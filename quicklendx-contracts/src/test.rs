@@ -325,12 +325,12 @@ fn test_simple_bid_storage() {
         &due_date,
         &String::from_str(&env, "Test invoice"),
     );
-    
+
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
-    
+
     // Place a single bid to test basic functionality
     let bid_id = client.place_bid(&investor, &invoice_id, &1001, &1100);
-    
+
     // Verify that the bid can be retrieved
     let bid = client.get_bid(&bid_id);
     assert!(bid.is_some(), "Bid should be retrievable");
@@ -377,19 +377,19 @@ fn test_unique_bid_id_generation() {
         &due_date,
         &String::from_str(&env, "Test invoice"),
     );
-    
+
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
-    
+
     // Place first bid
     let bid_id_1 = client.place_bid(&investor, &invoice_id, &1001, &1100);
-    
+
     // Verify first bid was stored correctly
     let bid_1 = client.get_bid(&bid_id_1);
     assert!(bid_1.is_some(), "First bid should be retrievable");
-    
+
     // Place second bid
     let bid_id_2 = client.place_bid(&investor, &invoice_id, &1002, &1200);
-    
+
     // Verify that the bid IDs are different
     assert_ne!(bid_id_1, bid_id_2);
 }
@@ -480,7 +480,7 @@ fn test_escrow_release_on_verification() {
 fn test_escrow_refund() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(QuickLendXContract,());
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let business = Address::generate(&env);
@@ -551,7 +551,10 @@ fn test_escrow_status_tracking() {
     // Test status progression: Held -> Released
     client.release_escrow_funds(&invoice_id);
     let escrow_details = client.get_escrow_details(&invoice_id);
-    assert_eq!(escrow_details.status, crate::payments::EscrowStatus::Released);
+    assert_eq!(
+        escrow_details.status,
+        crate::payments::EscrowStatus::Released
+    );
 }
 
 #[test]
@@ -723,12 +726,24 @@ fn test_add_invoice_rating_validation() {
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
+    let investor = Address::generate(&env);
+
     // Test invalid rating (0)
-    let result = client.try_add_invoice_rating(&invoice_id, &0, &String::from_str(&env, "Invalid"));
+    let result = client.try_add_invoice_rating(
+        &invoice_id,
+        &0,
+        &String::from_str(&env, "Invalid"),
+        &investor,
+    );
     assert!(result.is_err());
 
     // Test invalid rating (6)
-    let result = client.try_add_invoice_rating(&invoice_id, &6, &String::from_str(&env, "Invalid"));
+    let result = client.try_add_invoice_rating(
+        &invoice_id,
+        &6,
+        &String::from_str(&env, "Invalid"),
+        &investor,
+    );
     assert!(result.is_err());
 
     // Test rating on pending invoice (should fail)
@@ -743,6 +758,7 @@ fn test_add_invoice_rating_validation() {
         &pending_invoice_id,
         &5,
         &String::from_str(&env, "Should fail"),
+        &investor,
     );
     assert!(result.is_err());
 }
@@ -1108,7 +1124,7 @@ fn test_upload_invoice_requires_verification() {
     env.mock_all_auths();
 
     // Try to upload invoice without verification - should fail
-    let result = client.try_store_invoice(&business, &amount, &currency, &due_date, &description);
+    let result = client.try_upload_invoice(&business, &amount, &currency, &due_date, &description);
     assert!(result.is_err());
 
     // Submit KYC and verify business
@@ -1124,7 +1140,7 @@ fn test_upload_invoice_requires_verification() {
 
     // Now try to upload invoice - should succeed
     env.mock_all_auths();
-    let _invoice_id = client.store_invoice(&business, &amount, &currency, &due_date, &description);
+    let _invoice_id = client.upload_invoice(&business, &amount, &currency, &due_date, &description);
 }
 
 #[test]
@@ -1269,4 +1285,166 @@ fn test_get_verification_lists() {
     assert!(verified.contains(&business1));
     assert!(pending.contains(&business3));
     assert!(rejected.contains(&business2));
+}
+
+#[test]
+fn test_create_and_restore_backup() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Set up admin
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+
+    // Create test invoices
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice1_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 1"),
+    );
+
+    let invoice2_id = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 2"),
+    );
+
+    // Create backup
+    env.mock_all_auths();
+    let backup_id = client.create_backup(&String::from_str(&env, "Initial backup"));
+
+    // Verify backup was created
+    let backup = client.get_backup_details(&backup_id);
+    assert!(backup.is_some());
+    let backup = backup.unwrap();
+    assert_eq!(backup.invoice_count, 2);
+    assert_eq!(backup.status, BackupStatus::Active);
+
+    // Clear invoices - use the contract's clear method
+    env.mock_all_auths();
+    env.as_contract(&contract_id, || {
+        QuickLendXContract::clear_all_invoices(&env).unwrap();
+    });
+
+    // Verify invoices are gone
+    assert!(client.try_get_invoice(&invoice1_id).is_err());
+    assert!(client.try_get_invoice(&invoice2_id).is_err());
+
+    // Restore backup
+    env.mock_all_auths();
+    client.restore_backup(&backup_id);
+
+    // Verify invoices are back
+    let invoice1 = client.get_invoice(&invoice1_id);
+    assert_eq!(invoice1.amount, 1000);
+    let invoice2 = client.get_invoice(&invoice2_id);
+    assert_eq!(invoice2.amount, 2000);
+}
+
+#[test]
+fn test_backup_validation() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Set up admin
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+
+    // Create test invoice
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+    );
+
+    // Create backup
+    env.mock_all_auths();
+    let backup_id = client.create_backup(&String::from_str(&env, "Test backup"));
+
+    // Validate backup
+    let is_valid = client.validate_backup(&backup_id);
+    assert!(is_valid);
+
+    // Tamper with backup data (simulate corruption)
+    env.as_contract(&contract_id, || {
+        let mut backup = BackupStorage::get_backup(&env, &backup_id).unwrap();
+        backup.invoice_count = 999; // Incorrect count
+        BackupStorage::update_backup(&env, &backup);
+    });
+
+    // Validate should fail now
+    let is_valid = client.validate_backup(&backup_id);
+    assert!(!is_valid);
+}
+
+#[test]
+fn test_backup_cleanup() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Set up admin
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+
+    // Create multiple backups with simple descriptions
+    env.mock_all_auths();
+    for i in 0..10 {
+        let description = if i == 0 {
+            String::from_str(&env, "Backup 0")
+        } else if i == 1 {
+            String::from_str(&env, "Backup 1")
+        } else {
+            // Continue this pattern or just use a generic description
+            String::from_str(&env, "Backup")
+        };
+        client.create_backup(&description);
+    }
+
+    // Verify only last 5 backups are kept
+    let backups = client.get_backups();
+    assert_eq!(backups.len(), 5);
+}
+
+#[test]
+fn test_archive_backup() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Set up admin
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+
+    // Create backup
+    env.mock_all_auths();
+    let backup_id = client.create_backup(&String::from_str(&env, "Test backup"));
+
+    // Archive backup
+    client.archive_backup(&backup_id);
+
+    // Verify backup is archived
+    let backup = client.get_backup_details(&backup_id);
+    assert!(backup.is_some());
+    assert_eq!(backup.unwrap().status, BackupStatus::Archived);
+
+    // Verify backup is removed from active list
+    let backups = client.get_backups();
+    assert!(!backups.contains(&backup_id));
 }
