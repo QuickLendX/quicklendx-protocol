@@ -82,9 +82,10 @@ impl Invoice {
         self.status == InvoiceStatus::Verified && self.funded_amount == 0
     }
 
-    /// Check if invoice is overdue
-    pub fn is_overdue(&self, current_timestamp: u64) -> bool {
-        current_timestamp > self.due_date
+    /// Check if invoice is overdue considering grace period (if any)
+    pub fn is_overdue(&self, current_timestamp: u64, grace_period: Option<u64>) -> bool {
+        let effective_due_date = self.due_date + grace_period.unwrap_or(0);
+        current_timestamp > effective_due_date
     }
 
     /// Mark invoice as funded
@@ -203,12 +204,12 @@ impl Invoice {
         let counter_key = symbol_short!("inv_cnt");
         let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
         env.storage().instance().set(&counter_key, &(counter + 1));
-        
+
         let mut id_bytes = [0u8; 32];
         // Add invoice prefix to distinguish from other entity types
         id_bytes[0] = 0x1A; // 'I' for Invoice (hex)
         id_bytes[1] = 0x4E; // 'N' for iNvoice (hex)
-        // Embed timestamp in next 8 bytes
+                            // Embed timestamp in next 8 bytes
         id_bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
         // Embed counter in next 8 bytes
         id_bytes[10..18].copy_from_slice(&counter.to_be_bytes());
@@ -217,6 +218,24 @@ impl Invoice {
             id_bytes[i] = ((timestamp + counter + 0x1A4E) % 256) as u8;
         }
         BytesN::from_array(env, &id_bytes)
+    }
+
+    /// Check and handle expiration, marking as defaulted if overdue
+    pub fn check_and_handle_expiration(
+        &mut self,
+        env: &Env,
+        grace_period: Option<u64>,
+    ) -> Result<(), QuickLendXError> {
+        if self.status != InvoiceStatus::Funded {
+            return Ok(()); // Only funded invoices can expire
+        }
+
+        if self.is_overdue(env.ledger().timestamp(), grace_period) {
+            self.mark_as_defaulted();
+            Ok(())
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -248,7 +267,10 @@ impl InvoiceStorage {
     /// Get all invoices for a business
     pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
         let key = (symbol_short!("business"), business.clone());
-        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Get all invoices by status
@@ -260,7 +282,10 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Add invoice to business invoices list
@@ -280,7 +305,11 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        let mut invoices = env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env));
+        let mut invoices = env
+            .storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
         invoices.push_back(invoice_id.clone());
         env.storage().instance().set(&key, &invoices);
     }
