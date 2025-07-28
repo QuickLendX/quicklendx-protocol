@@ -322,6 +322,14 @@
                             },
                             {
                               "key": {
+                                "symbol": "expiration_timestamp"
+                              },
+                              "val": {
+                                "u64": 604800
+                              }
+                            },
+                            {
+                              "key": {
                                 "symbol": "investor"
                               },
                               "val": {
@@ -393,6 +401,14 @@
                                   "hi": 0,
                                   "lo": 1200
                                 }
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "expiration_timestamp"
+                              },
+                              "val": {
+                                "u64": 604800
                               }
                             },
                             {

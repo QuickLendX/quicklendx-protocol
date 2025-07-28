@@ -203,12 +203,12 @@ impl Invoice {
         let counter_key = symbol_short!("inv_cnt");
         let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
         env.storage().instance().set(&counter_key, &(counter + 1));
-        
+
         let mut id_bytes = [0u8; 32];
         // Add invoice prefix to distinguish from other entity types
         id_bytes[0] = 0x1A; // 'I' for Invoice (hex)
         id_bytes[1] = 0x4E; // 'N' for iNvoice (hex)
-        // Embed timestamp in next 8 bytes
+                            // Embed timestamp in next 8 bytes
         id_bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
         // Embed counter in next 8 bytes
         id_bytes[10..18].copy_from_slice(&counter.to_be_bytes());
@@ -248,7 +248,10 @@ impl InvoiceStorage {
     /// Get all invoices for a business
     pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
         let key = (symbol_short!("business"), business.clone());
-        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Get all invoices by status
@@ -260,7 +263,10 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Add invoice to business invoices list
@@ -280,7 +286,11 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        let mut invoices = env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env));
+        let mut invoices = env
+            .storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
         invoices.push_back(invoice_id.clone());
         env.storage().instance().set(&key, &invoices);
     }

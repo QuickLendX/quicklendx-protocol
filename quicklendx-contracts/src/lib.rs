@@ -242,9 +242,14 @@ impl QuickLendXContract {
         if bid_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
         }
+
         // Only the investor can place their own bid
         investor.require_auth();
-        // Create bid
+
+        // Clean any expired bids for this invoice first
+        BidStorage::clean_expired_bids(&env, &invoice_id)?;
+
+        // Create bid with expiration (default 7 days from now)
         let bid_id = BidStorage::generate_unique_bid_id(&env);
         let bid = Bid {
             bid_id: bid_id.clone(),
@@ -254,13 +259,22 @@ impl QuickLendXContract {
             expected_return,
             timestamp: env.ledger().timestamp(),
             status: BidStatus::Placed,
+            expiration_timestamp: env.ledger().timestamp() + 7 * 24 * 60 * 60, // 7 days
         };
+
         BidStorage::store_bid(&env, &bid);
         // Track bid for this invoice
         BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
+
         Ok(bid_id)
     }
 
+    /// Clean expired bids for an invoice
+    pub fn clean_expired_bids(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        BidStorage::clean_expired_bids(&env, &invoice_id)
+    }
+
+    /// Accept a bid (business only)
     /// Accept a bid (business only)
     pub fn accept_bid(
         env: Env,
@@ -269,16 +283,26 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+
         // Only the business owner can accept a bid
         invoice.business.require_auth();
-        // Only allow accepting if invoice is verified and bid is placed
-        if invoice.status != InvoiceStatus::Verified || bid.status != BidStatus::Placed {
+
+        // Clean any expired bids first
+        BidStorage::clean_expired_bids(&env, &invoice_id)?;
+
+        // Refresh bid data after potential cleanup
+        let mut bid =
+            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+        // Only allow accepting if invoice is verified and bid is placed and not expired
+        if invoice.status != InvoiceStatus::Verified
+            || bid.status != BidStatus::Placed
+            || bid.is_expired(env.ledger().timestamp())
+        {
             return Err(QuickLendXError::InvalidStatus);
         }
 
-        // Create escrow
+        // Rest of the function remains the same...
         let escrow_id = create_escrow(
             &env,
             &invoice_id,

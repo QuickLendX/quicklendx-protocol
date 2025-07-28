@@ -25,7 +25,7 @@
                 {
                   "i128": {
                     "hi": 0,
-                    "lo": 1001
+                    "lo": 1000
                   }
                 },
                 {
@@ -41,12 +41,48 @@
         }
       ]
     ],
+    [],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "function_name": "place_bid",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 1001
+                  }
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 1101
+                  }
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [],
     []
   ],
   "ledger": {
     "protocol_version": 22,
     "sequence_number": 0,
-    "timestamp": 0,
+    "timestamp": 604801,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "base_reserve": 0,
     "min_persistent_entry_ttl": 4096,
@@ -220,7 +256,7 @@
                               "val": {
                                 "i128": {
                                   "hi": 0,
-                                  "lo": 1001
+                                  "lo": 1000
                                 }
                               }
                             },
@@ -274,7 +310,7 @@
                               "val": {
                                 "vec": [
                                   {
-                                    "symbol": "Placed"
+                                    "symbol": "Expired"
                                   }
                                 ]
                               }
@@ -292,10 +328,93 @@
                       },
                       {
                         "key": {
+                          "bytes": "b1d00000000000093a8100000000000000025353535353535353535353535353"
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "bid_amount"
+                              },
+                              "val": {
+                                "i128": {
+                                  "hi": 0,
+                                  "lo": 1001
+                                }
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "bid_id"
+                              },
+                              "val": {
+                                "bytes": "b1d00000000000093a8100000000000000025353535353535353535353535353"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "expected_return"
+                              },
+                              "val": {
+                                "i128": {
+                                  "hi": 0,
+                                  "lo": 1101
+                                }
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "expiration_timestamp"
+                              },
+                              "val": {
+                                "u64": 1209601
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "investor"
+                              },
+                              "val": {
+                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "invoice_id"
+                              },
+                              "val": {
+                                "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "status"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "Placed"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "timestamp"
+                              },
+                              "val": {
+                                "u64": 604801
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
                           "symbol": "bid_cnt"
                         },
                         "val": {
-                          "u64": 1
+                          "u64": 2
                         }
                       },
                       {
@@ -340,7 +459,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1"
+                              "bytes": "b1d00000000000093a8100000000000000025353535353535353535353535353"
                             }
                           ]
                         }
@@ -396,6 +515,39 @@
                 "key": {
                   "ledger_key_nonce": {
                     "nonce": 801925984706572462
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          6311999
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "ledger_key_nonce": {
+                "nonce": 5541220902715666415
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": 5541220902715666415
                   }
                 },
                 "durability": "temporary",

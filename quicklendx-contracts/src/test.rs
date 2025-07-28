@@ -3,7 +3,7 @@
 use super::*;
 use soroban_sdk::{
     symbol_short,
-    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
+    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Ledger},
     vec, Address, BytesN, Env, String, Symbol, Vec,
 };
 
@@ -1447,4 +1447,119 @@ fn test_archive_backup() {
     // Verify backup is removed from active list
     let backups = client.get_backups();
     assert!(!backups.contains(&backup_id));
+}
+
+#[test]
+fn test_bid_expiration() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Create and verify invoice
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+    );
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+
+    // Place a bid
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+
+    // Check bid is active
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Placed);
+
+    // Fast forward time to after expiration
+    env.ledger().set_timestamp(bid.expiration_timestamp + 1);
+
+    // Clean expired bids
+    client.clean_expired_bids(&invoice_id);
+
+    // Check bid is now expired
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Expired);
+}
+
+#[test]
+fn test_expired_bid_not_accepted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Create and verify invoice
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+    );
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+
+    // Place a bid
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+
+    // Fast forward time to after expiration
+    let bid = client.get_bid(&bid_id).unwrap();
+    env.ledger().set_timestamp(bid.expiration_timestamp + 1);
+
+    // Try to accept expired bid (should fail)
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_bid_cleanup_automatically() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Create and verify invoice
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+    );
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+
+    // Place a bid
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+
+    // Fast forward time to after expiration
+    let bid = client.get_bid(&bid_id).unwrap();
+    env.ledger().set_timestamp(bid.expiration_timestamp + 1);
+
+    // Place another bid - this should trigger cleanup of the expired bid
+    let bid_id2 = client.place_bid(&investor, &invoice_id, &1001, &1101);
+
+    // Check first bid is now expired
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Expired);
+
+    // Check second bid is active
+    let bid2 = client.get_bid(&bid_id2).unwrap();
+    assert_eq!(bid2.status, BidStatus::Placed);
 }

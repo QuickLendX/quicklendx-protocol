@@ -142,3 +142,21 @@ pub fn emit_backup_archived(env: &Env, backup_id: &BytesN<32>) {
         (backup_id.clone(), env.ledger().timestamp()),
     );
 }
+
+/// Emit event when a bid expires
+pub fn emit_bid_expired(
+    env: &Env,
+    bid_id: &BytesN<32>,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("bid_exp"),),
+        (
+            bid_id.clone(),
+            invoice_id.clone(),
+            investor.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
