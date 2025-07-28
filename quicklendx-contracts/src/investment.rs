@@ -6,6 +6,7 @@ pub enum InvestmentStatus {
     Active,
     Withdrawn,
     Completed,
+    Defaulted
 }
 
 #[contracttype]

@@ -689,6 +689,31 @@ impl QuickLendXContract {
 
         Ok(())
     }
+
+    /// Check and handle expired invoices (admin function)
+    pub fn check_expired_invoices(
+        env: Env,
+        grace_period: Option<u64>,
+    ) -> Result<(), QuickLendXError> {
+        // Only admin can trigger this
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
+        defaults::check_and_handle_expired_invoices(&env, grace_period)
+    }
+
+    /// Check if an invoice is overdue
+    pub fn is_invoice_overdue(
+        env: Env,
+        invoice_id: BytesN<32>,
+        grace_period: Option<u64>,
+    ) -> Result<bool, QuickLendXError> {
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        Ok(invoice.is_overdue(env.ledger().timestamp(), grace_period))
+    }
 }
 
 #[cfg(test)]

@@ -3,7 +3,7 @@
 use super::*;
 use soroban_sdk::{
     symbol_short,
-    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
+    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Events, Ledger},
     vec, Address, BytesN, Env, String, Symbol, Vec,
 };
 
@@ -1447,4 +1447,53 @@ fn test_archive_backup() {
     // Verify backup is removed from active list
     let backups = client.get_backups();
     assert!(!backups.contains(&backup_id));
+}
+
+#[test]
+fn test_grace_period() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400; // 1 day from now
+    let grace_period = 86400; // 1 day grace period
+
+    // Create and fund an invoice
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+    );
+
+    // Verify and fund the invoice
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.mark_as_funded(investor.clone(), 1000, env.ledger().timestamp());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    // Fast-forward to just after due date (but within grace period)
+    env.ledger().set_timestamp(due_date + 1);
+
+    // Check if invoice is overdue without grace period - should be overdue
+    let is_overdue = client.is_invoice_overdue(&invoice_id, &None);
+    assert!(is_overdue);
+
+    // Check with grace period - should not be overdue yet
+    let is_overdue_with_grace = client.is_invoice_overdue(&invoice_id, &Some(grace_period));
+    assert!(!is_overdue_with_grace);
+
+    // Fast-forward past grace period
+    env.ledger().set_timestamp(due_date + grace_period + 1);
+
+    // Now should be overdue even with grace period
+    let is_overdue_with_grace = client.is_invoice_overdue(&invoice_id, &Some(grace_period));
+    assert!(is_overdue_with_grace);
 }
