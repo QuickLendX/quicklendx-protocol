@@ -1,10 +1,11 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Ledger},
     vec, Address, BytesN, Env, String, Symbol, Vec,
+};
+use crate::audit::{
+    AuditStorage, AuditQueryFilter, AuditOperation, log_invoice_operation
 };
 
 #[test]
@@ -1562,4 +1563,114 @@ fn test_bid_cleanup_automatically() {
     // Check second bid is active
     let bid2 = client.get_bid(&bid_id2).unwrap();
     assert_eq!(bid2.status, BidStatus::Placed);
+}
+
+fn test_audit_trail_creation() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    
+    let business = Address::generate(&env);
+    let amount = 1000i128;
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    
+    // Upload invoice
+    let invoice_id = client.upload_invoice(&business, &amount, &currency, &due_date, &description);
+    
+    // Check audit trail was created
+    let audit_trail = client.get_invoice_audit_trail(&invoice_id);
+    assert!(!audit_trail.is_empty());
+    
+    // Verify audit entry details
+    let audit_entry = client.get_audit_entry(&audit_trail.get(0).unwrap());
+    assert_eq!(audit_entry.invoice_id, invoice_id);
+    assert_eq!(audit_entry.operation, AuditOperation::InvoiceCreated);
+    assert_eq!(audit_entry.actor, business);
+}
+
+#[test]
+fn test_audit_integrity_validation() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    
+    let business = Address::generate(&env);
+    let amount = 1000i128;
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    
+    // Upload and verify invoice
+    let invoice_id = client.upload_invoice(&business, &amount, &currency, &due_date, &description);
+    client.verify_invoice(&invoice_id);
+    
+    // Validate audit integrity
+    let is_valid = client.validate_invoice_audit_integrity(&invoice_id);
+    assert!(is_valid);
+}
+
+#[test]
+fn test_audit_query_functionality() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    
+    let business = Address::generate(&env);
+    let amount = 1000i128;
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    
+    // Create multiple invoices
+    let invoice_id1 = client.upload_invoice(&business, &amount, &currency, &due_date, &description);
+    let invoice_id2 = client.upload_invoice(&business, &amount * 2, &currency, &due_date, &description);
+    
+    // Query by operation type
+    let filter = AuditQueryFilter {
+        invoice_id: None,
+        operation: Some(AuditOperation::InvoiceCreated),
+        actor: None,
+        start_timestamp: None,
+        end_timestamp: None,
+    };
+    
+    let results = client.query_audit_logs(&filter, 10);
+    assert_eq!(results.len(), 2);
+    
+    // Query by specific invoice
+    let filter = AuditQueryFilter {
+        invoice_id: Some(invoice_id1),
+        operation: None,
+        actor: None,
+        start_timestamp: None,
+        end_timestamp: None,
+    };
+    
+    let results = client.query_audit_logs(&filter, 10);
+    assert!(!results.is_empty());
+    assert_eq!(results.get(0).unwrap().invoice_id, invoice_id1);
+}
+
+#[test]
+fn test_audit_statistics() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    
+    let business = Address::generate(&env);
+    let amount = 1000i128;
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    
+    // Create and process invoices
+    let invoice_id = client.upload_invoice(&business, &amount, &currency, &due_date, &description);
+    client.verify_invoice(&invoice_id);
+    
+    // Get audit statistics
+    let stats = client.get_audit_stats();
+    assert!(stats.total_entries > 0);
+    assert!(stats.unique_actors > 0);
 }

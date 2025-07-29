@@ -14,6 +14,7 @@ mod payments;
 mod profits;
 mod settlement;
 mod verification;
+mod audit;
 
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::handle_default as do_handle_default;
@@ -33,6 +34,10 @@ use verification::{
 };
 
 use crate::backup::{Backup, BackupStatus, BackupStorage};
+use audit::{
+    log_invoice_created, log_invoice_status_change, log_invoice_funded, log_payment_processed,
+    AuditStorage, AuditLogEntry, AuditQueryFilter, AuditStats, AuditOperation
+};
 
 #[contract]
 pub struct QuickLendXContract;
@@ -717,3 +722,54 @@ impl QuickLendXContract {
 
 #[cfg(test)]
 mod test;
+
+
+    /// Get audit trail for an invoice
+    pub fn get_invoice_audit_trail(env: Env, invoice_id: BytesN<32>) -> Vec<BytesN<32>> {
+        AuditStorage::get_invoice_audit_trail(&env, &invoice_id)
+    }
+
+    /// Get audit entry by ID
+    pub fn get_audit_entry(env: Env, audit_id: BytesN<32>) -> Result<AuditLogEntry, QuickLendXError> {
+        AuditStorage::get_audit_entry(&env, &audit_id)
+            .ok_or(QuickLendXError::AuditLogNotFound)
+    }
+
+    /// Query audit logs with filters
+    pub fn query_audit_logs(
+        env: Env,
+        filter: AuditQueryFilter,
+        limit: u32,
+    ) -> Vec<AuditLogEntry> {
+        let results = AuditStorage::query_audit_logs(&env, &filter, limit);
+        emit_audit_query(&env, "query_audit_logs".to_string(), results.len() as u32);
+        results
+    }
+
+    /// Get audit statistics
+    pub fn get_audit_stats(env: Env) -> AuditStats {
+        AuditStorage::get_audit_stats(&env)
+    }
+
+    /// Validate audit log integrity for an invoice
+    pub fn validate_invoice_audit_integrity(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<bool, QuickLendXError> {
+        let is_valid = AuditStorage::validate_invoice_audit_integrity(&env, &invoice_id)?;
+        emit_audit_validation(&env, &invoice_id, is_valid);
+        Ok(is_valid)
+    }
+
+    /// Get audit entries by operation type
+    pub fn get_audit_entries_by_operation(
+        env: Env,
+        operation: AuditOperation,
+    ) -> Vec<BytesN<32>> {
+        AuditStorage::get_audit_entries_by_operation(&env, &operation)
+    }
+
+    /// Get audit entries by actor
+    pub fn get_audit_entries_by_actor(env: Env, actor: Address) -> Vec<BytesN<32>> {
+        AuditStorage::get_audit_entries_by_actor(&env, &actor)
+    }

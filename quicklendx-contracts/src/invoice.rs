@@ -45,8 +45,10 @@ pub struct Invoice {
 // Use the main error enum from errors.rs
 use crate::errors::QuickLendXError;
 
+use crate::audit::{log_invoice_created, log_invoice_status_change, log_invoice_funded};
+
 impl Invoice {
-    /// Create a new invoice
+    /// Create a new invoice with audit logging
     pub fn new(
         env: &Env,
         business: Address,
@@ -58,7 +60,7 @@ impl Invoice {
         let id = Self::generate_unique_invoice_id(env);
         let created_at = env.ledger().timestamp();
 
-        Self {
+        let invoice = Self {
             id,
             business,
             amount,
@@ -75,6 +77,11 @@ impl Invoice {
             total_ratings: 0,
             ratings: vec![env],
         }
+        
+        // Log invoice creation
+        log_invoice_created(env, &invoice);
+        
+        invoice
     }
 
     /// Check if invoice is available for funding
@@ -87,27 +94,32 @@ impl Invoice {
         current_timestamp > self.due_date
     }
 
-    /// Mark invoice as funded
-    pub fn mark_as_funded(&mut self, investor: Address, funded_amount: i128, timestamp: u64) {
+    /// Mark invoice as funded with audit logging
+    pub fn mark_as_funded(&mut self, env: &Env, investor: Address, funded_amount: i128, timestamp: u64) {
+        let old_status = self.status.clone();
         self.status = InvoiceStatus::Funded;
         self.funded_amount = funded_amount;
         self.funded_at = Some(timestamp);
-        self.investor = Some(investor);
+        self.investor = Some(investor.clone());
+        
+        // Log status change and funding
+        log_invoice_status_change(env, self.id.clone(), investor.clone(), old_status, self.status.clone());
+        log_invoice_funded(env, self.id.clone(), investor, funded_amount);
     }
 
-    /// Mark invoice as paid
-    pub fn mark_as_paid(&mut self, timestamp: u64) {
+    /// Mark invoice as paid with audit logging
+    pub fn mark_as_paid(&mut self, env: &Env, actor: Address, timestamp: u64) {
+        let old_status = self.status.clone();
         self.status = InvoiceStatus::Paid;
         self.settled_at = Some(timestamp);
+        
+        // Log status change
+        log_invoice_status_change(env, self.id.clone(), actor, old_status, self.status.clone());
     }
 
-    /// Mark invoice as defaulted
-    pub fn mark_as_defaulted(&mut self) {
-        self.status = InvoiceStatus::Defaulted;
-    }
-
-    /// Verify the invoice
-    pub fn verify(&mut self) {
+    /// Verify the invoice with audit logging
+    pub fn verify(&mut self, env: &Env, actor: Address) {
+        let old_status = self.status.clone();
         self.status = InvoiceStatus::Verified;
     }
 
@@ -217,6 +229,9 @@ impl Invoice {
             id_bytes[i] = ((timestamp + counter + 0x1A4E) % 256) as u8;
         }
         BytesN::from_array(env, &id_bytes)
+        
+        // Log status change
+        log_invoice_status_change(env, self.id.clone(), actor, old_status, self.status.clone());
     }
 }
 

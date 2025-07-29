@@ -1,5 +1,6 @@
 use crate::invoice::Invoice;
 use crate::payments::{Escrow, EscrowStatus};
+use crate::audit::{AuditLogEntry, AuditOperation};
 use soroban_sdk::{symbol_short, Address, BytesN, Env};
 
 pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
@@ -158,5 +159,35 @@ pub fn emit_bid_expired(
             investor.clone(),
             env.ledger().timestamp(),
         ),
+    );
+}
+
+/// Emit audit log event
+pub fn emit_audit_log_created(env: &Env, entry: &AuditLogEntry) {
+    env.events().publish(
+        (symbol_short!("aud_log"),),
+        (
+            entry.audit_id.clone(),
+            entry.invoice_id.clone(),
+            entry.operation.clone(),
+            entry.actor.clone(),
+            entry.timestamp,
+        ),
+    );
+}
+
+/// Emit audit validation event
+pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool) {
+    env.events().publish(
+        (symbol_short!("aud_val"),),
+        (invoice_id.clone(), is_valid, env.ledger().timestamp()),
+    );
+}
+
+/// Emit audit query event
+pub fn emit_audit_query(env: &Env, query_type: String, result_count: u32) {
+    env.events().publish(
+        (symbol_short!("aud_qry"),),
+        (query_type, result_count, env.ledger().timestamp()),
     );
 }
