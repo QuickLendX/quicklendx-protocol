@@ -16,6 +16,15 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
     investment.status = InvestmentStatus::Withdrawn;
     InvestmentStorage::update_investment(env, &investment);
+
+    // Process insurance claim if coverage exists
+    if let Some(ref insurance) = investment.insurance {
+        if insurance.active {
+            let claim_amount = InvestmentStorage::process_insurance_claim(env, &investment.investment_id)?;
+            crate::events::emit_insurance_claimed(env, &investment.investment_id, &insurance.provider, claim_amount);
+        }
+    }
+
     emit_invoice_defaulted(env, &invoice);
     Ok(())
 }

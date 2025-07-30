@@ -1560,3 +1560,98 @@ fn test_audit_statistics() {
     assert!(stats.total_entries > 0);
     assert!(stats.unique_actors > 0);
 }
+
+#[test]
+fn test_add_investment_insurance() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let provider = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Create and verify invoice
+    let invoice_id = client.store_invoice(&business, &1000, &currency, &due_date, &String::from_str(&env, "Invoice for insurance test"));
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+
+    // Place and accept bid
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Get investment id
+    let investments = env.storage().instance().keys();
+    let mut investment_id = None;
+    for key in investments.iter() {
+        if let Some(id) = key.downcast_ref::<BytesN<32>>() {
+            investment_id = Some(id.clone());
+        }
+    }
+    let investment_id = investment_id.expect("Investment ID should exist");
+
+    // Add insurance
+    let coverage_percentage = 80u8;
+    let premium = 50i128;
+    client.add_investment_insurance(&investment_id, &provider, &coverage_percentage, &premium);
+
+    // Check insurance added
+    let investment = InvestmentStorage::get_investment(&env, &investment_id).unwrap();
+    assert!(investment.insurance.is_some());
+    let insurance = investment.insurance.unwrap();
+    assert_eq!(insurance.provider, provider);
+    assert_eq!(insurance.coverage_percentage, coverage_percentage);
+    assert_eq!(insurance.premium_amount, premium);
+    assert_eq!(insurance.coverage_amount, investment.amount * coverage_percentage as i128 / 100);
+    assert!(insurance.active);
+}
+
+#[test]
+fn test_insurance_claim() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let provider = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Create and verify invoice
+    let invoice_id = client.store_invoice(&business, &1000, &currency, &due_date, &String::from_str(&env, "Invoice for insurance claim test"));
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+
+    // Place and accept bid
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Get investment id
+    let investments = env.storage().instance().keys();
+    let mut investment_id = None;
+    for key in investments.iter() {
+        if let Some(id) = key.downcast_ref::<BytesN<32>>() {
+            investment_id = Some(id.clone());
+        }
+    }
+    let investment_id = investment_id.expect("Investment ID should exist");
+
+    // Add insurance
+    let coverage_percentage = 60u8;
+    let premium = 40i128;
+    client.add_investment_insurance(&investment_id, &provider, &coverage_percentage, &premium);
+
+    // Claim insurance
+    let claim_amount = client.claim_investment_insurance(&investment_id);
+    assert_eq!(claim_amount, 1000 * coverage_percentage as i128 / 100);
+
+    // Insurance should now be inactive
+    let investment = InvestmentStorage::get_investment(&env, &investment_id).unwrap();
+    assert!(investment.insurance.is_some());
+    let insurance = investment.insurance.unwrap();
+    assert!(!insurance.active);
+}
+}

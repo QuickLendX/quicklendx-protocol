@@ -1,3 +1,4 @@
+
 use soroban_sdk::{contracttype, Address, BytesN, Env};
 
 #[contracttype]
@@ -10,6 +11,17 @@ pub enum InvestmentStatus {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InsuranceCoverage {
+    pub provider: Address,
+    pub coverage_amount: i128,
+    pub premium_amount: i128,
+    pub coverage_percentage: u8, // 0-100
+    pub active: bool,
+}
+
+#[contracttype]
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Investment {
     pub investment_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -17,6 +29,7 @@ pub struct Investment {
     pub amount: i128,
     pub funded_at: u64,
     pub status: InvestmentStatus,
+    pub insurance: Option<InsuranceCoverage>,
 }
 
 pub struct InvestmentStorage;
@@ -60,4 +73,49 @@ impl InvestmentStorage {
             .instance()
             .set(&investment.investment_id, investment);
     }
+
+    /// Add insurance coverage to an investment
+    pub fn add_insurance(
+        env: &Env,
+        investment_id: &BytesN<32>,
+        provider: Address,
+        coverage_percentage: u8,
+        premium: i128,
+    ) -> Result<(), crate::errors::QuickLendXError> {
+        if coverage_percentage > 100 {
+            return Err(crate::errors::QuickLendXError::InvalidCoveragePercentage);
+        }
+        let mut investment = Self::get_investment(env, investment_id)
+            .ok_or(crate::errors::QuickLendXError::StorageKeyNotFound)?;
+        let coverage_amount = investment.amount * coverage_percentage as i128 / 100;
+        investment.insurance = Some(InsuranceCoverage {
+            provider,
+            coverage_amount,
+            premium_amount: premium,
+            coverage_percentage,
+            active: true,
+        });
+        Self::update_investment(env, &investment);
+        Ok(())
+    }
+
+    /// Process insurance claim for an investment
+    pub fn process_insurance_claim(
+        env: &Env,
+        investment_id: &BytesN<32>,
+    ) -> Result<i128, crate::errors::QuickLendXError> {
+        let mut investment = Self::get_investment(env, investment_id)
+            .ok_or(crate::errors::QuickLendXError::StorageKeyNotFound)?;
+        if let Some(ref mut insurance) = investment.insurance {
+            if !insurance.active {
+                return Err(crate::errors::QuickLendXError::InsuranceNotActive);
+            }
+            insurance.active = false;
+            Self::update_investment(env, &investment);
+            Ok(insurance.coverage_amount)
+        } else {
+            Err(crate::errors::QuickLendXError::NoInsuranceCoverage)
+        }
+    }
+}
 }
