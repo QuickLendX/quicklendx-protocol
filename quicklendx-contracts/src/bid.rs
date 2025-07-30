@@ -65,4 +65,20 @@ impl BidStorage {
         }
         BytesN::from_array(env, &bytes)
     }
+
+    /// Get all bids
+    pub fn get_all_bids(env: &Env) -> Vec<BytesN<32>> {
+        let mut all_bids = vec![env];
+        
+        // Get all invoices and their bids
+        let all_invoices = crate::invoice::InvoiceStorage::get_all_invoices(env);
+        for invoice_id in all_invoices.iter() {
+            let bids = Self::get_bids_for_invoice(env, &invoice_id);
+            for bid_id in bids.iter() {
+                all_bids.push_back(bid_id);
+            }
+        }
+        
+        all_bids
+    }
 }

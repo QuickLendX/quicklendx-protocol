@@ -60,4 +60,29 @@ impl InvestmentStorage {
             .instance()
             .set(&investment.investment_id, investment);
     }
+
+    /// Get all investments
+    pub fn get_all_investments(env: &Env) -> Vec<BytesN<32>> {
+        let mut all_investments = vec![env];
+        
+        // Get all invoices and check for investments
+        let all_invoices = crate::invoice::InvoiceStorage::get_all_invoices(env);
+        for invoice_id in all_invoices.iter() {
+            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &invoice_id) {
+                if invoice.status == crate::invoice::InvoiceStatus::Funded || 
+                   invoice.status == crate::invoice::InvoiceStatus::Paid {
+                    // Create a synthetic investment ID based on invoice and investor
+                    if let Some(investor) = invoice.investor {
+                        let mut investment_id_bytes = [0u8; 32];
+                        investment_id_bytes[0..16].copy_from_slice(&invoice_id.to_array());
+                        investment_id_bytes[16..32].copy_from_slice(&investor.to_array());
+                        let investment_id = BytesN::from_array(env, &investment_id_bytes);
+                        all_investments.push_back(investment_id);
+                    }
+                }
+            }
+        }
+        
+        all_investments
+    }
 }
