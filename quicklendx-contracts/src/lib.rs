@@ -3,6 +3,7 @@ use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec,
 };
 
+mod analytics;
 mod backup;
 mod bid;
 mod defaults;
@@ -33,6 +34,7 @@ use verification::{
     verify_invoice_data, BusinessVerificationStorage,
 };
 
+use crate::analytics::{Analytics, AnalyticsStorage, PlatformMetrics, BusinessAnalytics, InvestorAnalytics, TimeBasedAnalytics, AnalyticsPeriod};
 use crate::backup::{Backup, BackupStatus, BackupStorage};
 use audit::{
     log_invoice_created, log_invoice_status_change, log_invoice_funded, log_payment_processed,
@@ -693,6 +695,85 @@ impl QuickLendXContract {
         }
 
         Ok(())
+    }
+
+    // Analytics Functions
+
+    /// Calculate and get platform metrics
+    pub fn get_platform_metrics(env: Env) -> PlatformMetrics {
+        let metrics = Analytics::calculate_platform_metrics(&env);
+        AnalyticsStorage::store_platform_metrics(&env, &metrics);
+        metrics
+    }
+
+    /// Calculate and get business analytics
+    pub fn get_business_analytics(env: Env, business: Address) -> Option<BusinessAnalytics> {
+        let analytics = Analytics::calculate_business_analytics(&env, &business);
+        if let Some(ref analytics_data) = analytics {
+            AnalyticsStorage::store_business_analytics(&env, &business, analytics_data);
+        }
+        analytics
+    }
+
+    /// Calculate and get investor analytics
+    pub fn get_investor_analytics(env: Env, investor: Address) -> Option<InvestorAnalytics> {
+        let analytics = Analytics::calculate_investor_analytics(&env, &investor);
+        if let Some(ref analytics_data) = analytics {
+            AnalyticsStorage::store_investor_analytics(&env, &investor, analytics_data);
+        }
+        analytics
+    }
+
+    /// Calculate and get time-based analytics
+    pub fn get_time_analytics(env: Env, period: AnalyticsPeriod) -> TimeBasedAnalytics {
+        let analytics = Analytics::calculate_time_analytics(&env, &period);
+        AnalyticsStorage::store_time_analytics(&env, &period, &analytics);
+        analytics
+    }
+
+    /// Generate business report
+    pub fn generate_business_report(env: Env, business: Address) -> Option<String> {
+        Analytics::generate_business_report(&env, &business)
+    }
+
+    /// Generate investor report
+    pub fn generate_investor_report(env: Env, investor: Address) -> Option<String> {
+        Analytics::generate_investor_report(&env, &investor)
+    }
+
+    /// Generate platform report
+    pub fn generate_platform_report(env: Env) -> String {
+        Analytics::generate_platform_report(&env)
+    }
+
+    /// Get stored platform metrics
+    pub fn get_stored_platform_metrics(env: Env) -> Option<PlatformMetrics> {
+        AnalyticsStorage::get_platform_metrics(&env)
+    }
+
+    /// Get stored business analytics
+    pub fn get_stored_business_analytics(env: Env, business: Address) -> Option<BusinessAnalytics> {
+        AnalyticsStorage::get_business_analytics(&env, &business)
+    }
+
+    /// Get stored investor analytics
+    pub fn get_stored_investor_analytics(env: Env, investor: Address) -> Option<InvestorAnalytics> {
+        AnalyticsStorage::get_investor_analytics(&env, &investor)
+    }
+
+    /// Get stored time analytics
+    pub fn get_stored_time_analytics(env: Env, period: AnalyticsPeriod) -> Option<TimeBasedAnalytics> {
+        AnalyticsStorage::get_time_analytics(&env, &period)
+    }
+
+    /// Get all businesses for analytics
+    pub fn get_all_businesses_for_analytics(env: Env) -> Vec<Address> {
+        AnalyticsStorage::get_all_businesses(&env)
+    }
+
+    /// Get all investors for analytics
+    pub fn get_all_investors_for_analytics(env: Env) -> Vec<Address> {
+        AnalyticsStorage::get_all_investors(&env)
     }
 }
 

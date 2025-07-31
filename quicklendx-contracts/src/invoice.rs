@@ -125,6 +125,77 @@ impl Invoice {
         // Log status change
         log_invoice_status_change(env, self.id.clone(), actor, old_status, self.status.clone());
     }
+
+    /// Add a rating to the invoice
+    pub fn add_rating(&mut self, rating: u32, feedback: String, rated_by: Address, timestamp: u64) -> Result<(), crate::errors::QuickLendXError> {
+        // Validate rating
+        if rating < 1 || rating > 5 {
+            return Err(crate::errors::QuickLendXError::InvalidRating);
+        }
+
+        // Check if user already rated this invoice
+        for existing_rating in self.ratings.iter() {
+            if existing_rating.rated_by == rated_by {
+                return Err(crate::errors::QuickLendXError::DuplicateRating);
+            }
+        }
+
+        // Create new rating
+        let new_rating = InvoiceRating {
+            rating,
+            feedback,
+            rated_by,
+            rated_at: timestamp,
+        };
+
+        // Add to ratings list
+        self.ratings.push_back(new_rating);
+        self.total_ratings += 1;
+
+        // Recalculate average rating
+        let mut total = 0u32;
+        for rating in self.ratings.iter() {
+            total += rating.rating;
+        }
+        self.average_rating = Some(total / self.total_ratings);
+
+        Ok(())
+    }
+
+    /// Check if invoice has ratings
+    pub fn has_ratings(&self) -> bool {
+        self.total_ratings > 0
+    }
+
+    /// Get highest rating
+    pub fn get_highest_rating(&self) -> Option<u32> {
+        if self.ratings.is_empty() {
+            return None;
+        }
+        
+        let mut highest = 0u32;
+        for rating in self.ratings.iter() {
+            if rating.rating > highest {
+                highest = rating.rating;
+            }
+        }
+        Some(highest)
+    }
+
+    /// Get lowest rating
+    pub fn get_lowest_rating(&self) -> Option<u32> {
+        if self.ratings.is_empty() {
+            return None;
+        }
+        
+        let mut lowest = 5u32;
+        for rating in self.ratings.iter() {
+            if rating.rating < lowest {
+                lowest = rating.rating;
+            }
+        }
+        Some(lowest)
+    }
 }
 
 /// Storage keys for invoice data
@@ -269,5 +340,27 @@ impl InvoiceStorage {
             }
         }
         count
+    }
+
+    /// Get all invoices across all statuses
+    pub fn get_all_invoices(env: &Env) -> Vec<BytesN<32>> {
+        let mut all_invoices = vec![env];
+        
+        let statuses = [
+            InvoiceStatus::Pending,
+            InvoiceStatus::Verified,
+            InvoiceStatus::Funded,
+            InvoiceStatus::Paid,
+            InvoiceStatus::Defaulted,
+        ];
+        
+        for status in statuses.iter() {
+            let invoices = Self::get_invoices_by_status(env, status);
+            for invoice_id in invoices.iter() {
+                all_invoices.push_back(invoice_id);
+            }
+        }
+        
+        all_invoices
     }
 }

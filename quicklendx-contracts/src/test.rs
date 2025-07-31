@@ -1560,3 +1560,152 @@ fn test_audit_statistics() {
     assert!(stats.total_entries > 0);
     assert!(stats.unique_actors > 0);
 }
+
+// Analytics Tests
+
+#[test]
+fn test_platform_metrics() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Create test data
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(&business, &1000, &currency, &due_date, &String::from_str(&env, "Test invoice"));
+
+    // Get platform metrics
+    let metrics = client.get_platform_metrics();
+    assert_eq!(metrics.total_invoices, 1);
+    assert_eq!(metrics.total_volume, 1000);
+    assert_eq!(metrics.active_businesses, 0); // No verified businesses yet
+}
+
+#[test]
+fn test_business_analytics() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Create test data
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(&business, &1000, &currency, &due_date, &String::from_str(&env, "Test invoice"));
+
+    // Get business analytics
+    let analytics = client.get_business_analytics(&business);
+    assert!(analytics.is_some());
+    let analytics = analytics.unwrap();
+    assert_eq!(analytics.total_invoices, 1);
+    assert_eq!(analytics.total_volume, 1000);
+    assert_eq!(analytics.business, business);
+}
+
+#[test]
+fn test_investor_analytics() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Create test data
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(&business, &1000, &currency, &due_date, &String::from_str(&env, "Test invoice"));
+
+    // Get investor analytics (should be None since no investments yet)
+    let analytics = client.get_investor_analytics(&investor);
+    assert!(analytics.is_none());
+}
+
+#[test]
+fn test_time_analytics() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Create test data
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(&business, &1000, &currency, &due_date, &String::from_str(&env, "Test invoice"));
+
+    // Get time analytics for different periods
+    let day_analytics = client.get_time_analytics(&crate::analytics::AnalyticsPeriod::Day);
+    let week_analytics = client.get_time_analytics(&crate::analytics::AnalyticsPeriod::Week);
+    let month_analytics = client.get_time_analytics(&crate::analytics::AnalyticsPeriod::Month);
+
+    assert_eq!(day_analytics.period, crate::analytics::AnalyticsPeriod::Day);
+    assert_eq!(week_analytics.period, crate::analytics::AnalyticsPeriod::Week);
+    assert_eq!(month_analytics.period, crate::analytics::AnalyticsPeriod::Month);
+}
+
+#[test]
+fn test_report_generation() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Create test data
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(&business, &1000, &currency, &due_date, &String::from_str(&env, "Test invoice"));
+
+    // Generate reports
+    let platform_report = client.generate_platform_report();
+    let business_report = client.generate_business_report(&business);
+
+    assert!(!platform_report.is_empty());
+    assert!(business_report.is_some());
+    let business_report = business_report.unwrap();
+    assert!(business_report.contains("Business Report"));
+}
+
+#[test]
+fn test_stored_analytics() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Create test data
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(&business, &1000, &currency, &due_date, &String::from_str(&env, "Test invoice"));
+
+    // Calculate and store analytics
+    let _metrics = client.get_platform_metrics();
+    let _business_analytics = client.get_business_analytics(&business);
+
+    // Get stored analytics
+    let stored_metrics = client.get_stored_platform_metrics();
+    let stored_business_analytics = client.get_stored_business_analytics(&business);
+
+    assert!(stored_metrics.is_some());
+    assert!(stored_business_analytics.is_some());
+}
+
+#[test]
+fn test_analytics_user_lists() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Get user lists for analytics
+    let businesses = client.get_all_businesses_for_analytics();
+    let investors = client.get_all_investors_for_analytics();
+
+    // Should be empty initially
+    assert_eq!(businesses.len(), 0);
+    assert_eq!(investors.len(), 0);
+}

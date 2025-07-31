@@ -44,6 +44,7 @@ pub enum QuickLendXError {
  NotFunded = 1501,
  AlreadyRated = 1502,
  NotRater = 1503,
+ DuplicateRating = 1504,
 
  // KYC/Verification errors (1600-1699, from main)
  BusinessNotVerified = 1600,
@@ -90,6 +91,7 @@ impl From<QuickLendXError> for Symbol {
  QuickLendXError::NotFunded => symbol_short!("NOT_FD"),
  QuickLendXError::AlreadyRated => symbol_short!("ALR_RT"),
  QuickLendXError::NotRater => symbol_short!("NOT_RT"),
+ QuickLendXError::DuplicateRating => symbol_short!("DUP_RT"),
  QuickLendXError::BusinessNotVerified => symbol_short!("BUS_NV"),
  QuickLendXError::KYCAlreadyPending => symbol_short!("KYC_PD"),
  QuickLendXError::KYCAlreadyVerified => symbol_short!("KYC_VF"),

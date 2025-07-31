@@ -174,3 +174,45 @@ pub fn emit_audit_query(env: &Env, query_type: String, result_count: u32) {
         (query_type, result_count, env.ledger().timestamp()),
     );
 }
+
+// Analytics Events
+
+/// Emit platform metrics calculated event
+pub fn emit_platform_metrics_calculated(env: &Env, total_invoices: u32, total_volume: i128) {
+    env.events().publish(
+        (symbol_short!("plat_metrics"),),
+        (total_invoices, total_volume, env.ledger().timestamp()),
+    );
+}
+
+/// Emit business analytics calculated event
+pub fn emit_business_analytics_calculated(env: &Env, business: &Address, total_invoices: u32, total_volume: i128) {
+    env.events().publish(
+        (symbol_short!("bus_analytics"),),
+        (business.clone(), total_invoices, total_volume, env.ledger().timestamp()),
+    );
+}
+
+/// Emit investor analytics calculated event
+pub fn emit_investor_analytics_calculated(env: &Env, investor: &Address, total_investments: u32, total_invested: i128) {
+    env.events().publish(
+        (symbol_short!("inv_analytics"),),
+        (investor.clone(), total_investments, total_invested, env.ledger().timestamp()),
+    );
+}
+
+/// Emit time analytics calculated event
+pub fn emit_time_analytics_calculated(env: &Env, period: &crate::analytics::AnalyticsPeriod, invoices_created: u32, total_volume: i128) {
+    env.events().publish(
+        (symbol_short!("time_analytics"),),
+        (period.clone(), invoices_created, total_volume, env.ledger().timestamp()),
+    );
+}
+
+/// Emit report generated event
+pub fn emit_report_generated(env: &Env, report_type: String, target_address: &Address) {
+    env.events().publish(
+        (symbol_short!("report_gen"),),
+        (report_type, target_address.clone(), env.ledger().timestamp()),
+    );
+}
