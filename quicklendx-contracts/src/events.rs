@@ -112,6 +112,44 @@ pub fn emit_escrow_status_changed(
     );
 }
 
+/// Emit event when insurance coverage is added to an investment
+pub fn emit_insurance_added(env: &Env, investment_id: &BytesN<32>, provider: &Address, coverage_amount: i128, premium_amount: i128, coverage_percentage: u8) {
+    env.events().publish(
+        (symbol_short!("ins_add"),),
+        (
+            investment_id.clone(),
+            provider.clone(),
+            coverage_amount,
+            premium_amount,
+            coverage_percentage,
+        ),
+    );
+}
+
+/// Emit event when insurance premium is paid
+pub fn emit_insurance_premium_paid(env: &Env, investment_id: &BytesN<32>, provider: &Address, premium_amount: i128) {
+    env.events().publish(
+        (symbol_short!("ins_prem"),),
+        (
+            investment_id.clone(),
+            provider.clone(),
+            premium_amount,
+        ),
+    );
+}
+
+/// Emit event when insurance claim is processed
+pub fn emit_insurance_claimed(env: &Env, investment_id: &BytesN<32>, provider: &Address, claim_amount: i128) {
+    env.events().publish(
+        (symbol_short!("ins_claim"),),
+        (
+            investment_id.clone(),
+            provider.clone(),
+            claim_amount,
+        ),
+    );
+}
+
 /// Emit event when backup is created
 pub fn emit_backup_created(env: &Env, backup_id: &BytesN<32>, invoice_count: u32) {
     env.events().publish(

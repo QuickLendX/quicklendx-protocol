@@ -44,6 +44,29 @@ pub struct QuickLendXContract;
 
 #[contractimpl]
 impl QuickLendXContract {
+    /// Add insurance coverage to an investment
+    pub fn add_investment_insurance(
+        env: Env,
+        investment_id: BytesN<32>,
+        provider: Address,
+        coverage_percentage: u8,
+        premium: i128,
+    ) -> Result<(), errors::QuickLendXError> {
+        investment::InvestmentStorage::add_insurance(&env, &investment_id, provider.clone(), coverage_percentage, premium)?;
+        events::emit_insurance_added(&env, &investment_id, &provider, premium * coverage_percentage as i128 / 100, premium, coverage_percentage);
+        events::emit_insurance_premium_paid(&env, &investment_id, &provider, premium);
+        Ok(())
+    }
+
+    /// Process insurance claim for an investment
+    pub fn claim_investment_insurance(
+        env: Env,
+        investment_id: BytesN<32>,
+    ) -> Result<i128, errors::QuickLendXError> {
+        let claim_amount = investment::InvestmentStorage::process_insurance_claim(&env, &investment_id)?;
+        // Provider and claim amount are emitted in the event from process_insurance_claim
+        Ok(claim_amount)
+    }
     /// Store an invoice in the contract
     pub fn store_invoice(
         env: Env,
