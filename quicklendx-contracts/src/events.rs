@@ -144,6 +144,23 @@ pub fn emit_backup_archived(env: &Env, backup_id: &BytesN<32>) {
     );
 }
 
+/// Emit event when a bid expires
+pub fn emit_bid_expired(
+    env: &Env,
+    bid_id: &BytesN<32>,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("bid_exp"),),
+        (
+            bid_id.clone(),
+            invoice_id.clone(),
+            investor.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
 
 /// Emit audit log event
 pub fn emit_audit_log_created(env: &Env, entry: &AuditLogEntry) {

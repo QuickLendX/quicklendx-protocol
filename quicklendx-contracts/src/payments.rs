@@ -1,12 +1,12 @@
-use soroban_sdk::{contracttype, Address, BytesN, Env, symbol_short};
 use crate::errors::QuickLendXError;
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum EscrowStatus {
-    Held,      // Funds are held in escrow
-    Released,  // Funds released to business
-    Refunded,  // Funds refunded to investor
+    Held,     // Funds are held in escrow
+    Released, // Funds released to business
+    Refunded, // Funds refunded to investor
 }
 
 #[contracttype]
@@ -28,7 +28,10 @@ impl EscrowStorage {
     pub fn store_escrow(env: &Env, escrow: &Escrow) {
         env.storage().instance().set(&escrow.escrow_id, escrow);
         // Also store by invoice_id for easy lookup
-        env.storage().instance().set(&(symbol_short!("escrow"), &escrow.invoice_id), &escrow.escrow_id);
+        env.storage().instance().set(
+            &(symbol_short!("escrow"), &escrow.invoice_id),
+            &escrow.escrow_id,
+        );
     }
 
     pub fn get_escrow(env: &Env, escrow_id: &BytesN<32>) -> Option<Escrow> {
@@ -36,7 +39,10 @@ impl EscrowStorage {
     }
 
     pub fn get_escrow_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Escrow> {
-        let escrow_id: Option<BytesN<32>> = env.storage().instance().get(&(symbol_short!("escrow"), invoice_id));
+        let escrow_id: Option<BytesN<32>> = env
+            .storage()
+            .instance()
+            .get(&(symbol_short!("escrow"), invoice_id));
         if let Some(id) = escrow_id {
             Self::get_escrow(env, &id)
         } else {
@@ -53,12 +59,12 @@ impl EscrowStorage {
         let counter_key = symbol_short!("esc_cnt");
         let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
         env.storage().instance().set(&counter_key, &(counter + 1));
-        
+
         let mut id_bytes = [0u8; 32];
         // Add escrow prefix to distinguish from other entity types
         id_bytes[0] = 0xE5; // 'E' for Escrow
         id_bytes[1] = 0xC0; // 'C' for sCrow
-        // Embed timestamp in next 8 bytes
+                            // Embed timestamp in next 8 bytes
         id_bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
         // Embed counter in next 8 bytes
         id_bytes[10..18].copy_from_slice(&counter.to_be_bytes());
@@ -66,7 +72,7 @@ impl EscrowStorage {
         for i in 18..32 {
             id_bytes[i] = ((timestamp + counter + 0xE5C0) % 256) as u8;
         }
-        
+
         BytesN::from_array(env, &id_bytes)
     }
 }
@@ -97,10 +103,7 @@ pub fn create_escrow(
 }
 
 /// Release escrow funds to business upon invoice verification
-pub fn release_escrow(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-) -> Result<(), QuickLendXError> {
+pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
@@ -122,10 +125,7 @@ pub fn release_escrow(
 }
 
 /// Refund escrow funds to investor if verification fails
-pub fn refund_escrow(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-) -> Result<(), QuickLendXError> {
+pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
