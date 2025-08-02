@@ -1561,3 +1561,331 @@ fn test_audit_statistics() {
     assert!(stats.total_entries > 0);
     assert!(stats.unique_actors > 0);
 }
+
+// Investor Verification Tests
+
+#[test]
+fn test_submit_investor_kyc_application() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let investor = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Investor ID and financial documents");
+    let investment_limit = 10000i128;
+
+    env.mock_all_auths();
+    client.submit_investor_kyc_application(&investor, &kyc_data, &investment_limit);
+
+    // Verify application was submitted
+    let verification = client.get_investor_verification(&investor);
+    assert!(verification.is_some());
+    let verification = verification.unwrap();
+    assert_eq!(verification.investor, investor);
+    assert_eq!(verification.status, verification::BusinessVerificationStatus::Pending);
+    assert_eq!(verification.kyc_data, kyc_data);
+    assert_eq!(verification.investment_limit, investment_limit);
+    assert!(verification.verified_at.is_none());
+    assert!(verification.verified_by.is_none());
+}
+
+#[test]
+fn test_verify_investor() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Verified investor documents");
+    let investment_limit = 50000i128;
+
+    // Set admin
+    client.set_admin(&admin);
+
+    // Submit KYC first
+    env.mock_all_auths();
+    client.submit_investor_kyc_application(&investor, &kyc_data, &25000i128);
+
+    // Verify investor
+    env.mock_all_auths();
+    client.verify_investor(&admin, &investor, &kyc_data, &investment_limit);
+
+    // Check status
+    let verification = client.get_investor_verification(&investor);
+    assert!(verification.is_some());
+    let verification = verification.unwrap();
+    assert_eq!(verification.status, verification::BusinessVerificationStatus::Verified);
+    assert_eq!(verification.investment_limit, investment_limit);
+    assert!(verification.verified_at.is_some());
+    assert_eq!(verification.verified_by, Some(admin.clone()));
+
+    // Check status query
+    let status = client.get_investor_verification_status(&investor);
+    assert!(status.is_some());
+    assert_eq!(status.unwrap(), verification::BusinessVerificationStatus::Verified);
+}
+
+#[test]
+fn test_reject_investor() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Investor documents");
+    let investment_limit = 10000i128;
+    let rejection_reason = String::from_str(&env, "Insufficient documentation");
+
+    // Set admin and submit KYC
+    client.set_admin(&admin);
+    env.mock_all_auths();
+    client.submit_investor_kyc_application(&investor, &kyc_data, &investment_limit);
+
+    // Reject investor
+    env.mock_all_auths();
+    client.reject_investor(&admin, &investor, &rejection_reason);
+
+    // Check status
+    let verification = client.get_investor_verification(&investor);
+    assert!(verification.is_some());
+    let verification = verification.unwrap();
+    assert_eq!(verification.status, verification::BusinessVerificationStatus::Rejected);
+    assert_eq!(verification.rejection_reason, Some(rejection_reason));
+    assert!(verification.verified_at.is_none());
+    assert_eq!(verification.verified_by, Some(admin));
+}
+
+#[test]
+fn test_investor_kyc_already_pending() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let investor = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Investor documents");
+    let investment_limit = 10000i128;
+
+    // Submit first application
+    env.mock_all_auths();
+    client.submit_investor_kyc_application(&investor, &kyc_data, &investment_limit);
+
+    // Try to submit again - should fail
+    env.mock_all_auths();
+    let result = client.try_submit_investor_kyc_application(&investor, &kyc_data, &investment_limit);
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvestorKYCAlreadyPending);
+}
+
+#[test]
+fn test_investor_kyc_already_verified() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Investor documents");
+    let investment_limit = 10000i128;
+
+    // Set admin, submit and verify
+    client.set_admin(&admin);
+    env.mock_all_auths();
+    client.submit_investor_kyc_application(&investor, &kyc_data, &investment_limit);
+    client.verify_investor(&admin, &investor, &kyc_data, &investment_limit);
+
+    // Try to submit again - should fail
+    env.mock_all_auths();
+    let result = client.try_submit_investor_kyc_application(&investor, &kyc_data, &investment_limit);
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvestorKYCAlreadyVerified);
+}
+
+#[test]
+fn test_investor_kyc_resubmission_after_rejection() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Investor documents");
+    let investment_limit = 10000i128;
+    let rejection_reason = String::from_str(&env, "Need more docs");
+
+    // Set admin, submit, and reject
+    client.set_admin(&admin);
+    env.mock_all_auths();
+    client.submit_investor_kyc_application(&investor, &kyc_data, &investment_limit);
+    client.reject_investor(&admin, &investor, &rejection_reason);
+
+    // Should be able to resubmit after rejection
+    let new_kyc_data = String::from_str(&env, "Updated investor documents");
+    env.mock_all_auths();
+    client.submit_investor_kyc_application(&investor, &new_kyc_data, &investment_limit);
+
+    let verification = client.get_investor_verification(&investor);
+    assert!(verification.is_some());
+    let verification = verification.unwrap();
+    assert_eq!(verification.status, verification::BusinessVerificationStatus::Pending);
+    assert_eq!(verification.kyc_data, new_kyc_data);
+}
+
+#[test]
+fn test_place_bid_requires_investor_verification() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and verify business
+    client.set_admin(&admin);
+    env.mock_all_auths();
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business docs"));
+    client.verify_business(&admin, &business);
+
+    // Create and verify invoice
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Test invoice"),
+    );
+    env.mock_all_auths();
+    client.verify_invoice(&invoice_id);
+
+    // Try to place bid without investor verification - should fail
+    env.mock_all_auths();
+    let result = client.try_place_bid(&investor, &invoice_id, &500, &600);
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvestorNotVerified);
+
+    // Verify investor and try again
+    env.mock_all_auths();
+    client.submit_investor_kyc_application(&investor, &String::from_str(&env, "Investor docs"), &10000);
+    client.verify_investor(&admin, &investor, &String::from_str(&env, "Investor docs"), &10000);
+
+    // Now bid should succeed
+    env.mock_all_auths();
+    let bid_id = client.place_bid(&investor, &invoice_id, &500, &600);
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.investor, investor);
+    assert_eq!(bid.bid_amount, 500);
+}
+
+#[test]
+fn test_investment_limit_enforcement() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let investment_limit = 1000i128;
+
+    // Set up verified business and investor
+    client.set_admin(&admin);
+    env.mock_all_auths();
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business docs"));
+    client.verify_business(&admin, &business);
+    client.submit_investor_kyc_application(&investor, &String::from_str(&env, "Investor docs"), &investment_limit);
+    client.verify_investor(&admin, &investor, &String::from_str(&env, "Investor docs"), &investment_limit);
+
+    // Create and verify invoice
+    let invoice_id = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Large invoice"),
+    );
+    env.mock_all_auths();
+    client.verify_invoice(&invoice_id);
+
+    // Try to bid above limit - should fail
+    env.mock_all_auths();
+    let result = client.try_place_bid(&investor, &invoice_id, &1500, &1800);
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvestmentLimitExceeded);
+
+    // Bid within limit should succeed
+    env.mock_all_auths();
+    let bid_id = client.place_bid(&investor, &invoice_id, &800, &900);
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.bid_amount, 800);
+}
+
+#[test]
+fn test_get_investor_verification_lists() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let investor1 = Address::generate(&env);
+    let investor2 = Address::generate(&env);
+    let investor3 = Address::generate(&env);
+
+    // Set admin
+    client.set_admin(&admin);
+
+    // Submit KYC applications
+    env.mock_all_auths();
+    let kyc_data = String::from_str(&env, "Investor documents");
+    let investment_limit = 10000i128;
+    client.submit_investor_kyc_application(&investor1, &kyc_data, &investment_limit);
+    client.submit_investor_kyc_application(&investor2, &kyc_data, &investment_limit);
+    client.submit_investor_kyc_application(&investor3, &kyc_data, &investment_limit);
+
+    // Verify investor1, reject investor2, leave investor3 pending
+    env.mock_all_auths();
+    client.verify_investor(&admin, &investor1, &kyc_data, &investment_limit);
+    client.reject_investor(&admin, &investor2, &String::from_str(&env, "Rejected"));
+
+    // Check lists
+    let verified = client.get_verified_investors();
+    let pending = client.get_pending_investors();
+    let rejected = client.get_rejected_investors();
+
+    assert_eq!(verified.len(), 1);
+    assert_eq!(pending.len(), 1);
+    assert_eq!(rejected.len(), 1);
+
+    assert!(verified.contains(&investor1));
+    assert!(pending.contains(&investor3));
+    assert!(rejected.contains(&investor2));
+}
+
+#[test]
+fn test_investor_verification_unauthorized_access() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let fake_admin = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Investor documents");
+    let investment_limit = 10000i128;
+
+    // Set real admin
+    client.set_admin(&admin);
+
+    // Submit KYC
+    env.mock_all_auths();
+    client.submit_investor_kyc_application(&investor, &kyc_data, &investment_limit);
+
+    // Try to verify with fake admin - should fail
+    env.mock_all_auths();
+    let result = client.try_verify_investor(&fake_admin, &investor, &kyc_data, &investment_limit);
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::NotAdmin);
+
+    // Try to reject with fake admin - should fail
+    env.mock_all_auths();
+    let result = client.try_reject_investor(&fake_admin, &investor, &String::from_str(&env, "Rejected"));
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::NotAdmin);
+}
