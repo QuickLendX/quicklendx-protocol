@@ -31,6 +31,9 @@ use settlement::settle_invoice as do_settle_invoice;
 use verification::{
     get_business_verification_status, reject_business, submit_kyc_application, verify_business,
     verify_invoice_data, BusinessVerificationStorage,
+    submit_investor_kyc_application, verify_investor, reject_investor, 
+    get_investor_verification_status, require_investor_verification, 
+    check_investment_limit, InvestorVerificationStorage,
 };
 
 use crate::backup::{Backup, BackupStatus, BackupStorage};
@@ -238,6 +241,15 @@ impl QuickLendXContract {
         bid_amount: i128,
         expected_return: i128,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        // Only the investor can place their own bid
+        investor.require_auth();
+        
+        // Check investor verification status
+        require_investor_verification(&env, &investor)?;
+        
+        // Check investment limit
+        check_investment_limit(&env, &investor, bid_amount)?;
+        
         // Only allow bids on verified invoices
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -247,8 +259,7 @@ impl QuickLendXContract {
         if bid_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
         }
-        // Only the investor can place their own bid
-        investor.require_auth();
+        
         // Create bid
         let bid_id = BidStorage::generate_unique_bid_id(&env);
         let bid = Bid {
@@ -491,6 +502,73 @@ impl QuickLendXContract {
     /// Get all rejected businesses
     pub fn get_rejected_businesses(env: Env) -> Vec<Address> {
         BusinessVerificationStorage::get_rejected_businesses(&env)
+    }
+
+    // Investor KYC/Verification Functions
+
+    /// Submit investor KYC application (investor only)
+    pub fn submit_investor_kyc_application(
+        env: Env,
+        investor: Address,
+        kyc_data: String,
+        investment_limit: i128,
+    ) -> Result<(), QuickLendXError> {
+        submit_investor_kyc_application(&env, &investor, kyc_data, investment_limit)
+    }
+
+    /// Verify investor (admin only)
+    pub fn verify_investor(
+        env: Env,
+        admin: Address,
+        investor: Address,
+        kyc_data: String,
+        investment_limit: i128,
+    ) -> Result<(), QuickLendXError> {
+        verify_investor(&env, &admin, &investor, kyc_data, investment_limit)
+    }
+
+    /// Reject investor (admin only)
+    pub fn reject_investor(
+        env: Env,
+        admin: Address,
+        investor: Address,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        reject_investor(&env, &admin, &investor, reason)
+    }
+
+    /// Get investor verification status
+    pub fn get_investor_verification_status(
+        env: Env,
+        investor: Address,
+    ) -> Option<verification::BusinessVerificationStatus> {
+        match get_investor_verification_status(&env, &investor) {
+            Ok(status) => Some(status),
+            Err(_) => None,
+        }
+    }
+
+    /// Get investor verification details
+    pub fn get_investor_verification(
+        env: Env,
+        investor: Address,
+    ) -> Option<verification::InvestorVerification> {
+        InvestorVerificationStorage::get_verification(&env, &investor)
+    }
+
+    /// Get all verified investors
+    pub fn get_verified_investors(env: Env) -> Vec<Address> {
+        InvestorVerificationStorage::get_verified_investors(&env)
+    }
+
+    /// Get all pending investors
+    pub fn get_pending_investors(env: Env) -> Vec<Address> {
+        InvestorVerificationStorage::get_pending_investors(&env)
+    }
+
+    /// Get all rejected investors
+    pub fn get_rejected_investors(env: Env) -> Vec<Address> {
+        InvestorVerificationStorage::get_rejected_investors(&env)
     }
 
     /// Release escrow funds to business upon invoice verification

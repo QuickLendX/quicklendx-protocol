@@ -51,6 +51,12 @@ pub enum QuickLendXError {
  KYCAlreadyVerified = 1602,
  KYCNotFound = 1603,
  InvalidKYCStatus = 1604,
+ InvestorNotVerified = 1605,
+ InvestorKYCAlreadyPending = 1606,
+ InvestorKYCAlreadyVerified = 1607,
+ InvestorKYCNotFound = 1608,
+ InvalidInvestorKYCStatus = 1609,
+ InvestmentLimitExceeded = 1610,
 
  // Audit errors (1700-1799)
  AuditLogNotFound = 1700,
@@ -95,6 +101,12 @@ impl From<QuickLendXError> for Symbol {
  QuickLendXError::KYCAlreadyVerified => symbol_short!("KYC_VF"),
  QuickLendXError::KYCNotFound => symbol_short!("KYC_NF"),
  QuickLendXError::InvalidKYCStatus => symbol_short!("KYC_IS"),
+ QuickLendXError::InvestorNotVerified => symbol_short!("INV_NV"),
+ QuickLendXError::InvestorKYCAlreadyPending => symbol_short!("IKYC_PD"),
+ QuickLendXError::InvestorKYCAlreadyVerified => symbol_short!("IKYC_VF"),
+ QuickLendXError::InvestorKYCNotFound => symbol_short!("IKYC_NF"),
+ QuickLendXError::InvalidInvestorKYCStatus => symbol_short!("IKYC_IS"),
+ QuickLendXError::InvestmentLimitExceeded => symbol_short!("INV_LIM"),
  // Add to Symbol conversion
  QuickLendXError::AuditLogNotFound => symbol_short!("AUD_NF"),
  QuickLendXError::AuditValidationFailed => symbol_short!("AUD_VF"),
