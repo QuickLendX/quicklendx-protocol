@@ -1,5 +1,7 @@
-use soroban_sdk::{contracttype, Address, BytesN, Env, symbol_short};
+use soroban_sdk::{contracttype, Address, BytesN, Env, symbol_short,EnvError};
 use crate::errors::QuickLendXError;
+use soroban_sdk::{Symbol};
+use soroban_sdk::token;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -22,6 +24,52 @@ pub struct Escrow {
     pub status: EscrowStatus,
 }
 
+#[contracttype]
+#[derive(Clone,Debug,Eq,PartialEq)]
+pub struct TokenMetadata{
+    pub symbol:BytesN<12>,
+    pub decimals:u8,
+    pub is_whitelisted: bool,
+    pub fee_bps: u32,
+}
+pub struct CurrencyRegistry;
+impl CurrencyRegistry{
+    pub fn set_token(env:&Env,token:&Address,metadata:&TokenMetadata)->Option<TokenMetadata>{
+        env.storage().instance().set(token,metadata);
+    }
+    pub fn get_token(env:&Env,token:&Address)->Option<TokenMetadata>{
+        env.storage().instance().get(token)
+    }
+    pub fn validate_token(env:&Env,token:&Address)->Result<TokenMetadata,QuickLendXError>{
+        let metadata=Self::get_token(env,token).ok_or(QuickLendXError::UnsupportedToken)?;
+        if !metadata.is_whitelisted{
+            return Err(QuickLendXError::UnsupportedToken);
+        }
+        Ok(metadata)
+    }
+}
+pub struct Client<'a>{
+    env:&'a Env,
+    contract_id:Address,
+}
+impl <'a>Client<'a>{
+    
+    pub fn new(env: &'a Env,contract_id:Address)->Self{
+        Self{env,contract_id}
+    }
+    pub fn transfer(
+        &self,
+        from:&Address,
+        to:&Address,
+        amount: &i128,
+     ) ->  Result<bool,soroban_sdk::EnvError>{
+        self.env.invoke_contract(
+            &self.contract_id,
+            &Symbol::short("transfer"),
+            &(from,to,amount),
+        )
+    }
+}
 pub struct EscrowStorage;
 
 impl EscrowStorage {
@@ -93,6 +141,7 @@ pub fn create_escrow(
     };
 
     EscrowStorage::store_escrow(env, &escrow);
+    CurrencyRegistry::validate_token(env,currency)?;
     Ok(escrow_id)
 }
 
@@ -109,7 +158,7 @@ pub fn release_escrow(
     }
 
     // Transfer funds from escrow to business
-    let transfer_success = transfer_funds(env, &escrow.investor, &escrow.business, escrow.amount);
+    let transfer_success = transfer_funds(env,&escrow.currency, &escrow.investor, &escrow.business, escrow.amount);
     if !transfer_success {
         return Err(QuickLendXError::InsufficientFunds);
     }
@@ -134,7 +183,7 @@ pub fn refund_escrow(
     }
 
     // Refund funds to investor
-    let transfer_success = transfer_funds(env, &escrow.business, &escrow.investor, escrow.amount);
+    let transfer_success = transfer_funds(env,&escrow.currency, &escrow.business, &escrow.investor, escrow.amount);
     if !transfer_success {
         return Err(QuickLendXError::InsufficientFunds);
     }
@@ -145,17 +194,41 @@ pub fn refund_escrow(
 
     Ok(())
 }
-
+pub fn native_xlm_address(env:&Env)->Address{
+    let zero_bytes=BytesN::from_array(env,&[0u8;32]);
+    Address::from_bytes(&zero_bytes).unwrap();
+}
 /// Transfer funds between addresses
 /// TODO: Integrate with Soroban payment primitives for XLM/USDC
 /// For now, this is a stub that always returns true
 /// Replace with actual payment logic when implementing token transfers
-pub fn transfer_funds(env: &Env, from: &Address, to: &Address, amount: i128) -> bool {
+pub fn transfer_funds(env: &Env,currency: &Address,from: &Address, to: &Address, amount: i128) -> Result<bool,QuickLendXError> {
     // Placeholder for actual token transfer implementation
     // This should integrate with Soroban's token interface
     // Example implementation would involve:
     // 1. Get token contract instance
     // 2. Call transfer method on token contract
     // 3. Handle success/failure appropriately
+    if currency==&native_xlm_address(env){
+        let payment_success=env.invoke_contract(
+            &Address::from_bytes(&BytesN::from_array(env,&[0u8;32])).unwrap(),
+            &symbol_short!("pay_nativ"),
+            &(from,to,amount),
+        ).is_ok();
+        if payment_success{
+            return Ok(true)
+        } else{
+            Err(QuickLendXError::PaymentFailed)
+        }
+    } else{
+    // let metadata=CurrencyRegistry::validate_token(env,currency)?;
+    // let fee_amount=amount*(metadat.fee_bps as i128)/10_000;
+    // let amount_after_fee=amount-fee_amount;
+    let client=token::Client::new(env,currency.clone());
+    match client.transfer(from,to,&amount){
+        Ok(success) if success=>Ok(true),
+        _=>Err(QuickLendXError::PaymentFailed),
+    }
+}
     true
 }
