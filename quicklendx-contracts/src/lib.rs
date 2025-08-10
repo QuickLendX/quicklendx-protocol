@@ -70,6 +70,10 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidDescription);
         }
 
+        // Validate category and tags
+        verification::validate_invoice_category(&category)?;
+        verification::validate_invoice_tags(&tags)?;
+
         // Create new invoice
         let invoice = Invoice::new(
             &env,
@@ -78,7 +82,6 @@ impl QuickLendXContract {
             currency.clone(),
             due_date,
             description,
-            category, // Add this
             tags,
         );
 
@@ -122,6 +125,10 @@ impl QuickLendXContract {
         // Basic validation
         verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
 
+        // Validate category and tags
+        verification::validate_invoice_category(&category)?;
+        verification::validate_invoice_tags(&tags)?;
+
         // Create and store invoice
         let invoice = Invoice::new(
             &env,
@@ -130,8 +137,6 @@ impl QuickLendXContract {
             currency.clone(),
             due_date,
             description.clone(),
-            category, // Add this
-            tags,     // Add this
         );
         InvoiceStorage::store_invoice(&env, &invoice);
         emit_invoice_uploaded(&env, &invoice);
@@ -147,7 +152,6 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
         // (Optional: Only admin can verify, add check here if needed)
-        invoice.verify(&env,invoice.business.clone());
         InvoiceStorage::update_invoice(&env, &invoice);
         emit_invoice_verified(&env, &invoice);
 
@@ -198,8 +202,6 @@ impl QuickLendXContract {
 
         // Update status
         match new_status {
-            InvoiceStatus::Verified => invoice.verify(&env,invoice.business.clone() ),
-            InvoiceStatus::Paid => invoice.mark_as_paid(&env,invoice.business.clone(),env.ledger().timestamp()),
             InvoiceStatus::Defaulted => invoice.mark_as_defaulted(),
             _ => return Err(QuickLendXError::InvalidStatus),
         }
@@ -704,9 +706,6 @@ impl QuickLendXContract {
 
         Ok(())
     }
-
-
-
     /// Get audit trail for an invoice
     pub fn get_invoice_audit_trail(env: Env, invoice_id: BytesN<32>) -> Vec<BytesN<32>> {
         AuditStorage::get_invoice_audit_trail(&env, &invoice_id)
@@ -725,8 +724,6 @@ impl QuickLendXContract {
         limit: u32,
     ) -> Vec<AuditLogEntry> {
         let results = AuditStorage::query_audit_logs(&env, &filter, limit);
-        emit_audit_query(&env,String::from_str(&env,
-            "query_audit_logs"), results.len() as u32);
         results
     }
 
@@ -757,7 +754,130 @@ impl QuickLendXContract {
     pub fn get_audit_entries_by_actor(env: Env, actor: Address) -> Vec<BytesN<32>> {
         AuditStorage::get_audit_entries_by_actor(&env, &actor)
     }
+
+    // Category and Tag Management Functions
+
+    /// Get invoices by category
+    pub fn get_invoices_by_category(env: Env, category: invoice::InvoiceCategory) -> Vec<BytesN<32>> {
+        InvoiceStorage::get_invoices_by_category(&env, &category)
+    }
+
+    /// Get invoices by category and status
+    pub fn get_invoices_by_cat_status(
+        env: Env,
+        category: invoice::InvoiceCategory,
+        status: InvoiceStatus,
+    ) -> Vec<BytesN<32>> {
+        InvoiceStorage::get_invoices_by_category_and_status(&env, &category, &status)
+    }
+
+    /// Get invoices by tag
+    pub fn get_invoices_by_tag(env: Env, tag: String) -> Vec<BytesN<32>> {
+        InvoiceStorage::get_invoices_by_tag(&env, &tag)
+    }
+
+    /// Get invoices by multiple tags (AND logic)
+    pub fn get_invoices_by_tags(env: Env, tags: Vec<String>) -> Vec<BytesN<32>> {
+        InvoiceStorage::get_invoices_by_tags(&env, &tags)
+    }
+
+    /// Get invoice count by category
+    pub fn get_invoice_count_by_category(env: Env, category: invoice::InvoiceCategory) -> u32 {
+        InvoiceStorage::get_invoice_count_by_category(&env, &category)
+    }
+
+    /// Get invoice count by tag
+    pub fn get_invoice_count_by_tag(env: Env, tag: String) -> u32 {
+        InvoiceStorage::get_invoice_count_by_tag(&env, &tag)
+    }
+
+    /// Get all available categories
+    pub fn get_all_categories(env: Env) -> Vec<invoice::InvoiceCategory> {
+        InvoiceStorage::get_all_categories(&env)
+    }
+
+    /// Update invoice category (business owner only)
+    pub fn update_invoice_category(
+        env: Env,
+        invoice_id: BytesN<32>,
+        new_category: invoice::InvoiceCategory,
+    ) -> Result<(), QuickLendXError> {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        // Only the business owner can update the category
+        invoice.business.require_auth();
+
+        let old_category = invoice.category.clone();
+        invoice.update_category(new_category.clone());
+
+        // Validate the new category
+        verification::validate_invoice_category(&new_category)?;
+
+        // Update the invoice
+        InvoiceStorage::update_invoice(&env, &invoice);
+
+        // Emit event
+        events::emit_invoice_category_updated(&env, &invoice_id, &invoice.business, &old_category, &new_category);
+
+        Ok(())
+    }
+
+    /// Add tag to invoice (business owner only)
+    pub fn add_invoice_tag(env: Env, invoice_id: BytesN<32>, tag: String) -> Result<(), QuickLendXError> {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        // Only the business owner can add tags
+        invoice.business.require_auth();
+
+        // Add the tag
+        invoice.add_tag(&env, tag.clone())?;
+
+        // Update the invoice
+        InvoiceStorage::update_invoice(&env, &invoice);
+
+        // Emit event
+        events::emit_invoice_tag_added(&env, &invoice_id, &invoice.business, &tag);
+
+        Ok(())
+    }
+
+    /// Remove tag from invoice (business owner only)
+    pub fn remove_invoice_tag(env: Env, invoice_id: BytesN<32>, tag: String) -> Result<(), QuickLendXError> {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        // Only the business owner can remove tags
+        invoice.business.require_auth();
+
+        // Remove the tag
+        invoice.remove_tag(tag.clone())?;
+
+        // Update the invoice
+        InvoiceStorage::update_invoice(&env, &invoice);
+
+        // Emit event
+        events::emit_invoice_tag_removed(&env, &invoice_id, &invoice.business, &tag);
+
+        Ok(())
+    }
+
+    /// Get all tags for an invoice
+    pub fn get_invoice_tags(env: Env, invoice_id: BytesN<32>) -> Result<Vec<String>, QuickLendXError> {
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        Ok(invoice.get_tags())
+    }
+
+    /// Check if invoice has a specific tag
+    pub fn invoice_has_tag(env: Env, invoice_id: BytesN<32>, tag: String) -> Result<bool, QuickLendXError> {
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        Ok(invoice.has_tag(tag))
+    }
 }
 
 #[cfg(test)]
 mod test;
+

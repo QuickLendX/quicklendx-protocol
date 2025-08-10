@@ -43,12 +43,20 @@ pub struct AuditLogEntry {
     pub transaction_hash: Option<BytesN<32>>,
 }
 
+/// Audit operation filter
+#[contracttype]
+#[derive(Clone, Debug)]
+pub enum AuditOperationFilter {
+    Any,
+    Specific(AuditOperation),
+}
+
 /// Audit query filters
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct AuditQueryFilter {
     pub invoice_id: Option<BytesN<32>>,
-    pub operation: Option<AuditOperation>,
+    pub operation: AuditOperationFilter,
     pub actor: Option<Address>,
     pub start_timestamp: Option<u64>,
     pub end_timestamp: Option<u64>,
@@ -204,7 +212,7 @@ impl AuditStorage {
         // Start with invoice-specific entries if invoice_id is provided
         let audit_ids = if let Some(invoice_id) = &filter.invoice_id {
             Self::get_invoice_audit_trail(env, invoice_id)
-        } else if let Some(operation) = &filter.operation {
+        } else if let AuditOperationFilter::Specific(operation) = &filter.operation {
             Self::get_audit_entries_by_operation(env, operation)
         } else if let Some(actor) = &filter.actor {
             Self::get_audit_entries_by_actor(env, actor)
@@ -236,7 +244,7 @@ impl AuditStorage {
         let total_entries = all_entries.len() as u32;
         
         let mut operations_count = Vec::new(env);
-        let mut unique_actors = Vec::new(env);
+        let mut unique_actors: Vec<Address> = Vec::new(env);
         let mut min_timestamp = u64::MAX;
         let mut max_timestamp = 0u64;
         
@@ -324,9 +332,12 @@ impl AuditStorage {
             }
         }
         
-        if let Some(operation) = &filter.operation {
-            if entry.operation != *operation {
-                return false;
+        match &filter.operation {
+            AuditOperationFilter::Any => {},
+            AuditOperationFilter::Specific(operation) => {
+                if entry.operation != *operation {
+                    return false;
+                }
             }
         }
         
@@ -427,7 +438,6 @@ pub fn log_invoice_funded(
         AuditOperation::InvoiceFunded,
         investor,
         None,
-        Some(String::from_str(env,"Funded")),
         Some(amount),
         None,
     );
@@ -447,7 +457,6 @@ pub fn log_payment_processed(
         AuditOperation::PaymentProcessed,
         actor,
         None,
-        Some(String::from_str(env,"Payment processed")),
         Some(amount),
         Some(payment_type),
     );
