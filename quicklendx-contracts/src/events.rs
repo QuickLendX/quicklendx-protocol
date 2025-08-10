@@ -1,7 +1,8 @@
 use crate::invoice::Invoice;
 use crate::payments::{Escrow, EscrowStatus};
 use crate::audit::{AuditLogEntry, AuditOperation};
-use soroban_sdk::{symbol_short, Address, BytesN, Env};
+use soroban_sdk::{symbol_short, Address, BytesN, Env,String};
+
 
 pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
     env.events().publish(

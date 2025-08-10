@@ -36,15 +36,15 @@ pub fn settle_invoice(
         calculate_profit(investment.amount, payment_amount, platform_fee_bps);
     
     // Transfer funds to investor and platform
-    let investor_paid = transfer_funds(env, &invoice.business, investor, investor_return);
-    let platform_paid = transfer_funds(env, &invoice.business, platform, platform_fee);
+    let investor_paid = transfer_funds(env, &invoice.currency,&invoice.business, investor,investor_return);
+    let platform_paid = transfer_funds(env, &invoice.currency,&invoice.business, platform, platform_fee);
     
-    if !investor_paid || !platform_paid {
+    if investor_paid.is_err() || platform_paid.is_err() {
         return Err(QuickLendXError::InsufficientFunds);
     }
     
     // Update invoice status
-    invoice.mark_as_paid(env.ledger().timestamp());
+    invoice.mark_as_paid(env, invoice.business.clone(),env.ledger().timestamp());
     InvoiceStorage::update_invoice(env, &invoice);
     
     // Update investment status

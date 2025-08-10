@@ -57,6 +57,14 @@ pub enum QuickLendXError {
  AuditValidationFailed = 1701,
  AuditIntegrityError = 1702,
  AuditQueryError = 1703,
+ UnsupportedToken=4,
+
+ // Category and Tag errors (1800-1899)
+ InvalidCategory = 1800,
+ CategoryNotFound = 1801,
+ InvalidTag = 1802,
+ TagLimitExceeded = 1803,
+ PaymentFailed= 1804,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -100,6 +108,13 @@ impl From<QuickLendXError> for Symbol {
  QuickLendXError::AuditValidationFailed => symbol_short!("AUD_VF"),
  QuickLendXError::AuditIntegrityError => symbol_short!("AUD_IE"),
  QuickLendXError::AuditQueryError => symbol_short!("AUD_QE"),
+ // Category and Tag errors
+ QuickLendXError::InvalidCategory => symbol_short!("INV_CAT"),
+ QuickLendXError::CategoryNotFound => symbol_short!("CAT_NF"),
+ QuickLendXError::InvalidTag => symbol_short!("INV_TAG"),
+ QuickLendXError::TagLimitExceeded => symbol_short!("TAG_LIM"),
+ QuickLendXError::UnsupportedToken => symbol_short!("UNSUP_TK"),
+ QuickLendXError::PaymentFailed => symbol_short!("PAY_FAIL"),
  }
  }
 }

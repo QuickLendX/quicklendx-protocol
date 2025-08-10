@@ -1,10 +1,12 @@
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address,BytesN, Env, String, Vec};
 use crate::invoice::{Invoice, InvoiceStatus};
 use crate::errors::QuickLendXError;
-
+// extern crate alloc;
+// use alloc::format;
 /// Audit operation types
+
+#[derive(Clone, Debug, Eq, PartialEq,PartialOrd, Ord)]
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AuditOperation {
     InvoiceCreated,
     InvoiceUploaded,
@@ -241,7 +243,7 @@ impl AuditStorage {
         for audit_id in all_entries.iter() {
             if let Some(entry) = Self::get_audit_entry(env, &audit_id) {
                 // Track unique actors
-                if !unique_actors.iter().any(|a| *a == entry.actor) {
+                if !unique_actors.iter().any(|a| a == entry.actor) {
                     unique_actors.push_back(entry.actor.clone());
                 }
                 
@@ -383,7 +385,7 @@ pub fn log_invoice_created(env: &Env, invoice: &Invoice) {
         AuditOperation::InvoiceCreated,
         invoice.business.clone(),
         None,
-        Some(format!("Amount: {}, Due: {}", invoice.amount, invoice.due_date)),
+        Some(String::from_str(env, "Invoice created")),
         Some(invoice.amount),
         Some(invoice.description.clone()),
     );
@@ -397,8 +399,8 @@ pub fn log_invoice_status_change(
     old_status: InvoiceStatus,
     new_status: InvoiceStatus,
 ) {
-    let old_value = format!("{:?}", old_status);
-    let new_value = format!("{:?}", new_status);
+    let old_value = String::from_str(env, "Status changed");
+    let new_value = String::from_str(env, "Status updated");
     
     log_invoice_operation(
         env,
@@ -425,7 +427,7 @@ pub fn log_invoice_funded(
         AuditOperation::InvoiceFunded,
         investor,
         None,
-        Some(format!("Funded with amount: {}", amount)),
+        Some(String::from_str(env,"Funded")),
         Some(amount),
         None,
     );
@@ -445,7 +447,7 @@ pub fn log_payment_processed(
         AuditOperation::PaymentProcessed,
         actor,
         None,
-        Some(format!("Payment type: {}, Amount: {}", payment_type, amount)),
+        Some(String::from_str(env,"Payment processed")),
         Some(amount),
         Some(payment_type),
     );

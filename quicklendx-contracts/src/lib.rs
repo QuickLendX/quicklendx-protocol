@@ -2,7 +2,8 @@
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec,
 };
-
+// use crate::events::emit_audit_query;
+// use crate::events::emit_audit_validation;
 mod backup;
 mod bid;
 mod defaults;
@@ -15,13 +16,13 @@ mod profits;
 mod settlement;
 mod verification;
 mod audit;
-
+//use crate::audit::alloc::string::ToString;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::handle_default as do_handle_default;
 use errors::QuickLendXError;
 use events::{
     emit_escrow_created, emit_escrow_refunded, emit_escrow_released, emit_invoice_uploaded,
-    emit_invoice_verified,
+    emit_invoice_verified, emit_audit_query, emit_audit_validation,
 };
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{Invoice, InvoiceStatus, InvoiceStorage};
@@ -38,7 +39,7 @@ use audit::{
     log_invoice_created, log_invoice_status_change, log_invoice_funded, log_payment_processed,
     AuditStorage, AuditLogEntry, AuditQueryFilter, AuditStats, AuditOperation
 };
-
+//use crate::audit::alloc::string::ToString;
 #[contract]
 pub struct QuickLendXContract;
 
@@ -52,6 +53,8 @@ impl QuickLendXContract {
         currency: Address,
         due_date: u64,
         description: String,
+        category: invoice::InvoiceCategory,
+        tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         // Validate input parameters
         if amount <= 0 {
@@ -75,6 +78,8 @@ impl QuickLendXContract {
             currency.clone(),
             due_date,
             description,
+            category, // Add this
+            tags,
         );
 
         // Store the invoice
@@ -97,6 +102,8 @@ impl QuickLendXContract {
         currency: Address,
         due_date: u64,
         description: String,
+        category: invoice::InvoiceCategory,
+        tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         // Only the business can upload their own invoice
         business.require_auth();
@@ -123,6 +130,8 @@ impl QuickLendXContract {
             currency.clone(),
             due_date,
             description.clone(),
+            category, // Add this
+            tags,     // Add this
         );
         InvoiceStorage::store_invoice(&env, &invoice);
         emit_invoice_uploaded(&env, &invoice);
@@ -138,7 +147,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
         // (Optional: Only admin can verify, add check here if needed)
-        invoice.verify();
+        invoice.verify(&env,invoice.business.clone());
         InvoiceStorage::update_invoice(&env, &invoice);
         emit_invoice_verified(&env, &invoice);
 
@@ -189,8 +198,8 @@ impl QuickLendXContract {
 
         // Update status
         match new_status {
-            InvoiceStatus::Verified => invoice.verify(),
-            InvoiceStatus::Paid => invoice.mark_as_paid(env.ledger().timestamp()),
+            InvoiceStatus::Verified => invoice.verify(&env,invoice.business.clone() ),
+            InvoiceStatus::Paid => invoice.mark_as_paid(&env,invoice.business.clone(),env.ledger().timestamp()),
             InvoiceStatus::Defaulted => invoice.mark_as_defaulted(),
             _ => return Err(QuickLendXError::InvalidStatus),
         }
@@ -297,6 +306,7 @@ impl QuickLendXContract {
         BidStorage::update_bid(&env, &bid);
         // Mark invoice as funded
         invoice.mark_as_funded(
+            &env,
             bid.investor.clone(),
             bid.bid_amount,
             env.ledger().timestamp(),
@@ -694,10 +704,7 @@ impl QuickLendXContract {
 
         Ok(())
     }
-}
 
-#[cfg(test)]
-mod test;
 
 
     /// Get audit trail for an invoice
@@ -718,7 +725,8 @@ mod test;
         limit: u32,
     ) -> Vec<AuditLogEntry> {
         let results = AuditStorage::query_audit_logs(&env, &filter, limit);
-        emit_audit_query(&env, "query_audit_logs".to_string(), results.len() as u32);
+        emit_audit_query(&env,String::from_str(&env,
+            "query_audit_logs"), results.len() as u32);
         results
     }
 
@@ -749,3 +757,7 @@ mod test;
     pub fn get_audit_entries_by_actor(env: Env, actor: Address) -> Vec<BytesN<32>> {
         AuditStorage::get_audit_entries_by_actor(&env, &actor)
     }
+}
+
+#[cfg(test)]
+mod test;
