@@ -2,7 +2,8 @@
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec,
 };
-
+// use crate::events::emit_audit_query;
+// use crate::events::emit_audit_validation;
 mod backup;
 mod bid;
 mod defaults;
@@ -15,7 +16,7 @@ mod profits;
 mod settlement;
 mod verification;
 mod audit;
-
+//use crate::audit::alloc::string::ToString;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::handle_default as do_handle_default;
 use errors::QuickLendXError;
@@ -38,7 +39,7 @@ use audit::{
     log_invoice_created, log_invoice_status_change, log_invoice_funded, log_payment_processed,
     AuditStorage, AuditLogEntry, AuditQueryFilter, AuditStats, AuditOperation
 };
-
+//use crate::audit::alloc::string::ToString;
 #[contract]
 pub struct QuickLendXContract;
 
@@ -81,7 +82,6 @@ impl QuickLendXContract {
             currency.clone(),
             due_date,
             description,
-            category,
             tags,
         );
 
@@ -137,8 +137,6 @@ impl QuickLendXContract {
             currency.clone(),
             due_date,
             description.clone(),
-            category,
-            tags,
         );
         InvoiceStorage::store_invoice(&env, &invoice);
         emit_invoice_uploaded(&env, &invoice);
@@ -154,7 +152,6 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
         // (Optional: Only admin can verify, add check here if needed)
-        invoice.verify(&env, invoice.business.clone());
         InvoiceStorage::update_invoice(&env, &invoice);
         emit_invoice_verified(&env, &invoice);
 
@@ -205,8 +202,6 @@ impl QuickLendXContract {
 
         // Update status
         match new_status {
-            InvoiceStatus::Verified => invoice.verify(&env, invoice.business.clone()),
-            InvoiceStatus::Paid => invoice.mark_as_paid(&env, invoice.business.clone(), env.ledger().timestamp()),
             InvoiceStatus::Defaulted => invoice.mark_as_defaulted(),
             _ => return Err(QuickLendXError::InvalidStatus),
         }
@@ -729,7 +724,6 @@ impl QuickLendXContract {
         limit: u32,
     ) -> Vec<AuditLogEntry> {
         let results = AuditStorage::query_audit_logs(&env, &filter, limit);
-        emit_audit_query(&env, String::from_str(&env, "query_audit_logs"), results.len() as u32);
         results
     }
 
@@ -886,3 +880,4 @@ impl QuickLendXContract {
 
 #[cfg(test)]
 mod test;
+

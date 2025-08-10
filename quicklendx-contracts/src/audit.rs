@@ -1,10 +1,12 @@
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address,BytesN, Env, String, Vec};
 use crate::invoice::{Invoice, InvoiceStatus};
 use crate::errors::QuickLendXError;
-
+// extern crate alloc;
+// use alloc::format;
 /// Audit operation types
+
+#[derive(Clone, Debug, Eq, PartialEq,PartialOrd, Ord)]
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AuditOperation {
     InvoiceCreated,
     InvoiceUploaded,
@@ -436,7 +438,6 @@ pub fn log_invoice_funded(
         AuditOperation::InvoiceFunded,
         investor,
         None,
-        Some(String::from_str(env, "Funded")),
         Some(amount),
         None,
     );
@@ -456,7 +457,6 @@ pub fn log_payment_processed(
         AuditOperation::PaymentProcessed,
         actor,
         None,
-        Some(String::from_str(env, "Payment processed")),
         Some(amount),
         Some(payment_type),
     );

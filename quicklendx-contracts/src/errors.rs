@@ -57,12 +57,6 @@ pub enum QuickLendXError {
  AuditValidationFailed = 1701,
  AuditIntegrityError = 1702,
  AuditQueryError = 1703,
-
- // Category and Tag errors (1800-1899)
- InvalidCategory = 1800,
- CategoryNotFound = 1801,
- InvalidTag = 1802,
- TagLimitExceeded = 1803,
 }
 
 impl From<QuickLendXError> for Symbol {
