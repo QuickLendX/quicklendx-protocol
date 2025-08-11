@@ -1,0 +1,78 @@
+# LLVM Coverage Configuration for QuickLendX Protocol
+
+[report]
+# Minimum coverage threshold (80%)
+fail-under-line = 80
+fail-under-branch = 75
+fail-under-function = 85
+
+# Output formats
+format = ["html", "lcov", "text"]
+
+# HTML report configuration
+[report.html]
+output-dir = "target/llvm-cov/html"
+title = "QuickLendX Protocol Test Coverage Report"
+
+# LCOV report configuration  
+[report.lcov]
+output-path = "target/llvm-cov/lcov.info"
+
+# Text report configuration
+[report.text]
+output-path = "target/llvm-cov/coverage.txt"
+
+# Coverage collection settings
+[coverage]
+# Include all source files
+include-build-script = false
+include-ffi = false
+
+# Exclude test files from coverage
+exclude = [
+    "*/tests/*",
+    "*/test.rs",
+    "*/integration_tests.rs", 
+    "*/stress_tests.rs",
+    "*/security_tests.rs",
+    "*/property_tests.rs",
+    "*/benches/*"
+]
+
+# Include specific modules for detailed coverage
+include = [
+    "src/lib.rs",
+    "src/invoice.rs",
+    "src/bid.rs", 
+    "src/payments.rs",
+    "src/verification.rs",
+    "src/audit.rs",
+    "src/backup.rs",
+    "src/investment.rs",
+    "src/profits.rs",
+    "src/settlement.rs",
+    "src/defaults.rs",
+    "src/events.rs",
+    "src/errors.rs"
+]
+
+# Branch coverage settings
+[coverage.branch]
+# Enable branch coverage analysis
+enabled = true
+# Minimum branch coverage threshold
+threshold = 75
+
+# Function coverage settings  
+[coverage.function]
+# Enable function coverage analysis
+enabled = true
+# Minimum function coverage threshold
+threshold = 85
+
+# Line coverage settings
+[coverage.line]
+# Enable line coverage analysis  
+enabled = true
+# Minimum line coverage threshold
+threshold = 80
