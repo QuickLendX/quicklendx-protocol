@@ -77,6 +77,20 @@
                 },
                 {
                   "string": "Test invoice"
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Services"
+                    }
+                  ]
+                },
+                {
+                  "vec": [
+                    {
+                      "string": "test"
+                    }
+                  ]
                 }
               ]
             }
@@ -148,6 +162,18 @@
                               },
                               "val": {
                                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "category"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "Services"
+                                  }
+                                ]
                               }
                             },
                             {
@@ -235,6 +261,18 @@
                                 "vec": [
                                   {
                                     "symbol": "Pending"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "tags"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "string": "test"
                                   }
                                 ]
                               }

@@ -96,6 +96,18 @@
                             },
                             {
                               "key": {
+                                "symbol": "category"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "Services"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
                                 "symbol": "created_at"
                               },
                               "val": {
@@ -179,6 +191,18 @@
                                 "vec": [
                                   {
                                     "symbol": "Pending"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "tags"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "string": "test"
                                   }
                                 ]
                               }
@@ -464,6 +488,18 @@
                                 },
                                 {
                                   "key": {
+                                    "symbol": "category"
+                                  },
+                                  "val": {
+                                    "vec": [
+                                      {
+                                        "symbol": "Services"
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": {
                                     "symbol": "created_at"
                                   },
                                   "val": {
@@ -547,6 +583,18 @@
                                     "vec": [
                                       {
                                         "symbol": "Pending"
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "tags"
+                                  },
+                                  "val": {
+                                    "vec": [
+                                      {
+                                        "string": "test"
                                       }
                                     ]
                                   }

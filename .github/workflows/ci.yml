@@ -1,48 +1,341 @@
-name: Soroban Smart Contracts CI
+name: QuickLendX Protocol - Comprehensive Testing & QA
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
-  build:
-    runs-on: macos-latest
+  # Code Quality and Linting
+  code-quality:
+    name: Code Quality & Linting
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: rustfmt, clippy
+        override: true
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: quicklendx-contracts/target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Check code formatting
+      run: |
+        cd quicklendx-contracts
+        cargo fmt --all -- --check
+
+    - name: Run Clippy linting
+      run: |
+        cd quicklendx-contracts
+        cargo clippy --all-targets --all-features -- -D warnings
+
+  # Unit and Integration Tests
+  test-suite:
+    name: Comprehensive Test Suite
+    runs-on: ubuntu-latest
+    needs: code-quality
+    strategy:
+      matrix:
+        test-type: [unit, integration, security, property, stress]
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install Rust
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Install Stellar CLI
       run: |
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source $HOME/.cargo/env
-    - name: Install Rust target for Soroban
-      run: |
-        source $HOME/.cargo/env
-        rustup target add wasm32v1-none
-    - name: Install Stellar CLI with Homebrew
-      run: |
-        brew update
-        brew install stellar-cli
+        curl -L https://github.com/stellar/stellar-cli/releases/download/v21.0.0/stellar-cli-21.0.0-x86_64-unknown-linux-gnu.tar.gz | tar xz
+        sudo mv stellar /usr/local/bin/
         stellar --version
 
-    - name: Build Cargo project
+    - name: Install Rust target for Soroban
+      run: rustup target add wasm32-unknown-unknown
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          quicklendx-contracts/target
+        key: ${{ runner.os }}-cargo-${{ matrix.test-type }}-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Run Unit Tests
+      if: matrix.test-type == 'unit'
       run: |
         cd quicklendx-contracts
-        cargo build --verbose
+        cargo test --lib --verbose
+
+    - name: Run Integration Tests
+      if: matrix.test-type == 'integration'
+      run: |
+        cd quicklendx-contracts
+        cargo test integration_tests --verbose
+
+    - name: Run Security Tests
+      if: matrix.test-type == 'security'
+      run: |
+        cd quicklendx-contracts
+        cargo test security_tests --verbose
+
+    - name: Run Property-Based Tests
+      if: matrix.test-type == 'property'
+      run: |
+        cd quicklendx-contracts
+        cargo test property_tests --verbose
+
+    - name: Run Stress Tests
+      if: matrix.test-type == 'stress'
+      run: |
+        cd quicklendx-contracts
+        cargo test stress_tests --verbose --release
+
+  # Performance Benchmarks
+  performance-tests:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    needs: code-quality
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Install Stellar CLI
+      run: |
+        curl -L https://github.com/stellar/stellar-cli/releases/download/v21.0.0/stellar-cli-21.0.0-x86_64-unknown-linux-gnu.tar.gz | tar xz
+        sudo mv stellar /usr/local/bin/
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          quicklendx-contracts/target
+        key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Run Performance Benchmarks
+      run: |
+        cd quicklendx-contracts
+        cargo bench --verbose
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: quicklendx-contracts/target/criterion/
+
+  # Test Coverage Analysis
+  coverage:
+    name: Test Coverage Analysis
+    runs-on: ubuntu-latest
+    needs: test-suite
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: llvm-tools-preview
+        override: true
+
+    - name: Install cargo-llvm-cov
+      run: cargo install cargo-llvm-cov
+
+    - name: Install Stellar CLI
+      run: |
+        curl -L https://github.com/stellar/stellar-cli/releases/download/v21.0.0/stellar-cli-21.0.0-x86_64-unknown-linux-gnu.tar.gz | tar xz
+        sudo mv stellar /usr/local/bin/
+
+    - name: Install Rust target for Soroban
+      run: rustup target add wasm32-unknown-unknown
+
+    - name: Generate test coverage
+      run: |
+        cd quicklendx-contracts
+        cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: quicklendx-contracts/lcov.info
+        fail_ci_if_error: true
+        verbose: true
+
+    - name: Coverage threshold check
+      run: |
+        cd quicklendx-contracts
+        coverage=$(cargo llvm-cov --all-features --workspace --summary-only | grep -o '[0-9.]*%' | head -1 | sed 's/%//')
+        echo "Current coverage: $coverage%"
+        if (( $(echo "$coverage < 80" | bc -l) )); then
+          echo "Coverage $coverage% is below minimum threshold of 80%"
+          exit 1
+        fi
+
+  # Contract Build and Deployment Validation
+  contract-build:
+    name: Contract Build & Deployment Validation
+    runs-on: ubuntu-latest
+    needs: [test-suite, performance-tests]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Install Stellar CLI
+      run: |
+        curl -L https://github.com/stellar/stellar-cli/releases/download/v21.0.0/stellar-cli-21.0.0-x86_64-unknown-linux-gnu.tar.gz | tar xz
+        sudo mv stellar /usr/local/bin/
+        stellar --version
+
+    - name: Install Rust target for Soroban
+      run: rustup target add wasm32-unknown-unknown
 
     - name: Build Soroban contract
       run: |
-        source $HOME/.cargo/env
         cd quicklendx-contracts
         stellar contract build --verbose
 
-    - name: Run Cargo tests
+    - name: Validate contract size
       run: |
-        source $HOME/.cargo/env
         cd quicklendx-contracts
-        cargo test --verbose
+        wasm_size=$(wc -c < target/wasm32-unknown-unknown/release/quicklendx_contracts.wasm)
+        echo "Contract size: $wasm_size bytes"
+        max_size=1048576  # 1MB limit
+        if [ $wasm_size -gt $max_size ]; then
+          echo "Contract size $wasm_size exceeds maximum allowed size of $max_size bytes"
+          exit 1
+        fi
+
+    - name: Upload contract artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: contract-wasm
+        path: quicklendx-contracts/target/wasm32-unknown-unknown/release/*.wasm
+
+  # Frontend Testing (if applicable)
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: quicklendx-frontend/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd quicklendx-frontend
+        npm ci
+
+    - name: Run linting
+      run: |
+        cd quicklendx-frontend
+        npm run lint
+
+    - name: Build frontend
+      run: |
+        cd quicklendx-frontend
+        npm run build
+
+  # Security Audit
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+
+    - name: Run security audit
+      run: |
+        cd quicklendx-contracts
+        cargo audit
+
+    - name: Run cargo deny
+      run: |
+        cd quicklendx-contracts
+        cargo install cargo-deny
+        cargo deny check
+
+  # Final Quality Gate
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs: [test-suite, coverage, contract-build, security-audit]
+    if: always()
+
+    steps:
+    - name: Check all jobs status
+      run: |
+        if [[ "${{ needs.test-suite.result }}" != "success" ]]; then
+          echo "Test suite failed"
+          exit 1
+        fi
+        if [[ "${{ needs.coverage.result }}" != "success" ]]; then
+          echo "Coverage check failed"
+          exit 1
+        fi
+        if [[ "${{ needs.contract-build.result }}" != "success" ]]; then
+          echo "Contract build failed"
+          exit 1
+        fi
+        if [[ "${{ needs.security-audit.result }}" != "success" ]]; then
+          echo "Security audit failed"
+          exit 1
+        fi
+        echo "All quality gates passed successfully!"

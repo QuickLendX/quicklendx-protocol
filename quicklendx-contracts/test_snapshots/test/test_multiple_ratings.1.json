@@ -78,6 +78,18 @@
                             },
                             {
                               "key": {
+                                "symbol": "category"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "Services"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
                                 "symbol": "created_at"
                               },
                               "val": {
@@ -202,6 +214,18 @@
                                 "vec": [
                                   {
                                     "symbol": "Funded"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "tags"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "string": "test"
                                   }
                                 ]
                               }
