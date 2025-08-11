@@ -1,6 +1,6 @@
+use crate::audit::AuditLogEntry;
 use crate::invoice::Invoice;
 use crate::payments::{Escrow, EscrowStatus};
-use crate::audit::{AuditLogEntry, AuditOperation};
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String};
 
 pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
@@ -100,6 +100,7 @@ pub fn emit_escrow_refunded(
 }
 
 /// Emit event when escrow status changes
+#[allow(dead_code)]
 pub fn emit_escrow_status_changed(
     env: &Env,
     escrow_id: &BytesN<32>,
@@ -144,8 +145,8 @@ pub fn emit_backup_archived(env: &Env, backup_id: &BytesN<32>) {
     );
 }
 
-
 /// Emit audit log event
+#[allow(dead_code)]
 pub fn emit_audit_log_created(env: &Env, entry: &AuditLogEntry) {
     env.events().publish(
         (symbol_short!("aud_log"),),
@@ -169,10 +170,8 @@ pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool)
 
 /// Emit audit query event
 pub fn emit_audit_query(env: &Env, query_type: String, result_count: u32) {
-    env.events().publish(
-        (symbol_short!("aud_qry"),),
-        (query_type, result_count),
-    );
+    env.events()
+        .publish((symbol_short!("aud_qry"),), (query_type, result_count));
 }
 
 /// Emit event when invoice category is updated

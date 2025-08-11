@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, Map, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec};
 
 /// Invoice status enumeration
 #[contracttype]
@@ -58,12 +58,12 @@ pub struct Invoice {
 }
 
 // Use the main error enum from errors.rs
-use crate::errors::QuickLendXError;
 
-use crate::audit::{log_invoice_created, log_invoice_status_change, log_invoice_funded};
+use crate::audit::{log_invoice_created, log_invoice_funded, log_invoice_status_change};
 
 impl Invoice {
     /// Create a new invoice with audit logging
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         env: &Env,
         business: Address,
@@ -96,10 +96,10 @@ impl Invoice {
             total_ratings: 0,
             ratings: vec![env],
         };
-        
+
         // Log invoice creation
         log_invoice_created(env, &invoice);
-        
+
         invoice
     }
 
@@ -110,13 +110,13 @@ impl Invoice {
         let counter_key = symbol_short!("inv_cnt");
         let counter: u32 = env.storage().instance().get(&counter_key).unwrap_or(0);
         env.storage().instance().set(&counter_key, &(counter + 1));
-        
+
         // Create a unique ID from timestamp, sequence, and counter
         let mut id_bytes = [0u8; 32];
         id_bytes[0..8].copy_from_slice(&timestamp.to_be_bytes());
         id_bytes[8..12].copy_from_slice(&sequence.to_be_bytes());
         id_bytes[12..16].copy_from_slice(&counter.to_be_bytes());
-        
+
         BytesN::from_array(env, &id_bytes)
     }
 
@@ -131,15 +131,27 @@ impl Invoice {
     }
 
     /// Mark invoice as funded with audit logging
-    pub fn mark_as_funded(&mut self, env: &Env, investor: Address, funded_amount: i128, timestamp: u64) {
+    pub fn mark_as_funded(
+        &mut self,
+        env: &Env,
+        investor: Address,
+        funded_amount: i128,
+        timestamp: u64,
+    ) {
         let old_status = self.status.clone();
         self.status = InvoiceStatus::Funded;
         self.funded_amount = funded_amount;
         self.funded_at = Some(timestamp);
         self.investor = Some(investor.clone());
-        
+
         // Log status change and funding
-        log_invoice_status_change(env, self.id.clone(), investor.clone(), old_status, self.status.clone());
+        log_invoice_status_change(
+            env,
+            self.id.clone(),
+            investor.clone(),
+            old_status,
+            self.status.clone(),
+        );
         log_invoice_funded(env, self.id.clone(), investor, funded_amount);
     }
 
@@ -148,7 +160,7 @@ impl Invoice {
         let old_status = self.status.clone();
         self.status = InvoiceStatus::Paid;
         self.settled_at = Some(timestamp);
-        
+
         // Log status change
         log_invoice_status_change(env, self.id.clone(), actor, old_status, self.status.clone());
     }
@@ -157,7 +169,7 @@ impl Invoice {
     pub fn verify(&mut self, env: &Env, actor: Address) {
         let old_status = self.status.clone();
         self.status = InvoiceStatus::Verified;
-        
+
         // Log status change
         log_invoice_status_change(env, self.id.clone(), actor, old_status, self.status.clone());
     }
@@ -173,8 +185,14 @@ impl Invoice {
     }
 
     /// Add a rating to the invoice
-    pub fn add_rating(&mut self, rating: u32, feedback: String, rated_by: Address, rated_at: u64) -> Result<(), crate::errors::QuickLendXError> {
-        if rating < 1 || rating > 5 {
+    pub fn add_rating(
+        &mut self,
+        rating: u32,
+        feedback: String,
+        rated_by: Address,
+        rated_at: u64,
+    ) -> Result<(), crate::errors::QuickLendXError> {
+        if !(1..=5).contains(&rating) {
             return Err(crate::errors::QuickLendXError::InvalidRating);
         }
 
@@ -214,9 +232,13 @@ impl Invoice {
     }
 
     /// Add a tag to the invoice
-    pub fn add_tag(&mut self, env: &Env, tag: String) -> Result<(), crate::errors::QuickLendXError> {
+    pub fn add_tag(
+        &mut self,
+        _env: &Env,
+        tag: String,
+    ) -> Result<(), crate::errors::QuickLendXError> {
         // Validate tag length (1-50 characters)
-        if tag.len() < 1 || tag.len() > 50 {
+        if tag.is_empty() || tag.len() > 50 {
             return Err(crate::errors::QuickLendXError::InvalidTag);
         }
 
@@ -238,7 +260,7 @@ impl Invoice {
 
     /// Remove a tag from the invoice
     pub fn remove_tag(&mut self, tag: String) -> Result<(), crate::errors::QuickLendXError> {
-        let mut new_tags = Vec::new(&self.tags.env());
+        let mut new_tags = Vec::new(self.tags.env());
         let mut found = false;
 
         for existing_tag in self.tags.iter() {
@@ -306,7 +328,10 @@ impl InvoiceStorage {
     /// Get all invoices for a business
     pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
         let key = (symbol_short!("business"), business.clone());
-        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Get all invoices by status
@@ -318,7 +343,10 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Add invoice to business invoices list
@@ -338,7 +366,11 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        let mut invoices = env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env));
+        let mut invoices = env
+            .storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
         invoices.push_back(invoice_id.clone());
         env.storage().instance().set(&key, &invoices);
     }
@@ -432,7 +464,7 @@ impl InvoiceStorage {
             InvoiceStatus::Paid,
             InvoiceStatus::Defaulted,
         ];
-        
+
         for status in all_statuses.iter() {
             let invoices = Self::get_invoices_by_status(env, status);
             for invoice_id in invoices.iter() {
@@ -454,7 +486,7 @@ impl InvoiceStorage {
     ) -> Vec<BytesN<32>> {
         let mut filtered_invoices = vec![env];
         let invoices = Self::get_invoices_by_status(env, status);
-        
+
         for invoice_id in invoices.iter() {
             if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
                 if invoice.category == *category {
@@ -475,7 +507,7 @@ impl InvoiceStorage {
             InvoiceStatus::Paid,
             InvoiceStatus::Defaulted,
         ];
-        
+
         for status in all_statuses.iter() {
             let invoices = Self::get_invoices_by_status(env, status);
             for invoice_id in invoices.iter() {
@@ -499,7 +531,7 @@ impl InvoiceStorage {
             InvoiceStatus::Paid,
             InvoiceStatus::Defaulted,
         ];
-        
+
         for status in all_statuses.iter() {
             let invoices = Self::get_invoices_by_status(env, status);
             for invoice_id in invoices.iter() {
