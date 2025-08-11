@@ -1,7 +1,7 @@
 use crate::errors::QuickLendXError;
 use crate::events::emit_invoice_defaulted;
-use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
-use crate::invoice::{Invoice, InvoiceStatus, InvoiceStorage};
+use crate::investment::{InvestmentStatus, InvestmentStorage};
+use crate::invoice::{InvoiceStatus, InvoiceStorage};
 use soroban_sdk::{BytesN, Env};
 
 pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {

@@ -1,6 +1,6 @@
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
-use crate::invoice::{Invoice, InvoiceStatus};
 use crate::errors::QuickLendXError;
+use crate::invoice::{Invoice, InvoiceStatus};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
 /// Audit operation types
 #[contracttype]
@@ -72,6 +72,7 @@ pub struct AuditStats {
 
 impl AuditLogEntry {
     /// Create a new audit log entry
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         env: &Env,
         invoice_id: BytesN<32>,
@@ -85,7 +86,7 @@ impl AuditLogEntry {
         let audit_id = Self::generate_audit_id(env);
         let timestamp = env.ledger().timestamp();
         let block_height = env.ledger().sequence();
-        
+
         Self {
             audit_id,
             invoice_id,
@@ -108,20 +109,20 @@ impl AuditLogEntry {
         let counter_key = symbol_short!("aud_cnt");
         let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
         env.storage().instance().set(&counter_key, &(counter + 1));
-        
+
         let mut id_bytes = [0u8; 32];
         // Add audit prefix
         id_bytes[0] = 0xAD; // 'A' for Audit
         id_bytes[1] = 0x1F; // 'U' for aUdit
-        // Embed timestamp
+                            // Embed timestamp
         id_bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
         // Embed sequence
         id_bytes[10..14].copy_from_slice(&sequence.to_be_bytes());
         // Embed counter
         id_bytes[14..22].copy_from_slice(&counter.to_be_bytes());
         // Fill remaining with pattern
-        for i in 22..32 {
-            id_bytes[i] = ((timestamp + sequence as u64 + counter + 0xAD1F) % 256) as u8;
+        for (_i, byte) in id_bytes.iter_mut().enumerate().skip(22) {
+            *byte = ((timestamp + sequence as u64 + counter + 0xAD1F) % 256) as u8;
         }
         BytesN::from_array(env, &id_bytes)
     }
@@ -132,12 +133,12 @@ impl AuditLogEntry {
         if self.timestamp > env.ledger().timestamp() {
             return Ok(false);
         }
-        
+
         // Check block height is valid
         if self.block_height > env.ledger().sequence() {
             return Ok(false);
         }
-        
+
         // Validate operation-specific data
         match self.operation {
             AuditOperation::InvoiceFunded | AuditOperation::PaymentProcessed => {
@@ -152,7 +153,7 @@ impl AuditLogEntry {
             }
             _ => {}
         }
-        
+
         Ok(true)
     }
 }
@@ -165,16 +166,16 @@ impl AuditStorage {
     pub fn store_audit_entry(env: &Env, entry: &AuditLogEntry) {
         // Store individual entry
         env.storage().instance().set(&entry.audit_id, entry);
-        
+
         // Add to invoice audit trail
         Self::add_to_invoice_audit_trail(env, &entry.invoice_id, &entry.audit_id);
-        
+
         // Add to operation index
         Self::add_to_operation_index(env, &entry.operation, &entry.audit_id);
-        
+
         // Add to actor index
         Self::add_to_actor_index(env, &entry.actor, &entry.audit_id);
-        
+
         // Add to timestamp index
         Self::add_to_timestamp_index(env, entry.timestamp, &entry.audit_id);
     }
@@ -187,26 +188,42 @@ impl AuditStorage {
     /// Get audit trail for an invoice
     pub fn get_invoice_audit_trail(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
         let key = (symbol_short!("inv_aud"), invoice_id.clone());
-        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Get audit entries by operation type
-    pub fn get_audit_entries_by_operation(env: &Env, operation: &AuditOperation) -> Vec<BytesN<32>> {
+    pub fn get_audit_entries_by_operation(
+        env: &Env,
+        operation: &AuditOperation,
+    ) -> Vec<BytesN<32>> {
         let key = (symbol_short!("op_aud"), operation.clone());
-        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Get audit entries by actor
     pub fn get_audit_entries_by_actor(env: &Env, actor: &Address) -> Vec<BytesN<32>> {
         let key = (symbol_short!("act_aud"), actor.clone());
-        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Query audit logs with filters
-    pub fn query_audit_logs(env: &Env, filter: &AuditQueryFilter, limit: u32) -> Vec<AuditLogEntry> {
+    pub fn query_audit_logs(
+        env: &Env,
+        filter: &AuditQueryFilter,
+        limit: u32,
+    ) -> Vec<AuditLogEntry> {
         let mut results = Vec::new(env);
         let mut count = 0u32;
-        
+
         // Start with invoice-specific entries if invoice_id is provided
         let audit_ids = if let Some(invoice_id) = &filter.invoice_id {
             Self::get_invoice_audit_trail(env, invoice_id)
@@ -218,12 +235,12 @@ impl AuditStorage {
             // Get all audit entries (expensive operation)
             Self::get_all_audit_entries(env)
         };
-        
+
         for audit_id in audit_ids.iter() {
             if count >= limit {
                 break;
             }
-            
+
             if let Some(entry) = Self::get_audit_entry(env, &audit_id) {
                 // Apply filters
                 if Self::matches_filter(&entry, filter) {
@@ -232,27 +249,27 @@ impl AuditStorage {
                 }
             }
         }
-        
+
         results
     }
 
     /// Get audit statistics
     pub fn get_audit_stats(env: &Env) -> AuditStats {
         let all_entries = Self::get_all_audit_entries(env);
-        let total_entries = all_entries.len() as u32;
-        
-        let mut operations_count = Vec::new(env);
+        let total_entries = all_entries.len();
+
+        let operations_count = Vec::new(env);
         let mut unique_actors: Vec<Address> = Vec::new(env);
         let mut min_timestamp = u64::MAX;
         let mut max_timestamp = 0u64;
-        
+
         for audit_id in all_entries.iter() {
             if let Some(entry) = Self::get_audit_entry(env, &audit_id) {
                 // Track unique actors
                 if !unique_actors.iter().any(|a| a == entry.actor) {
                     unique_actors.push_back(entry.actor.clone());
                 }
-                
+
                 // Update timestamp range
                 if entry.timestamp < min_timestamp {
                     min_timestamp = entry.timestamp;
@@ -262,19 +279,22 @@ impl AuditStorage {
                 }
             }
         }
-        
+
         AuditStats {
             total_entries,
             operations_count,
-            unique_actors: unique_actors.len() as u32,
+            unique_actors: unique_actors.len(),
             date_range: (min_timestamp, max_timestamp),
         }
     }
 
     /// Validate audit log integrity for an invoice
-    pub fn validate_invoice_audit_integrity(env: &Env, invoice_id: &BytesN<32>) -> Result<bool, QuickLendXError> {
+    pub fn validate_invoice_audit_integrity(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Result<bool, QuickLendXError> {
         let audit_trail = Self::get_invoice_audit_trail(env, invoice_id);
-        
+
         for audit_id in audit_trail.iter() {
             if let Some(entry) = Self::get_audit_entry(env, &audit_id) {
                 if !entry.validate_integrity(env)? {
@@ -284,7 +304,7 @@ impl AuditStorage {
                 return Ok(false); // Missing audit entry
             }
         }
-        
+
         Ok(true)
     }
 
@@ -313,14 +333,21 @@ impl AuditStorage {
     fn add_to_timestamp_index(env: &Env, timestamp: u64, audit_id: &BytesN<32>) {
         let day_key = timestamp / 86400; // Group by day
         let key = (symbol_short!("ts_aud"), day_key);
-        let mut entries: Vec<BytesN<32>> = env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env));
+        let mut entries: Vec<BytesN<32>> = env
+            .storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
         entries.push_back(audit_id.clone());
         env.storage().instance().set(&key, &entries);
     }
 
     fn get_all_audit_entries(env: &Env) -> Vec<BytesN<32>> {
         let key = symbol_short!("all_aud");
-        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     fn matches_filter(entry: &AuditLogEntry, filter: &AuditQueryFilter) -> bool {
@@ -329,39 +356,40 @@ impl AuditStorage {
                 return false;
             }
         }
-        
+
         match &filter.operation {
-            AuditOperationFilter::Any => {},
+            AuditOperationFilter::Any => {}
             AuditOperationFilter::Specific(operation) => {
                 if entry.operation != *operation {
                     return false;
                 }
             }
         }
-        
+
         if let Some(actor) = &filter.actor {
             if entry.actor != *actor {
                 return false;
             }
         }
-        
+
         if let Some(start_ts) = filter.start_timestamp {
             if entry.timestamp < start_ts {
                 return false;
             }
         }
-        
+
         if let Some(end_ts) = filter.end_timestamp {
             if entry.timestamp > end_ts {
                 return false;
             }
         }
-        
+
         true
     }
 }
 
 /// Audit trail helper functions
+#[allow(clippy::too_many_arguments)]
 pub fn log_invoice_operation(
     env: &Env,
     invoice_id: BytesN<32>,
@@ -382,7 +410,7 @@ pub fn log_invoice_operation(
         amount,
         additional_data,
     );
-    
+
     AuditStorage::store_audit_entry(env, &entry);
 }
 
@@ -405,12 +433,12 @@ pub fn log_invoice_status_change(
     env: &Env,
     invoice_id: BytesN<32>,
     actor: Address,
-    old_status: InvoiceStatus,
-    new_status: InvoiceStatus,
+    _old_status: InvoiceStatus,
+    _new_status: InvoiceStatus,
 ) {
     let old_value = String::from_str(env, "Status changed");
     let new_value = String::from_str(env, "Status updated");
-    
+
     log_invoice_operation(
         env,
         invoice_id,
@@ -424,12 +452,7 @@ pub fn log_invoice_status_change(
 }
 
 /// Log invoice funding
-pub fn log_invoice_funded(
-    env: &Env,
-    invoice_id: BytesN<32>,
-    investor: Address,
-    amount: i128,
-) {
+pub fn log_invoice_funded(env: &Env, invoice_id: BytesN<32>, investor: Address, amount: i128) {
     log_invoice_operation(
         env,
         invoice_id,
@@ -443,6 +466,7 @@ pub fn log_invoice_funded(
 }
 
 /// Log payment processing
+#[allow(dead_code)]
 pub fn log_payment_processed(
     env: &Env,
     invoice_id: BytesN<32>,
