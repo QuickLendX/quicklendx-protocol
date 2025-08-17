@@ -1,4 +1,5 @@
 use soroban_sdk::{contracttype, Address, BytesN, Env, symbol_short};
+use soroban_token_sdk::{Client as TokenClient, token::StellarAssetContractClient};
 use crate::errors::QuickLendXError;
 
 #[contracttype]
@@ -146,16 +147,22 @@ pub fn refund_escrow(
     Ok(())
 }
 
-/// Transfer funds between addresses
-/// TODO: Integrate with Soroban payment primitives for XLM/USDC
-/// For now, this is a stub that always returns true
-/// Replace with actual payment logic when implementing token transfers
 pub fn transfer_funds(env: &Env, from: &Address, to: &Address, amount: i128) -> bool {
-    // Placeholder for actual token transfer implementation
-    // This should integrate with Soroban's token interface
-    // Example implementation would involve:
-    // 1. Get token contract instance
-    // 2. Call transfer method on token contract
-    // 3. Handle success/failure appropriately
-    true
+    if amount <= 0 {
+        return false;
+    }
+    if from == to {
+        return false;
+    }
+    // Native XLM transfer
+    if to == &Address::from_account_id(&env.ledger().network_passphrase()) {
+        let res = env.pay(from, to, amount);
+        return res.is_ok();
+    }
+    // USDC transfer via token contract
+    // I am leaving an empty space for USDC contract ID 🪪
+    let usdc_contract_id = BytesN::<32>::from_array(&[/* USDC contract ID */]);
+    let token_client = TokenClient::new(env, &usdc_contract_id);
+    let res = token_client.transfer(from, to, &amount);
+    res.is_ok()
 }
