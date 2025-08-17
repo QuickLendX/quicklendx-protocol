@@ -44,7 +44,7 @@ pub fn settle_invoice(
     }
     
     // Update invoice status
-    invoice.mark_as_paid(env.ledger().timestamp());
+    invoice.mark_as_paid(env, invoice.business.clone(), env.ledger().timestamp());
     InvoiceStorage::update_invoice(env, &invoice);
     
     // Update investment status

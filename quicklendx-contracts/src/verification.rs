@@ -333,6 +333,42 @@ fn emit_business_verified(env: &Env, business: &Address, admin: &Address) {
 fn emit_business_rejected(env: &Env, business: &Address, admin: &Address) {
     env.events().publish(
         (symbol_short!("bus_rej"),),
-        (business.clone(), admin.clone(), env.ledger().timestamp()),
+        (business.clone(), admin.clone()),
     );
+}
+
+/// Validate invoice category
+pub fn validate_invoice_category(category: &crate::invoice::InvoiceCategory) -> Result<(), QuickLendXError> {
+    // All categories are valid as they are defined in the enum
+    // This function can be extended to add additional validation logic if needed
+    match category {
+        crate::invoice::InvoiceCategory::Services => Ok(()),
+        crate::invoice::InvoiceCategory::Products => Ok(()),
+        crate::invoice::InvoiceCategory::Consulting => Ok(()),
+        crate::invoice::InvoiceCategory::Manufacturing => Ok(()),
+        crate::invoice::InvoiceCategory::Technology => Ok(()),
+        crate::invoice::InvoiceCategory::Healthcare => Ok(()),
+        crate::invoice::InvoiceCategory::Other => Ok(()),
+    }
+}
+
+/// Validate invoice tags
+pub fn validate_invoice_tags(tags: &Vec<String>) -> Result<(), QuickLendXError> {
+    // Check tag count limit (max 10 tags per invoice)
+    if tags.len() > 10 {
+        return Err(QuickLendXError::TagLimitExceeded);
+    }
+
+    // Validate each tag
+    for tag in tags.iter() {
+        // Check tag length (1-50 characters)
+        if tag.len() < 1 || tag.len() > 50 {
+            return Err(QuickLendXError::InvalidTag);
+        }
+
+        // Check for empty tags (length 0 is already checked above)
+        // Note: Soroban String doesn't have trim() method
+    }
+
+    Ok(())
 }
