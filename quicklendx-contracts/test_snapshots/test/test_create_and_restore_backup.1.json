@@ -119,6 +119,18 @@
                             },
                             {
                               "key": {
+                                "symbol": "category"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "Services"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
                                 "symbol": "created_at"
                               },
                               "val": {
@@ -208,6 +220,18 @@
                             },
                             {
                               "key": {
+                                "symbol": "tags"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "string": "test"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
                                 "symbol": "total_ratings"
                               },
                               "val": {
@@ -246,6 +270,18 @@
                               },
                               "val": {
                                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "category"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "Services"
+                                  }
+                                ]
                               }
                             },
                             {
@@ -333,6 +369,18 @@
                                 "vec": [
                                   {
                                     "symbol": "Pending"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "tags"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "string": "test"
                                   }
                                 ]
                               }
@@ -724,6 +772,18 @@
                                 },
                                 {
                                   "key": {
+                                    "symbol": "category"
+                                  },
+                                  "val": {
+                                    "vec": [
+                                      {
+                                        "symbol": "Services"
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": {
                                     "symbol": "created_at"
                                   },
                                   "val": {
@@ -813,6 +873,18 @@
                                 },
                                 {
                                   "key": {
+                                    "symbol": "tags"
+                                  },
+                                  "val": {
+                                    "vec": [
+                                      {
+                                        "string": "test"
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": {
                                     "symbol": "total_ratings"
                                   },
                                   "val": {
@@ -846,6 +918,18 @@
                                   },
                                   "val": {
                                     "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "category"
+                                  },
+                                  "val": {
+                                    "vec": [
+                                      {
+                                        "symbol": "Services"
+                                      }
+                                    ]
                                   }
                                 },
                                 {
@@ -933,6 +1017,18 @@
                                     "vec": [
                                       {
                                         "symbol": "Pending"
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "tags"
+                                  },
+                                  "val": {
+                                    "vec": [
+                                      {
+                                        "string": "test"
                                       }
                                     ]
                                   }

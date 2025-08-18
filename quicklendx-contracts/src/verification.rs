@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Symbol, Vec};
 use crate::errors::QuickLendXError;
+use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 #[contracttype]
 pub enum BusinessVerificationStatus {
@@ -22,6 +22,7 @@ pub struct BusinessVerification {
 pub struct BusinessVerificationStorage;
 
 impl BusinessVerificationStorage {
+    #[allow(dead_code)]
     const VERIFICATION_KEY: &'static str = "business_verification";
     const VERIFIED_BUSINESSES_KEY: &'static str = "verified_businesses";
     const PENDING_BUSINESSES_KEY: &'static str = "pending_businesses";
@@ -309,7 +310,7 @@ pub fn verify_invoice_data(
     if due_date <= current_timestamp {
         return Err(QuickLendXError::InvoiceDueDateInvalid);
     }
-    if description.len() == 0 {
+    if description.is_empty() {
         return Err(QuickLendXError::InvalidDescription);
     }
     Ok(())
@@ -338,7 +339,9 @@ fn emit_business_rejected(env: &Env, business: &Address, admin: &Address) {
 }
 
 /// Validate invoice category
-pub fn validate_invoice_category(category: &crate::invoice::InvoiceCategory) -> Result<(), QuickLendXError> {
+pub fn validate_invoice_category(
+    category: &crate::invoice::InvoiceCategory,
+) -> Result<(), QuickLendXError> {
     // All categories are valid as they are defined in the enum
     // This function can be extended to add additional validation logic if needed
     match category {
@@ -362,7 +365,7 @@ pub fn validate_invoice_tags(tags: &Vec<String>) -> Result<(), QuickLendXError> 
     // Validate each tag
     for tag in tags.iter() {
         // Check tag length (1-50 characters)
-        if tag.len() < 1 || tag.len() > 50 {
+        if tag.is_empty() || tag.len() > 50 {
             return Err(QuickLendXError::InvalidTag);
         }
 
