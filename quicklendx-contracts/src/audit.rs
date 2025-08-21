@@ -42,13 +42,19 @@ pub struct AuditLogEntry {
     pub block_height: u32,
     pub transaction_hash: Option<BytesN<32>>,
 }
-
+/// Audit operation filter
+#[contracttype]
+#[derive(Clone, Debug)]
+pub enum AuditOperationFilter {
+    Any,
+    Specific(AuditOperation),
+}
 /// Audit query filters
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct AuditQueryFilter {
     pub invoice_id: Option<BytesN<32>>,
-    pub operation: Option<AuditOperation>,
+    pub operation: AuditOperationFilter,
     pub actor: Option<Address>,
     pub start_timestamp: Option<u64>,
     pub end_timestamp: Option<u64>,
@@ -204,7 +210,7 @@ impl AuditStorage {
         // Start with invoice-specific entries if invoice_id is provided
         let audit_ids = if let Some(invoice_id) = &filter.invoice_id {
             Self::get_invoice_audit_trail(env, invoice_id)
-        } else if let Some(operation) = &filter.operation {
+        } else if let AuditOperationFilter::Specific(operation) = &filter.operation {
             Self::get_audit_entries_by_operation(env, operation)
         } else if let Some(actor) = &filter.actor {
             Self::get_audit_entries_by_actor(env, actor)
@@ -324,9 +330,12 @@ impl AuditStorage {
             }
         }
         
-        if let Some(operation) = &filter.operation {
+        match &filter.operation {
+            AuditOperationFilter::Any => {},
+            AuditOperationFilter::Specific(operation) => {
             if entry.operation != *operation {
                 return false;
+                }
             }
         }
         

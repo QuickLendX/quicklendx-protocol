@@ -4,21 +4,18 @@ use soroban_sdk::{
     testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
     vec, Address, BytesN, Env, String, Symbol, Vec,
 };
-use crate::QuickLendXContract;
-use crate::QuickLendXContractClient;
-use crate::{
-    audit::{AuditStorage, AuditQueryFilter, AuditOperation, log_invoice_operation}, 
-    bid::BidStorage,
-    contract::{QuickLendXContract, QuickLendXContractClient},
-    invoice::{InvoiceStatus, InvoiceStorage,InvoiceCategory},
-    investment::InvestmentStorage,
-    payments::EscrowStatus,
+use crate::audit::{
+    AuditStorage, AuditQueryFilter, AuditOperation, AuditOperationFilter, log_invoice_operation
 };
-
+use crate::invoice::{InvoiceStatus, InvoiceStorage,InvoiceCategory};
+use crate::{QuickLendXContract, QuickLendXContractClient};
+use crate::payments::{EscrowStatus};
+use crate::investment::{InvestmentStorage};
+use crate::bid::{BidStorage};
 #[test]
 fn test_store_invoice() {
     let env = Env::default();
-    let contract_id = env.register_contract(&None, QuickLendXContract);
+    let contract_id = env.register_contract(None, QuickLendXContract);
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let business = Address::generate(&env);
@@ -28,7 +25,7 @@ fn test_store_invoice() {
     let description = String::from_str(&env, "Test invoice for services");
     let category = InvoiceCategory::Standard;
     let tags = Vec::new(&env);
-    let invoice_id = client.store_invoice(&business, &amount, &currency, &due_date, &description,category, tags);
+    let invoice_id = client.store_invoice(&business, &amount, &currency, &due_date, &description,&category, &tags);
 
     // Verify invoice was stored
     let invoice = client.get_invoice(&invoice_id);
@@ -399,7 +396,7 @@ fn test_simple_bid_storage() {
 #[test]
 fn test_unique_bid_id_generation() {
     let env = Env::default();
-    let contract_id = env.register_contract(&contract_id, QuickLendXContract);
+    let contract_id = env.register_contract(None, QuickLendXContract);
 
     env.as_contract(&contract_id, || {
         let mut ids = Vec::new(&env);
@@ -707,7 +704,7 @@ fn test_escrow_double_operation_prevention() {
 #[test]
 fn test_unique_investment_id_generation() {
     let env = Env::default();
-    let contract_id = env.register_contract(&contract_id, QuickLendXContract);
+    let contract_id = env.register_contract(None, QuickLendXContract);
 
     env.as_contract(&contract_id, || {
         let mut ids = Vec::new(&env);
@@ -732,7 +729,7 @@ fn test_unique_investment_id_generation() {
 #[test]
 fn test_add_invoice_rating() {
     let env = Env::default();
-    let contract_id = env.register_contract(&contract_id, QuickLendXContract);
+    let contract_id = env.register_contract(None, QuickLendXContract);
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let business = Address::generate(&env);
@@ -845,6 +842,8 @@ fn test_add_invoice_rating_validation() {
         &currency,
         &due_date,
         &String::from_str(&env, "Pending invoice"),
+        &category,
+        &tags,
     );
     let result = client.try_add_invoice_rating(
         &pending_invoice_id,
@@ -865,7 +864,8 @@ fn test_multiple_ratings() {
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-
+    let category = InvoiceCategory::Standard;
+    let tags = Vec::new(&env);
     // Create and fund invoice
     let invoice_id = client.store_invoice(
         &business,
@@ -873,6 +873,8 @@ fn test_multiple_ratings() {
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
+        &category,
+        &tags,
     );
 
     env.as_contract(&contract_id, || {
@@ -913,7 +915,8 @@ fn test_duplicate_rating_prevention() {
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-
+    let category = InvoiceCategory::Standard;
+    let tags = Vec::new(&env);
     // Create and fund invoice
     let invoice_id = client.store_invoice(
         &business,
@@ -921,6 +924,8 @@ fn test_duplicate_rating_prevention() {
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
+        &category,
+        &tags,
     );
 
     env.as_contract(&contract_id, || {
@@ -970,7 +975,8 @@ fn test_rating_queries() {
     let business1 = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-
+    let category = InvoiceCategory::Standard;
+    let tags = Vec::new(&env);
     // Create and fund a single invoice first
     let invoice1_id = client.store_invoice(
         &business1,
@@ -978,6 +984,8 @@ fn test_rating_queries() {
         &currency,
         &due_date,
         &String::from_str(&env, "Invoice 1"),
+        &category,
+        &tags,
     );
 
     // Add rating with proper authentication
@@ -1037,7 +1045,8 @@ fn test_rating_statistics() {
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-
+    let category = InvoiceCategory::Standard;
+    let tags = Vec::new(&env);
     // Create and fund invoice
     let invoice_id = client.store_invoice(
         &business,
@@ -1045,6 +1054,8 @@ fn test_rating_statistics() {
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
+        &category,
+        &tags,
     );
 
     env.as_contract(&contract_id, || {
@@ -1085,7 +1096,8 @@ fn test_rating_on_unfunded_invoice() {
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-
+    let category = InvoiceCategory::Standard;
+    let tags = Vec::new(&env);
     // Create invoice but don't fund it
     let invoice_id = client.store_invoice(
         &business,
@@ -1093,6 +1105,8 @@ fn test_rating_on_unfunded_invoice() {
         &currency,
         &due_date,
         &String::from_str(&env, "Unfunded invoice"),
+        &category,
+        &tags,
     );
 
     // Try to rate unfunded invoice (should fail)
@@ -1211,12 +1225,13 @@ fn test_upload_invoice_requires_verification() {
     let amount = 1000;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-
+    let category = InvoiceCategory::Standard;
+    let tags = Vec::new(&env);
     // Mock business authorization
     env.mock_all_auths();
 
     // Try to upload invoice without verification - should fail
-    let result = client.try_upload_invoice(&business, &amount, &currency, &due_date, &description);
+    let result = client.try_upload_invoice(&business, &amount, &currency, &due_date, &description, &category,&tags);
     assert!(result.is_err());
 
     // Submit KYC and verify business
@@ -1232,7 +1247,7 @@ fn test_upload_invoice_requires_verification() {
 
     // Now try to upload invoice - should succeed
     env.mock_all_auths();
-    let _invoice_id = client.upload_invoice(&business, &amount, &currency, &due_date, &description);
+    let _invoice_id = client.upload_invoice(&business, &amount, &currency, &due_date, &description,&category,&tags);
 }
 
 #[test]
@@ -1393,6 +1408,8 @@ fn test_create_and_restore_backup() {
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
+    let category = InvoiceCategory::Standard;
+    let tags = Vec::new(&env);
 
     let invoice1_id = client.store_invoice(
         &business,
@@ -1400,6 +1417,8 @@ fn test_create_and_restore_backup() {
         &currency,
         &due_date,
         &String::from_str(&env, "Invoice 1"),
+        &category,
+        &tags,
     );
 
     let invoice2_id = client.store_invoice(
@@ -1408,6 +1427,8 @@ fn test_create_and_restore_backup() {
         &currency,
         &due_date,
         &String::from_str(&env, "Invoice 2"),
+        &category,
+        &tags,
     );
 
     // Create backup
@@ -1456,13 +1477,16 @@ fn test_backup_validation() {
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-
+    let category = InvoiceCategory::Standard;
+    let tags = Vec::new(&env);
     client.store_invoice(
         &business,
         &1000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
+        &category,
+        &tags,
     );
 
     // Create backup
@@ -1552,9 +1576,10 @@ fn test_audit_trail_creation() {
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-    
+    let category = InvoiceCategory::Standard;
+    let tags = Vec::new(&env);
     // Upload invoice
-    let invoice_id = client.upload_invoice(&business, &amount, &currency, &due_date, &description);
+    let invoice_id = client.upload_invoice(&business, &amount, &currency, &due_date, &description, &category, &tags);
     
     // Check audit trail was created
     let audit_trail = client.get_invoice_audit_trail(&invoice_id);
@@ -1578,9 +1603,10 @@ fn test_audit_integrity_validation() {
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-    
+    let category=InvoiceCategory::Standard;
+    let tags=Vec::new(&env);
     // Upload and verify invoice
-    let invoice_id = client.upload_invoice(&business, &amount, &currency, &due_date, &description);
+    let invoice_id = client.upload_invoice(&business, &amount, &currency, &due_date, &description, &category, &tags);
     client.verify_invoice(&invoice_id);
     
     // Validate audit integrity
@@ -1599,33 +1625,35 @@ fn test_audit_query_functionality() {
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-    
+    let category = InvoiceCategory::Standard;
+    let tags = Vec::new(&env);
     // Create multiple invoices
-    let invoice_id1 = client.upload_invoice(&business, &amount, &currency, &due_date, &description);
-    let invoice_id2 = client.upload_invoice(&business, &amount * 2, &currency, &due_date, &description);
+    let invoice_id1 = client.upload_invoice(&business, &amount, &currency, &due_date, &description, &category, &tags);
+    let amount2=amount*2;
+    let invoice_id2 = client.upload_invoice(&business, &amount2, &currency, &due_date, &description, &category, &tags);
     
     // Query by operation type
     let filter = AuditQueryFilter {
         invoice_id: None,
-        operation: Some(AuditOperation::InvoiceCreated),
+        operation: AuditOperationFilter::Specific(AuditOperation::InvoiceCreated),
         actor: None,
         start_timestamp: None,
         end_timestamp: None,
     };
     
-    let results = client.query_audit_logs(&filter, 10);
+    let results = client.query_audit_logs(&filter, &10);
     assert_eq!(results.len(), 2);
     
     // Query by specific invoice
     let filter = AuditQueryFilter {
-        invoice_id: Some(invoice_id1),
-        operation: None,
+        invoice_id: Some(invoice_id1.clone()),
+        operation:AuditOperationFilter::Any ,
         actor: None,
         start_timestamp: None,
         end_timestamp: None,
     };
     
-    let results = client.query_audit_logs(&filter, 10);
+    let results = client.query_audit_logs(&filter, &10);
     assert!(!results.is_empty());
     assert_eq!(results.get(0).unwrap().invoice_id, invoice_id1);
 }
@@ -1641,9 +1669,10 @@ fn test_audit_statistics() {
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-    
+    let category=InvoiceCategory::Standard;
+    let tags= Vec::new(&env);
     // Create and process invoices
-    let invoice_id = client.upload_invoice(&business, &amount, &currency, &due_date, &description);
+    let invoice_id = client.upload_invoice(&business, &amount, &currency, &due_date, &description, &category, &tags);
     client.verify_invoice(&invoice_id);
     
     // Get audit statistics

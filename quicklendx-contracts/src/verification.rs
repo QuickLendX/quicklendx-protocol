@@ -1,6 +1,6 @@
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Symbol, Vec};
 use crate::errors::QuickLendXError;
-
+use crate::invoice;
 #[contracttype]
 pub enum BusinessVerificationStatus {
     Pending,
@@ -298,6 +298,10 @@ pub fn verify_invoice_data(
     _currency: &Address,
     due_date: u64,
     description: &String,
+    // category: invoice::InvoiceCategory,
+    // tags: Vec<String>,
+    
+    
 ) -> Result<(), QuickLendXError> {
     // First check if business is verified
     require_business_verification(env, business)?;
@@ -335,4 +339,41 @@ fn emit_business_rejected(env: &Env, business: &Address, admin: &Address) {
         (symbol_short!("bus_rej"),),
         (business.clone(), admin.clone(), env.ledger().timestamp()),
     );
+}
+/// Validate invoice category
+pub fn validate_invoice_category(category: &crate::invoice::InvoiceCategory) -> Result<(), QuickLendXError> {
+    // All categories are valid as they are defined in the enum
+    // This function can be extended to add additional validation logic if needed
+    match category {
+        crate::invoice::InvoiceCategory::Services => Ok(()),
+        crate::invoice::InvoiceCategory::Products => Ok(()),
+        crate::invoice::InvoiceCategory::Consulting => Ok(()),
+        crate::invoice::InvoiceCategory::Manufacturing => Ok(()),
+        crate::invoice::InvoiceCategory::Technology => Ok(()),
+        crate::invoice::InvoiceCategory::Healthcare => Ok(()),
+        crate::invoice::InvoiceCategory::Other => Ok(()),
+        crate::invoice::InvoiceCategory::Standard => Ok(()),
+    }
+    }
+
+
+/// Validate invoice tags
+pub fn validate_invoice_tags(tags: &Vec<String>) -> Result<(), QuickLendXError> {
+    // Check tag count limit (max 10 tags per invoice)
+    if tags.len() > 10 {
+        return Err(QuickLendXError::TagLimitExceeded);
+    }
+
+    // Validate each tag
+    for tag in tags.iter() {
+        // Check tag length (1-50 characters)
+        if tag.len() < 1 || tag.len() > 50 {
+            return Err(QuickLendXError::InvalidTag);
+        }
+
+        // Check for empty tags (length 0 is already checked above)
+        // Note: Soroban String doesn't have trim() method
+    }
+
+    Ok(())
 }

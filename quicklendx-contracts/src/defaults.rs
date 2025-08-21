@@ -10,7 +10,7 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvalidStatus);
     }
-    //invoice.mark_as_defaulted();
+    invoice.mark_as_defaulted();
     InvoiceStorage::update_invoice(env, &invoice);
     let mut investment = InvestmentStorage::get_investment(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;

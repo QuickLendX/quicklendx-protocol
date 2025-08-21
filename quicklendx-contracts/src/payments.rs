@@ -161,7 +161,12 @@ pub fn release_escrow(
     }
 
     // Transfer funds from escrow to business
-    transfer_funds(env,&escrow.currency, &escrow.investor, &escrow.business, escrow.amount)?;
+    // Transfer funds from escrow to business
+    let transfer_success = transfer_funds(env, &escrow.currency,&escrow.investor, &escrow.business, escrow.amount);
+    if transfer_success.is_err() {
+        return Err(QuickLendXError::InsufficientFunds);
+    }
+    //transfer_funds(env,&escrow.currency, &escrow.investor, &escrow.business, escrow.amount)?;
 
     // Update escrow status
     escrow.status = EscrowStatus::Released;
@@ -183,8 +188,12 @@ pub fn refund_escrow(
     }
 
     // Refund funds to investor
-    transfer_funds(env, &escrow.currency, &escrow.business, &escrow.investor, escrow.amount)?;
-
+    //transfer_funds(env, &escrow.currency, &escrow.business, &escrow.investor, escrow.amount)?;
+    // Refund funds to investor
+    let transfer_success = transfer_funds(env,&escrow.currency, &escrow.business, &escrow.investor, escrow.amount);
+    if transfer_success.is_err() {
+        return Err(QuickLendXError::InsufficientFunds);
+    }
     // Update escrow status
     escrow.status = EscrowStatus::Refunded;
     EscrowStorage::update_escrow(env, &escrow);

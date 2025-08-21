@@ -22,6 +22,7 @@ pub enum InvoiceCategory {
     Technology,    // Technology services/products
     Healthcare,    // Healthcare services
     Other,         // Other categories
+    Standard,
 }
 
 /// Invoice rating structure
