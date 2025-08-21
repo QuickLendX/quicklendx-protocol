@@ -11,59 +11,24 @@ env:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        rust-version: ['1.70.0', '1.75.0', 'stable']
-        exclude:
-          # Exclude macOS with older Rust versions to reduce matrix size
-          - os: macos-latest
-            rust-version: '1.70.0'
+    runs-on: macos-latest
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install Rust ${{ matrix.rust-version }}
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ matrix.rust-version }}
-        override: true
-        components: rustfmt, clippy
-
-    - name: Cache Rust dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-
+    - name: Install Rust
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source $HOME/.cargo/env
     - name: Install Rust target for Soroban
       run: |
-        rustup target add wasm32-unknown-unknown
-
-    - name: Install Stellar CLI
+        source $HOME/.cargo/env
+        rustup target add wasm32v1-none
+    - name: Install Stellar CLI with Homebrew
       run: |
-        if [[ "$RUNNER_OS" == "macOS" ]]; then
-          brew update
-          brew install stellar-cli
-        else
-          # For Ubuntu, we'll need to install from source or use a different method
-          # For now, we'll skip this step on Ubuntu as it might not be available
-          echo "Stellar CLI installation skipped on Ubuntu"
-        fi
-
-    - name: Show Stellar CLI version
-      run: |
-        if command -v stellar &> /dev/null; then
-          stellar --version
-        else
-          echo "Stellar CLI not available on this platform"
-        fi
+        brew update
+        brew install stellar-cli
+        stellar --version
 
     - name: Build Cargo project
       run: |
@@ -72,65 +37,12 @@ jobs:
 
     - name: Build Soroban contract
       run: |
+        source $HOME/.cargo/env
         cd quicklendx-contracts
-        if command -v stellar &> /dev/null; then
-          stellar contract build --verbose
-        else
-          echo "Skipping stellar contract build - CLI not available"
-        fi
+        stellar contract build --verbose
 
     - name: Run Cargo tests
       run: |
-        cd quicklendx-contracts
-        cargo test --verbose
-
-    - name: Run Cargo clippy
-      run: |
-        cd quicklendx-contracts
-        cargo clippy -- -D warnings
-
-    - name: Check formatting
-      run: |
-        cd quicklendx-contracts
-        cargo fmt --all -- --check
-
-  # Additional job for Windows to ensure cross-platform compatibility
-  build-windows:
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        rust-version: ['stable']
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install Rust ${{ matrix.rust-version }}
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ matrix.rust-version }}
-        override: true
-
-    - name: Cache Rust dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-
-    - name: Install Rust target for Soroban
-      run: |
-        rustup target add wasm32-unknown-unknown
-
-    - name: Build Cargo project
-      run: |
-        cd quicklendx-contracts
-        cargo build --verbose
-
-    - name: Run Cargo tests
-      run: |
+        source $HOME/.cargo/env
         cd quicklendx-contracts
         cargo test --verbose

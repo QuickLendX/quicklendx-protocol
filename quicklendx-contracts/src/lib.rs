@@ -70,6 +70,10 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidDescription);
         }
 
+        // Validate category and tags
+        verification::validate_invoice_category(&category)?;
+        verification::validate_invoice_tags(&tags)?;
+
         // Create new invoice
         let invoice = Invoice::new(
             &env,
@@ -78,7 +82,7 @@ impl QuickLendXContract {
             currency.clone(),
             due_date,
             description,
-            category, // Add this
+            catgory,
             tags,
         );
 
@@ -122,6 +126,10 @@ impl QuickLendXContract {
         // Basic validation
         verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
 
+        // Validate category and tags
+        verification::validate_invoice_category(&category)?;
+        verification::validate_invoice_tags(&tags)?;
+
         // Create and store invoice
         let invoice = Invoice::new(
             &env,
@@ -130,8 +138,8 @@ impl QuickLendXContract {
             currency.clone(),
             due_date,
             description.clone(),
-            category, // Add this
-            tags,     // Add this
+            category,
+            tags,
         );
         InvoiceStorage::store_invoice(&env, &invoice);
         emit_invoice_uploaded(&env, &invoice);
@@ -147,7 +155,6 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
         // (Optional: Only admin can verify, add check here if needed)
-        invoice.verify(&env,invoice.business.clone());
         InvoiceStorage::update_invoice(&env, &invoice);
         emit_invoice_verified(&env, &invoice);
 
@@ -198,8 +205,6 @@ impl QuickLendXContract {
 
         // Update status
         match new_status {
-            InvoiceStatus::Verified => invoice.verify(&env,invoice.business.clone()),
-            InvoiceStatus::Paid => invoice.mark_as_paid(&env,invoice.business.clone(),env.ledger().timestamp()),
             InvoiceStatus::Defaulted => invoice.mark_as_defaulted(),
             _ => return Err(QuickLendXError::InvalidStatus),
         }
@@ -704,9 +709,6 @@ impl QuickLendXContract {
 
         Ok(())
     }
-
-
-
     /// Get audit trail for an invoice
     pub fn get_invoice_audit_trail(env: Env, invoice_id: BytesN<32>) -> Vec<BytesN<32>> {
         AuditStorage::get_invoice_audit_trail(&env, &invoice_id)
@@ -725,8 +727,6 @@ impl QuickLendXContract {
         limit: u32,
     ) -> Vec<AuditLogEntry> {
         let results = AuditStorage::query_audit_logs(&env, &filter, limit);
-        emit_audit_query(&env,String::from_str(&env,
-            "query_audit_logs"), results.len() as u32);
         results
     }
 
@@ -757,7 +757,11 @@ impl QuickLendXContract {
     pub fn get_audit_entries_by_actor(env: Env, actor: Address) -> Vec<BytesN<32>> {
         AuditStorage::get_audit_entries_by_actor(&env, &actor)
     }
-     /// Get invoices by category
+
+    // Category and Tag Management Functions
+
+    /// Get invoices by category
+
     pub fn get_invoices_by_category(env: Env, category: invoice::InvoiceCategory) -> Vec<BytesN<32>> {
         InvoiceStorage::get_invoices_by_category(&env, &category)
     }
@@ -880,3 +884,4 @@ impl QuickLendXContract {
 
 #[cfg(test)]
 mod test;
+
