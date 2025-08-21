@@ -120,6 +120,23 @@ impl Invoice {
         BytesN::from_array(env, &id_bytes)
     }
 
+    /// Generate a unique invoice ID
+    fn generate_unique_invoice_id(env: &Env) -> BytesN<32> {
+        let timestamp = env.ledger().timestamp();
+        let sequence = env.ledger().sequence();
+        let counter_key = symbol_short!("inv_cnt");
+        let counter: u32 = env.storage().instance().get(&counter_key).unwrap_or(0);
+        env.storage().instance().set(&counter_key, &(counter + 1));
+        
+        // Create a unique ID from timestamp, sequence, and counter
+        let mut id_bytes = [0u8; 32];
+        id_bytes[0..8].copy_from_slice(&timestamp.to_be_bytes());
+        id_bytes[8..12].copy_from_slice(&sequence.to_be_bytes());
+        id_bytes[12..16].copy_from_slice(&counter.to_be_bytes());
+        
+        BytesN::from_array(env, &id_bytes)
+    }
+
     /// Check if invoice is available for funding
     pub fn is_available_for_funding(&self) -> bool {
         self.status == InvoiceStatus::Verified && self.funded_amount == 0
@@ -161,7 +178,6 @@ impl Invoice {
         // Log status change
         log_invoice_status_change(env, self.id.clone(), actor, old_status, self.status.clone());
     }
-        /// Mark invoice as defaulted
     pub fn mark_as_defaulted(&mut self) {
         self.status = InvoiceStatus::Defaulted;
     }

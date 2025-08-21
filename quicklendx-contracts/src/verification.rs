@@ -337,9 +337,10 @@ fn emit_business_verified(env: &Env, business: &Address, admin: &Address) {
 fn emit_business_rejected(env: &Env, business: &Address, admin: &Address) {
     env.events().publish(
         (symbol_short!("bus_rej"),),
-        (business.clone(), admin.clone(), env.ledger().timestamp()),
+        (business.clone(), admin.clone()),
     );
 }
+
 /// Validate invoice category
 pub fn validate_invoice_category(category: &crate::invoice::InvoiceCategory) -> Result<(), QuickLendXError> {
     // All categories are valid as they are defined in the enum

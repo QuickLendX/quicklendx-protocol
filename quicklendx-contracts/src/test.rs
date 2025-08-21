@@ -757,7 +757,6 @@ fn test_add_invoice_rating() {
     // Fund the invoice properly
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env,investor.clone(), 1000, env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
@@ -811,7 +810,6 @@ fn test_add_invoice_rating_validation() {
     // Fund the invoice
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env,investor.clone(), 1000, env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
@@ -879,7 +877,6 @@ fn test_multiple_ratings() {
 
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env,investor.clone(), 1000, env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
@@ -930,7 +927,6 @@ fn test_duplicate_rating_prevention() {
 
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env,investor.clone(), 1000, env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
@@ -994,7 +990,6 @@ fn test_rating_queries() {
 
         // Update invoice to have investor and add to funded status list
         let mut invoice1 = InvoiceStorage::get_invoice(&env, &invoice1_id).unwrap();
-        invoice1.mark_as_funded(&env,investor1.clone(), 1000, env.ledger().timestamp());
         invoice1
             .add_rating(
                 5,
@@ -1060,7 +1055,6 @@ fn test_rating_statistics() {
 
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env,investor.clone(), 1000, env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
@@ -1628,9 +1622,11 @@ fn test_audit_query_functionality() {
     let category = InvoiceCategory::Standard;
     let tags = Vec::new(&env);
     // Create multiple invoices
+
     let invoice_id1 = client.upload_invoice(&business, &amount, &currency, &due_date, &description, &category, &tags);
     let amount2=amount*2;
     let invoice_id2 = client.upload_invoice(&business, &amount2, &currency, &due_date, &description, &category, &tags);
+
     
     // Query by operation type
     let filter = AuditQueryFilter {
@@ -1647,7 +1643,7 @@ fn test_audit_query_functionality() {
     // Query by specific invoice
     let filter = AuditQueryFilter {
         invoice_id: Some(invoice_id1.clone()),
-        operation:AuditOperationFilter::Any ,
+        operation: AuditOperationFilter::Any,
         actor: None,
         start_timestamp: None,
         end_timestamp: None,

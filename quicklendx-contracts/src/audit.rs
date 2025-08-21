@@ -42,6 +42,7 @@ pub struct AuditLogEntry {
     pub block_height: u32,
     pub transaction_hash: Option<BytesN<32>>,
 }
+
 /// Audit operation filter
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -49,6 +50,7 @@ pub enum AuditOperationFilter {
     Any,
     Specific(AuditOperation),
 }
+
 /// Audit query filters
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -242,7 +244,7 @@ impl AuditStorage {
         let total_entries = all_entries.len() as u32;
         
         let mut operations_count = Vec::new(env);
-        let mut unique_actors = Vec::new(env);
+        let mut unique_actors: Vec<Address> = Vec::new(env);
         let mut min_timestamp = u64::MAX;
         let mut max_timestamp = 0u64;
         
@@ -333,8 +335,12 @@ impl AuditStorage {
         match &filter.operation {
             AuditOperationFilter::Any => {},
             AuditOperationFilter::Specific(operation) => {
-            if entry.operation != *operation {
-                return false;
+
+            
+
+                if entry.operation != *operation {
+                    return false;
+
                 }
             }
         }
@@ -436,7 +442,7 @@ pub fn log_invoice_funded(
         AuditOperation::InvoiceFunded,
         investor,
         None,
-        Some(String::from_str(env,"Funded")),
+        Some(String::from_str(env, "Funded")),
         Some(amount),
         None,
     );
@@ -456,7 +462,7 @@ pub fn log_payment_processed(
         AuditOperation::PaymentProcessed,
         actor,
         None,
-        Some(String::from_str(env,"Payment processed")),
+        Some(String::from_str(env, "Payment processed")),
         Some(amount),
         Some(payment_type),
     );
