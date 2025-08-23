@@ -177,6 +177,9 @@ impl AuditStorage {
         
         // Add to timestamp index
         Self::add_to_timestamp_index(env, entry.timestamp, &entry.audit_id);
+
+        // Add to global entries list
+        Self::add_to_all_audit_entries(env, &entry.audit_id);
     }
 
     /// Get audit entry by ID
@@ -316,6 +319,17 @@ impl AuditStorage {
         let mut entries: Vec<BytesN<32>> = env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env));
         entries.push_back(audit_id.clone());
         env.storage().instance().set(&key, &entries);
+    }
+
+    fn add_to_all_audit_entries(env: &Env, audit_id: &BytesN<32>) {
+        let key = symbol_short!("all_aud");
+        let mut all: Vec<BytesN<32>> = env
+            .storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
+        all.push_back(audit_id.clone());
+        env.storage().instance().set(&key, &all);
     }
 
     fn get_all_audit_entries(env: &Env) -> Vec<BytesN<32>> {

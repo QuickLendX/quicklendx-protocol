@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, Map, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec};
 
 /// Invoice status enumeration
 #[contracttype]
@@ -194,35 +194,77 @@ impl Invoice {
         self.status = InvoiceStatus::Defaulted;
     }
 
+    /// Add a rating to the invoice
+    pub fn add_rating(
+        &mut self,
+        rating: u32,
+        feedback: String,
+        rater: Address,
+        timestamp: u64,
+    ) -> Result<(), QuickLendXError> {
+        // Validate invoice is funded
+        if self.status != InvoiceStatus::Funded && self.status != InvoiceStatus::Paid {
+            return Err(QuickLendXError::NotFunded);
+        }
+
+        // Verify rater is the investor
+        if self.investor.as_ref() != Some(&rater) {
+            return Err(QuickLendXError::NotRater);
+        }
+
+        // Validate rating value
+        if rating < 1 || rating > 5 {
+            return Err(QuickLendXError::InvalidRating);
+        }
+
+        // Check if rater has already rated
+        for existing_rating in self.ratings.iter() {
+            if existing_rating.rated_by == rater {
+                return Err(QuickLendXError::AlreadyRated);
+            }
+        }
+
+        // Create new rating
+        let invoice_rating = InvoiceRating {
+            rating,
+            feedback,
+            rated_by: rater,
+            rated_at: timestamp,
+        };
+
+        // Add rating
+        self.ratings.push_back(invoice_rating);
+        self.total_ratings += 1;
+
+        // Calculate new average rating
+        let sum: u64 = self.ratings.iter().map(|r| r.rating as u64).sum();
+        self.average_rating = Some((sum / self.total_ratings as u64) as u32);
+
+        Ok(())
+    }
+
+    /// Get ratings above a threshold
+    pub fn get_ratings_above(&self, env: &Env, threshold: u32) -> Vec<InvoiceRating> {
+        let mut filtered = vec![env];
+        for rating in self.ratings.iter() {
+            if rating.rating >= threshold {
+                filtered.push_back(rating);
+            }
+        }
+        filtered
+    }
+
+    /// Get all ratings for the invoice
+    pub fn get_all_ratings(&self) -> &Vec<InvoiceRating> {
+        &self.ratings
+    }
+
     /// Check if invoice has ratings
     pub fn has_ratings(&self) -> bool {
         self.total_ratings > 0
     }
 
-    /// Add a rating to the invoice
-    pub fn add_rating(&mut self, rating: u32, feedback: String, rated_by: Address, rated_at: u64) -> Result<(), crate::errors::QuickLendXError> {
-        if rating < 1 || rating > 5 {
-            return Err(crate::errors::QuickLendXError::InvalidRating);
-        }
-
-        let new_rating = InvoiceRating {
-            rating,
-            feedback,
-            rated_by,
-            rated_at,
-        };
-
-        self.ratings.push_back(new_rating);
-        self.total_ratings += 1;
-
-        // Recalculate average rating
-        let total: u32 = self.ratings.iter().map(|r| r.rating).sum();
-        self.average_rating = Some(total / self.total_ratings);
-
-        Ok(())
-    }
-
-    /// Get the highest rating
+    /// Get the highest rating received
     pub fn get_highest_rating(&self) -> Option<u32> {
         if self.ratings.is_empty() {
             None
@@ -231,7 +273,7 @@ impl Invoice {
         }
     }
 
-    /// Get the lowest rating
+    /// Get the lowest rating received
     pub fn get_lowest_rating(&self) -> Option<u32> {
         if self.ratings.is_empty() {
             None
@@ -333,7 +375,10 @@ impl InvoiceStorage {
     /// Get all invoices for a business
     pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
         let key = (symbol_short!("business"), business.clone());
-        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Get all invoices by status
@@ -345,7 +390,10 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Add invoice to business invoices list
@@ -365,7 +413,11 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        let mut invoices = env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env));
+        let mut invoices = env
+            .storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
         invoices.push_back(invoice_id.clone());
         env.storage().instance().set(&key, &invoices);
     }

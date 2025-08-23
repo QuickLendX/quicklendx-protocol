@@ -77,6 +77,18 @@
                             },
                             {
                               "key": {
+                                "symbol": "category"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "Services"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
                                 "symbol": "created_at"
                               },
                               "val": {
@@ -166,6 +178,14 @@
                             },
                             {
                               "key": {
+                                "symbol": "tags"
+                              },
+                              "val": {
+                                "vec": []
+                              }
+                            },
+                            {
+                              "key": {
                                 "symbol": "total_ratings"
                               },
                               "val": {
@@ -204,6 +224,18 @@
                               },
                               "val": {
                                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "category"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "Services"
+                                  }
+                                ]
                               }
                             },
                             {
@@ -297,6 +329,14 @@
                             },
                             {
                               "key": {
+                                "symbol": "tags"
+                              },
+                              "val": {
+                                "vec": []
+                              }
+                            },
+                            {
+                              "key": {
                                 "symbol": "total_ratings"
                               },
                               "val": {
@@ -335,6 +375,18 @@
                               },
                               "val": {
                                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "category"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "Services"
+                                  }
+                                ]
                               }
                             },
                             {
@@ -424,6 +476,14 @@
                                     "symbol": "Pending"
                                   }
                                 ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "tags"
+                              },
+                              "val": {
+                                "vec": []
                               }
                             },
                             {
@@ -733,6 +793,24 @@
                                 "symbol": "transaction_hash"
                               },
                               "val": "void"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "symbol": "all_aud"
+                        },
+                        "val": {
+                          "vec": [
+                            {
+                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
                             }
                           ]
                         }
