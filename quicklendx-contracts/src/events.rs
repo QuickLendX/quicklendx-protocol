@@ -265,18 +265,18 @@ pub fn emit_invoice_tag_added(
     );
 }
 
-/// Emit event when a tag is removed from an invoice
-pub fn emit_invoice_tag_removed(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-    business: &Address,
-    tag: &String,
-) {
-    env.events().publish(
-        (symbol_short!("tag_rm"),),
-        (invoice_id.clone(), business.clone(), tag.clone()),
-    );
-}
+// /// Emit event when a tag is removed from an invoice
+// pub fn emit_invoice_tag_removed(
+//     env: &Env,
+//     invoice_id: &BytesN<32>,
+//     business: &Address,
+//     tag: &String,
+// ) {
+//     env.events().publish(
+//         (symbol_short!("tag_rm"),),
+//         (invoice_id.clone(), business.clone(), tag.clone()),
+//     );
+// }
 
 /// Emit event when a dispute is created
 pub fn emit_dispute_created(
