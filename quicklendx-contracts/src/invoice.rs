@@ -10,10 +10,7 @@ pub enum InvoiceStatus {
     Paid,      // Invoice has been paid and settled
     Defaulted, // Invoice payment is overdue/defaulted
 }
-<<<<<<< HEAD
 
-=======
->>>>>>> b178002 (Fix native_xlm_address return type)
 /// Dispute status enumeration
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -23,10 +20,7 @@ pub enum DisputeStatus {
     UnderReview, // Dispute is under review
     Resolved,    // Dispute has been resolved
 }
-<<<<<<< HEAD
 
-=======
->>>>>>> b178002 (Fix native_xlm_address return type)
 /// Dispute structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -39,10 +33,7 @@ pub struct Dispute {
     pub resolved_by: Option<Address>, // Address of the party who resolved the dispute
     pub resolved_at: Option<u64>,   // Timestamp when dispute was resolved
 }
-<<<<<<< HEAD
 
-=======
->>>>>>> b178002 (Fix native_xlm_address return type)
 /// Invoice category enumeration
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -90,10 +81,7 @@ pub struct Invoice {
     pub ratings: Vec<InvoiceRating>, // List of all ratings
     pub dispute_status: DisputeStatus, // Current dispute status
     pub dispute: Option<Dispute>,    // Dispute details if any
-<<<<<<< HEAD
-=======
 
->>>>>>> b178002 (Fix native_xlm_address return type)
 }
 
 // Use the main error enum from errors.rs
