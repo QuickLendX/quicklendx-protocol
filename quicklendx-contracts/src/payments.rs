@@ -1,5 +1,6 @@
 use soroban_sdk::{contracttype, Address, BytesN, Env, symbol_short};
 use crate::errors::QuickLendXError;
+use soroban_token_sdk::TokenClient;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -146,16 +147,54 @@ pub fn refund_escrow(
     Ok(())
 }
 
-/// Transfer funds between addresses
-/// TODO: Integrate with Soroban payment primitives for XLM/USDC
-/// For now, this is a stub that always returns true
-/// Replace with actual payment logic when implementing token transfers
+
+
 pub fn transfer_funds(env: &Env, from: &Address, to: &Address, amount: i128) -> bool {
-    // Placeholder for actual token transfer implementation
-    // This should integrate with Soroban's token interface
-    // Example implementation would involve:
-    // 1. Get token contract instance
-    // 2. Call transfer method on token contract
-    // 3. Handle success/failure appropriately
-    true
+
+    if amount <= 0 {
+        return false;
+    }
+    if from == to {
+        return false;
+    }
+
+    if let Err(_) = from.require_auth() {
+        return false;
+    }
+
+    // Check if the transfer is for XLM (based on original logic)
+    if to == &Address::from_account_id(&env.ledger().network_passphrase()) {
+        let balance = env.ledger().account_balance(from).unwrap_or(0);
+        if balance < amount {
+            return false;
+        }
+
+        let result = env.invoke_contract::<()>(
+            &env.ledger().network_passphrase(),
+            &symbol_short!("transfer"),
+            Vec::from_array(env, [from.clone().into(), to.clone().into(), amount.into()]),
+        );
+        return result.is_ok();
+    } else {
+        // NB: This is for Test ⛓️
+        let usdc_contract_id = BytesN::from_array(
+            env,
+            &[
+                0xCD, 0x7C, 0xF9, 0x83, 0x1E, 0xF8, 0xA2, 0xE8,
+                0x9F, 0x16, 0xB8, 0xC3, 0xB6, 0x62, 0xA6, 0xD0,
+                0xB9, 0xB2, 0xD2, 0xF4, 0xB9, 0xD6, 0xF8, 0xC7,
+                0xF7, 0xC0, 0x83, 0x6C, 0x0F, 0x2B, 0x6F, 0xA5,
+            ],
+        );
+
+        let token_client = TokenClient::new(env, &usdc_contract_id);
+
+        let balance = token_client.balance(from);
+        if balance < amount {
+            return false;
+        }
+
+        let result = token_client.transfer(from, to, &amount);
+        return result.is_ok();
+    }
 }
