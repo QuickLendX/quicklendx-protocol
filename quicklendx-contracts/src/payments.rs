@@ -162,10 +162,10 @@ pub fn release_escrow(
 
     // Transfer funds from escrow to business
     // Transfer funds from escrow to business
-    let transfer_success = transfer_funds(env, &escrow.currency,&escrow.investor, &escrow.business, escrow.amount);
-    if transfer_success.is_err() {
-        return Err(QuickLendXError::InsufficientFunds);
-    }
+    transfer_funds(env, &escrow.currency,&escrow.investor, &escrow.business, escrow.amount)?;
+    // if transfer_success.is_err() {
+    //     return Err(QuickLendXError::InsufficientFunds);
+    // }
     //transfer_funds(env,&escrow.currency, &escrow.investor, &escrow.business, escrow.amount)?;
 
     // Update escrow status
@@ -190,10 +190,10 @@ pub fn refund_escrow(
     // Refund funds to investor
     //transfer_funds(env, &escrow.currency, &escrow.business, &escrow.investor, escrow.amount)?;
     // Refund funds to investor
-    let transfer_success = transfer_funds(env,&escrow.currency, &escrow.business, &escrow.investor, escrow.amount);
-    if transfer_success.is_err() {
-        return Err(QuickLendXError::InsufficientFunds);
-    }
+    transfer_funds(env,&escrow.currency,&escrow.business, &escrow.investor, escrow.amount)?;
+    // if transfer_success.is_err() {
+    //     return Err(QuickLendXError::InsufficientFunds);
+    // }
     // Update escrow status
     escrow.status = EscrowStatus::Refunded;
     EscrowStorage::update_escrow(env, &escrow);
@@ -202,7 +202,7 @@ pub fn refund_escrow(
 }
 pub fn native_xlm_address(env:&Env)->Address{
     //let zero_bytes=BytesN::from_array(env,&[0u8;32]);
-    Address::from_string_bytes(&soroban_sdk::Bytes::from_array(env,&[0u8;56]))
+    env.current_contract_address()
 }
 /// Transfer funds between addresses
 /// TODO: Integrate with Soroban payment primitives for XLM/USDC
@@ -218,10 +218,6 @@ pub fn transfer_funds(env: &Env,currency: &Address,from: &Address, to: &Address,
     // if currency==&native_xlm_address(env){
     //     let payment_success=env.invoke_contract(
     //         &contract_id,
-    //         &symbol_short!("pay_nativ"),
-    //         let args=vec![
-    //             from.into_val(env),
-    //             to.into_val(env),
     //             amount.into_val(env),
     //         ];
     //         // let args_vec=soroban_sdk::Vec::from_array(env,args);
@@ -237,10 +233,19 @@ pub fn transfer_funds(env: &Env,currency: &Address,from: &Address, to: &Address,
     let fee_amount=amount*(metadata.fee_bps as i128)/10_000;
     let amount_after_fee=amount-fee_amount;
     let client=token::Client::new(env,currency);
-    client
-        .try_transfer(from, to, &amount_after_fee)
-        .map_err(|_| QuickLendXError::PaymentFailed)?;
-
+    client.transfer(from,to,&amount_after_fee);
+        
+    
+    // if fee_amount>0{
+    //     let treasury=env.current_contract_address();
+    //         client
+    //     .transfer(from,&treasury,&fee_amount)
+    //     .map_err(|_| QuickLendXError::PaymentFailed)?;
+    // }
     Ok(())
+    //let client=token::Client::new(env,currency.clone());
+    // client
+    //     .transfer(from,to,&amount_after_fee)
+    //     .map_err(|_| QuickLendXError::PaymentFailed)
 }
    

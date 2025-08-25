@@ -1,7 +1,7 @@
 use crate::invoice::Invoice;
 use crate::payments::{Escrow, EscrowStatus};
 use crate::audit::{AuditLogEntry, AuditOperation};
-
+use soroban_sdk::{symbol_short, Address, BytesN, Env, String};
 pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
     env.events().publish(
         (symbol_short!("inv_up"),),
@@ -175,38 +175,39 @@ pub fn emit_audit_query(env: &Env, query_type: String, result_count: u32) {
 }
 
 /// Emit event when invoice category is updated
-pub fn emit_invoice_category_updated(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-    business: &Address,
-    old_category: &crate::invoice::InvoiceCategory,
-    new_category: &crate::invoice::InvoiceCategory,
-) {
-    env.events().publish(
-        (symbol_short!("cat_upd"),),
-        (
-            invoice_id.clone(),
-            business.clone(),
-            old_category.clone(),
-            new_category.clone(),
-        ),
-    );
-}
+// pub fn emit_invoice_category_updated(
+//     env: &Env,
+//     invoice_id: &BytesN<32>,
+//     business: &Address,
+//     old_category: &crate::invoice::InvoiceCategory,
+//     new_category: &crate::invoice::InvoiceCategory,
+// ) {
+//     env.events().publish(
+//         (symbol_short!("cat_upd"),),
+//         (
+//             invoice_id.clone(),
+//             business.clone(),
+//             old_category.clone(),
+//             new_category.clone(),
+//         ),
+//     );
+// }
 
 /// Emit event when a tag is added to an invoice
-pub fn emit_invoice_tag_added(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-    business: &Address,
-    tag: &String,
-) {
-    env.events().publish(
-        (symbol_short!("tag_add"),),
-        (invoice_id.clone(), business.clone(), tag.clone()),
-    );
-}
+// pub fn emit_invoice_tag_added(
+//     env: &Env,
+//     invoice_id: &BytesN<32>,
+//     business: &Address,
+//     tag: &String,
+// ) {
+//     env.events().publish(
+//         (symbol_short!("tag_add"),),
+//         (invoice_id.clone(), business.clone(), tag.clone()),
+//     );
+// }
 
 /// Emit event when a tag is removed from an invoice
+
 pub fn emit_invoice_tag_removed(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -218,6 +219,19 @@ pub fn emit_invoice_tag_removed(
         (invoice_id.clone(), business.clone(), tag.clone()),
     );
 }
+
+
+// pub fn emit_invoice_tag_removed(
+//     env: &Env,
+//     invoice_id: &BytesN<32>,
+//     business: &Address,
+//     tag: &String,
+// ) {
+//     env.events().publish(
+//         (symbol_short!("tag_rm"),),
+//         (invoice_id.clone(), business.clone(), tag.clone()),
+//     );
+// }
 
 /// Emit event when invoice category is updated
 pub fn emit_invoice_category_updated(
@@ -263,7 +277,6 @@ pub fn emit_invoice_tag_removed(
         (invoice_id.clone(), business.clone(), tag.clone()),
     );
 }
-
 
 /// Emit event when a dispute is created
 pub fn emit_dispute_created(
@@ -315,5 +328,6 @@ pub fn emit_dispute_resolved(
             env.ledger().timestamp(),
         ),
     );
+
 }
 

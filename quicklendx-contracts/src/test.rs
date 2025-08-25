@@ -8,7 +8,8 @@ use crate::audit::{
     AuditStorage, AuditQueryFilter, AuditOperation, AuditOperationFilter, log_invoice_operation
 };
 
-use crate::invoice::{InvoiceStatus, InvoiceStorage,InvoiceCategory};
+use crate::invoice::{InvoiceStatus, InvoiceStorage,InvoiceCategory,DisputeStatus, Dispute};
+
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use crate::payments::{EscrowStatus};
 use crate::investment::{InvestmentStorage};
@@ -2169,4 +2170,6 @@ fn test_dispute_validation() {
         &empty_evidence,
     );
     assert!(result.is_err());
+
 }
+

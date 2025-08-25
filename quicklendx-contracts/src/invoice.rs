@@ -10,7 +10,10 @@ pub enum InvoiceStatus {
     Paid,      // Invoice has been paid and settled
     Defaulted, // Invoice payment is overdue/defaulted
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> b178002 (Fix native_xlm_address return type)
 /// Dispute status enumeration
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -20,7 +23,10 @@ pub enum DisputeStatus {
     UnderReview, // Dispute is under review
     Resolved,    // Dispute has been resolved
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> b178002 (Fix native_xlm_address return type)
 /// Dispute structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,7 +39,10 @@ pub struct Dispute {
     pub resolved_by: Option<Address>, // Address of the party who resolved the dispute
     pub resolved_at: Option<u64>,   // Timestamp when dispute was resolved
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> b178002 (Fix native_xlm_address return type)
 /// Invoice category enumeration
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -81,6 +90,10 @@ pub struct Invoice {
     pub ratings: Vec<InvoiceRating>, // List of all ratings
     pub dispute_status: DisputeStatus, // Current dispute status
     pub dispute: Option<Dispute>,    // Dispute details if any
+<<<<<<< HEAD
+=======
+
+>>>>>>> b178002 (Fix native_xlm_address return type)
 }
 
 // Use the main error enum from errors.rs
@@ -130,23 +143,7 @@ impl Invoice {
         
         invoice
     }
-    /// Generate a unique invoice ID
-    fn generate_unique_invoice_id(env: &Env) -> BytesN<32> {
-        let timestamp = env.ledger().timestamp();
-        let sequence = env.ledger().sequence();
-        let counter_key = symbol_short!("inv_cnt");
-        let counter: u32 = env.storage().instance().get(&counter_key).unwrap_or(0);
-        env.storage().instance().set(&counter_key, &(counter + 1));
-        
-        // Create a unique ID from timestamp, sequence, and counter
-        let mut id_bytes = [0u8; 32];
-        id_bytes[0..8].copy_from_slice(&timestamp.to_be_bytes());
-        id_bytes[8..12].copy_from_slice(&sequence.to_be_bytes());
-        id_bytes[12..16].copy_from_slice(&counter.to_be_bytes());
-        
-        BytesN::from_array(env, &id_bytes)
-    }
-
+    
     /// Generate a unique invoice ID
     fn generate_unique_invoice_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();

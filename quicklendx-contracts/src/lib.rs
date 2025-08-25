@@ -33,7 +33,10 @@ use events::{
     emit_invoice_verified, emit_audit_query, emit_audit_validation,
 };
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
+
 use invoice::{Invoice, InvoiceStatus, InvoiceStorage, DisputeStatus};
+use invoice::{Invoice, InvoiceStatus, InvoiceStorage,DisputeStatus};
+
 use payments::{create_escrow, refund_escrow, release_escrow, EscrowStorage};
 use profits::calculate_profit as do_calculate_profit;
 use settlement::settle_invoice as do_settle_invoice;
@@ -90,7 +93,7 @@ impl QuickLendXContract {
             currency.clone(),
             due_date,
             description,
-            catgory,
+            category,
             tags,
         );
 
@@ -163,6 +166,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
         // (Optional: Only admin can verify, add check here if needed)
+        invoice.verify(&env, invoice.business.clone());
         InvoiceStorage::update_invoice(&env, &invoice);
         emit_invoice_verified(&env, &invoice);
 
@@ -213,6 +217,8 @@ impl QuickLendXContract {
 
         // Update status
         match new_status {
+            InvoiceStatus::Verified => invoice.verify(&env, invoice.business.clone()),
+            InvoiceStatus::Paid => invoice.mark_as_paid(&env, invoice.business.clone(), env.ledger().timestamp()),
             InvoiceStatus::Defaulted => invoice.mark_as_defaulted(),
             _ => return Err(QuickLendXError::InvalidStatus),
         }
@@ -890,7 +896,6 @@ impl QuickLendXContract {
     }
 
     // Dispute Resolution Functions
-
     /// Create a dispute for an invoice
     pub fn create_dispute(
         env: Env,

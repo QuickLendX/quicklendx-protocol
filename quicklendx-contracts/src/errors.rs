@@ -29,7 +29,7 @@ pub enum QuickLendXError {
  InvalidCurrency = 1202,
  InvalidTimestamp = 1203,
  InvalidDescription = 1204,
-
+ UnsupportedToken=1205,
  // Storage errors (1300-1399)
  StorageError = 1300,
  StorageKeyNotFound = 1301,
@@ -38,6 +38,7 @@ pub enum QuickLendXError {
  InsufficientFunds = 1400,
  InvalidStatus = 1401,
  OperationNotAllowed = 1402,
+ PaymentFailed=1403,
 
  // Rating errors (1500-1599, from feat-invoice_rating_system)
  InvalidRating = 1500,
@@ -98,11 +99,13 @@ impl From<QuickLendXError> for Symbol {
  QuickLendXError::InvalidCurrency => symbol_short!("INV_CR"),
  QuickLendXError::InvalidTimestamp => symbol_short!("INV_TM"),
  QuickLendXError::InvalidDescription => symbol_short!("INV_DS"),
+ QuickLendXError::UnsupportedToken=>symbol_short!("UNSUP_TOK"),
  QuickLendXError::StorageError => symbol_short!("STORE"),
  QuickLendXError::StorageKeyNotFound => symbol_short!("KEY_NF"),
  QuickLendXError::InsufficientFunds => symbol_short!("INSUF"),
  QuickLendXError::InvalidStatus => symbol_short!("INV_ST"),
  QuickLendXError::OperationNotAllowed => symbol_short!("OP_NA"),
+ QuickLendXError::PaymentFailed=>symbol_short!("PAY_FAIL"),
  QuickLendXError::InvalidRating => symbol_short!("INV_RT"),
  QuickLendXError::NotFunded => symbol_short!("NOT_FD"),
  QuickLendXError::AlreadyRated => symbol_short!("ALR_RT"),
@@ -122,6 +125,7 @@ impl From<QuickLendXError> for Symbol {
  QuickLendXError::CategoryNotFound => symbol_short!("CAT_NF"),
  QuickLendXError::InvalidTag => symbol_short!("INV_TAG"),
  QuickLendXError::TagLimitExceeded => symbol_short!("TAG_LIM"),
+
  // Dispute errors
  QuickLendXError::DisputeNotFound => symbol_short!("DSP_NF"),
  QuickLendXError::DisputeAlreadyExists => symbol_short!("DSP_EX"),
@@ -130,6 +134,7 @@ impl From<QuickLendXError> for Symbol {
  QuickLendXError::DisputeNotUnderReview => symbol_short!("DSP_UR"),
  QuickLendXError::InvalidDisputeReason => symbol_short!("DSP_RN"),
  QuickLendXError::InvalidDisputeEvidence => symbol_short!("DSP_EV"),
+
  }
 }
 }
