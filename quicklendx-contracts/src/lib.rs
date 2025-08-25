@@ -35,7 +35,7 @@ use events::{
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
 
 use invoice::{Invoice, InvoiceStatus, InvoiceStorage, DisputeStatus};
-use invoice::{Invoice, InvoiceStatus, InvoiceStorage,DisputeStatus};
+//use invoice::{Invoice, InvoiceStatus, InvoiceStorage,DisputeStatus};
 
 use payments::{create_escrow, refund_escrow, release_escrow, EscrowStorage};
 use profits::calculate_profit as do_calculate_profit;
