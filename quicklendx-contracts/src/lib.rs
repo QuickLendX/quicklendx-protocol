@@ -2,7 +2,8 @@
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec,
 };
-
+// use crate::events::emit_audit_query;
+// use crate::events::emit_audit_validation;
 mod backup;
 mod bid;
 mod defaults;
@@ -15,7 +16,7 @@ mod profits;
 mod settlement;
 mod verification;
 mod audit;
-
+//use crate::audit::alloc::string::ToString;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::{
     handle_default as do_handle_default,
@@ -32,7 +33,10 @@ use events::{
     emit_invoice_verified, emit_audit_query, emit_audit_validation,
 };
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
+
 use invoice::{Invoice, InvoiceStatus, InvoiceStorage, DisputeStatus};
+//use invoice::{Invoice, InvoiceStatus, InvoiceStorage,DisputeStatus};
+
 use payments::{create_escrow, refund_escrow, release_escrow, EscrowStorage};
 use profits::calculate_profit as do_calculate_profit;
 use settlement::settle_invoice as do_settle_invoice;
@@ -41,12 +45,12 @@ use verification::{
     verify_invoice_data, BusinessVerificationStorage,
 };
 
-use crate::backup::{Backup, BackupStatus, BackupStorage};
+use crate::{backup::{Backup, BackupStatus, BackupStorage}, invoice::InvoiceCategory};
 use audit::{
     log_invoice_created, log_invoice_status_change, log_invoice_funded, log_payment_processed,
     AuditStorage, AuditLogEntry, AuditQueryFilter, AuditStats, AuditOperation
 };
-
+//use crate::audit::alloc::string::ToString;
 #[contract]
 pub struct QuickLendXContract;
 
@@ -113,7 +117,7 @@ impl QuickLendXContract {
         currency: Address,
         due_date: u64,
         description: String,
-        category: invoice::InvoiceCategory,
+        category:invoice::InvoiceCategory,   
         tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         // Only the business can upload their own invoice
@@ -737,7 +741,6 @@ impl QuickLendXContract {
         limit: u32,
     ) -> Vec<AuditLogEntry> {
         let results = AuditStorage::query_audit_logs(&env, &filter, limit);
-        emit_audit_query(&env, String::from_str(&env, "query_audit_logs"), results.len() as u32);
         results
     }
 
@@ -772,6 +775,7 @@ impl QuickLendXContract {
     // Category and Tag Management Functions
 
     /// Get invoices by category
+
     pub fn get_invoices_by_category(env: Env, category: invoice::InvoiceCategory) -> Vec<BytesN<32>> {
         InvoiceStorage::get_invoices_by_category(&env, &category)
     }
@@ -892,7 +896,6 @@ impl QuickLendXContract {
     }
 
     // Dispute Resolution Functions
-
     /// Create a dispute for an invoice
     pub fn create_dispute(
         env: Env,
@@ -957,3 +960,4 @@ impl QuickLendXContract {
 
 #[cfg(test)]
 mod test;
+

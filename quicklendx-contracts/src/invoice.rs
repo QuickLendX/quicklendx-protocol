@@ -45,6 +45,7 @@ pub enum InvoiceCategory {
     Technology,    // Technology services/products
     Healthcare,    // Healthcare services
     Other,         // Other categories
+    Standard,
 }
 
 /// Invoice rating structure
@@ -80,6 +81,7 @@ pub struct Invoice {
     pub ratings: Vec<InvoiceRating>, // List of all ratings
     pub dispute_status: DisputeStatus, // Current dispute status
     pub dispute: Option<Dispute>,    // Dispute details if any
+
 }
 
 // Use the main error enum from errors.rs
@@ -129,7 +131,7 @@ impl Invoice {
         
         invoice
     }
-
+    
     /// Generate a unique invoice ID
     fn generate_unique_invoice_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
@@ -188,8 +190,6 @@ impl Invoice {
         // Log status change
         log_invoice_status_change(env, self.id.clone(), actor, old_status, self.status.clone());
     }
-
-    /// Mark invoice as defaulted
     pub fn mark_as_defaulted(&mut self) {
         self.status = InvoiceStatus::Defaulted;
     }
@@ -448,7 +448,6 @@ impl InvoiceStorage {
         }
         count
     }
-
     /// Get invoices by category
     pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
         let mut category_invoices = vec![env];

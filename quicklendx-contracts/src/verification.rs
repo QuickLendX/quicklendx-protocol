@@ -1,6 +1,6 @@
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Symbol, Vec};
 use crate::errors::QuickLendXError;
-
+use crate::invoice;
 #[contracttype]
 pub enum BusinessVerificationStatus {
     Pending,
@@ -298,6 +298,10 @@ pub fn verify_invoice_data(
     _currency: &Address,
     due_date: u64,
     description: &String,
+    // category: invoice::InvoiceCategory,
+    // tags: Vec<String>,
+    
+    
 ) -> Result<(), QuickLendXError> {
     // First check if business is verified
     require_business_verification(env, business)?;
@@ -349,8 +353,10 @@ pub fn validate_invoice_category(category: &crate::invoice::InvoiceCategory) -> 
         crate::invoice::InvoiceCategory::Technology => Ok(()),
         crate::invoice::InvoiceCategory::Healthcare => Ok(()),
         crate::invoice::InvoiceCategory::Other => Ok(()),
+        crate::invoice::InvoiceCategory::Standard => Ok(()),
     }
-}
+    }
+
 
 /// Validate invoice tags
 pub fn validate_invoice_tags(tags: &Vec<String>) -> Result<(), QuickLendXError> {

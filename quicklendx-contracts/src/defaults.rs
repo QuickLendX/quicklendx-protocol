@@ -1,8 +1,15 @@
 use crate::errors::QuickLendXError;
-use crate::events::{emit_invoice_defaulted, emit_dispute_created, emit_dispute_under_review, emit_dispute_resolved};
+
+// use crate::events::{emit_invoice_defaulted, emit_dispute_created, emit_dispute_under_review, emit_dispute_resolved};
+// use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
+// use crate::invoice::{Invoice, InvoiceStatus, InvoiceStorage, DisputeStatus, Dispute};
+// use soroban_sdk::{Address, BytesN, Env, String, Vec};
+
+use crate::events::{emit_invoice_defaulted,emit_dispute_created, emit_dispute_under_review, emit_dispute_resolved};
 use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
-use crate::invoice::{Invoice, InvoiceStatus, InvoiceStorage, DisputeStatus, Dispute};
-use soroban_sdk::{Address, BytesN, Env, String, Vec};
+use crate::invoice::{Invoice, InvoiceStatus, InvoiceStorage,DisputeStatus, Dispute};
+use soroban_sdk::{Address,BytesN, Env, String, Vec};
+
 
 pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut invoice =
@@ -19,6 +26,7 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     emit_invoice_defaulted(env, &invoice);
     Ok(())
 }
+
 
 /// Create a dispute for an invoice
 pub fn create_dispute(
@@ -218,4 +226,5 @@ pub fn get_invoices_by_dispute_status(
     }
     
     filtered_invoices
+
 }

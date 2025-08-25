@@ -1,10 +1,12 @@
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address,BytesN, Env, String, Vec};
 use crate::invoice::{Invoice, InvoiceStatus};
 use crate::errors::QuickLendXError;
-
+// extern crate alloc;
+// use alloc::format;
 /// Audit operation types
+
+#[derive(Clone, Debug, Eq, PartialEq,PartialOrd, Ord)]
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AuditOperation {
     InvoiceCreated,
     InvoiceUploaded,
@@ -333,8 +335,12 @@ impl AuditStorage {
         match &filter.operation {
             AuditOperationFilter::Any => {},
             AuditOperationFilter::Specific(operation) => {
+
+            
+
                 if entry.operation != *operation {
                     return false;
+
                 }
             }
         }
