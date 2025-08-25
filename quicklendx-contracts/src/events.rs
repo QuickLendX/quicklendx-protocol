@@ -218,6 +218,7 @@ pub fn emit_invoice_tag_removed(
         (invoice_id.clone(), business.clone(), tag.clone()),
     );
 }
+
 /// Emit event when invoice category is updated
 pub fn emit_invoice_category_updated(
     env: &Env,
@@ -262,3 +263,57 @@ pub fn emit_invoice_tag_removed(
         (invoice_id.clone(), business.clone(), tag.clone()),
     );
 }
+
+
+/// Emit event when a dispute is created
+pub fn emit_dispute_created(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    created_by: &Address,
+    reason: &String,
+) {
+    env.events().publish(
+        (symbol_short!("dsp_cr"),),
+        (
+            invoice_id.clone(),
+            created_by.clone(),
+            reason.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when a dispute is put under review
+pub fn emit_dispute_under_review(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    reviewed_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("dsp_ur"),),
+        (
+            invoice_id.clone(),
+            reviewed_by.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when a dispute is resolved
+pub fn emit_dispute_resolved(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    resolved_by: &Address,
+    resolution: &String,
+) {
+    env.events().publish(
+        (symbol_short!("dsp_rs"),),
+        (
+            invoice_id.clone(),
+            resolved_by.clone(),
+            resolution.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+

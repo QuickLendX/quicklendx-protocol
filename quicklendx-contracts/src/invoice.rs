@@ -11,6 +11,29 @@ pub enum InvoiceStatus {
     Defaulted, // Invoice payment is overdue/defaulted
 }
 
+/// Dispute status enumeration
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DisputeStatus {
+    None,        // No dispute exists
+    Disputed,    // Dispute has been created
+    UnderReview, // Dispute is under review
+    Resolved,    // Dispute has been resolved
+}
+
+/// Dispute structure
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Dispute {
+    pub created_by: Address,        // Address of the party who created the dispute
+    pub created_at: u64,            // Timestamp when dispute was created
+    pub reason: String,             // Reason for the dispute
+    pub evidence: String,           // Evidence provided by the disputing party
+    pub resolution: Option<String>, // Resolution description (if resolved)
+    pub resolved_by: Option<Address>, // Address of the party who resolved the dispute
+    pub resolved_at: Option<u64>,   // Timestamp when dispute was resolved
+}
+
 /// Invoice category enumeration
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -56,6 +79,8 @@ pub struct Invoice {
     pub average_rating: Option<u32>, // Average rating (1-5)
     pub total_ratings: u32,          // Total number of ratings
     pub ratings: Vec<InvoiceRating>, // List of all ratings
+    pub dispute_status: DisputeStatus, // Current dispute status
+    pub dispute: Option<Dispute>,    // Dispute details if any
 }
 
 // Use the main error enum from errors.rs
@@ -96,6 +121,8 @@ impl Invoice {
             average_rating: None,
             total_ratings: 0,
             ratings: vec![env],
+            dispute_status: DisputeStatus::None,
+            dispute: None,
         };
         
         // Log invoice creation

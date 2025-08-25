@@ -18,14 +18,22 @@ mod verification;
 mod audit;
 //use crate::audit::alloc::string::ToString;
 use bid::{Bid, BidStatus, BidStorage};
-use defaults::handle_default as do_handle_default;
+use defaults::{
+    handle_default as do_handle_default,
+    create_dispute as do_create_dispute,
+    put_dispute_under_review as do_put_dispute_under_review,
+    resolve_dispute as do_resolve_dispute,
+    get_dispute_details as do_get_dispute_details,
+    get_invoices_with_disputes as do_get_invoices_with_disputes,
+    get_invoices_by_dispute_status as do_get_invoices_by_dispute_status,
+};
 use errors::QuickLendXError;
 use events::{
     emit_escrow_created, emit_escrow_refunded, emit_escrow_released, emit_invoice_uploaded,
     emit_invoice_verified, emit_audit_query, emit_audit_validation,
 };
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
-use invoice::{Invoice, InvoiceStatus, InvoiceStorage};
+use invoice::{Invoice, InvoiceStatus, InvoiceStorage, DisputeStatus};
 use payments::{create_escrow, refund_escrow, release_escrow, EscrowStorage};
 use profits::calculate_profit as do_calculate_profit;
 use settlement::settle_invoice as do_settle_invoice;
@@ -879,6 +887,69 @@ impl QuickLendXContract {
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         Ok(invoice.has_tag(tag))
+    }
+
+    // Dispute Resolution Functions
+
+    /// Create a dispute for an invoice
+    pub fn create_dispute(
+        env: Env,
+        invoice_id: BytesN<32>,
+        creator: Address,
+        reason: String,
+        evidence: String,
+    ) -> Result<(), QuickLendXError> {
+        do_create_dispute(&env, &invoice_id, &creator, reason, evidence)
+    }
+
+    /// Put a dispute under review (admin function)
+    pub fn put_dispute_under_review(
+        env: Env,
+        invoice_id: BytesN<32>,
+        reviewer: Address,
+    ) -> Result<(), QuickLendXError> {
+        do_put_dispute_under_review(&env, &invoice_id, &reviewer)
+    }
+
+    /// Resolve a dispute (admin function)
+    pub fn resolve_dispute(
+        env: Env,
+        invoice_id: BytesN<32>,
+        resolver: Address,
+        resolution: String,
+    ) -> Result<(), QuickLendXError> {
+        do_resolve_dispute(&env, &invoice_id, &resolver, resolution)
+    }
+
+    /// Get dispute details for an invoice
+    pub fn get_dispute_details(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<Option<invoice::Dispute>, QuickLendXError> {
+        do_get_dispute_details(&env, &invoice_id)
+    }
+
+    /// Get all invoices with disputes
+    pub fn get_invoices_with_disputes(env: Env) -> Vec<BytesN<32>> {
+        do_get_invoices_with_disputes(&env)
+    }
+
+    /// Get invoices by dispute status
+    pub fn get_invoices_by_dispute_status(
+        env: Env,
+        dispute_status: DisputeStatus,
+    ) -> Vec<BytesN<32>> {
+        do_get_invoices_by_dispute_status(&env, dispute_status)
+    }
+
+    /// Get dispute status for an invoice
+    pub fn get_invoice_dispute_status(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<DisputeStatus, QuickLendXError> {
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        Ok(invoice.dispute_status)
     }
 }
 

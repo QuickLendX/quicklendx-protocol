@@ -7,11 +7,16 @@ use soroban_sdk::{
 use crate::audit::{
     AuditStorage, AuditQueryFilter, AuditOperation, AuditOperationFilter, log_invoice_operation
 };
+
 use crate::invoice::{InvoiceStatus, InvoiceStorage,InvoiceCategory};
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use crate::payments::{EscrowStatus};
 use crate::investment::{InvestmentStorage};
 use crate::bid::{BidStorage};
+
+use crate::invoice::{DisputeStatus, Dispute};
+
+
 #[test]
 fn test_store_invoice() {
     let env = Env::default();
@@ -1675,4 +1680,493 @@ fn test_audit_statistics() {
     let stats = client.get_audit_stats();
     assert!(stats.total_entries > 0);
     assert!(stats.unique_actors > 0);
+}
+
+// Dispute Resolution System Tests
+
+#[test]
+fn test_create_dispute() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+
+    // Create and verify invoice
+    let invoice_id = client.upload_invoice(
+        &business, 
+        &amount, 
+        &currency, 
+        &due_date, 
+        &description,
+        &invoice::InvoiceCategory::Services,
+        &vec![&env],
+    );
+    client.verify_invoice(&invoice_id);
+
+    // Create dispute as business
+    let reason = String::from_str(&env, "Payment not received");
+    let evidence = String::from_str(&env, "Bank statement showing no payment");
+    
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &reason,
+        &evidence,
+    );
+
+    // Verify dispute was created
+    let dispute_status = client.get_invoice_dispute_status(&invoice_id);
+    assert_eq!(dispute_status, DisputeStatus::Disputed);
+
+    let dispute_details = client.get_dispute_details(&invoice_id);
+    assert!(dispute_details.is_some());
+    
+    let dispute = dispute_details.unwrap();
+    assert_eq!(dispute.created_by, business);
+    assert_eq!(dispute.reason, reason);
+    assert_eq!(dispute.evidence, evidence);
+    assert!(dispute.resolution.is_none());
+}
+
+#[test]
+fn test_create_dispute_as_investor() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+
+    // Create, verify, and fund invoice
+    let invoice_id = client.upload_invoice(
+        &business, 
+        &amount, 
+        &currency, 
+        &due_date, 
+        &description,
+        &invoice::InvoiceCategory::Services,
+        &vec![&env],
+    );
+    client.verify_invoice(&invoice_id);
+    
+    // Place and accept bid
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 100),
+    );
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Create dispute as investor
+    let reason = String::from_str(&env, "Invoice details are incorrect");
+    let evidence = String::from_str(&env, "Original contract shows different terms");
+    
+    client.create_dispute(
+        &invoice_id,
+        &investor,
+        &reason,
+        &evidence,
+    );
+
+    // Verify dispute was created
+    let dispute_status = client.get_invoice_dispute_status(&invoice_id);
+    assert_eq!(dispute_status, DisputeStatus::Disputed);
+
+    let dispute_details = client.get_dispute_details(&invoice_id);
+    assert!(dispute_details.is_some());
+    
+    let dispute = dispute_details.unwrap();
+    assert_eq!(dispute.created_by, investor);
+    assert_eq!(dispute.reason, reason);
+    assert_eq!(dispute.evidence, evidence);
+}
+
+#[test]
+fn test_unauthorized_dispute_creation() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let unauthorized = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+
+    // Create and verify invoice
+    let invoice_id = client.upload_invoice(
+        &business, 
+        &amount, 
+        &currency, 
+        &due_date, 
+        &description,
+        &invoice::InvoiceCategory::Services,
+        &vec![&env],
+    );
+    client.verify_invoice(&invoice_id);
+
+    // Try to create dispute as unauthorized party
+    let reason = String::from_str(&env, "Invalid dispute");
+    let evidence = String::from_str(&env, "Invalid evidence");
+    
+    let result = client.create_dispute(
+        &invoice_id,
+        &unauthorized,
+        &reason,
+        &evidence,
+    );
+    
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_duplicate_dispute_prevention() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+
+    // Create and verify invoice
+    let invoice_id = client.upload_invoice(
+        &business, 
+        &amount, 
+        &currency, 
+        &due_date, 
+        &description,
+        &invoice::InvoiceCategory::Services,
+        &vec![&env],
+    );
+    client.verify_invoice(&invoice_id);
+
+    // Create first dispute
+    let reason1 = String::from_str(&env, "First dispute");
+    let evidence1 = String::from_str(&env, "First evidence");
+    
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &reason1,
+        &evidence1,
+    );
+
+    // Try to create second dispute
+    let reason2 = String::from_str(&env, "Second dispute");
+    let evidence2 = String::from_str(&env, "Second evidence");
+    
+    let result = client.create_dispute(
+        &invoice_id,
+        &business,
+        &reason2,
+        &evidence2,
+    );
+    
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_dispute_under_review() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+
+    // Set admin
+    client.set_admin(&admin);
+
+    // Create, verify invoice and create dispute
+    let invoice_id = client.upload_invoice(
+        &business, 
+        &amount, 
+        &currency, 
+        &due_date, 
+        &description,
+        &invoice::InvoiceCategory::Services,
+        &vec![&env],
+    );
+    client.verify_invoice(&invoice_id);
+    
+    let reason = String::from_str(&env, "Payment issue");
+    let evidence = String::from_str(&env, "Payment evidence");
+    
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &reason,
+        &evidence,
+    );
+
+    // Put dispute under review
+    client.put_dispute_under_review(
+        &invoice_id,
+        &admin,
+    );
+
+    // Verify dispute status
+    let dispute_status = client.get_invoice_dispute_status(&invoice_id);
+    assert_eq!(dispute_status, DisputeStatus::UnderReview);
+}
+
+#[test]
+fn test_resolve_dispute() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+
+    // Set admin
+    client.set_admin(&admin);
+
+    // Create, verify invoice and create dispute
+    let invoice_id = client.upload_invoice(
+        &business, 
+        &amount, 
+        &currency, 
+        &due_date, 
+        &description,
+        &invoice::InvoiceCategory::Services,
+        &vec![&env],
+    );
+    client.verify_invoice(&invoice_id);
+    
+    let reason = String::from_str(&env, "Payment issue");
+    let evidence = String::from_str(&env, "Payment evidence");
+    
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &reason,
+        &evidence,
+    );
+
+    // Put dispute under review
+    client.put_dispute_under_review(
+        &invoice_id,
+        &admin,
+    );
+
+    // Resolve dispute
+    let resolution = String::from_str(&env, "Payment confirmed, dispute resolved in favor of business");
+    client.resolve_dispute(
+        &invoice_id,
+        &admin,
+        &resolution,
+    );
+
+    // Verify dispute is resolved
+    let dispute_status = client.get_invoice_dispute_status(&invoice_id);
+    assert_eq!(dispute_status, DisputeStatus::Resolved);
+
+    let dispute_details = client.get_dispute_details(&invoice_id);
+    assert!(dispute_details.is_some());
+    
+    let dispute = dispute_details.unwrap();
+    assert_eq!(dispute.resolution.unwrap(), resolution);
+    assert_eq!(dispute.resolved_by.unwrap(), admin);
+    assert!(dispute.resolved_at.is_some());
+}
+
+#[test]
+fn test_get_invoices_with_disputes() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business1 = Address::generate(&env);
+    let business2 = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+
+    // Create invoices
+    let invoice_id1 = client.upload_invoice(
+        &business1, 
+        &amount, 
+        &currency, 
+        &due_date, 
+        &description,
+        &invoice::InvoiceCategory::Services,
+        &vec![&env],
+    );
+    let invoice_id2 = client.upload_invoice(
+        &business2, 
+        &amount, 
+        &currency, 
+        &due_date, 
+        &description,
+        &invoice::InvoiceCategory::Services,
+        &vec![&env],
+    );
+    
+    client.verify_invoice(&invoice_id1);
+    client.verify_invoice(&invoice_id2);
+
+    // Create disputes
+    let reason = String::from_str(&env, "Payment issue");
+    let evidence = String::from_str(&env, "Payment evidence");
+    
+    client.create_dispute(
+        &invoice_id1,
+        &business1,
+        &reason,
+        &evidence,
+    );
+    
+    client.create_dispute(
+        &invoice_id2,
+        &business2,
+        &reason,
+        &evidence,
+    );
+
+    // Get all invoices with disputes
+    let disputed_invoices = client.get_invoices_with_disputes();
+    assert_eq!(disputed_invoices.len(), 2);
+    assert!(disputed_invoices.contains(&invoice_id1));
+    assert!(disputed_invoices.contains(&invoice_id2));
+}
+
+#[test]
+fn test_get_invoices_by_dispute_status() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+
+    // Set admin
+    client.set_admin(&admin);
+
+    // Create, verify invoice and create dispute
+    let invoice_id = client.upload_invoice(
+        &business, 
+        &amount, 
+        &currency, 
+        &due_date, 
+        &description,
+        &invoice::InvoiceCategory::Services,
+        &vec![&env],
+    );
+    client.verify_invoice(&invoice_id);
+    
+    let reason = String::from_str(&env, "Payment issue");
+    let evidence = String::from_str(&env, "Payment evidence");
+    
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &reason,
+        &evidence,
+    );
+
+    // Get invoices with disputed status
+    let disputed_invoices = client.get_invoices_by_dispute_status(&DisputeStatus::Disputed);
+    assert_eq!(disputed_invoices.len(), 1);
+    assert_eq!(disputed_invoices.get(0).unwrap(), invoice_id);
+
+    // Put under review
+    client.put_dispute_under_review(
+        &invoice_id,
+        &admin,
+    );
+
+    // Get invoices with under review status
+    let under_review_invoices = client.get_invoices_by_dispute_status(&DisputeStatus::UnderReview);
+    assert_eq!(under_review_invoices.len(), 1);
+    assert_eq!(under_review_invoices.get(0).unwrap(), invoice_id);
+
+    // Resolve dispute
+    let resolution = String::from_str(&env, "Dispute resolved");
+    client.resolve_dispute(
+        &invoice_id,
+        &admin,
+        &resolution,
+    );
+
+    // Get invoices with resolved status
+    let resolved_invoices = client.get_invoices_by_dispute_status(&DisputeStatus::Resolved);
+    assert_eq!(resolved_invoices.len(), 1);
+    assert_eq!(resolved_invoices.get(0).unwrap(), invoice_id);
+}
+
+#[test]
+fn test_dispute_validation() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+
+    // Create and verify invoice
+    let invoice_id = client.upload_invoice(
+        &business, 
+        &amount, 
+        &currency, 
+        &due_date, 
+        &description,
+        &invoice::InvoiceCategory::Services,
+        &vec![&env],
+    );
+    client.verify_invoice(&invoice_id);
+
+    // Test empty reason
+    let empty_reason = String::from_str(&env, "");
+    let evidence = String::from_str(&env, "Valid evidence");
+    
+    let result = client.create_dispute(
+        &invoice_id,
+        &business,
+        &empty_reason,
+        &evidence,
+    );
+    assert!(result.is_err());
+
+    // Test empty evidence
+    let reason = String::from_str(&env, "Valid reason");
+    let empty_evidence = String::from_str(&env, "");
+    
+    let result = client.create_dispute(
+        &invoice_id,
+        &business,
+        &reason,
+        &empty_evidence,
+    );
+    assert!(result.is_err());
 }
