@@ -1,4 +1,4 @@
-use crate::audit::{AuditLogEntry, AuditOperation};
+use crate::audit::AuditLogEntry;
 use crate::bid::Bid;
 use crate::invoice::Invoice;
 use crate::payments::{Escrow, EscrowStatus};
@@ -128,6 +128,85 @@ pub fn emit_bid_expired(env: &Env, bid: &Bid) {
             bid.investor.clone(),
             bid.bid_amount,
             bid.expiration_timestamp,
+        ),
+    );
+}
+
+/// Emit event when a bid is extended
+pub fn emit_bid_extended(
+    env: &Env,
+    bid: &Bid,
+    old_expiration: u64,
+    extension_duration: u64,
+) {
+    env.events().publish(
+        (symbol_short!("bid_ext"),),
+        (
+            bid.bid_id.clone(),
+            bid.invoice_id.clone(),
+            bid.investor.clone(),
+            old_expiration,
+            bid.expiration_timestamp,
+            extension_duration,
+            bid.extensions_used,
+        ),
+    );
+}
+
+/// Emit event when a bid is withdrawn with fee
+pub fn emit_bid_withdrawn_with_fee(env: &Env, bid: &Bid, fee_amount: i128) {
+    env.events().publish(
+        (symbol_short!("bid_wfee"),),
+        (
+            bid.bid_id.clone(),
+            bid.invoice_id.clone(),
+            bid.investor.clone(),
+            bid.bid_amount,
+            fee_amount,
+        ),
+    );
+}
+
+/// Emit event when bid placement occurs (enhanced)
+pub fn emit_bid_placed(env: &Env, bid: &Bid) {
+    env.events().publish(
+        (symbol_short!("bid_plcd"),),
+        (
+            bid.bid_id.clone(),
+            bid.invoice_id.clone(),
+            bid.investor.clone(),
+            bid.bid_amount,
+            bid.expected_return,
+            bid.expiration_timestamp,
+        ),
+    );
+}
+
+/// Emit event when bid is accepted (enhanced)
+pub fn emit_bid_accepted(env: &Env, bid: &Bid, escrow_id: &crate::BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("bid_acc"),),
+        (
+            bid.bid_id.clone(),
+            bid.invoice_id.clone(),
+            bid.investor.clone(),
+            bid.bid_amount,
+            escrow_id.clone(),
+        ),
+    );
+}
+
+/// Emit event for bid analytics update
+pub fn emit_bid_analytics_updated(env: &Env, analytics: &crate::bid::BidAnalytics) {
+    env.events().publish(
+        (symbol_short!("bid_anly"),),
+        (
+            analytics.total_bids,
+            analytics.active_bids,
+            analytics.expired_bids,
+            analytics.withdrawn_bids,
+            analytics.accepted_bids,
+            analytics.total_withdrawal_fees,
         ),
     );
 }

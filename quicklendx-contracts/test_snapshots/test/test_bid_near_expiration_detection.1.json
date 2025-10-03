@@ -1,7 +1,7 @@
 {
   "generators": {
     "address": 4,
-    "nonce": 0
+    "nonce": 1
   },
   "auth": [
     [],
@@ -43,12 +43,14 @@
       ]
     ],
     [],
+    [],
+    [],
     []
   ],
   "ledger": {
     "protocol_version": 22,
     "sequence_number": 0,
-    "timestamp": 0,
+    "timestamp": 561600,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "base_reserve": 0,
     "min_persistent_entry_ttl": 4096,
@@ -142,7 +144,7 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "string": "Test invoice"
+                                "string": "Near expiration test invoice"
                               }
                             },
                             {
@@ -337,7 +339,7 @@
                                 "symbol": "bid_id"
                               },
                               "val": {
-                                "bytes": "b1d0000000000000000000000000000000653535353535353535353535353535"
+                                "bytes": "b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1"
                               }
                             },
                             {
@@ -382,7 +384,7 @@
                                 "symbol": "additional_data"
                               },
                               "val": {
-                                "string": "Test invoice"
+                                "string": "Near expiration test invoice"
                               }
                             },
                             {
@@ -560,7 +562,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "b1d0000000000000000000000000000000653535353535353535353535353535"
+                          "bytes": "b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1"
                         },
                         "val": {
                           "map": [
@@ -580,7 +582,7 @@
                                 "symbol": "bid_id"
                               },
                               "val": {
-                                "bytes": "b1d0000000000000000000000000000000653535353535353535353535353535"
+                                "bytes": "b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1"
                               }
                             },
                             {
@@ -806,7 +808,7 @@
                           "symbol": "bid_cnt"
                         },
                         "val": {
-                          "u64": 101
+                          "u64": 1
                         }
                       },
                       {
@@ -1016,7 +1018,7 @@
                               "symbol": "bid_hist"
                             },
                             {
-                              "bytes": "b1d0000000000000000000000000000000653535353535353535353535353535"
+                              "bytes": "b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1"
                             }
                           ]
                         },
@@ -1042,7 +1044,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "b1d0000000000000000000000000000000653535353535353535353535353535"
+                              "bytes": "b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1"
                             }
                           ]
                         }
@@ -1170,9 +1172,41 @@
         {
           "contract_data": {
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": "ledger_key_contract_instance",
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": "ledger_key_contract_instance",
+                "durability": "persistent",
+                "val": {
+                  "contract_instance": {
+                    "executable": {
+                      "wasm": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                    },
+                    "storage": null
+                  }
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
-                "nonce": 801925984706572462
+                "nonce": 1
               }
             },
             "durability": "temporary"
@@ -1187,7 +1221,7 @@
                 "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
                 "key": {
                   "ledger_key_nonce": {
-                    "nonce": 801925984706572462
+                    "nonce": 1
                   }
                 },
                 "durability": "temporary",

@@ -23,7 +23,8 @@ A decentralized invoice financing protocol built on Stellar's Soroban platform, 
 QuickLendX is a comprehensive DeFi protocol that facilitates invoice financing through smart contracts. The protocol enables:
 
 - **Invoice Management**: Upload, verify, and manage business invoices
-- **Bidding System**: Investors can place bids on invoices with competitive rates
+- **Advanced Bidding System**: Investors can place bids with expiration, extension, and withdrawal features
+- **Bid Expiration & Auto-Cancellation**: Automatic cleanup of expired bids with gas optimization
 - **Escrow Management**: Secure fund handling through smart contract escrows
 - **KYC/Verification**: Business verification and compliance features
 - **Audit Trail**: Complete transaction history and audit capabilities
@@ -37,6 +38,11 @@ QuickLendX is a comprehensive DeFi protocol that facilitates invoice financing t
 - ✅ **Tag System**: Flexible invoice tagging for better organization
 - ✅ **Real-time Settlement**: Automated payment processing
 - ✅ **Comprehensive Auditing**: Full audit trail and integrity validation
+- ✅ **Bid Expiration Management**: Automatic bid expiration with configurable TTL
+- ✅ **Bid Extensions**: Allow investors to extend bid validity (up to 3 times)
+- ✅ **Withdrawal Fees**: Configurable fees for bid withdrawals
+- ✅ **Bid Analytics**: Comprehensive bid statistics and performance tracking
+- ✅ **Gas-Optimized Cleanup**: Efficient batch processing for expired bids
 
 ## 🏗️ Architecture
 
@@ -224,6 +230,70 @@ pub fn accept_bid(
 ) -> Result<(), QuickLendXError>
 ```
 
+#### Bid Expiration & Management
+
+##### `extend_bid`
+Extends a bid's expiration time (up to 3 extensions per bid).
+
+```rust
+pub fn extend_bid(
+    env: Env,
+    bid_id: BytesN<32>,
+    extension_duration: u64,
+) -> Result<(), QuickLendXError>
+```
+
+**Parameters:**
+- `bid_id`: ID of the bid to extend
+- `extension_duration`: Duration to extend in seconds
+
+##### `withdraw_bid`
+Withdraws a bid with applicable fees.
+
+```rust
+pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<i128, QuickLendXError>
+```
+
+**Returns:** Withdrawal fee amount
+
+##### `can_extend_bid`
+Checks if a bid can be extended.
+
+```rust
+pub fn can_extend_bid(env: Env, bid_id: BytesN<32>) -> Result<bool, QuickLendXError>
+```
+
+##### `batch_cleanup_expired_bids`
+Gas-optimized batch cleanup of expired bids.
+
+```rust
+pub fn batch_cleanup_expired_bids(
+    env: Env,
+    invoice_ids: Vec<BytesN<32>>,
+    max_gas_per_invoice: u32,
+) -> u32
+```
+
+**Returns:** Number of bids cleaned up
+
+##### `get_bid_analytics`
+Retrieves comprehensive bid analytics.
+
+```rust
+pub fn get_bid_analytics(env: Env) -> BidAnalytics
+```
+
+##### `is_bid_near_expiration`
+Checks if a bid is near expiration.
+
+```rust
+pub fn is_bid_near_expiration(
+    env: Env,
+    bid_id: BytesN<32>,
+    threshold_hours: u64,
+) -> Result<bool, QuickLendXError>
+```
+
 #### Payment & Escrow
 
 ##### `release_escrow_funds`
@@ -309,6 +379,22 @@ pub struct Bid {
     pub expected_return: i128,
     pub status: BidStatus,
     pub created_at: u64,
+    pub expiration_timestamp: u64,
+    pub extensions_used: u32,
+    pub withdrawal_fee_paid: i128,
+}
+```
+
+#### BidAnalytics
+```rust
+pub struct BidAnalytics {
+    pub total_bids: u32,
+    pub active_bids: u32,
+    pub accepted_bids: u32,
+    pub withdrawn_bids: u32,
+    pub expired_bids: u32,
+    pub total_withdrawal_fees: i128,
+    pub average_bid_duration: u64,
 }
 ```
 
@@ -360,6 +446,49 @@ contract.verify_invoice(&env, invoice_id)?;
 contract.release_escrow_funds(&env, invoice_id)?;
 ```
 
+### Bid Expiration & Extension Examples
+
+```rust
+use soroban_sdk::{Address, BytesN};
+
+// 1. Place a bid (automatically gets 7-day expiration)
+let bid_id = contract.place_bid(
+    &env,
+    investor_addr,
+    invoice_id,
+    48000, // $480.00 bid
+    52000  // $520.00 expected return
+)?;
+
+// 2. Check if bid can be extended
+let can_extend = contract.can_extend_bid(&env, bid_id)?;
+if can_extend {
+    // 3. Extend bid by 24 hours (up to 3 extensions allowed)
+    contract.extend_bid(&env, bid_id, 24 * 60 * 60)?;
+}
+
+// 4. Check if bid is near expiration (within 24 hours)
+let near_expiration = contract.is_bid_near_expiration(&env, bid_id, 24)?;
+if near_expiration {
+    println!("Bid expires soon!");
+}
+
+// 5. Withdraw bid (with fee)
+let withdrawal_fee = contract.withdraw_bid(&env, bid_id)?;
+println!("Withdrawal fee: {}", withdrawal_fee);
+
+// 6. Get bid analytics
+let analytics = contract.get_bid_analytics(&env);
+println!("Total bids: {}", analytics.total_bids);
+println!("Active bids: {}", analytics.active_bids);
+println!("Total withdrawal fees: {}", analytics.total_withdrawal_fees);
+
+// 7. Batch cleanup expired bids (gas-optimized)
+let invoice_ids = vec![&env, invoice_id1, invoice_id2, invoice_id3];
+let cleaned_count = contract.batch_cleanup_expired_bids(&env, invoice_ids, 10);
+println!("Cleaned up {} expired bids", cleaned_count);
+```
+
 ### Query Examples
 
 ```rust
@@ -371,6 +500,22 @@ let pending_invoices = contract.get_invoices_by_status(&env, InvoiceStatus::Pend
 
 // Get invoices with rating above threshold
 let high_rated_invoices = contract.get_invoices_with_rating_above(&env, 4);
+
+// Get bids by status
+let active_bids = contract.get_bids_by_status(&env, invoice_id, BidStatus::Placed);
+let expired_bids = contract.get_bids_by_status(&env, invoice_id, BidStatus::Expired);
+
+// Get extendable bids for an invoice
+let extendable_bids = contract.get_extendable_bids(&env, invoice_id);
+
+// Get bids near expiration
+let near_expiration_bids = contract.get_bids_near_expiration(&env, invoice_id, 24);
+
+// Get bid history
+let bid_history = contract.get_bid_history(&env, bid_id);
+
+// Get invoice-specific bid analytics
+let invoice_analytics = contract.get_invoice_bid_analytics(&env, invoice_id);
 
 // Get audit trail
 let audit_trail = contract.get_invoice_audit_trail(&env, invoice_id);

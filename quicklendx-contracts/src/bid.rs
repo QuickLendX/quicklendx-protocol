@@ -1,9 +1,13 @@
 use core::cmp::Ordering;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Vec};
 
-use crate::events::emit_bid_expired;
+use crate::events::{emit_bid_expired, emit_bid_extended, emit_bid_withdrawn_with_fee};
 
-const DEFAULT_BID_TTL: u64 = 7 * 24 * 60 * 60;
+const DEFAULT_BID_TTL: u64 = 7 * 24 * 60 * 60; // 7 days
+const MAX_BID_TTL: u64 = 30 * 24 * 60 * 60; // 30 days maximum
+const MIN_BID_TTL: u64 = 1 * 60 * 60; // 1 hour minimum
+const WITHDRAWAL_FEE_BPS: i128 = 50; // 0.5% withdrawal fee
+const MAX_EXTENSIONS: u32 = 3; // Maximum number of extensions allowed
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -25,6 +29,54 @@ pub struct Bid {
     pub timestamp: u64,
     pub status: BidStatus,
     pub expiration_timestamp: u64,
+    pub extensions_used: u32,
+    pub original_expiration: u64,
+    pub withdrawal_fee_paid: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BidHistoryEntry {
+    pub bid_id: BytesN<32>,
+    pub action: BidAction,
+    pub timestamp: u64,
+    pub actor: Address,
+    pub details: BidActionDetails,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BidAction {
+    Placed,
+    Extended,
+    Withdrawn,
+    Accepted,
+    Expired,
+    FeeCharged,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BidActionDetails {
+    None,
+    Extension(u64, u64), // (new_expiration, extension_duration)
+    Withdrawal(i128),    // (fee_amount)
+    Acceptance(BytesN<32>), // (escrow_id)
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BidAnalytics {
+    pub total_bids: u32,
+    pub active_bids: u32,
+    pub expired_bids: u32,
+    pub withdrawn_bids: u32,
+    pub accepted_bids: u32,
+    pub total_bid_amount: i128,
+    pub average_bid_amount: i128,
+    pub total_withdrawal_fees: i128,
+    pub average_bid_duration: u64,
+    pub extension_usage_rate: u32, // percentage
 }
 
 impl Bid {
@@ -35,9 +87,260 @@ impl Bid {
     pub fn default_expiration(now: u64) -> u64 {
         now.saturating_add(DEFAULT_BID_TTL)
     }
+
+    pub fn can_extend(&self) -> bool {
+        self.extensions_used < MAX_EXTENSIONS && self.status == BidStatus::Placed
+    }
+
+    pub fn calculate_withdrawal_fee(&self) -> i128 {
+        (self.bid_amount * WITHDRAWAL_FEE_BPS) / 10000
+    }
+
+    pub fn validate_extension_duration(&self, extension_duration: u64, current_timestamp: u64) -> bool {
+        let new_expiration = self.expiration_timestamp.saturating_add(extension_duration);
+        let total_duration = new_expiration.saturating_sub(self.timestamp);
+        
+        extension_duration >= MIN_BID_TTL && 
+        total_duration <= MAX_BID_TTL &&
+        new_expiration > current_timestamp
+    }
+
+    pub fn time_until_expiration(&self, current_timestamp: u64) -> u64 {
+        if current_timestamp >= self.expiration_timestamp {
+            0
+        } else {
+            self.expiration_timestamp - current_timestamp
+        }
+    }
+
+    pub fn is_near_expiration(&self, current_timestamp: u64, threshold_hours: u64) -> bool {
+        let threshold_seconds = threshold_hours * 60 * 60;
+        self.time_until_expiration(current_timestamp) <= threshold_seconds
+    }
 }
 
 pub struct BidStorage;
+
+pub struct BidHistoryStorage;
+
+pub struct BidAnalyticsStorage;
+
+impl BidHistoryStorage {
+    fn history_key(bid_id: &BytesN<32>) -> (soroban_sdk::Symbol, BytesN<32>) {
+        (symbol_short!("bid_hist"), bid_id.clone())
+    }
+    
+    fn all_history_key() -> soroban_sdk::Symbol {
+        symbol_short!("all_hist")
+    }
+    
+    pub fn add_history_entry(
+        env: &Env,
+        bid_id: &BytesN<32>,
+        action: BidAction,
+        actor: &Address,
+        details: BidActionDetails,
+    ) {
+        let entry = BidHistoryEntry {
+            bid_id: bid_id.clone(),
+            action,
+            timestamp: env.ledger().timestamp(),
+            actor: actor.clone(),
+            details,
+        };
+        
+        // Store individual entry
+        let entry_id = Self::generate_history_id(env);
+        env.storage().instance().set(&entry_id, &entry);
+        
+        // Add to bid's history list
+        let mut bid_history = Self::get_bid_history(env, bid_id);
+        bid_history.push_back(entry_id.clone());
+        env.storage().instance().set(&Self::history_key(bid_id), &bid_history);
+        
+        // Add to global history list
+        let mut all_history: Vec<BytesN<32>> = env.storage()
+            .instance()
+            .get(&Self::all_history_key())
+            .unwrap_or_else(|| Vec::new(env));
+        all_history.push_back(entry_id);
+        env.storage().instance().set(&Self::all_history_key(), &all_history);
+    }
+    
+    pub fn get_bid_history(env: &Env, bid_id: &BytesN<32>) -> Vec<BytesN<32>> {
+        env.storage()
+            .instance()
+            .get(&Self::history_key(bid_id))
+            .unwrap_or_else(|| Vec::new(env))
+    }
+    
+    pub fn get_history_entry(env: &Env, entry_id: &BytesN<32>) -> Option<BidHistoryEntry> {
+        env.storage().instance().get(entry_id)
+    }
+    
+    pub fn get_bid_history_entries(env: &Env, bid_id: &BytesN<32>) -> Vec<BidHistoryEntry> {
+        let mut entries = Vec::new(env);
+        let history_ids = Self::get_bid_history(env, bid_id);
+        
+        for entry_id in history_ids.iter() {
+            if let Some(entry) = Self::get_history_entry(env, &entry_id) {
+                entries.push_back(entry);
+            }
+        }
+        
+        entries
+    }
+    
+    fn generate_history_id(env: &Env) -> BytesN<32> {
+        let timestamp = env.ledger().timestamp();
+        let counter_key = symbol_short!("hist_cnt");
+        let mut counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
+        counter += 1;
+        env.storage().instance().set(&counter_key, &counter);
+        
+        let mut bytes = [0u8; 32];
+        bytes[0] = 0x48; // 'H' for History
+        bytes[1] = 0x57; // 'W' for hiW (history)
+        bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
+        bytes[10..18].copy_from_slice(&counter.to_be_bytes());
+        for i in 18..32 {
+            bytes[i] = ((timestamp + counter + 0x4857) % 256) as u8;
+        }
+        BytesN::from_array(env, &bytes)
+    }
+}
+
+impl BidAnalyticsStorage {
+    fn analytics_key() -> soroban_sdk::Symbol {
+        symbol_short!("bid_anly")
+    }
+    
+    fn invoice_analytics_key(invoice_id: &BytesN<32>) -> (soroban_sdk::Symbol, BytesN<32>) {
+        (symbol_short!("inv_anly"), invoice_id.clone())
+    }
+    
+    pub fn get_global_analytics(env: &Env) -> BidAnalytics {
+        env.storage()
+            .instance()
+            .get(&Self::analytics_key())
+            .unwrap_or_else(|| BidAnalytics {
+                total_bids: 0,
+                active_bids: 0,
+                expired_bids: 0,
+                withdrawn_bids: 0,
+                accepted_bids: 0,
+                total_bid_amount: 0,
+                average_bid_amount: 0,
+                total_withdrawal_fees: 0,
+                average_bid_duration: 0,
+                extension_usage_rate: 0,
+            })
+    }
+    
+    pub fn update_bid_placed_stats(env: &Env, bid: &Bid) {
+        let mut analytics = Self::get_global_analytics(env);
+        
+        analytics.total_bids += 1;
+        analytics.active_bids += 1;
+        analytics.total_bid_amount += bid.bid_amount;
+        analytics.average_bid_amount = analytics.total_bid_amount / analytics.total_bids as i128;
+        
+        env.storage().instance().set(&Self::analytics_key(), &analytics);
+    }
+    
+    pub fn update_withdrawal_stats(env: &Env, bid: &Bid) {
+        let mut analytics = Self::get_global_analytics(env);
+        
+        analytics.active_bids = analytics.active_bids.saturating_sub(1);
+        analytics.withdrawn_bids += 1;
+        analytics.total_withdrawal_fees += bid.withdrawal_fee_paid;
+        
+        env.storage().instance().set(&Self::analytics_key(), &analytics);
+    }
+    
+    pub fn update_expiration_stats(env: &Env, _bid: &Bid) {
+        let mut analytics = Self::get_global_analytics(env);
+        
+        analytics.active_bids = analytics.active_bids.saturating_sub(1);
+        analytics.expired_bids += 1;
+        
+        env.storage().instance().set(&Self::analytics_key(), &analytics);
+    }
+    
+    pub fn update_acceptance_stats(env: &Env, _bid: &Bid) {
+        let mut analytics = Self::get_global_analytics(env);
+        
+        analytics.active_bids = analytics.active_bids.saturating_sub(1);
+        analytics.accepted_bids += 1;
+        
+        env.storage().instance().set(&Self::analytics_key(), &analytics);
+    }
+    
+    pub fn update_extension_stats(env: &Env, _bid: &Bid) {
+        let mut analytics = Self::get_global_analytics(env);
+        
+        // Calculate extension usage rate
+        let total_extensible = analytics.total_bids;
+        if total_extensible > 0 {
+            let extensions_used = analytics.total_bids - analytics.expired_bids - analytics.withdrawn_bids - analytics.accepted_bids;
+            analytics.extension_usage_rate = (extensions_used * 100) / total_extensible;
+        }
+        
+        env.storage().instance().set(&Self::analytics_key(), &analytics);
+    }
+    
+    pub fn get_invoice_analytics(env: &Env, invoice_id: &BytesN<32>) -> BidAnalytics {
+        let bids = BidStorage::get_bid_records_for_invoice(env, invoice_id);
+        let mut analytics = BidAnalytics {
+            total_bids: 0,
+            active_bids: 0,
+            expired_bids: 0,
+            withdrawn_bids: 0,
+            accepted_bids: 0,
+            total_bid_amount: 0,
+            average_bid_amount: 0,
+            total_withdrawal_fees: 0,
+            average_bid_duration: 0,
+            extension_usage_rate: 0,
+        };
+        
+        let mut total_duration = 0u64;
+        let mut extensions_count = 0u32;
+        
+        for bid in bids.iter() {
+            analytics.total_bids += 1;
+            analytics.total_bid_amount += bid.bid_amount;
+            analytics.total_withdrawal_fees += bid.withdrawal_fee_paid;
+            
+            match bid.status {
+                BidStatus::Placed => analytics.active_bids += 1,
+                BidStatus::Expired => analytics.expired_bids += 1,
+                BidStatus::Withdrawn => analytics.withdrawn_bids += 1,
+                BidStatus::Accepted => analytics.accepted_bids += 1,
+            }
+            
+            // Calculate duration
+            let duration = if bid.status == BidStatus::Placed {
+                env.ledger().timestamp().saturating_sub(bid.timestamp)
+            } else {
+                bid.expiration_timestamp.saturating_sub(bid.timestamp)
+            };
+            total_duration += duration;
+            
+            if bid.extensions_used > 0 {
+                extensions_count += 1;
+            }
+        }
+        
+        if analytics.total_bids > 0 {
+            analytics.average_bid_amount = analytics.total_bid_amount / analytics.total_bids as i128;
+            analytics.average_bid_duration = total_duration / analytics.total_bids as u64;
+            analytics.extension_usage_rate = (extensions_count * 100) / analytics.total_bids;
+        }
+        
+        analytics
+    }
+}
 
 impl BidStorage {
     fn invoice_key(invoice_id: &BytesN<32>) -> (soroban_sdk::Symbol, BytesN<32>) {
@@ -268,5 +571,177 @@ impl BidStorage {
             bytes[i] = ((timestamp + counter as u64 + 0xB1D0) % 256) as u8;
         }
         BytesN::from_array(env, &bytes)
+    }
+
+    /// Extend a bid's expiration time
+    pub fn extend_bid(
+        env: &Env,
+        bid_id: &BytesN<32>,
+        extension_duration: u64,
+    ) -> Result<(), crate::errors::QuickLendXError> {
+        let mut bid = Self::get_bid(env, bid_id)
+            .ok_or(crate::errors::QuickLendXError::StorageKeyNotFound)?;
+        
+        let current_timestamp = env.ledger().timestamp();
+        
+        // Validate extension eligibility
+        if !bid.can_extend() {
+            return Err(crate::errors::QuickLendXError::OperationNotAllowed);
+        }
+        
+        if !bid.validate_extension_duration(extension_duration, current_timestamp) {
+            return Err(crate::errors::QuickLendXError::InvalidAmount);
+        }
+        
+        // Update bid
+        let old_expiration = bid.expiration_timestamp;
+        bid.expiration_timestamp = bid.expiration_timestamp.saturating_add(extension_duration);
+        bid.extensions_used += 1;
+        
+        Self::update_bid(env, &bid);
+        
+        // Record history
+        BidHistoryStorage::add_history_entry(
+            env,
+            &bid.bid_id,
+            BidAction::Extended,
+            &bid.investor,
+            BidActionDetails::Extension(bid.expiration_timestamp, extension_duration),
+        );
+        
+        // Emit event
+        emit_bid_extended(env, &bid, old_expiration, extension_duration);
+        
+        Ok(())
+    }
+    
+    /// Withdraw a bid with fee calculation
+    pub fn withdraw_bid_with_fee(
+        env: &Env,
+        bid_id: &BytesN<32>,
+    ) -> Result<i128, crate::errors::QuickLendXError> {
+        let mut bid = Self::get_bid(env, bid_id)
+            .ok_or(crate::errors::QuickLendXError::StorageKeyNotFound)?;
+        
+        if bid.status != BidStatus::Placed {
+            return Err(crate::errors::QuickLendXError::OperationNotAllowed);
+        }
+        
+        let withdrawal_fee = bid.calculate_withdrawal_fee();
+        bid.status = BidStatus::Withdrawn;
+        bid.withdrawal_fee_paid = withdrawal_fee;
+        
+        Self::update_bid(env, &bid);
+        
+        // Record history
+        BidHistoryStorage::add_history_entry(
+            env,
+            &bid.bid_id,
+            BidAction::Withdrawn,
+            &bid.investor,
+            BidActionDetails::Withdrawal(withdrawal_fee),
+        );
+        
+        // Update analytics
+        BidAnalyticsStorage::update_withdrawal_stats(env, &bid);
+        
+        // Emit event
+        emit_bid_withdrawn_with_fee(env, &bid, withdrawal_fee);
+        
+        Ok(withdrawal_fee)
+    }
+    
+    /// Gas-optimized batch expiration cleanup
+    pub fn batch_cleanup_expired_bids(
+        env: &Env,
+        invoice_ids: &Vec<BytesN<32>>,
+        max_gas_per_invoice: u32,
+    ) -> u32 {
+        let mut total_expired = 0u32;
+        
+        for invoice_id in invoice_ids.iter() {
+            let expired_count = Self::cleanup_expired_bids_limited(env, &invoice_id, max_gas_per_invoice);
+            total_expired = total_expired.saturating_add(expired_count);
+        }
+        
+        total_expired
+    }
+    
+    /// Limited cleanup to manage gas costs
+    fn cleanup_expired_bids_limited(env: &Env, invoice_id: &BytesN<32>, max_bids: u32) -> u32 {
+        let current_timestamp = env.ledger().timestamp();
+        let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
+        let mut active = Vec::new(env);
+        let mut expired = 0u32;
+        let mut processed = 0u32;
+        
+        for bid_id in bid_ids.iter() {
+            if processed >= max_bids {
+                // Add remaining bids back to active list without processing
+                active.push_back(bid_id);
+                continue;
+            }
+            
+            if let Some(mut bid) = Self::get_bid(env, &bid_id) {
+                if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
+                    bid.status = BidStatus::Expired;
+                    Self::update_bid(env, &bid);
+                    
+                    // Record history
+                    BidHistoryStorage::add_history_entry(
+                        env,
+                        &bid.bid_id,
+                        BidAction::Expired,
+                        &bid.investor,
+                        BidActionDetails::None,
+                    );
+                    
+                    emit_bid_expired(env, &bid);
+                    expired += 1;
+                } else {
+                    active.push_back(bid_id);
+                }
+            }
+            processed += 1;
+        }
+        
+        env.storage()
+            .instance()
+            .set(&Self::invoice_key(invoice_id), &active);
+        
+        expired
+    }
+    
+    /// Get bids near expiration for proactive management
+    pub fn get_bids_near_expiration(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        threshold_hours: u64,
+    ) -> Vec<Bid> {
+        let current_timestamp = env.ledger().timestamp();
+        let mut near_expiration = Vec::new(env);
+        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+        
+        for bid in records.iter() {
+            if bid.status == BidStatus::Placed && bid.is_near_expiration(current_timestamp, threshold_hours) {
+                near_expiration.push_back(bid);
+            }
+        }
+        
+        near_expiration
+    }
+    
+    /// Get bids that can be extended
+    pub fn get_extendable_bids(env: &Env, invoice_id: &BytesN<32>) -> Vec<Bid> {
+        let mut extendable = Vec::new(env);
+        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+        
+        for bid in records.iter() {
+            if bid.can_extend() {
+                extendable.push_back(bid);
+            }
+        }
+        
+        extendable
     }
 }

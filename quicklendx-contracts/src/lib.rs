@@ -15,7 +15,7 @@ mod profits;
 mod settlement;
 mod verification;
 
-use bid::{Bid, BidStatus, BidStorage};
+use bid::{Bid, BidStatus, BidStorage, BidHistoryStorage, BidAnalyticsStorage, BidAnalytics, BidHistoryEntry, BidAction, BidActionDetails};
 use defaults::{
     create_dispute as do_create_dispute, get_dispute_details as do_get_dispute_details,
     get_invoices_by_dispute_status as do_get_invoices_by_dispute_status,
@@ -26,7 +26,8 @@ use defaults::{
 use errors::QuickLendXError;
 use events::{
     emit_audit_query, emit_audit_validation, emit_escrow_created, emit_escrow_refunded,
-    emit_escrow_released, emit_invoice_uploaded, emit_invoice_verified,
+    emit_escrow_released, emit_invoice_uploaded, emit_invoice_verified, emit_bid_placed,
+    emit_bid_accepted,
 };
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{DisputeStatus, Invoice, InvoiceStatus, InvoiceStorage};
@@ -37,20 +38,19 @@ use verification::{
     get_business_verification_status, reject_business, submit_kyc_application, validate_bid,
     verify_business, verify_invoice_data, BusinessVerificationStorage,
 };
-
 use crate::backup::{Backup, BackupStatus, BackupStorage};
 use crate::notifications::{
     Notification, NotificationDeliveryStatus, NotificationPreferences, NotificationStats,
     NotificationSystem,
 };
+
 use audit::{
-    log_invoice_created, log_invoice_funded, log_invoice_status_change, log_payment_processed,
-    AuditLogEntry, AuditOperation, AuditQueryFilter, AuditStats, AuditStorage,
+    AuditLogEntry, AuditOperation, AuditQueryFilter, AuditStats,
 };
+use audit::AuditStorage;
 
 #[contract]
 pub struct QuickLendXContract;
-
 #[contractimpl]
 impl QuickLendXContract {
     /// Store an invoice in the contract
@@ -308,6 +308,87 @@ impl QuickLendXContract {
         BidStorage::cleanup_expired_bids(&env, &invoice_id)
     }
 
+    /// Extend a bid's expiration time (investor only)
+    pub fn extend_bid(
+        env: Env,
+        bid_id: BytesN<32>,
+        extension_duration: u64,
+    ) -> Result<(), QuickLendXError> {
+        let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        // Only the investor can extend their own bid
+        bid.investor.require_auth();
+        
+        BidStorage::extend_bid(&env, &bid_id, extension_duration)
+    }
+
+    /// Get bids near expiration for proactive management
+    pub fn get_bids_near_expiration(
+        env: Env,
+        invoice_id: BytesN<32>,
+        threshold_hours: u64,
+    ) -> Vec<Bid> {
+        BidStorage::get_bids_near_expiration(&env, &invoice_id, threshold_hours)
+    }
+
+    /// Get bids that can be extended
+    pub fn get_extendable_bids(env: Env, invoice_id: BytesN<32>) -> Vec<Bid> {
+        BidStorage::get_extendable_bids(&env, &invoice_id)
+    }
+
+    /// Gas-optimized batch cleanup of expired bids
+    pub fn batch_cleanup_expired_bids(
+        env: Env,
+        invoice_ids: Vec<BytesN<32>>,
+        max_gas_per_invoice: u32,
+    ) -> u32 {
+        BidStorage::batch_cleanup_expired_bids(&env, &invoice_ids, max_gas_per_invoice)
+    }
+
+    /// Get bid history for a specific bid
+    pub fn get_bid_history(env: Env, bid_id: BytesN<32>) -> Vec<BidHistoryEntry> {
+        BidHistoryStorage::get_bid_history_entries(&env, &bid_id)
+    }
+
+    /// Get global bid analytics
+    pub fn get_bid_analytics(env: Env) -> BidAnalytics {
+        BidAnalyticsStorage::get_global_analytics(&env)
+    }
+
+    /// Get bid analytics for a specific invoice
+    pub fn get_invoice_bid_analytics(env: Env, invoice_id: BytesN<32>) -> BidAnalytics {
+        BidAnalyticsStorage::get_invoice_analytics(&env, &invoice_id)
+    }
+
+    /// Check if a bid can be extended
+    pub fn can_extend_bid(env: Env, bid_id: BytesN<32>) -> Result<bool, QuickLendXError> {
+        let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Ok(bid.can_extend())
+    }
+
+    /// Calculate withdrawal fee for a bid
+    pub fn calculate_bid_withdrawal_fee(env: Env, bid_id: BytesN<32>) -> Result<i128, QuickLendXError> {
+        let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Ok(bid.calculate_withdrawal_fee())
+    }
+
+    /// Get time until bid expiration
+    pub fn get_bid_time_until_expiration(env: Env, bid_id: BytesN<32>) -> Result<u64, QuickLendXError> {
+        let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let current_timestamp = env.ledger().timestamp();
+        Ok(bid.time_until_expiration(current_timestamp))
+    }
+
+    /// Check if bid is near expiration
+    pub fn is_bid_near_expiration(
+        env: Env,
+        bid_id: BytesN<32>,
+        threshold_hours: u64,
+    ) -> Result<bool, QuickLendXError> {
+        let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let current_timestamp = env.ledger().timestamp();
+        Ok(bid.is_near_expiration(current_timestamp, threshold_hours))
+    }
+
     /// Place a bid on an invoice
     pub fn place_bid(
         env: Env,
@@ -329,6 +410,7 @@ impl QuickLendXContract {
         // Create bid
         let bid_id = BidStorage::generate_unique_bid_id(&env);
         let current_timestamp = env.ledger().timestamp();
+        let expiration_timestamp = Bid::default_expiration(current_timestamp);
         let bid = Bid {
             bid_id: bid_id.clone(),
             invoice_id: invoice_id.clone(),
@@ -337,11 +419,29 @@ impl QuickLendXContract {
             expected_return,
             timestamp: current_timestamp,
             status: BidStatus::Placed,
-            expiration_timestamp: Bid::default_expiration(current_timestamp),
+            expiration_timestamp,
+            extensions_used: 0,
+            original_expiration: expiration_timestamp,
+            withdrawal_fee_paid: 0,
         };
         BidStorage::store_bid(&env, &bid);
         // Track bid for this invoice
         BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
+
+        // Record history
+        BidHistoryStorage::add_history_entry(
+            &env,
+            &bid_id,
+            BidAction::Placed,
+            &investor,
+            BidActionDetails::None,
+        );
+
+        // Update analytics
+        BidAnalyticsStorage::update_bid_placed_stats(&env, &bid);
+
+        // Emit events
+        emit_bid_placed(&env, &bid);
 
         // Send notification for business about new bid
         let _ = NotificationSystem::notify_bid_received(&env, &invoice, &bid);
@@ -358,10 +458,6 @@ impl QuickLendXContract {
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-        let invoice_id = bid.invoice_id.clone();
-        BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut bid =
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         // Only the business owner can accept a bid
@@ -383,6 +479,19 @@ impl QuickLendXContract {
         // Mark bid as accepted
         bid.status = BidStatus::Accepted;
         BidStorage::update_bid(&env, &bid);
+        
+        // Record history
+        BidHistoryStorage::add_history_entry(
+            &env,
+            &bid.bid_id,
+            BidAction::Accepted,
+            &invoice.business,
+            BidActionDetails::Acceptance(escrow_id.clone()),
+        );
+
+        // Update analytics
+        BidAnalyticsStorage::update_acceptance_stats(&env, &bid);
+        
         // Mark invoice as funded
         invoice.mark_as_funded(
             &env,
@@ -406,6 +515,7 @@ impl QuickLendXContract {
         let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
             .expect("Escrow should exist after creation");
         emit_escrow_created(&env, &escrow);
+        emit_bid_accepted(&env, &bid, &escrow_id);
 
         // Send notification to investor for bid acceptance
         let _ = NotificationSystem::notify_bid_accepted(&env, &invoice, &bid);
@@ -422,18 +532,13 @@ impl QuickLendXContract {
     }
 
     /// Withdraw a bid (investor only, before acceptance)
-    pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+    pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<i128, QuickLendXError> {
+        let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         // Only the investor can withdraw their own bid
         bid.investor.require_auth();
-        // Only allow withdrawal if bid is placed (not accepted/withdrawn)
-        if bid.status != BidStatus::Placed {
-            return Err(QuickLendXError::OperationNotAllowed);
-        }
-        bid.status = BidStatus::Withdrawn;
-        BidStorage::update_bid(&env, &bid);
-        Ok(())
+        
+        // Use the new withdrawal with fee functionality
+        BidStorage::withdraw_bid_with_fee(&env, &bid_id)
     }
 
     /// Settle an invoice (business or automated process)
