@@ -1,6 +1,6 @@
 use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
-use crate::invoice::Invoice;
+use crate::invoice::{Invoice, InvoiceMetadata};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 #[contracttype]
@@ -19,6 +19,17 @@ pub struct BusinessVerification {
     pub kyc_data: String, // Encrypted KYC data
     pub submitted_at: u64,
     pub rejection_reason: Option<String>,
+}
+
+#[contracttype]
+pub struct InvestorVerification {
+    pub investor: Address,
+    pub status: BusinessVerificationStatus,
+    pub verified_at: Option<u64>,
+    pub verified_by: Option<Address>,
+    pub kyc_data: String,
+    pub investment_limit: i128,
+    pub submitted_at: u64,
 }
 
 const MIN_BID_AMOUNT: i128 = 100;
@@ -183,6 +194,65 @@ impl BusinessVerificationStorage {
         } else {
             false
         }
+    }
+}
+
+pub struct InvestorVerificationStorage;
+
+impl InvestorVerificationStorage {
+    pub fn submit(env: &Env, investor: &Address, kyc_data: String) -> Result<(), QuickLendXError> {
+        let mut verification = Self::get(env, investor);
+        match verification {
+            Some(ref existing) => match existing.status {
+                BusinessVerificationStatus::Pending => {
+                    return Err(QuickLendXError::KYCAlreadyPending)
+                }
+                BusinessVerificationStatus::Verified => {
+                    return Err(QuickLendXError::KYCAlreadyVerified)
+                }
+                BusinessVerificationStatus::Rejected => {
+                    verification = Some(InvestorVerification {
+                        investor: investor.clone(),
+                        status: BusinessVerificationStatus::Pending,
+                        verified_at: None,
+                        verified_by: None,
+                        kyc_data,
+                        investment_limit: existing.investment_limit,
+                        submitted_at: env.ledger().timestamp(),
+                    });
+                }
+            },
+            None => {
+                verification = Some(InvestorVerification {
+                    investor: investor.clone(),
+                    status: BusinessVerificationStatus::Pending,
+                    verified_at: None,
+                    verified_by: None,
+                    kyc_data,
+                    investment_limit: 0,
+                    submitted_at: env.ledger().timestamp(),
+                });
+            }
+        }
+
+        if let Some(v) = verification {
+            Self::store(env, &v);
+        }
+        Ok(())
+    }
+
+    pub fn store(env: &Env, verification: &InvestorVerification) {
+        env.storage()
+            .instance()
+            .set(&verification.investor, verification);
+    }
+
+    pub fn get(env: &Env, investor: &Address) -> Option<InvestorVerification> {
+        env.storage().instance().get(investor)
+    }
+
+    pub fn update(env: &Env, verification: &InvestorVerification) {
+        Self::store(env, verification);
     }
 }
 
@@ -406,6 +476,117 @@ pub fn validate_invoice_tags(tags: &Vec<String>) -> Result<(), QuickLendXError> 
 
         // Check for empty tags (length 0 is already checked above)
         // Note: Soroban String doesn't have trim() method
+    }
+
+    Ok(())
+}
+
+pub fn submit_investor_kyc(
+    env: &Env,
+    investor: &Address,
+    kyc_data: String,
+) -> Result<(), QuickLendXError> {
+    investor.require_auth();
+    InvestorVerificationStorage::submit(env, investor, kyc_data)
+}
+
+pub fn verify_investor(
+    env: &Env,
+    admin: &Address,
+    investor: &Address,
+    investment_limit: i128,
+) -> Result<InvestorVerification, QuickLendXError> {
+    admin.require_auth();
+
+    if investment_limit <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let mut verification =
+        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
+
+    match verification.status {
+        BusinessVerificationStatus::Verified => return Err(QuickLendXError::KYCAlreadyVerified),
+        BusinessVerificationStatus::Pending | BusinessVerificationStatus::Rejected => {
+            verification.status = BusinessVerificationStatus::Verified;
+            verification.verified_at = Some(env.ledger().timestamp());
+            verification.verified_by = Some(admin.clone());
+            verification.investment_limit = investment_limit;
+            InvestorVerificationStorage::update(env, &verification);
+            Ok(verification)
+        }
+    }
+}
+
+pub fn reject_investor(
+    env: &Env,
+    admin: &Address,
+    investor: &Address,
+) -> Result<(), QuickLendXError> {
+    admin.require_auth();
+    let mut verification =
+        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
+
+    verification.status = BusinessVerificationStatus::Rejected;
+    verification.verified_at = Some(env.ledger().timestamp());
+    verification.verified_by = Some(admin.clone());
+    InvestorVerificationStorage::update(env, &verification);
+    Ok(())
+}
+
+pub fn get_investor_verification(env: &Env, investor: &Address) -> Option<InvestorVerification> {
+    InvestorVerificationStorage::get(env, investor)
+}
+
+pub fn is_investor_verified(env: &Env, investor: &Address) -> bool {
+    if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
+        matches!(verification.status, BusinessVerificationStatus::Verified)
+    } else {
+        false
+    }
+}
+
+/// Validate structured invoice metadata against the invoice amount
+pub fn validate_invoice_metadata(
+    metadata: &InvoiceMetadata,
+    invoice_amount: i128,
+) -> Result<(), QuickLendXError> {
+    if metadata.customer_name.len() == 0 {
+        return Err(QuickLendXError::InvalidDescription);
+    }
+
+    if metadata.customer_address.len() == 0 {
+        return Err(QuickLendXError::InvalidDescription);
+    }
+
+    if metadata.tax_id.len() == 0 {
+        return Err(QuickLendXError::InvalidDescription);
+    }
+
+    if metadata.line_items.len() == 0 {
+        return Err(QuickLendXError::InvalidDescription);
+    }
+
+    let mut computed_total = 0i128;
+    for record in metadata.line_items.iter() {
+        if record.0.len() == 0 {
+            return Err(QuickLendXError::InvalidDescription);
+        }
+
+        if record.1 <= 0 || record.2 < 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let expected_total = record.1.saturating_mul(record.2);
+        if expected_total != record.3 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        computed_total = computed_total.saturating_add(record.3);
+    }
+
+    if computed_total != invoice_amount {
+        return Err(QuickLendXError::InvoiceAmountInvalid);
     }
 
     Ok(())

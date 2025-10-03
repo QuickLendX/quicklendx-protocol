@@ -6,6 +6,7 @@
   "auth": [
     [],
     [],
+    [],
     []
   ],
   "ledger": {
@@ -105,7 +106,7 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "string": "Unfunded invoice"
+                                "string": "Invalid metadata invoice"
                               }
                             },
                             {
@@ -339,7 +340,7 @@
                                 "symbol": "additional_data"
                               },
                               "val": {
-                                "string": "Unfunded invoice"
+                                "string": "Invalid metadata invoice"
                               }
                             },
                             {

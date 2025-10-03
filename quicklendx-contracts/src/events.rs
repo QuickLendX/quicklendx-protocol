@@ -1,8 +1,9 @@
 use crate::audit::AuditLogEntry;
 use crate::bid::Bid;
-use crate::invoice::Invoice;
+use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::payments::{Escrow, EscrowStatus};
 use crate::profits::PlatformFeeConfig;
+use crate::verification::InvestorVerification;
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String};
 
 pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
@@ -25,6 +26,42 @@ pub fn emit_invoice_verified(env: &Env, invoice: &Invoice) {
     );
 }
 
+pub fn emit_invoice_metadata_updated(env: &Env, invoice: &Invoice, metadata: &InvoiceMetadata) {
+    let mut total = 0i128;
+    for record in metadata.line_items.iter() {
+        total = total.saturating_add(record.3);
+    }
+
+    env.events().publish(
+        (symbol_short!("inv_meta"),),
+        (
+            invoice.id.clone(),
+            metadata.customer_name.clone(),
+            metadata.tax_id.clone(),
+            metadata.line_items.len() as u32,
+            total,
+        ),
+    );
+}
+
+pub fn emit_invoice_metadata_cleared(env: &Env, invoice: &Invoice) {
+    env.events().publish(
+        (symbol_short!("inv_mclr"),),
+        (invoice.id.clone(), invoice.business.clone()),
+    );
+}
+
+pub fn emit_investor_verified(env: &Env, verification: &InvestorVerification) {
+    env.events().publish(
+        (symbol_short!("inv_veri"),),
+        (
+            verification.investor.clone(),
+            verification.investment_limit,
+            verification.verified_at,
+        ),
+    );
+}
+
 pub fn emit_invoice_settled(
     env: &Env,
     invoice: &crate::invoice::Invoice,
@@ -38,6 +75,27 @@ pub fn emit_invoice_settled(
             invoice.business.clone(),
             investor_return,
             platform_fee,
+        ),
+    );
+}
+
+pub fn emit_partial_payment(
+    env: &Env,
+    invoice: &Invoice,
+    payment_amount: i128,
+    total_paid: i128,
+    progress: u32,
+    transaction_id: String,
+) {
+    env.events().publish(
+        (symbol_short!("inv_pp"),),
+        (
+            invoice.id.clone(),
+            invoice.business.clone(),
+            payment_amount,
+            total_paid,
+            progress,
+            transaction_id,
         ),
     );
 }

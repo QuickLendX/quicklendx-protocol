@@ -289,6 +289,46 @@
                             },
                             {
                               "key": {
+                                "symbol": "metadata_customer_address"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "metadata_customer_name"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "metadata_line_items"
+                              },
+                              "val": {
+                                "vec": []
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "metadata_notes"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "metadata_tax_id"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "payment_history"
+                              },
+                              "val": {
+                                "vec": []
+                              }
+                            },
+                            {
+                              "key": {
                                 "symbol": "ratings"
                               },
                               "val": {
@@ -319,6 +359,17 @@
                               },
                               "val": {
                                 "vec": []
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "total_paid"
+                              },
+                              "val": {
+                                "i128": {
+                                  "hi": 0,
+                                  "lo": 0
+                                }
                               }
                             },
                             {
@@ -517,6 +568,46 @@
                             },
                             {
                               "key": {
+                                "symbol": "metadata_customer_address"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "metadata_customer_name"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "metadata_line_items"
+                              },
+                              "val": {
+                                "vec": []
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "metadata_notes"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "metadata_tax_id"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "payment_history"
+                              },
+                              "val": {
+                                "vec": []
+                              }
+                            },
+                            {
+                              "key": {
                                 "symbol": "ratings"
                               },
                               "val": {
@@ -547,6 +638,17 @@
                               },
                               "val": {
                                 "vec": []
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "total_paid"
+                              },
+                              "val": {
+                                "i128": {
+                                  "hi": 0,
+                                  "lo": 0
+                                }
                               }
                             },
                             {
@@ -1103,6 +1205,46 @@
                                 },
                                 {
                                   "key": {
+                                    "symbol": "metadata_customer_address"
+                                  },
+                                  "val": "void"
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "metadata_customer_name"
+                                  },
+                                  "val": "void"
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "metadata_line_items"
+                                  },
+                                  "val": {
+                                    "vec": []
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "metadata_notes"
+                                  },
+                                  "val": "void"
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "metadata_tax_id"
+                                  },
+                                  "val": "void"
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "payment_history"
+                                  },
+                                  "val": {
+                                    "vec": []
+                                  }
+                                },
+                                {
+                                  "key": {
                                     "symbol": "ratings"
                                   },
                                   "val": {
@@ -1133,6 +1275,17 @@
                                   },
                                   "val": {
                                     "vec": []
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "total_paid"
+                                  },
+                                  "val": {
+                                    "i128": {
+                                      "hi": 0,
+                                      "lo": 0
+                                    }
                                   }
                                 },
                                 {
@@ -1326,6 +1479,46 @@
                                 },
                                 {
                                   "key": {
+                                    "symbol": "metadata_customer_address"
+                                  },
+                                  "val": "void"
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "metadata_customer_name"
+                                  },
+                                  "val": "void"
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "metadata_line_items"
+                                  },
+                                  "val": {
+                                    "vec": []
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "metadata_notes"
+                                  },
+                                  "val": "void"
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "metadata_tax_id"
+                                  },
+                                  "val": "void"
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "payment_history"
+                                  },
+                                  "val": {
+                                    "vec": []
+                                  }
+                                },
+                                {
+                                  "key": {
                                     "symbol": "ratings"
                                   },
                                   "val": {
@@ -1356,6 +1549,17 @@
                                   },
                                   "val": {
                                     "vec": []
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "total_paid"
+                                  },
+                                  "val": {
+                                    "i128": {
+                                      "hi": 0,
+                                      "lo": 0
+                                    }
                                   }
                                 },
                                 {
