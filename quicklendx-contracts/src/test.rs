@@ -8,7 +8,7 @@ use crate::invoice::{Dispute, DisputeStatus, InvoiceCategory, InvoiceMetadata, L
 use crate::verification::BusinessVerificationStatus;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, BytesN, Env, String, Vec,
+    token, Address, BytesN, Env, String, Vec, IntoVal,
 };
 
 fn verify_investor_for_test(
@@ -17,7 +17,9 @@ fn verify_investor_for_test(
     investor: &Address,
     limit: i128,
 ) {
+    // Submit KYC first
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
+    // Then verify with the admin (note: admin should already be set in the test)
     client.verify_investor(investor, &limit);
 }
 
@@ -810,14 +812,6 @@ fn test_escrow_creation_on_bid_acceptance() {
     let bid_amount = 1000i128;
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -830,10 +824,6 @@ fn test_escrow_creation_on_bid_acceptance() {
         &Vec::new(&env),
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place bid
@@ -871,10 +861,6 @@ fn test_escrow_release_on_verification() {
     let bid_amount = 1000i128;
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
 
     // Create invoice
     let invoice_id = client.store_invoice(
@@ -887,8 +873,6 @@ fn test_escrow_release_on_verification() {
         &Vec::new(&env),
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place and accept bid (creates escrow)
@@ -3087,11 +3071,15 @@ fn test_bid_extension_functionality() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     // Setup
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000;
     let due_date = env.ledger().timestamp() + 86400;
+    
+    env.mock_all_auths();
+    client.set_admin(&admin);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -3104,6 +3092,9 @@ fn test_bid_extension_functionality() {
         &Vec::new(&env),
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    
+    // Verify investor for testing
+    verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place bid
     let bid_id = client
@@ -3185,11 +3176,15 @@ fn test_bid_withdrawal_with_fees() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     // Setup
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000;
     let due_date = env.ledger().timestamp() + 86400;
+    
+    env.mock_all_auths();
+    client.set_admin(&admin);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -3202,6 +3197,9 @@ fn test_bid_withdrawal_with_fees() {
         &Vec::new(&env),
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    
+    // Verify investor for testing
+    verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place bid
     let bid_amount = 900;
@@ -3254,11 +3252,15 @@ fn test_bid_history_tracking() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     // Setup
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000;
     let due_date = env.ledger().timestamp() + 86400;
+    
+    env.mock_all_auths();
+    client.set_admin(&admin);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -3271,6 +3273,9 @@ fn test_bid_history_tracking() {
         &Vec::new(&env),
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    
+    // Verify investor for testing
+    verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place bid
     let bid_id = client
@@ -3334,12 +3339,16 @@ fn test_bid_analytics() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     // Setup
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor1 = Address::generate(&env);
     let investor2 = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000;
     let due_date = env.ledger().timestamp() + 86400;
+    
+    env.mock_all_auths();
+    client.set_admin(&admin);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -3352,8 +3361,12 @@ fn test_bid_analytics() {
         &Vec::new(&env),
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    
+    // Verify investors for testing
+    verify_investor_for_test(&env, &client, &investor1, 10_000);
+    verify_investor_for_test(&env, &client, &investor2, 10_000);
 
-    // Check initial analytics
+    // Place multiple bids
     let initial_analytics = client.get_bid_analytics();
     let initial_total = initial_analytics.total_bids;
 
@@ -3425,11 +3438,18 @@ fn test_gas_optimized_batch_cleanup() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     // Setup multiple invoices
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000;
     let due_date = env.ledger().timestamp() + 86400;
+    
+    env.mock_all_auths();
+    client.set_admin(&admin);
+    
+    // Verify investor for testing
+    verify_investor_for_test(&env, &client, &investor, 10_000);
 
     let mut invoice_ids = Vec::new(&env);
     
@@ -3485,11 +3505,15 @@ fn test_bid_near_expiration_detection() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     // Setup
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000;
     let due_date = env.ledger().timestamp() + 86400;
+    
+    env.mock_all_auths();
+    client.set_admin(&admin);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -3502,6 +3526,9 @@ fn test_bid_near_expiration_detection() {
         &Vec::new(&env),
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    
+    // Verify investor for testing
+    verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place bid
     let bid_id = client
@@ -3545,11 +3572,15 @@ fn test_bid_validation_improvements() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     // Setup
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000;
     let due_date = env.ledger().timestamp() + 86400;
+    
+    env.mock_all_auths();
+    client.set_admin(&admin);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -3562,6 +3593,9 @@ fn test_bid_validation_improvements() {
         &Vec::new(&env),
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    
+    // Verify investor for testing
+    verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place bid
     let bid_id = client
@@ -3617,12 +3651,16 @@ fn test_extendable_bids_query() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     // Setup
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor1 = Address::generate(&env);
     let investor2 = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000;
     let due_date = env.ledger().timestamp() + 86400;
+    
+    env.mock_all_auths();
+    client.set_admin(&admin);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -3635,6 +3673,10 @@ fn test_extendable_bids_query() {
         &Vec::new(&env),
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    
+    // Verify investors for testing
+    verify_investor_for_test(&env, &client, &investor1, 10_000);
+    verify_investor_for_test(&env, &client, &investor2, 10_000);
 
     // Place two bids
     let bid1_id = client
@@ -3665,7 +3707,7 @@ fn test_extendable_bids_query() {
     assert_eq!(extendable_bids.len(), 2);
 
     // Use up all extensions on first bid
-    for _ in 0..3 {
+    for _i in 0..3 {
         client
             .mock_auths(&[soroban_sdk::testutils::MockAuth {
                 address: &investor1,
