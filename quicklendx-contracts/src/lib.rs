@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 mod audit;
 mod backup;
@@ -7,6 +7,7 @@ mod bid;
 mod defaults;
 mod errors;
 mod events;
+mod fees;
 mod investment;
 mod invoice;
 mod notifications;
@@ -1316,6 +1317,114 @@ impl QuickLendXContract {
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         Ok(invoice.dispute_status)
+    }
+
+    // ========================================
+    // Fee and Revenue Management Functions
+    // ========================================
+
+    /// Initialize fee management system
+    pub fn initialize_fee_system(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        fees::FeeManager::initialize(&env, &admin)
+    }
+
+    /// Update fee structure for a specific fee type
+    pub fn update_fee_structure(
+        env: Env,
+        admin: Address,
+        fee_type: fees::FeeType,
+        base_fee_bps: u32,
+        min_fee: i128,
+        max_fee: i128,
+        is_active: bool,
+    ) -> Result<fees::FeeStructure, QuickLendXError> {
+        fees::FeeManager::update_fee_structure(&env, &admin, fee_type, base_fee_bps, min_fee, max_fee, is_active)
+    }
+
+    /// Get fee structure for a fee type
+    pub fn get_fee_structure(env: Env, fee_type: fees::FeeType) -> Result<fees::FeeStructure, QuickLendXError> {
+        fees::FeeManager::get_fee_structure(&env, &fee_type)
+    }
+
+    /// Calculate total fees for a transaction
+    pub fn calculate_transaction_fees(
+        env: Env,
+        user: Address,
+        transaction_amount: i128,
+        is_early_payment: bool,
+        is_late_payment: bool,
+    ) -> Result<i128, QuickLendXError> {
+        fees::FeeManager::calculate_total_fees(&env, &user, transaction_amount, is_early_payment, is_late_payment)
+    }
+
+    /// Get user volume data and tier
+    pub fn get_user_volume_data(env: Env, user: Address) -> fees::UserVolumeData {
+        fees::FeeManager::get_user_volume(&env, &user)
+    }
+
+    /// Update user volume (called internally after transactions)
+    pub fn update_user_transaction_volume(
+        env: Env,
+        user: Address,
+        transaction_amount: i128,
+    ) -> Result<fees::UserVolumeData, QuickLendXError> {
+        fees::FeeManager::update_user_volume(&env, &user, transaction_amount)
+    }
+
+    /// Configure revenue distribution
+    pub fn configure_revenue_distribution(
+        env: Env,
+        admin: Address,
+        treasury_address: Address,
+        treasury_share_bps: u32,
+        developer_share_bps: u32,
+        platform_share_bps: u32,
+        auto_distribution: bool,
+        min_distribution_amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        let config = fees::RevenueConfig {
+            treasury_address,
+            treasury_share_bps,
+            developer_share_bps,
+            platform_share_bps,
+            auto_distribution,
+            min_distribution_amount,
+        };
+        fees::FeeManager::configure_revenue_distribution(&env, &admin, config)
+    }
+
+    /// Distribute revenue for a period
+    pub fn distribute_revenue(
+        env: Env,
+        admin: Address,
+        period: u64,
+    ) -> Result<(i128, i128, i128), QuickLendXError> {
+        fees::FeeManager::distribute_revenue(&env, &admin, period)
+    }
+
+    /// Get fee analytics for a period
+    pub fn get_fee_analytics(env: Env, period: u64) -> Result<fees::FeeAnalytics, QuickLendXError> {
+        fees::FeeManager::get_analytics(&env, period)
+    }
+
+    /// Collect fees (internal function called after fee calculation)
+    pub fn collect_transaction_fees(
+        env: Env,
+        user: Address,
+        fees_by_type: Map<fees::FeeType, i128>,
+        total_amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        fees::FeeManager::collect_fees(&env, &user, fees_by_type, total_amount)
+    }
+
+    /// Validate fee parameters
+    pub fn validate_fee_parameters(
+        env: Env,
+        base_fee_bps: u32,
+        min_fee: i128,
+        max_fee: i128,
+    ) -> Result<(), QuickLendXError> {
+        fees::FeeManager::validate_fee_params(base_fee_bps, min_fee, max_fee)
     }
 }
 
