@@ -409,3 +409,97 @@ pub fn emit_dispute_resolved(
         ),
     );
 }
+
+/// Emit event when a payment is detected
+pub fn emit_payment_detected(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    payment_amount: i128,
+    transaction_id: &String,
+    source: &String,
+) {
+    env.events().publish(
+        (symbol_short!("pay_det"),),
+        (
+            invoice_id.clone(),
+            payment_amount,
+            transaction_id.clone(),
+            source.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when automated settlement is triggered
+pub fn emit_automated_settlement_triggered(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    payment_amount: i128,
+    settlement_id: &BytesN<32>,
+) {
+    env.events().publish(
+        (symbol_short!("auto_set"),),
+        (
+            invoice_id.clone(),
+            payment_amount,
+            settlement_id.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when settlement queue item is processed
+pub fn emit_settlement_queued(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    queue_id: &BytesN<32>,
+    priority: u32,
+) {
+    env.events().publish(
+        (symbol_short!("set_queue"),),
+        (
+            invoice_id.clone(),
+            queue_id.clone(),
+            priority,
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when settlement retry is attempted
+pub fn emit_settlement_retry(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    settlement_id: &BytesN<32>,
+    retry_count: u32,
+    reason: &String,
+) {
+    env.events().publish(
+        (symbol_short!("set_retry"),),
+        (
+            invoice_id.clone(),
+            settlement_id.clone(),
+            retry_count,
+            reason.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when payment validation fails
+pub fn emit_payment_validation_failed(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    payment_amount: i128,
+    reason: &String,
+) {
+    env.events().publish(
+        (symbol_short!("pay_val_f"),),
+        (
+            invoice_id.clone(),
+            payment_amount,
+            reason.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}

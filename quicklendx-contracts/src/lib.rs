@@ -35,7 +35,10 @@ use invoice::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus, InvoiceSto
 use payments::{create_escrow, refund_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
-    process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
+    detect_payment as do_detect_payment, get_settlement_queue_status as do_get_settlement_queue_status,
+    process_partial_payment as do_process_partial_payment, process_settlement_queue as do_process_settlement_queue,
+    retry_failed_settlements as do_retry_failed_settlements, settle_invoice as do_settle_invoice,
+    trigger_automated_settlement as do_trigger_automated_settlement, PaymentEvent,
 };
 use verification::{
     get_business_verification_status, get_investor_verification as do_get_investor_verification,
@@ -1316,6 +1319,42 @@ impl QuickLendXContract {
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         Ok(invoice.dispute_status)
+    }
+
+    // Automated Settlement Functions
+
+    /// Detect payment and trigger automated settlement
+    pub fn detect_payment(
+        env: Env,
+        invoice_id: BytesN<32>,
+        payment_event: PaymentEvent,
+    ) -> Result<(), QuickLendXError> {
+        do_detect_payment(&env, &invoice_id, payment_event)
+    }
+
+    /// Trigger automated settlement for a specific invoice
+    pub fn trigger_automated_settlement(
+        env: Env,
+        invoice_id: BytesN<32>,
+        payment_amount: i128,
+        settlement_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        do_trigger_automated_settlement(&env, &invoice_id, payment_amount, &settlement_id)
+    }
+
+    /// Process settlement queue - can be called periodically by admin or automated process
+    pub fn process_settlement_queue(env: Env) -> Result<u32, QuickLendXError> {
+        do_process_settlement_queue(&env)
+    }
+
+    /// Get settlement queue status (pending count, processed count)
+    pub fn get_settlement_queue_status(env: Env) -> (u32, u32) {
+        do_get_settlement_queue_status(&env)
+    }
+
+    /// Retry failed settlements manually (admin function)
+    pub fn retry_failed_settlements(env: Env, admin: Address) -> Result<u32, QuickLendXError> {
+        do_retry_failed_settlements(&env, &admin)
     }
 }
 
