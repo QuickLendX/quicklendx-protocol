@@ -144,7 +144,7 @@ impl SettlementQueueStorage {
             Ok(None)
         }
     }
-
+ 
     /// Mark settlement as completed
     pub fn mark_completed(env: &Env, queue_id: &BytesN<32>) {
         let mut processed = Self::get_processed_settlements(env);
@@ -369,7 +369,6 @@ pub fn settle_invoice(
 
     // Send notification about payment received
     let _ = NotificationSystem::notify_payment_received(env, &invoice, total_payment);
-
     Ok(())
 }
 
