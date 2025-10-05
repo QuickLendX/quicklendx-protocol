@@ -98,6 +98,9 @@ pub struct InvoiceMetadata {
     pub tax_id: String,
     pub line_items: Vec<LineItemRecord>,
     pub notes: String,
+    pub documents: Vec<DocumentMetadata>,     // Attached documents
+    pub version_history: Vec<MetadataVersion>, // Version control
+    pub current_version: u32,                  // Current version number
 }
 
 /// Individual payment record for an invoice
