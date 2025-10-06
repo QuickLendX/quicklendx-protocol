@@ -67,6 +67,28 @@ pub struct InvoiceRating {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LineItemRecord(pub String, pub i128, pub i128, pub i128);
 
+/// Document metadata with versioning and hash verification
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DocumentMetadata {
+    pub document_hash: BytesN<32>,     // SHA-256 hash of the document
+    pub ipfs_cid: Option<String>,      // IPFS Content Identifier (optional)
+    pub document_type: String,         // Type of document (e.g., "pdf", "invoice", "contract")
+    pub file_size: u64,                // Size of the document in bytes
+    pub uploaded_at: u64,              // Timestamp when document was uploaded
+    pub uploaded_by: Address,          // Address that uploaded the document
+}
+
+/// Metadata version for tracking changes
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MetadataVersion {
+    pub version: u32,                  // Version number
+    pub updated_at: u64,               // Timestamp of update
+    pub updated_by: Address,           // Address that made the update
+    pub change_description: String,    // Description of changes
+}
+
 /// Metadata associated with an invoice
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -76,6 +98,9 @@ pub struct InvoiceMetadata {
     pub tax_id: String,
     pub line_items: Vec<LineItemRecord>,
     pub notes: String,
+    pub documents: Vec<DocumentMetadata>,     // Attached documents
+    pub version_history: Vec<MetadataVersion>, // Version control
+    pub current_version: u32,                  // Current version number
 }
 
 /// Individual payment record for an invoice
