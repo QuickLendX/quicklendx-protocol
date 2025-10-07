@@ -3170,3 +3170,360 @@ fn test_investment_insurance_lifecycle() {
     assert!(!insurance_after.active);
     assert_eq!(insurance_after.coverage_amount, expected_coverage);
 }
+
+// Automated Settlement Tests
+
+#[test]
+fn test_payment_detection_and_automated_settlement() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Setup token
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    token_client.initialize(&admin, &7, &String::from_str(&env, "Test Token"), &String::from_str(&env, "TEST"));
+
+    let initial_balance = 10_000i128;
+    sac_client.mint(&business, &initial_balance);
+    sac_client.mint(&investor, &initial_balance);
+
+    let expiration = env.ledger().sequence() + 1_000;
+    token_client.approve(&business, &contract_id, &initial_balance, &expiration);
+    token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
+
+    client.set_admin(&admin);
+
+    // Create and fund an invoice
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice for automated settlement"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Verify invoice is funded
+    let funded_invoice = client.get_invoice(&invoice_id);
+    assert_eq!(funded_invoice.status, InvoiceStatus::Funded);
+
+    // Create a payment event
+    let payment_event = PaymentEvent {
+        invoice_id: invoice_id.clone(),
+        amount: 1_000i128,
+        transaction_id: String::from_str(&env, "tx_12345"),
+        source: String::from_str(&env, "bank_transfer"),
+        timestamp: env.ledger().timestamp(),
+        currency: currency.clone(),
+    };
+
+    // Detect payment and trigger automated settlement
+    let result = client.detect_payment(&invoice_id, &payment_event);
+    assert!(result.is_ok());
+
+    // Verify invoice is now paid
+    let settled_invoice = client.get_invoice(&invoice_id);
+    assert_eq!(settled_invoice.status, InvoiceStatus::Paid);
+    assert!(settled_invoice.settled_at.is_some());
+}
+
+#[test]
+fn test_payment_validation_failure() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    client.set_admin(&admin);
+
+    // Create an invoice
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    // Create an invalid payment event (negative amount)
+    let invalid_payment_event = PaymentEvent {
+        invoice_id: invoice_id.clone(),
+        amount: -100i128, // Invalid negative amount
+        transaction_id: String::from_str(&env, "tx_12345"),
+        source: String::from_str(&env, "bank_transfer"),
+        timestamp: env.ledger().timestamp(),
+        currency: currency.clone(),
+    };
+
+    // Attempt to detect payment - should fail validation
+    let result = client.detect_payment(&invoice_id, &invalid_payment_event);
+    assert!(result.is_err());
+    let err = result.err().expect("expected error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::InvalidPaymentEvent);
+}
+
+#[test]
+fn test_settlement_queue_processing() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Setup token
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    token_client.initialize(&admin, &7, &String::from_str(&env, "Test Token"), &String::from_str(&env, "TEST"));
+
+    let initial_balance = 10_000i128;
+    sac_client.mint(&business, &initial_balance);
+    sac_client.mint(&investor, &initial_balance);
+
+    let expiration = env.ledger().sequence() + 1_000;
+    token_client.approve(&business, &contract_id, &initial_balance, &expiration);
+    token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
+
+    client.set_admin(&admin);
+
+    // Create and fund an invoice
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice for queue processing"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Create a payment event
+    let payment_event = PaymentEvent {
+        invoice_id: invoice_id.clone(),
+        amount: 1_000i128,
+        transaction_id: String::from_str(&env, "tx_12345"),
+        source: String::from_str(&env, "bank_transfer"),
+        timestamp: env.ledger().timestamp(),
+        currency: currency.clone(),
+    };
+
+    // Detect payment (this will add to queue)
+    let result = client.detect_payment(&invoice_id, &payment_event);
+    assert!(result.is_ok());
+
+    // Check queue status
+    let (pending, processed) = client.get_settlement_queue_status();
+    assert!(pending >= 0);
+    assert!(processed >= 0);
+
+    // Process settlement queue
+    let processed_count = client.process_settlement_queue();
+    assert!(processed_count.is_ok());
+    let count = processed_count.unwrap();
+    assert!(count >= 0);
+
+    // Verify invoice is settled
+    let settled_invoice = client.get_invoice(&invoice_id);
+    assert_eq!(settled_invoice.status, InvoiceStatus::Paid);
+}
+
+#[test]
+fn test_duplicate_payment_prevention() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Setup token
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    token_client.initialize(&admin, &7, &String::from_str(&env, "Test Token"), &String::from_str(&env, "TEST"));
+
+    let initial_balance = 10_000i128;
+    sac_client.mint(&business, &initial_balance);
+    sac_client.mint(&investor, &initial_balance);
+
+    let expiration = env.ledger().sequence() + 1_000;
+    token_client.approve(&business, &contract_id, &initial_balance, &expiration);
+    token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
+
+    client.set_admin(&admin);
+
+    // Create and fund an invoice
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice for duplicate prevention"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Create a payment event
+    let payment_event = PaymentEvent {
+        invoice_id: invoice_id.clone(),
+        amount: 1_000i128,
+        transaction_id: String::from_str(&env, "tx_12345"),
+        source: String::from_str(&env, "bank_transfer"),
+        timestamp: env.ledger().timestamp(),
+        currency: currency.clone(),
+    };
+
+    // First payment detection - should succeed
+    let result1 = client.detect_payment(&invoice_id, &payment_event);
+    assert!(result1.is_ok());
+
+    // Process the settlement
+    let _ = client.process_settlement_queue();
+
+    // Verify invoice is now paid
+    let settled_invoice = client.get_invoice(&invoice_id);
+    assert_eq!(settled_invoice.status, InvoiceStatus::Paid);
+
+    // Attempt duplicate payment detection - should fail
+    let duplicate_payment_event = PaymentEvent {
+        invoice_id: invoice_id.clone(),
+        amount: 1_000i128,
+        transaction_id: String::from_str(&env, "tx_12345"), // Same transaction ID
+        source: String::from_str(&env, "bank_transfer"),
+        timestamp: env.ledger().timestamp(),
+        currency: currency.clone(),
+    };
+
+    let result2 = client.detect_payment(&invoice_id, &duplicate_payment_event);
+    assert!(result2.is_err());
+    let err = result2.err().expect("expected error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::PaymentAlreadyProcessed);
+}
+
+#[test]
+fn test_partial_payment_automated_settlement() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Setup token
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    token_client.initialize(&admin, &7, &String::from_str(&env, "Test Token"), &String::from_str(&env, "TEST"));
+
+    let initial_balance = 10_000i128;
+    sac_client.mint(&business, &initial_balance);
+    sac_client.mint(&investor, &initial_balance);
+
+    let expiration = env.ledger().sequence() + 1_000;
+    token_client.approve(&business, &contract_id, &initial_balance, &expiration);
+    token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
+
+    client.set_admin(&admin);
+
+    // Create and fund an invoice
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice for partial payment"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Create a partial payment event
+    let partial_payment_event = PaymentEvent {
+        invoice_id: invoice_id.clone(),
+        amount: 500i128, // Partial payment
+        transaction_id: String::from_str(&env, "tx_partial_1"),
+        source: String::from_str(&env, "bank_transfer"),
+        timestamp: env.ledger().timestamp(),
+        currency: currency.clone(),
+    };
+
+    // Detect partial payment
+    let result = client.detect_payment(&invoice_id, &partial_payment_event);
+    assert!(result.is_ok());
+
+    // Process settlement queue
+    let _ = client.process_settlement_queue();
+
+    // Verify invoice is still funded (not fully paid yet)
+    let invoice_after_partial = client.get_invoice(&invoice_id);
+    assert_eq!(invoice_after_partial.status, InvoiceStatus::Funded);
+    assert_eq!(invoice_after_partial.total_paid, 500i128);
+
+    // Create a second partial payment to complete the invoice
+    let final_payment_event = PaymentEvent {
+        invoice_id: invoice_id.clone(),
+        amount: 500i128, // Complete the payment
+        transaction_id: String::from_str(&env, "tx_partial_2"),
+        source: String::from_str(&env, "bank_transfer"),
+        timestamp: env.ledger().timestamp(),
+        currency: currency.clone(),
+    };
+
+    // Detect final payment
+    let result2 = client.detect_payment(&invoice_id, &final_payment_event);
+    assert!(result2.is_ok());
+
+    // Process settlement queue
+    let _ = client.process_settlement_queue();
+
+    // Verify invoice is now fully paid
+    let final_invoice = client.get_invoice(&invoice_id);
+    assert_eq!(final_invoice.status, InvoiceStatus::Paid);
+    assert_eq!(final_invoice.total_paid, 1_000i128);
+}
