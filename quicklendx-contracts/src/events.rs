@@ -410,179 +410,95 @@ pub fn emit_dispute_resolved(
     );
 }
 
-// Analytics Events
-
-/// Emit event when platform metrics are updated
-pub fn emit_platform_metrics_updated(
+/// Emit event when a payment is detected
+pub fn emit_payment_detected(
     env: &Env,
-    total_invoices: u32,
-    total_volume: i128,
-    total_fees: i128,
-    success_rate: i128,
+    invoice_id: &BytesN<32>,
+    payment_amount: i128,
+    transaction_id: &String,
+    source: &String,
 ) {
     env.events().publish(
-        (symbol_short!("plt_met"),),
+        (symbol_short!("pay_det"),),
         (
-            total_invoices,
-            total_volume,
-            total_fees,
-            success_rate,
+            invoice_id.clone(),
+            payment_amount,
+            transaction_id.clone(),
+            source.clone(),
             env.ledger().timestamp(),
         ),
     );
 }
 
-/// Emit event when performance metrics are updated
-pub fn emit_performance_metrics_updated(
+/// Emit event when automated settlement is triggered
+pub fn emit_automated_settlement_triggered(
     env: &Env,
-    average_settlement_time: u64,
-    transaction_success_rate: i128,
-    user_satisfaction_score: u32,
+    invoice_id: &BytesN<32>,
+    payment_amount: i128,
+    settlement_id: &BytesN<32>,
 ) {
     env.events().publish(
-        (symbol_short!("perf_met"),),
+        (symbol_short!("auto_set"),),
         (
-            average_settlement_time,
-            transaction_success_rate,
-            user_satisfaction_score,
+            invoice_id.clone(),
+            payment_amount,
+            settlement_id.clone(),
             env.ledger().timestamp(),
         ),
     );
 }
 
-/// Emit event when user behavior metrics are calculated
-pub fn emit_user_behavior_analyzed(
+/// Emit event when settlement queue item is processed
+pub fn emit_settlement_queued(
     env: &Env,
-    user: &Address,
-    total_investments: u32,
-    success_rate: i128,
-    risk_score: u32,
+    invoice_id: &BytesN<32>,
+    queue_id: &BytesN<32>,
+    priority: u32,
 ) {
     env.events().publish(
-        (symbol_short!("usr_beh"),),
+        (symbol_short!("set_queue"),),
         (
-            user.clone(),
-            total_investments,
-            success_rate,
-            risk_score,
+            invoice_id.clone(),
+            queue_id.clone(),
+            priority,
             env.ledger().timestamp(),
         ),
     );
 }
 
-/// Emit event when financial metrics are calculated
-pub fn emit_financial_metrics_calculated(
+/// Emit event when settlement retry is attempted
+pub fn emit_settlement_retry(
     env: &Env,
-    period: &crate::analytics::TimePeriod,
-    total_volume: i128,
-    total_fees: i128,
-    average_return_rate: i128,
+    invoice_id: &BytesN<32>,
+    settlement_id: &BytesN<32>,
+    retry_count: u32,
+    reason: &String,
 ) {
     env.events().publish(
-        (symbol_short!("fin_met"),),
+        (symbol_short!("set_retry"),),
         (
-            period.clone(),
-            total_volume,
-            total_fees,
-            average_return_rate,
+            invoice_id.clone(),
+            settlement_id.clone(),
+            retry_count,
+            reason.clone(),
             env.ledger().timestamp(),
         ),
     );
 }
 
-/// Emit event when business report is generated
-pub fn emit_business_report_generated(
+/// Emit event when payment validation fails
+pub fn emit_payment_validation_failed(
     env: &Env,
-    report_id: &BytesN<32>,
-    business: &Address,
-    period: &crate::analytics::TimePeriod,
-    invoices_uploaded: u32,
-    success_rate: i128,
+    invoice_id: &BytesN<32>,
+    payment_amount: i128,
+    reason: &String,
 ) {
     env.events().publish(
-        (symbol_short!("biz_rpt"),),
+        (symbol_short!("pay_val_f"),),
         (
-            report_id.clone(),
-            business.clone(),
-            period.clone(),
-            invoices_uploaded,
-            success_rate,
-            env.ledger().timestamp(),
-        ),
-    );
-}
-
-/// Emit event when investor report is generated
-pub fn emit_investor_report_generated(
-    env: &Env,
-    report_id: &BytesN<32>,
-    investor: &Address,
-    period: &crate::analytics::TimePeriod,
-    investments_made: u32,
-    average_return_rate: i128,
-) {
-    env.events().publish(
-        (symbol_short!("inv_rpt"),),
-        (
-            report_id.clone(),
-            investor.clone(),
-            period.clone(),
-            investments_made,
-            average_return_rate,
-            env.ledger().timestamp(),
-        ),
-    );
-}
-
-/// Emit event when analytics data is updated
-pub fn emit_analytics_data_updated(
-    env: &Env,
-    data_type: &String,
-    record_count: u32,
-    last_updated: u64,
-) {
-    env.events().publish(
-        (symbol_short!("anal_upd"),),
-        (
-            data_type.clone(),
-            record_count,
-            last_updated,
-            env.ledger().timestamp(),
-        ),
-    );
-}
-
-/// Emit event when analytics query is performed
-pub fn emit_analytics_query(
-    env: &Env,
-    query_type: &String,
-    filters_applied: u32,
-    result_count: u32,
-) {
-    env.events().publish(
-        (symbol_short!("anal_qry"),),
-        (
-            query_type.clone(),
-            filters_applied,
-            result_count,
-            env.ledger().timestamp(),
-        ),
-    );
-}
-
-/// Emit event when analytics export is requested
-pub fn emit_analytics_export(
-    env: &Env,
-    export_type: &String,
-    requested_by: &Address,
-    record_count: u32,
-) {
-    env.events().publish(
-        (symbol_short!("anal_exp"),),
-        (
-            export_type.clone(),
-            requested_by.clone(),
-            record_count,
+            invoice_id.clone(),
+            payment_amount,
+            reason.clone(),
             env.ledger().timestamp(),
         ),
     );

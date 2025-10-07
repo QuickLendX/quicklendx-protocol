@@ -37,7 +37,10 @@ use invoice::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus, InvoiceSto
 use payments::{create_escrow, refund_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
-    process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
+    detect_payment as do_detect_payment, get_settlement_queue_status as do_get_settlement_queue_status,
+    process_partial_payment as do_process_partial_payment, process_settlement_queue as do_process_settlement_queue,
+    retry_failed_settlements as do_retry_failed_settlements, settle_invoice as do_settle_invoice,
+    trigger_automated_settlement as do_trigger_automated_settlement, PaymentEvent,
 };
 use verification::{
     get_business_verification_status, get_investor_verification as do_get_investor_verification,
@@ -439,7 +442,7 @@ impl QuickLendXContract {
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         let invoice_id = bid.invoice_id.clone();
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        let mut bid =
+    let mut bid =
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         // Only the business owner can accept a bid
         invoice.business.require_auth();
@@ -1662,7 +1665,7 @@ impl QuickLendXContract {
 
     /// Validate fee parameters
     pub fn validate_fee_parameters(
-        env: Env,
+    _env: Env,
         base_fee_bps: u32,
         min_fee: i128,
         max_fee: i128,
