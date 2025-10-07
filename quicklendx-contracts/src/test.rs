@@ -1,10 +1,8 @@
 use super::*;
-use crate::audit::{
-    log_invoice_operation, AuditOperation, AuditOperationFilter, AuditQueryFilter, AuditStorage,
-};
+use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
 use crate::bid::{BidStatus, BidStorage};
 use crate::investment::{Investment, InvestmentStorage};
-use crate::invoice::{Dispute, DisputeStatus, InvoiceCategory, InvoiceMetadata, LineItemRecord};
+use crate::invoice::{DisputeStatus, InvoiceCategory, InvoiceMetadata, LineItemRecord};
 use crate::verification::BusinessVerificationStatus;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -347,7 +345,7 @@ fn test_invoice_metadata_validation() {
 fn test_investor_verification_enforced() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, QuickLendXContract);
+    let contract_id = env.register(None, QuickLendXContract);
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -540,7 +538,7 @@ fn test_invoice_lifecycle() {
 fn test_simple_bid_storage() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, QuickLendXContract);
+    let contract_id = env.register(None, QuickLendXContract);
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let business = Address::generate(&env);

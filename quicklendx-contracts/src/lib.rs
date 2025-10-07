@@ -439,7 +439,7 @@ impl QuickLendXContract {
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         let invoice_id = bid.invoice_id.clone();
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        let mut bid =
+    let mut bid =
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         // Only the business owner can accept a bid
         invoice.business.require_auth();
@@ -1662,7 +1662,7 @@ impl QuickLendXContract {
 
     /// Validate fee parameters
     pub fn validate_fee_parameters(
-        env: Env,
+    _env: Env,
         base_fee_bps: u32,
         min_fee: i128,
         max_fee: i128,
