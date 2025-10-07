@@ -77,21 +77,6 @@ impl BidStorage {
                 .set(&Self::invoice_key(invoice_id), &bids);
         }
     }
-    pub fn remove_bid_from_invoice(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
-        let bids = Self::get_bids_for_invoice(env, invoice_id);
-        let mut filtered = Vec::new(env);
-        let mut idx: u32 = 0;
-        while idx < bids.len() {
-            let current = bids.get(idx).unwrap();
-            if current != *bid_id {
-                filtered.push_back(current);
-            }
-            idx += 1;
-        }
-        env.storage()
-            .instance()
-            .set(&Self::invoice_key(invoice_id), &filtered);
-    }
     fn refresh_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let current_timestamp = env.ledger().timestamp();
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);

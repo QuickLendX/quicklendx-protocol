@@ -37,7 +37,6 @@ const MIN_BID_AMOUNT: i128 = 100;
 pub struct BusinessVerificationStorage;
 
 impl BusinessVerificationStorage {
-    const VERIFICATION_KEY: &'static str = "business_verification";
     const VERIFIED_BUSINESSES_KEY: &'static str = "verified_businesses";
     const PENDING_BUSINESSES_KEY: &'static str = "pending_businesses";
     const REJECTED_BUSINESSES_KEY: &'static str = "rejected_businesses";
@@ -538,13 +537,6 @@ pub fn get_investor_verification(env: &Env, investor: &Address) -> Option<Invest
     InvestorVerificationStorage::get(env, investor)
 }
 
-pub fn is_investor_verified(env: &Env, investor: &Address) -> bool {
-    if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
-        matches!(verification.status, BusinessVerificationStatus::Verified)
-    } else {
-        false
-    }
-}
 
 /// Validate structured invoice metadata against the invoice amount
 pub fn validate_invoice_metadata(

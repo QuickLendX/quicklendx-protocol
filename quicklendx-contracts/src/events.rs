@@ -1,7 +1,6 @@
-use crate::audit::AuditLogEntry;
 use crate::bid::Bid;
 use crate::invoice::{Invoice, InvoiceMetadata};
-use crate::payments::{Escrow, EscrowStatus};
+use crate::payments::Escrow;
 use crate::profits::PlatformFeeConfig;
 use crate::verification::InvestorVerification;
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String};
@@ -244,18 +243,6 @@ pub fn emit_bid_expired(env: &Env, bid: &Bid) {
     );
 }
 
-/// Emit event when escrow status changes
-pub fn emit_escrow_status_changed(
-    env: &Env,
-    escrow_id: &BytesN<32>,
-    old_status: EscrowStatus,
-    new_status: EscrowStatus,
-) {
-    env.events().publish(
-        (symbol_short!("esc_st"),),
-        (escrow_id.clone(), old_status, new_status),
-    );
-}
 
 /// Emit event when backup is created
 pub fn emit_backup_created(env: &Env, backup_id: &BytesN<32>, invoice_count: u32) {
@@ -289,19 +276,6 @@ pub fn emit_backup_archived(env: &Env, backup_id: &BytesN<32>) {
     );
 }
 
-/// Emit audit log event
-pub fn emit_audit_log_created(env: &Env, entry: &AuditLogEntry) {
-    env.events().publish(
-        (symbol_short!("aud_log"),),
-        (
-            entry.audit_id.clone(),
-            entry.invoice_id.clone(),
-            entry.operation.clone(),
-            entry.actor.clone(),
-            entry.timestamp,
-        ),
-    );
-}
 
 /// Emit audit validation event
 pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool) {
@@ -534,23 +508,6 @@ pub fn emit_investor_report_generated(
     );
 }
 
-/// Emit event when analytics data is updated
-pub fn emit_analytics_data_updated(
-    env: &Env,
-    data_type: &String,
-    record_count: u32,
-    last_updated: u64,
-) {
-    env.events().publish(
-        (symbol_short!("anal_upd"),),
-        (
-            data_type.clone(),
-            record_count,
-            last_updated,
-            env.ledger().timestamp(),
-        ),
-    );
-}
 
 /// Emit event when analytics query is performed
 pub fn emit_analytics_query(

@@ -454,7 +454,7 @@ impl Invoice {
     /// Add a tag to the invoice
     pub fn add_tag(
         &mut self,
-        env: &Env,
+        _env: &Env,
         tag: String,
     ) -> Result<(), crate::errors::QuickLendXError> {
         // Validate tag length (1-50 characters)

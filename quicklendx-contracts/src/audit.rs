@@ -260,7 +260,7 @@ impl AuditStorage {
         let all_entries = Self::get_all_audit_entries(env);
         let total_entries = all_entries.len() as u32;
 
-        let mut operations_count = Vec::new(env);
+        let operations_count = Vec::new(env);
         let mut unique_actors: Vec<Address> = Vec::new(env);
         let mut min_timestamp = u64::MAX;
         let mut max_timestamp = 0u64;
@@ -445,8 +445,8 @@ pub fn log_invoice_status_change(
     env: &Env,
     invoice_id: BytesN<32>,
     actor: Address,
-    old_status: InvoiceStatus,
-    new_status: InvoiceStatus,
+    _old_status: InvoiceStatus,
+    _new_status: InvoiceStatus,
 ) {
     let old_value = String::from_str(env, "Status changed");
     let new_value = String::from_str(env, "Status updated");
