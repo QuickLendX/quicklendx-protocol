@@ -610,6 +610,11 @@ pub fn emit_investor_performance_updated(
 ) {
     env.events().publish(
         (symbol_short!("inv_perf"),),
-        (total_investors, verified_investors, platform_success_rate, average_risk_score),
+        (
+            total_investors,
+            verified_investors,
+            platform_success_rate,
+            average_risk_score,
+        ),
     );
 }

@@ -1064,57 +1064,68 @@ impl AnalyticsCalculator {
         investor: &Address,
     ) -> Result<InvestorAnalytics, QuickLendXError> {
         let current_timestamp = env.ledger().timestamp();
-        
+
         // Get investor verification data
         let verification = crate::verification::InvestorVerificationStorage::get(env, investor)
             .ok_or(QuickLendXError::KYCNotFound)?;
-        
+
         // Calculate success rate
-        let total_investments = verification.successful_investments + verification.defaulted_investments;
+        let total_investments =
+            verification.successful_investments + verification.defaulted_investments;
         let success_rate = if total_investments > 0 {
-            (verification.successful_investments.saturating_mul(10000)).saturating_div(total_investments) as i128
+            (verification.successful_investments.saturating_mul(10000))
+                .saturating_div(total_investments) as i128
         } else {
             0
         };
-        
+
         // Calculate average investment size
         let average_investment_size = if total_investments > 0 {
-            verification.total_invested.saturating_div(total_investments as i128)
+            verification
+                .total_invested
+                .saturating_div(total_investments as i128)
         } else {
             0
         };
-        
+
         // Calculate portfolio diversity score (simplified)
         let portfolio_diversity_score = if total_investments > 0 {
             // In a real implementation, this would analyze category distribution
-            let diversity = if total_investments > 10 { 80 } else if total_investments > 5 { 60 } else { 40 };
+            let diversity = if total_investments > 10 {
+                80
+            } else if total_investments > 5 {
+                60
+            } else {
+                40
+            };
             diversity
         } else {
             0
         };
-        
+
         // Calculate account age
         let account_age = current_timestamp.saturating_sub(verification.submitted_at);
-        
+
         // Calculate compliance score based on various factors
         let mut compliance_score = 100u32;
-        
+
         // Reduce score for defaults
         if verification.defaulted_investments > 0 {
-            let default_rate = (verification.defaulted_investments * 100) / total_investments.max(1);
+            let default_rate =
+                (verification.defaulted_investments * 100) / total_investments.max(1);
             compliance_score = compliance_score.saturating_sub(default_rate);
         }
-        
+
         // Reduce score for high risk
         if verification.risk_score > 75 {
             compliance_score = compliance_score.saturating_sub(20);
         } else if verification.risk_score > 50 {
             compliance_score = compliance_score.saturating_sub(10);
         }
-        
+
         // Get preferred categories (simplified - would need actual investment data)
         let preferred_categories = Vec::new(env);
-        
+
         Ok(InvestorAnalytics {
             investor_address: investor.clone(),
             tier: verification.tier,
@@ -1137,18 +1148,22 @@ impl AnalyticsCalculator {
     }
 
     /// Calculate investor performance metrics for the platform
-    pub fn calculate_investor_performance_metrics(
+    pub fn calc_investor_perf_metrics(
         env: &Env,
     ) -> Result<InvestorPerformanceMetrics, QuickLendXError> {
         let current_timestamp = env.ledger().timestamp();
-        
+
         // Get investor counts by status
-        let verified_investors = crate::verification::InvestorVerificationStorage::get_verified_investors(env);
-        let pending_investors = crate::verification::InvestorVerificationStorage::get_pending_investors(env);
-        let rejected_investors = crate::verification::InvestorVerificationStorage::get_rejected_investors(env);
-        
-        let total_investors = verified_investors.len() + pending_investors.len() + rejected_investors.len();
-        
+        let verified_investors =
+            crate::verification::InvestorVerificationStorage::get_verified_investors(env);
+        let pending_investors =
+            crate::verification::InvestorVerificationStorage::get_pending_investors(env);
+        let rejected_investors =
+            crate::verification::InvestorVerificationStorage::get_rejected_investors(env);
+
+        let total_investors =
+            verified_investors.len() + pending_investors.len() + rejected_investors.len();
+
         // Calculate investors by tier
         let mut investors_by_tier = Vec::new(env);
         let tiers = [
@@ -1158,12 +1173,16 @@ impl AnalyticsCalculator {
             crate::verification::InvestorTier::Platinum,
             crate::verification::InvestorTier::VIP,
         ];
-        
+
         for tier in tiers.iter() {
-            let tier_investors = crate::verification::InvestorVerificationStorage::get_investors_by_tier(env, tier.clone());
+            let tier_investors =
+                crate::verification::InvestorVerificationStorage::get_investors_by_tier(
+                    env,
+                    tier.clone(),
+                );
             investors_by_tier.push_back((tier.clone(), tier_investors.len() as u32));
         }
-        
+
         // Calculate investors by risk level
         let mut investors_by_risk = Vec::new(env);
         let risk_levels = [
@@ -1172,50 +1191,61 @@ impl AnalyticsCalculator {
             crate::verification::InvestorRiskLevel::High,
             crate::verification::InvestorRiskLevel::VeryHigh,
         ];
-        
+
         for risk_level in risk_levels.iter() {
-            let risk_investors = crate::verification::InvestorVerificationStorage::get_investors_by_risk_level(env, risk_level.clone());
+            let risk_investors =
+                crate::verification::InvestorVerificationStorage::get_investors_by_risk_level(
+                    env,
+                    risk_level.clone(),
+                );
             investors_by_risk.push_back((risk_level.clone(), risk_investors.len() as u32));
         }
-        
+
         // Calculate total investment volume and average
         let mut total_investment_volume = 0i128;
         let mut total_investments = 0u32;
         let mut total_risk_score = 0u32;
         let mut successful_investments = 0u32;
-        
+
         for investor in verified_investors.iter() {
-            if let Some(verification) = crate::verification::InvestorVerificationStorage::get(env, &investor) {
-                total_investment_volume = total_investment_volume.saturating_add(verification.total_invested);
-                let investor_total = verification.successful_investments + verification.defaulted_investments;
+            if let Some(verification) =
+                crate::verification::InvestorVerificationStorage::get(env, &investor)
+            {
+                total_investment_volume =
+                    total_investment_volume.saturating_add(verification.total_invested);
+                let investor_total =
+                    verification.successful_investments + verification.defaulted_investments;
                 total_investments = total_investments.saturating_add(investor_total);
                 total_risk_score = total_risk_score.saturating_add(verification.risk_score);
-                successful_investments = successful_investments.saturating_add(verification.successful_investments);
+                successful_investments =
+                    successful_investments.saturating_add(verification.successful_investments);
             }
         }
-        
+
         let average_investment_size = if total_investments > 0 {
             total_investment_volume.saturating_div(total_investments as i128)
         } else {
             0
         };
-        
+
         let platform_success_rate = if total_investments > 0 {
             (successful_investments.saturating_mul(10000)).saturating_div(total_investments) as i128
         } else {
             0
         };
-        
+
         let average_risk_score = if verified_investors.len() > 0 {
             total_risk_score.saturating_div(verified_investors.len() as u32)
         } else {
             0
         };
-        
+
         // Get top performing investors (simplified)
         let mut top_performing_investors = Vec::new(env);
         for investor in verified_investors.iter() {
-            if let Some(verification) = crate::verification::InvestorVerificationStorage::get(env, &investor) {
+            if let Some(verification) =
+                crate::verification::InvestorVerificationStorage::get(env, &investor)
+            {
                 if verification.successful_investments > 5 && verification.risk_score < 30 {
                     top_performing_investors.push_back(investor);
                     if top_performing_investors.len() >= 10 {
@@ -1224,7 +1254,7 @@ impl AnalyticsCalculator {
                 }
             }
         }
-        
+
         Ok(InvestorPerformanceMetrics {
             total_investors: total_investors as u32,
             verified_investors: verified_investors.len() as u32,

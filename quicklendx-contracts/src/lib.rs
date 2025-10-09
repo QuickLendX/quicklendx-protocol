@@ -40,15 +40,14 @@ use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
 use verification::{
-    get_business_verification_status, get_investor_verification as do_get_investor_verification,
-    reject_business, reject_investor as do_reject_investor,
-    submit_investor_kyc as do_submit_investor_kyc, submit_kyc_application, validate_bid,
+    calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
+    determine_risk_level, get_business_verification_status, get_investor_analytics,
+    get_investor_verification as do_get_investor_verification, reject_business,
+    reject_investor as do_reject_investor, submit_investor_kyc as do_submit_investor_kyc,
+    submit_kyc_application, update_investor_analytics, validate_bid, validate_investor_investment,
     validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
     verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
-    InvestorVerification, InvestorVerificationStorage, InvestorTier, InvestorRiskLevel,
-    calculate_investor_risk_score, determine_investor_tier, determine_risk_level,
-    calculate_investment_limit, update_investor_analytics, get_investor_analytics,
-    validate_investor_investment,
+    InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
 };
 
 use crate::backup::{Backup, BackupStatus, BackupStorage};
@@ -57,9 +56,9 @@ use crate::notifications::{
     NotificationSystem,
 };
 use analytics::{
-    AnalyticsCalculator, AnalyticsStorage, BusinessReport, FinancialMetrics, InvestorReport,
-    PerformanceMetrics, PlatformMetrics, TimePeriod, UserBehaviorMetrics, InvestorAnalytics,
-    InvestorPerformanceMetrics,
+    AnalyticsCalculator, AnalyticsStorage, BusinessReport, FinancialMetrics, InvestorAnalytics,
+    InvestorPerformanceMetrics, InvestorReport, PerformanceMetrics, PlatformMetrics, TimePeriod,
+    UserBehaviorMetrics,
 };
 use audit::{AuditLogEntry, AuditOperation, AuditQueryFilter, AuditStats, AuditStorage};
 
@@ -92,6 +91,11 @@ impl QuickLendXContract {
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
         }
+
+        // Check if business is verified (temporarily disabled for debugging)
+        // if !verification::BusinessVerificationStorage::is_business_verified(&env, &business) {
+        //     return Err(QuickLendXError::BusinessNotVerified);
+        // }
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
@@ -566,9 +570,9 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         // Get the investment to track investor analytics
         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
-        
+
         let result = do_settle_invoice(&env, &invoice_id, payment_amount);
-        
+
         // Update investor analytics if settlement was successful
         if result.is_ok() {
             if let Some(inv) = investment {
@@ -576,7 +580,7 @@ impl QuickLendXContract {
                 let _ = update_investor_analytics(&env, &inv.investor, inv.amount, is_successful);
             }
         }
-        
+
         result
     }
 
@@ -610,16 +614,16 @@ impl QuickLendXContract {
     pub fn handle_default(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         // Get the investment to track investor analytics
         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
-        
+
         let result = do_handle_default(&env, &invoice_id);
-        
+
         // Update investor analytics for failed investment
         if result.is_ok() {
             if let Some(inv) = investment {
                 let _ = update_investor_analytics(&env, &inv.investor, inv.amount, false);
             }
         }
-        
+
         result
     }
 
@@ -740,7 +744,11 @@ impl QuickLendXContract {
     }
 
     /// Reject an investor verification request
-    pub fn reject_investor(env: Env, investor: Address, reason: String) -> Result<(), QuickLendXError> {
+    pub fn reject_investor(
+        env: Env,
+        investor: Address,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
         let admin =
             BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         do_reject_investor(&env, &admin, &investor, reason)
@@ -877,7 +885,10 @@ impl QuickLendXContract {
     }
 
     /// Get investor analytics
-    pub fn get_investor_analytics(env: Env, investor: Address) -> Result<InvestorVerification, QuickLendXError> {
+    pub fn get_investor_analytics(
+        env: Env,
+        investor: Address,
+    ) -> Result<InvestorVerification, QuickLendXError> {
         get_investor_analytics(&env, &investor)
     }
 
@@ -1698,10 +1709,10 @@ impl QuickLendXContract {
     }
 
     /// Calculate investor performance metrics for the platform
-    pub fn calculate_investor_performance_metrics(
+    pub fn calc_investor_perf_metrics(
         env: Env,
     ) -> Result<InvestorPerformanceMetrics, QuickLendXError> {
-        let metrics = AnalyticsCalculator::calculate_investor_performance_metrics(&env)?;
+        let metrics = AnalyticsCalculator::calc_investor_perf_metrics(&env)?;
         AnalyticsStorage::store_investor_performance(&env, &metrics);
         Ok(metrics)
     }
@@ -1712,7 +1723,10 @@ impl QuickLendXContract {
     }
 
     /// Update investor analytics (admin only)
-    pub fn update_investor_analytics_data(env: Env, investor: Address) -> Result<(), QuickLendXError> {
+    pub fn update_investor_analytics_data(
+        env: Env,
+        investor: Address,
+    ) -> Result<(), QuickLendXError> {
         let admin =
             BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
@@ -1738,7 +1752,7 @@ impl QuickLendXContract {
             BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
 
-        let metrics = AnalyticsCalculator::calculate_investor_performance_metrics(&env)?;
+        let metrics = AnalyticsCalculator::calc_investor_perf_metrics(&env)?;
         AnalyticsStorage::store_investor_performance(&env, &metrics);
 
         // Emit event
@@ -1771,11 +1785,22 @@ impl QuickLendXContract {
         max_fee: i128,
         is_active: bool,
     ) -> Result<fees::FeeStructure, QuickLendXError> {
-        fees::FeeManager::update_fee_structure(&env, &admin, fee_type, base_fee_bps, min_fee, max_fee, is_active)
+        fees::FeeManager::update_fee_structure(
+            &env,
+            &admin,
+            fee_type,
+            base_fee_bps,
+            min_fee,
+            max_fee,
+            is_active,
+        )
     }
 
     /// Get fee structure for a fee type
-    pub fn get_fee_structure(env: Env, fee_type: fees::FeeType) -> Result<fees::FeeStructure, QuickLendXError> {
+    pub fn get_fee_structure(
+        env: Env,
+        fee_type: fees::FeeType,
+    ) -> Result<fees::FeeStructure, QuickLendXError> {
         fees::FeeManager::get_fee_structure(&env, &fee_type)
     }
 
@@ -1787,7 +1812,13 @@ impl QuickLendXContract {
         is_early_payment: bool,
         is_late_payment: bool,
     ) -> Result<i128, QuickLendXError> {
-        fees::FeeManager::calculate_total_fees(&env, &user, transaction_amount, is_early_payment, is_late_payment)
+        fees::FeeManager::calculate_total_fees(
+            &env,
+            &user,
+            transaction_amount,
+            is_early_payment,
+            is_late_payment,
+        )
     }
 
     /// Get user volume data and tier
