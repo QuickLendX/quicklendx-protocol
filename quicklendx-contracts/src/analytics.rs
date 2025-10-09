@@ -207,6 +207,7 @@ impl AnalyticsStorage {
         (symbol_short!("analytics"),)
     }
 
+
     pub fn store_platform_metrics(env: &Env, metrics: &PlatformMetrics) {
         env.storage()
             .instance()
@@ -235,9 +236,6 @@ impl AnalyticsStorage {
             .set(&Self::user_behavior_key(user), behavior);
     }
 
-    pub fn get_user_behavior(env: &Env, user: &Address) -> Option<UserBehaviorMetrics> {
-        env.storage().instance().get(&Self::user_behavior_key(user))
-    }
 
     pub fn store_business_report(env: &Env, report: &BusinessReport) {
         env.storage()
@@ -263,15 +261,6 @@ impl AnalyticsStorage {
             .get(&Self::investor_report_key(report_id))
     }
 
-    pub fn store_analytics_data(env: &Env, data: &AnalyticsData) {
-        env.storage()
-            .instance()
-            .set(&Self::analytics_data_key(), data);
-    }
-
-    pub fn get_analytics_data(env: &Env) -> Option<AnalyticsData> {
-        env.storage().instance().get(&Self::analytics_data_key())
-    }
 
     pub fn store_investor_analytics(env: &Env, investor: &Address, analytics: &InvestorAnalytics) {
         env.storage()

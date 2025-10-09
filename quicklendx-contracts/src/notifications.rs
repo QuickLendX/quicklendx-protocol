@@ -1,6 +1,6 @@
 use crate::bid::Bid;
 use crate::invoice::{Invoice, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, vec, Address, Bytes, BytesN, Env, Map, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, Map, String, Vec};
 
 /// Notification types for different events
 #[contracttype]
