@@ -130,7 +130,10 @@ impl FeeManager {
         Ok(())
     }
 
-    pub fn get_fee_structure(env: &Env, fee_type: &FeeType) -> Result<FeeStructure, QuickLendXError> {
+    pub fn get_fee_structure(
+        env: &Env,
+        fee_type: &FeeType,
+    ) -> Result<FeeStructure, QuickLendXError> {
         let fee_structures: Vec<FeeStructure> = env
             .storage()
             .instance()
@@ -187,7 +190,9 @@ impl FeeManager {
         if !found {
             fee_structures.push_back(updated_structure.clone());
         }
-        env.storage().instance().set(&FEE_CONFIG_KEY, &fee_structures);
+        env.storage()
+            .instance()
+            .set(&FEE_CONFIG_KEY, &fee_structures);
         Ok(updated_structure)
     }
 
@@ -235,10 +240,7 @@ impl FeeManager {
         Ok(total_fees)
     }
 
-    fn calculate_base_fee(
-        structure: &FeeStructure,
-        amount: i128,
-    ) -> Result<i128, QuickLendXError> {
+    fn calculate_base_fee(structure: &FeeStructure, amount: i128) -> Result<i128, QuickLendXError> {
         let fee = amount * structure.base_fee_bps as i128 / BPS_DENOMINATOR;
         let fee = if fee < structure.min_fee {
             structure.min_fee
@@ -304,11 +306,8 @@ impl FeeManager {
     ) -> Result<(), QuickLendXError> {
         let period = Self::get_current_period(env);
         let key = (REVENUE_KEY, period);
-        let mut revenue_data: RevenueData = env
-            .storage()
-            .instance()
-            .get(&key)
-            .unwrap_or(RevenueData {
+        let mut revenue_data: RevenueData =
+            env.storage().instance().get(&key).unwrap_or(RevenueData {
                 period,
                 total_collected: 0,
                 fees_by_type: Map::new(env),
@@ -317,7 +316,9 @@ impl FeeManager {
                 transaction_count: 0,
             });
         revenue_data.total_collected = revenue_data.total_collected.saturating_add(total_amount);
-        revenue_data.pending_distribution = revenue_data.pending_distribution.saturating_add(total_amount);
+        revenue_data.pending_distribution = revenue_data
+            .pending_distribution
+            .saturating_add(total_amount);
         revenue_data.transaction_count = revenue_data.transaction_count.saturating_add(1);
         // Copy fees by type into revenue data
         revenue_data.fees_by_type = fees_collected;
@@ -336,7 +337,8 @@ impl FeeManager {
         config: RevenueConfig,
     ) -> Result<(), QuickLendXError> {
         admin.require_auth();
-        let total_shares = config.treasury_share_bps + config.developer_share_bps + config.platform_share_bps;
+        let total_shares =
+            config.treasury_share_bps + config.developer_share_bps + config.platform_share_bps;
         if total_shares != 10_000 {
             return Err(QuickLendXError::InvalidAmount);
         }
@@ -388,7 +390,8 @@ impl FeeManager {
             0
         };
         let efficiency_score = if revenue_data.total_collected > 0 {
-            let distributed_pct = revenue_data.total_distributed * 100 / revenue_data.total_collected;
+            let distributed_pct =
+                revenue_data.total_distributed * 100 / revenue_data.total_collected;
             distributed_pct.min(100) as u32
         } else {
             0

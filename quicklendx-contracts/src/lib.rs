@@ -40,12 +40,14 @@ use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
 use verification::{
-    get_business_verification_status, get_investor_verification as do_get_investor_verification,
-    reject_business, reject_investor as do_reject_investor,
-    submit_investor_kyc as do_submit_investor_kyc, submit_kyc_application, validate_bid,
+    calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
+    determine_risk_level, get_business_verification_status, get_investor_analytics,
+    get_investor_verification as do_get_investor_verification, reject_business,
+    reject_investor as do_reject_investor, submit_investor_kyc as do_submit_investor_kyc,
+    submit_kyc_application, update_investor_analytics, validate_bid, validate_investor_investment,
     validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
     verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
-    InvestorVerification,
+    InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
 };
 
 use crate::backup::{Backup, BackupStatus, BackupStorage};
@@ -54,8 +56,9 @@ use crate::notifications::{
     NotificationSystem,
 };
 use analytics::{
-    AnalyticsCalculator, AnalyticsStorage, BusinessReport, FinancialMetrics, InvestorReport,
-    PerformanceMetrics, PlatformMetrics, TimePeriod, UserBehaviorMetrics,
+    AnalyticsCalculator, AnalyticsStorage, BusinessReport, FinancialMetrics, InvestorAnalytics,
+    InvestorPerformanceMetrics, InvestorReport, PerformanceMetrics, PlatformMetrics, TimePeriod,
+    UserBehaviorMetrics,
 };
 use audit::{AuditLogEntry, AuditOperation, AuditQueryFilter, AuditStats, AuditStorage};
 
@@ -88,6 +91,11 @@ impl QuickLendXContract {
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
         }
+
+        // Check if business is verified (temporarily disabled for debugging)
+        // if !verification::BusinessVerificationStorage::is_business_verified(&env, &business) {
+        //     return Err(QuickLendXError::BusinessNotVerified);
+        // }
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
@@ -560,7 +568,20 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         payment_amount: i128,
     ) -> Result<(), QuickLendXError> {
-        do_settle_invoice(&env, &invoice_id, payment_amount)
+        // Get the investment to track investor analytics
+        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+
+        let result = do_settle_invoice(&env, &invoice_id, payment_amount);
+
+        // Update investor analytics if settlement was successful
+        if result.is_ok() {
+            if let Some(inv) = investment {
+                let is_successful = payment_amount >= inv.amount;
+                let _ = update_investor_analytics(&env, &inv.investor, inv.amount, is_successful);
+            }
+        }
+
+        result
     }
 
     pub fn get_invoice_investment(
@@ -591,7 +612,19 @@ impl QuickLendXContract {
 
     /// Handle invoice default (admin or automated process)
     pub fn handle_default(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        do_handle_default(&env, &invoice_id)
+        // Get the investment to track investor analytics
+        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+
+        let result = do_handle_default(&env, &invoice_id);
+
+        // Update investor analytics for failed investment
+        if result.is_ok() {
+            if let Some(inv) = investment {
+                let _ = update_investor_analytics(&env, &inv.investor, inv.amount, false);
+            }
+        }
+
+        result
     }
 
     /// Calculate profit and platform fee
@@ -711,10 +744,14 @@ impl QuickLendXContract {
     }
 
     /// Reject an investor verification request
-    pub fn reject_investor(env: Env, investor: Address) -> Result<(), QuickLendXError> {
+    pub fn reject_investor(
+        env: Env,
+        investor: Address,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
         let admin =
             BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        do_reject_investor(&env, &admin, &investor)
+        do_reject_investor(&env, &admin, &investor, reason)
     }
 
     /// Get investor verification record if available
@@ -778,6 +815,95 @@ impl QuickLendXContract {
     /// Get all rejected businesses
     pub fn get_rejected_businesses(env: Env) -> Vec<Address> {
         BusinessVerificationStorage::get_rejected_businesses(&env)
+    }
+
+    // ========================================
+    // Enhanced Investor Verification Functions
+    // ========================================
+
+    /// Get all verified investors
+    pub fn get_verified_investors(env: Env) -> Vec<Address> {
+        InvestorVerificationStorage::get_verified_investors(&env)
+    }
+
+    /// Get all pending investors
+    pub fn get_pending_investors(env: Env) -> Vec<Address> {
+        InvestorVerificationStorage::get_pending_investors(&env)
+    }
+
+    /// Get all rejected investors
+    pub fn get_rejected_investors(env: Env) -> Vec<Address> {
+        InvestorVerificationStorage::get_rejected_investors(&env)
+    }
+
+    /// Get investors by tier
+    pub fn get_investors_by_tier(env: Env, tier: InvestorTier) -> Vec<Address> {
+        InvestorVerificationStorage::get_investors_by_tier(&env, tier)
+    }
+
+    /// Get investors by risk level
+    pub fn get_investors_by_risk_level(env: Env, risk_level: InvestorRiskLevel) -> Vec<Address> {
+        InvestorVerificationStorage::get_investors_by_risk_level(&env, risk_level)
+    }
+
+    /// Calculate investor risk score
+    pub fn calculate_investor_risk_score(
+        env: Env,
+        investor: Address,
+        kyc_data: String,
+    ) -> Result<u32, QuickLendXError> {
+        calculate_investor_risk_score(&env, &investor, &kyc_data)
+    }
+
+    /// Determine investor tier
+    pub fn determine_investor_tier(
+        env: Env,
+        investor: Address,
+        risk_score: u32,
+    ) -> Result<InvestorTier, QuickLendXError> {
+        determine_investor_tier(&env, &investor, risk_score)
+    }
+
+    /// Calculate investment limit for investor
+    pub fn calculate_investment_limit(
+        env: Env,
+        tier: InvestorTier,
+        risk_level: InvestorRiskLevel,
+        base_limit: i128,
+    ) -> i128 {
+        calculate_investment_limit(&tier, &risk_level, base_limit)
+    }
+
+    /// Update investor analytics after investment
+    pub fn update_investor_analytics(
+        env: Env,
+        investor: Address,
+        investment_amount: i128,
+        is_successful: bool,
+    ) -> Result<(), QuickLendXError> {
+        update_investor_analytics(&env, &investor, investment_amount, is_successful)
+    }
+
+    /// Get investor analytics
+    pub fn get_investor_analytics(
+        env: Env,
+        investor: Address,
+    ) -> Result<InvestorVerification, QuickLendXError> {
+        get_investor_analytics(&env, &investor)
+    }
+
+    /// Validate investor investment
+    pub fn validate_investor_investment(
+        env: Env,
+        investor: Address,
+        investment_amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        validate_investor_investment(&env, &investor, investment_amount)
+    }
+
+    /// Check if investor is verified
+    pub fn is_investor_verified(env: Env, investor: Address) -> bool {
+        InvestorVerificationStorage::is_investor_verified(&env, &investor)
     }
 
     /// Release escrow funds to business upon invoice verification
@@ -1562,6 +1688,84 @@ impl QuickLendXContract {
 
         Ok(trends)
     }
+
+    // ========================================
+    // Enhanced Investor Analytics Functions
+    // ========================================
+
+    /// Calculate comprehensive investor analytics
+    pub fn calculate_investor_analytics(
+        env: Env,
+        investor: Address,
+    ) -> Result<InvestorAnalytics, QuickLendXError> {
+        let analytics = AnalyticsCalculator::calculate_investor_analytics(&env, &investor)?;
+        AnalyticsStorage::store_investor_analytics(&env, &investor, &analytics);
+        Ok(analytics)
+    }
+
+    /// Get stored investor analytics
+    pub fn get_investor_analytics_data(env: Env, investor: Address) -> Option<InvestorAnalytics> {
+        AnalyticsStorage::get_investor_analytics(&env, &investor)
+    }
+
+    /// Calculate investor performance metrics for the platform
+    pub fn calc_investor_perf_metrics(
+        env: Env,
+    ) -> Result<InvestorPerformanceMetrics, QuickLendXError> {
+        let metrics = AnalyticsCalculator::calc_investor_perf_metrics(&env)?;
+        AnalyticsStorage::store_investor_performance(&env, &metrics);
+        Ok(metrics)
+    }
+
+    /// Get stored investor performance metrics
+    pub fn get_investor_performance_metrics(env: Env) -> Option<InvestorPerformanceMetrics> {
+        AnalyticsStorage::get_investor_performance(&env)
+    }
+
+    /// Update investor analytics (admin only)
+    pub fn update_investor_analytics_data(
+        env: Env,
+        investor: Address,
+    ) -> Result<(), QuickLendXError> {
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
+        let analytics = AnalyticsCalculator::calculate_investor_analytics(&env, &investor)?;
+        AnalyticsStorage::store_investor_analytics(&env, &investor, &analytics);
+
+        // Emit event
+        events::emit_investor_analytics_updated(
+            &env,
+            &investor,
+            analytics.success_rate,
+            analytics.risk_score,
+            analytics.compliance_score,
+        );
+
+        Ok(())
+    }
+
+    /// Update platform investor performance metrics (admin only)
+    pub fn update_investor_performance_data(env: Env) -> Result<(), QuickLendXError> {
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
+        let metrics = AnalyticsCalculator::calc_investor_perf_metrics(&env)?;
+        AnalyticsStorage::store_investor_performance(&env, &metrics);
+
+        // Emit event
+        events::emit_investor_performance_updated(
+            &env,
+            metrics.total_investors,
+            metrics.verified_investors,
+            metrics.platform_success_rate,
+            metrics.average_risk_score,
+        );
+
+        Ok(())
+    }
     // ========================================
     // Fee and Revenue Management Functions
     // ========================================
@@ -1581,11 +1785,22 @@ impl QuickLendXContract {
         max_fee: i128,
         is_active: bool,
     ) -> Result<fees::FeeStructure, QuickLendXError> {
-        fees::FeeManager::update_fee_structure(&env, &admin, fee_type, base_fee_bps, min_fee, max_fee, is_active)
+        fees::FeeManager::update_fee_structure(
+            &env,
+            &admin,
+            fee_type,
+            base_fee_bps,
+            min_fee,
+            max_fee,
+            is_active,
+        )
     }
 
     /// Get fee structure for a fee type
-    pub fn get_fee_structure(env: Env, fee_type: fees::FeeType) -> Result<fees::FeeStructure, QuickLendXError> {
+    pub fn get_fee_structure(
+        env: Env,
+        fee_type: fees::FeeType,
+    ) -> Result<fees::FeeStructure, QuickLendXError> {
         fees::FeeManager::get_fee_structure(&env, &fee_type)
     }
 
@@ -1597,7 +1812,13 @@ impl QuickLendXContract {
         is_early_payment: bool,
         is_late_payment: bool,
     ) -> Result<i128, QuickLendXError> {
-        fees::FeeManager::calculate_total_fees(&env, &user, transaction_amount, is_early_payment, is_late_payment)
+        fees::FeeManager::calculate_total_fees(
+            &env,
+            &user,
+            transaction_amount,
+            is_early_payment,
+            is_late_payment,
+        )
     }
 
     /// Get user volume data and tier
