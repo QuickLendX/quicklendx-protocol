@@ -544,3 +544,34 @@ pub fn emit_analytics_export(
         ),
     );
 }
+
+pub fn emit_investor_analytics_updated(
+    env: &Env,
+    investor: &Address,
+    success_rate: i128,
+    risk_score: u32,
+    compliance_score: u32,
+) {
+    env.events().publish(
+        (symbol_short!("inv_anal"),),
+        (investor.clone(), success_rate, risk_score, compliance_score),
+    );
+}
+
+pub fn emit_investor_performance_updated(
+    env: &Env,
+    total_investors: u32,
+    verified_investors: u32,
+    platform_success_rate: i128,
+    average_risk_score: u32,
+) {
+    env.events().publish(
+        (symbol_short!("inv_perf"),),
+        (
+            total_investors,
+            verified_investors,
+            platform_success_rate,
+            average_risk_score,
+        ),
+    );
+}
