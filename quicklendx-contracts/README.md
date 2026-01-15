@@ -4,7 +4,9 @@
 [![Soroban](https://img.shields.io/badge/Soroban-000000?style=for-the-badge&logo=stellar&logoColor=white)](https://soroban.stellar.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A decentralized invoice financing protocol built on Stellar's Soroban platform, enabling businesses to access working capital by selling their invoices to investors.
+**Production-ready** smart contracts for QuickLendX, a decentralized invoice financing protocol built on Stellar's Soroban platform. These contracts enable businesses to access working capital by selling their invoices to investors through a secure, transparent, and efficient blockchain-based marketplace.
+
+> **Note**: This is the smart contracts repository. For the full project documentation, see the [main README](../README.md).
 
 ## 📚 Table of Contents
 
@@ -62,11 +64,16 @@ QuickLendX is a comprehensive DeFi protocol that facilitates invoice financing t
 ### Core Modules
 
 - **`invoice.rs`**: Invoice creation, management, and lifecycle
-- **`bid.rs`**: Bidding system and bid management
+- **`bid.rs`**: Bidding system and bid management with ranking algorithms
 - **`payments.rs`**: Escrow creation, release, and refund
-- **`verification.rs`**: KYC and business verification
+- **`verification.rs`**: KYC, business and investor verification with risk assessment
 - **`audit.rs`**: Audit trail and integrity validation
 - **`backup.rs`**: Data backup and restoration
+- **`analytics.rs`**: Platform metrics, reporting, and business intelligence
+- **`fees.rs`**: Fee management and revenue distribution
+- **`settlement.rs`**: Invoice settlement and payment processing
+- **`investment.rs`**: Investment tracking and insurance
+- **`notifications.rs`**: Notification system for all parties
 - **`events.rs`**: Event emission and handling
 - **`errors.rs`**: Error definitions and handling
 
@@ -467,13 +474,31 @@ stellar-cli contract deploy \
 
 ### Mainnet Deployment
 
-⚠️ **Important**: Mainnet deployment requires thorough testing and security audits.
+⚠️ **CRITICAL**: Mainnet deployment requires thorough testing, security audits, and proper configuration.
 
-1. **Security Checklist**
-   - [ ] All tests passing
-   - [ ] Security audit completed
-   - [ ] Gas optimization verified
-   - [ ] Emergency pause functionality tested
+#### Pre-Deployment Checklist
+
+- [ ] All unit tests passing (`cargo test`)
+- [ ] Integration tests completed
+- [ ] Security audit completed by third-party auditors
+- [ ] Gas optimization verified
+- [ ] Contract size within limits
+- [ ] Admin keys secured and backed up
+- [ ] Emergency procedures documented
+- [ ] Monitoring and alerting configured
+- [ ] Documentation updated
+- [ ] Team trained on contract operations
+
+#### Production Deployment Steps
+
+1. **Final Build**
+```bash
+# Optimized production build
+cargo build --target wasm32-unknown-unknown --release
+
+# Verify contract size
+ls -lh target/wasm32-unknown-unknown/release/quicklendx_contracts.wasm
+```
 
 2. **Deploy to Mainnet**
 ```bash
@@ -481,6 +506,40 @@ stellar-cli contract deploy \
     --wasm target/wasm32-unknown-unknown/release/quicklendx_contracts.wasm \
     --source <DEPLOYER_ACCOUNT> \
     --network mainnet
+```
+
+3. **Initialize Contract**
+```bash
+# Set admin (CRITICAL - do this immediately)
+stellar-cli contract invoke \
+    --id <CONTRACT_ID> \
+    --source <ADMIN_ACCOUNT> \
+    --network mainnet \
+    -- set_admin \
+    --admin <ADMIN_ADDRESS>
+
+# Initialize fee system
+stellar-cli contract invoke \
+    --id <CONTRACT_ID> \
+    --source <ADMIN_ACCOUNT> \
+    --network mainnet \
+    -- initialize_fee_system \
+    --admin <ADMIN_ADDRESS>
+```
+
+4. **Verify Deployment**
+```bash
+# Verify admin is set
+stellar-cli contract invoke \
+    --id <CONTRACT_ID> \
+    --network mainnet \
+    -- get_admin
+
+# Check contract version/status
+stellar-cli contract invoke \
+    --id <CONTRACT_ID> \
+    --network mainnet \
+    -- get_total_invoice_count
 ```
 
 ### Environment Configuration
@@ -570,24 +629,44 @@ RUST_LOG=debug cargo test -- --nocapture
    - Use references where possible
    - Clean up temporary data
 
-## 📋 Best Practices
+## 🔒 Production Security
 
-### Security
+### Security Best Practices
 
 1. **Input Validation**
-   - Always validate user inputs
-   - Check for overflow conditions
-   - Sanitize string inputs
+   - Always validate user inputs before processing
+   - Check for overflow/underflow conditions
+   - Sanitize string inputs and enforce length limits
+   - Validate addresses and amounts
 
 2. **Access Control**
-   - Implement proper authorization checks
-   - Use role-based access control
-   - Validate caller permissions
+   - Implement proper authorization checks on all sensitive functions
+   - Use role-based access control (admin, business, investor)
+   - Validate caller permissions using `require_auth()`
+   - Never trust external inputs
 
 3. **Error Handling**
-   - Provide meaningful error messages
-   - Don't expose sensitive information
+   - Provide meaningful error messages for debugging
+   - Don't expose sensitive information in errors
    - Handle edge cases gracefully
+   - Use custom error types for better error handling
+
+4. **Audit & Monitoring**
+   - Emit events for all critical operations
+   - Maintain comprehensive audit trails
+   - Monitor contract state changes
+   - Set up alerts for suspicious activities
+
+### Production Checklist
+
+- ✅ All functions have proper access control
+- ✅ Input validation on all user-facing functions
+- ✅ Overflow/underflow protection
+- ✅ Reentrancy protection (where applicable)
+- ✅ Event emission for all state changes
+- ✅ Comprehensive error handling
+- ✅ Gas optimization verified
+- ✅ Security audit completed
 
 ### Code Quality
 
