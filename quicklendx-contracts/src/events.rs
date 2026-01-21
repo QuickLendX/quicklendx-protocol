@@ -25,6 +25,17 @@ pub fn emit_invoice_verified(env: &Env, invoice: &Invoice) {
     );
 }
 
+pub fn emit_invoice_cancelled(env: &Env, invoice: &Invoice) {
+    env.events().publish(
+        (symbol_short!("inv_canc"),),
+        (
+            invoice.id.clone(),
+            invoice.business.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
 pub fn emit_invoice_metadata_updated(env: &Env, invoice: &Invoice, metadata: &InvoiceMetadata) {
     let mut total = 0i128;
     for record in metadata.line_items.iter() {
