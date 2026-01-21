@@ -386,6 +386,12 @@ impl QuickLendXContract {
     }
 
     /// Place a bid on an invoice
+    /// 
+    /// Validates:
+    /// - Invoice exists and is verified
+    /// - Bid amount is positive
+    /// - Investor is authorized and verified
+    /// - Creates and stores the bid
     pub fn place_bid(
         env: Env,
         investor: Address,
@@ -393,14 +399,20 @@ impl QuickLendXContract {
         bid_amount: i128,
         expected_return: i128,
     ) -> Result<BytesN<32>, QuickLendXError> {
-        // Only allow bids on verified invoices
+        // Authorization check: Only the investor can place their own bid
+        investor.require_auth();
+        
+        // Validate bid amount is positive
+        if bid_amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        
+        // Validate invoice exists and is verified
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
         }
-        // Only the investor can place their own bid
-        investor.require_auth();
 
         let verification = do_get_investor_verification(&env, &investor)
             .ok_or(QuickLendXError::BusinessNotVerified)?;
@@ -558,12 +570,22 @@ impl QuickLendXContract {
     }
 
     /// Withdraw a bid (investor only, before acceptance)
+    /// 
+    /// Validates:
+    /// - Bid exists
+    /// - Caller is the bid owner (authorization check)
+    /// - Bid is in Placed status (prevents withdrawal of accepted/expired/withdrawn bids)
+    /// - Updates bid status to Withdrawn
     pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        // Get bid and validate it exists
         let mut bid =
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-        // Only the investor can withdraw their own bid
+        
+        // Authorization check: Only the investor who owns the bid can withdraw it
         bid.investor.require_auth();
-        // Only allow withdrawal if bid is placed (not accepted/withdrawn)
+        
+        // Status validation: Only allow withdrawal if bid is placed
+        // Prevents withdrawal of accepted, withdrawn, or expired bids
         if bid.status != BidStatus::Placed {
             return Err(QuickLendXError::OperationNotAllowed);
         }
