@@ -29,8 +29,8 @@ use errors::QuickLendXError;
 use events::{
     emit_audit_query, emit_audit_validation, emit_escrow_created, emit_escrow_refunded,
     emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
-    emit_invoice_uploaded, emit_invoice_verified,
+    emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
+    emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
@@ -204,6 +204,40 @@ impl QuickLendXContract {
         Ok(())
     }
 
+    /// Cancel an invoice (business only, before funding)
+    pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        // Only the business owner can cancel their own invoice
+        invoice.business.require_auth();
+
+        // Remove from old status list
+        InvoiceStorage::remove_from_status_invoices(&env, &invoice.status, &invoice_id);
+
+        // Cancel the invoice (only works if Pending or Verified)
+        invoice.cancel(&env, invoice.business.clone())?;
+
+        // Update storage
+        InvoiceStorage::update_invoice(&env, &invoice);
+
+        // Add to cancelled status list
+        InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Cancelled, &invoice_id);
+
+        // Emit event
+        emit_invoice_cancelled(&env, &invoice);
+
+        // Send notification (optional - could notify interested investors)
+        let _ = NotificationSystem::notify_invoice_status_changed(
+            &env,
+            &invoice,
+            &InvoiceStatus::Pending, // Could be Pending or Verified
+            &InvoiceStatus::Cancelled,
+        );
+
+        Ok(())
+    }
+
     /// Get an invoice by ID
     pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<Invoice, QuickLendXError> {
         InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
@@ -344,8 +378,9 @@ impl QuickLendXContract {
         let funded = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Funded);
         let paid = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Paid);
         let defaulted = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Defaulted);
+        let cancelled = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Cancelled);
 
-        pending + verified + funded + paid + defaulted
+        pending + verified + funded + paid + defaulted + cancelled
     }
 
     /// Get a bid by ID
@@ -1167,6 +1202,7 @@ impl QuickLendXContract {
             InvoiceStatus::Funded,
             InvoiceStatus::Paid,
             InvoiceStatus::Defaulted,
+            InvoiceStatus::Cancelled,
         ]
         .iter()
         {
