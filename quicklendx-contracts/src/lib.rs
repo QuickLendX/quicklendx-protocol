@@ -27,10 +27,10 @@ use defaults::{
 };
 use errors::QuickLendXError;
 use events::{
-    emit_audit_query, emit_audit_validation, emit_escrow_created, emit_escrow_refunded,
-    emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
-    emit_invoice_uploaded, emit_invoice_verified,
+    emit_audit_query, emit_audit_validation, emit_bid_placed, emit_bid_withdrawn,
+    emit_escrow_created, emit_escrow_refunded, emit_escrow_released, emit_insurance_added,
+    emit_insurance_premium_collected, emit_investor_verified, emit_invoice_metadata_cleared,
+    emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
@@ -373,6 +373,13 @@ impl QuickLendXContract {
         BidStorage::get_bids_by_investor(&env, &invoice_id, &investor)
     }
 
+    /// Get all bids for an invoice
+    /// Returns a list of all bid records (including expired, withdrawn, etc.)
+    /// Use get_bids_by_status to filter by status if needed
+    pub fn get_bids_for_invoice(env: Env, invoice_id: BytesN<32>) -> Vec<Bid> {
+        BidStorage::get_bid_records_for_invoice(&env, &invoice_id)
+    }
+
     /// Remove bids that have passed their expiration window
     pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> u32 {
         BidStorage::cleanup_expired_bids(&env, &invoice_id)
@@ -427,6 +434,9 @@ impl QuickLendXContract {
         BidStorage::store_bid(&env, &bid);
         // Track bid for this invoice
         BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
+
+        // Emit bid placed event
+        emit_bid_placed(&env, &bid);
 
         // Send notification for business about new bid
         let _ = NotificationSystem::notify_bid_received(&env, &invoice, &bid);
@@ -559,6 +569,10 @@ impl QuickLendXContract {
         }
         bid.status = BidStatus::Withdrawn;
         BidStorage::update_bid(&env, &bid);
+        
+        // Emit bid withdrawn event
+        emit_bid_withdrawn(&env, &bid);
+        
         Ok(())
     }
 
