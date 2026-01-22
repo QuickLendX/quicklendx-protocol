@@ -3426,3 +3426,583 @@ fn test_basic_readme_queries() {
     // All tests passed
     assert!(true);
 }
+
+// ========================================
+// Invoice Lifecycle Tests
+// ========================================
+
+#[test]
+fn test_upload_invoice_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and verify business
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    // Upload invoice
+    let amount = 1000000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Payment for consulting services");
+    let tags = Vec::new(&env);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Consulting,
+        &tags,
+    );
+
+    // Verify invoice was created with correct status
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Pending);
+    assert_eq!(invoice.business, business);
+    assert_eq!(invoice.amount, amount);
+    assert_eq!(invoice.due_date, due_date);
+}
+
+#[test]
+#[should_panic(expected = "BusinessNotVerified")]
+fn test_upload_invoice_not_verified_business() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Try to upload invoice without being verified
+    let amount = 1000000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+
+    client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+}
+
+#[test]
+#[should_panic(expected = "InvalidAmount")]
+fn test_upload_invoice_invalid_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and verify business
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    // Try to upload invoice with negative amount
+    let amount = -100i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+
+    client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+}
+
+#[test]
+#[should_panic(expected = "InvoiceDueDateInvalid")]
+fn test_upload_invoice_past_due_date() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and verify business
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    // Try to upload invoice with past due date
+    let amount = 1000000i128;
+    let due_date = env.ledger().timestamp() - 86400; // Past date
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+
+    client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+}
+
+#[test]
+fn test_verify_invoice_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and verify business
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    // Upload invoice
+    let amount = 1000000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+
+    // Verify invoice status is Pending
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Pending);
+
+    // Verify the invoice
+    client.verify_invoice(&invoice_id);
+
+    // Check status changed to Verified
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Verified);
+}
+
+#[test]
+#[should_panic(expected = "NotAdmin")]
+fn test_verify_invoice_not_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and verify business
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    // Upload invoice
+    let amount = 1000000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+
+    // Try to verify as non-admin (should fail in real scenario)
+    // Note: mock_all_auths() bypasses auth, so we set admin first
+    client.set_admin(&non_admin);
+    client.verify_invoice(&invoice_id);
+}
+
+#[test]
+#[should_panic(expected = "InvalidStatus")]
+fn test_verify_invoice_already_verified() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and verify business
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    // Upload invoice
+    let amount = 1000000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+
+    // Verify once
+    client.verify_invoice(&invoice_id);
+
+    // Try to verify again (should fail)
+    client.verify_invoice(&invoice_id);
+}
+
+#[test]
+fn test_cancel_invoice_pending() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and verify business
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    // Upload invoice
+    let amount = 1000000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+
+    // Verify invoice is Pending
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Pending);
+
+    // Cancel the invoice
+    client.cancel_invoice(&invoice_id);
+
+    // Verify status changed to Cancelled
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Cancelled);
+}
+
+#[test]
+fn test_cancel_invoice_verified() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and verify business
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    // Upload invoice
+    let amount = 1000000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+
+    // Verify the invoice
+    client.verify_invoice(&invoice_id);
+
+    // Verify invoice is Verified
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Verified);
+
+    // Cancel the invoice
+    client.cancel_invoice(&invoice_id);
+
+    // Verify status changed to Cancelled
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Cancelled);
+}
+
+#[test]
+#[should_panic(expected = "InvalidStatus")]
+fn test_cancel_invoice_funded() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and verify business and investor
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+    verify_investor_for_test(&env, &client, &investor, 10000000);
+
+    // Upload and verify invoice
+    let amount = 1000000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+
+    client.verify_invoice(&invoice_id);
+
+    // Investor places bid
+    let bid_amount = amount;
+    let expected_return = amount + 100000;
+    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+
+    // Business accepts bid (invoice becomes Funded)
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Verify invoice is Funded
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+
+    // Try to cancel funded invoice (should fail)
+    client.cancel_invoice(&invoice_id);
+}
+
+#[test]
+fn test_complete_invoice_lifecycle_with_cancellation() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Setup: Set admin and verify business
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    // Step 1: Upload invoice
+    let amount = 1000000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Consulting services invoice");
+    let tags = Vec::new(&env);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Consulting,
+        &tags,
+    );
+
+    // Verify invoice is Pending
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Pending);
+    assert_eq!(invoice.business, business);
+    assert_eq!(invoice.amount, amount);
+
+    // Step 2: Verify invoice
+    client.verify_invoice(&invoice_id);
+
+    // Verify status changed to Verified
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Verified);
+
+    // Step 3: Cancel invoice (business changes mind)
+    client.cancel_invoice(&invoice_id);
+
+    // Verify status changed to Cancelled
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Cancelled);
+
+    // Verify cancelled invoices are tracked
+    let cancelled_invoices = client.get_invoices_by_status(&InvoiceStatus::Cancelled);
+    assert_eq!(cancelled_invoices.len(), 1);
+    assert_eq!(cancelled_invoices.get(0).unwrap(), invoice_id);
+}
+
+#[test]
+fn test_invoice_lifecycle_counts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Setup
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    // Create multiple invoices in different states
+    let due_date = env.ledger().timestamp() + 86400;
+    let tags = Vec::new(&env);
+
+    // Invoice 1: Pending
+    let invoice_id_1 = client.upload_invoice(
+        &business,
+        &1000000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 1"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+
+    // Invoice 2: Verified
+    let invoice_id_2 = client.upload_invoice(
+        &business,
+        &2000000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 2"),
+        &InvoiceCategory::Products,
+        &tags,
+    );
+    client.verify_invoice(&invoice_id_2);
+
+    // Invoice 3: Cancelled
+    let invoice_id_3 = client.upload_invoice(
+        &business,
+        &3000000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 3"),
+        &InvoiceCategory::Consulting,
+        &tags,
+    );
+    client.verify_invoice(&invoice_id_3);
+    client.cancel_invoice(&invoice_id_3);
+
+    // Verify counts
+    let pending_count = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
+    let verified_count = client.get_invoice_count_by_status(&InvoiceStatus::Verified);
+    let cancelled_count = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
+    let total_count = client.get_total_invoice_count();
+
+    assert_eq!(pending_count, 1);
+    assert_eq!(verified_count, 1);
+    assert_eq!(cancelled_count, 1);
+    assert_eq!(total_count, 3);
+}
+
+#[test]
+fn test_get_invoices_by_status_cancelled() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Setup
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    let due_date = env.ledger().timestamp() + 86400;
+    let tags = Vec::new(&env);
+
+    // Create and cancel multiple invoices
+    let mut cancelled_ids = Vec::new(&env);
+    for i in 0..3 {
+        let invoice_id = client.upload_invoice(
+            &business,
+            &((i + 1) * 1000000),
+            &currency,
+            &due_date,
+            &String::from_str(&env, &format!("Invoice {}", i + 1)),
+            &InvoiceCategory::Services,
+            &tags,
+        );
+        client.cancel_invoice(&invoice_id);
+        cancelled_ids.push_back(invoice_id);
+    }
+
+    // Get all cancelled invoices
+    let cancelled_invoices = client.get_invoices_by_status(&InvoiceStatus::Cancelled);
+    assert_eq!(cancelled_invoices.len(), 3);
+
+    // Verify all cancelled IDs are in the list
+    for id in cancelled_ids.iter() {
+        let found = cancelled_invoices.iter().any(|invoice_id| invoice_id == id);
+        assert!(found);
+    }
+}
