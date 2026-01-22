@@ -15,6 +15,8 @@ mod notifications;
 mod payments;
 mod profits;
 mod settlement;
+#[cfg(test)]
+mod test_fees;
 mod verification;
 
 use bid::{Bid, BidStatus, BidStorage};
@@ -443,8 +445,7 @@ impl QuickLendXContract {
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        let bid =
-            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         let invoice_id = bid.invoice_id.clone();
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut bid =

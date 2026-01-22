@@ -243,7 +243,6 @@ pub fn emit_bid_expired(env: &Env, bid: &Bid) {
     );
 }
 
-
 /// Emit event when backup is created
 pub fn emit_backup_created(env: &Env, backup_id: &BytesN<32>, invoice_count: u32) {
     env.events().publish(
@@ -275,7 +274,6 @@ pub fn emit_backup_archived(env: &Env, backup_id: &BytesN<32>) {
         (backup_id.clone(), env.ledger().timestamp()),
     );
 }
-
 
 /// Emit audit validation event
 pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool) {
@@ -507,7 +505,6 @@ pub fn emit_investor_report_generated(
         ),
     );
 }
-
 
 /// Emit event when analytics query is performed
 pub fn emit_analytics_query(
