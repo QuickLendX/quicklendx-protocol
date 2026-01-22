@@ -795,6 +795,120 @@ fn test_bid_validation_rules() {
     assert!(second_bid.is_ok());
 }
 
+#[test]
+fn test_withdraw_bid() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+
+    // Create and verify invoice
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Withdraw test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+
+    // Place a bid
+    let bid_id = client.place_bid(&investor, &invoice_id, &500, &600);
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Placed);
+
+    // Withdraw the bid
+    client.withdraw_bid(&bid_id);
+    let withdrawn_bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(withdrawn_bid.status, BidStatus::Withdrawn);
+
+    // Verify bid is no longer in placed status
+    let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
+    assert_eq!(placed_bids.len(), 0);
+
+    // Verify bid appears in withdrawn status
+    let withdrawn_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Withdrawn);
+    assert_eq!(withdrawn_bids.len(), 1);
+    assert_eq!(withdrawn_bids.get(0).unwrap().bid_id, bid_id);
+
+    // Try to withdraw again (should fail)
+    assert!(client.try_withdraw_bid(&bid_id).is_err());
+}
+
+#[test]
+fn test_get_bids_for_invoice() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor_a = Address::generate(&env);
+    let investor_b = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+
+    // Create and verify invoice
+    let invoice_id = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Get bids test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    verify_investor_for_test(&env, &client, &investor_a, 10_000);
+    verify_investor_for_test(&env, &client, &investor_b, 10_000);
+
+    // Place multiple bids
+    let bid_a = client.place_bid(&investor_a, &invoice_id, &500, &600);
+    let bid_b = client.place_bid(&investor_b, &invoice_id, &600, &750);
+
+    // Get all bids for invoice
+    let all_bids = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(all_bids.len(), 2);
+
+    // Verify both bids are present
+    let mut found_a = false;
+    let mut found_b = false;
+    for bid in all_bids.iter() {
+        if bid.bid_id == bid_a {
+            found_a = true;
+            assert_eq!(bid.investor, investor_a);
+        }
+        if bid.bid_id == bid_b {
+            found_b = true;
+            assert_eq!(bid.investor, investor_b);
+        }
+    }
+    assert!(found_a && found_b, "Both bids should be found");
+
+    // Withdraw one bid
+    client.withdraw_bid(&bid_a);
+
+    // Get all bids again (should still include withdrawn bid)
+    let all_bids_after = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(all_bids_after.len(), 2);
+
+    // Verify withdrawn bid is still in the list
+    let withdrawn = all_bids_after.iter().find(|b| b.bid_id == bid_a).unwrap();
+    assert_eq!(withdrawn.status, BidStatus::Withdrawn);
+}
+
 // TODO: Fix type mismatch issues in escrow tests
 // #[test]
 fn test_escrow_creation_on_bid_acceptance() {
