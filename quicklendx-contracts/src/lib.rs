@@ -1894,3 +1894,6 @@ impl QuickLendXContract {
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod test_bid;
