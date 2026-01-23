@@ -610,7 +610,7 @@ pub fn require_business_verification(env: &Env, business: &Address) -> Result<()
 // Keep the existing invoice verification function
 pub fn verify_invoice_data(
     env: &Env,
-    business: &Address,
+    _business: &Address,
     amount: i128,
     _currency: &Address,
     due_date: u64,

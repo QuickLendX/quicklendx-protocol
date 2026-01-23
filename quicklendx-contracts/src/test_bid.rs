@@ -304,7 +304,7 @@ fn test_best_bid_excludes_withdrawn() {
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
 
     // investor1: profit = 2k
-    let bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let _bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
 
     // investor2: profit = 10k (best initially)
     let bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &25_000);
