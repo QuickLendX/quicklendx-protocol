@@ -423,6 +423,23 @@ pub fn emit_dispute_resolved(
     );
 }
 
+pub fn emit_invoice_funded(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    amount: i128,
+) {
+    env.events().publish(
+        (symbol_short!("inv_fnd"),),
+        (
+            invoice_id.clone(),
+            investor.clone(),
+            amount,
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
 // Analytics Events
 
 /// Emit event when platform metrics are updated

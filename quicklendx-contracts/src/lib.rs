@@ -6,6 +6,7 @@ mod audit;
 mod backup;
 mod bid;
 mod defaults;
+mod escrow;
 mod errors;
 mod events;
 mod fees;
@@ -18,6 +19,7 @@ mod settlement;
 mod verification;
 
 use bid::{Bid, BidStatus, BidStorage};
+use escrow::accept_bid_and_fund as do_accept_bid_and_fund;
 use defaults::{
     create_dispute as do_create_dispute, get_dispute_details as do_get_dispute_details,
     get_invoices_by_dispute_status as do_get_invoices_by_dispute_status,
@@ -176,6 +178,15 @@ impl QuickLendXContract {
         let _ = NotificationSystem::notify_invoice_created(&env, &invoice);
 
         Ok(invoice.id)
+    }
+
+    /// Accept a bid and fund the invoice using escrow
+    pub fn accept_bid_and_fund(
+        env: Env,
+        invoice_id: BytesN<32>,
+        bid_id: BytesN<32>,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        do_accept_bid_and_fund(&env, &invoice_id, &bid_id)
     }
 
     /// Verify an invoice (admin or automated process)
@@ -994,6 +1005,22 @@ impl QuickLendXContract {
         InvestorVerificationStorage::is_investor_verified(&env, &investor)
     }
 
+    /// Get escrow details for an invoice
+    pub fn get_escrow_details(env: Env, invoice_id: BytesN<32>) -> Result<payments::Escrow, QuickLendXError> {
+        EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
+    /// Get escrow status for an invoice
+    pub fn get_escrow_status(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<payments::EscrowStatus, QuickLendXError> {
+        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Ok(escrow.status)
+    }
+
     /// Release escrow funds to business upon invoice verification
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
@@ -1032,25 +1059,6 @@ impl QuickLendXContract {
         );
 
         Ok(())
-    }
-
-    /// Get escrow status for an invoice
-    pub fn get_escrow_status(
-        env: Env,
-        invoice_id: BytesN<32>,
-    ) -> Result<payments::EscrowStatus, QuickLendXError> {
-        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
-        Ok(escrow.status)
-    }
-
-    /// Get escrow details for an invoice
-    pub fn get_escrow_details(
-        env: Env,
-        invoice_id: BytesN<32>,
-    ) -> Result<payments::Escrow, QuickLendXError> {
-        EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
     ///== Notification Management Functions ==///
