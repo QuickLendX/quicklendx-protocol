@@ -1970,3 +1970,6 @@ mod test;
 
 #[cfg(test)]
 mod test_bid;
+
+#[cfg(test)]
+mod test_admin;
