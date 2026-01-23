@@ -4076,6 +4076,9 @@ fn test_settle_invoice_full_flow() {
     );
 
     // Create and cancel multiple invoices
+    let currency = token_address.clone();
+    let due_date = env.ledger().timestamp() + 86400;
+    let tags = soroban_sdk::Vec::new(&env);
     let mut cancelled_ids = Vec::new(&env);
     for i in 0..3 {
         let invoice_id = client.upload_invoice(
@@ -4095,6 +4098,9 @@ fn test_settle_invoice_full_flow() {
         client.cancel_invoice(&invoice_id);
         cancelled_ids.push_back(invoice_id);
     }
+
+    // 5. Verify invoice
+    client.verify_invoice(&invoice_id);
 
     // 6. Verify investor and place bid
     verify_investor_for_test(&env, &client, &investor, 10_000);
