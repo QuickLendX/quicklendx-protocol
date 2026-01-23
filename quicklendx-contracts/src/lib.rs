@@ -29,10 +29,11 @@ use defaults::{
 };
 use errors::QuickLendXError;
 use events::{
-    emit_audit_query, emit_audit_validation, emit_escrow_created, emit_escrow_refunded,
-    emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
-    emit_invoice_uploaded, emit_invoice_verified,
+    emit_audit_query, emit_audit_validation, emit_bid_placed, emit_bid_withdrawn,
+    emit_escrow_created, emit_escrow_refunded, emit_escrow_released, emit_insurance_added,
+    emit_insurance_premium_collected, emit_investor_verified, emit_invoice_cancelled,
+    emit_invoice_metadata_cleared, emit_invoice_metadata_updated, emit_invoice_uploaded,
+    emit_invoice_verified,
 };
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
@@ -206,6 +207,40 @@ impl QuickLendXContract {
         Ok(())
     }
 
+    /// Cancel an invoice (business only, before funding)
+    pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        // Only the business owner can cancel their own invoice
+        invoice.business.require_auth();
+
+        // Remove from old status list
+        InvoiceStorage::remove_from_status_invoices(&env, &invoice.status, &invoice_id);
+
+        // Cancel the invoice (only works if Pending or Verified)
+        invoice.cancel(&env, invoice.business.clone())?;
+
+        // Update storage
+        InvoiceStorage::update_invoice(&env, &invoice);
+
+        // Add to cancelled status list
+        InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Cancelled, &invoice_id);
+
+        // Emit event
+        emit_invoice_cancelled(&env, &invoice);
+
+        // Send notification (optional - could notify interested investors)
+        let _ = NotificationSystem::notify_invoice_status_changed(
+            &env,
+            &invoice,
+            &InvoiceStatus::Pending, // Could be Pending or Verified
+            &InvoiceStatus::Cancelled,
+        );
+
+        Ok(())
+    }
+
     /// Get an invoice by ID
     pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<Invoice, QuickLendXError> {
         InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
@@ -346,8 +381,9 @@ impl QuickLendXContract {
         let funded = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Funded);
         let paid = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Paid);
         let defaulted = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Defaulted);
+        let cancelled = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Cancelled);
 
-        pending + verified + funded + paid + defaulted
+        pending + verified + funded + paid + defaulted + cancelled
     }
 
     /// Get a bid by ID
@@ -375,12 +411,25 @@ impl QuickLendXContract {
         BidStorage::get_bids_by_investor(&env, &invoice_id, &investor)
     }
 
+    /// Get all bids for an invoice
+    /// Returns a list of all bid records (including expired, withdrawn, etc.)
+    /// Use get_bids_by_status to filter by status if needed
+    pub fn get_bids_for_invoice(env: Env, invoice_id: BytesN<32>) -> Vec<Bid> {
+        BidStorage::get_bid_records_for_invoice(&env, &invoice_id)
+    }
+
     /// Remove bids that have passed their expiration window
     pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> u32 {
         BidStorage::cleanup_expired_bids(&env, &invoice_id)
     }
 
     /// Place a bid on an invoice
+    /// 
+    /// Validates:
+    /// - Invoice exists and is verified
+    /// - Bid amount is positive
+    /// - Investor is authorized and verified
+    /// - Creates and stores the bid
     pub fn place_bid(
         env: Env,
         investor: Address,
@@ -388,14 +437,20 @@ impl QuickLendXContract {
         bid_amount: i128,
         expected_return: i128,
     ) -> Result<BytesN<32>, QuickLendXError> {
-        // Only allow bids on verified invoices
+        // Authorization check: Only the investor can place their own bid
+        investor.require_auth();
+        
+        // Validate bid amount is positive
+        if bid_amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        
+        // Validate invoice exists and is verified
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
         }
-        // Only the investor can place their own bid
-        investor.require_auth();
 
         let verification = do_get_investor_verification(&env, &investor)
             .ok_or(QuickLendXError::BusinessNotVerified)?;
@@ -429,6 +484,9 @@ impl QuickLendXContract {
         BidStorage::store_bid(&env, &bid);
         // Track bid for this invoice
         BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
+
+        // Emit bid placed event
+        emit_bid_placed(&env, &bid);
 
         // Send notification for business about new bid
         let _ = NotificationSystem::notify_bid_received(&env, &invoice, &bid);
@@ -549,17 +607,31 @@ impl QuickLendXContract {
     }
 
     /// Withdraw a bid (investor only, before acceptance)
+    /// 
+    /// Validates:
+    /// - Bid exists
+    /// - Caller is the bid owner (authorization check)
+    /// - Bid is in Placed status (prevents withdrawal of accepted/expired/withdrawn bids)
+    /// - Updates bid status to Withdrawn
     pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        // Get bid and validate it exists
         let mut bid =
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-        // Only the investor can withdraw their own bid
+        
+        // Authorization check: Only the investor who owns the bid can withdraw it
         bid.investor.require_auth();
-        // Only allow withdrawal if bid is placed (not accepted/withdrawn)
+        
+        // Status validation: Only allow withdrawal if bid is placed
+        // Prevents withdrawal of accepted, withdrawn, or expired bids
         if bid.status != BidStatus::Placed {
             return Err(QuickLendXError::OperationNotAllowed);
         }
         bid.status = BidStatus::Withdrawn;
         BidStorage::update_bid(&env, &bid);
+        
+        // Emit bid withdrawn event
+        emit_bid_withdrawn(&env, &bid);
+        
         Ok(())
     }
 
@@ -1168,6 +1240,7 @@ impl QuickLendXContract {
             InvoiceStatus::Funded,
             InvoiceStatus::Paid,
             InvoiceStatus::Defaulted,
+            InvoiceStatus::Cancelled,
         ]
         .iter()
         {
@@ -1895,3 +1968,6 @@ impl QuickLendXContract {
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod test_bid;
