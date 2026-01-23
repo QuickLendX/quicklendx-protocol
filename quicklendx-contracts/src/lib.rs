@@ -192,8 +192,16 @@ impl QuickLendXContract {
         if invoice.status != InvoiceStatus::Pending {
             return Err(QuickLendXError::InvalidStatus);
         }
+
+        // Remove from pending status list
+        InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Pending, &invoice_id);
+
         invoice.verify(&env, admin.clone());
         InvoiceStorage::update_invoice(&env, &invoice);
+
+        // Add to verified status list
+        InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
+
         emit_invoice_verified(&env, &invoice);
 
         // Send notification
@@ -424,7 +432,7 @@ impl QuickLendXContract {
     }
 
     /// Place a bid on an invoice
-    /// 
+    ///
     /// Validates:
     /// - Invoice exists and is verified
     /// - Bid amount is positive
@@ -439,12 +447,12 @@ impl QuickLendXContract {
     ) -> Result<BytesN<32>, QuickLendXError> {
         // Authorization check: Only the investor can place their own bid
         investor.require_auth();
-        
+
         // Validate bid amount is positive
         if bid_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
         }
-        
+
         // Validate invoice exists and is verified
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -607,7 +615,7 @@ impl QuickLendXContract {
     }
 
     /// Withdraw a bid (investor only, before acceptance)
-    /// 
+    ///
     /// Validates:
     /// - Bid exists
     /// - Caller is the bid owner (authorization check)
@@ -617,10 +625,10 @@ impl QuickLendXContract {
         // Get bid and validate it exists
         let mut bid =
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-        
+
         // Authorization check: Only the investor who owns the bid can withdraw it
         bid.investor.require_auth();
-        
+
         // Status validation: Only allow withdrawal if bid is placed
         // Prevents withdrawal of accepted, withdrawn, or expired bids
         if bid.status != BidStatus::Placed {
@@ -628,10 +636,10 @@ impl QuickLendXContract {
         }
         bid.status = BidStatus::Withdrawn;
         BidStorage::update_bid(&env, &bid);
-        
+
         // Emit bid withdrawn event
         emit_bid_withdrawn(&env, &bid);
-        
+
         Ok(())
     }
 
