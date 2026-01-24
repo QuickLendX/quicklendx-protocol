@@ -15,6 +15,8 @@ mod notifications;
 mod payments;
 mod profits;
 mod settlement;
+#[cfg(test)]
+mod test_fees;
 mod verification;
 
 use bid::{Bid, BidStatus, BidStorage};
@@ -191,12 +193,14 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
 
+        // Remove from pending status list
         // Remove from old status list (Pending)
         InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Pending, &invoice_id);
 
         invoice.verify(&env, admin.clone());
         InvoiceStorage::update_invoice(&env, &invoice);
 
+        // Add to verified status list
         // Add to new status list (Verified)
         InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
 
