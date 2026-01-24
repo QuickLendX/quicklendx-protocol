@@ -14,6 +14,7 @@ pub enum InvoiceStatus {
     Funded,    // Invoice has been funded by an investor
     Paid,      // Invoice has been paid and settled
     Defaulted, // Invoice payment is overdue/defaulted
+    Cancelled, // Invoice has been cancelled by the business owner
 }
 
 /// Dispute status enumeration
@@ -363,6 +364,22 @@ impl Invoice {
         self.status = InvoiceStatus::Defaulted;
     }
 
+    /// Cancel the invoice (only if Pending or Verified, not Funded)
+    pub fn cancel(&mut self, env: &Env, actor: Address) -> Result<(), QuickLendXError> {
+        // Can only cancel if Pending or Verified (not yet funded)
+        if self.status != InvoiceStatus::Pending && self.status != InvoiceStatus::Verified {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+
+        let old_status = self.status.clone();
+        self.status = InvoiceStatus::Cancelled;
+
+        // Log status change
+        log_invoice_status_change(env, self.id.clone(), actor, old_status, self.status.clone());
+
+        Ok(())
+    }
+
     /// Add a rating to the invoice
     pub fn add_rating(
         &mut self,
@@ -562,6 +579,7 @@ impl InvoiceStorage {
             InvoiceStatus::Funded => symbol_short!("funded"),
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
+            InvoiceStatus::Cancelled => symbol_short!("canceld"),
         };
         env.storage()
             .instance()
@@ -585,6 +603,7 @@ impl InvoiceStorage {
             InvoiceStatus::Funded => symbol_short!("funded"),
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
+            InvoiceStatus::Cancelled => symbol_short!("canceld"),
         };
         let mut invoices = env
             .storage()
@@ -603,6 +622,7 @@ impl InvoiceStorage {
             InvoiceStatus::Funded => symbol_short!("funded"),
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
+            InvoiceStatus::Cancelled => symbol_short!("canceld"),
         };
         let invoices = Self::get_invoices_by_status(env, status);
 
@@ -683,6 +703,7 @@ impl InvoiceStorage {
             InvoiceStatus::Funded,
             InvoiceStatus::Paid,
             InvoiceStatus::Defaulted,
+            InvoiceStatus::Cancelled,
         ];
 
         for status in all_statuses.iter() {
@@ -726,6 +747,7 @@ impl InvoiceStorage {
             InvoiceStatus::Funded,
             InvoiceStatus::Paid,
             InvoiceStatus::Defaulted,
+            InvoiceStatus::Cancelled,
         ];
 
         for status in all_statuses.iter() {
@@ -750,6 +772,7 @@ impl InvoiceStorage {
             InvoiceStatus::Funded,
             InvoiceStatus::Paid,
             InvoiceStatus::Defaulted,
+            InvoiceStatus::Cancelled,
         ];
 
         for status in all_statuses.iter() {

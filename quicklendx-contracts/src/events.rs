@@ -25,6 +25,17 @@ pub fn emit_invoice_verified(env: &Env, invoice: &Invoice) {
     );
 }
 
+pub fn emit_invoice_cancelled(env: &Env, invoice: &Invoice) {
+    env.events().publish(
+        (symbol_short!("inv_canc"),),
+        (
+            invoice.id.clone(),
+            invoice.business.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
 pub fn emit_invoice_metadata_updated(env: &Env, invoice: &Invoice, metadata: &InvoiceMetadata) {
     let mut total = 0i128;
     for record in metadata.line_items.iter() {
@@ -243,6 +254,35 @@ pub fn emit_bid_expired(env: &Env, bid: &Bid) {
     );
 }
 
+/// Emit event when a bid is placed
+pub fn emit_bid_placed(env: &Env, bid: &Bid) {
+    env.events().publish(
+        (symbol_short!("bid_plc"),),
+        (
+            bid.bid_id.clone(),
+            bid.invoice_id.clone(),
+            bid.investor.clone(),
+            bid.bid_amount,
+            bid.expected_return,
+            bid.timestamp,
+            bid.expiration_timestamp,
+        ),
+    );
+}
+
+/// Emit event when a bid is withdrawn
+pub fn emit_bid_withdrawn(env: &Env, bid: &Bid) {
+    env.events().publish(
+        (symbol_short!("bid_wdr"),),
+        (
+            bid.bid_id.clone(),
+            bid.invoice_id.clone(),
+            bid.investor.clone(),
+            bid.bid_amount,
+            env.ledger().timestamp(),
+        ),
+    );
+}
 
 /// Emit event when backup is created
 pub fn emit_backup_created(env: &Env, backup_id: &BytesN<32>, invoice_count: u32) {
@@ -275,7 +315,6 @@ pub fn emit_backup_archived(env: &Env, backup_id: &BytesN<32>) {
         (backup_id.clone(), env.ledger().timestamp()),
     );
 }
-
 
 /// Emit audit validation event
 pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool) {
@@ -507,7 +546,6 @@ pub fn emit_investor_report_generated(
         ),
     );
 }
-
 
 /// Emit event when analytics query is performed
 pub fn emit_analytics_query(
