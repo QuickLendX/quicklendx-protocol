@@ -128,10 +128,14 @@ fn settle_invoice_internal(
         return Err(QuickLendXError::PaymentTooLow);
     }
 
-    // Calculate profit and platform fee
-    let (investor_return, platform_fee) = calculate_profit(env, investment.amount, total_payment);
+    // Calculate platform fee using the enhanced fee system
+    let (investor_return, platform_fee) = crate::fees::FeeManager::calculate_platform_fee(
+        env,
+        investment.amount,
+        total_payment,
+    )?;
 
-    // Transfer funds to investor and platform
+    // Transfer funds to investor
     let business_address = invoice.business.clone();
     transfer_funds(
         env,
@@ -141,15 +145,22 @@ fn settle_invoice_internal(
         investor_return,
     )?;
 
+    // Route platform fee to treasury if configured, otherwise to contract
     if platform_fee > 0 {
-        let platform_account = env.current_contract_address();
-        transfer_funds(
+        let fee_recipient = crate::fees::FeeManager::route_platform_fee(
             env,
             &invoice.currency,
             &business_address,
-            &platform_account,
             platform_fee,
         )?;
+        
+        // Emit fee routing event
+        crate::events::emit_platform_fee_routed(
+            env,
+            invoice_id,
+            &fee_recipient,
+            platform_fee,
+        );
     }
 
     // Update invoice status
