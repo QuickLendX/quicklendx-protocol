@@ -6,7 +6,6 @@
 /// 2. Withdrawal - authorize only bid owner can withdraw
 /// 3. Indexing - multiple bids properly indexed and queryable
 /// 4. Ranking - profit-based bid comparison works correctly
-
 use super::*;
 use crate::bid::BidStatus;
 use crate::invoice::InvoiceCategory;
@@ -41,7 +40,7 @@ fn create_verified_invoice(
 ) -> BytesN<32> {
     let currency = Address::generate(env);
     let due_date = env.ledger().timestamp() + 86400;
-    
+
     let invoice_id = client.store_invoice(
         business,
         &amount,
@@ -51,7 +50,7 @@ fn create_verified_invoice(
         &InvoiceCategory::Services,
         &Vec::new(env),
     );
-    
+
     let _ = client.try_verify_invoice(&invoice_id);
     invoice_id
 }
@@ -96,13 +95,13 @@ fn test_bid_placement_verified_invoice_succeeds() {
     let _ = client.set_admin(&admin);
     let investor = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
-    
+
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
 
     // Bid on verified invoice should succeed
     let result = client.try_place_bid(&investor, &invoice_id, &5_000, &6_000);
     assert!(result.is_ok(), "Bid on verified invoice must succeed");
-    
+
     let bid_id = result.unwrap().unwrap();
     let bid = client.get_bid(&bid_id);
     assert!(bid.is_some());
@@ -118,7 +117,7 @@ fn test_bid_placement_respects_investment_limit() {
     let _ = client.set_admin(&admin);
     let investor = add_verified_investor(&env, &client, 1_000); // Low limit
     let business = Address::generate(&env);
-    
+
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
 
     // Bid exceeding limit should fail
@@ -139,7 +138,7 @@ fn test_bid_withdrawal_by_owner_succeeds() {
     let _ = client.set_admin(&admin);
     let investor = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
-    
+
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
 
     // Place bid
@@ -164,7 +163,7 @@ fn test_bid_withdrawal_only_placed_bids() {
     let _ = client.set_admin(&admin);
     let investor = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
-    
+
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
 
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
@@ -192,7 +191,7 @@ fn test_multiple_bids_indexing_and_query() {
     let investor2 = add_verified_investor(&env, &client, 100_000);
     let investor3 = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
-    
+
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
 
     // Place 3 bids
@@ -203,7 +202,7 @@ fn test_multiple_bids_indexing_and_query() {
     // Query placed bids
     let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
     assert_eq!(placed_bids.len(), 3, "Should have 3 placed bids");
-    
+
     // Verify all bid IDs present
     let found_1 = placed_bids.iter().any(|b| b.bid_id == bid_id_1);
     let found_2 = placed_bids.iter().any(|b| b.bid_id == bid_id_2);
@@ -213,7 +212,11 @@ fn test_multiple_bids_indexing_and_query() {
     // Withdraw one and verify status filtering
     let _ = client.try_withdraw_bid(&bid_id_1);
     let placed_after = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
-    assert_eq!(placed_after.len(), 2, "Should have 2 placed bids after withdrawal");
+    assert_eq!(
+        placed_after.len(),
+        2,
+        "Should have 2 placed bids after withdrawal"
+    );
 
     let withdrawn_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Withdrawn);
     assert_eq!(withdrawn_bids.len(), 1, "Should have 1 withdrawn bid");
@@ -229,7 +232,7 @@ fn test_query_bids_by_investor() {
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
-    
+
     let invoice_id_1 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
     let invoice_id_2 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
 
@@ -242,11 +245,19 @@ fn test_query_bids_by_investor() {
 
     // Query investor1 bids on invoice 1
     let inv1_bids = client.get_bids_by_investor(&invoice_id_1, &investor1);
-    assert_eq!(inv1_bids.len(), 1, "Investor1 should have 1 bid on invoice 1");
+    assert_eq!(
+        inv1_bids.len(),
+        1,
+        "Investor1 should have 1 bid on invoice 1"
+    );
 
     // Query investor2 bids on invoice 1
     let inv2_bids = client.get_bids_by_investor(&invoice_id_1, &investor2);
-    assert_eq!(inv2_bids.len(), 1, "Investor2 should have 1 bid on invoice 1");
+    assert_eq!(
+        inv2_bids.len(),
+        1,
+        "Investor2 should have 1 bid on invoice 1"
+    );
 }
 
 // ============================================================================
@@ -264,7 +275,7 @@ fn test_bid_ranking_by_profit() {
     let investor2 = add_verified_investor(&env, &client, 100_000);
     let investor3 = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
-    
+
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
 
     // Place bids with different profit margins
@@ -280,14 +291,30 @@ fn test_bid_ranking_by_profit() {
     // Best bid should be investor2 (highest profit)
     let best_bid = client.get_best_bid(&invoice_id);
     assert!(best_bid.is_some());
-    assert_eq!(best_bid.unwrap().investor, investor2, "Best bid must have highest profit");
+    assert_eq!(
+        best_bid.unwrap().investor,
+        investor2,
+        "Best bid must have highest profit"
+    );
 
     // Ranked bids should order by profit descending
     let ranked = client.get_ranked_bids(&invoice_id);
     assert_eq!(ranked.len(), 3, "Should have 3 ranked bids");
-    assert_eq!(ranked.get(0).unwrap().investor, investor2, "Rank 1: investor2 (profit 3k)");
-    assert_eq!(ranked.get(1).unwrap().investor, investor1, "Rank 2: investor1 (profit 2k)");
-    assert_eq!(ranked.get(2).unwrap().investor, investor3, "Rank 3: investor3 (profit 1k)");
+    assert_eq!(
+        ranked.get(0).unwrap().investor,
+        investor2,
+        "Rank 1: investor2 (profit 3k)"
+    );
+    assert_eq!(
+        ranked.get(1).unwrap().investor,
+        investor1,
+        "Rank 2: investor1 (profit 2k)"
+    );
+    assert_eq!(
+        ranked.get(2).unwrap().investor,
+        investor3,
+        "Rank 3: investor3 (profit 1k)"
+    );
 }
 
 /// Core Test: Best bid ignores withdrawn bids
@@ -300,7 +327,7 @@ fn test_best_bid_excludes_withdrawn() {
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
-    
+
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
 
     // investor1: profit = 2k
@@ -315,7 +342,11 @@ fn test_best_bid_excludes_withdrawn() {
     // Best bid should now be investor1
     let best = client.get_best_bid(&invoice_id);
     assert!(best.is_some());
-    assert_eq!(best.unwrap().investor, investor1, "Best bid must skip withdrawn bids");
+    assert_eq!(
+        best.unwrap().investor,
+        investor1,
+        "Best bid must skip withdrawn bids"
+    );
 }
 
 /// Core Test: Bid expiration cleanup
@@ -327,24 +358,33 @@ fn test_bid_expiration_and_cleanup() {
     let _ = client.set_admin(&admin);
     let investor = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
-    
+
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
 
     // Place bid
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
-    
+
     let placed = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
     assert_eq!(placed.len(), 1, "Should have 1 placed bid");
 
     // Advance time past expiration (7 days = 604800 seconds)
-    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 604800 + 1);
 
     // Query to trigger cleanup
     let placed_after = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
-    assert_eq!(placed_after.len(), 0, "Placed bids should be empty after expiration");
+    assert_eq!(
+        placed_after.len(),
+        0,
+        "Placed bids should be empty after expiration"
+    );
 
     // Bid should be marked expired
     let bid = client.get_bid(&bid_id);
     assert!(bid.is_some());
-    assert_eq!(bid.unwrap().status, BidStatus::Expired, "Bid must be marked expired");
+    assert_eq!(
+        bid.unwrap().status,
+        BidStatus::Expired,
+        "Bid must be marked expired"
+    );
 }
