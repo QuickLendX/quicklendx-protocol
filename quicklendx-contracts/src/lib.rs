@@ -2304,3 +2304,4 @@ mod test_default;
 
 #[cfg(test)]
 mod test_queries;
+mod test_partial_payments;
