@@ -29,7 +29,7 @@ use defaults::{
 };
 use errors::QuickLendXError;
 use events::{
-    emit_audit_query, emit_audit_validation, emit_bid_placed, emit_bid_withdrawn,
+    emit_audit_query, emit_audit_validation, emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn,
     emit_escrow_created, emit_escrow_refunded, emit_escrow_released, emit_insurance_added,
     emit_insurance_premium_collected, emit_investor_verified, emit_invoice_cancelled,
     emit_invoice_metadata_cleared, emit_invoice_metadata_updated, emit_invoice_uploaded,
@@ -570,6 +570,9 @@ impl QuickLendXContract {
         let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
             .expect("Escrow should exist after creation");
         emit_escrow_created(&env, &escrow);
+
+        // Emit bid accepted event
+        emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
 
         // Send notification to investor for bid acceptance
         let _ = NotificationSystem::notify_bid_accepted(&env, &invoice, &bid);
@@ -1983,6 +1986,215 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         fees::FeeManager::validate_fee_params(base_fee_bps, min_fee, max_fee)
     }
+
+    // ========================================
+    // Query Functions for Frontend Integration
+    // ========================================
+
+    /// Get invoices by business with optional status filter and pagination
+    pub fn get_business_invoices_paged(
+        env: Env,
+        business: Address,
+        status_filter: Option<InvoiceStatus>,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<BytesN<32>> {
+        let all_invoices = InvoiceStorage::get_business_invoices(&env, &business);
+        let mut filtered = Vec::new(&env);
+
+        for invoice_id in all_invoices.iter() {
+            if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
+                if let Some(status) = &status_filter {
+                    if invoice.status == *status {
+                        filtered.push_back(invoice_id);
+                    }
+                } else {
+                    filtered.push_back(invoice_id);
+                }
+            }
+        }
+
+        // Apply pagination
+        let mut result = Vec::new(&env);
+        let start = offset.min(filtered.len() as u32);
+        let end = (start + limit).min(filtered.len() as u32);
+        let mut idx = start;
+        while idx < end {
+            if let Some(invoice_id) = filtered.get(idx) {
+                result.push_back(invoice_id);
+            }
+            idx += 1;
+        }
+        result
+    }
+
+    /// Get investments by investor with optional status filter and pagination
+    pub fn get_investor_investments_paged(
+        env: Env,
+        investor: Address,
+        status_filter: Option<InvestmentStatus>,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<BytesN<32>> {
+        let all_investment_ids = InvestmentStorage::get_investments_by_investor(&env, &investor);
+        let mut filtered = Vec::new(&env);
+
+        for investment_id in all_investment_ids.iter() {
+            if let Some(investment) = InvestmentStorage::get_investment(&env, &investment_id) {
+                if let Some(status) = &status_filter {
+                    if investment.status == *status {
+                        filtered.push_back(investment_id);
+                    }
+                } else {
+                    filtered.push_back(investment_id);
+                }
+            }
+        }
+
+        // Apply pagination
+        let mut result = Vec::new(&env);
+        let start = offset.min(filtered.len() as u32);
+        let end = (start + limit).min(filtered.len() as u32);
+        let mut idx = start;
+        while idx < end {
+            if let Some(investment_id) = filtered.get(idx) {
+                result.push_back(investment_id);
+            }
+            idx += 1;
+        }
+        result
+    }
+
+    /// Get available invoices with pagination and optional filters
+    pub fn get_available_invoices_paged(
+        env: Env,
+        min_amount: Option<i128>,
+        max_amount: Option<i128>,
+        category_filter: Option<invoice::InvoiceCategory>,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<BytesN<32>> {
+        let verified_invoices = InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified);
+        let mut filtered = Vec::new(&env);
+
+        for invoice_id in verified_invoices.iter() {
+            if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
+                // Filter by amount range
+                if let Some(min) = min_amount {
+                    if invoice.amount < min {
+                        continue;
+                    }
+                }
+                if let Some(max) = max_amount {
+                    if invoice.amount > max {
+                        continue;
+                    }
+                }
+                // Filter by category
+                if let Some(category) = &category_filter {
+                    if invoice.category != *category {
+                        continue;
+                    }
+                }
+                filtered.push_back(invoice_id);
+            }
+        }
+
+        // Apply pagination
+        let mut result = Vec::new(&env);
+        let start = offset.min(filtered.len() as u32);
+        let end = (start + limit).min(filtered.len() as u32);
+        let mut idx = start;
+        while idx < end {
+            if let Some(invoice_id) = filtered.get(idx) {
+                result.push_back(invoice_id);
+            }
+            idx += 1;
+        }
+        result
+    }
+
+    /// Get bid history for an invoice with pagination
+    pub fn get_bid_history_paged(
+        env: Env,
+        invoice_id: BytesN<32>,
+        status_filter: Option<BidStatus>,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<Bid> {
+        let all_bids = BidStorage::get_bid_records_for_invoice(&env, &invoice_id);
+        let mut filtered = Vec::new(&env);
+
+        for bid in all_bids.iter() {
+            if let Some(status) = &status_filter {
+                if bid.status == *status {
+                    filtered.push_back(bid);
+                }
+            } else {
+                filtered.push_back(bid);
+            }
+        }
+
+        // Apply pagination
+        let mut result = Vec::new(&env);
+        let start = offset.min(filtered.len() as u32);
+        let end = (start + limit).min(filtered.len() as u32);
+        let mut idx = start;
+        while idx < end {
+            if let Some(bid) = filtered.get(idx) {
+                result.push_back(bid);
+            }
+            idx += 1;
+        }
+        result
+    }
+
+    /// Get bid history for an investor with pagination
+    pub fn get_investor_bids_paged(
+        env: Env,
+        investor: Address,
+        status_filter: Option<BidStatus>,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<Bid> {
+        let all_bid_ids = BidStorage::get_bids_by_investor_all(&env, &investor);
+        let mut filtered = Vec::new(&env);
+
+        for bid_id in all_bid_ids.iter() {
+            if let Some(bid) = BidStorage::get_bid(&env, &bid_id) {
+                if let Some(status) = &status_filter {
+                    if bid.status == *status {
+                        filtered.push_back(bid);
+                    }
+                } else {
+                    filtered.push_back(bid);
+                }
+            }
+        }
+
+        // Apply pagination
+        let mut result = Vec::new(&env);
+        let start = offset.min(filtered.len() as u32);
+        let end = (start + limit).min(filtered.len() as u32);
+        let mut idx = start;
+        while idx < end {
+            if let Some(bid) = filtered.get(idx) {
+                result.push_back(bid);
+            }
+            idx += 1;
+        }
+        result
+    }
+
+    /// Get investments by investor (simple version without pagination for backward compatibility)
+    pub fn get_investments_by_investor(env: Env, investor: Address) -> Vec<BytesN<32>> {
+        InvestmentStorage::get_investments_by_investor(&env, &investor)
+    }
+
+    /// Get bid history for an invoice (simple version without pagination)
+    pub fn get_bid_history(env: Env, invoice_id: BytesN<32>) -> Vec<Bid> {
+        BidStorage::get_bid_records_for_invoice(&env, &invoice_id)
+    }
 }
 
 #[cfg(test)]
@@ -1993,3 +2205,6 @@ mod test_bid;
 
 #[cfg(test)]
 mod test_escrow;
+
+#[cfg(test)]
+mod test_events;
