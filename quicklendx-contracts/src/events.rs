@@ -14,6 +14,7 @@ pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
             invoice.amount,
             invoice.currency.clone(),
             invoice.due_date,
+            env.ledger().timestamp(),
         ),
     );
 }
@@ -21,7 +22,11 @@ pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
 pub fn emit_invoice_verified(env: &Env, invoice: &Invoice) {
     env.events().publish(
         (symbol_short!("inv_ver"),),
-        (invoice.id.clone(), invoice.business.clone()),
+        (
+            invoice.id.clone(),
+            invoice.business.clone(),
+            env.ledger().timestamp(),
+        ),
     );
 }
 
@@ -83,8 +88,13 @@ pub fn emit_invoice_settled(
         (
             invoice.id.clone(),
             invoice.business.clone(),
+            invoice.investor.clone().unwrap_or(Address::from_str(
+                env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            )),
             investor_return,
             platform_fee,
+            env.ledger().timestamp(),
         ),
     );
 }
@@ -124,7 +134,15 @@ pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
 pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::invoice::Invoice) {
     env.events().publish(
         (symbol_short!("inv_def"),),
-        (invoice.id.clone(), invoice.business.clone()),
+        (
+            invoice.id.clone(),
+            invoice.business.clone(),
+            invoice.investor.clone().unwrap_or(Address::from_str(
+                env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            )),
+            env.ledger().timestamp(),
+        ),
     );
 }
 
@@ -279,6 +297,22 @@ pub fn emit_bid_withdrawn(env: &Env, bid: &Bid) {
             bid.invoice_id.clone(),
             bid.investor.clone(),
             bid.bid_amount,
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when a bid is accepted
+pub fn emit_bid_accepted(env: &Env, bid: &Bid, invoice_id: &BytesN<32>, business: &Address) {
+    env.events().publish(
+        (symbol_short!("bid_acc"),),
+        (
+            bid.bid_id.clone(),
+            invoice_id.clone(),
+            bid.investor.clone(),
+            business.clone(),
+            bid.bid_amount,
+            bid.expected_return,
             env.ledger().timestamp(),
         ),
     );
