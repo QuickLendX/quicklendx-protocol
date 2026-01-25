@@ -15,8 +15,6 @@ mod notifications;
 mod payments;
 mod profits;
 mod settlement;
-#[cfg(test)]
-mod test_fees;
 mod verification;
 
 use bid::{Bid, BidStatus, BidStorage};
@@ -44,7 +42,7 @@ use settlement::{
 };
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
-    determine_risk_level, get_business_verification_status, get_investor_analytics,
+    get_business_verification_status, get_investor_analytics,
     get_investor_verification as do_get_investor_verification, reject_business,
     reject_investor as do_reject_investor, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, update_investor_analytics, validate_bid, validate_investor_investment,
@@ -958,7 +956,7 @@ impl QuickLendXContract {
 
     /// Calculate investment limit for investor
     pub fn calculate_investment_limit(
-        env: Env,
+        _env: Env,
         tier: InvestorTier,
         risk_level: InvestorRiskLevel,
         base_limit: i128,
@@ -2040,3 +2038,4 @@ mod test_bid;
 
 #[cfg(test)]
 mod test_fees;
+mod test_escrow;
