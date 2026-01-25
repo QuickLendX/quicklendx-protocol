@@ -766,7 +766,6 @@ pub fn get_investor_verification(env: &Env, investor: &Address) -> Option<Invest
     InvestorVerificationStorage::get(env, investor)
 }
 
-
 /// Calculate investor risk score based on various factors
 pub fn calculate_investor_risk_score(
     env: &Env,
