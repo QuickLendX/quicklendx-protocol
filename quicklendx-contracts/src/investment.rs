@@ -160,6 +160,9 @@ impl InvestmentStorage {
             &Self::invoice_index_key(&investment.invoice_id),
             &investment.investment_id,
         );
+
+        // Add to investor index
+        Self::add_to_investor_index(env, &investment.investor, &investment.investment_id);
     }
     pub fn get_investment(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
         env.storage().instance().get(investment_id)
@@ -178,5 +181,36 @@ impl InvestmentStorage {
             &Self::invoice_index_key(&investment.invoice_id),
             &investment.investment_id,
         );
+    }
+
+    fn investor_index_key(investor: &Address) -> (Symbol, Address) {
+        (symbol_short!("invst_inv"), investor.clone())
+    }
+
+    /// Get all investments for an investor
+    pub fn get_investments_by_investor(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
+        let key = Self::investor_index_key(investor);
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    /// Add investment to investor index
+    pub fn add_to_investor_index(env: &Env, investor: &Address, investment_id: &BytesN<32>) {
+        let key = Self::investor_index_key(investor);
+        let mut investments = Self::get_investments_by_investor(env, investor);
+        // Check if already exists
+        let mut exists = false;
+        for inv_id in investments.iter() {
+            if inv_id == *investment_id {
+                exists = true;
+                break;
+            }
+        }
+        if !exists {
+            investments.push_back(investment_id.clone());
+            env.storage().instance().set(&key, &investments);
+        }
     }
 }
