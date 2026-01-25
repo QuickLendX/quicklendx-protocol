@@ -17,6 +17,8 @@ mod profits;
 mod settlement;
 #[cfg(test)]
 mod test_fees;
+#[cfg(test)]
+mod test_storage;
 mod verification;
 
 use bid::{Bid, BidStatus, BidStorage};
