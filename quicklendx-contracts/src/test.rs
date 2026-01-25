@@ -913,7 +913,6 @@ fn test_get_bids_for_invoice() {
     assert_eq!(withdrawn.status, BidStatus::Withdrawn);
 }
 
-// TODO: Fix type mismatch issues in escrow tests
 #[test]
 fn test_escrow_creation_on_bid_acceptance() {
     let env = Env::default();
@@ -948,10 +947,6 @@ fn test_escrow_creation_on_bid_acceptance() {
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place bid
     token_client.approve(&investor, &contract_id, &10000, &20000);
@@ -974,7 +969,6 @@ fn test_escrow_creation_on_bid_acceptance() {
     assert_eq!(escrow_status, crate::payments::EscrowStatus::Held);
 }
 
-// TODO: Fix type mismatch issues in escrow tests
 #[test]
 fn test_escrow_release_on_verification() {
     let env = Env::default();
