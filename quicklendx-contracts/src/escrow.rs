@@ -1,4 +1,3 @@
-#![no_std]
 use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::events::emit_invoice_funded;

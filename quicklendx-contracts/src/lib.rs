@@ -2258,6 +2258,8 @@ mod test_bid;
 
 #[cfg(test)]
 mod test_fees;
+
+#[cfg(test)]
 mod test_escrow;
 
 #[cfg(test)]
