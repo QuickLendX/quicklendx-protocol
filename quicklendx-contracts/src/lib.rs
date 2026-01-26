@@ -26,7 +26,8 @@ use defaults::{
     create_dispute as do_create_dispute, get_dispute_details as do_get_dispute_details,
     get_invoices_by_dispute_status as do_get_invoices_by_dispute_status,
     get_invoices_with_disputes as do_get_invoices_with_disputes,
-    handle_default as do_handle_default, put_dispute_under_review as do_put_dispute_under_review,
+    handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
+    put_dispute_under_review as do_put_dispute_under_review,
     resolve_dispute as do_resolve_dispute,
 };
 use errors::QuickLendXError;
@@ -717,11 +718,42 @@ impl QuickLendXContract {
     }
 
     /// Handle invoice default (admin or automated process)
+    /// This is the internal handler - use mark_invoice_defaulted for public API
     pub fn handle_default(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         // Get the investment to track investor analytics
         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = do_handle_default(&env, &invoice_id);
+
+        // Update investor analytics for failed investment
+        if result.is_ok() {
+            if let Some(inv) = investment {
+                let _ = update_investor_analytics(&env, &inv.investor, inv.amount, false);
+            }
+        }
+
+        result
+    }
+
+    /// Mark an invoice as defaulted (admin or automated process)
+    /// Checks due date + grace period before marking as defaulted
+    /// 
+    /// # Arguments
+    /// * `invoice_id` - The invoice ID to mark as defaulted
+    /// * `grace_period` - Optional grace period in seconds (defaults to 7 days)
+    /// 
+    /// # Returns
+    /// * `Ok(())` if the invoice was successfully marked as defaulted
+    /// * `Err(QuickLendXError)` if the operation fails
+    pub fn mark_invoice_defaulted(
+        env: Env,
+        invoice_id: BytesN<32>,
+        grace_period: Option<u64>,
+    ) -> Result<(), QuickLendXError> {
+        // Get the investment to track investor analytics
+        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+
+        let result = do_mark_invoice_defaulted(&env, &invoice_id, grace_period);
 
         // Update investor analytics for failed investment
         if result.is_ok() {
@@ -2216,3 +2248,9 @@ mod test_escrow;
 
 #[cfg(test)]
 mod test_events;
+
+#[cfg(test)]
+mod test_errors;
+
+#[cfg(test)]
+mod test_default;
