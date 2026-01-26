@@ -351,7 +351,13 @@ fn test_investor_verification_enforced() {
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
-    let currency = Address::generate(&env);
+    
+    // Setup token
+    let token_admin = Address::generate(&env);
+    let currency = env.register_stellar_asset_contract(token_admin);
+    let token_client = token::Client::new(&env, &currency);
+    let token_admin_client = token::StellarAssetClient::new(&env, &currency);
+    token_admin_client.mint(&investor, &10000);
     let due_date = env.ledger().timestamp() + 86400;
 
     client.set_admin(&admin);
@@ -907,9 +913,8 @@ fn test_get_bids_for_invoice() {
     assert_eq!(withdrawn.status, BidStatus::Withdrawn);
 }
 
-// TODO: Fix type mismatch issues in escrow tests
-// #[test]
-fn _test_escrow_creation_on_bid_acceptance() {
+#[test]
+fn test_escrow_creation_on_bid_acceptance() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
@@ -917,17 +922,16 @@ fn _test_escrow_creation_on_bid_acceptance() {
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
-    let currency = Address::generate(&env);
+    
+    // Setup token
+    let token_admin = Address::generate(&env);
+    let currency = env.register_stellar_asset_contract(token_admin);
+    let token_client = token::Client::new(&env, &currency);
+    let token_admin_client = token::StellarAssetClient::new(&env, &currency);
+    token_admin_client.mint(&investor, &10000);
+
     let due_date = env.ledger().timestamp() + 86400;
     let bid_amount = 1000i128;
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
     let admin = Address::generate(&env);
     client.set_admin(&admin);
 
@@ -943,12 +947,9 @@ fn _test_escrow_creation_on_bid_acceptance() {
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place bid
+    token_client.approve(&investor, &contract_id, &10000, &20000);
     let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &1100);
 
     // Accept bid (should create escrow)
@@ -968,9 +969,8 @@ fn _test_escrow_creation_on_bid_acceptance() {
     assert_eq!(escrow_status, crate::payments::EscrowStatus::Held);
 }
 
-// TODO: Fix type mismatch issues in escrow tests
-// #[test]
-fn _test_escrow_release_on_verification() {
+#[test]
+fn test_escrow_release_on_verification() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
@@ -978,13 +978,16 @@ fn _test_escrow_release_on_verification() {
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
-    let currency = Address::generate(&env);
+    
+    // Setup token
+    let token_admin = Address::generate(&env);
+    let currency = env.register_stellar_asset_contract(token_admin);
+    let token_client = token::Client::new(&env, &currency);
+    let token_admin_client = token::StellarAssetClient::new(&env, &currency);
+    token_admin_client.mint(&investor, &10000);
+
     let due_date = env.ledger().timestamp() + 86400;
     let bid_amount = 1000i128;
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
     let admin = Address::generate(&env);
     client.set_admin(&admin);
 
@@ -1000,10 +1003,9 @@ fn _test_escrow_release_on_verification() {
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place and accept bid (creates escrow)
+    token_client.approve(&investor, &contract_id, &10000, &20000);
     let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &1100);
     client.accept_bid(&invoice_id, &bid_id);
 
@@ -1019,8 +1021,7 @@ fn _test_escrow_release_on_verification() {
     assert_eq!(escrow_status, crate::payments::EscrowStatus::Released);
 }
 
-// TODO: Fix type mismatch issues in escrow tests
-// #[test]
+#[test]
 fn test_escrow_refund() {
     let env = Env::default();
     env.mock_all_auths();
@@ -1029,9 +1030,19 @@ fn test_escrow_refund() {
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
-    let currency = Address::generate(&env);
+    
+    // Setup token
+    let token_admin = Address::generate(&env);
+    let currency = env.register_stellar_asset_contract(token_admin);
+    let token_client = token::Client::new(&env, &currency);
+    let token_admin_client = token::StellarAssetClient::new(&env, &currency);
+    token_admin_client.mint(&investor, &10000);
+
     let due_date = env.ledger().timestamp() + 86400;
     let bid_amount = 1000i128;
+    
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
 
     // Create invoice
     let invoice_id = client.store_invoice(
@@ -1044,8 +1055,10 @@ fn test_escrow_refund() {
         &Vec::new(&env),
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place and accept bid (creates escrow)
+    token_client.approve(&investor, &contract_id, &10000, &20000);
     let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &1100);
     client.accept_bid(&invoice_id, &bid_id);
 
@@ -1059,10 +1072,13 @@ fn test_escrow_refund() {
     // Verify escrow is refunded
     let escrow_status = client.get_escrow_status(&invoice_id);
     assert_eq!(escrow_status, crate::payments::EscrowStatus::Refunded);
+    
+    // Verify funds returned to investor
+    // Note: investor had 10000, bid 1000, so balance was 9000. Refunded 1000, so balance 10000.
+    assert_eq!(token_client.balance(&investor), 10000);
 }
 
-// TODO: Fix type mismatch issues in escrow tests
-// #[test]
+#[test]
 fn test_escrow_status_tracking() {
     let env = Env::default();
     env.mock_all_auths();
@@ -1071,9 +1087,19 @@ fn test_escrow_status_tracking() {
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
-    let currency = Address::generate(&env);
+    
+    // Setup token
+    let token_admin = Address::generate(&env);
+    let currency = env.register_stellar_asset_contract(token_admin);
+    let token_client = token::Client::new(&env, &currency);
+    let token_admin_client = token::StellarAssetClient::new(&env, &currency);
+    token_admin_client.mint(&investor, &10000);
+
     let due_date = env.ledger().timestamp() + 86400;
     let bid_amount = 1000i128;
+    
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -1086,8 +1112,10 @@ fn test_escrow_status_tracking() {
         &Vec::new(&env),
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place and accept bid
+    token_client.approve(&investor, &contract_id, &10000, &20000);
     let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &1100);
     client.accept_bid(&invoice_id, &bid_id);
 
@@ -1131,8 +1159,7 @@ fn test_escrow_error_cases() {
     assert!(matches!(result, Err(_)));
 }
 
-// TODO: Fix type mismatch issues in escrow tests
-// #[test]
+#[test]
 fn test_escrow_double_operation_prevention() {
     let env = Env::default();
     env.mock_all_auths();
@@ -1141,9 +1168,19 @@ fn test_escrow_double_operation_prevention() {
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
-    let currency = Address::generate(&env);
+    
+    // Setup token
+    let token_admin = Address::generate(&env);
+    let currency = env.register_stellar_asset_contract(token_admin);
+    let token_client = token::Client::new(&env, &currency);
+    let token_admin_client = token::StellarAssetClient::new(&env, &currency);
+    token_admin_client.mint(&investor, &10000);
+
     let due_date = env.ledger().timestamp() + 86400;
     let bid_amount = 1000i128;
+    
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -1156,8 +1193,10 @@ fn test_escrow_double_operation_prevention() {
         &Vec::new(&env),
     );
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place and accept bid
+    token_client.approve(&investor, &contract_id, &10000, &20000);
     let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &1100);
     client.accept_bid(&invoice_id, &bid_id);
 
