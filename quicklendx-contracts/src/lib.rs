@@ -2248,9 +2248,11 @@ mod test_escrow;
 
 #[cfg(test)]
 mod test_events;
-
 #[cfg(test)]
 mod test_errors;
 
 #[cfg(test)]
 mod test_default;
+
+#[cfg(test)]
+mod test_queries;

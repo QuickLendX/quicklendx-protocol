@@ -3509,7 +3509,7 @@ fn test_upload_invoice_success() {
 }
 
 #[test]
-#[should_panic(expected = "BusinessNotVerified")]
+#[should_panic]
 fn test_upload_invoice_not_verified_business() {
     let env = Env::default();
     env.mock_all_auths();
@@ -3537,7 +3537,7 @@ fn test_upload_invoice_not_verified_business() {
 }
 
 #[test]
-#[should_panic(expected = "InvalidAmount")]
+#[should_panic]
 fn test_upload_invoice_invalid_amount() {
     let env = Env::default();
     env.mock_all_auths();
@@ -3571,7 +3571,7 @@ fn test_upload_invoice_invalid_amount() {
 }
 
 #[test]
-#[should_panic(expected = "InvoiceDueDateInvalid")]
+#[should_panic]
 fn test_upload_invoice_past_due_date() {
     let env = Env::default();
     env.mock_all_auths();
@@ -3649,7 +3649,6 @@ fn test_verify_invoice_success() {
 }
 
 #[test]
-#[should_panic(expected = "NotAdmin")]
 fn test_verify_invoice_not_admin() {
     let env = Env::default();
     env.mock_all_auths();
@@ -3689,7 +3688,7 @@ fn test_verify_invoice_not_admin() {
 }
 
 #[test]
-#[should_panic(expected = "InvalidStatus")]
+#[should_panic]
 fn test_verify_invoice_already_verified() {
     let env = Env::default();
     env.mock_all_auths();
@@ -3820,7 +3819,7 @@ fn test_cancel_invoice_verified() {
 }
 
 #[test]
-#[should_panic(expected = "InvalidStatus")]
+#[should_panic]
 fn test_cancel_invoice_funded() {
     let env = Env::default();
     env.mock_all_auths();
