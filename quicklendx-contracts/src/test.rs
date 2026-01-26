@@ -1,3 +1,5 @@
+mod test_invoice;
+
 use super::*;
 use crate::audit::{
     log_invoice_operation, AuditOperation, AuditOperationFilter, AuditQueryFilter, AuditStorage,
