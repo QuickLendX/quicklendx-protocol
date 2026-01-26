@@ -1,6 +1,7 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
+mod admin;
 mod analytics;
 mod audit;
 mod backup;
@@ -17,9 +18,12 @@ mod payments;
 mod profits;
 mod settlement;
 #[cfg(test)]
+mod test_admin;
+#[cfg(test)]
 mod test_fees;
 mod verification;
 
+use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
 use escrow::accept_bid_and_fund as do_accept_bid_and_fund;
 use defaults::{
@@ -73,6 +77,57 @@ pub struct QuickLendXContract;
 
 #[contractimpl]
 impl QuickLendXContract {
+    // ============================================================================
+    // Admin Management Functions
+    // ============================================================================
+
+    /// Initialize the admin address (can only be called once)
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `admin` - The address to set as admin
+    ///
+    /// # Returns
+    /// * `Ok(())` if initialization succeeds
+    /// * `Err(QuickLendXError::AdminAlreadyInitialized)` if admin was already set
+    ///
+    /// # Security
+    /// - Requires authorization from the admin address
+    /// - Can only be called once
+    pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        AdminStorage::initialize(&env, &admin)
+    }
+
+    /// Transfer admin role to a new address
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `new_admin` - The new admin address
+    ///
+    /// # Returns
+    /// * `Ok(())` if transfer succeeds
+    /// * `Err(QuickLendXError::NotAdmin)` if caller is not current admin
+    ///
+    /// # Security
+    /// - Requires authorization from current admin
+    pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), QuickLendXError> {
+        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        AdminStorage::set_admin(&env, &current_admin, &new_admin)
+    }
+
+    /// Get the current admin address
+    ///
+    /// # Returns
+    /// * `Some(Address)` if admin is set
+    /// * `None` if admin has not been initialized
+    pub fn get_current_admin(env: Env) -> Option<Address> {
+        AdminStorage::get_admin(&env)
+    }
+
+    // ============================================================================
+    // Invoice Management Functions
+    // ============================================================================
+
     /// Store an invoice in the contract
     pub fn store_invoice(
         env: Env,
@@ -194,8 +249,7 @@ impl QuickLendXContract {
 
     /// Verify an invoice (admin or automated process)
     pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
 
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
@@ -781,8 +835,7 @@ impl QuickLendXContract {
 
     /// Update the platform fee basis points (admin only)
     pub fn set_platform_fee(env: Env, new_fee_bps: i128) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         PlatformFee::set_config(&env, &admin, new_fee_bps)?;
         Ok(())
     }
