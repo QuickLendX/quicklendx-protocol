@@ -4,7 +4,7 @@ use crate::events::{
     emit_invoice_defaulted, emit_invoice_expired,
 };
 use crate::investment::{InvestmentStatus, InvestmentStorage};
-use crate::invoice::{Dispute, DisputeStatus, Invoice, InvoiceStatus, InvoiceStorage};
+use crate::invoice::{Dispute, DisputeStatus, InvoiceStatus, InvoiceStorage};
 use crate::notifications::NotificationSystem;
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
@@ -32,12 +32,12 @@ pub fn mark_invoice_defaulted(
 
     // Only funded invoices can be defaulted
     if invoice.status != InvoiceStatus::Funded {
-        return Err(QuickLendXError::InvoiceNotFunded);
+        return Err(QuickLendXError::InvoiceNotAvailableForFunding);
     }
 
     // Check if invoice is already defaulted
     if invoice.status == InvoiceStatus::Defaulted {
-        return Err(QuickLendXError::InvoiceAlreadyDefaulted);
+        return Err(QuickLendXError::InvalidStatus);
     }
 
     let current_timestamp = env.ledger().timestamp();
@@ -66,7 +66,7 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     // Check if already defaulted
     if invoice.status == InvoiceStatus::Defaulted {
-        return Err(QuickLendXError::InvoiceAlreadyDefaulted);
+        return Err(QuickLendXError::InvalidStatus);
     }
 
     // Remove from funded status list
