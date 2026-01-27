@@ -664,3 +664,54 @@ pub fn emit_investor_performance_updated(
         ),
     );
 }
+/// Emit event when platform fee is routed to treasury
+pub fn emit_platform_fee_routed(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    recipient: &Address,
+    fee_amount: i128,
+) {
+    env.events().publish(
+        (symbol_short!("fee_rout"),),
+        (
+            invoice_id.clone(),
+            recipient.clone(),
+            fee_amount,
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when treasury configuration is updated
+pub fn emit_treasury_configured(
+    env: &Env,
+    treasury_address: &Address,
+    configured_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("trs_cfg"),),
+        (
+            treasury_address.clone(),
+            configured_by.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when platform fee configuration is updated
+pub fn emit_platform_fee_config_updated(
+    env: &Env,
+    old_fee_bps: u32,
+    new_fee_bps: u32,
+    updated_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("fee_cfg"),),
+        (
+            old_fee_bps,
+            new_fee_bps,
+            updated_by.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}

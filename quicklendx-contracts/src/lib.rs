@@ -16,8 +16,6 @@ mod notifications;
 mod payments;
 mod profits;
 mod settlement;
-#[cfg(test)]
-mod test_fees;
 mod verification;
 
 use bid::{Bid, BidStatus, BidStorage};
@@ -1911,6 +1909,53 @@ impl QuickLendXContract {
         fees::FeeManager::initialize(&env, &admin)
     }
 
+    /// Configure treasury address for platform fee routing (admin only)
+    pub fn configure_treasury(
+        env: Env,
+        treasury_address: Address,
+    ) -> Result<(), QuickLendXError> {
+        let admin = BusinessVerificationStorage::get_admin(&env)
+            .ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
+        let _treasury_config = fees::FeeManager::configure_treasury(&env, &admin, treasury_address.clone())?;
+        
+        // Emit event
+        events::emit_treasury_configured(&env, &treasury_address, &admin);
+        
+        Ok(())
+    }
+
+    /// Update platform fee basis points (admin only)
+    pub fn update_platform_fee_bps(
+        env: Env,
+        new_fee_bps: u32,
+    ) -> Result<(), QuickLendXError> {
+        let admin = BusinessVerificationStorage::get_admin(&env)
+            .ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
+        let old_config = fees::FeeManager::get_platform_fee_config(&env)?;
+        let old_fee_bps = old_config.fee_bps;
+        
+        let _new_config = fees::FeeManager::update_platform_fee(&env, &admin, new_fee_bps)?;
+        
+        // Emit event
+        events::emit_platform_fee_config_updated(&env, old_fee_bps, new_fee_bps, &admin);
+        
+        Ok(())
+    }
+
+    /// Get current platform fee configuration
+    pub fn get_platform_fee_config(env: Env) -> Result<fees::PlatformFeeConfig, QuickLendXError> {
+        fees::FeeManager::get_platform_fee_config(&env)
+    }
+
+    /// Get treasury address if configured
+    pub fn get_treasury_address(env: Env) -> Option<Address> {
+        fees::FeeManager::get_treasury_address(&env)
+    }
+
     /// Update fee structure for a specific fee type
     pub fn update_fee_structure(
         env: Env,
@@ -2242,6 +2287,9 @@ mod test;
 
 #[cfg(test)]
 mod test_bid;
+
+#[cfg(test)]
+mod test_fees;
 
 #[cfg(test)]
 mod test_escrow;
