@@ -5,11 +5,15 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, Symbol, Ve
 const MAX_FEE_BPS: u32 = 1000;
 const MIN_FEE_BPS: u32 = 0;
 const BPS_DENOMINATOR: i128 = 10_000;
+const DEFAULT_PLATFORM_FEE_BPS: u32 = 200; // 2%
+const MAX_PLATFORM_FEE_BPS: u32 = 1000; // 10%
 
 // Storage keys
 const FEE_CONFIG_KEY: Symbol = symbol_short!("fee_cfg");
 const REVENUE_KEY: Symbol = symbol_short!("revenue");
 const VOLUME_KEY: Symbol = symbol_short!("volume");
+const TREASURY_CONFIG_KEY: Symbol = symbol_short!("treasury");
+const PLATFORM_FEE_KEY: Symbol = symbol_short!("plt_fee");
 
 /// Fee types supported by the platform
 #[contracttype]
@@ -56,6 +60,26 @@ pub struct UserVolumeData {
     pub last_updated: u64,
 }
 
+/// Treasury configuration for platform fees
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct TreasuryConfig {
+    pub treasury_address: Address,
+    pub is_active: bool,
+    pub updated_at: u64,
+    pub updated_by: Address,
+}
+
+/// Platform fee configuration  
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlatformFeeConfig {
+    pub fee_bps: u32,
+    pub treasury_address: Option<Address>, // Simplified - just store address directly
+    pub updated_at: u64,
+    pub updated_by: Address,
+}
+
 /// Revenue configuration
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -96,11 +120,13 @@ pub struct FeeManager;
 impl FeeManager {
     pub fn initialize(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         admin.require_auth();
+        
+        // Initialize default fee structures
         let default_fees = vec![
             env,
             FeeStructure {
                 fee_type: FeeType::Platform,
-                base_fee_bps: 200,
+                base_fee_bps: DEFAULT_PLATFORM_FEE_BPS,
                 min_fee: 100,
                 max_fee: 1_000_000,
                 is_active: true,
@@ -127,7 +153,101 @@ impl FeeManager {
             },
         ];
         env.storage().instance().set(&FEE_CONFIG_KEY, &default_fees);
+        
+        // Initialize platform fee configuration
+        let platform_fee_config = PlatformFeeConfig {
+            fee_bps: DEFAULT_PLATFORM_FEE_BPS,
+            treasury_address: None,
+            updated_at: env.ledger().timestamp(),
+            updated_by: admin.clone(),
+        };
+        env.storage().instance().set(&PLATFORM_FEE_KEY, &platform_fee_config);
+        
         Ok(())
+    }
+
+    /// Configure treasury for platform fee routing
+    pub fn configure_treasury(
+        env: &Env,
+        admin: &Address,
+        treasury_address: Address,
+    ) -> Result<TreasuryConfig, QuickLendXError> {
+        admin.require_auth();
+        
+        let treasury_config = TreasuryConfig {
+            treasury_address: treasury_address.clone(),
+            is_active: true,
+            updated_at: env.ledger().timestamp(),
+            updated_by: admin.clone(),
+        };
+        
+        // Update platform fee config with treasury
+        let mut platform_config = Self::get_platform_fee_config(env)?;
+        platform_config.treasury_address = Some(treasury_address.clone());
+        platform_config.updated_at = env.ledger().timestamp();
+        platform_config.updated_by = admin.clone();
+        
+        env.storage().instance().set(&PLATFORM_FEE_KEY, &platform_config);
+        
+        Ok(treasury_config)
+    }
+
+    /// Update platform fee basis points
+    pub fn update_platform_fee(
+        env: &Env,
+        admin: &Address,
+        new_fee_bps: u32,
+    ) -> Result<PlatformFeeConfig, QuickLendXError> {
+        admin.require_auth();
+        
+        if new_fee_bps > MAX_PLATFORM_FEE_BPS {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        
+        let mut platform_config = Self::get_platform_fee_config(env)?;
+        platform_config.fee_bps = new_fee_bps;
+        platform_config.updated_at = env.ledger().timestamp();
+        platform_config.updated_by = admin.clone();
+        
+        env.storage().instance().set(&PLATFORM_FEE_KEY, &platform_config);
+        
+        Ok(platform_config)
+    }
+
+    /// Get platform fee configuration
+    pub fn get_platform_fee_config(env: &Env) -> Result<PlatformFeeConfig, QuickLendXError> {
+        env.storage()
+            .instance()
+            .get(&PLATFORM_FEE_KEY)
+            .ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
+    /// Calculate platform fee for settlement
+    pub fn calculate_platform_fee(
+        env: &Env,
+        investment_amount: i128,
+        payment_amount: i128,
+    ) -> Result<(i128, i128), QuickLendXError> {
+        let config = Self::get_platform_fee_config(env)?;
+        
+        if payment_amount <= investment_amount {
+            return Ok((payment_amount, 0));
+        }
+        
+        let profit = payment_amount - investment_amount;
+        let platform_fee = profit * config.fee_bps as i128 / BPS_DENOMINATOR;
+        let investor_return = payment_amount - platform_fee;
+        
+        Ok((investor_return, platform_fee))
+    }
+
+    /// Get treasury address if configured
+    pub fn get_treasury_address(env: &Env) -> Option<Address> {
+        if let Ok(config) = Self::get_platform_fee_config(env) {
+            config.treasury_address
+        } else {
+            None
+        }
     }
 
     pub fn get_fee_structure(
@@ -417,5 +537,28 @@ impl FeeManager {
             return Err(QuickLendXError::InvalidAmount);
         }
         Ok(())
+    }
+
+    /// Route platform fees to treasury if configured
+    pub fn route_platform_fee(
+        env: &Env,
+        currency: &Address,
+        from: &Address,
+        fee_amount: i128,
+    ) -> Result<Address, QuickLendXError> {
+        if fee_amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        
+        if let Some(treasury_address) = Self::get_treasury_address(env) {
+            // Transfer to treasury
+            crate::payments::transfer_funds(env, currency, from, &treasury_address, fee_amount)?;
+            Ok(treasury_address)
+        } else {
+            // Default to contract address if no treasury configured
+            let contract_address = env.current_contract_address();
+            crate::payments::transfer_funds(env, currency, from, &contract_address, fee_amount)?;
+            Ok(contract_address)
+        }
     }
 }

@@ -6,6 +6,7 @@ mod audit;
 mod backup;
 mod bid;
 mod defaults;
+mod escrow;
 mod errors;
 mod events;
 mod fees;
@@ -15,18 +16,16 @@ mod notifications;
 mod payments;
 mod profits;
 mod settlement;
-#[cfg(test)]
-mod test_fees;
-#[cfg(test)]
-mod test_storage;
 mod verification;
 
 use bid::{Bid, BidStatus, BidStorage};
+use escrow::accept_bid_and_fund as do_accept_bid_and_fund;
 use defaults::{
     create_dispute as do_create_dispute, get_dispute_details as do_get_dispute_details,
     get_invoices_by_dispute_status as do_get_invoices_by_dispute_status,
     get_invoices_with_disputes as do_get_invoices_with_disputes,
-    handle_default as do_handle_default, put_dispute_under_review as do_put_dispute_under_review,
+    handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
+    put_dispute_under_review as do_put_dispute_under_review,
     resolve_dispute as do_resolve_dispute,
 };
 use errors::QuickLendXError;
@@ -180,6 +179,15 @@ impl QuickLendXContract {
         let _ = NotificationSystem::notify_invoice_created(&env, &invoice);
 
         Ok(invoice.id)
+    }
+
+    /// Accept a bid and fund the invoice using escrow
+    pub fn accept_bid_and_fund(
+        env: Env,
+        invoice_id: BytesN<32>,
+        bid_id: BytesN<32>,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        do_accept_bid_and_fund(&env, &invoice_id, &bid_id)
     }
 
     /// Verify an invoice (admin or automated process)
@@ -708,11 +716,42 @@ impl QuickLendXContract {
     }
 
     /// Handle invoice default (admin or automated process)
+    /// This is the internal handler - use mark_invoice_defaulted for public API
     pub fn handle_default(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         // Get the investment to track investor analytics
         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = do_handle_default(&env, &invoice_id);
+
+        // Update investor analytics for failed investment
+        if result.is_ok() {
+            if let Some(inv) = investment {
+                let _ = update_investor_analytics(&env, &inv.investor, inv.amount, false);
+            }
+        }
+
+        result
+    }
+
+    /// Mark an invoice as defaulted (admin or automated process)
+    /// Checks due date + grace period before marking as defaulted
+    /// 
+    /// # Arguments
+    /// * `invoice_id` - The invoice ID to mark as defaulted
+    /// * `grace_period` - Optional grace period in seconds (defaults to 7 days)
+    /// 
+    /// # Returns
+    /// * `Ok(())` if the invoice was successfully marked as defaulted
+    /// * `Err(QuickLendXError)` if the operation fails
+    pub fn mark_invoice_defaulted(
+        env: Env,
+        invoice_id: BytesN<32>,
+        grace_period: Option<u64>,
+    ) -> Result<(), QuickLendXError> {
+        // Get the investment to track investor analytics
+        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+
+        let result = do_mark_invoice_defaulted(&env, &invoice_id, grace_period);
 
         // Update investor analytics for failed investment
         if result.is_ok() {
@@ -1003,6 +1042,22 @@ impl QuickLendXContract {
         InvestorVerificationStorage::is_investor_verified(&env, &investor)
     }
 
+    /// Get escrow details for an invoice
+    pub fn get_escrow_details(env: Env, invoice_id: BytesN<32>) -> Result<payments::Escrow, QuickLendXError> {
+        EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
+    /// Get escrow status for an invoice
+    pub fn get_escrow_status(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<payments::EscrowStatus, QuickLendXError> {
+        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Ok(escrow.status)
+    }
+
     /// Release escrow funds to business upon invoice verification
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
@@ -1041,25 +1096,6 @@ impl QuickLendXContract {
         );
 
         Ok(())
-    }
-
-    /// Get escrow status for an invoice
-    pub fn get_escrow_status(
-        env: Env,
-        invoice_id: BytesN<32>,
-    ) -> Result<payments::EscrowStatus, QuickLendXError> {
-        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
-        Ok(escrow.status)
-    }
-
-    /// Get escrow details for an invoice
-    pub fn get_escrow_details(
-        env: Env,
-        invoice_id: BytesN<32>,
-    ) -> Result<payments::Escrow, QuickLendXError> {
-        EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
     ///== Notification Management Functions ==///
@@ -1873,6 +1909,53 @@ impl QuickLendXContract {
         fees::FeeManager::initialize(&env, &admin)
     }
 
+    /// Configure treasury address for platform fee routing (admin only)
+    pub fn configure_treasury(
+        env: Env,
+        treasury_address: Address,
+    ) -> Result<(), QuickLendXError> {
+        let admin = BusinessVerificationStorage::get_admin(&env)
+            .ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
+        let _treasury_config = fees::FeeManager::configure_treasury(&env, &admin, treasury_address.clone())?;
+        
+        // Emit event
+        events::emit_treasury_configured(&env, &treasury_address, &admin);
+        
+        Ok(())
+    }
+
+    /// Update platform fee basis points (admin only)
+    pub fn update_platform_fee_bps(
+        env: Env,
+        new_fee_bps: u32,
+    ) -> Result<(), QuickLendXError> {
+        let admin = BusinessVerificationStorage::get_admin(&env)
+            .ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
+        let old_config = fees::FeeManager::get_platform_fee_config(&env)?;
+        let old_fee_bps = old_config.fee_bps;
+        
+        let _new_config = fees::FeeManager::update_platform_fee(&env, &admin, new_fee_bps)?;
+        
+        // Emit event
+        events::emit_platform_fee_config_updated(&env, old_fee_bps, new_fee_bps, &admin);
+        
+        Ok(())
+    }
+
+    /// Get current platform fee configuration
+    pub fn get_platform_fee_config(env: Env) -> Result<fees::PlatformFeeConfig, QuickLendXError> {
+        fees::FeeManager::get_platform_fee_config(&env)
+    }
+
+    /// Get treasury address if configured
+    pub fn get_treasury_address(env: Env) -> Option<Address> {
+        fees::FeeManager::get_treasury_address(&env)
+    }
+
     /// Update fee structure for a specific fee type
     pub fn update_fee_structure(
         env: Env,
@@ -2206,7 +2289,18 @@ mod test;
 mod test_bid;
 
 #[cfg(test)]
+mod test_fees;
+
+#[cfg(test)]
 mod test_escrow;
 
 #[cfg(test)]
 mod test_events;
+#[cfg(test)]
+mod test_errors;
+
+#[cfg(test)]
+mod test_default;
+
+#[cfg(test)]
+mod test_queries;

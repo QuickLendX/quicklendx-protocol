@@ -1,4 +1,5 @@
 use crate::errors::QuickLendXError;
+use crate::events::emit_escrow_created;
 use soroban_sdk::token;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
 
@@ -108,6 +109,7 @@ pub fn create_escrow(
     };
 
     EscrowStorage::store_escrow(env, &escrow);
+    emit_escrow_created(env, &escrow);
     Ok(escrow_id)
 }
 
