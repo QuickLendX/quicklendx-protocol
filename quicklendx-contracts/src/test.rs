@@ -1,3 +1,5 @@
+mod test_invoice;
+
 use super::*;
 use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
 use crate::bid::{BidStatus, BidStorage};
