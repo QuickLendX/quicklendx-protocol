@@ -17,9 +17,7 @@ pub fn test_partial_payments_comprehensive() {
     let token_admin = Address::generate(&env);
 
     // Set up token contract
-    let currency = env
-        .register_stellar_asset_contract_v2(token_admin.clone())
-        .address();
+    let currency = env.register_stellar_asset_contract(token_admin.clone());
     let token_client = token::Client::new(&env, &currency);
     let sac_client = token::StellarAssetClient::new(&env, &currency);
 
@@ -163,9 +161,7 @@ pub fn test_settlement_edge_cases() {
     let token_admin = Address::generate(&env);
 
     // Set up token contract
-    let currency = env
-        .register_stellar_asset_contract_v2(token_admin.clone())
-        .address();
+    let currency = env.register_stellar_asset_contract(token_admin.clone());
     let token_client = token::Client::new(&env, &currency);
     let sac_client = token::StellarAssetClient::new(&env, &currency);
 

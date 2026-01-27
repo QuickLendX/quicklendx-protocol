@@ -347,6 +347,45 @@
                             }
                           ]
                         }
+                      },
+                      {
+                        "key": {
+                          "symbol": "plt_fee"
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "fee_bps"
+                              },
+                              "val": {
+                                "u32": 200
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "treasury_address"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "updated_at"
+                              },
+                              "val": {
+                                "u64": 0
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "updated_by"
+                              },
+                              "val": {
+                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                              }
+                            }
+                          ]
+                        }
                       }
                     ]
                   }
