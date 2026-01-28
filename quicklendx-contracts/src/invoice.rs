@@ -3,7 +3,7 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String,
 
 use crate::errors::QuickLendXError;
 
-const DEFAULT_INVOICE_GRACE_PERIOD: u64 = 14 * 24 * 60 * 60;
+const DEFAULT_INVOICE_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days default grace period
 
 /// Invoice status enumeration
 #[contracttype]

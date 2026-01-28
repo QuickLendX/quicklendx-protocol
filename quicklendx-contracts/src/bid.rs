@@ -44,8 +44,38 @@ impl BidStorage {
         (symbol_short!("bids"), invoice_id.clone())
     }
 
+    fn investor_bids_key(investor: &Address) -> (soroban_sdk::Symbol, Address) {
+        (symbol_short!("bid_inv"), investor.clone())
+    }
+
+    pub fn get_bids_by_investor_all(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
+        let key = Self::investor_bids_key(investor);
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    fn add_to_investor_bids(env: &Env, investor: &Address, bid_id: &BytesN<32>) {
+        let key = Self::investor_bids_key(investor);
+        let mut bids = Self::get_bids_by_investor_all(env, investor);
+        let mut exists = false;
+        for bid in bids.iter() {
+            if bid == *bid_id {
+                exists = true;
+                break;
+            }
+        }
+        if !exists {
+            bids.push_back(bid_id.clone());
+            env.storage().instance().set(&key, &bids);
+        }
+    }
+
     pub fn store_bid(env: &Env, bid: &Bid) {
         env.storage().instance().set(&bid.bid_id, bid);
+        // Add to investor index
+        Self::add_to_investor_bids(env, &bid.investor, &bid.bid_id);
     }
     pub fn get_bid(env: &Env, bid_id: &BytesN<32>) -> Option<Bid> {
         env.storage().instance().get(bid_id)

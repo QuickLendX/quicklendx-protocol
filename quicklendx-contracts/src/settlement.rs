@@ -49,13 +49,39 @@ pub fn process_partial_payment(
     );
 
     if invoice.is_fully_paid() {
-        settle_invoice(env, invoice_id, invoice.total_paid)?;
+        // Use internal function to avoid duplicate require_auth call
+        settle_invoice_internal(env, invoice_id, invoice.total_paid)?;
     }
 
     Ok(())
 }
 
 pub fn settle_invoice(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    payment_amount: i128,
+) -> Result<(), QuickLendXError> {
+    if payment_amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    // Get and validate invoice
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+    if invoice.status != InvoiceStatus::Funded {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    // Require business authorization for direct settlement calls
+    invoice.business.require_auth();
+
+    // Delegate to internal settlement logic
+    settle_invoice_internal(env, invoice_id, payment_amount)
+}
+
+/// Internal settlement logic - no auth required (caller must verify authorization)
+fn settle_invoice_internal(
     env: &Env,
     invoice_id: &BytesN<32>,
     payment_amount: i128,
@@ -102,10 +128,14 @@ pub fn settle_invoice(
         return Err(QuickLendXError::PaymentTooLow);
     }
 
-    // Calculate profit and platform fee
-    let (investor_return, platform_fee) = calculate_profit(env, investment.amount, total_payment);
+    // Calculate platform fee using the enhanced fee system
+    let (investor_return, platform_fee) = crate::fees::FeeManager::calculate_platform_fee(
+        env,
+        investment.amount,
+        total_payment,
+    )?;
 
-    // Transfer funds to investor and platform
+    // Transfer funds to investor
     let business_address = invoice.business.clone();
     transfer_funds(
         env,
@@ -115,15 +145,22 @@ pub fn settle_invoice(
         investor_return,
     )?;
 
+    // Route platform fee to treasury if configured, otherwise to contract
     if platform_fee > 0 {
-        let platform_account = env.current_contract_address();
-        transfer_funds(
+        let fee_recipient = crate::fees::FeeManager::route_platform_fee(
             env,
             &invoice.currency,
             &business_address,
-            &platform_account,
             platform_fee,
         )?;
+        
+        // Emit fee routing event
+        crate::events::emit_platform_fee_routed(
+            env,
+            invoice_id,
+            &fee_recipient,
+            platform_fee,
+        );
     }
 
     // Update invoice status
