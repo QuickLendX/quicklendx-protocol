@@ -32,8 +32,7 @@ pub fn mark_invoice_defaulted(
 
     // Only funded invoices can be defaulted
     if invoice.status != InvoiceStatus::Funded {
-        return Err(QuickLendXError::NotFunded);
-
+        return Err(QuickLendXError::InvoiceNotAvailableForFunding);
     }
 
     // Check if invoice is already defaulted
