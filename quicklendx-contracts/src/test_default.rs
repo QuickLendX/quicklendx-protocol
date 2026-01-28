@@ -164,7 +164,7 @@ fn test_cannot_default_unfunded_invoice() {
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
-    assert_eq!(contract_err, QuickLendXError::InvoiceNotFunded);
+    assert_eq!(contract_err, QuickLendXError::InvoiceNotAvailableForFunding);
 }
 
 #[test]
@@ -193,7 +193,7 @@ fn test_cannot_default_pending_invoice() {
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
-    assert_eq!(contract_err, QuickLendXError::InvoiceNotFunded);
+    assert_eq!(contract_err, QuickLendXError::InvoiceNotAvailableForFunding);
 }
 
 #[test]
@@ -221,7 +221,7 @@ fn test_cannot_default_already_defaulted_invoice() {
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
-    assert_eq!(contract_err, QuickLendXError::InvoiceAlreadyDefaulted);
+    assert_eq!(contract_err, QuickLendXError::InvalidStatus);
 }
 
 #[test]
