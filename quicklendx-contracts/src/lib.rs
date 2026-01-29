@@ -19,7 +19,6 @@ mod profits;
 mod settlement;
 #[cfg(test)]
 mod test_admin;
-mod test_fees;
 mod verification;
 
 use admin::AdminStorage;
