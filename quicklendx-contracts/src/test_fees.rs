@@ -4,14 +4,14 @@ use soroban_sdk::{testutils::Address as _, Address, Env, Map, String};
 
 /// Helper function to set up admin for testing
 fn setup_admin(env: &Env, client: &QuickLendXContractClient) -> Address {
-    let admin = Address::generate(env);
+    let admin = Address::generate(&env);
     client.set_admin(&admin);
     admin
 }
 
 /// Helper function to create and verify a business
 fn setup_business(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
-    let business = Address::generate(env);
+    let business = Address::generate(&env);
     client.submit_kyc_application(&business, &String::from_str(env, "Business KYC"));
     client.verify_business(admin, &business);
     business
@@ -19,7 +19,7 @@ fn setup_business(env: &Env, client: &QuickLendXContractClient, admin: &Address)
 
 /// Helper function to create and verify an investor
 fn setup_investor(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
-    let investor = Address::generate(env);
+    let investor = Address::generate(&env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &1_000_000); // 1000 XLM limit
     investor
