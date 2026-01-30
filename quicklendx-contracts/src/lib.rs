@@ -2416,3 +2416,6 @@ mod test_default;
 mod test_queries;
 #[cfg(test)]
 mod test_partial_payments;
+
+#[cfg(test)]
+mod test_investor_kyc;

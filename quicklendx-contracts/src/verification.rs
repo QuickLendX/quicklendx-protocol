@@ -4,6 +4,7 @@ use crate::invoice::{Invoice, InvoiceMetadata};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BusinessVerificationStatus {
     Pending,
     Verified,
