@@ -54,6 +54,8 @@ pub enum QuickLendXError {
     NotificationBlocked = 1045,
     InvoiceAlreadyFunded = 1046,
     InvoiceNotAvailableForFunding = 1047,
+    InvoiceNotFunded = 1048,
+    InvoiceAlreadyDefaulted = 1049,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -107,6 +109,8 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
             QuickLendXError::InvoiceAlreadyFunded => symbol_short!("INV_AF"),
             QuickLendXError::InvoiceNotAvailableForFunding => symbol_short!("INV_NAF"),
+            QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NFD"),
+            QuickLendXError::InvoiceAlreadyDefaulted => symbol_short!("INV_AD"),
         }
     }
 }
