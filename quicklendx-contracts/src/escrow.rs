@@ -1,3 +1,8 @@
+//! Escrow funding flow: accept a bid and lock investor funds in escrow.
+//!
+//! Called from the public API with a reentrancy guard. Validates invoice/bid state,
+//! creates escrow via payments, and updates bid, invoice, and investment state.
+
 use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::events::emit_invoice_funded;
@@ -6,6 +11,16 @@ use crate::invoice::{InvoiceStatus, InvoiceStorage};
 use crate::payments::create_escrow;
 use soroban_sdk::{BytesN, Env, Vec};
 
+/// Accept a bid and fund the invoice: transfer in from investor, create escrow, update state.
+///
+/// Caller (business) must be authorized. Invoice must be Verified; bid must be Placed and not expired.
+///
+/// # Returns
+/// * `Ok(escrow_id)` - The new escrow ID
+///
+/// # Errors
+/// * `InvoiceNotFound`, `StorageKeyNotFound`, `InvalidStatus`, `InvoiceAlreadyFunded`,
+///   `InvoiceNotAvailableForFunding`, `Unauthorized`, or errors from `create_escrow`
 pub fn accept_bid_and_fund(
     env: &Env,
     invoice_id: &BytesN<32>,
