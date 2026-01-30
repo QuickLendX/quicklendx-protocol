@@ -388,3 +388,103 @@ fn test_bid_expiration_and_cleanup() {
         "Bid must be marked expired"
     );
 }
+// ============================================================================
+// Category 5: Investment Limit Management
+// ============================================================================
+
+/// Test: Admin can set investment limit for verified investor
+#[test]
+fn test_set_investment_limit_succeeds() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    // Create investor with initial limit
+    let investor = add_verified_investor(&env, &client, 50_000);
+    
+    // Verify initial limit (will be adjusted by tier/risk multipliers)
+    let verification = client.get_investor_verification(&investor).unwrap();
+    let initial_limit = verification.investment_limit;
+    
+    // Admin updates limit
+    client.set_investment_limit(&investor, &100_000);
+    
+    // Verify limit was updated (should be higher than initial)
+    let updated_verification = client.get_investor_verification(&investor).unwrap();
+    assert!(updated_verification.investment_limit > initial_limit, "Investment limit should be increased");
+}
+
+/// Test: Non-admin cannot set investment limit
+#[test]
+fn test_set_investment_limit_non_admin_fails() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    
+    // Create an unverified investor (no admin setup)
+    let investor = Address::generate(&env);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
+    
+    // Try to set limit without admin setup - should fail with NotAdmin error
+    let result = client.try_set_investment_limit(&investor, &100_000);
+    assert!(result.is_err(), "Should fail when no admin is configured");
+}
+
+/// Test: Cannot set limit for unverified investor
+#[test]
+fn test_set_investment_limit_unverified_fails() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    let unverified_investor = Address::generate(&env);
+    
+    // Try to set limit for unverified investor
+    let result = client.try_set_investment_limit(&unverified_investor, &100_000);
+    assert!(result.is_err(), "Should not be able to set limit for unverified investor");
+}
+
+/// Test: Cannot set invalid investment limit
+#[test]
+fn test_set_investment_limit_invalid_amount_fails() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    let investor = add_verified_investor(&env, &client, 50_000);
+    
+    // Try to set zero or negative limit
+    let result = client.try_set_investment_limit(&investor, &0);
+    assert!(result.is_err(), "Should not be able to set zero investment limit");
+    
+    let result = client.try_set_investment_limit(&investor, &-1000);
+    assert!(result.is_err(), "Should not be able to set negative investment limit");
+}
+
+/// Test: Updated limit is enforced in bid placement
+#[test]
+fn test_updated_limit_enforced_in_bidding() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    // Create investor with low initial limit
+    let investor = add_verified_investor(&env, &client, 10_000);
+    let business = Address::generate(&env);
+    
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 50_000);
+    
+    // Bid above initial limit should fail
+    let result = client.try_place_bid(&investor, &invoice_id, &15_000, &16_000);
+    assert!(result.is_err(), "Bid above initial limit should fail");
+    
+    // Admin increases limit
+    let _ = client.set_investment_limit(&investor, &50_000);
+    
+    // Now the same bid should succeed
+    let result = client.try_place_bid(&investor, &invoice_id, &15_000, &16_000);
+    assert!(result.is_ok(), "Bid should succeed after limit increase");
+}
