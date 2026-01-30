@@ -21,6 +21,8 @@ mod settlement;
 #[cfg(test)]
 mod test_admin;
 mod test_overflow;
+#[cfg(test)]
+mod test_profit_fee;
 mod verification;
 
 use admin::AdminStorage;
