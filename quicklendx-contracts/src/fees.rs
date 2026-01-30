@@ -234,9 +234,9 @@ impl FeeManager {
             return Ok((payment_amount, 0));
         }
         
-        let profit = payment_amount - investment_amount;
-        let platform_fee = profit * config.fee_bps as i128 / BPS_DENOMINATOR;
-        let investor_return = payment_amount - platform_fee;
+        let profit = payment_amount.saturating_sub(investment_amount);
+        let platform_fee = profit.saturating_mul(config.fee_bps as i128) / BPS_DENOMINATOR;
+        let investor_return = payment_amount.saturating_sub(platform_fee);
         
         Ok((investor_return, platform_fee))
     }
@@ -347,21 +347,21 @@ impl FeeManager {
             }
             let mut fee = Self::calculate_base_fee(&structure, transaction_amount)?;
             if structure.fee_type != FeeType::LatePayment {
-                fee = fee - (fee * tier_discount as i128 / BPS_DENOMINATOR);
+                fee = fee.saturating_sub(fee.saturating_mul(tier_discount as i128) / BPS_DENOMINATOR);
             }
             if is_early_payment && structure.fee_type == FeeType::Platform {
-                fee = fee - (fee * 1000 / BPS_DENOMINATOR);
+                fee = fee.saturating_sub(fee.saturating_mul(1000) / BPS_DENOMINATOR);
             }
             if is_late_payment && structure.fee_type == FeeType::LatePayment {
-                fee = fee + (fee * 2000 / BPS_DENOMINATOR);
+                fee = fee.saturating_add(fee.saturating_mul(2000) / BPS_DENOMINATOR);
             }
-            total_fees += fee;
+            total_fees = total_fees.saturating_add(fee);
         }
         Ok(total_fees)
     }
 
     fn calculate_base_fee(structure: &FeeStructure, amount: i128) -> Result<i128, QuickLendXError> {
-        let fee = amount * structure.base_fee_bps as i128 / BPS_DENOMINATOR;
+        let fee = amount.saturating_mul(structure.base_fee_bps as i128) / BPS_DENOMINATOR;
         let fee = if fee < structure.min_fee {
             structure.min_fee
         } else if fee > structure.max_fee {
@@ -488,9 +488,9 @@ impl FeeManager {
             return Err(QuickLendXError::InvalidAmount);
         }
         let amount = revenue_data.pending_distribution;
-        let treasury_amount = amount * config.treasury_share_bps as i128 / BPS_DENOMINATOR;
-        let developer_amount = amount * config.developer_share_bps as i128 / BPS_DENOMINATOR;
-        let platform_amount = amount - treasury_amount - developer_amount;
+        let treasury_amount = amount.saturating_mul(config.treasury_share_bps as i128) / BPS_DENOMINATOR;
+        let developer_amount = amount.saturating_mul(config.developer_share_bps as i128) / BPS_DENOMINATOR;
+        let platform_amount = amount.saturating_sub(treasury_amount).saturating_sub(developer_amount);
         revenue_data.total_distributed = revenue_data.total_distributed.saturating_add(amount);
         revenue_data.pending_distribution = 0;
         env.storage().instance().set(&revenue_key, &revenue_data);
