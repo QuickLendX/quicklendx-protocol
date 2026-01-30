@@ -1,3 +1,7 @@
+//! Payment and escrow operations: create escrow, release, refund, and token transfers.
+//!
+//! Public release/refund entry points are wrapped with a reentrancy guard in lib.rs.
+
 use crate::errors::QuickLendXError;
 use crate::events::emit_escrow_created;
 use soroban_sdk::token;
@@ -79,7 +83,13 @@ impl EscrowStorage {
     }
 }
 
-/// Create escrow when bid is accepted
+/// Create escrow: transfer `amount` from investor to contract and store escrow record.
+///
+/// # Returns
+/// * `Ok(escrow_id)` - The new escrow ID
+///
+/// # Errors
+/// * `InvalidAmount` if amount <= 0, or token/allowance errors from transfer
 pub fn create_escrow(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -113,7 +123,10 @@ pub fn create_escrow(
     Ok(escrow_id)
 }
 
-/// Release escrow funds to business upon invoice verification
+/// Release escrow funds to business (contract → business). Escrow must be Held.
+///
+/// # Errors
+/// * `StorageKeyNotFound` if no escrow for invoice, `InvalidStatus` if not Held
 pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
@@ -139,7 +152,10 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     Ok(())
 }
 
-/// Refund escrow funds to investor if verification fails
+/// Refund escrow funds to investor (contract → investor). Escrow must be Held.
+///
+/// # Errors
+/// * `StorageKeyNotFound` if no escrow for invoice, `InvalidStatus` if not Held
 pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
@@ -165,7 +181,10 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
     Ok(())
 }
 
-/// Transfer funds between addresses
+/// Transfer token funds from one address to another. Uses allowance when `from` is not the contract.
+///
+/// # Errors
+/// * `InvalidAmount`, `InsufficientFunds`, `OperationNotAllowed` (insufficient allowance)
 pub fn transfer_funds(
     env: &Env,
     currency: &Address,

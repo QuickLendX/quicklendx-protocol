@@ -489,15 +489,25 @@ stellar-cli contract deploy \
 - [ ] Documentation updated
 - [ ] Team trained on contract operations
 
+#### Contract size budget
+
+The release build is tuned for minimal WASM size (opt-level = "z", LTO, strip, codegen-units = 1). The contract MUST stay within the **size budget** so it fits network limits.
+
+| Budget   | Limit   | Notes |
+|----------|---------|--------|
+| WASM size | 256 KB | CI fails if exceeded. Check with `stellar contract build` then `ls -l target/wasm32v1-none/release/*.wasm`. |
+
+To reduce size: avoid large inline data, use smaller types where safe, and ensure test-only code is not included in the release binary (it is excluded by default).
+
 #### Production Deployment Steps
 
 1. **Final Build**
 ```bash
-# Optimized production build
-cargo build --target wasm32-unknown-unknown --release
+# Optimized production build (uses stellar contract build → wasm32v1-none)
+stellar contract build
 
-# Verify contract size
-ls -lh target/wasm32-unknown-unknown/release/quicklendx_contracts.wasm
+# Verify contract size (must be under budget)
+ls -lh target/wasm32v1-none/release/quicklendx_contracts.wasm
 ```
 
 2. **Deploy to Mainnet**
