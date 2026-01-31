@@ -2430,3 +2430,5 @@ mod test_default;
 mod test_queries;
 #[cfg(test)]
 mod test_partial_payments;
+#[cfg(test)]
+mod test_profit_fee_formula;
