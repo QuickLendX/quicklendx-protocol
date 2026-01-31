@@ -1,6 +1,7 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
+mod admin;
 mod analytics;
 mod audit;
 mod backup;
@@ -15,9 +16,14 @@ mod invoice;
 mod notifications;
 mod payments;
 mod profits;
+mod reentrancy;
 mod settlement;
+#[cfg(test)]
+mod test_admin;
+mod test_overflow;
 mod verification;
 
+use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
 use escrow::accept_bid_and_fund as do_accept_bid_and_fund;
 use defaults::{
@@ -71,7 +77,75 @@ pub struct QuickLendXContract;
 
 #[contractimpl]
 impl QuickLendXContract {
-    /// Store an invoice in the contract
+    // ============================================================================
+    // Admin Management Functions
+    // ============================================================================
+
+    /// Initialize the admin address (can only be called once)
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `admin` - The address to set as admin
+    ///
+    /// # Returns
+    /// * `Ok(())` if initialization succeeds
+    /// * `Err(QuickLendXError::AdminAlreadyInitialized)` if admin was already set
+    ///
+    /// # Security
+    /// - Requires authorization from the admin address
+    /// - Can only be called once
+    pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        AdminStorage::initialize(&env, &admin)
+    }
+
+    /// Transfer admin role to a new address
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `new_admin` - The new admin address
+    ///
+    /// # Returns
+    /// * `Ok(())` if transfer succeeds
+    /// * `Err(QuickLendXError::NotAdmin)` if caller is not current admin
+    ///
+    /// # Security
+    /// - Requires authorization from current admin
+    pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), QuickLendXError> {
+        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        AdminStorage::set_admin(&env, &current_admin, &new_admin)
+    }
+
+    /// Get the current admin address
+    ///
+    /// # Returns
+    /// * `Some(Address)` if admin is set
+    /// * `None` if admin has not been initialized
+    pub fn get_current_admin(env: Env) -> Option<Address> {
+        AdminStorage::get_admin(&env)
+    }
+
+    // ============================================================================
+    // Invoice Management Functions
+    // ============================================================================
+
+    /// Store an invoice in the contract (unauthenticated; use `upload_invoice` for business flow).
+    ///
+    /// # Arguments
+    /// * `business` - Address of the business that owns the invoice
+    /// * `amount` - Invoice amount in smallest currency unit (e.g. cents)
+    /// * `currency` - Token contract address for the invoice currency
+    /// * `due_date` - Unix timestamp when the invoice is due
+    /// * `description` - Human-readable description
+    /// * `category` - Invoice category (e.g. Services, Goods)
+    /// * `tags` - Optional tags for filtering
+    ///
+    /// # Returns
+    /// * `Ok(BytesN<32>)` - The new invoice ID
+    ///
+    /// # Errors
+    /// * `InvalidAmount` if amount <= 0
+    /// * `InvoiceDueDateInvalid` if due_date is not in the future
+    /// * `InvalidDescription` if description is empty
     pub fn store_invoice(
         env: Env,
         business: Address,
@@ -181,19 +255,30 @@ impl QuickLendXContract {
         Ok(invoice.id)
     }
 
-    /// Accept a bid and fund the invoice using escrow
+    /// Accept a bid and fund the invoice using escrow (transfer in from investor).
+    ///
+    /// Business must be authorized. Invoice must be Verified and bid Placed.
+    /// Protected by reentrancy guard (see docs/contracts/security.md).
+    ///
+    /// # Returns
+    /// * `Ok(BytesN<32>)` - The new escrow ID
+    ///
+    /// # Errors
+    /// * `InvoiceNotFound`, `StorageKeyNotFound`, `InvalidStatus`, `InvoiceAlreadyFunded`, `InvoiceNotAvailableForFunding`, `Unauthorized`
+    /// * `OperationNotAllowed` if reentrancy is detected
     pub fn accept_bid_and_fund(
         env: Env,
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
-        do_accept_bid_and_fund(&env, &invoice_id, &bid_id)
+        reentrancy::with_payment_guard(&env, || {
+            do_accept_bid_and_fund(&env, &invoice_id, &bid_id)
+        })
     }
 
     /// Verify an invoice (admin or automated process)
     pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
 
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
@@ -261,7 +346,11 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    /// Get an invoice by ID
+    /// Get an invoice by ID.
+    ///
+    /// # Returns
+    /// * `Ok(Invoice)` - The invoice data
+    /// * `Err(InvoiceNotFound)` if the ID does not exist
     pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<Invoice, QuickLendXError> {
         InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
     }
@@ -529,6 +618,16 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
+        reentrancy::with_payment_guard(&env, || {
+            Self::accept_bid_impl(env.clone(), invoice_id.clone(), bid_id.clone())
+        })
+    }
+
+    fn accept_bid_impl(
+        env: Env,
+        invoice_id: BytesN<32>,
+        bid_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -537,14 +636,11 @@ impl QuickLendXContract {
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut bid =
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-        // Only the business owner can accept a bid
         invoice.business.require_auth();
-        // Only allow accepting if invoice is verified and bid is placed
         if invoice.status != InvoiceStatus::Verified || bid.status != BidStatus::Placed {
             return Err(QuickLendXError::InvalidStatus);
         }
 
-        // Create escrow
         let escrow_id = create_escrow(
             &env,
             &invoice_id,
@@ -553,10 +649,8 @@ impl QuickLendXContract {
             bid.bid_amount,
             &invoice.currency,
         )?;
-        // Mark bid as accepted
         bid.status = BidStatus::Accepted;
         BidStorage::update_bid(&env, &bid);
-        // Mark invoice as funded
         invoice.mark_as_funded(
             &env,
             bid.investor.clone(),
@@ -564,7 +658,6 @@ impl QuickLendXContract {
             env.ledger().timestamp(),
         );
         InvoiceStorage::update_invoice(&env, &invoice);
-        // Track investment
         let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         let investment = Investment {
             investment_id: investment_id.clone(),
@@ -580,14 +673,8 @@ impl QuickLendXContract {
         let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
             .expect("Escrow should exist after creation");
         emit_escrow_created(&env, &escrow);
-
-        // Emit bid accepted event
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
-
-        // Send notification to investor for bid acceptance
         let _ = NotificationSystem::notify_bid_accepted(&env, &invoice, &bid);
-
-        // Send notification about invoice status change
         let _ = NotificationSystem::notify_invoice_status_changed(
             &env,
             &invoice,
@@ -598,6 +685,20 @@ impl QuickLendXContract {
         Ok(())
     }
 
+    /// Add insurance coverage to an active investment (investor only).
+    ///
+    /// # Arguments
+    /// * `investment_id` - The investment to insure
+    /// * `provider` - Insurance provider address
+    /// * `coverage_percentage` - Coverage as a percentage (e.g. 80 for 80%)
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    ///
+    /// # Errors
+    /// * `StorageKeyNotFound` if investment does not exist
+    /// * `InvalidStatus` if investment is not Active
+    /// * `InvalidAmount` if computed premium is zero
     pub fn add_investment_insurance(
         env: Env,
         investment_id: BytesN<32>,
@@ -673,12 +774,12 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         payment_amount: i128,
     ) -> Result<(), QuickLendXError> {
-        // Get the investment to track investor analytics
         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
-        let result = do_settle_invoice(&env, &invoice_id, payment_amount);
+        let result = reentrancy::with_payment_guard(&env, || {
+            do_settle_invoice(&env, &invoice_id, payment_amount)
+        });
 
-        // Update investor analytics if settlement was successful
         if result.is_ok() {
             if let Some(inv) = investment {
                 let is_successful = payment_amount >= inv.amount;
@@ -689,6 +790,11 @@ impl QuickLendXContract {
         result
     }
 
+    /// Get the investment record for a funded invoice.
+    ///
+    /// # Returns
+    /// * `Ok(Investment)` - The investment tied to the invoice
+    /// * `Err(StorageKeyNotFound)` if the invoice has no investment
     pub fn get_invoice_investment(
         env: Env,
         invoice_id: BytesN<32>,
@@ -697,6 +803,11 @@ impl QuickLendXContract {
             .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
+    /// Get an investment by ID.
+    ///
+    /// # Returns
+    /// * `Ok(Investment)` - The investment record
+    /// * `Err(StorageKeyNotFound)` if the ID does not exist
     pub fn get_investment(
         env: Env,
         investment_id: BytesN<32>,
@@ -779,8 +890,7 @@ impl QuickLendXContract {
 
     /// Update the platform fee basis points (admin only)
     pub fn set_platform_fee(env: Env, new_fee_bps: i128) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         PlatformFee::set_config(&env, &admin, new_fee_bps)?;
         Ok(())
     }
@@ -1060,42 +1170,42 @@ impl QuickLendXContract {
 
     /// Release escrow funds to business upon invoice verification
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        reentrancy::with_payment_guard(&env, || {
+            let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-        // Release escrow funds
-        release_escrow(&env, &invoice_id)?;
+            release_escrow(&env, &invoice_id)?;
 
-        // Emit event
-        emit_escrow_released(
-            &env,
-            &escrow.escrow_id,
-            &invoice_id,
-            &escrow.business,
-            escrow.amount,
-        );
+            emit_escrow_released(
+                &env,
+                &escrow.escrow_id,
+                &invoice_id,
+                &escrow.business,
+                escrow.amount,
+            );
 
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Refund escrow funds to investor if verification fails
     pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        reentrancy::with_payment_guard(&env, || {
+            let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-        // Refund escrow funds
-        refund_escrow(&env, &invoice_id)?;
+            refund_escrow(&env, &invoice_id)?;
 
-        // Emit event
-        emit_escrow_refunded(
-            &env,
-            &escrow.escrow_id,
-            &invoice_id,
-            &escrow.investor,
-            escrow.amount,
-        );
+            emit_escrow_refunded(
+                &env,
+                &escrow.escrow_id,
+                &invoice_id,
+                &escrow.investor,
+                escrow.amount,
+            );
 
-        Ok(())
+            Ok(())
+        })
     }
 
     ///== Notification Management Functions ==///
@@ -2304,3 +2414,5 @@ mod test_default;
 
 #[cfg(test)]
 mod test_queries;
+#[cfg(test)]
+mod test_partial_payments;

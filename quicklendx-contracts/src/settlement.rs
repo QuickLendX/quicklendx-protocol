@@ -1,3 +1,6 @@
+//! Invoice settlement: partial payments and full settlement (transfer out to investor + fees).
+//! `settle_invoice` is called from lib with a reentrancy guard.
+
 use crate::audit::log_payment_processed;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_invoice_settled, emit_partial_payment};
@@ -5,9 +8,14 @@ use crate::investment::{InvestmentStatus, InvestmentStorage};
 use crate::invoice::{InvoiceStatus, InvoiceStorage};
 use crate::notifications::NotificationSystem;
 use crate::payments::transfer_funds;
-use crate::profits::calculate_profit;
 use soroban_sdk::{BytesN, Env, String};
 
+/// Record a partial payment; if total paid meets or exceeds amount, settles the invoice.
+///
+/// Business must be authorized. Invoice must be Funded.
+///
+/// # Errors
+/// * `InvalidAmount`, `InvoiceNotFound`, `InvalidStatus`, or settlement errors when fully paid
 pub fn process_partial_payment(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -56,6 +64,12 @@ pub fn process_partial_payment(
     Ok(())
 }
 
+/// Settle a funded invoice: pay investor (and platform fee), mark invoice Paid, investment Completed.
+///
+/// Business must be authorized. Invoice must be Funded; total payment must be at least investment amount.
+///
+/// # Errors
+/// * `InvalidAmount`, `InvoiceNotFound`, `InvalidStatus`, `PaymentTooLow`, `NotInvestor`, `StorageKeyNotFound`, or fee/transfer errors
 pub fn settle_invoice(
     env: &Env,
     invoice_id: &BytesN<32>,

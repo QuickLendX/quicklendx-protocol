@@ -180,8 +180,8 @@ impl BidStorage {
         filtered
     }
     pub fn compare_bids(bid1: &Bid, bid2: &Bid) -> Ordering {
-        let profit1 = bid1.expected_return - bid1.bid_amount;
-        let profit2 = bid2.expected_return - bid2.bid_amount;
+        let profit1 = bid1.expected_return.saturating_sub(bid1.bid_amount);
+        let profit2 = bid2.expected_return.saturating_sub(bid2.bid_amount);
         if profit1 != profit2 {
             return profit1.cmp(&profit2);
         }

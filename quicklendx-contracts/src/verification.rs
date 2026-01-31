@@ -208,20 +208,31 @@ impl BusinessVerificationStorage {
             .set(&Self::REJECTED_BUSINESSES_KEY, &new_rejected);
     }
 
+    /// @deprecated Use `admin::AdminStorage::initialize()` or `admin::AdminStorage::set_admin()` instead
+    /// This function is kept for backward compatibility with existing tests.
+    /// It syncs with the new AdminStorage system.
     pub fn set_admin(env: &Env, admin: &Address) {
+        // Store in old location for backward compatibility
         env.storage().instance().set(&Self::ADMIN_KEY, admin);
+        
+        // Always sync with new AdminStorage
+        // This allows tests that call set_admin() multiple times to work
+        env.storage().instance().set(&crate::admin::ADMIN_KEY, admin);
+        env.storage().instance().set(&crate::admin::ADMIN_INITIALIZED_KEY, &true);
     }
 
+    /// @deprecated Use `admin::AdminStorage::get_admin()` instead
+    /// This function is kept for backward compatibility only
     pub fn get_admin(env: &Env) -> Option<Address> {
-        env.storage().instance().get(&Self::ADMIN_KEY)
+        // Try new storage first, fall back to old
+        crate::admin::AdminStorage::get_admin(env)
+            .or_else(|| env.storage().instance().get(&Self::ADMIN_KEY))
     }
 
+    /// @deprecated Use `admin::AdminStorage::is_admin()` instead
+    /// This function is kept for backward compatibility only
     pub fn is_admin(env: &Env, address: &Address) -> bool {
-        if let Some(admin) = Self::get_admin(env) {
-            admin == *address
-        } else {
-            false
-        }
+        crate::admin::AdminStorage::is_admin(env, address)
     }
 }
 

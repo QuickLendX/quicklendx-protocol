@@ -109,7 +109,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
             QuickLendXError::InvoiceAlreadyFunded => symbol_short!("INV_AF"),
             QuickLendXError::InvoiceNotAvailableForFunding => symbol_short!("INV_NAF"),
-            QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NFD"),
+            QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NDF"),
             QuickLendXError::InvoiceAlreadyDefaulted => symbol_short!("INV_AD"),
         }
     }
