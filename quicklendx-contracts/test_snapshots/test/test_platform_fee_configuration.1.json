@@ -111,6 +111,7 @@
                       {
                         "key": {
                           "symbol": "fee_cfg"
+                          "symbol": "pf_cfg"
                         },
                         "val": {
                           "map": [

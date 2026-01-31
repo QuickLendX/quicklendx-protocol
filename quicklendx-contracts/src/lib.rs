@@ -6,9 +6,11 @@ mod analytics;
 mod audit;
 mod backup;
 mod bid;
+mod currency;
 mod defaults;
-mod escrow;
+mod dispute;
 mod errors;
+mod escrow;
 mod events;
 mod fees;
 mod investment;
@@ -16,33 +18,44 @@ mod invoice;
 mod notifications;
 mod payments;
 mod profits;
+mod protocol_limits;
 mod reentrancy;
 mod settlement;
 #[cfg(test)]
 mod test_admin;
+#[cfg(test)]
+mod test_business_kyc;
 mod test_overflow;
+mod test_overflow;
+// mod test_refund;
+#[cfg(test)]
+mod test_profit_fee;
+mod test_refund;
 mod verification;
 
+#[cfg(test)]
+ mod test_invoice_metadata;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
-use escrow::accept_bid_and_fund as do_accept_bid_and_fund;
 use defaults::{
     create_dispute as do_create_dispute, get_dispute_details as do_get_dispute_details,
     get_invoices_by_dispute_status as do_get_invoices_by_dispute_status,
     get_invoices_with_disputes as do_get_invoices_with_disputes,
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
-    put_dispute_under_review as do_put_dispute_under_review,
-    resolve_dispute as do_resolve_dispute,
+    put_dispute_under_review as do_put_dispute_under_review, resolve_dispute as do_resolve_dispute,
 };
 use errors::QuickLendXError;
-use events::{
-    emit_audit_query, emit_audit_validation, emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn,
-    emit_escrow_created, emit_escrow_refunded, emit_escrow_released, emit_insurance_added,
-    emit_insurance_premium_collected, emit_investor_verified, emit_invoice_cancelled,
-    emit_invoice_metadata_cleared, emit_invoice_metadata_updated, emit_invoice_uploaded,
-    emit_invoice_verified,
+use escrow::{
+    accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds,
 };
-use investment::{Investment, InvestmentStatus, InvestmentStorage};
+use events::{
+    emit_audit_query, emit_audit_validation, emit_bid_accepted, emit_bid_placed,
+    emit_bid_withdrawn, emit_escrow_created, emit_escrow_refunded, emit_escrow_released,
+    emit_insurance_added, emit_insurance_premium_collected, emit_investor_verified,
+    emit_invoice_cancelled, emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
+    emit_invoice_uploaded, emit_invoice_verified,
+};
+use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
 use payments::{create_escrow, refund_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
@@ -53,8 +66,9 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
     get_business_verification_status, get_investor_analytics,
     get_investor_verification as do_get_investor_verification, reject_business,
-    reject_investor as do_reject_investor, submit_investor_kyc as do_submit_investor_kyc,
-    submit_kyc_application, update_investor_analytics, validate_bid, validate_investor_investment,
+    reject_investor as do_reject_investor, set_investment_limit,
+    submit_investor_kyc as do_submit_investor_kyc, submit_kyc_application,
+    update_investor_analytics, validate_bid, validate_investor_investment,
     validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
     verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
     InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
@@ -124,6 +138,26 @@ impl QuickLendXContract {
         AdminStorage::get_admin(&env)
     }
 
+    /// Add a token address to the currency whitelist (admin only).
+    pub fn add_currency(env: Env, admin: Address, currency: Address) -> Result<(), QuickLendXError> {
+        currency::CurrencyWhitelist::add_currency(&env, &admin, &currency)
+    }
+
+    /// Remove a token address from the currency whitelist (admin only).
+    pub fn remove_currency(env: Env, admin: Address, currency: Address) -> Result<(), QuickLendXError> {
+        currency::CurrencyWhitelist::remove_currency(&env, &admin, &currency)
+    }
+
+    /// Check if a token is allowed for invoice currency.
+    pub fn is_allowed_currency(env: Env, currency: Address) -> bool {
+        currency::CurrencyWhitelist::is_allowed_currency(&env, &currency)
+    }
+
+    /// Get all whitelisted token addresses.
+    pub fn get_whitelisted_currencies(env: Env) -> Vec<Address> {
+        currency::CurrencyWhitelist::get_whitelisted_currencies(&env)
+    }
+
     // ============================================================================
     // Invoice Management Functions
     // ============================================================================
@@ -169,6 +203,8 @@ impl QuickLendXContract {
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
         }
+
+        currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
 
         // Check if business is verified (temporarily disabled for debugging)
         // if !verification::BusinessVerificationStorage::is_business_verified(&env, &business) {
@@ -230,6 +266,7 @@ impl QuickLendXContract {
 
         // Basic validation
         verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
+        currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
@@ -248,6 +285,7 @@ impl QuickLendXContract {
         );
         InvoiceStorage::store_invoice(&env, &invoice);
         emit_invoice_uploaded(&env, &invoice);
+        audit::log_invoice_uploaded(&env, invoice.id.clone(), business, invoice.amount);
 
         // Send notification
         let _ = NotificationSystem::notify_invoice_created(&env, &invoice);
@@ -271,9 +309,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
-        reentrancy::with_payment_guard(&env, || {
-            do_accept_bid_and_fund(&env, &invoice_id, &bid_id)
-        })
+        reentrancy::with_payment_guard(&env, || do_accept_bid_and_fund(&env, &invoice_id, &bid_id))
     }
 
     /// Verify an invoice (admin or automated process)
@@ -300,6 +336,7 @@ impl QuickLendXContract {
         InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
 
         emit_invoice_verified(&env, &invoice);
+        audit::log_invoice_verified(&env, invoice_id.clone(), admin);
 
         // Send notification
         let _ = NotificationSystem::notify_invoice_verified(&env, &invoice);
@@ -334,6 +371,7 @@ impl QuickLendXContract {
 
         // Emit event
         emit_invoice_cancelled(&env, &invoice);
+        audit::log_invoice_cancelled(&env, invoice_id, invoice.business.clone());
 
         // Send notification (optional - could notify interested investors)
         let _ = NotificationSystem::notify_invoice_status_changed(
@@ -569,6 +607,7 @@ impl QuickLendXContract {
         if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
         }
+        currency::CurrencyWhitelist::require_allowed_currency(&env, &invoice.currency)?;
 
         let verification = do_get_investor_verification(&env, &investor)
             .ok_or(QuickLendXError::BusinessNotVerified)?;
@@ -605,6 +644,7 @@ impl QuickLendXContract {
 
         // Emit bid placed event
         emit_bid_placed(&env, &bid);
+        audit::log_bid_placed(&env, invoice_id, investor, bid_amount, bid_id.clone());
 
         // Send notification for business about new bid
         let _ = NotificationSystem::notify_bid_received(&env, &invoice, &bid);
@@ -674,6 +714,8 @@ impl QuickLendXContract {
             .expect("Escrow should exist after creation");
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
+        audit::log_bid_accepted(&env, invoice_id.clone(), invoice.business.clone(), bid.bid_amount);
+        audit::log_escrow_created(&env, invoice_id.clone(), bid.investor.clone(), bid.bid_amount, escrow_id);
         let _ = NotificationSystem::notify_bid_accepted(&env, &invoice, &bid);
         let _ = NotificationSystem::notify_invoice_status_changed(
             &env,
@@ -764,6 +806,7 @@ impl QuickLendXContract {
 
         // Emit bid withdrawn event
         emit_bid_withdrawn(&env, &bid);
+        audit::log_bid_withdrawn(&env, bid.invoice_id.clone(), bid.investor.clone(), bid_id);
 
         Ok(())
     }
@@ -816,6 +859,27 @@ impl QuickLendXContract {
             .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
+    /// Query insurance coverage for an investment.
+    ///
+    /// # Arguments
+    /// * `investment_id` - The investment to query
+    ///
+    /// # Returns
+    /// * `Ok(Vec<InsuranceCoverage>)` - All insurance records for the investment
+    /// * `Err(StorageKeyNotFound)` if the investment does not exist
+    ///
+    /// # Security Notes
+    /// - Returns all insurance records (active and inactive)
+    /// - No authorization required for queries
+    pub fn query_investment_insurance(
+        env: Env,
+        investment_id: BytesN<32>,
+    ) -> Result<Vec<InsuranceCoverage>, QuickLendXError> {
+        let investment = InvestmentStorage::get_investment(&env, &investment_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Ok(investment.insurance)
+    }
+
     /// Process a partial payment towards an invoice
     pub fn process_partial_payment(
         env: Env,
@@ -846,11 +910,11 @@ impl QuickLendXContract {
 
     /// Mark an invoice as defaulted (admin or automated process)
     /// Checks due date + grace period before marking as defaulted
-    /// 
+    ///
     /// # Arguments
     /// * `invoice_id` - The invoice ID to mark as defaulted
     /// * `grace_period` - Optional grace period in seconds (defaults to 7 days)
-    /// 
+    ///
     /// # Returns
     /// * `Ok(())` if the invoice was successfully marked as defaulted
     /// * `Err(QuickLendXError)` if the operation fails
@@ -1005,6 +1069,17 @@ impl QuickLendXContract {
         do_get_investor_verification(&env, &investor)
     }
 
+    /// Set investment limit for a verified investor (admin only)
+    pub fn set_investment_limit(
+        env: Env,
+        investor: Address,
+        new_limit: i128,
+    ) -> Result<(), QuickLendXError> {
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        verification::set_investment_limit(&env, &admin, &investor, new_limit)
+    }
+
     /// Verify business (admin only)
     pub fn verify_business(
         env: Env,
@@ -1153,7 +1228,10 @@ impl QuickLendXContract {
     }
 
     /// Get escrow details for an invoice
-    pub fn get_escrow_details(env: Env, invoice_id: BytesN<32>) -> Result<payments::Escrow, QuickLendXError> {
+    pub fn get_escrow_details(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<payments::Escrow, QuickLendXError> {
         EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::StorageKeyNotFound)
     }
@@ -1188,24 +1266,16 @@ impl QuickLendXContract {
         })
     }
 
-    /// Refund escrow funds to investor if verification fails
-    pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        reentrancy::with_payment_guard(&env, || {
-            let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-                .ok_or(QuickLendXError::StorageKeyNotFound)?;
-
-            refund_escrow(&env, &invoice_id)?;
-
-            emit_escrow_refunded(
-                &env,
-                &escrow.escrow_id,
-                &invoice_id,
-                &escrow.investor,
-                escrow.amount,
-            );
-
-            Ok(())
-        })
+    /// Refund escrow funds to investor if verification fails or as an explicit manual refund.
+    ///
+    /// Can be triggered by Admin or Business owner. Invoice must be Funded.
+    /// Protected by payment reentrancy guard.
+    pub fn refund_escrow_funds(
+        env: Env,
+        invoice_id: BytesN<32>,
+        caller: Address,
+    ) -> Result<(), QuickLendXError> {
+        reentrancy::with_payment_guard(&env, || do_refund_escrow_funds(&env, &invoice_id, &caller))
     }
 
     ///== Notification Management Functions ==///
@@ -2030,39 +2100,34 @@ impl QuickLendXContract {
     }
 
     /// Configure treasury address for platform fee routing (admin only)
-    pub fn configure_treasury(
-        env: Env,
-        treasury_address: Address,
-    ) -> Result<(), QuickLendXError> {
-        let admin = BusinessVerificationStorage::get_admin(&env)
-            .ok_or(QuickLendXError::NotAdmin)?;
+    pub fn configure_treasury(env: Env, treasury_address: Address) -> Result<(), QuickLendXError> {
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
 
-        let _treasury_config = fees::FeeManager::configure_treasury(&env, &admin, treasury_address.clone())?;
-        
+        let _treasury_config =
+            fees::FeeManager::configure_treasury(&env, &admin, treasury_address.clone())?;
+
         // Emit event
         events::emit_treasury_configured(&env, &treasury_address, &admin);
-        
+
         Ok(())
     }
 
     /// Update platform fee basis points (admin only)
-    pub fn update_platform_fee_bps(
-        env: Env,
-        new_fee_bps: u32,
-    ) -> Result<(), QuickLendXError> {
-        let admin = BusinessVerificationStorage::get_admin(&env)
-            .ok_or(QuickLendXError::NotAdmin)?;
+    pub fn update_platform_fee_bps(env: Env, new_fee_bps: u32) -> Result<(), QuickLendXError> {
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
 
         let old_config = fees::FeeManager::get_platform_fee_config(&env)?;
         let old_fee_bps = old_config.fee_bps;
-        
+
         let _new_config = fees::FeeManager::update_platform_fee(&env, &admin, new_fee_bps)?;
-        
+
         // Emit event
         events::emit_platform_fee_config_updated(&env, old_fee_bps, new_fee_bps, &admin);
-        
+
         Ok(())
     }
 
@@ -2147,6 +2212,13 @@ impl QuickLendXContract {
         auto_distribution: bool,
         min_distribution_amount: i128,
     ) -> Result<(), QuickLendXError> {
+        // Verify admin
+        let stored_admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        if admin != stored_admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
+
         let config = fees::RevenueConfig {
             treasury_address,
             treasury_share_bps,
@@ -2156,6 +2228,11 @@ impl QuickLendXContract {
             min_distribution_amount,
         };
         fees::FeeManager::configure_revenue_distribution(&env, &admin, config)
+    }
+
+    /// Get current revenue split configuration
+    pub fn get_revenue_split_config(env: Env) -> Result<fees::RevenueConfig, QuickLendXError> {
+        fees::FeeManager::get_revenue_split_config(&env)
     }
 
     /// Distribute revenue for a period
@@ -2279,7 +2356,8 @@ impl QuickLendXContract {
         offset: u32,
         limit: u32,
     ) -> Vec<BytesN<32>> {
-        let verified_invoices = InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified);
+        let verified_invoices =
+            InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified);
         let mut filtered = Vec::new(&env);
 
         for invoice_id in verified_invoices.iter() {
@@ -2418,14 +2496,30 @@ mod test_fees;
 mod test_escrow;
 
 #[cfg(test)]
-mod test_events;
+mod test_audit;
+#[cfg(test)]
+mod test_currency;
 #[cfg(test)]
 mod test_errors;
+#[cfg(test)]
+mod test_events;
 
 #[cfg(test)]
 mod test_default;
 
 #[cfg(test)]
-mod test_queries;
+mod test_investment_queries;
 #[cfg(test)]
 mod test_partial_payments;
+#[cfg(test)]
+mod test_queries;
+#[cfg(test)]
+mod test_reentrancy;
+
+mod test_investor_kyc;
+#[cfg(test)]
+mod test_profit_fee_formula;
+#[cfg(test)]
+mod test_insurance;
+mod test_escrow_refund;
+mod test_revenue_split;

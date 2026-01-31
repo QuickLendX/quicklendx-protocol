@@ -26,9 +26,13 @@ When a business accepts a bid from an investor, the bid amount is locked in a co
     *   Escrow status changes to `Released`.
 
 3.  **Refund**:
-    *   Admin or authorized process calls `refund_escrow_funds`.
-    *   Funds are transferred back to the investor.
+    *   Admin or the Business owner calls `refund_escrow_funds`.
+    *   System validates invoice status (must be Funded).
+    *   Funds are transferred back from the contract to the investor.
     *   Escrow status changes to `Refunded`.
+    *   Invoice status changes to `Refunded`.
+    *   Bid status changes to `Cancelled`.
+    *   Investment status changes to `Refunded`.
 
 ## Key Functions
 
@@ -45,10 +49,10 @@ When a business accepts a bid from an investor, the bid amount is locked in a co
 *   **Events**: `EscrowReleased`.
 
 ### `refund_escrow_funds`
-*   **Description**: Refunds escrow funds to the investor.
-*   **Parameters**: `invoice_id`.
-*   **Auth**: Internal/Admin.
-*   **Events**: `EscrowRefunded`.
+*   **Description**: Refunds escrow funds back to the investor.
+*   **Parameters**: `invoice_id`, `caller`.
+*   **Auth**: Admin or Business Owner.
+*   **Events**: `esc_ref` (EscrowRefunded), Audit logs.
 
 ### `get_escrow_details`
 *   **Description**: Retrieves details of the escrow for a given invoice.
@@ -78,7 +82,7 @@ pub struct Escrow {
 
 ## Security Considerations
 
-*   **Authorization**: Only the business owner can accept a bid. Only admins can verify invoices and trigger release (in the current flow).
+*   **Authorization**: Only the business owner can accept a bid. Only admins can verify invoices. Both Admins and Business Owners can trigger a refund of funded invoices.
 *   **Invariants**:
     *   Escrow can only be created if the invoice is `Verified` (or ready for funding) and the bid is `Placed`.
     *   Funds can only be released if the escrow is in `Held` status.

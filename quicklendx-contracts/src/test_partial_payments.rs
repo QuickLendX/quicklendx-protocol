@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
+    use crate::QuickLendXContract;
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::Env;
-    use crate::QuickLendXContract;
 
     #[test]
     fn test_partial_payments_validation() {
