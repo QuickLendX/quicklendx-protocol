@@ -2399,6 +2399,9 @@ mod test;
 mod test_bid;
 
 #[cfg(test)]
+mod test_bid_ranking;
+
+#[cfg(test)]
 mod test_fees;
 
 #[cfg(test)]
