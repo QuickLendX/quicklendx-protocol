@@ -26,9 +26,11 @@ mod storage;
 mod test_admin;
 #[cfg(test)]
 mod test_overflow;
-// mod test_refund;
+// #[cfg(test)]
 #[cfg(test)]
 mod test_profit_fee;
+#[cfg(test)]
+mod test_refund;
 #[cfg(test)]
 mod test_storage;
 mod verification;

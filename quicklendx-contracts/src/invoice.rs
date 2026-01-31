@@ -718,7 +718,7 @@ impl InvoiceStorage {
 
     /// Get invoices by category
     pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
-        let mut category_invoices = vec![env];
+        let mut category_invoices = Vec::new(env);
         let all_statuses = [
             InvoiceStatus::Pending,
             InvoiceStatus::Verified,
@@ -763,7 +763,7 @@ impl InvoiceStorage {
 
     /// Get invoices by tag
     pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
-        let mut tagged_invoices = vec![env];
+        let mut tagged_invoices: Vec<BytesN<32>> = Vec::new(env);
         let all_statuses = [
             InvoiceStatus::Pending,
             InvoiceStatus::Verified,
@@ -789,7 +789,7 @@ impl InvoiceStorage {
 
     /// Get invoices by multiple tags (AND logic - must have all tags)
     pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
-        let mut tagged_invoices = vec![env];
+        let mut tagged_invoices: Vec<BytesN<32>> = Vec::new(env);
         let all_statuses = [
             InvoiceStatus::Pending,
             InvoiceStatus::Verified,
