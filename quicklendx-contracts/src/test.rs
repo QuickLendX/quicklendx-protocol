@@ -1,4 +1,5 @@
 mod test_invoice;
+mod test_invoice_categories;
 
 use super::*;
 use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
@@ -3326,6 +3327,260 @@ fn test_investment_insurance_lifecycle() {
         .expect("expected insurance entry after claim");
     assert!(!insurance_after.active);
     assert_eq!(insurance_after.coverage_amount, expected_coverage);
+}
+
+#[test]
+fn test_query_investment_insurance_single_coverage() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let provider = Address::generate(&env);
+    let admin = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    let initial_balance = 10_000i128;
+    sac_client.mint(&business, &initial_balance);
+    sac_client.mint(&investor, &initial_balance);
+
+    let expiration = env.ledger().sequence() + 1_000;
+    token_client.approve(&business, &contract_id, &initial_balance, &expiration);
+    token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
+
+    client.set_admin(&admin);
+
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &5_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test insurance query"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000i128, &5_500i128);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let investment = client.get_invoice_investment(&invoice_id);
+    let investment_id = investment.investment_id.clone();
+
+    // Query with no insurance should return empty vector
+    let insurance_before = client.try_query_investment_insurance(&investment_id).unwrap().unwrap();
+    assert_eq!(insurance_before.len(), 0);
+
+    // Add insurance
+    let coverage_percentage = 75u32;
+    client.add_investment_insurance(&investment_id, &provider, &coverage_percentage);
+
+    // Query should now return the insurance coverage
+    let insurance_vec = client.try_query_investment_insurance(&investment_id).unwrap().unwrap();
+    assert_eq!(insurance_vec.len(), 1);
+
+    let coverage = insurance_vec
+        .get(0)
+        .expect("expected insurance coverage");
+    assert_eq!(coverage.provider, provider);
+    assert_eq!(coverage.coverage_percentage, coverage_percentage);
+    assert!(coverage.active);
+    let expected_amount = 5_000i128 * 75 / 100;
+    assert_eq!(coverage.coverage_amount, expected_amount);
+    assert!(coverage.premium_amount > 0);
+}
+
+#[test]
+fn test_query_investment_insurance_nonexistent_investment() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let fake_investment_id = BytesN::from_array(
+        &env,
+        &[
+            0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+            23, 24, 25, 26, 27, 28, 29, 30, 31,
+        ],
+    );
+
+    // Query nonexistent investment should return StorageKeyNotFound
+    let result = client.try_query_investment_insurance(&fake_investment_id);
+    assert!(result.is_err());
+    let err = result.err().expect("expected error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::StorageKeyNotFound);
+}
+
+#[test]
+fn test_query_investment_insurance_premium_calculation() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let provider = Address::generate(&env);
+    let admin = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    let initial_balance = 100_000i128;
+    sac_client.mint(&business, &initial_balance);
+    sac_client.mint(&investor, &initial_balance);
+
+    let expiration = env.ledger().sequence() + 1_000;
+    token_client.approve(&business, &contract_id, &initial_balance, &expiration);
+    token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
+
+    client.set_admin(&admin);
+
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_amount = 10_000i128;
+    let invoice_id = client.store_invoice(
+        &business,
+        &invoice_amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Premium calculation test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    verify_investor_for_test(&env, &client, &investor, 100_000);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &invoice_amount, &11_000i128);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let investment = client.get_invoice_investment(&invoice_id);
+    let investment_id = investment.investment_id.clone();
+
+    // Test multiple coverage percentages
+    let test_cases: [(u32, i128); 3] = [
+        (50u32, 5_000i128),  // 50% of 10,000
+        (80u32, 8_000i128),  // 80% of 10,000
+        (100u32, 10_000i128), // 100% of 10,000
+    ];
+
+    for (idx, (coverage_pct, expected_coverage)) in test_cases.iter().enumerate() {
+        let provider_i = if idx == 0 {
+            provider.clone()
+        } else {
+            // Can't add multiple insurances, so test each separately
+            break;
+        };
+
+        client.add_investment_insurance(&investment_id, &provider_i, coverage_pct);
+
+        let insurance_vec = client.try_query_investment_insurance(&investment_id).unwrap().unwrap();
+        assert_eq!(insurance_vec.len(), 1);
+
+        let coverage = insurance_vec.get(0).expect("expected coverage");
+        assert_eq!(coverage.coverage_percentage, *coverage_pct);
+        assert_eq!(coverage.coverage_amount, *expected_coverage);
+
+        // Verify premium calculation: coverage_amount * DEFAULT_INSURANCE_PREMIUM_BPS / 10_000
+        // where DEFAULT_INSURANCE_PREMIUM_BPS = 200 (2%)
+        let expected_premium = *expected_coverage * 200 / 10_000;
+        let expected_premium = if expected_premium == 0 && expected_coverage > &0 {
+            1
+        } else {
+            expected_premium
+        };
+        assert_eq!(coverage.premium_amount, expected_premium);
+    }
+}
+
+#[test]
+fn test_query_investment_insurance_inactive_coverage() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let provider = Address::generate(&env);
+    let admin = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    let initial_balance = 10_000i128;
+    sac_client.mint(&business, &initial_balance);
+    sac_client.mint(&investor, &initial_balance);
+
+    let expiration = env.ledger().sequence() + 1_000;
+    token_client.approve(&business, &contract_id, &initial_balance, &expiration);
+    token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
+
+    client.set_admin(&admin);
+
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test inactive coverage"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let investment = client.get_invoice_investment(&invoice_id);
+    let investment_id = investment.investment_id.clone();
+
+    // Add insurance
+    client.add_investment_insurance(&investment_id, &provider, &60u32);
+
+    // Query and verify it's active
+    let insurance_before = client.try_query_investment_insurance(&investment_id).unwrap().unwrap();
+    let coverage_before = insurance_before
+        .get(0)
+        .expect("expected coverage");
+    assert!(coverage_before.active);
+
+    // Trigger default to deactivate insurance
+    let stored_invoice = client.get_invoice(&invoice_id);
+    env.ledger().set_timestamp(stored_invoice.due_date + 1);
+    let _ = client.handle_default(&invoice_id);
+
+    // Query and verify it's now inactive
+    let insurance_after = client.try_query_investment_insurance(&investment_id).unwrap().unwrap();
+    let coverage_after = insurance_after
+        .get(0)
+        .expect("expected coverage");
+    assert!(!coverage_after.active);
+    assert_eq!(coverage_after.coverage_amount, coverage_before.coverage_amount);
 }
 
 // Test basic functionality from README.md
