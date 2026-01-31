@@ -12,7 +12,11 @@ pub struct CurrencyWhitelist;
 
 impl CurrencyWhitelist {
     /// Add a token address to the whitelist (admin only).
-    pub fn add_currency(env: &Env, admin: &Address, currency: &Address) -> Result<(), QuickLendXError> {
+    pub fn add_currency(
+        env: &Env,
+        admin: &Address,
+        currency: &Address,
+    ) -> Result<(), QuickLendXError> {
         let current_admin = AdminStorage::get_admin(env).ok_or(QuickLendXError::NotAdmin)?;
         if *admin != current_admin {
             return Err(QuickLendXError::NotAdmin);
@@ -29,7 +33,11 @@ impl CurrencyWhitelist {
     }
 
     /// Remove a token address from the whitelist (admin only).
-    pub fn remove_currency(env: &Env, admin: &Address, currency: &Address) -> Result<(), QuickLendXError> {
+    pub fn remove_currency(
+        env: &Env,
+        admin: &Address,
+        currency: &Address,
+    ) -> Result<(), QuickLendXError> {
         let current_admin = AdminStorage::get_admin(env).ok_or(QuickLendXError::NotAdmin)?;
         if *admin != current_admin {
             return Err(QuickLendXError::NotAdmin);

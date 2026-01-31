@@ -37,7 +37,10 @@ fn test_audit_invoice_created_and_trail() {
         &Vec::new(&env),
     );
     let trail = client.get_invoice_audit_trail(&invoice_id);
-    assert!(!trail.is_empty(), "store_invoice should produce at least one audit entry");
+    assert!(
+        !trail.is_empty(),
+        "store_invoice should produce at least one audit entry"
+    );
     let entry = client.get_audit_entry(&trail.get(0).unwrap());
     assert_eq!(entry.operation, AuditOperation::InvoiceCreated);
     assert_eq!(entry.actor, business);
@@ -60,10 +63,13 @@ fn test_audit_verify_produces_entry() {
     );
     let _ = client.verify_invoice(&invoice_id);
     let trail = client.get_invoice_audit_trail(&invoice_id);
-    let has_verified = trail.iter().any(|id| {
-        client.get_audit_entry(&id).operation == AuditOperation::InvoiceVerified
-    });
-    assert!(has_verified, "verify_invoice should produce InvoiceVerified audit entry");
+    let has_verified = trail
+        .iter()
+        .any(|id| client.get_audit_entry(&id).operation == AuditOperation::InvoiceVerified);
+    assert!(
+        has_verified,
+        "verify_invoice should produce InvoiceVerified audit entry"
+    );
 }
 
 #[test]
@@ -99,7 +105,10 @@ fn test_audit_query_by_invoice() {
     let results = client.query_audit_logs(&filter, &100u32);
     assert!(!results.is_empty());
     for e in results.iter() {
-        assert_eq!(e.invoice_id, inv1, "query by invoice should return only that invoice");
+        assert_eq!(
+            e.invoice_id, inv1,
+            "query by invoice should return only that invoice"
+        );
     }
     let trail2 = client.get_invoice_audit_trail(&inv2);
     assert!(!trail2.is_empty());
@@ -120,7 +129,10 @@ fn test_audit_query_by_operation() {
         &Vec::new(&env),
     );
     let ids = client.get_audit_entries_by_operation(&AuditOperation::InvoiceCreated);
-    assert!(!ids.is_empty(), "should have at least one InvoiceCreated entry");
+    assert!(
+        !ids.is_empty(),
+        "should have at least one InvoiceCreated entry"
+    );
 }
 
 #[test]
@@ -139,7 +151,10 @@ fn test_audit_query_by_actor() {
     );
     let _ = client.verify_invoice(&invoice_id);
     let admin_entries = client.get_audit_entries_by_actor(&admin);
-    assert!(!admin_entries.is_empty(), "admin should have at least one audit entry (verify)");
+    assert!(
+        !admin_entries.is_empty(),
+        "admin should have at least one audit entry (verify)"
+    );
 }
 
 #[test]
@@ -165,7 +180,10 @@ fn test_audit_query_time_range() {
         end_timestamp: Some(now.saturating_add(3600)),
     };
     let results = client.query_audit_logs(&filter, &10u32);
-    assert!(!results.is_empty(), "recent entries should match time range");
+    assert!(
+        !results.is_empty(),
+        "recent entries should match time range"
+    );
 }
 
 #[test]

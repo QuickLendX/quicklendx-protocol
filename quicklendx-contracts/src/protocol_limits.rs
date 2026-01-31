@@ -50,7 +50,7 @@ impl ProtocolLimitsContract {
             .instance()
             .get(&"admin")
             .ok_or(QuickLendXError::NotAdmin)?;
-        
+
         if admin != stored_admin {
             return Err(QuickLendXError::Unauthorized);
         }

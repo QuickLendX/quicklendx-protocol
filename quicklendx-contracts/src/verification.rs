@@ -1001,7 +1001,7 @@ pub fn set_investment_limit(
     new_limit: i128,
 ) -> Result<(), QuickLendXError> {
     admin.require_auth();
-    
+
     // Check admin authorization
     if !crate::admin::AdminStorage::is_admin(env, admin) {
         return Err(QuickLendXError::NotAdmin);
@@ -1011,8 +1011,8 @@ pub fn set_investment_limit(
         return Err(QuickLendXError::InvalidAmount);
     }
 
-    let mut verification = InvestorVerificationStorage::get(env, investor)
-        .ok_or(QuickLendXError::KYCNotFound)?;
+    let mut verification =
+        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
 
     // Only allow setting limits for verified investors
     if !matches!(verification.status, BusinessVerificationStatus::Verified) {
@@ -1020,10 +1020,12 @@ pub fn set_investment_limit(
     }
 
     // Calculate final investment limit based on tier and risk
-    let calculated_limit = calculate_investment_limit(&verification.tier, &verification.risk_level, new_limit);
-    
+    let calculated_limit =
+        calculate_investment_limit(&verification.tier, &verification.risk_level, new_limit);
+
     verification.investment_limit = calculated_limit;
-    verification.compliance_notes = Some(String::from_str(env, "Investment limit updated by admin"));
+    verification.compliance_notes =
+        Some(String::from_str(env, "Investment limit updated by admin"));
 
     InvestorVerificationStorage::update(env, &verification);
     Ok(())

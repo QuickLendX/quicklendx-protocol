@@ -344,11 +344,7 @@ impl PlatformFee {
 /// let profit = calculate_investor_profit(&env, 1000, 1100);
 /// assert_eq!(profit, 98); // 100 profit - 2 fee
 /// ```
-pub fn calculate_investor_profit(
-    env: &Env,
-    investment_amount: i128,
-    payment_amount: i128,
-) -> i128 {
+pub fn calculate_investor_profit(env: &Env, investment_amount: i128, payment_amount: i128) -> i128 {
     let breakdown = PlatformFee::calculate_breakdown(env, investment_amount, payment_amount);
     breakdown.investor_profit
 }
@@ -508,8 +504,7 @@ mod tests {
     fn test_basic_profit_calculation() {
         // Investment: 1000, Payment: 1100, Fee: 2% (200 bps)
         // Profit: 100, Fee: 2, Investor gets: 1098
-        let (investor_return, platform_fee) =
-            PlatformFee::calculate_with_fee_bps(1000, 1100, 200);
+        let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 1100, 200);
         assert_eq!(platform_fee, 2);
         assert_eq!(investor_return, 1098);
         assert!(verify_no_dust(investor_return, platform_fee, 1100));
@@ -518,8 +513,7 @@ mod tests {
     #[test]
     fn test_exact_payment_no_profit() {
         // Payment equals investment - no profit, no fee
-        let (investor_return, platform_fee) =
-            PlatformFee::calculate_with_fee_bps(1000, 1000, 200);
+        let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 1000, 200);
         assert_eq!(platform_fee, 0);
         assert_eq!(investor_return, 1000);
         assert!(verify_no_dust(investor_return, platform_fee, 1000));
@@ -528,8 +522,7 @@ mod tests {
     #[test]
     fn test_underpayment_loss() {
         // Payment less than investment - investor takes loss, no fee
-        let (investor_return, platform_fee) =
-            PlatformFee::calculate_with_fee_bps(1000, 900, 200);
+        let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 900, 200);
         assert_eq!(platform_fee, 0);
         assert_eq!(investor_return, 900);
         assert!(verify_no_dust(investor_return, platform_fee, 900));
@@ -540,8 +533,7 @@ mod tests {
         // High profit scenario
         // Investment: 1000, Payment: 2000 (100% return), Fee: 2%
         // Profit: 1000, Fee: 20, Investor gets: 1980
-        let (investor_return, platform_fee) =
-            PlatformFee::calculate_with_fee_bps(1000, 2000, 200);
+        let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 2000, 200);
         assert_eq!(platform_fee, 20);
         assert_eq!(investor_return, 1980);
         assert!(verify_no_dust(investor_return, platform_fee, 2000));
@@ -549,8 +541,7 @@ mod tests {
 
     #[test]
     fn test_zero_payment() {
-        let (investor_return, platform_fee) =
-            PlatformFee::calculate_with_fee_bps(1000, 0, 200);
+        let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 0, 200);
         assert_eq!(platform_fee, 0);
         assert_eq!(investor_return, 0);
     }
@@ -558,8 +549,7 @@ mod tests {
     #[test]
     fn test_zero_investment() {
         // Zero investment means all payment is profit
-        let (investor_return, platform_fee) =
-            PlatformFee::calculate_with_fee_bps(0, 1000, 200);
+        let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(0, 1000, 200);
         assert_eq!(platform_fee, 20); // 2% of 1000
         assert_eq!(investor_return, 980);
         assert!(verify_no_dust(investor_return, platform_fee, 1000));
@@ -568,8 +558,7 @@ mod tests {
     #[test]
     fn test_zero_fee() {
         // No fee means investor gets full payment
-        let (investor_return, platform_fee) =
-            PlatformFee::calculate_with_fee_bps(1000, 1100, 0);
+        let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 1100, 0);
         assert_eq!(platform_fee, 0);
         assert_eq!(investor_return, 1100);
     }
@@ -578,8 +567,7 @@ mod tests {
     fn test_max_fee() {
         // Maximum 10% fee
         // Profit: 100, Fee: 10, Investor gets: 1090
-        let (investor_return, platform_fee) =
-            PlatformFee::calculate_with_fee_bps(1000, 1100, 1000);
+        let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 1100, 1000);
         assert_eq!(platform_fee, 10);
         assert_eq!(investor_return, 1090);
         assert!(verify_no_dust(investor_return, platform_fee, 1100));
@@ -589,8 +577,7 @@ mod tests {
     fn test_rounding_down_small_profit() {
         // Small profit where rounding matters
         // Profit: 1, Fee at 2%: 0.02 -> rounds to 0
-        let (investor_return, platform_fee) =
-            PlatformFee::calculate_with_fee_bps(1000, 1001, 200);
+        let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 1001, 200);
         assert_eq!(platform_fee, 0); // Rounds down to 0
         assert_eq!(investor_return, 1001);
         assert!(verify_no_dust(investor_return, platform_fee, 1001));
@@ -600,8 +587,7 @@ mod tests {
     fn test_rounding_boundary() {
         // Profit where fee is exactly at boundary
         // Profit: 50, Fee at 2%: 1 (exactly)
-        let (investor_return, platform_fee) =
-            PlatformFee::calculate_with_fee_bps(1000, 1050, 200);
+        let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 1050, 200);
         assert_eq!(platform_fee, 1);
         assert_eq!(investor_return, 1049);
         assert!(verify_no_dust(investor_return, platform_fee, 1050));
@@ -610,8 +596,7 @@ mod tests {
     #[test]
     fn test_rounding_just_below_boundary() {
         // Profit: 49, Fee at 2%: 0.98 -> rounds to 0
-        let (investor_return, platform_fee) =
-            PlatformFee::calculate_with_fee_bps(1000, 1049, 200);
+        let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 1049, 200);
         assert_eq!(platform_fee, 0); // Rounds down
         assert_eq!(investor_return, 1049);
         assert!(verify_no_dust(investor_return, platform_fee, 1049));
@@ -621,7 +606,7 @@ mod tests {
     fn test_large_amounts() {
         // Large amounts to verify no overflow
         let investment = 1_000_000_000_000_i128; // 1 trillion
-        let payment = 1_100_000_000_000_i128;    // 10% return
+        let payment = 1_100_000_000_000_i128; // 10% return
         let (investor_return, platform_fee) =
             PlatformFee::calculate_with_fee_bps(investment, payment, 200);
 

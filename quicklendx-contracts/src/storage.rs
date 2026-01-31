@@ -16,11 +16,12 @@
 //! - Persistent storage for long-term data retention
 //! - Upgrade-safe: Keys are designed to avoid conflicts during contract upgrades
 
-use soroban_sdk::{symbol_short, Address, BytesN, Env, Map, Symbol, Vec};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec};
 
-use crate::types::{
-    Bid, BidStatus, Investment, InvestmentStatus, Invoice, InvoiceStatus, PlatformFeeConfig,
-};
+use crate::bid::{Bid, BidStatus};
+use crate::investment::{Investment, InvestmentStatus};
+use crate::invoice::{Invoice, InvoiceStatus};
+use crate::profits::PlatformFeeConfig;
 
 /// Storage keys for the contract
 pub struct StorageKeys;
@@ -58,7 +59,7 @@ impl StorageKeys {
 
     /// Key for investment count
     pub fn investment_count() -> Symbol {
-        symbol_short!("invst_count")
+        symbol_short!("inv_cnt")
     }
 }
 
@@ -80,6 +81,7 @@ impl Indexes {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("defaulted"),
             InvoiceStatus::Cancelled => symbol_short!("cancelled"),
+            InvoiceStatus::Refunded => symbol_short!("refunded"),
         };
         (symbol_short!("inv_stat"), status_symbol)
     }
@@ -91,7 +93,7 @@ impl Indexes {
 
     /// Index: bids by investor
     pub fn bids_by_investor(investor: &Address) -> (Symbol, Address) {
-        (symbol_short!("bids_invstr"), investor.clone())
+        (symbol_short!("bids_inv"), investor.clone())
     }
 
     /// Index: bids by status
@@ -101,6 +103,7 @@ impl Indexes {
             BidStatus::Withdrawn => symbol_short!("withdrawn"),
             BidStatus::Accepted => symbol_short!("accepted"),
             BidStatus::Expired => symbol_short!("expired"),
+            BidStatus::Cancelled => symbol_short!("cancelled"),
         };
         (symbol_short!("bids_stat"), status_symbol)
     }
@@ -112,7 +115,7 @@ impl Indexes {
 
     /// Index: investments by investor
     pub fn investments_by_investor(investor: &Address) -> (Symbol, Address) {
-        (symbol_short!("invst_invstr"), investor.clone())
+        (symbol_short!("inv_invst"), investor.clone())
     }
 
     /// Index: investments by status
@@ -122,8 +125,9 @@ impl Indexes {
             InvestmentStatus::Withdrawn => symbol_short!("withdrawn"),
             InvestmentStatus::Completed => symbol_short!("completed"),
             InvestmentStatus::Defaulted => symbol_short!("defaulted"),
+            InvestmentStatus::Refunded => symbol_short!("refunded"),
         };
-        (symbol_short!("invst_stat"), status_symbol)
+        (symbol_short!("inv_stat"), status_symbol)
     }
 }
 
@@ -343,7 +347,9 @@ pub struct InvestmentStorage;
 impl InvestmentStorage {
     /// Store an investment
     pub fn store(env: &Env, investment: &Investment) {
-        env.storage().persistent().set(&investment.investment_id, investment);
+        env.storage()
+            .persistent()
+            .set(&investment.investment_id, investment);
 
         // Update indexes
         Self::add_to_invoice_index(env, &investment.invoice_id, &investment.investment_id);
@@ -361,12 +367,22 @@ impl InvestmentStorage {
         // Remove from old status index if status changed
         if let Some(old_investment) = Self::get(env, &investment.investment_id) {
             if old_investment.status != investment.status {
-                Self::remove_from_status_index(env, old_investment.status, &investment.investment_id);
-                Self::add_to_status_index(env, investment.status.clone(), &investment.investment_id);
+                Self::remove_from_status_index(
+                    env,
+                    old_investment.status,
+                    &investment.investment_id,
+                );
+                Self::add_to_status_index(
+                    env,
+                    investment.status.clone(),
+                    &investment.investment_id,
+                );
             }
         }
 
-        env.storage().persistent().set(&investment.investment_id, investment);
+        env.storage()
+            .persistent()
+            .set(&investment.investment_id, investment);
     }
 
     /// Get investments by invoice

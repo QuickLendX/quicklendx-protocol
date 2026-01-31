@@ -9,7 +9,7 @@ use soroban_sdk::{testutils::Address as _, Address, Env};
 fn test_calculate_platform_fee_full_payment() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register(QuickLendXContract, ());
     let admin = Address::generate(&env);
 
@@ -20,16 +20,13 @@ fn test_calculate_platform_fee_full_payment() {
         // Investment: 1000, Payment: 1100 => Profit: 100
         // Fee: 100 * 2% = 2
         // Investor gets: 1100 - 2 = 1098
-        
+
         let investment_amount = 1000i128;
         let payment_amount = 1100i128;
-        
-        let (investor_return, platform_fee) = FeeManager::calculate_platform_fee(
-            &env,
-            investment_amount,
-            payment_amount,
-        ).unwrap();
-        
+
+        let (investor_return, platform_fee) =
+            FeeManager::calculate_platform_fee(&env, investment_amount, payment_amount).unwrap();
+
         assert_eq!(platform_fee, 2);
         assert_eq!(investor_return, 1098);
     });
@@ -39,7 +36,7 @@ fn test_calculate_platform_fee_full_payment() {
 fn test_calculate_platform_fee_no_profit() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register(QuickLendXContract, ());
     let admin = Address::generate(&env);
 
@@ -49,16 +46,13 @@ fn test_calculate_platform_fee_no_profit() {
         // Investment: 1000, Payment: 1000 => Profit: 0
         // Fee: 0
         // Investor gets: 1000
-        
+
         let investment_amount = 1000i128;
         let payment_amount = 1000i128;
-        
-        let (investor_return, platform_fee) = FeeManager::calculate_platform_fee(
-            &env,
-            investment_amount,
-            payment_amount,
-        ).unwrap();
-        
+
+        let (investor_return, platform_fee) =
+            FeeManager::calculate_platform_fee(&env, investment_amount, payment_amount).unwrap();
+
         assert_eq!(platform_fee, 0);
         assert_eq!(investor_return, 1000);
     });
@@ -68,7 +62,7 @@ fn test_calculate_platform_fee_no_profit() {
 fn test_calculate_platform_fee_partial_loss() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register(QuickLendXContract, ());
     let admin = Address::generate(&env);
 
@@ -78,16 +72,13 @@ fn test_calculate_platform_fee_partial_loss() {
         // Investment: 1000, Payment: 800 => Profit: -200 (0)
         // Fee: 0
         // Investor gets: 800
-        
+
         let investment_amount = 1000i128;
         let payment_amount = 800i128;
-        
-        let (investor_return, platform_fee) = FeeManager::calculate_platform_fee(
-            &env,
-            investment_amount,
-            payment_amount,
-        ).unwrap();
-        
+
+        let (investor_return, platform_fee) =
+            FeeManager::calculate_platform_fee(&env, investment_amount, payment_amount).unwrap();
+
         assert_eq!(platform_fee, 0);
         assert_eq!(investor_return, 800);
     });
@@ -97,7 +88,7 @@ fn test_calculate_platform_fee_partial_loss() {
 fn test_calculate_platform_fee_rounding() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register(QuickLendXContract, ());
     let admin = Address::generate(&env);
 
@@ -107,16 +98,13 @@ fn test_calculate_platform_fee_rounding() {
         // Investment: 1000, Payment: 1001 => Profit: 1
         // Fee: 1 * 200 / 10000 = 0.02 => 0 (integer division)
         // Investor gets: 1001
-        
+
         let investment_amount = 1000i128;
         let payment_amount = 1001i128;
-        
-        let (investor_return, platform_fee) = FeeManager::calculate_platform_fee(
-            &env,
-            investment_amount,
-            payment_amount,
-        ).unwrap();
-        
+
+        let (investor_return, platform_fee) =
+            FeeManager::calculate_platform_fee(&env, investment_amount, payment_amount).unwrap();
+
         assert_eq!(platform_fee, 0);
         assert_eq!(investor_return, 1001);
     });
@@ -126,7 +114,7 @@ fn test_calculate_platform_fee_rounding() {
 fn test_calculate_platform_fee_small_fee() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register(QuickLendXContract, ());
     let admin = Address::generate(&env);
 
@@ -136,16 +124,13 @@ fn test_calculate_platform_fee_small_fee() {
         // Investment: 1000, Payment: 1050 => Profit: 50
         // Fee: 50 * 200 / 10000 = 10000 / 10000 = 1
         // Investor gets: 1049
-        
+
         let investment_amount = 1000i128;
         let payment_amount = 1050i128;
-        
-        let (investor_return, platform_fee) = FeeManager::calculate_platform_fee(
-            &env,
-            investment_amount,
-            payment_amount,
-        ).unwrap();
-        
+
+        let (investor_return, platform_fee) =
+            FeeManager::calculate_platform_fee(&env, investment_amount, payment_amount).unwrap();
+
         assert_eq!(platform_fee, 1);
         assert_eq!(investor_return, 1049);
     });
@@ -155,7 +140,7 @@ fn test_calculate_platform_fee_small_fee() {
 fn test_calculate_platform_fee_updated_bps() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register(QuickLendXContract, ());
     let admin = Address::generate(&env);
 
@@ -172,16 +157,13 @@ fn test_calculate_platform_fee_updated_bps() {
         // Investment: 1000, Payment: 1100 => Profit: 100
         // Fee: 100 * 10% = 10
         // Investor gets: 1090
-        
+
         let investment_amount = 1000i128;
         let payment_amount = 1100i128;
-        
-        let (investor_return, platform_fee) = FeeManager::calculate_platform_fee(
-            &env,
-            investment_amount,
-            payment_amount,
-        ).unwrap();
-        
+
+        let (investor_return, platform_fee) =
+            FeeManager::calculate_platform_fee(&env, investment_amount, payment_amount).unwrap();
+
         assert_eq!(platform_fee, 10);
         assert_eq!(investor_return, 1090);
     });
@@ -191,7 +173,7 @@ fn test_calculate_platform_fee_updated_bps() {
 fn test_calculate_platform_fee_large_numbers() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register(QuickLendXContract, ());
     let admin = Address::generate(&env);
 
@@ -200,16 +182,13 @@ fn test_calculate_platform_fee_large_numbers() {
 
         // Investment: 1M, Payment: 2M => Profit: 1M
         // Fee: 1M * 2% = 20,000
-        
+
         let investment_amount = 1_000_000i128;
         let payment_amount = 2_000_000i128;
-        
-        let (investor_return, platform_fee) = FeeManager::calculate_platform_fee(
-            &env,
-            investment_amount,
-            payment_amount,
-        ).unwrap();
-        
+
+        let (investor_return, platform_fee) =
+            FeeManager::calculate_platform_fee(&env, investment_amount, payment_amount).unwrap();
+
         assert_eq!(platform_fee, 20_000);
         assert_eq!(investor_return, 1_980_000);
     });

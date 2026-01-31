@@ -29,7 +29,9 @@
 
 use super::*;
 use crate::invoice::InvoiceCategory;
-use soroban_sdk::{symbol_short, testutils::Address as _, token, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{
+    symbol_short, testutils::Address as _, token, Address, BytesN, Env, String, Vec,
+};
 
 // ============================================================================
 // Test Context - Efficient setup with shared resources
@@ -79,7 +81,9 @@ fn setup_context() -> TestContext<'static> {
 
     // Single token for all tests
     let token_admin = Address::generate(&env);
-    let currency = env.register_stellar_asset_contract_v2(token_admin).address();
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
 
     TestContext::new(env, client, contract_id, admin, currency)
 }
@@ -121,7 +125,9 @@ fn create_invoice_with_bid(
 
     ctx.client.verify_invoice(&invoice_id);
 
-    let bid_id = ctx.client.place_bid(investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = ctx
+        .client
+        .place_bid(investor, &invoice_id, &amount, &(amount + 100));
 
     (invoice_id, bid_id)
 }
@@ -192,7 +198,10 @@ fn test_guard_releases_lock_after_success() {
         ctx.env.storage().instance().get(&key).unwrap_or(false)
     });
 
-    assert!(!lock_value, "Lock should be released (false) after successful operation");
+    assert!(
+        !lock_value,
+        "Lock should be released (false) after successful operation"
+    );
 }
 
 /// Test 3: Guard releases lock after failed operation
@@ -225,7 +234,10 @@ fn test_guard_releases_lock_after_failure() {
         ctx.env.storage().instance().get(&key).unwrap_or(false)
     });
 
-    assert!(!lock_value, "Lock should be released (false) even after failed operation");
+    assert!(
+        !lock_value,
+        "Lock should be released (false) even after failed operation"
+    );
 }
 
 /// Test 4: Sequential protected calls succeed
@@ -252,7 +264,10 @@ fn test_sequential_protected_calls_succeed() {
 
     // Accept second bid - should also succeed (lock was released)
     let result_2 = ctx.client.try_accept_bid(&invoice_2, &bid_2);
-    assert!(result_2.is_ok(), "Second accept_bid should succeed (lock released after first)");
+    assert!(
+        result_2.is_ok(),
+        "Second accept_bid should succeed (lock released after first)"
+    );
 
     // Verify final lock state
     let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {

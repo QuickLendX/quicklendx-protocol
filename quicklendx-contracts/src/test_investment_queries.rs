@@ -30,10 +30,22 @@ struct TestContext<'a> {
 }
 
 impl<'a> TestContext<'a> {
-    fn new(env: Env, client: QuickLendXContractClient<'a>, admin: Address, currency: Address) -> Self {
+    fn new(
+        env: Env,
+        client: QuickLendXContractClient<'a>,
+        admin: Address,
+        currency: Address,
+    ) -> Self {
         let sac_client = token::StellarAssetClient::new(&env, &currency);
         let token_client = token::Client::new(&env, &currency);
-        Self { env, client, admin, currency, sac_client, token_client }
+        Self {
+            env,
+            client,
+            admin,
+            currency,
+            sac_client,
+            token_client,
+        }
     }
 }
 
@@ -50,14 +62,17 @@ fn setup_context() -> TestContext<'static> {
 
     // Single token for ALL tests - registered once
     let token_admin = Address::generate(&env);
-    let currency = env.register_stellar_asset_contract_v2(token_admin).address();
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
 
     TestContext::new(env, client, admin, currency)
 }
 
 /// Setup verified business - called once per business
 fn setup_business(ctx: &TestContext, business: &Address) {
-    ctx.client.submit_kyc_application(business, &String::from_str(&ctx.env, "Business KYC"));
+    ctx.client
+        .submit_kyc_application(business, &String::from_str(&ctx.env, "Business KYC"));
     ctx.client.verify_business(&ctx.admin, business);
 }
 
@@ -68,15 +83,22 @@ fn setup_investor(ctx: &TestContext, investor: &Address, limit: i128) {
 
     // Approve contract once with high limit
     let expiration = ctx.env.ledger().sequence() + 100_000;
-    ctx.token_client.approve(investor, &ctx.client.address, &(limit * 10), &expiration);
+    ctx.token_client
+        .approve(investor, &ctx.client.address, &(limit * 10), &expiration);
 
     // KYC once
-    ctx.client.submit_investor_kyc(investor, &String::from_str(&ctx.env, "Investor KYC"));
+    ctx.client
+        .submit_investor_kyc(investor, &String::from_str(&ctx.env, "Investor KYC"));
     ctx.client.verify_investor(investor, &limit);
 }
 
 /// Lightweight invoice funding - reuses existing token and verified parties
-fn fund_invoice(ctx: &TestContext, business: &Address, investor: &Address, amount: i128) -> BytesN<32> {
+fn fund_invoice(
+    ctx: &TestContext,
+    business: &Address,
+    investor: &Address,
+    amount: i128,
+) -> BytesN<32> {
     let due_date = ctx.env.ledger().timestamp() + 86_400;
 
     let invoice_id = ctx.client.store_invoice(
@@ -91,7 +113,9 @@ fn fund_invoice(ctx: &TestContext, business: &Address, investor: &Address, amoun
 
     ctx.client.verify_invoice(&invoice_id);
 
-    let bid_id = ctx.client.place_bid(investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = ctx
+        .client
+        .place_bid(investor, &invoice_id, &amount, &(amount + 100));
     ctx.client.accept_bid(&invoice_id, &bid_id);
 
     invoice_id
@@ -121,18 +145,29 @@ fn test_get_investments_by_investor_correctness() {
 
     // Query investor_a
     let investments_a = ctx.client.get_investments_by_investor(&investor_a);
-    assert_eq!(investments_a.len(), 1, "investor_a should have exactly 1 investment");
+    assert_eq!(
+        investments_a.len(),
+        1,
+        "investor_a should have exactly 1 investment"
+    );
 
     let investment_a = ctx.client.get_invoice_investment(&invoice_1);
     assert!(investments_a.contains(&investment_a.investment_id));
 
     // Query investor_b
     let investments_b = ctx.client.get_investments_by_investor(&investor_b);
-    assert_eq!(investments_b.len(), 1, "investor_b should have exactly 1 investment");
+    assert_eq!(
+        investments_b.len(),
+        1,
+        "investor_b should have exactly 1 investment"
+    );
 
     // Verify isolation
     let investment_b = ctx.client.get_invoice_investment(&invoice_2);
-    assert!(!investments_a.contains(&investment_b.investment_id), "investor_a should NOT have investor_b's investment");
+    assert!(
+        !investments_a.contains(&investment_b.investment_id),
+        "investor_a should NOT have investor_b's investment"
+    );
 }
 
 /// Test: by_investor returns empty Vec for investor with no investments
@@ -143,7 +178,11 @@ fn test_get_investments_by_investor_empty() {
     let new_investor = Address::generate(&ctx.env);
 
     let investments = ctx.client.get_investments_by_investor(&new_investor);
-    assert_eq!(investments.len(), 0, "New investor should have 0 investments");
+    assert_eq!(
+        investments.len(),
+        0,
+        "New investor should have 0 investments"
+    );
 }
 
 /// Test: by_status filter returns only matching investments
@@ -172,7 +211,11 @@ fn test_get_investor_investments_paged_status_filter() {
         &0u32,
         &10u32,
     );
-    assert_eq!(active.len(), 2, "investor_a should have 2 Active investments");
+    assert_eq!(
+        active.len(),
+        2,
+        "investor_a should have 2 Active investments"
+    );
 
     // Verify correct investments
     let inv_1 = ctx.client.get_invoice_investment(&invoice_1);
@@ -347,7 +390,10 @@ fn test_get_investor_investments_paged_offset() {
         v
     };
     for id in page_2.iter() {
-        assert!(!first_two.contains(&id), "Offset results should not overlap");
+        assert!(
+            !first_two.contains(&id),
+            "Offset results should not overlap"
+        );
     }
 
     // offset beyond
