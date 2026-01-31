@@ -4,6 +4,7 @@ use crate::invoice::{Invoice, InvoiceMetadata};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BusinessVerificationStatus {
     Pending,
     Verified,
@@ -986,6 +987,42 @@ pub fn validate_investor_investment(
     } else {
         Err(QuickLendXError::KYCNotFound)
     }
+}
+
+/// Set investment limit for a verified investor (admin only)
+pub fn set_investment_limit(
+    env: &Env,
+    admin: &Address,
+    investor: &Address,
+    new_limit: i128,
+) -> Result<(), QuickLendXError> {
+    admin.require_auth();
+    
+    // Check admin authorization
+    if !crate::admin::AdminStorage::is_admin(env, admin) {
+        return Err(QuickLendXError::NotAdmin);
+    }
+
+    if new_limit <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let mut verification = InvestorVerificationStorage::get(env, investor)
+        .ok_or(QuickLendXError::KYCNotFound)?;
+
+    // Only allow setting limits for verified investors
+    if !matches!(verification.status, BusinessVerificationStatus::Verified) {
+        return Err(QuickLendXError::InvalidKYCStatus);
+    }
+
+    // Calculate final investment limit based on tier and risk
+    let calculated_limit = calculate_investment_limit(&verification.tier, &verification.risk_level, new_limit);
+    
+    verification.investment_limit = calculated_limit;
+    verification.compliance_notes = Some(String::from_str(env, "Investment limit updated by admin"));
+
+    InvestorVerificationStorage::update(env, &verification);
+    Ok(())
 }
 
 /// Validate structured invoice metadata against the invoice amount
