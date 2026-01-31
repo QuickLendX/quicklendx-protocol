@@ -1,12 +1,11 @@
 /// Comprehensive tests for invoice lifecycle, validation, authorization, and status transitions
-/// 
+///
 /// This test module covers:
 /// - Invoice creation and validation
 /// - Authorization and access control
 /// - Status transitions and state management
 /// - Edge cases and error handling
 /// - Security considerations
-
 use super::*;
 use crate::invoice::{InvoiceCategory, InvoiceMetadata, InvoiceStatus, LineItemRecord};
 use crate::verification::BusinessVerificationStatus;
@@ -27,8 +26,7 @@ fn setup_verified_business(env: &Env, client: &QuickLendXContractClient) -> Addr
 
     env.mock_all_auths();
     client.set_admin(&admin);
-    client
-        .submit_kyc_application(&business, &kyc_data);
+    client.submit_kyc_application(&business, &kyc_data);
     client.verify_business(&admin, &business);
 
     business
@@ -42,8 +40,7 @@ fn setup_verified_investor(env: &Env, client: &QuickLendXContractClient) -> Addr
 
     env.mock_all_auths();
     client.set_admin(&admin);
-    client
-        .submit_investor_kyc(&investor, &kyc_data);
+    client.submit_investor_kyc(&investor, &kyc_data);
     client.verify_investor(&investor, &10_000);
 
     investor
@@ -59,16 +56,15 @@ fn create_test_invoice(
     let currency = Address::generate(env);
     let due_date = env.ledger().timestamp() + 86400; // 1 day from now
 
-    client
-        .store_invoice(
-            business,
-            &amount,
-            &currency,
-            &due_date,
-            &String::from_str(env, "Test invoice"),
-            &InvoiceCategory::Services,
-            &Vec::new(env),
-        )
+    client.store_invoice(
+        business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(env),
+    )
 }
 
 // ============================================================================
@@ -87,16 +83,15 @@ fn test_invoice_creation_valid() {
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Valid invoice");
 
-    let invoice_id = client
-        .store_invoice(
-            &business,
-            &amount,
-            &currency,
-            &due_date,
-            &description,
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.business, business);
@@ -302,16 +297,15 @@ fn test_invoice_upload_verified_business_succeeds() {
 
     env.mock_all_auths();
 
-    let invoice_id = client
-        .upload_invoice(
-            &business,
-            &1000,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Verified upload"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
+    let invoice_id = client.upload_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Verified upload"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.business, business);
@@ -427,16 +421,15 @@ fn test_invoice_status_transition_verified_to_funded() {
 
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = client
-        .store_invoice(
-            &business,
-            &1000,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Test invoice"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
 
     // Verify invoice
     client.verify_invoice(&invoice_id);
@@ -472,16 +465,15 @@ fn test_invoice_status_transition_funded_to_paid() {
 
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = client
-        .store_invoice(
-            &business,
-            &1000,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Test invoice"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
 
     // Verify invoice
     client.verify_invoice(&invoice_id);
@@ -497,8 +489,7 @@ fn test_invoice_status_transition_funded_to_paid() {
     assert_eq!(invoice.status, InvoiceStatus::Funded);
 
     // Transition to Paid
-    client
-        .update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
@@ -520,16 +511,15 @@ fn test_invoice_status_transition_funded_to_defaulted() {
 
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = client
-        .store_invoice(
-            &business,
-            &1000,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Test invoice"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
 
     // Verify invoice
     client.verify_invoice(&invoice_id);
@@ -545,8 +535,7 @@ fn test_invoice_status_transition_funded_to_defaulted() {
     assert_eq!(invoice.status, InvoiceStatus::Funded);
 
     // Transition to Defaulted
-    client
-        .update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Defaulted);
@@ -620,16 +609,15 @@ fn test_invoice_large_amount() {
     let due_date = env.ledger().timestamp() + 86400;
     let large_amount = i128::MAX / 2; // Very large amount
 
-    let invoice_id = client
-        .store_invoice(
-            &business,
-            &large_amount,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Large invoice"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
+    let invoice_id = client.store_invoice(
+        &business,
+        &large_amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Large invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.amount, large_amount);
@@ -646,16 +634,15 @@ fn test_invoice_minimum_amount() {
     let due_date = env.ledger().timestamp() + 86400;
     let min_amount = 1i128;
 
-    let invoice_id = client
-        .store_invoice(
-            &business,
-            &min_amount,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Minimum invoice"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
+    let invoice_id = client.store_invoice(
+        &business,
+        &min_amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Minimum invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.amount, min_amount);
@@ -672,16 +659,15 @@ fn test_invoice_far_future_due_date() {
     let current_time = env.ledger().timestamp();
     let far_future = current_time + (365 * 24 * 60 * 60); // 1 year from now
 
-    let invoice_id = client
-        .store_invoice(
-            &business,
-            &1000,
-            &currency,
-            &far_future,
-            &String::from_str(&env, "Far future invoice"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &far_future,
+        &String::from_str(&env, "Far future invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.due_date, far_future);
@@ -698,38 +684,35 @@ fn test_invoice_multiple_invoices_same_business() {
     let due_date = env.ledger().timestamp() + 86400;
 
     // Create multiple invoices
-    let invoice1_id = client
-        .store_invoice(
-            &business,
-            &1000,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Invoice 1"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
+    let invoice1_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 1"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
 
-    let invoice2_id = client
-        .store_invoice(
-            &business,
-            &2000,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Invoice 2"),
-            &InvoiceCategory::Products,
-            &Vec::new(&env),
-        );
+    let invoice2_id = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 2"),
+        &InvoiceCategory::Products,
+        &Vec::new(&env),
+    );
 
-    let invoice3_id = client
-        .store_invoice(
-            &business,
-            &3000,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Invoice 3"),
-            &InvoiceCategory::Consulting,
-            &Vec::new(&env),
-        );
+    let invoice3_id = client.store_invoice(
+        &business,
+        &3000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 3"),
+        &InvoiceCategory::Consulting,
+        &Vec::new(&env),
+    );
 
     // Verify all invoices exist
     let business_invoices = client.get_business_invoices(&business);
@@ -860,16 +843,15 @@ fn test_invoice_business_cannot_accept_own_bid() {
 
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = client
-        .store_invoice(
-            &business,
-            &1000,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Test invoice"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
 
     client.verify_invoice(&invoice_id);
 
@@ -1123,7 +1105,7 @@ fn test_invoice_rating_only_investor_can_rate() {
 // ============================================================================
 
 // SECURITY NOTES:
-// 
+//
 // 1. AUTHORIZATION CHECKS:
 //    - Invoice upload requires business verification (KYC)
 //    - Invoice verification requires admin authentication

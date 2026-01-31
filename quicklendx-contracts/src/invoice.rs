@@ -15,6 +15,7 @@ pub enum InvoiceStatus {
     Paid,      // Invoice has been paid and settled
     Defaulted, // Invoice payment is overdue/defaulted
     Cancelled, // Invoice has been cancelled by the business owner
+    Refunded,  // Invoice has been refunded (prevents multiple refunds/releases)
 }
 
 /// Dispute status enumeration
@@ -121,7 +122,9 @@ pub struct Invoice {
 }
 
 // Use the main error enum from errors.rs
-use crate::audit::{log_invoice_created, log_invoice_funded, log_invoice_status_change};
+use crate::audit::{
+    log_invoice_created, log_invoice_funded, log_invoice_refunded, log_invoice_status_change,
+};
 
 impl Invoice {
     /// Create a new invoice with audit logging
@@ -273,6 +276,22 @@ impl Invoice {
 
         // Log status change
         log_invoice_status_change(env, self.id.clone(), actor, old_status, self.status.clone());
+    }
+
+    /// Mark invoice as refunded with audit logging
+    pub fn mark_as_refunded(&mut self, env: &Env, actor: Address) {
+        let old_status = self.status.clone();
+        self.status = InvoiceStatus::Refunded;
+
+        // Log status change
+        log_invoice_status_change(
+            env,
+            self.id.clone(),
+            actor.clone(),
+            old_status,
+            self.status.clone(),
+        );
+        log_invoice_refunded(env, self.id.clone(), actor);
     }
 
     /// Add a payment record and update totals
@@ -580,6 +599,7 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
             InvoiceStatus::Cancelled => symbol_short!("canceld"),
+            InvoiceStatus::Refunded => symbol_short!("refundd"),
         };
         env.storage()
             .instance()
@@ -604,6 +624,7 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
             InvoiceStatus::Cancelled => symbol_short!("canceld"),
+            InvoiceStatus::Refunded => symbol_short!("refundd"),
         };
         let mut invoices = env
             .storage()
@@ -623,6 +644,7 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
             InvoiceStatus::Cancelled => symbol_short!("canceld"),
+            InvoiceStatus::Refunded => symbol_short!("refundd"),
         };
         let invoices = Self::get_invoices_by_status(env, status);
 
@@ -704,6 +726,7 @@ impl InvoiceStorage {
             InvoiceStatus::Paid,
             InvoiceStatus::Defaulted,
             InvoiceStatus::Cancelled,
+            InvoiceStatus::Refunded,
         ];
 
         for status in all_statuses.iter() {
@@ -748,6 +771,7 @@ impl InvoiceStorage {
             InvoiceStatus::Paid,
             InvoiceStatus::Defaulted,
             InvoiceStatus::Cancelled,
+            InvoiceStatus::Refunded,
         ];
 
         for status in all_statuses.iter() {
@@ -773,6 +797,7 @@ impl InvoiceStorage {
             InvoiceStatus::Paid,
             InvoiceStatus::Defaulted,
             InvoiceStatus::Cancelled,
+            InvoiceStatus::Refunded,
         ];
 
         for status in all_statuses.iter() {

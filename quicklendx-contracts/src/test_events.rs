@@ -1,5 +1,5 @@
 /// Comprehensive test suite for event system
-/// 
+///
 /// Test Coverage:
 /// 1. InvoiceUploaded - emitted when invoice is uploaded
 /// 2. InvoiceVerified - emitted when invoice is verified
@@ -10,17 +10,16 @@
 /// 7. InvoiceDefaulted - emitted when invoice defaults
 /// 8. InvoiceCancelled - emitted when invoice is cancelled
 /// 9. EscrowCreated - emitted when escrow is created
-/// 
+///
 /// Security Notes:
 /// - All events include timestamps for indexing
 /// - Events contain all relevant data (invoice_id, addresses, amounts)
 /// - Events are emitted for all state-changing operations
-
 use super::*;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, Env, String, Vec, token,
+    token, Address, Env, String, Vec,
 };
 
 fn setup_contract(env: &Env) -> (QuickLendXContractClient, Address, Address) {
@@ -53,7 +52,12 @@ fn verify_investor_for_test(
     client.verify_investor(investor, &limit);
 }
 
-fn init_currency_for_test(env: &Env, contract_id: &Address, business: &Address, investor: Option<&Address>) -> Address {
+fn init_currency_for_test(
+    env: &Env,
+    contract_id: &Address,
+    business: &Address,
+    investor: Option<&Address>,
+) -> Address {
     let token_admin = Address::generate(env);
     let currency = env
         .register_stellar_asset_contract_v2(token_admin.clone())
@@ -442,11 +446,17 @@ fn test_multiple_events_in_sequence() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Pending);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Pending
+    );
 
     // 2. Verify invoice (InvoiceVerified event)
     client.verify_invoice(&invoice_id);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Verified);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Verified
+    );
 
     // 3. Place bid (BidPlaced event)
     let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
@@ -454,5 +464,8 @@ fn test_multiple_events_in_sequence() {
 
     // 4. Accept bid (BidAccepted and EscrowCreated events)
     client.accept_bid(&invoice_id, &bid_id);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
 }

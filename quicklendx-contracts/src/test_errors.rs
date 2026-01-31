@@ -1,6 +1,6 @@
 /// Comprehensive test suite for error handling
 /// Tests verify all error variants are correctly raised and error messages are appropriate
-/// 
+///
 /// Test Categories:
 /// 1. Invoice errors - verify each invoice error variant is raised correctly
 /// 2. Authorization errors - verify auth failures are properly handled
@@ -155,12 +155,7 @@ fn test_invoice_not_verified_error() {
 
     // Try to place bid on unverified invoice
     let investor = Address::generate(&env);
-    let result = client.try_place_bid(
-        &investor,
-        &invoice_id,
-        &500,
-        &600,
-    );
+    let result = client.try_place_bid(&investor, &invoice_id, &500, &600);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
@@ -223,7 +218,7 @@ fn test_invoice_already_funded_error() {
     let investor = Address::generate(&env);
     client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
     client.verify_investor(&investor, &10000);
-    
+
     let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
     client.accept_bid(&invoice_id, &bid_id);
 
@@ -231,7 +226,7 @@ fn test_invoice_already_funded_error() {
     let investor2 = Address::generate(&env);
     client.submit_investor_kyc(&investor2, &String::from_str(&env, "KYC"));
     client.verify_investor(&investor2, &10000);
-    
+
     let bid_id2 = client.place_bid(&investor2, &invoice_id, &1000, &1100);
     let result = client.try_accept_bid(&invoice_id, &bid_id2);
     assert!(result.is_err());
@@ -247,14 +242,15 @@ fn test_invoice_already_defaulted_error() {
     let investor = Address::generate(&env);
     client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
     client.verify_investor(&investor, &10000);
-    
+
     let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
     client.accept_bid(&invoice_id, &bid_id);
 
     // Move time past due date + grace period
     let invoice = client.get_invoice(&invoice_id);
     let grace_period = 7 * 24 * 60 * 60; // 7 days
-    env.ledger().set_timestamp(invoice.due_date + grace_period + 1);
+    env.ledger()
+        .set_timestamp(invoice.due_date + grace_period + 1);
 
     // Mark as defaulted
     client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
@@ -291,14 +287,15 @@ fn test_operation_not_allowed_before_grace_period() {
     let investor = Address::generate(&env);
     client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
     client.verify_investor(&investor, &10000);
-    
+
     let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
     client.accept_bid(&invoice_id, &bid_id);
 
     // Move time past due date but before grace period
     let invoice = client.get_invoice(&invoice_id);
     let grace_period = 7 * 24 * 60 * 60; // 7 days
-    env.ledger().set_timestamp(invoice.due_date + grace_period / 2); // Halfway through grace period
+    env.ledger()
+        .set_timestamp(invoice.due_date + grace_period / 2); // Halfway through grace period
 
     // Try to mark as defaulted before grace period expires
     let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
@@ -363,21 +360,21 @@ fn test_business_not_verified_error() {
 #[test]
 fn test_no_panics_on_error_conditions() {
     let (env, client, _admin) = setup();
-    
+
     // Test various error conditions that should not panic
     let invalid_id = BytesN::from_array(&env, &[0u8; 32]);
-    
+
     // All these should return errors, not panic
     let _ = client.try_get_invoice(&invalid_id);
     let _ = client.get_bid(&invalid_id); // Returns Option, not Result
     let _ = client.try_get_investment(&invalid_id);
     let _ = client.try_get_escrow_details(&invalid_id);
-    
+
     // Test with invalid parameters
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-    
+
     let _ = client.try_store_invoice(
         &business,
         &0, // Invalid amount
@@ -387,7 +384,7 @@ fn test_no_panics_on_error_conditions() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    
+
     let _ = client.try_store_invoice(
         &business,
         &1000,
@@ -403,11 +400,10 @@ fn test_no_panics_on_error_conditions() {
 fn test_error_message_consistency() {
     // Verify that error codes are consistent and descriptive
     // This test ensures error enum values are properly defined
-    
+
     assert_eq!(QuickLendXError::InvoiceNotFound as u32, 1000);
     assert_eq!(QuickLendXError::Unauthorized as u32, 1100);
     assert_eq!(QuickLendXError::InvalidAmount as u32, 1200);
     assert_eq!(QuickLendXError::StorageError as u32, 1300);
     assert_eq!(QuickLendXError::InsufficientFunds as u32, 1400);
 }
-

@@ -1,8 +1,11 @@
 use super::*;
 use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::bid::BidStatus;
-use soroban_sdk::{testutils::{Address as _, Ledger}, Address, BytesN, Env, String, Vec};
+use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Address, BytesN, Env, String, Vec,
+};
 
 // Helper: basic setup returning env and client
 fn setup() -> (Env, QuickLendXContractClient<'static>) {
@@ -48,28 +51,52 @@ fn test_get_business_invoices_paged_empty_and_pagination() {
     // No invoices for this business should return empty results
     let business = Address::generate(&env);
 
-    let empty = client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &0u32, &10u32);
+    let empty = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &10u32,
+    );
     assert_eq!(empty.len(), 0, "Expected no invoices for new business");
 
     // Create 5 invoices for business
     for i in 0..5 {
-        let _id = create_invoice(&env, &client, &business, 1000 + i * 100, InvoiceCategory::Services, false);
+        let _id = create_invoice(
+            &env,
+            &client,
+            &business,
+            1000 + i * 100,
+            InvoiceCategory::Services,
+            false,
+        );
     }
 
     // Page 0, limit 2 => 2 results
-    let p0 = client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &0u32, &2u32);
+    let p0 =
+        client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &0u32, &2u32);
     assert_eq!(p0.len(), 2);
 
     // Page 1, offset 2, limit 2 => next 2 results
-    let p1 = client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &2u32, &2u32);
+    let p1 =
+        client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &2u32, &2u32);
     assert_eq!(p1.len(), 2);
 
     // Offset beyond length => empty
-    let p_out = client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &10u32, &5u32);
-    assert_eq!(p_out.len(), 0, "Offset beyond length should return empty slice");
+    let p_out = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &10u32,
+        &5u32,
+    );
+    assert_eq!(
+        p_out.len(),
+        0,
+        "Offset beyond length should return empty slice"
+    );
 
     // Limit zero => empty
-    let p_zero = client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &0u32, &0u32);
+    let p_zero =
+        client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &0u32, &0u32);
     assert_eq!(p_zero.len(), 0, "Limit zero should return empty results");
 }
 
@@ -83,33 +110,103 @@ fn test_get_available_invoices_paged_filters_and_bounds() {
     let business = Address::generate(&env);
 
     // Create and verify invoices with varying amounts and categories
-    let id1 = create_invoice(&env, &client, &business, 500, InvoiceCategory::Products, true);
-    let id2 = create_invoice(&env, &client, &business, 1500, InvoiceCategory::Services, true);
-    let id3 = create_invoice(&env, &client, &business, 2500, InvoiceCategory::Services, true);
-    let id4 = create_invoice(&env, &client, &business, 3500, InvoiceCategory::Products, true);
+    let id1 = create_invoice(
+        &env,
+        &client,
+        &business,
+        500,
+        InvoiceCategory::Products,
+        true,
+    );
+    let id2 = create_invoice(
+        &env,
+        &client,
+        &business,
+        1500,
+        InvoiceCategory::Services,
+        true,
+    );
+    let id3 = create_invoice(
+        &env,
+        &client,
+        &business,
+        2500,
+        InvoiceCategory::Services,
+        true,
+    );
+    let id4 = create_invoice(
+        &env,
+        &client,
+        &business,
+        3500,
+        InvoiceCategory::Products,
+        true,
+    );
 
     // No filters: should return at least the 4 we added
-    let all = client.get_available_invoices_paged(&Option::<i128>::None, &Option::<i128>::None, &Option::<InvoiceCategory>::None, &0u32, &10u32);
+    let all = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &0u32,
+        &10u32,
+    );
     assert!(all.len() >= 4, "Expected at least 4 verified invoices");
 
     // Filter by min_amount => should exclude id1
-    let min_filtered = client.get_available_invoices_paged(&Some(1000i128), &Option::<i128>::None, &Option::<InvoiceCategory>::None, &0u32, &10u32);
-    assert!(!min_filtered.contains(&id1), "id1 should be excluded by min_amount filter");
-    assert!(min_filtered.contains(&id2), "id2 should be included by min_amount filter");
+    let min_filtered = client.get_available_invoices_paged(
+        &Some(1000i128),
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &0u32,
+        &10u32,
+    );
+    assert!(
+        !min_filtered.contains(&id1),
+        "id1 should be excluded by min_amount filter"
+    );
+    assert!(
+        min_filtered.contains(&id2),
+        "id2 should be included by min_amount filter"
+    );
 
     // Filter by max_amount => should exclude highest
-    let max_filtered = client.get_available_invoices_paged(&Option::<i128>::None, &Some(3000i128), &Option::<InvoiceCategory>::None, &0u32, &10u32);
-    assert!(!max_filtered.contains(&id4), "id4 should be excluded by max_amount filter");
-    assert!(max_filtered.contains(&id3), "id3 should be included by max_amount filter");
+    let max_filtered = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Some(3000i128),
+        &Option::<InvoiceCategory>::None,
+        &0u32,
+        &10u32,
+    );
+    assert!(
+        !max_filtered.contains(&id4),
+        "id4 should be excluded by max_amount filter"
+    );
+    assert!(
+        max_filtered.contains(&id3),
+        "id3 should be included by max_amount filter"
+    );
 
     // Filter by category (Services) => should include id2 and id3 only
-    let cat_filtered = client.get_available_invoices_paged(&Option::<i128>::None, &Option::<i128>::None, &Some(InvoiceCategory::Services), &0u32, &10u32);
+    let cat_filtered = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Some(InvoiceCategory::Services),
+        &0u32,
+        &10u32,
+    );
     assert!(cat_filtered.contains(&id2));
     assert!(cat_filtered.contains(&id3));
     assert!(!cat_filtered.contains(&id1));
 
     // Pagination: limit 1 offset 1 should return exactly 1 item
-    let page = client.get_available_invoices_paged(&Option::<i128>::None, &Option::<i128>::None, &Option::<InvoiceCategory>::None, &1u32, &1u32);
+    let page = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &1u32,
+        &1u32,
+    );
     assert_eq!(page.len(), 1);
 }
 
@@ -123,24 +220,67 @@ fn test_query_audit_logs_filters_and_limit() {
     // Use the registered contract via client to create invoices
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let inv1 = client.store_invoice(&business, &1000, &currency, &due_date, &String::from_str(&env, "inv1"), &InvoiceCategory::Services, &Vec::new(&env));
-    let inv2 = client.store_invoice(&business, &2000, &currency, &due_date, &String::from_str(&env, "inv2"), &InvoiceCategory::Products, &Vec::new(&env));
+    let inv1 = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "inv1"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let inv2 = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "inv2"),
+        &InvoiceCategory::Products,
+        &Vec::new(&env),
+    );
 
     let actor = Address::generate(&env);
     let actor = Address::generate(&env);
 
     env.as_contract(&contract_id, || {
-        let e1 = crate::audit::AuditLogEntry::new(&env, inv1.clone(), AuditOperation::InvoiceCreated, actor.clone(), None, None, None, None);
+        let e1 = crate::audit::AuditLogEntry::new(
+            &env,
+            inv1.clone(),
+            AuditOperation::InvoiceCreated,
+            actor.clone(),
+            None,
+            None,
+            None,
+            None,
+        );
         crate::audit::AuditStorage::store_audit_entry(&env, &e1);
     });
 
     env.as_contract(&contract_id, || {
-        let e2 = crate::audit::AuditLogEntry::new(&env, inv2.clone(), AuditOperation::InvoiceCreated, actor.clone(), None, None, None, None);
+        let e2 = crate::audit::AuditLogEntry::new(
+            &env,
+            inv2.clone(),
+            AuditOperation::InvoiceCreated,
+            actor.clone(),
+            None,
+            None,
+            None,
+            None,
+        );
         crate::audit::AuditStorage::store_audit_entry(&env, &e2);
     });
 
     env.as_contract(&contract_id, || {
-        let e3 = crate::audit::AuditLogEntry::new(&env, inv1.clone(), AuditOperation::InvoiceVerified, actor.clone(), None, None, None, None);
+        let e3 = crate::audit::AuditLogEntry::new(
+            &env,
+            inv1.clone(),
+            AuditOperation::InvoiceVerified,
+            actor.clone(),
+            None,
+            None,
+            None,
+            None,
+        );
         crate::audit::AuditStorage::store_audit_entry(&env, &e3);
     });
 
@@ -162,7 +302,10 @@ fn test_query_audit_logs_filters_and_limit() {
         }
         entries
     });
-    assert!(results_inv1.len() >= 2, "Expected at least two audit entries for inv1");
+    assert!(
+        results_inv1.len() >= 2,
+        "Expected at least two audit entries for inv1"
+    );
 
     // Query by specific operation InvoiceCreated => should return entries with that operation
     let filter_created = AuditQueryFilter {
@@ -173,7 +316,10 @@ fn test_query_audit_logs_filters_and_limit() {
         end_timestamp: None,
     };
     let results_created: Vec<crate::audit::AuditLogEntry> = env.as_contract(&contract_id, || {
-        let ids = crate::audit::AuditStorage::get_audit_entries_by_operation(&env, &AuditOperation::InvoiceCreated);
+        let ids = crate::audit::AuditStorage::get_audit_entries_by_operation(
+            &env,
+            &AuditOperation::InvoiceCreated,
+        );
         let mut entries = Vec::new(&env);
         for i in ids.iter() {
             if let Some(e) = crate::audit::AuditStorage::get_audit_entry(&env, &i) {
@@ -182,11 +328,17 @@ fn test_query_audit_logs_filters_and_limit() {
         }
         entries
     });
-    assert!(results_created.len() >= 2, "Expected at least two InvoiceCreated entries");
+    assert!(
+        results_created.len() >= 2,
+        "Expected at least two InvoiceCreated entries"
+    );
 
     // Limit enforcement: limit=1 should return only 1
     let results_limited: Vec<crate::audit::AuditLogEntry> = env.as_contract(&contract_id, || {
-        let ids = crate::audit::AuditStorage::get_audit_entries_by_operation(&env, &AuditOperation::InvoiceCreated);
+        let ids = crate::audit::AuditStorage::get_audit_entries_by_operation(
+            &env,
+            &AuditOperation::InvoiceCreated,
+        );
         let mut entries = Vec::new(&env);
         let mut cnt = 0u32;
         for i in ids.iter() {
@@ -200,6 +352,9 @@ fn test_query_audit_logs_filters_and_limit() {
         }
         entries
     });
-    assert_eq!(results_limited.len(), 1, "Limit should restrict number of returned entries");
+    assert_eq!(
+        results_limited.len(),
+        1,
+        "Limit should restrict number of returned entries"
+    );
 }
-

@@ -143,11 +143,8 @@ fn settle_invoice_internal(
     }
 
     // Calculate platform fee using the enhanced fee system
-    let (investor_return, platform_fee) = crate::fees::FeeManager::calculate_platform_fee(
-        env,
-        investment.amount,
-        total_payment,
-    )?;
+    let (investor_return, platform_fee) =
+        crate::fees::FeeManager::calculate_platform_fee(env, investment.amount, total_payment)?;
 
     // Transfer funds to investor
     let business_address = invoice.business.clone();
@@ -167,14 +164,9 @@ fn settle_invoice_internal(
             &business_address,
             platform_fee,
         )?;
-        
+
         // Emit fee routing event
-        crate::events::emit_platform_fee_routed(
-            env,
-            invoice_id,
-            &fee_recipient,
-            platform_fee,
-        );
+        crate::events::emit_platform_fee_routed(env, invoice_id, &fee_recipient, platform_fee);
     }
 
     // Update invoice status
