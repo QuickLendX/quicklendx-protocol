@@ -23,6 +23,7 @@ mod protocol_limits;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
+mod test_business_kyc;
 mod test_overflow;
 #[cfg(test)]
 mod test_refund;
