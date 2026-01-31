@@ -121,6 +121,225 @@
                           "symbol": "fee_cfg"
                         },
                         "val": {
+                          "vec": [
+                            {
+                              "map": [
+                                {
+                                  "key": {
+                                    "symbol": "base_fee_bps"
+                                  },
+                                  "val": {
+                                    "u32": 200
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "fee_type"
+                                  },
+                                  "val": {
+                                    "vec": [
+                                      {
+                                        "symbol": "Platform"
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "is_active"
+                                  },
+                                  "val": {
+                                    "bool": true
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "max_fee"
+                                  },
+                                  "val": {
+                                    "i128": {
+                                      "hi": 0,
+                                      "lo": 1000000
+                                    }
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "min_fee"
+                                  },
+                                  "val": {
+                                    "i128": {
+                                      "hi": 0,
+                                      "lo": 100
+                                    }
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "updated_at"
+                                  },
+                                  "val": {
+                                    "u64": 0
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "updated_by"
+                                  },
+                                  "val": {
+                                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "map": [
+                                {
+                                  "key": {
+                                    "symbol": "base_fee_bps"
+                                  },
+                                  "val": {
+                                    "u32": 50
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "fee_type"
+                                  },
+                                  "val": {
+                                    "vec": [
+                                      {
+                                        "symbol": "Processing"
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "is_active"
+                                  },
+                                  "val": {
+                                    "bool": true
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "max_fee"
+                                  },
+                                  "val": {
+                                    "i128": {
+                                      "hi": 0,
+                                      "lo": 500000
+                                    }
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "min_fee"
+                                  },
+                                  "val": {
+                                    "i128": {
+                                      "hi": 0,
+                                      "lo": 50
+                                    }
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "updated_at"
+                                  },
+                                  "val": {
+                                    "u64": 0
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "updated_by"
+                                  },
+                                  "val": {
+                                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "map": [
+                                {
+                                  "key": {
+                                    "symbol": "base_fee_bps"
+                                  },
+                                  "val": {
+                                    "u32": 100
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "fee_type"
+                                  },
+                                  "val": {
+                                    "vec": [
+                                      {
+                                        "symbol": "Verification"
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "is_active"
+                                  },
+                                  "val": {
+                                    "bool": true
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "max_fee"
+                                  },
+                                  "val": {
+                                    "i128": {
+                                      "hi": 0,
+                                      "lo": 100000
+                                    }
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "min_fee"
+                                  },
+                                  "val": {
+                                    "i128": {
+                                      "hi": 0,
+                                      "lo": 100
+                                    }
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "updated_at"
+                                  },
+                                  "val": {
+                                    "u64": 0
+                                  }
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "updated_by"
+                                  },
+                                  "val": {
+                                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "symbol": "pf_cfg"
+                        },
+                        "val": {
                           "map": [
                             {
                               "key": {
