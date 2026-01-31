@@ -25,6 +25,8 @@ mod test_overflow;
 mod test_profit_fee;
 mod verification;
 
+#[cfg(test)]
+ mod test_invoice_metadata;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
 use escrow::accept_bid_and_fund as do_accept_bid_and_fund;
