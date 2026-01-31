@@ -496,3 +496,17 @@ pub fn log_payment_processed(
         Some(payment_type),
     );
 }
+
+/// Log invoice refund
+pub fn log_invoice_refunded(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+    log_invoice_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowRefunded,
+        actor,
+        None,
+        Some(String::from_str(env, "Refunded")),
+        None,
+        None,
+    );
+}

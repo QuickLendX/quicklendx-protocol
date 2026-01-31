@@ -12,6 +12,7 @@ pub enum BidStatus {
     Withdrawn,
     Accepted,
     Expired,
+    Cancelled,
 }
 
 #[contracttype]

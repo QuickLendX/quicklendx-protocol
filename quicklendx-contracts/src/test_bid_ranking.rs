@@ -21,11 +21,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>) {
     (env, client)
 }
 
-fn add_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    limit: i128,
-) -> Address {
+fn add_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i128) -> Address {
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "KYC"));
     client.verify_investor(&investor, &limit);
@@ -86,10 +82,17 @@ fn test_empty_ranked_and_best_for_nonexistent_invoice() {
     let invalid_invoice_id = BytesN::from_array(&env, &[0xff; 32]);
 
     let ranked = client.get_ranked_bids(&invalid_invoice_id);
-    assert_eq!(ranked.len(), 0, "ranked must be empty for non-existent invoice");
+    assert_eq!(
+        ranked.len(),
+        0,
+        "ranked must be empty for non-existent invoice"
+    );
 
     let best = client.get_best_bid(&invalid_invoice_id);
-    assert!(best.is_none(), "best bid must be None for non-existent invoice");
+    assert!(
+        best.is_none(),
+        "best bid must be None for non-existent invoice"
+    );
 }
 
 // =============================================================================
@@ -147,7 +150,11 @@ fn test_ranking_with_multiple_bids() {
 
     let ranked = client.get_ranked_bids(&invoice_id);
     assert_eq!(ranked.len(), 3);
-    assert_eq!(ranked.get(0).unwrap().investor, inv_b, "highest profit first");
+    assert_eq!(
+        ranked.get(0).unwrap().investor,
+        inv_b,
+        "highest profit first"
+    );
     assert_eq!(ranked.get(0).unwrap().bid_id, bid_b);
 
     let best = client.get_best_bid(&invoice_id).unwrap();
@@ -176,7 +183,10 @@ fn test_best_bid_equals_first_ranked() {
     let best = client.get_best_bid(&invoice_id);
     assert!(best.is_some());
     assert_eq!(best.as_ref().unwrap().bid_id, ranked.get(0).unwrap().bid_id);
-    assert_eq!(best.as_ref().unwrap().investor, ranked.get(0).unwrap().investor);
+    assert_eq!(
+        best.as_ref().unwrap().investor,
+        ranked.get(0).unwrap().investor
+    );
 }
 
 // =============================================================================
