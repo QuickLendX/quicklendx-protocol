@@ -6,6 +6,7 @@ mod analytics;
 mod audit;
 mod backup;
 mod bid;
+mod currency;
 mod defaults;
 mod dispute;
 mod errors;
@@ -22,6 +23,7 @@ mod reentrancy;
 mod settlement;
 #[cfg(test)]
 mod test_admin;
+#[cfg(test)]
 mod test_overflow;
 // mod test_refund;
 #[cfg(test)]
@@ -131,6 +133,26 @@ impl QuickLendXContract {
         AdminStorage::get_admin(&env)
     }
 
+    /// Add a token address to the currency whitelist (admin only).
+    pub fn add_currency(env: Env, admin: Address, currency: Address) -> Result<(), QuickLendXError> {
+        currency::CurrencyWhitelist::add_currency(&env, &admin, &currency)
+    }
+
+    /// Remove a token address from the currency whitelist (admin only).
+    pub fn remove_currency(env: Env, admin: Address, currency: Address) -> Result<(), QuickLendXError> {
+        currency::CurrencyWhitelist::remove_currency(&env, &admin, &currency)
+    }
+
+    /// Check if a token is allowed for invoice currency.
+    pub fn is_allowed_currency(env: Env, currency: Address) -> bool {
+        currency::CurrencyWhitelist::is_allowed_currency(&env, &currency)
+    }
+
+    /// Get all whitelisted token addresses.
+    pub fn get_whitelisted_currencies(env: Env) -> Vec<Address> {
+        currency::CurrencyWhitelist::get_whitelisted_currencies(&env)
+    }
+
     // ============================================================================
     // Invoice Management Functions
     // ============================================================================
@@ -176,6 +198,8 @@ impl QuickLendXContract {
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
         }
+
+        currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
 
         // Check if business is verified (temporarily disabled for debugging)
         // if !verification::BusinessVerificationStorage::is_business_verified(&env, &business) {
@@ -237,6 +261,7 @@ impl QuickLendXContract {
 
         // Basic validation
         verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
+        currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
@@ -255,6 +280,7 @@ impl QuickLendXContract {
         );
         InvoiceStorage::store_invoice(&env, &invoice);
         emit_invoice_uploaded(&env, &invoice);
+        audit::log_invoice_uploaded(&env, invoice.id.clone(), business, invoice.amount);
 
         // Send notification
         let _ = NotificationSystem::notify_invoice_created(&env, &invoice);
@@ -305,6 +331,7 @@ impl QuickLendXContract {
         InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
 
         emit_invoice_verified(&env, &invoice);
+        audit::log_invoice_verified(&env, invoice_id.clone(), admin);
 
         // Send notification
         let _ = NotificationSystem::notify_invoice_verified(&env, &invoice);
@@ -339,6 +366,7 @@ impl QuickLendXContract {
 
         // Emit event
         emit_invoice_cancelled(&env, &invoice);
+        audit::log_invoice_cancelled(&env, invoice_id, invoice.business.clone());
 
         // Send notification (optional - could notify interested investors)
         let _ = NotificationSystem::notify_invoice_status_changed(
@@ -574,6 +602,7 @@ impl QuickLendXContract {
         if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
         }
+        currency::CurrencyWhitelist::require_allowed_currency(&env, &invoice.currency)?;
 
         let verification = do_get_investor_verification(&env, &investor)
             .ok_or(QuickLendXError::BusinessNotVerified)?;
@@ -610,6 +639,7 @@ impl QuickLendXContract {
 
         // Emit bid placed event
         emit_bid_placed(&env, &bid);
+        audit::log_bid_placed(&env, invoice_id, investor, bid_amount, bid_id.clone());
 
         // Send notification for business about new bid
         let _ = NotificationSystem::notify_bid_received(&env, &invoice, &bid);
@@ -679,6 +709,8 @@ impl QuickLendXContract {
             .expect("Escrow should exist after creation");
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
+        audit::log_bid_accepted(&env, invoice_id.clone(), invoice.business.clone(), bid.bid_amount);
+        audit::log_escrow_created(&env, invoice_id.clone(), bid.investor.clone(), bid.bid_amount, escrow_id);
         let _ = NotificationSystem::notify_bid_accepted(&env, &invoice, &bid);
         let _ = NotificationSystem::notify_invoice_status_changed(
             &env,
@@ -769,6 +801,7 @@ impl QuickLendXContract {
 
         // Emit bid withdrawn event
         emit_bid_withdrawn(&env, &bid);
+        audit::log_bid_withdrawn(&env, bid.invoice_id.clone(), bid.investor.clone(), bid_id);
 
         Ok(())
     }
@@ -2426,6 +2459,10 @@ mod test_fees;
 #[cfg(test)]
 mod test_escrow;
 
+#[cfg(test)]
+mod test_audit;
+#[cfg(test)]
+mod test_currency;
 #[cfg(test)]
 mod test_errors;
 #[cfg(test)]

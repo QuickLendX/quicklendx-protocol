@@ -1,7 +1,7 @@
 //! Invoice settlement: partial payments and full settlement (transfer out to investor + fees).
 //! `settle_invoice` is called from lib with a reentrancy guard.
 
-use crate::audit::log_payment_processed;
+use crate::audit::{log_payment_processed, log_settlement_completed};
 use crate::errors::QuickLendXError;
 use crate::events::{emit_invoice_settled, emit_partial_payment};
 use crate::investment::{InvestmentStatus, InvestmentStorage};
@@ -189,6 +189,12 @@ fn settle_invoice_internal(
         business_address.clone(),
         total_payment,
         String::from_str(env, "final"),
+    );
+    log_settlement_completed(
+        env,
+        invoice.id.clone(),
+        business_address.clone(),
+        total_payment,
     );
 
     // Emit settlement event
