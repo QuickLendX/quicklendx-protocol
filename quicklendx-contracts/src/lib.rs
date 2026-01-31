@@ -2150,6 +2150,13 @@ impl QuickLendXContract {
         auto_distribution: bool,
         min_distribution_amount: i128,
     ) -> Result<(), QuickLendXError> {
+        // Verify admin
+        let stored_admin = BusinessVerificationStorage::get_admin(&env)
+            .ok_or(QuickLendXError::NotAdmin)?;
+        if admin != stored_admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
+
         let config = fees::RevenueConfig {
             treasury_address,
             treasury_share_bps,
@@ -2159,6 +2166,11 @@ impl QuickLendXContract {
             min_distribution_amount,
         };
         fees::FeeManager::configure_revenue_distribution(&env, &admin, config)
+    }
+
+    /// Get current revenue split configuration
+    pub fn get_revenue_split_config(env: Env) -> Result<fees::RevenueConfig, QuickLendXError> {
+        fees::FeeManager::get_revenue_split_config(&env)
     }
 
     /// Distribute revenue for a period
@@ -2438,6 +2450,7 @@ mod test_reentrancy;
 mod test_partial_payments;
 
 #[cfg(test)]
+mod test_revenue_split;
 mod test_investor_kyc;
 #[cfg(test)]
 mod test_profit_fee_formula;
