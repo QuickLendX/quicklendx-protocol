@@ -8,6 +8,7 @@ mod backup;
 mod bid;
 mod currency;
 mod defaults;
+mod dispute;
 mod errors;
 mod escrow;
 mod events;
@@ -26,8 +27,7 @@ mod test_admin;
 mod test_business_kyc;
 mod test_overflow;
 mod test_overflow;
-#[cfg(test)]
-mod test_refund;
+// mod test_refund;
 #[cfg(test)]
 mod test_profit_fee;
 mod test_refund;
@@ -2483,14 +2483,6 @@ mod test_queries;
 #[cfg(test)]
 mod test_reentrancy;
 
-#[cfg(test)]
-mod test_investment_queries;
-#[cfg(test)]
-mod test_reentrancy;
-
-#[cfg(test)]
-mod test_revenue_split;
-#[cfg(test)]
 mod test_investor_kyc;
 #[cfg(test)]
 mod test_profit_fee_formula;
