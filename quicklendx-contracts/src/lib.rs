@@ -53,7 +53,7 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
     get_business_verification_status, get_investor_analytics,
     get_investor_verification as do_get_investor_verification, reject_business,
-    reject_investor as do_reject_investor, submit_investor_kyc as do_submit_investor_kyc,
+    reject_investor as do_reject_investor, set_investment_limit, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, update_investor_analytics, validate_bid, validate_investor_investment,
     validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
     verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
@@ -1003,6 +1003,17 @@ impl QuickLendXContract {
     /// Get investor verification record if available
     pub fn get_investor_verification(env: Env, investor: Address) -> Option<InvestorVerification> {
         do_get_investor_verification(&env, &investor)
+    }
+
+    /// Set investment limit for a verified investor (admin only)
+    pub fn set_investment_limit(
+        env: Env,
+        investor: Address,
+        new_limit: i128,
+    ) -> Result<(), QuickLendXError> {
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        verification::set_investment_limit(&env, &admin, &investor, new_limit)
     }
 
     /// Verify business (admin only)
