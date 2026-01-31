@@ -21,6 +21,7 @@ pub enum InvestmentStatus {
     Withdrawn,
     Completed,
     Defaulted,
+    Refunded,
 }
 
 #[contracttype]

@@ -13,12 +13,12 @@ pub const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60;
 
 /// Mark an invoice as defaulted (admin or automated process)
 /// Checks due date + grace period before marking as defaulted
-/// 
+///
 /// # Arguments
 /// * `env` - The environment
 /// * `invoice_id` - The invoice ID to mark as defaulted
 /// * `grace_period` - Optional grace period in seconds (defaults to DEFAULT_GRACE_PERIOD)
-/// 
+///
 /// # Returns
 /// * `Ok(())` if the invoice was successfully marked as defaulted
 /// * `Err(QuickLendXError)` if the operation fails
@@ -58,7 +58,7 @@ pub fn mark_invoice_defaulted(
 pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-    
+
     // Validate invoice is in funded status
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvalidStatus);
@@ -71,17 +71,17 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     // Remove from funded status list
     InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
-    
+
     // Mark invoice as defaulted
     invoice.mark_as_defaulted();
     InvoiceStorage::update_invoice(env, &invoice);
-    
+
     // Add to defaulted status list
     InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Defaulted, invoice_id);
-    
+
     // Emit expiration event
     emit_invoice_expired(env, &invoice);
-    
+
     // Update investment status and process insurance claims
     if let Some(mut investment) = InvestmentStorage::get_investment_by_invoice(env, invoice_id) {
         investment.status = InvestmentStatus::Defaulted;
@@ -108,13 +108,13 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
             );
         }
     }
-    
+
     // Emit default event
     emit_invoice_defaulted(env, &invoice);
-    
+
     // Send notification
     let _ = NotificationSystem::notify_invoice_defaulted(env, &invoice);
-    
+
     Ok(())
 }
 

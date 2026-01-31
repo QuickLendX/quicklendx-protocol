@@ -1,7 +1,7 @@
 //! Invoice settlement: partial payments and full settlement (transfer out to investor + fees).
 //! `settle_invoice` is called from lib with a reentrancy guard.
 
-use crate::audit::log_payment_processed;
+use crate::audit::{log_payment_processed, log_settlement_completed};
 use crate::errors::QuickLendXError;
 use crate::events::{emit_invoice_settled, emit_partial_payment};
 use crate::investment::{InvestmentStatus, InvestmentStorage};
@@ -143,11 +143,8 @@ fn settle_invoice_internal(
     }
 
     // Calculate platform fee using the enhanced fee system
-    let (investor_return, platform_fee) = crate::fees::FeeManager::calculate_platform_fee(
-        env,
-        investment.amount,
-        total_payment,
-    )?;
+    let (investor_return, platform_fee) =
+        crate::fees::FeeManager::calculate_platform_fee(env, investment.amount, total_payment)?;
 
     // Transfer funds to investor
     let business_address = invoice.business.clone();
@@ -167,14 +164,9 @@ fn settle_invoice_internal(
             &business_address,
             platform_fee,
         )?;
-        
+
         // Emit fee routing event
-        crate::events::emit_platform_fee_routed(
-            env,
-            invoice_id,
-            &fee_recipient,
-            platform_fee,
-        );
+        crate::events::emit_platform_fee_routed(env, invoice_id, &fee_recipient, platform_fee);
     }
 
     // Update invoice status
@@ -197,6 +189,12 @@ fn settle_invoice_internal(
         business_address.clone(),
         total_payment,
         String::from_str(env, "final"),
+    );
+    log_settlement_completed(
+        env,
+        invoice.id.clone(),
+        business_address.clone(),
+        total_payment,
     );
 
     // Emit settlement event
