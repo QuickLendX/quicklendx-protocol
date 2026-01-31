@@ -120,7 +120,7 @@ pub struct FeeManager;
 impl FeeManager {
     pub fn initialize(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         admin.require_auth();
-        
+
         // Initialize default fee structures
         let default_fees = vec![
             env,
@@ -153,7 +153,7 @@ impl FeeManager {
             },
         ];
         env.storage().instance().set(&FEE_CONFIG_KEY, &default_fees);
-        
+
         // Initialize platform fee configuration
         let platform_fee_config = PlatformFeeConfig {
             fee_bps: DEFAULT_PLATFORM_FEE_BPS,
@@ -161,8 +161,10 @@ impl FeeManager {
             updated_at: env.ledger().timestamp(),
             updated_by: admin.clone(),
         };
-        env.storage().instance().set(&PLATFORM_FEE_KEY, &platform_fee_config);
-        
+        env.storage()
+            .instance()
+            .set(&PLATFORM_FEE_KEY, &platform_fee_config);
+
         Ok(())
     }
 
@@ -173,22 +175,24 @@ impl FeeManager {
         treasury_address: Address,
     ) -> Result<TreasuryConfig, QuickLendXError> {
         admin.require_auth();
-        
+
         let treasury_config = TreasuryConfig {
             treasury_address: treasury_address.clone(),
             is_active: true,
             updated_at: env.ledger().timestamp(),
             updated_by: admin.clone(),
         };
-        
+
         // Update platform fee config with treasury
         let mut platform_config = Self::get_platform_fee_config(env)?;
         platform_config.treasury_address = Some(treasury_address.clone());
         platform_config.updated_at = env.ledger().timestamp();
         platform_config.updated_by = admin.clone();
-        
-        env.storage().instance().set(&PLATFORM_FEE_KEY, &platform_config);
-        
+
+        env.storage()
+            .instance()
+            .set(&PLATFORM_FEE_KEY, &platform_config);
+
         Ok(treasury_config)
     }
 
@@ -199,18 +203,20 @@ impl FeeManager {
         new_fee_bps: u32,
     ) -> Result<PlatformFeeConfig, QuickLendXError> {
         admin.require_auth();
-        
+
         if new_fee_bps > MAX_PLATFORM_FEE_BPS {
             return Err(QuickLendXError::InvalidAmount);
         }
-        
+
         let mut platform_config = Self::get_platform_fee_config(env)?;
         platform_config.fee_bps = new_fee_bps;
         platform_config.updated_at = env.ledger().timestamp();
         platform_config.updated_by = admin.clone();
-        
-        env.storage().instance().set(&PLATFORM_FEE_KEY, &platform_config);
-        
+
+        env.storage()
+            .instance()
+            .set(&PLATFORM_FEE_KEY, &platform_config);
+
         Ok(platform_config)
     }
 
@@ -229,15 +235,15 @@ impl FeeManager {
         payment_amount: i128,
     ) -> Result<(i128, i128), QuickLendXError> {
         let config = Self::get_platform_fee_config(env)?;
-        
+
         if payment_amount <= investment_amount {
             return Ok((payment_amount, 0));
         }
-        
+
         let profit = payment_amount.saturating_sub(investment_amount);
         let platform_fee = profit.saturating_mul(config.fee_bps as i128) / BPS_DENOMINATOR;
         let investor_return = payment_amount.saturating_sub(platform_fee);
-        
+
         Ok((investor_return, platform_fee))
     }
 
@@ -347,7 +353,8 @@ impl FeeManager {
             }
             let mut fee = Self::calculate_base_fee(&structure, transaction_amount)?;
             if structure.fee_type != FeeType::LatePayment {
-                fee = fee.saturating_sub(fee.saturating_mul(tier_discount as i128) / BPS_DENOMINATOR);
+                fee =
+                    fee.saturating_sub(fee.saturating_mul(tier_discount as i128) / BPS_DENOMINATOR);
             }
             if is_early_payment && structure.fee_type == FeeType::Platform {
                 fee = fee.saturating_sub(fee.saturating_mul(1000) / BPS_DENOMINATOR);
@@ -467,6 +474,15 @@ impl FeeManager {
         Ok(())
     }
 
+    /// Get current revenue split configuration
+    pub fn get_revenue_split_config(env: &Env) -> Result<RevenueConfig, QuickLendXError> {
+        let key = symbol_short!("rev_cfg");
+        env.storage()
+            .instance()
+            .get(&key)
+            .ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
     pub fn distribute_revenue(
         env: &Env,
         admin: &Address,
@@ -488,9 +504,13 @@ impl FeeManager {
             return Err(QuickLendXError::InvalidAmount);
         }
         let amount = revenue_data.pending_distribution;
-        let treasury_amount = amount.saturating_mul(config.treasury_share_bps as i128) / BPS_DENOMINATOR;
-        let developer_amount = amount.saturating_mul(config.developer_share_bps as i128) / BPS_DENOMINATOR;
-        let platform_amount = amount.saturating_sub(treasury_amount).saturating_sub(developer_amount);
+        let treasury_amount =
+            amount.saturating_mul(config.treasury_share_bps as i128) / BPS_DENOMINATOR;
+        let developer_amount =
+            amount.saturating_mul(config.developer_share_bps as i128) / BPS_DENOMINATOR;
+        let platform_amount = amount
+            .saturating_sub(treasury_amount)
+            .saturating_sub(developer_amount);
         revenue_data.total_distributed = revenue_data.total_distributed.saturating_add(amount);
         revenue_data.pending_distribution = 0;
         env.storage().instance().set(&revenue_key, &revenue_data);
@@ -549,7 +569,7 @@ impl FeeManager {
         if fee_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
         }
-        
+
         if let Some(treasury_address) = Self::get_treasury_address(env) {
             // Transfer to treasury
             crate::payments::transfer_funds(env, currency, from, &treasury_address, fee_amount)?;

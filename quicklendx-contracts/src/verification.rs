@@ -4,6 +4,7 @@ use crate::invoice::{Invoice, InvoiceMetadata};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BusinessVerificationStatus {
     Pending,
     Verified,
@@ -214,11 +215,15 @@ impl BusinessVerificationStorage {
     pub fn set_admin(env: &Env, admin: &Address) {
         // Store in old location for backward compatibility
         env.storage().instance().set(&Self::ADMIN_KEY, admin);
-        
+
         // Always sync with new AdminStorage
         // This allows tests that call set_admin() multiple times to work
-        env.storage().instance().set(&crate::admin::ADMIN_KEY, admin);
-        env.storage().instance().set(&crate::admin::ADMIN_INITIALIZED_KEY, &true);
+        env.storage()
+            .instance()
+            .set(&crate::admin::ADMIN_KEY, admin);
+        env.storage()
+            .instance()
+            .set(&crate::admin::ADMIN_INITIALIZED_KEY, &true);
     }
 
     /// @deprecated Use `admin::AdminStorage::get_admin()` instead

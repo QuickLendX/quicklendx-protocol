@@ -457,12 +457,7 @@ pub fn emit_dispute_resolved(
     );
 }
 
-pub fn emit_invoice_funded(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-    investor: &Address,
-    amount: i128,
-) {
+pub fn emit_invoice_funded(env: &Env, invoice_id: &BytesN<32>, investor: &Address, amount: i128) {
     env.events().publish(
         (symbol_short!("inv_fnd"),),
         (
@@ -683,11 +678,7 @@ pub fn emit_platform_fee_routed(
 }
 
 /// Emit event when treasury configuration is updated
-pub fn emit_treasury_configured(
-    env: &Env,
-    treasury_address: &Address,
-    configured_by: &Address,
-) {
+pub fn emit_treasury_configured(env: &Env, treasury_address: &Address, configured_by: &Address) {
     env.events().publish(
         (symbol_short!("trs_cfg"),),
         (

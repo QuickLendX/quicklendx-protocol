@@ -298,9 +298,6 @@ mod test_admin {
 
         // Try to set fee without admin
         let result = client.try_set_platform_fee(&200);
-        assert!(
-            result.is_err(),
-            "Fee configuration must fail without admin"
-        );
+        assert!(result.is_err(), "Fee configuration must fail without admin");
     }
 }

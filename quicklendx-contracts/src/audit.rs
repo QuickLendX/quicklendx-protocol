@@ -401,8 +401,9 @@ impl AuditStorage {
     }
 }
 
-/// Audit trail helper functions
-pub fn log_invoice_operation(
+/// Internal audit entrypoint: log a critical operation with actor, timestamp, and payload.
+/// Gas-efficient append-only; used by invoice, bid, escrow, and settlement flows.
+pub fn log_operation(
     env: &Env,
     invoice_id: BytesN<32>,
     operation: AuditOperation,
@@ -422,8 +423,21 @@ pub fn log_invoice_operation(
         amount,
         additional_data,
     );
-
     AuditStorage::store_audit_entry(env, &entry);
+}
+
+/// Convenience wrapper for log_operation (used by invoice helpers).
+pub fn log_invoice_operation(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    operation: AuditOperation,
+    actor: Address,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    amount: Option<i128>,
+    additional_data: Option<String>,
+) {
+    log_operation(env, invoice_id, operation, actor, old_value, new_value, amount, additional_data);
 }
 
 /// Log invoice creation
@@ -494,5 +508,153 @@ pub fn log_payment_processed(
         Some(String::from_str(env, "Payment processed")),
         Some(amount),
         Some(payment_type),
+    );
+}
+
+/// Log invoice refund
+pub fn log_invoice_refunded(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowRefunded,
+        actor,
+        None,
+        Some(String::from_str(env, "Refunded")),
+        None,
+        None,
+    );
+}
+
+/// Log invoice uploaded (business flow).
+pub fn log_invoice_uploaded(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::InvoiceUploaded,
+        actor,
+        None,
+        Some(String::from_str(env, "Invoice uploaded")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log invoice verified (admin).
+pub fn log_invoice_verified(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::InvoiceVerified,
+        actor,
+        None,
+        Some(String::from_str(env, "Invoice verified")),
+        None,
+        None,
+    );
+}
+
+/// Log invoice cancelled.
+pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::InvoiceStatusChanged,
+        actor,
+        None,
+        Some(String::from_str(env, "Invoice cancelled")),
+        None,
+        None,
+    );
+}
+
+/// Log bid placed.
+pub fn log_bid_placed(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    bid_amount: i128,
+    _bid_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidPlaced,
+        actor,
+        None,
+        Some(String::from_str(env, "Bid placed")),
+        Some(bid_amount),
+        None,
+    );
+}
+
+/// Log bid accepted.
+pub fn log_bid_accepted(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidAccepted,
+        actor,
+        None,
+        Some(String::from_str(env, "Bid accepted")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log bid withdrawn.
+pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid_id: BytesN<32>) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidWithdrawn,
+        actor,
+        None,
+        Some(String::from_str(env, "Bid withdrawn")),
+        None,
+        None,
+    );
+}
+
+/// Log escrow created.
+pub fn log_escrow_created(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    _escrow_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowCreated,
+        actor,
+        None,
+        Some(String::from_str(env, "Escrow created")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log settlement completed (full payment).
+pub fn log_settlement_completed(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::SettlementCompleted,
+        actor,
+        None,
+        Some(String::from_str(env, "Settlement completed")),
+        Some(amount),
+        None,
     );
 }
