@@ -13,6 +13,7 @@ mod errors;
 mod escrow;
 mod events;
 mod fees;
+mod init;
 mod investment;
 mod invoice;
 mod notifications;
@@ -2513,6 +2514,9 @@ mod test_bid_ranking;
 
 #[cfg(test)]
 mod test_fees;
+
+#[cfg(test)]
+mod test_init;
 
 #[cfg(test)]
 mod test_escrow;
