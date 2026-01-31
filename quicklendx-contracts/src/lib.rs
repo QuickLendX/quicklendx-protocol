@@ -2432,3 +2432,5 @@ mod test_queries;
 mod test_partial_payments;
 #[cfg(test)]
 mod test_profit_fee_formula;
+#[cfg(test)]
+mod test_insurance;
