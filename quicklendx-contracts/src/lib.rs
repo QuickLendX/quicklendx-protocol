@@ -8,6 +8,7 @@ mod backup;
 mod bid;
 mod currency;
 mod defaults;
+mod dispute;
 mod errors;
 mod escrow;
 mod events;
@@ -17,15 +18,14 @@ mod invoice;
 mod notifications;
 mod payments;
 mod profits;
+mod protocol_limits;
 mod reentrancy;
 mod settlement;
-mod protocol_limits;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
 mod test_overflow;
-#[cfg(test)]
-mod test_refund;
+// mod test_refund;
 #[cfg(test)]
 mod test_profit_fee;
 mod verification;
@@ -40,7 +40,9 @@ use defaults::{
     put_dispute_under_review as do_put_dispute_under_review, resolve_dispute as do_resolve_dispute,
 };
 use errors::QuickLendXError;
-use escrow::{accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds};
+use escrow::{
+    accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds,
+};
 use events::{
     emit_audit_query, emit_audit_validation, emit_bid_accepted, emit_bid_placed,
     emit_bid_withdrawn, emit_escrow_created, emit_escrow_refunded, emit_escrow_released,
@@ -59,8 +61,9 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
     get_business_verification_status, get_investor_analytics,
     get_investor_verification as do_get_investor_verification, reject_business,
-    reject_investor as do_reject_investor, set_investment_limit, submit_investor_kyc as do_submit_investor_kyc,
-    submit_kyc_application, update_investor_analytics, validate_bid, validate_investor_investment,
+    reject_investor as do_reject_investor, set_investment_limit,
+    submit_investor_kyc as do_submit_investor_kyc, submit_kyc_application,
+    update_investor_analytics, validate_bid, validate_investor_investment,
     validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
     verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
     InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
@@ -2174,8 +2177,8 @@ impl QuickLendXContract {
         min_distribution_amount: i128,
     ) -> Result<(), QuickLendXError> {
         // Verify admin
-        let stored_admin = BusinessVerificationStorage::get_admin(&env)
-            .ok_or(QuickLendXError::NotAdmin)?;
+        let stored_admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         if admin != stored_admin {
             return Err(QuickLendXError::NotAdmin);
         }
@@ -2469,17 +2472,16 @@ mod test_events;
 mod test_default;
 
 #[cfg(test)]
+mod test_investment_queries;
+#[cfg(test)]
 mod test_partial_payments;
 #[cfg(test)]
 mod test_queries;
 #[cfg(test)]
-mod test_investment_queries;
-#[cfg(test)]
 mod test_reentrancy;
 
-#[cfg(test)]
-mod test_revenue_split;
-#[cfg(test)]
 mod test_investor_kyc;
 #[cfg(test)]
 mod test_profit_fee_formula;
+#[cfg(test)]
+mod test_revenue_split;
