@@ -474,6 +474,15 @@ impl FeeManager {
         Ok(())
     }
 
+    /// Get current revenue split configuration
+    pub fn get_revenue_split_config(env: &Env) -> Result<RevenueConfig, QuickLendXError> {
+        let key = symbol_short!("rev_cfg");
+        env.storage()
+            .instance()
+            .get(&key)
+            .ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
     pub fn distribute_revenue(
         env: &Env,
         admin: &Address,

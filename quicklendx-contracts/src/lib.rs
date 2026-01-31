@@ -22,6 +22,8 @@ mod settlement;
 mod test_admin;
 mod test_overflow;
 mod test_refund;
+#[cfg(test)]
+mod test_profit_fee;
 mod verification;
 
 use admin::AdminStorage;
@@ -53,7 +55,7 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
     get_business_verification_status, get_investor_analytics,
     get_investor_verification as do_get_investor_verification, reject_business,
-    reject_investor as do_reject_investor, submit_investor_kyc as do_submit_investor_kyc,
+    reject_investor as do_reject_investor, set_investment_limit, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, update_investor_analytics, validate_bid, validate_investor_investment,
     validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
     verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
@@ -1001,6 +1003,17 @@ impl QuickLendXContract {
     /// Get investor verification record if available
     pub fn get_investor_verification(env: Env, investor: Address) -> Option<InvestorVerification> {
         do_get_investor_verification(&env, &investor)
+    }
+
+    /// Set investment limit for a verified investor (admin only)
+    pub fn set_investment_limit(
+        env: Env,
+        investor: Address,
+        new_limit: i128,
+    ) -> Result<(), QuickLendXError> {
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        verification::set_investment_limit(&env, &admin, &investor, new_limit)
     }
 
     /// Verify business (admin only)
@@ -2125,6 +2138,13 @@ impl QuickLendXContract {
         auto_distribution: bool,
         min_distribution_amount: i128,
     ) -> Result<(), QuickLendXError> {
+        // Verify admin
+        let stored_admin = BusinessVerificationStorage::get_admin(&env)
+            .ok_or(QuickLendXError::NotAdmin)?;
+        if admin != stored_admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
+
         let config = fees::RevenueConfig {
             treasury_address,
             treasury_share_bps,
@@ -2134,6 +2154,11 @@ impl QuickLendXContract {
             min_distribution_amount,
         };
         fees::FeeManager::configure_revenue_distribution(&env, &admin, config)
+    }
+
+    /// Get current revenue split configuration
+    pub fn get_revenue_split_config(env: Env) -> Result<fees::RevenueConfig, QuickLendXError> {
+        fees::FeeManager::get_revenue_split_config(&env)
     }
 
     /// Distribute revenue for a period
@@ -2408,3 +2433,16 @@ mod test_default;
 mod test_partial_payments;
 #[cfg(test)]
 mod test_queries;
+mod test_queries;
+#[cfg(test)]
+mod test_investment_queries;
+#[cfg(test)]
+mod test_reentrancy;
+#[cfg(test)]
+mod test_partial_payments;
+
+#[cfg(test)]
+mod test_revenue_split;
+mod test_investor_kyc;
+#[cfg(test)]
+mod test_profit_fee_formula;

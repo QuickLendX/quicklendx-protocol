@@ -706,3 +706,36 @@ pub fn emit_platform_fee_config_updated(
         ),
     );
 }
+
+/// Emit detailed profit and fee breakdown event for transparency
+///
+/// This event provides full visibility into settlement calculations:
+/// - investment_amount: Original principal invested
+/// - payment_amount: Total payment received
+/// - gross_profit: Profit before fees
+/// - platform_fee: Fee charged
+/// - investor_return: Net amount to investor
+pub fn emit_profit_fee_breakdown(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investment_amount: i128,
+    payment_amount: i128,
+    gross_profit: i128,
+    platform_fee: i128,
+    investor_return: i128,
+    fee_bps_applied: i128,
+) {
+    env.events().publish(
+        (symbol_short!("pf_brk"),),
+        (
+            invoice_id.clone(),
+            investment_amount,
+            payment_amount,
+            gross_profit,
+            platform_fee,
+            investor_return,
+            fee_bps_applied,
+            env.ledger().timestamp(),
+        ),
+    );
+}
