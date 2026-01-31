@@ -3379,7 +3379,10 @@ fn test_query_investment_insurance_single_coverage() {
     let investment_id = investment.investment_id.clone();
 
     // Query with no insurance should return empty vector
-    let insurance_before = client.try_query_investment_insurance(&investment_id).unwrap().unwrap();
+    let insurance_before = client
+        .try_query_investment_insurance(&investment_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(insurance_before.len(), 0);
 
     // Add insurance
@@ -3387,12 +3390,13 @@ fn test_query_investment_insurance_single_coverage() {
     client.add_investment_insurance(&investment_id, &provider, &coverage_percentage);
 
     // Query should now return the insurance coverage
-    let insurance_vec = client.try_query_investment_insurance(&investment_id).unwrap().unwrap();
+    let insurance_vec = client
+        .try_query_investment_insurance(&investment_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(insurance_vec.len(), 1);
 
-    let coverage = insurance_vec
-        .get(0)
-        .expect("expected insurance coverage");
+    let coverage = insurance_vec.get(0).expect("expected insurance coverage");
     assert_eq!(coverage.provider, provider);
     assert_eq!(coverage.coverage_percentage, coverage_percentage);
     assert!(coverage.active);
@@ -3411,8 +3415,8 @@ fn test_query_investment_insurance_nonexistent_investment() {
     let fake_investment_id = BytesN::from_array(
         &env,
         &[
-            0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-            23, 24, 25, 26, 27, 28, 29, 30, 31,
+            0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31,
         ],
     );
 
@@ -3476,8 +3480,8 @@ fn test_query_investment_insurance_premium_calculation() {
 
     // Test multiple coverage percentages
     let test_cases: [(u32, i128); 3] = [
-        (50u32, 5_000i128),  // 50% of 10,000
-        (80u32, 8_000i128),  // 80% of 10,000
+        (50u32, 5_000i128),   // 50% of 10,000
+        (80u32, 8_000i128),   // 80% of 10,000
         (100u32, 10_000i128), // 100% of 10,000
     ];
 
@@ -3491,7 +3495,10 @@ fn test_query_investment_insurance_premium_calculation() {
 
         client.add_investment_insurance(&investment_id, &provider_i, coverage_pct);
 
-        let insurance_vec = client.try_query_investment_insurance(&investment_id).unwrap().unwrap();
+        let insurance_vec = client
+            .try_query_investment_insurance(&investment_id)
+            .unwrap()
+            .unwrap();
         assert_eq!(insurance_vec.len(), 1);
 
         let coverage = insurance_vec.get(0).expect("expected coverage");
@@ -3563,10 +3570,11 @@ fn test_query_investment_insurance_inactive_coverage() {
     client.add_investment_insurance(&investment_id, &provider, &60u32);
 
     // Query and verify it's active
-    let insurance_before = client.try_query_investment_insurance(&investment_id).unwrap().unwrap();
-    let coverage_before = insurance_before
-        .get(0)
-        .expect("expected coverage");
+    let insurance_before = client
+        .try_query_investment_insurance(&investment_id)
+        .unwrap()
+        .unwrap();
+    let coverage_before = insurance_before.get(0).expect("expected coverage");
     assert!(coverage_before.active);
 
     // Trigger default to deactivate insurance
@@ -3575,12 +3583,16 @@ fn test_query_investment_insurance_inactive_coverage() {
     let _ = client.handle_default(&invoice_id);
 
     // Query and verify it's now inactive
-    let insurance_after = client.try_query_investment_insurance(&investment_id).unwrap().unwrap();
-    let coverage_after = insurance_after
-        .get(0)
-        .expect("expected coverage");
+    let insurance_after = client
+        .try_query_investment_insurance(&investment_id)
+        .unwrap()
+        .unwrap();
+    let coverage_after = insurance_after.get(0).expect("expected coverage");
     assert!(!coverage_after.active);
-    assert_eq!(coverage_after.coverage_amount, coverage_before.coverage_amount);
+    assert_eq!(
+        coverage_after.coverage_amount,
+        coverage_before.coverage_amount
+    );
 }
 
 // Test basic functionality from README.md
