@@ -1,5 +1,5 @@
 use super::*;
-use crate::invoice::{InvoiceCategory};
+use crate::invoice::InvoiceCategory;
 use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 
 #[test]
@@ -44,7 +44,7 @@ fn test_invoice_category_and_tags() {
 
     let mut tags3 = Vec::new(&env);
     tags3.push_back(String::from_str(&env, "urgent"));
-    
+
     // Invoice 3: Services, [urgent]
     let invoice3_id = client.store_invoice(
         &business,
@@ -79,7 +79,7 @@ fn test_invoice_category_and_tags() {
 
     // Test add_invoice_tag
     client.add_invoice_tag(&invoice3_id, &String::from_str(&env, "tech"));
-    
+
     let tech_invoices_updated = client.get_invoices_by_tag(&String::from_str(&env, "tech"));
     assert_eq!(tech_invoices_updated.len(), 3);
     assert!(tech_invoices_updated.contains(&invoice3_id));

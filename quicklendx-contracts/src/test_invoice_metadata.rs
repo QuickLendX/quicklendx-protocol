@@ -10,7 +10,7 @@ fn test_metadata_update_requires_owner_pattern() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let _client = crate::QuickLendXContractClient::new(&env, &contract_id);
-    
+
     // Your test logic here using the client
     assert!(true); // Placeholder
 }
@@ -21,7 +21,7 @@ fn test_metadata_validation_pattern() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let _client = crate::QuickLendXContractClient::new(&env, &contract_id);
-    
+
     // Your test logic here using the client
     assert!(true); // Placeholder
 }
@@ -32,7 +32,7 @@ fn test_non_owner_cannot_update_metadata_pattern() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let _client = crate::QuickLendXContractClient::new(&env, &contract_id);
-    
+
     // Your test logic here using the client
     assert!(true); // Placeholder
 }
@@ -43,7 +43,7 @@ fn test_update_and_query_metadata_pattern() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let _client = crate::QuickLendXContractClient::new(&env, &contract_id);
-    
+
     // Your test logic here using the client
     assert!(true); // Placeholder
 }
