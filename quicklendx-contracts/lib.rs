@@ -1,5 +1,6 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, vec, Env, String, Vec};
+use investment_queries::InvestmentQueries;
 
 #[contract]
 pub struct Contract;
@@ -21,3 +22,6 @@ impl Contract {
 }
 
 mod test;
+mod investment_queries;
+
+
