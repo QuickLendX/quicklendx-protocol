@@ -1626,6 +1626,10 @@ impl QuickLendXContract {
             &new_category,
         );
 
+        // Update indexes
+        InvoiceStorage::remove_category_index(&env, &old_category, &invoice_id);
+        InvoiceStorage::add_category_index(&env, &new_category, &invoice_id);
+
         Ok(())
     }
 
@@ -1650,6 +1654,9 @@ impl QuickLendXContract {
         // Emit event
         events::emit_invoice_tag_added(&env, &invoice_id, &invoice.business, &tag);
 
+        // Update index
+        InvoiceStorage::add_tag_index(&env, &tag, &invoice_id);
+
         Ok(())
     }
 
@@ -1673,6 +1680,9 @@ impl QuickLendXContract {
 
         // Emit event
         events::emit_invoice_tag_removed(&env, &invoice_id, &invoice.business, &tag);
+
+        // Update index
+        InvoiceStorage::remove_tag_index(&env, &tag, &invoice_id);
 
         Ok(())
     }
