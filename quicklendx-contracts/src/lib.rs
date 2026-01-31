@@ -33,6 +33,8 @@ mod test_profit_fee;
 mod test_refund;
 mod verification;
 
+#[cfg(test)]
+ mod test_invoice_metadata;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::{
