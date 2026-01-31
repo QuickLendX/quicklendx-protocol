@@ -2435,13 +2435,10 @@ mod test_default;
 mod test_partial_payments;
 #[cfg(test)]
 mod test_queries;
-mod test_queries;
 #[cfg(test)]
 mod test_investment_queries;
 #[cfg(test)]
 mod test_reentrancy;
-#[cfg(test)]
-mod test_partial_payments;
 
 #[cfg(test)]
 mod test_revenue_split;
