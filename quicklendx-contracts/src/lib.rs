@@ -2431,6 +2431,8 @@ mod test_default;
 #[cfg(test)]
 mod test_queries;
 #[cfg(test)]
+mod test_investment_queries;
+#[cfg(test)]
 mod test_partial_payments;
 
 #[cfg(test)]
