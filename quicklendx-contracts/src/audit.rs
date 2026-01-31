@@ -437,7 +437,16 @@ pub fn log_invoice_operation(
     amount: Option<i128>,
     additional_data: Option<String>,
 ) {
-    log_operation(env, invoice_id, operation, actor, old_value, new_value, amount, additional_data);
+    log_operation(
+        env,
+        invoice_id,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        amount,
+        additional_data,
+    );
 }
 
 /// Log invoice creation
@@ -588,12 +597,7 @@ pub fn log_bid_placed(
 }
 
 /// Log bid accepted.
-pub fn log_bid_accepted(
-    env: &Env,
-    invoice_id: BytesN<32>,
-    actor: Address,
-    amount: i128,
-) {
+pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
     log_operation(
         env,
         invoice_id,
@@ -641,12 +645,7 @@ pub fn log_escrow_created(
 }
 
 /// Log settlement completed (full payment).
-pub fn log_settlement_completed(
-    env: &Env,
-    invoice_id: BytesN<32>,
-    actor: Address,
-    amount: i128,
-) {
+pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
     log_operation(
         env,
         invoice_id,

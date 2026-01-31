@@ -21,6 +21,7 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
+mod storage;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
@@ -28,6 +29,8 @@ mod test_overflow;
 // mod test_refund;
 #[cfg(test)]
 mod test_profit_fee;
+#[cfg(test)]
+mod test_storage;
 mod verification;
 
 use admin::AdminStorage;
@@ -134,12 +137,20 @@ impl QuickLendXContract {
     }
 
     /// Add a token address to the currency whitelist (admin only).
-    pub fn add_currency(env: Env, admin: Address, currency: Address) -> Result<(), QuickLendXError> {
+    pub fn add_currency(
+        env: Env,
+        admin: Address,
+        currency: Address,
+    ) -> Result<(), QuickLendXError> {
         currency::CurrencyWhitelist::add_currency(&env, &admin, &currency)
     }
 
     /// Remove a token address from the currency whitelist (admin only).
-    pub fn remove_currency(env: Env, admin: Address, currency: Address) -> Result<(), QuickLendXError> {
+    pub fn remove_currency(
+        env: Env,
+        admin: Address,
+        currency: Address,
+    ) -> Result<(), QuickLendXError> {
         currency::CurrencyWhitelist::remove_currency(&env, &admin, &currency)
     }
 
@@ -709,8 +720,19 @@ impl QuickLendXContract {
             .expect("Escrow should exist after creation");
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
-        audit::log_bid_accepted(&env, invoice_id.clone(), invoice.business.clone(), bid.bid_amount);
-        audit::log_escrow_created(&env, invoice_id.clone(), bid.investor.clone(), bid.bid_amount, escrow_id);
+        audit::log_bid_accepted(
+            &env,
+            invoice_id.clone(),
+            invoice.business.clone(),
+            bid.bid_amount,
+        );
+        audit::log_escrow_created(
+            &env,
+            invoice_id.clone(),
+            bid.investor.clone(),
+            bid.bid_amount,
+            escrow_id,
+        );
         let _ = NotificationSystem::notify_bid_accepted(&env, &invoice, &bid);
         let _ = NotificationSystem::notify_invoice_status_changed(
             &env,

@@ -13,9 +13,7 @@
 extern crate std;
 
 use super::*;
-use crate::profits::{
-    calculate_treasury_split, validate_calculation_inputs,
-};
+use crate::profits::{calculate_treasury_split, validate_calculation_inputs};
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 use std::vec;
 
@@ -305,13 +303,13 @@ fn test_rounding_small_profit_various_fees() {
     // Test rounding with various fee rates and small profits
     let test_cases = vec![
         // (investment, payment, fee_bps, expected_fee)
-        (1000, 1001, 200, 0),  // 1 profit, 2% = 0.02 -> 0
-        (1000, 1010, 200, 0),  // 10 profit, 2% = 0.2 -> 0
-        (1000, 1049, 200, 0),  // 49 profit, 2% = 0.98 -> 0
-        (1000, 1050, 200, 1),  // 50 profit, 2% = 1.0 -> 1
-        (1000, 1051, 200, 1),  // 51 profit, 2% = 1.02 -> 1
-        (1000, 1099, 200, 1),  // 99 profit, 2% = 1.98 -> 1
-        (1000, 1100, 200, 2),  // 100 profit, 2% = 2.0 -> 2
+        (1000, 1001, 200, 0), // 1 profit, 2% = 0.02 -> 0
+        (1000, 1010, 200, 0), // 10 profit, 2% = 0.2 -> 0
+        (1000, 1049, 200, 0), // 49 profit, 2% = 0.98 -> 0
+        (1000, 1050, 200, 1), // 50 profit, 2% = 1.0 -> 1
+        (1000, 1051, 200, 1), // 51 profit, 2% = 1.02 -> 1
+        (1000, 1099, 200, 1), // 99 profit, 2% = 1.98 -> 1
+        (1000, 1100, 200, 2), // 100 profit, 2% = 2.0 -> 2
     ];
 
     for (investment, payment, fee_bps, expected_fee) in test_cases {
@@ -329,7 +327,9 @@ fn test_rounding_small_profit_various_fees() {
             investor_return + platform_fee,
             payment,
             "Dust found for inv={}, pay={}, fee_bps={}",
-            investment, payment, fee_bps
+            investment,
+            payment,
+            fee_bps
         );
     }
 }
@@ -384,8 +384,7 @@ fn test_no_dust_comprehensive() {
             // Test various payment amounts
             for multiplier in [0.5, 0.9, 1.0, 1.01, 1.1, 1.5, 2.0, 5.0] {
                 let payment = (*investment as f64 * multiplier) as i128;
-                let (investor_return, platform_fee) =
-                    client.calculate_profit(investment, &payment);
+                let (investor_return, platform_fee) = client.calculate_profit(investment, &payment);
 
                 // THE KEY INVARIANT: no dust
                 assert_eq!(
@@ -652,8 +651,7 @@ fn test_many_calculations_no_dust() {
         let investment = i * 1000;
         let payment = investment + (i * 10); // Small profit
 
-        let (investor_return, platform_fee) =
-            client.calculate_profit(&investment, &payment);
+        let (investor_return, platform_fee) = client.calculate_profit(&investment, &payment);
 
         assert_eq!(
             investor_return + platform_fee,
