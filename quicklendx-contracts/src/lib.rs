@@ -25,14 +25,19 @@ mod storage;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
+mod test_business_kyc;
+mod test_overflow;
 mod test_overflow;
 // mod test_refund;
 #[cfg(test)]
 mod test_profit_fee;
 #[cfg(test)]
 mod test_storage;
+mod test_refund;
 mod verification;
 
+#[cfg(test)]
+ mod test_invoice_metadata;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::{
@@ -53,7 +58,7 @@ use events::{
     emit_invoice_cancelled, emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
     emit_invoice_uploaded, emit_invoice_verified,
 };
-use investment::{Investment, InvestmentStatus, InvestmentStorage};
+use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
 use payments::{create_escrow, refund_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
@@ -874,6 +879,27 @@ impl QuickLendXContract {
     ) -> Result<Investment, QuickLendXError> {
         InvestmentStorage::get_investment(&env, &investment_id)
             .ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
+    /// Query insurance coverage for an investment.
+    ///
+    /// # Arguments
+    /// * `investment_id` - The investment to query
+    ///
+    /// # Returns
+    /// * `Ok(Vec<InsuranceCoverage>)` - All insurance records for the investment
+    /// * `Err(StorageKeyNotFound)` if the investment does not exist
+    ///
+    /// # Security Notes
+    /// - Returns all insurance records (active and inactive)
+    /// - No authorization required for queries
+    pub fn query_investment_insurance(
+        env: Env,
+        investment_id: BytesN<32>,
+    ) -> Result<Vec<InsuranceCoverage>, QuickLendXError> {
+        let investment = InvestmentStorage::get_investment(&env, &investment_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Ok(investment.insurance)
     }
 
     /// Process a partial payment towards an invoice
@@ -2506,4 +2532,6 @@ mod test_investor_kyc;
 #[cfg(test)]
 mod test_profit_fee_formula;
 #[cfg(test)]
+mod test_insurance;
+mod test_escrow_refund;
 mod test_revenue_split;
