@@ -19,6 +19,7 @@ mod profits;
 mod reentrancy;
 mod settlement;
 mod protocol_limits;
+mod dispute;
 #[cfg(test)]
 mod test_admin;
 mod test_overflow;
