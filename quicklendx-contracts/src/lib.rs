@@ -27,18 +27,18 @@ mod test_admin;
 #[cfg(test)]
 mod test_business_kyc;
 #[cfg(test)]
+mod test_dispute;
+#[cfg(test)]
 mod test_overflow;
-// #[cfg(test)]
 #[cfg(test)]
 mod test_profit_fee;
 #[cfg(test)]
 mod test_refund;
 #[cfg(test)]
 mod test_storage;
-mod verification;
-
 #[cfg(test)]
 mod test_invoice_metadata;
+mod verification;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::{
