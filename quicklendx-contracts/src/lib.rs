@@ -16,6 +16,7 @@ mod invoice;
 mod notifications;
 mod payments;
 mod profits;
+mod protocol_limits;
 mod reentrancy;
 mod settlement;
 #[cfg(test)]
@@ -25,6 +26,7 @@ mod test_business_kyc;
 mod test_overflow;
 #[cfg(test)]
 mod test_profit_fee;
+mod test_refund;
 mod verification;
 
 use admin::AdminStorage;
@@ -37,7 +39,9 @@ use defaults::{
     put_dispute_under_review as do_put_dispute_under_review, resolve_dispute as do_resolve_dispute,
 };
 use errors::QuickLendXError;
-use escrow::accept_bid_and_fund as do_accept_bid_and_fund;
+use escrow::{
+    accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds,
+};
 use events::{
     emit_audit_query, emit_audit_validation, emit_bid_accepted, emit_bid_placed,
     emit_bid_withdrawn, emit_escrow_created, emit_escrow_refunded, emit_escrow_released,
@@ -1204,24 +1208,16 @@ impl QuickLendXContract {
         })
     }
 
-    /// Refund escrow funds to investor if verification fails
-    pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        reentrancy::with_payment_guard(&env, || {
-            let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-                .ok_or(QuickLendXError::StorageKeyNotFound)?;
-
-            refund_escrow(&env, &invoice_id)?;
-
-            emit_escrow_refunded(
-                &env,
-                &escrow.escrow_id,
-                &invoice_id,
-                &escrow.investor,
-                escrow.amount,
-            );
-
-            Ok(())
-        })
+    /// Refund escrow funds to investor if verification fails or as an explicit manual refund.
+    ///
+    /// Can be triggered by Admin or Business owner. Invoice must be Funded.
+    /// Protected by payment reentrancy guard.
+    pub fn refund_escrow_funds(
+        env: Env,
+        invoice_id: BytesN<32>,
+        caller: Address,
+    ) -> Result<(), QuickLendXError> {
+        reentrancy::with_payment_guard(&env, || do_refund_escrow_funds(&env, &invoice_id, &caller))
     }
 
     ///== Notification Management Functions ==///

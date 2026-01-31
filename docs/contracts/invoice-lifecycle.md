@@ -12,6 +12,7 @@ The invoice lifecycle consists of the following states:
 4. **Paid** - Invoice has been paid and settled
 5. **Defaulted** - Invoice payment is overdue/defaulted
 6. **Cancelled** - Invoice has been cancelled by the business owner
+7. **Refunded** - Invoice funds have been returned to the investor and the invoice is closed
 
 ## Core Functions
 
@@ -113,12 +114,48 @@ Allows a business to cancel their own invoice before it has been funded by an in
 - `InvalidStatus` - Invoice is already funded, paid, defaulted, or cancelled
 
 ---
+### 4. `refund_escrow_funds`
+
+Allows an admin or the business owner to refund a funded invoice, returning funds to the investor.
+
+**Authorization**: Admin or Business owner (requires authentication)
+
+**Parameters**:
+- `env: Env` - Contract environment
+- `invoice_id: BytesN<32>` - ID of the invoice to refund
+- `caller: Address` - Address of the party initiating the refund
+
+**Returns**: `Result<(), QuickLendXError>` - Success or error
+
+**Validations**:
+- Caller must be an admin or the business owner
+- Invoice must be in `Funded` status
+
+**State Transitions**:
+- `Funded` → `Refunded`
+
+**Related Updates**:
+- Bid status → `Cancelled`
+- Investment status → `Refunded`
+- Escrow status → `Refunded`
+
+**Events Emitted**:
+- `esc_ref` (escrow_refunded) - Transferred funds back to investor
+- Audit logs for status change and refund
+
+**Failure Cases**:
+- `InvoiceNotFound` - Invoice does not exist
+- `Unauthorized` - Caller is not authorized (Admin/Business)
+- `InvalidStatus` - Invoice is not in Funded status
+
+---
 
 ## Authorization Rules
 
 ### Business (Invoice Owner)
 - Can upload invoices (if verified)
 - Can cancel their own invoices (before funding)
+- Can refund their own invoices (after funding, before release)
 - Can update invoice metadata
 - Can update invoice category and tags
 
@@ -160,6 +197,7 @@ Allows a business to cancel their own invoice before it has been funded by an in
 Alternative paths:
 - Pending/Verified → Cancelled (business cancels)
 - Funded → Defaulted (payment overdue beyond grace period)
+- Funded → Refunded (admin or business refunds)
 ```
 
 ---
