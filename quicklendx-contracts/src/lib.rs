@@ -2155,6 +2155,11 @@ impl QuickLendXContract {
         fees::FeeManager::configure_revenue_distribution(&env, &admin, config)
     }
 
+    /// Get current revenue split configuration
+    pub fn get_revenue_split_config(env: Env) -> Result<fees::RevenueConfig, QuickLendXError> {
+        fees::FeeManager::get_revenue_split_config(&env)
+    }
+
     /// Distribute revenue for a period
     pub fn distribute_revenue(
         env: Env,

@@ -171,3 +171,34 @@ fn test_only_admin_can_update_config() {
     );
     assert!(result_admin.is_ok(), "Should succeed for admin");
 }
+
+#[test]
+fn test_get_revenue_split_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // Configure revenue distribution
+    client.configure_revenue_distribution(
+        &admin,
+        &treasury,
+        &6000, // 60% Treasury
+        &2500, // 25% Developer
+        &1500, // 15% Platform
+        &true,
+        &500,
+    );
+
+    // Query and verify configuration
+    let config = client.get_revenue_split_config();
+    assert_eq!(config.treasury_share_bps, 6000);
+    assert_eq!(config.developer_share_bps, 2500);
+    assert_eq!(config.platform_share_bps, 1500);
+    assert_eq!(config.auto_distribution, true);
+    assert_eq!(config.min_distribution_amount, 500);
+}
