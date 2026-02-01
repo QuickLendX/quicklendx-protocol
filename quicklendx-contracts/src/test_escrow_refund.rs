@@ -1,9 +1,10 @@
 //! Tests for escrow refund behavior: authorization, idempotency, and state safety
 //!
 use super::*;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use crate::invoice::InvoiceCategory;
 use crate::payments::EscrowStatus;
-use soroban_sdk::{testutils::Address as _, token, Address, Env, String};
+#[cfg(test)]
+use soroban_sdk::{testutils::Address as _, token, Address, Env};
 
 fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let env = Env::default();
@@ -17,7 +18,12 @@ fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     (env, client, admin, contract_id)
 }
 
-fn setup_token(env: &Env, business: &Address, investor: &Address, contract_id: &Address) -> Address {
+fn setup_token(
+    env: &Env,
+    business: &Address,
+    investor: &Address,
+    contract_id: &Address,
+) -> Address {
     let token_admin = Address::generate(env);
     let currency = env
         .register_stellar_asset_contract_v2(token_admin.clone())
@@ -68,7 +74,12 @@ fn test_refund_transfers_and_updates_status() {
     client.verify_investor(&investor, &10_000i128);
 
     // Approve and place bid
-    token_client.approve(&investor, &contract_id, &10_000i128, &(env.ledger().sequence() + 10_000));
+    token_client.approve(
+        &investor,
+        &contract_id,
+        &10_000i128,
+        &(env.ledger().sequence() + 10_000),
+    );
     let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
 
     // Accept (creates escrow)
@@ -120,7 +131,12 @@ fn test_refund_idempotency_and_release_blocked() {
     // Investor setup and bid
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
     client.verify_investor(&investor, &10_000i128);
-    token_client.approve(&investor, &contract_id, &10_000i128, &(env.ledger().sequence() + 10_000));
+    token_client.approve(
+        &investor,
+        &contract_id,
+        &10_000i128,
+        &(env.ledger().sequence() + 10_000),
+    );
     let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
     client.accept_bid(&invoice_id, &bid_id);
 
@@ -131,11 +147,17 @@ fn test_refund_idempotency_and_release_blocked() {
 
     // Second refund should fail (not Held)
     let result = client.try_refund_escrow_funds(&invoice_id);
-    assert!(result.is_err(), "Second refund must be rejected to avoid double refunds");
+    assert!(
+        result.is_err(),
+        "Second refund must be rejected to avoid double refunds"
+    );
 
     // Attempt to release after refund should fail
     let release_result = client.try_release_escrow_funds(&invoice_id);
-    assert!(release_result.is_err(), "Release must be rejected after refund");
+    assert!(
+        release_result.is_err(),
+        "Release must be rejected after refund"
+    );
 }
 
 #[test]
@@ -146,7 +168,9 @@ fn test_refund_authorization_current_behavior_and_security_note() {
 
     // Setup token and balances
     let token_admin = Address::generate(&env);
-    let currency = env.register_stellar_asset_contract_v2(token_admin).address();
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
     let token_client = token::Client::new(&env, &currency);
     let sac_client = token::StellarAssetClient::new(&env, &currency);
     sac_client.mint(&investor, &5_000i128);
@@ -166,14 +190,23 @@ fn test_refund_authorization_current_behavior_and_security_note() {
     client.verify_invoice(&invoice_id);
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
     client.verify_investor(&investor, &10_000i128);
-    token_client.approve(&investor, &contract_id, &10_000i128, &(env.ledger().sequence() + 10_000));
+    token_client.approve(
+        &investor,
+        &contract_id,
+        &10_000i128,
+        &(env.ledger().sequence() + 10_000),
+    );
     let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Now call refund without mocking auth: should succeed under current code
     client.refund_escrow_funds(&invoice_id);
     let escrow_status = client.get_escrow_status(&invoice_id);
-    assert_eq!(escrow_status, EscrowStatus::Refunded, "Refund should succeed under current code");
+    assert_eq!(
+        escrow_status,
+        EscrowStatus::Refunded,
+        "Refund should succeed under current code"
+    );
 
     // Security note: Consider adding `admin.require_auth()` or `invoice.business.require_auth()`
     // to `refund_escrow_funds` to limit who can initiate refunds.

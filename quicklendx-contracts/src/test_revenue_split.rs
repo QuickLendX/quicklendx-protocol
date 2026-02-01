@@ -1,6 +1,7 @@
 use crate::fees::FeeType;
 use crate::QuickLendXContract;
 use crate::QuickLendXContractClient;
+#[cfg(test)]
 use soroban_sdk::{testutils::Address as _, Address, Env, Map};
 
 fn setup_admin(env: &Env, client: &QuickLendXContractClient) -> Address {
