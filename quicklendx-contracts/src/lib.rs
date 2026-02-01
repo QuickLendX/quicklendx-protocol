@@ -2548,4 +2548,10 @@ mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
 #[cfg(test)]
+<<<<<<< HEAD
+=======
+mod test_insurance;
+//#[cfg(test)]
+//mod test_escrow_refund;
+>>>>>>> 3447895 (Fix merge conflicts and upstream compatibility issues)
 mod test_revenue_split;
