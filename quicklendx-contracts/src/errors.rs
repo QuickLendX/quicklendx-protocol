@@ -1,7 +1,6 @@
-use soroban_sdk::{contracterror, symbol_short, Symbol};
+use soroban_sdk::{symbol_short, Symbol};
 
 /// Custom error types for the QuickLendX contract
-#[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum QuickLendXError {
@@ -56,6 +55,7 @@ pub enum QuickLendXError {
     InvoiceNotAvailableForFunding = 1047,
     InvoiceNotFunded = 1048,
     InvoiceAlreadyDefaulted = 1049,
+    ProtocolPaused = 1050,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -111,6 +111,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvoiceNotAvailableForFunding => symbol_short!("INV_NAF"),
             QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NDF"),
             QuickLendXError::InvoiceAlreadyDefaulted => symbol_short!("INV_AD"),
+            QuickLendXError::ProtocolPaused => symbol_short!("PAUS"),
         }
     }
 }
