@@ -106,12 +106,8 @@ fn test_add_insurance_requires_investor_auth() {
 
     let stored = client.get_investment(&investment_id);
     assert_eq!(stored.insurance.len(), 0);
-<<<<<<< HEAD
-
     let err_debug = alloc::format!("{:?}", invoke_err);
     assert!(!err_debug.contains("ed25519"));
-=======
->>>>>>> 3447895 (Fix merge conflicts and upstream compatibility issues)
 }
 
 // ============================================================================

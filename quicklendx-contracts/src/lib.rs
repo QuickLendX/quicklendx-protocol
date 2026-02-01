@@ -2538,19 +2538,26 @@ mod test_queries;
 mod test_reentrancy;
 
 #[cfg(test)]
+<<<<<<< HEAD
 mod test_escrow_refund;
 #[cfg(test)]
 mod test_insurance;
 #[cfg(test)]
+=======
+mod test_insurance;
+>>>>>>> 390655f (chore: apply code formatting via rust fmt)
 mod test_investor_kyc;
 #[cfg(test)]
 mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
+<<<<<<< HEAD
 #[cfg(test)]
 <<<<<<< HEAD
 =======
 mod test_insurance;
+=======
+>>>>>>> 390655f (chore: apply code formatting via rust fmt)
 //#[cfg(test)]
 //mod test_escrow_refund;
 >>>>>>> 3447895 (Fix merge conflicts and upstream compatibility issues)
