@@ -10,7 +10,7 @@
 /// 6. Edge cases - empty strings, boundary values
 use super::*;
 use crate::errors::QuickLendXError;
-use crate::invoice::{InvoiceCategory, DisputeStatus};
+use crate::invoice::{DisputeStatus, InvoiceCategory};
 use soroban_sdk::{
     testutils::{Address as _, BytesN as _},
     Address, BytesN, Env, String, Vec,
@@ -406,7 +406,7 @@ fn test_multiple_disputes_different_invoices() {
 
     let dispute1_opt = dispute1_result.unwrap();
     let dispute2_opt = dispute2_result.unwrap();
-    
+
     assert!(dispute1_opt.is_some());
     assert!(dispute2_opt.is_some());
 
