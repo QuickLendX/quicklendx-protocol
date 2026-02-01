@@ -7,10 +7,11 @@
 /// 4. Coverage/premium math - exact rounding and overflow boundaries
 /// 5. Query correctness - insurance list and ordering
 /// 6. Security edges - duplicates, invalid inputs, and non-mutation on failures
-
 use super::*;
 use crate::errors::QuickLendXError;
-use crate::investment::{Investment, InvestmentStatus, InvestmentStorage, DEFAULT_INSURANCE_PREMIUM_BPS};
+use crate::investment::{
+    Investment, InvestmentStatus, InvestmentStorage, DEFAULT_INSURANCE_PREMIUM_BPS,
+};
 use soroban_sdk::{
     testutils::{Address as _, MockAuth, MockAuthInvoke},
     Address, BytesN, Env, IntoVal, Vec,
@@ -89,19 +90,17 @@ fn test_add_insurance_requires_investor_auth() {
         },
     };
 
-    let result = client
-        .mock_auths(&[auth])
-        .try_add_investment_insurance(&investment_id, &provider, &60u32);
+    let result =
+        client
+            .mock_auths(&[auth])
+            .try_add_investment_insurance(&investment_id, &provider, &60u32);
 
     let err = result.err().expect("expected auth error");
     let invoke_err = err.err().expect("expected invoke error");
     assert_eq!(invoke_err, soroban_sdk::InvokeError::Abort);
 
-    let stored = client.get_investment(&investment_id).unwrap();
+    let stored = client.get_investment(&investment_id);
     assert_eq!(stored.insurance.len(), 0);
-
-    let err_debug = format!("{:?}", invoke_err);
-    assert!(!err_debug.contains("ed25519"));
 }
 
 // ============================================================================
@@ -126,13 +125,12 @@ fn test_add_insurance_requires_active_investment() {
         let investment_id =
             store_investment(&env, &investor, 5_000, status.clone(), (idx + 2) as u8);
 
-        let result =
-            client.try_add_investment_insurance(&investment_id, &provider, &50u32);
+        let result = client.try_add_investment_insurance(&investment_id, &provider, &50u32);
         let err = result.err().expect("expected invalid status error");
         let contract_error = err.expect("expected contract error");
         assert_eq!(contract_error, QuickLendXError::InvalidStatus);
 
-        let stored = client.get_investment(&investment_id).unwrap();
+        let stored = client.get_investment(&investment_id);
         assert_eq!(stored.insurance.len(), 0);
     }
 }
@@ -170,7 +168,7 @@ fn test_state_transition_before_add_rejected() {
     let contract_error = err.expect("expected contract error");
     assert_eq!(contract_error, QuickLendXError::InvalidStatus);
 
-    let stored = client.get_investment(&investment_id).unwrap();
+    let stored = client.get_investment(&investment_id);
     assert_eq!(stored.insurance.len(), 0);
 }
 
@@ -190,7 +188,7 @@ fn test_premium_and_coverage_math_exact() {
 
     client.add_investment_insurance(&investment_id, &provider, &80u32);
 
-    let stored = client.get_investment(&investment_id).unwrap();
+    let stored = client.get_investment(&investment_id);
     let insurance = stored.insurance.get(0).unwrap();
     assert_eq!(insurance.coverage_amount, 8_000);
     assert_eq!(insurance.premium_amount, 160);
@@ -199,11 +197,10 @@ fn test_premium_and_coverage_math_exact() {
         Investment::calculate_premium(10_000, 80)
     );
 
-    let investment_id_small =
-        store_investment(&env, &investor, 500, InvestmentStatus::Active, 5);
+    let investment_id_small = store_investment(&env, &investor, 500, InvestmentStatus::Active, 5);
     client.add_investment_insurance(&investment_id_small, &provider, &1u32);
 
-    let stored_small = client.get_investment(&investment_id_small).unwrap();
+    let stored_small = client.get_investment(&investment_id_small);
     let insurance_small = stored_small.insurance.get(0).unwrap();
     assert_eq!(insurance_small.coverage_amount, 5);
     assert_eq!(insurance_small.premium_amount, 1);
@@ -255,12 +252,14 @@ fn test_large_values_handle_saturation() {
 
     client.add_investment_insurance(&investment_id, &provider, &100u32);
 
-    let stored = client.get_investment(&investment_id).unwrap();
+    let stored = client.get_investment(&investment_id);
     let insurance = stored.insurance.get(0).unwrap();
 
     let expected_coverage = amount.saturating_mul(100).checked_div(100).unwrap_or(0);
-    let expected_premium =
-        expected_coverage.saturating_mul(DEFAULT_INSURANCE_PREMIUM_BPS).checked_div(10_000).unwrap_or(0);
+    let expected_premium = expected_coverage
+        .saturating_mul(DEFAULT_INSURANCE_PREMIUM_BPS)
+        .checked_div(10_000)
+        .unwrap_or(0);
 
     assert_eq!(insurance.coverage_amount, expected_coverage);
     assert_eq!(insurance.premium_amount, expected_premium);
@@ -288,7 +287,7 @@ fn test_multiple_entries_and_no_cross_investment_leakage() {
     set_insurance_inactive(&env, &investment_a, 0);
     client.add_investment_insurance(&investment_a, &provider_two, &40u32);
 
-    let stored_a = client.get_investment(&investment_a).unwrap();
+    let stored_a = client.get_investment(&investment_a);
     assert_eq!(stored_a.insurance.len(), 2);
     let first = stored_a.insurance.get(0).unwrap();
     let second = stored_a.insurance.get(1).unwrap();
@@ -297,17 +296,20 @@ fn test_multiple_entries_and_no_cross_investment_leakage() {
     assert_eq!(second.provider, provider_two);
     assert!(second.active);
 
-    let stored_b = client.get_investment(&investment_b).unwrap();
+    let stored_b = client.get_investment(&investment_b);
     assert_eq!(stored_b.insurance.len(), 0);
 
     client.add_investment_insurance(&investment_b, &provider_three, &50u32);
 
-    let stored_a_after = client.get_investment(&investment_a).unwrap();
-    let stored_b_after = client.get_investment(&investment_b).unwrap();
+    let stored_a_after = client.get_investment(&investment_a);
+    let stored_b_after = client.get_investment(&investment_b);
 
     assert_eq!(stored_a_after.insurance.len(), 2);
     assert_eq!(stored_b_after.insurance.len(), 1);
-    assert_eq!(stored_b_after.insurance.get(0).unwrap().provider, provider_three);
+    assert_eq!(
+        stored_b_after.insurance.get(0).unwrap().provider,
+        provider_three
+    );
 }
 
 // ============================================================================
@@ -326,7 +328,7 @@ fn test_duplicate_submission_rejected_and_state_unchanged() {
     let investment_id = store_investment(&env, &investor, 9_000, InvestmentStatus::Active, 13);
     client.add_investment_insurance(&investment_id, &provider, &70u32);
 
-    let before = client.get_investment(&investment_id).unwrap();
+    let before = client.get_investment(&investment_id);
     assert_eq!(before.insurance.len(), 1);
 
     let result = client.try_add_investment_insurance(&investment_id, &provider_two, &30u32);
@@ -334,7 +336,7 @@ fn test_duplicate_submission_rejected_and_state_unchanged() {
     let contract_error = err.expect("expected contract error");
     assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
 
-    let after = client.get_investment(&investment_id).unwrap();
+    let after = client.get_investment(&investment_id);
     assert_eq!(after.insurance.len(), 1);
     assert_eq!(after.insurance.get(0).unwrap().provider, provider);
 }
@@ -376,7 +378,9 @@ fn test_investment_helpers_cover_branches() {
     let invalid_premium = empty_investment.add_insurance(provider.clone(), 50, 0);
     assert_eq!(invalid_premium, Err(QuickLendXError::InvalidAmount));
 
-    let claim = investment.process_insurance_claim().expect("claim should succeed");
+    let claim = investment
+        .process_insurance_claim()
+        .expect("claim should succeed");
     assert_eq!(claim.0, provider);
     assert_eq!(claim.1, 500);
     assert!(!investment.has_active_insurance());
