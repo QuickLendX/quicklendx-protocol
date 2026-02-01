@@ -2543,6 +2543,7 @@ mod test_reentrancy;
 mod test_escrow_refund;
 #[cfg(test)]
 mod test_insurance;
+#[cfg(test)]
 mod test_investor_kyc;
 #[cfg(test)]
 mod test_limit;
@@ -2552,4 +2553,5 @@ mod test_profit_fee_formula;
 mod test_insurance;
 #[cfg(test)]
 mod test_escrow_refund;
+#[cfg(test)]
 mod test_revenue_split;
