@@ -144,3 +144,7 @@ fn test_admin_operations_require_authorization() {
     let result = client.try_verify_business(&non_admin, &business);
     assert!(result.is_err());
 }
+
+
+// casting of References
+// perequisites for method chaining
