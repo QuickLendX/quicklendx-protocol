@@ -26,18 +26,19 @@ mod storage;
 mod test_admin;
 #[cfg(test)]
 mod test_business_kyc;
+#[cfg(test)]
 mod test_overflow;
-mod test_overflow;
-// mod test_refund;
+// #[cfg(test)]
 #[cfg(test)]
 mod test_profit_fee;
 #[cfg(test)]
-mod test_storage;
 mod test_refund;
+#[cfg(test)]
+mod test_storage;
 mod verification;
 
 #[cfg(test)]
- mod test_invoice_metadata;
+mod test_invoice_metadata;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::{
@@ -53,14 +54,14 @@ use escrow::{
 };
 use events::{
     emit_audit_query, emit_audit_validation, emit_bid_accepted, emit_bid_placed,
-    emit_bid_withdrawn, emit_escrow_created, emit_escrow_refunded, emit_escrow_released,
-    emit_insurance_added, emit_insurance_premium_collected, emit_investor_verified,
-    emit_invoice_cancelled, emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
-    emit_invoice_uploaded, emit_invoice_verified,
+    emit_bid_withdrawn, emit_escrow_created, emit_escrow_released, emit_insurance_added,
+    emit_insurance_premium_collected, emit_investor_verified, emit_invoice_cancelled,
+    emit_invoice_metadata_cleared, emit_invoice_metadata_updated, emit_invoice_uploaded,
+    emit_invoice_verified,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
-use payments::{create_escrow, refund_escrow, release_escrow, EscrowStorage};
+use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
@@ -69,9 +70,8 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
     get_business_verification_status, get_investor_analytics,
     get_investor_verification as do_get_investor_verification, reject_business,
-    reject_investor as do_reject_investor, set_investment_limit,
-    submit_investor_kyc as do_submit_investor_kyc, submit_kyc_application,
-    update_investor_analytics, validate_bid, validate_investor_investment,
+    reject_investor as do_reject_investor, submit_investor_kyc as do_submit_investor_kyc,
+    submit_kyc_application, update_investor_analytics, validate_bid, validate_investor_investment,
     validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
     verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
     InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
@@ -1301,7 +1301,6 @@ impl QuickLendXContract {
     }
 
     ///== Notification Management Functions ==///
-
     /// Get a notification by ID
     pub fn get_notification(env: Env, notification_id: BytesN<32>) -> Option<Notification> {
         NotificationSystem::get_notification(&env, &notification_id)
@@ -2538,10 +2537,14 @@ mod test_queries;
 #[cfg(test)]
 mod test_reentrancy;
 
+#[cfg(test)]
+mod test_escrow_refund;
+#[cfg(test)]
+mod test_insurance;
 mod test_investor_kyc;
+#[cfg(test)]
+mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
 #[cfg(test)]
-mod test_insurance;
-mod test_escrow_refund;
 mod test_revenue_split;

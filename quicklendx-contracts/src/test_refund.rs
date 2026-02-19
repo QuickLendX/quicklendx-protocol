@@ -7,10 +7,9 @@
 /// 4. State Transitions: Invoice, Bid, Investment, and Escrow statuses are correctly updated
 /// 5. Security: Unauthorized callers cannot trigger refunds
 use super::*;
-use crate::bid::BidStatus;
-use crate::investment::InvestmentStatus;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use crate::invoice::InvoiceCategory;
 use crate::payments::EscrowStatus;
+#[cfg(test)]
 use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Vec};
 
 // ============================================================================

@@ -550,7 +550,7 @@ impl FeeManager {
         min_fee: i128,
         max_fee: i128,
     ) -> Result<(), QuickLendXError> {
-        if base_fee_bps < MIN_FEE_BPS || base_fee_bps > MAX_FEE_BPS {
+        if base_fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidAmount);
         }
         if min_fee < 0 || max_fee < 0 || max_fee < min_fee {
