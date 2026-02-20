@@ -2548,3 +2548,5 @@ mod test_limit;
 mod test_profit_fee_formula;
 #[cfg(test)]
 mod test_revenue_split;
+#[cfg(test)]
+mod test_fuzz;

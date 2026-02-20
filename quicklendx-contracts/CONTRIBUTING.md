@@ -50,6 +50,38 @@ This compiles the contract using the top-level workspace configuration.
 cargo test
 ```
 
+### 🔬 Running Fuzz Tests
+
+The project includes property-based fuzz tests for critical paths (invoice creation, bid placement, and settlement). These tests use `proptest` to generate many random inputs and verify that:
+- No panics occur
+- State remains consistent
+- Invalid inputs are properly rejected
+
+To run fuzz tests:
+
+```bash
+# Run all tests including fuzz tests
+cargo test
+
+# Run only fuzz tests
+cargo test fuzz_
+
+# Run fuzz tests with more iterations (default is 100 cases per test)
+PROPTEST_CASES=1000 cargo test fuzz_
+```
+
+**Fuzz test coverage:**
+- `fuzz_store_invoice_*`: Tests invoice creation with various amounts, due dates, and description lengths
+- `fuzz_place_bid_*`: Tests bid placement with different amounts and expected returns
+- `fuzz_settle_invoice_*`: Tests settlement with various payment amounts
+- `fuzz_no_arithmetic_overflow`: Tests large numbers don't cause overflow
+
+**Security notes:**
+- Fuzz tests validate input ranges and boundary conditions
+- All critical math operations are tested for overflow/underflow
+- State consistency is verified after each operation
+- Invalid inputs must return errors, never panic
+
 ---
 
 # ✍️ How to Contribute
