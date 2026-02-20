@@ -724,6 +724,24 @@ RUST_LOG=debug cargo test -- --nocapture
    - Test edge cases
    - Test performance characteristics
 
+4. **Fuzz Tests** 🔬
+   - Property-based testing for critical paths
+   - Tests invoice creation, bid placement, and settlement
+   - Validates input ranges, boundary conditions, and arithmetic safety
+   - See [FUZZ_TESTING.md](FUZZ_TESTING.md) for details
+   - Run with: `cargo test fuzz_`
+   - Extended testing: `PROPTEST_CASES=1000 cargo test fuzz_`
+
+### Security Testing
+
+The protocol includes comprehensive fuzz testing for critical operations:
+- **Invoice Creation**: Tests valid ranges of amount, due_date, description length
+- **Bid Placement**: Tests bid_amount and expected_return validation
+- **Settlement**: Tests payment_amount handling and state transitions
+- **Arithmetic Safety**: Tests for overflow/underflow in calculations
+
+See [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md) for detailed security analysis.
+
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
