@@ -36,8 +36,6 @@ mod test_profit_fee;
 mod test_storage;
 #[cfg(test)]
 mod test_refund;
-#[cfg(test)]
-mod test_storage;
 mod verification;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
@@ -2546,4 +2544,5 @@ mod test_limit;
 mod test_profit_fee_formula;
 //#[cfg(test)]
 //mod test_escrow_refund;
+#[cfg(test)]
 mod test_revenue_split;
