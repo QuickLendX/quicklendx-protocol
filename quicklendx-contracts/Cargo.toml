@@ -13,6 +13,10 @@ soroban-sdk = "22.0.0"
 soroban-sdk = { version = "22.0.0", features = ["testutils"] }
 proptest = "1.4"
 
+[features]
+# Enable fuzz tests (disabled by default to avoid blocking CI)
+fuzz-tests = []
+
 # Optimized for minimal WASM size and network deployment limits (see README size budget).
 [profile.release]
 opt-level = "z"

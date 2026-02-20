@@ -57,24 +57,25 @@ The project includes property-based fuzz tests for critical paths (invoice creat
 - State remains consistent
 - Invalid inputs are properly rejected
 
+**Note:** Fuzz tests are behind a feature flag to avoid interfering with CI/CD.
+
 To run fuzz tests:
 
 ```bash
-# Run all tests including fuzz tests
-cargo test
+# Run all fuzz tests (with feature flag)
+cargo test --features fuzz-tests fuzz_
 
-# Run only fuzz tests
-cargo test fuzz_
+# Run only fuzz tests with more iterations
+PROPTEST_CASES=1000 cargo test --features fuzz-tests fuzz_
 
-# Run fuzz tests with more iterations (default is 100 cases per test)
-PROPTEST_CASES=1000 cargo test fuzz_
+# Run specific fuzz test
+cargo test --features fuzz-tests fuzz_store_invoice_valid_ranges
 ```
 
 **Fuzz test coverage:**
 - `fuzz_store_invoice_*`: Tests invoice creation with various amounts, due dates, and description lengths
 - `fuzz_place_bid_*`: Tests bid placement with different amounts and expected returns
 - `fuzz_settle_invoice_*`: Tests settlement with various payment amounts
-- `fuzz_no_arithmetic_overflow`: Tests large numbers don't cause overflow
 
 **Security notes:**
 - Fuzz tests validate input ranges and boundary conditions

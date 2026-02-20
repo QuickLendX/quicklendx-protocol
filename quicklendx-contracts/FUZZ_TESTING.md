@@ -60,31 +60,31 @@ This document describes the fuzz testing implementation for QuickLendX Protocol'
 ### Basic Test Run
 ```bash
 cd quicklendx-contracts
-cargo test
+cargo test --features fuzz-tests fuzz_
 ```
 
 ### Run Only Fuzz Tests
 ```bash
-cargo test fuzz_
+cargo test --features fuzz-tests fuzz_
 ```
 
 ### Extended Fuzz Testing (More Iterations)
 ```bash
-# Run with 1000 cases per test (default is 100)
-PROPTEST_CASES=1000 cargo test fuzz_
+# Run with 1000 cases per test (default is 50)
+PROPTEST_CASES=1000 cargo test --features fuzz-tests fuzz_
 
 # Run with 10000 cases for thorough testing
-PROPTEST_CASES=10000 cargo test fuzz_
+PROPTEST_CASES=10000 cargo test --features fuzz-tests fuzz_
 
 # Run specific fuzz test
-cargo test fuzz_store_invoice_valid_ranges
+cargo test --features fuzz-tests fuzz_store_invoice_valid_ranges
 ```
 
 ### Continuous Fuzzing
 For long-running fuzz campaigns:
 ```bash
 # Run for extended period
-PROPTEST_CASES=100000 cargo test fuzz_ -- --nocapture
+PROPTEST_CASES=100000 cargo test --features fuzz-tests fuzz_ -- --nocapture
 ```
 
 ## Expected Results

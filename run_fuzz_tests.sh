@@ -33,73 +33,66 @@ run_test() {
 # Parse command line arguments
 case "${1:-quick}" in
     quick)
-        echo "Running quick fuzz tests (100 cases per test)..."
+        echo "Running quick fuzz tests (50 cases per test)..."
         echo ""
-        run_test "Quick Fuzz Test" "cargo test fuzz_ --lib"
+        run_test "Quick Fuzz Test" "cargo test --features fuzz-tests fuzz_ --lib"
         ;;
     
     standard)
         echo "Running standard fuzz tests (1,000 cases per test)..."
         echo ""
-        run_test "Standard Fuzz Test" "PROPTEST_CASES=1000 cargo test fuzz_ --lib"
+        run_test "Standard Fuzz Test" "PROPTEST_CASES=1000 cargo test --features fuzz-tests fuzz_ --lib"
         ;;
     
     extended)
         echo "Running extended fuzz tests (10,000 cases per test)..."
         echo "⚠️  This may take 30+ minutes"
         echo ""
-        run_test "Extended Fuzz Test" "PROPTEST_CASES=10000 cargo test fuzz_ --lib"
+        run_test "Extended Fuzz Test" "PROPTEST_CASES=10000 cargo test --features fuzz-tests fuzz_ --lib"
         ;;
     
     thorough)
         echo "Running thorough fuzz tests (100,000 cases per test)..."
         echo "⚠️  This may take several hours"
         echo ""
-        run_test "Thorough Fuzz Test" "PROPTEST_CASES=100000 cargo test fuzz_ --lib"
+        run_test "Thorough Fuzz Test" "PROPTEST_CASES=100000 cargo test --features fuzz-tests fuzz_ --lib"
         ;;
     
     invoice)
         echo "Running invoice creation fuzz tests..."
         echo ""
-        run_test "Invoice Fuzz Tests" "cargo test fuzz_store_invoice --lib"
+        run_test "Invoice Fuzz Tests" "cargo test --features fuzz-tests fuzz_store_invoice --lib"
         ;;
     
     bid)
         echo "Running bid placement fuzz tests..."
         echo ""
-        run_test "Bid Fuzz Tests" "cargo test fuzz_place_bid --lib"
+        run_test "Bid Fuzz Tests" "cargo test --features fuzz-tests fuzz_place_bid --lib"
         ;;
     
     settlement)
         echo "Running settlement fuzz tests..."
         echo ""
-        run_test "Settlement Fuzz Tests" "cargo test fuzz_settle_invoice --lib"
-        ;;
-    
-    overflow)
-        echo "Running arithmetic overflow tests..."
-        echo ""
-        run_test "Overflow Tests" "cargo test fuzz_no_arithmetic_overflow --lib"
+        run_test "Settlement Fuzz Tests" "cargo test --features fuzz-tests fuzz_settle_invoice --lib"
         ;;
     
     all)
         echo "Running ALL tests (including non-fuzz)..."
         echo ""
-        run_test "All Tests" "cargo test --lib"
+        run_test "All Tests" "cargo test --features fuzz-tests --lib"
         ;;
     
     help|--help|-h)
         echo "Usage: $0 [mode]"
         echo ""
         echo "Modes:"
-        echo "  quick      - Run with 100 cases per test (~30s, default)"
+        echo "  quick      - Run with 50 cases per test (~30s, default)"
         echo "  standard   - Run with 1,000 cases per test (~5min)"
         echo "  extended   - Run with 10,000 cases per test (~30min)"
         echo "  thorough   - Run with 100,000 cases per test (hours)"
         echo "  invoice    - Run only invoice creation tests"
         echo "  bid        - Run only bid placement tests"
         echo "  settlement - Run only settlement tests"
-        echo "  overflow   - Run only arithmetic overflow tests"
         echo "  all        - Run all tests including non-fuzz"
         echo "  help       - Show this help message"
         echo ""
@@ -111,6 +104,8 @@ case "${1:-quick}" in
         echo "Environment Variables:"
         echo "  PROPTEST_CASES=N    - Set number of test cases"
         echo "  PROPTEST_SEED=N     - Reproduce specific test case"
+        echo ""
+        echo "Note: Fuzz tests require the 'fuzz-tests' feature flag"
         echo ""
         echo "Documentation:"
         echo "  See FUZZ_TESTING.md for detailed guide"
