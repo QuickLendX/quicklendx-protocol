@@ -406,10 +406,6 @@ fn test_multiple_disputes_different_invoices() {
 
     let dispute1_opt = dispute1_result.unwrap();
     let dispute2_opt = dispute2_result.unwrap();
-<<<<<<< HEAD
-=======
-
->>>>>>> 390655f (chore: apply code formatting via rust fmt)
     assert!(dispute1_opt.is_some());
     assert!(dispute2_opt.is_some());
 
