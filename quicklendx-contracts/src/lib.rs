@@ -2546,3 +2546,5 @@ mod test_profit_fee_formula;
 //mod test_escrow_refund;
 #[cfg(test)]
 mod test_revenue_split;
+#[cfg(test)]
+mod test_fuzz;
