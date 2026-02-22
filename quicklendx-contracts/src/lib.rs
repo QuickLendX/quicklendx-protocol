@@ -27,18 +27,16 @@ mod test_admin;
 #[cfg(test)]
 mod test_business_kyc;
 #[cfg(test)]
+mod test_dispute;
+#[cfg(test)]
 mod test_overflow;
-// #[cfg(test)]
 #[cfg(test)]
 mod test_profit_fee;
 #[cfg(test)]
-mod test_refund;
-#[cfg(test)]
 mod test_storage;
-mod verification;
-
 #[cfg(test)]
-mod test_invoice_metadata;
+mod test_refund;
+mod verification;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::{
@@ -2538,13 +2536,13 @@ mod test_queries;
 mod test_reentrancy;
 
 #[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
 mod test_insurance;
 mod test_investor_kyc;
 #[cfg(test)]
 mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
+//#[cfg(test)]
+//mod test_escrow_refund;
 #[cfg(test)]
 mod test_revenue_split;

@@ -91,8 +91,8 @@ fn test_refund_transfers_and_updates_status() {
     let bal_after_lock = token_client.balance(&investor);
     assert_eq!(bal_after_lock, 9_000i128);
 
-    // Refund escrow funds
-    client.refund_escrow_funds(&invoice_id);
+    // Refund escrow funds (initiated by business)
+    client.refund_escrow_funds(&invoice_id, &business);
 
     // Escrow marked Refunded
     let escrow_status = client.get_escrow_status(&invoice_id);
@@ -141,12 +141,12 @@ fn test_refund_idempotency_and_release_blocked() {
     client.accept_bid(&invoice_id, &bid_id);
 
     // Refund once
-    client.refund_escrow_funds(&invoice_id);
+    client.refund_escrow_funds(&invoice_id, &business);
     let escrow_status = client.get_escrow_status(&invoice_id);
     assert_eq!(escrow_status, EscrowStatus::Refunded);
 
     // Second refund should fail (not Held)
-    let result = client.try_refund_escrow_funds(&invoice_id);
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
     assert!(
         result.is_err(),
         "Second refund must be rejected to avoid double refunds"
@@ -200,7 +200,7 @@ fn test_refund_authorization_current_behavior_and_security_note() {
     client.accept_bid(&invoice_id, &bid_id);
 
     // Now call refund without mocking auth: should succeed under current code
-    client.refund_escrow_funds(&invoice_id);
+    client.refund_escrow_funds(&invoice_id, &business);
     let escrow_status = client.get_escrow_status(&invoice_id);
     assert_eq!(
         escrow_status,
