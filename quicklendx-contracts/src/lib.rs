@@ -36,9 +36,9 @@ mod test_overflow;
 #[cfg(test)]
 mod test_profit_fee;
 #[cfg(test)]
-mod test_storage;
-#[cfg(test)]
 mod test_refund;
+#[cfg(test)]
+mod test_storage;
 mod verification;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
@@ -192,6 +192,36 @@ impl QuickLendXContract {
     /// Get all whitelisted token addresses.
     pub fn get_whitelisted_currencies(env: Env) -> Vec<Address> {
         currency::CurrencyWhitelist::get_whitelisted_currencies(&env)
+    }
+
+    /// Replace the entire currency whitelist atomically (admin only).
+    pub fn set_currencies(
+        env: Env,
+        admin: Address,
+        currencies: Vec<Address>,
+    ) -> Result<(), QuickLendXError> {
+        currency::CurrencyWhitelist::set_currencies(&env, &admin, &currencies)
+    }
+
+    /// Clear the entire currency whitelist (admin only).
+    /// After this call all currencies are allowed (empty-list backward-compat rule).
+    pub fn clear_currencies(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        currency::CurrencyWhitelist::clear_currencies(&env, &admin)
+    }
+
+    /// Return the number of whitelisted currencies.
+    pub fn currency_count(env: Env) -> u32 {
+        currency::CurrencyWhitelist::currency_count(&env)
+    }
+
+    /// Return a paginated slice of the whitelist.
+    pub fn get_whitelisted_currencies_paged(env: Env, offset: u32, limit: u32) -> Vec<Address> {
+        currency::CurrencyWhitelist::get_whitelisted_currencies_paged(&env, offset, limit)
+    }
+
+    /// Cancel a pending emergency withdrawal (admin only).
+    pub fn cancel_emergency_withdraw(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        emergency::EmergencyWithdraw::cancel(&env, &admin)
     }
 
     // ============================================================================
@@ -2596,6 +2626,6 @@ mod test_profit_fee_formula;
 //#[cfg(test)]
 //mod test_escrow_refund;
 #[cfg(test)]
-mod test_revenue_split;
-#[cfg(test)]
 mod test_fuzz;
+#[cfg(test)]
+mod test_revenue_split;
