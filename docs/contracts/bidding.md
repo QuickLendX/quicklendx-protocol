@@ -167,6 +167,40 @@ Gets all bids from a specific investor for an invoice.
 pub fn get_bids_by_investor(env: Env, invoice_id: BytesN<32>, investor: Address) -> Vec<Bid>
 ```
 
+### `cancel_bid`
+
+Cancels a placed bid. Unlike withdraw, cancel is a hard termination.
+
+**Signature:**
+```rust
+pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> bool
+```
+
+**Returns:** `true` if cancelled, `false` if bid not found or not in `Placed` status.
+
+**Validation Rules:**
+1. Bid must exist
+2. Bid must be in `Placed` status
+
+**Error Codes:** None — returns `false` for invalid states instead of error.
+
+---
+
+### `get_all_bids_by_investor`
+
+Returns all bids placed by an investor across **all invoices** (all statuses).
+
+**Signature:**
+```rust
+pub fn get_all_bids_by_investor(env: Env, investor: Address) -> Vec<Bid>
+```
+
+**Returns:** All bid records for the investor regardless of status or invoice.
+
+**Notes:**
+- Use `get_bids_by_investor` for per-invoice filtering
+- Includes Placed, Withdrawn, Cancelled, Accepted, Expired bids
+
 ## Data Structures
 
 ### `Bid`
@@ -192,6 +226,7 @@ pub enum BidStatus {
     Withdrawn, // Bid was withdrawn by investor
     Accepted,  // Bid was accepted by business
     Expired,   // Bid expired without acceptance
+    Cancelled, // Bid was hard-cancelled
 }
 ```
 
@@ -204,13 +239,18 @@ pub enum BidStatus {
 2. **Withdraw Bid**: Investor withdraws their bid before acceptance
    - Status: `Withdrawn`
    - Only possible if status is `Placed`
+  
+3. **Cancel Bid**: Hard cancellation of a placed bid
+   - Status: `Cancelled`
+   - Returns `false` if already non-Placed
+   - Excluded from ranking and best-bid selection
 
-3. **Accept Bid**: Business accepts a bid (via `accept_bid` entrypoint)
+4. **Accept Bid**: Business accepts a bid (via `accept_bid` entrypoint)
    - Status: `Accepted`
    - Invoice status changes to `Funded`
    - Escrow is created
 
-4. **Expire Bid**: Bid expires after expiration timestamp
+5. **Expire Bid**: Bid expires after expiration timestamp
    - Status: `Expired`
    - Automatically updated during cleanup operations
 
