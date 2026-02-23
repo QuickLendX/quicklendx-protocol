@@ -152,6 +152,139 @@ fn test_get_invoices_by_category_empty() {
     assert_eq!(services.len(), 0);
 }
 
+#[test]
+fn test_get_invoice_count_by_category_matches_list_length_for_each_category() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Build coverage across every category, including duplicates.
+    let _ = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "svc-1"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let _ = client.store_invoice(
+        &business,
+        &1001,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "svc-2"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let _ = client.store_invoice(
+        &business,
+        &1100,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "prod"),
+        &InvoiceCategory::Products,
+        &Vec::new(&env),
+    );
+    let _ = client.store_invoice(
+        &business,
+        &1200,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "consult"),
+        &InvoiceCategory::Consulting,
+        &Vec::new(&env),
+    );
+    let _ = client.store_invoice(
+        &business,
+        &1300,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "manufact"),
+        &InvoiceCategory::Manufacturing,
+        &Vec::new(&env),
+    );
+    let _ = client.store_invoice(
+        &business,
+        &1400,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "tech"),
+        &InvoiceCategory::Technology,
+        &Vec::new(&env),
+    );
+    let _ = client.store_invoice(
+        &business,
+        &1500,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "health"),
+        &InvoiceCategory::Healthcare,
+        &Vec::new(&env),
+    );
+    let _ = client.store_invoice(
+        &business,
+        &1600,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "other"),
+        &InvoiceCategory::Other,
+        &Vec::new(&env),
+    );
+
+    let categories = [
+        InvoiceCategory::Services,
+        InvoiceCategory::Products,
+        InvoiceCategory::Consulting,
+        InvoiceCategory::Manufacturing,
+        InvoiceCategory::Technology,
+        InvoiceCategory::Healthcare,
+        InvoiceCategory::Other,
+    ];
+
+    for category in categories {
+        let list = client.get_invoices_by_category(&category);
+        let count = client.get_invoice_count_by_category(&category);
+        assert_eq!(count, list.len() as u32);
+    }
+}
+
+#[test]
+fn test_get_all_categories_returns_expected_set() {
+    let (env, client, _admin) = setup_env();
+    let categories = client.get_all_categories();
+
+    assert_eq!(categories.len(), 7);
+    assert!(categories.contains(&InvoiceCategory::Services));
+    assert!(categories.contains(&InvoiceCategory::Products));
+    assert!(categories.contains(&InvoiceCategory::Consulting));
+    assert!(categories.contains(&InvoiceCategory::Manufacturing));
+    assert!(categories.contains(&InvoiceCategory::Technology));
+    assert!(categories.contains(&InvoiceCategory::Healthcare));
+    assert!(categories.contains(&InvoiceCategory::Other));
+
+    // Ensure no duplicates by counting matches for each expected value.
+    let expected = [
+        InvoiceCategory::Services,
+        InvoiceCategory::Products,
+        InvoiceCategory::Consulting,
+        InvoiceCategory::Manufacturing,
+        InvoiceCategory::Technology,
+        InvoiceCategory::Healthcare,
+        InvoiceCategory::Other,
+    ];
+    for category in expected {
+        let mut occurrences = 0u32;
+        for c in categories.iter() {
+            if c == category {
+                occurrences += 1;
+            }
+        }
+        assert_eq!(occurrences, 1);
+    }
+}
+
 // ============================================================================
 // CATEGORY AND STATUS COMBINED QUERY TESTS
 // ============================================================================
@@ -333,6 +466,66 @@ fn test_get_invoices_by_tag_nonexistent() {
     // Query for tag that doesn't exist
     let result = client.get_invoices_by_tag(&String::from_str(&env, "nonexistent"));
     assert_eq!(result.len(), 0);
+}
+
+#[test]
+fn test_get_invoice_count_by_tag_matches_list_length_for_various_tags() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let mut tags1 = Vec::new(&env);
+    tags1.push_back(String::from_str(&env, "urgent"));
+    tags1.push_back(String::from_str(&env, "tech"));
+
+    let mut tags2 = Vec::new(&env);
+    tags2.push_back(String::from_str(&env, "urgent"));
+    tags2.push_back(String::from_str(&env, "finance"));
+
+    let mut tags3 = Vec::new(&env);
+    tags3.push_back(String::from_str(&env, "tech"));
+
+    let _ = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "i1"),
+        &InvoiceCategory::Services,
+        &tags1,
+    );
+    let _ = client.store_invoice(
+        &business,
+        &1100,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "i2"),
+        &InvoiceCategory::Products,
+        &tags2,
+    );
+    let _ = client.store_invoice(
+        &business,
+        &1200,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "i3"),
+        &InvoiceCategory::Technology,
+        &tags3,
+    );
+
+    let query_tags = [
+        String::from_str(&env, "urgent"),
+        String::from_str(&env, "tech"),
+        String::from_str(&env, "finance"),
+        String::from_str(&env, "nonexistent"),
+    ];
+
+    for tag in query_tags.iter() {
+        let list = client.get_invoices_by_tag(&tag);
+        let count = client.get_invoice_count_by_tag(&tag);
+        assert_eq!(count, list.len() as u32, "tag count mismatch");
+    }
 }
 
 // ============================================================================
