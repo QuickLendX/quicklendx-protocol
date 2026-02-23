@@ -218,16 +218,85 @@ fn test_cannot_refund_twice() {
 #[test]
 fn test_cannot_refund_nonexistent_invoice() {
     let (env, client, admin) = setup();
-    
+
     // Generate a random invoice ID that doesn't exist
     let nonexistent_invoice_id = BytesN::from_array(&env, &[1u8; 32]);
-    
+
     // Attempt to refund
     let result = client.try_refund_escrow_funds(&nonexistent_invoice_id, &admin);
-    
+
     // Verify it returns an error
+    assert!(result.is_err(), "Cannot refund a nonexistent invoice");
+}
+
+#[test]
+fn test_cannot_refund_missing_escrow() {
+    let (env, client, admin) = setup();
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &client.address);
+
+    let amount = 10_000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Create and verify an invoice
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test Missing Escrow"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    // Forcibly update status to Funded, skipping the bid process (no escrow record created)
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Funded);
+
+    // Attempt to refund should fail because there is no corresponding escrow record
+    let result = client.try_refund_escrow_funds(&invoice_id, &admin);
     assert!(
         result.is_err(),
-        "Cannot refund a nonexistent invoice"
+        "Cannot refund an invoice if the escrow record is missing"
     );
+}
+
+#[test]
+fn test_refund_updates_internal_states_correctly() {
+    let (env, client, admin) = setup();
+    let (invoice_id, business, _investor, _amount, _currency) =
+        create_funded_invoice(&env, &client, &admin);
+
+    // Pre-refund state verification
+    let pre_refund_invoice = client.get_invoice(&invoice_id);
+    assert_eq!(pre_refund_invoice.status, InvoiceStatus::Funded);
+
+    // Status list tracking count check before refund
+    let pre_refunded_count = client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+
+    // Perform the refund
+    client.refund_escrow_funds(&invoice_id, &business);
+
+    // 1. Invoice Status should update to Refunded
+    let post_refund_invoice = client.get_invoice(&invoice_id);
+    assert_eq!(post_refund_invoice.status, InvoiceStatus::Refunded);
+
+    // 2. Invoice Status tracking lists should be updated correctly
+    let post_refunded_count = client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+
+    assert_eq!(post_refunded_count, pre_refunded_count + 1);
+
+    // 3. Bid status should update to Cancelled
+    let bids = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(bids.len(), 1);
+    assert_eq!(bids.get(0).unwrap().status, BidStatus::Cancelled);
+
+    // 4. Investment status should update to Refunded
+    env.as_contract(&client.address, || {
+        let investment =
+            crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
+                .unwrap();
+        assert_eq!(investment.status, InvestmentStatus::Refunded);
+    });
 }
