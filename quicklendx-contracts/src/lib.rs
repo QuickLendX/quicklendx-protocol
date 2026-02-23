@@ -771,6 +771,9 @@ impl QuickLendXContract {
             env.ledger().timestamp(),
         );
         InvoiceStorage::update_invoice(&env, &invoice);
+        // Update status index: Verified -> Funded
+        InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
+        InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Funded, &invoice_id);
         let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         let investment = Investment {
             investment_id: investment_id.clone(),

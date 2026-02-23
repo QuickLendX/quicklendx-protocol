@@ -12,10 +12,10 @@ use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, BytesN, Env, String, Vec,
+    token, Address, BytesN, Env, String, Vec,
 };
 
-// Helper: Setup contract with admin
+// Helper: Setup contract with admin and core config
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
@@ -23,6 +23,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.set_admin(&admin);
+    client.initialize_fee_system(&admin);
     (env, client, admin)
 }
 
@@ -30,13 +31,11 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
 fn create_verified_business(
     env: &Env,
     client: &QuickLendXContractClient,
-    _admin: &Address,
+    admin: &Address,
 ) -> Address {
     let business = Address::generate(env);
     client.submit_kyc_application(&business, &String::from_str(env, "KYC data"));
-    let admin = Address::generate(env);
-    client.set_admin(&admin);
-    client.verify_business(&admin, &business);
+    client.verify_business(admin, &business);
     business
 }
 
@@ -44,7 +43,7 @@ fn create_verified_business(
 fn create_verified_investor(
     env: &Env,
     client: &QuickLendXContractClient,
-    _admin: &Address,
+    admin: &Address,
     limit: i128,
 ) -> Address {
     let investor = Address::generate(env);
@@ -57,13 +56,29 @@ fn create_verified_investor(
 fn create_and_fund_invoice(
     env: &Env,
     client: &QuickLendXContractClient,
-    _admin: &Address,
+    admin: &Address,
     business: &Address,
     investor: &Address,
     amount: i128,
     due_date: u64,
 ) -> BytesN<32> {
-    let currency = Address::generate(env);
+    // Register token contract (use v2 API like test_refund.rs and test_escrow.rs)
+    let token_admin = Address::generate(env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac_client = token::StellarAssetClient::new(env, &currency);
+    let token_client = token::Client::new(env, &currency);
+
+    // Whitelist the currency
+    client.add_currency(admin, &currency);
+
+    // Mint tokens to investor so they can bid
+    sac_client.mint(investor, &amount);
+    // Approve contract to spend investor's tokens (use a finite TTL)
+    let expiry = env.ledger().sequence() + 10_000;
+    token_client.approve(investor, &client.address, &amount, &expiry);
+
     let invoice_id = client.store_invoice(
         business,
         &amount,

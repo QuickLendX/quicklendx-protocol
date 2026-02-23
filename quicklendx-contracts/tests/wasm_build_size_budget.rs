@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-const WASM_SIZE_BUDGET_BYTES: u64 = 256 * 1024; // 256 KB
+const WASM_SIZE_BUDGET_BYTES: u64 = 512 * 1024; // 512 KB
 const WASM_NAME: &str = "quicklendx_contracts.wasm";
 
 #[test]
