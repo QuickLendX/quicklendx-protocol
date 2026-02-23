@@ -597,6 +597,74 @@ fn test_partial_expiration_cleanup() {
     let expired_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Expired);
     assert_eq!(expired_bids.len(), 1, "Should have 1 expired bid (first)");
 }
+
+/// Test: accept_bid cleans up expired bids before accepting
+#[test]
+fn test_accept_bid_cleans_up_expired_before_accepting() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place two bids
+    let bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    
+    // Advance time by 3 days
+    env.ledger().set_timestamp(env.ledger().timestamp() + (3 * 24 * 60 * 60));
+    
+    let bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
+    
+    // Advance time by 5 more days (first bid expired, second still valid)
+    env.ledger().set_timestamp(env.ledger().timestamp() + (5 * 24 * 60 * 60));
+    
+    // Accept second bid - should clean up first expired bid
+    let result = client.try_accept_bid(&business, &invoice_id, &bid_2);
+    assert!(result.is_ok(), "Should successfully accept valid bid");
+    
+    // Verify first bid is expired
+    let bid_1_status = client.get_bid(&bid_1).unwrap();
+    assert_eq!(bid_1_status.status, BidStatus::Expired, "First bid should be expired");
+    
+    // Verify second bid is accepted
+    let bid_2_status = client.get_bid(&bid_2).unwrap();
+    assert_eq!(bid_2_status.status, BidStatus::Accepted, "Second bid should be accepted");
+    
+    // Verify cleanup happened
+    let expired_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Expired);
+    assert_eq!(expired_bids.len(), 1, "Should have 1 expired bid");
+}
+
+/// Test: Cannot accept expired bid
+#[test]
+fn test_cannot_accept_expired_bid() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place bid
+    let bid_id = client.place_bid(&investor, &invoice_id, &10_000, &12_000);
+    
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+    
+    // Try to accept expired bid - should fail
+    let result = client.try_accept_bid(&business, &invoice_id, &bid_id);
+    assert!(result.is_err(), "Should not be able to accept expired bid");
+    
+    // Verify bid is marked expired
+    let bid_status = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid_status.status, BidStatus::Expired, "Bid should be expired");
+}
 // ============================================================================
 // Category 5: Investment Limit Management
 // ============================================================================
