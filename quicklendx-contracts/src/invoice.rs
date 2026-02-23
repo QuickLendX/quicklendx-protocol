@@ -811,32 +811,11 @@ impl InvoiceStorage {
 
     /// Get invoices by category
     pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
-        let mut category_invoices: Vec<BytesN<32>> = env
+        env
             .storage()
             .instance()
             .get(&Self::category_key(category))
-            .unwrap_or_else(|| Vec::new(env));
-        let all_statuses = [
-            InvoiceStatus::Pending,
-            InvoiceStatus::Verified,
-            InvoiceStatus::Funded,
-            InvoiceStatus::Paid,
-            InvoiceStatus::Defaulted,
-            InvoiceStatus::Cancelled,
-            InvoiceStatus::Refunded,
-        ];
-
-        for status in all_statuses.iter() {
-            let invoices = Self::get_invoices_by_status(env, status);
-            for invoice_id in invoices.iter() {
-                if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
-                    if invoice.category == *category {
-                        category_invoices.push_back(invoice_id);
-                    }
-                }
-            }
-        }
-        category_invoices
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Get invoices by category and status
@@ -860,32 +839,11 @@ impl InvoiceStorage {
 
     /// Get invoices by tag
     pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
-        let mut tagged_invoices: Vec<BytesN<32>> = env
+        env
             .storage()
             .instance()
             .get(&Self::tag_key(tag))
-            .unwrap_or_else(|| Vec::new(env));
-        let all_statuses = [
-            InvoiceStatus::Pending,
-            InvoiceStatus::Verified,
-            InvoiceStatus::Funded,
-            InvoiceStatus::Paid,
-            InvoiceStatus::Defaulted,
-            InvoiceStatus::Cancelled,
-            InvoiceStatus::Refunded,
-        ];
-
-        for status in all_statuses.iter() {
-            let invoices = Self::get_invoices_by_status(env, status);
-            for invoice_id in invoices.iter() {
-                if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
-                    if invoice.has_tag(tag.clone()) {
-                        tagged_invoices.push_back(invoice_id);
-                    }
-                }
-            }
-        }
-        tagged_invoices
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Get invoices by multiple tags (AND logic - must have all tags)
