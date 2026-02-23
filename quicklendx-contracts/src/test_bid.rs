@@ -388,6 +388,68 @@ fn test_bid_expiration_and_cleanup() {
         "Bid must be marked expired"
     );
 }
+
+// ============================================================================
+// Category 6: Bid Expiration - Default TTL and Cleanup
+// ============================================================================
+
+/// Test: Bid uses default TTL (7 days) when placed
+#[test]
+fn test_bid_default_ttl_seven_days() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
+    
+    let initial_timestamp = env.ledger().timestamp();
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    
+    let bid = client.get_bid(&bid_id).unwrap();
+    let expected_expiration = initial_timestamp + (7 * 24 * 60 * 60); // 7 days in seconds
+    
+    assert_eq!(
+        bid.expiration_timestamp, expected_expiration,
+        "Bid expiration should be 7 days from placement"
+    );
+}
+
+/// Test: cleanup_expired_bids returns count of removed bids
+#[test]
+fn test_cleanup_expired_bids_returns_count() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let investor3 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place 3 bids
+    let _bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let _bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
+    let _bid_3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
+    
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+    
+    // Cleanup should return count of 3
+    let removed_count = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(removed_count, 3, "Should remove all 3 expired bids");
+    
+    // Verify all bids are marked expired
+    let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
+    assert_eq!(placed_bids.len(), 0, "No bids should be in Placed status");
+    
+    let expired_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Expired);
+    assert_eq!(expired_bids.len(), 3, "All 3 bids should be Expired");
+}
 // ============================================================================
 // Category 5: Investment Limit Management
 // ============================================================================
