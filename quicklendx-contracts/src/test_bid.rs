@@ -761,6 +761,121 @@ fn test_cleanup_on_invoice_with_no_bids() {
     let removed = client.cleanup_expired_bids(&invoice_id);
     assert_eq!(removed, 0, "Should remove 0 bids when invoice has no bids");
 }
+
+/// Test: Withdrawn bids are not affected by expiration cleanup
+#[test]
+fn test_withdrawn_bids_not_affected_by_expiration() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place two bids
+    let bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
+    
+    // Withdraw first bid
+    let _ = client.try_withdraw_bid(&bid_1);
+    
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+    
+    // Cleanup should only affect placed bids
+    let removed = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(removed, 1, "Should remove only 1 placed bid");
+    
+    // Verify first bid is still withdrawn (not expired)
+    let bid_1_status = client.get_bid(&bid_1).unwrap();
+    assert_eq!(bid_1_status.status, BidStatus::Withdrawn, "Withdrawn bid should remain withdrawn");
+    
+    // Verify second bid is expired
+    let bid_2_status = client.get_bid(&bid_2).unwrap();
+    assert_eq!(bid_2_status.status, BidStatus::Expired, "Placed bid should be expired");
+}
+
+/// Test: Cancelled bids are not affected by expiration cleanup
+#[test]
+fn test_cancelled_bids_not_affected_by_expiration() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place two bids
+    let bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
+    
+    // Cancel first bid
+    let _ = client.cancel_bid(&bid_1);
+    
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+    
+    // Cleanup should only affect placed bids
+    let removed = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(removed, 1, "Should remove only 1 placed bid");
+    
+    // Verify first bid is still cancelled (not expired)
+    let bid_1_status = client.get_bid(&bid_1).unwrap();
+    assert_eq!(bid_1_status.status, BidStatus::Cancelled, "Cancelled bid should remain cancelled");
+    
+    // Verify second bid is expired
+    let bid_2_status = client.get_bid(&bid_2).unwrap();
+    assert_eq!(bid_2_status.status, BidStatus::Expired, "Placed bid should be expired");
+}
+
+/// Test: Mixed status bids - only Placed bids expire
+#[test]
+fn test_mixed_status_bids_only_placed_expire() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let investor3 = add_verified_investor(&env, &client, 100_000);
+    let investor4 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place four bids
+    let bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
+    let bid_3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
+    let bid_4 = client.place_bid(&investor4, &invoice_id, &25_000, &30_000);
+    
+    // Withdraw bid 1
+    let _ = client.try_withdraw_bid(&bid_1);
+    
+    // Cancel bid 2
+    let _ = client.cancel_bid(&bid_2);
+    
+    // Leave bid 3 and 4 as Placed
+    
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+    
+    // Cleanup should only affect placed bids (3 and 4)
+    let removed = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(removed, 2, "Should remove 2 placed bids");
+    
+    // Verify statuses
+    assert_eq!(client.get_bid(&bid_1).unwrap().status, BidStatus::Withdrawn);
+    assert_eq!(client.get_bid(&bid_2).unwrap().status, BidStatus::Cancelled);
+    assert_eq!(client.get_bid(&bid_3).unwrap().status, BidStatus::Expired);
+    assert_eq!(client.get_bid(&bid_4).unwrap().status, BidStatus::Expired);
+}
 // ============================================================================
 // Category 5: Investment Limit Management
 // ============================================================================
