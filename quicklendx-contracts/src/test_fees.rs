@@ -526,3 +526,170 @@ fn test_comprehensive_fee_calculation() {
 
     assert_eq!(fees, 1403);
 }
+
+// ─── calculate_transaction_fees: all flag combinations ───────────────────────
+
+/// Base case: no flags set, Standard tier — verifies raw fee with no modifiers
+#[test]
+fn test_calculate_transaction_fees_base_case() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let amount = 10_000_i128;
+    let fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
+
+    // Platform 2% = 200, Processing 0.5% = 50, Verification 1% = 100 → total 350
+    assert_eq!(fees, 350);
+}
+
+/// is_early_payment = true: Platform fee gets an extra 10% reduction
+#[test]
+fn test_calculate_transaction_fees_early_payment_flag() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let amount = 10_000_i128;
+    let base_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
+    let early_fees = client.calculate_transaction_fees(&user, &amount, &true, &false);
+
+    // Early payment applies 10% discount on Platform fee (200 → 180)
+    // Total: 180 + 50 + 100 = 330
+    assert_eq!(early_fees, 330);
+    assert!(early_fees < base_fees, "Early payment must reduce total fees");
+}
+
+/// is_late_payment = true: LatePayment fee is added with 20% surcharge on top
+#[test]
+fn test_calculate_transaction_fees_late_payment_flag() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    // Add an active LatePayment fee structure
+    client.update_fee_structure(
+        &admin,
+        &FeeType::LatePayment,
+        &100,   // 1%
+        &50,    // min fee
+        &10_000, // max fee
+        &true,
+    );
+
+    let amount = 10_000_i128;
+    let base_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
+    let late_fees = client.calculate_transaction_fees(&user, &amount, &false, &true);
+
+    // LatePayment: 1% of 10k = 100, +20% surcharge = 120
+    // Total: 350 + 120 = 470
+    assert_eq!(late_fees, 470);
+    assert!(late_fees > base_fees, "Late payment must increase total fees");
+}
+
+/// Both flags true: early payment discount AND late payment penalty applied together
+#[test]
+fn test_calculate_transaction_fees_both_flags() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    client.update_fee_structure(
+        &admin,
+        &FeeType::LatePayment,
+        &100,
+        &50,
+        &10_000,
+        &true,
+    );
+
+    let amount = 10_000_i128;
+    let early_fees = client.calculate_transaction_fees(&user, &amount, &true, &false);
+    let late_fees = client.calculate_transaction_fees(&user, &amount, &false, &true);
+    let both_fees = client.calculate_transaction_fees(&user, &amount, &true, &true);
+
+    // Platform 200 → early discount 10% → 180
+    // Processing 50, Verification 100 unchanged
+    // LatePayment 100 + 20% surcharge = 120
+    // Total: 180 + 50 + 100 + 120 = 450
+    assert_eq!(both_fees, 450);
+    // Both flags should produce result between the two extremes
+    assert!(both_fees > early_fees);
+    assert!(both_fees < late_fees + early_fees); // sanity: not additive of both penalties
+}
+
+/// Volume tier discount applied correctly for Silver, Gold, and Platinum
+#[test]
+fn test_calculate_transaction_fees_volume_tier_discounts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let amount = 10_000_i128;
+
+    // Standard tier (no discount) — baseline
+    let standard_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
+    assert_eq!(standard_fees, 350);
+
+    // Elevate to Silver tier (5% discount, total_volume >= 100_000_000_000)
+    client.update_user_transaction_volume(&user, &100_000_000_000_i128);
+    let silver_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
+    // Each non-LatePayment fee reduced by 5%: 200*0.95=190, 50*0.95=47, 100*0.95=95 → 332
+    assert_eq!(silver_fees, 332);
+    assert!(silver_fees < standard_fees);
+
+    // Elevate to Gold tier (10% discount, total_volume >= 500_000_000_000)
+    client.update_user_transaction_volume(&user, &400_000_000_000_i128);
+    let gold_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
+    // 200*0.90=180, 50*0.90=45, 100*0.90=90 → 315
+    assert_eq!(gold_fees, 315);
+    assert!(gold_fees < silver_fees);
+
+    // Elevate to Platinum tier (15% discount, total_volume >= 1_000_000_000_000)
+    client.update_user_transaction_volume(&user, &500_000_000_000_i128);
+    let platinum_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
+    // 200*0.85=170, 50*0.85=42, 100*0.85=85 → 297
+    assert_eq!(platinum_fees, 297);
+    assert!(platinum_fees < gold_fees);
+}
+
+/// Zero amount must return an error
+#[test]
+fn test_calculate_transaction_fees_zero_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let result = client.try_calculate_transaction_fees(&user, &0_i128, &false, &false);
+    assert!(result.is_err(), "Zero amount must return InvalidAmount error");
+}
