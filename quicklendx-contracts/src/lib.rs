@@ -2211,7 +2211,6 @@ impl QuickLendXContract {
     pub fn configure_treasury(env: Env, treasury_address: Address) -> Result<(), QuickLendXError> {
         let admin =
             BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
 
         let _treasury_config =
             fees::FeeManager::configure_treasury(&env, &admin, treasury_address.clone())?;
