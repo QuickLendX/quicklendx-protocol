@@ -2632,3 +2632,5 @@ mod test_escrow_refund;
 mod test_fuzz;
 #[cfg(test)]
 mod test_revenue_split;
+#[cfg(test)]
+mod test_protocol_limits;
