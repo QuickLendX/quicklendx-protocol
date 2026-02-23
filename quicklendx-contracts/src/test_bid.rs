@@ -665,6 +665,102 @@ fn test_cannot_accept_expired_bid() {
     let bid_status = client.get_bid(&bid_id).unwrap();
     assert_eq!(bid_status.status, BidStatus::Expired, "Bid should be expired");
 }
+
+/// Test: Bid at exact expiration boundary (not expired)
+#[test]
+fn test_bid_at_exact_expiration_not_expired() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place bid
+    let bid_id = client.place_bid(&investor, &invoice_id, &10_000, &12_000);
+    let bid = client.get_bid(&bid_id).unwrap();
+    
+    // Set time to exactly expiration timestamp (not past it)
+    env.ledger().set_timestamp(bid.expiration_timestamp);
+    
+    // Bid should still be valid (not expired)
+    let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
+    assert_eq!(placed_bids.len(), 1, "Bid at exact expiration should still be placed");
+    
+    // Verify bid status is still Placed
+    let bid_status = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid_status.status, BidStatus::Placed, "Bid should still be placed at exact expiration");
+}
+
+/// Test: Bid one second past expiration (expired)
+#[test]
+fn test_bid_one_second_past_expiration_expired() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place bid
+    let bid_id = client.place_bid(&investor, &invoice_id, &10_000, &12_000);
+    let bid = client.get_bid(&bid_id).unwrap();
+    
+    // Set time to one second past expiration
+    env.ledger().set_timestamp(bid.expiration_timestamp + 1);
+    
+    // Trigger cleanup
+    let removed = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(removed, 1, "Should remove 1 expired bid");
+    
+    // Verify bid is expired
+    let bid_status = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid_status.status, BidStatus::Expired, "Bid should be expired one second past expiration");
+}
+
+/// Test: Cleanup with no expired bids returns zero
+#[test]
+fn test_cleanup_with_no_expired_bids_returns_zero() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place bid
+    let _bid_id = client.place_bid(&investor, &invoice_id, &10_000, &12_000);
+    
+    // Cleanup immediately (no expired bids)
+    let removed = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(removed, 0, "Should remove 0 bids when none are expired");
+    
+    // Verify bid is still placed
+    let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
+    assert_eq!(placed_bids.len(), 1, "Bid should still be placed");
+}
+
+/// Test: Cleanup on invoice with no bids returns zero
+#[test]
+fn test_cleanup_on_invoice_with_no_bids() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Cleanup on invoice with no bids
+    let removed = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(removed, 0, "Should remove 0 bids when invoice has no bids");
+}
 // ============================================================================
 // Category 5: Investment Limit Management
 // ============================================================================
