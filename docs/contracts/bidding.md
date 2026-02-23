@@ -206,7 +206,7 @@ pub fn get_all_bids_by_investor(env: Env, investor: Address) -> Vec<Bid>
 ### `Bid`
 
 ```rust
-pub struct Bid {
+    pub struct Bid {
     pub bid_id: BytesN<32>,           // Unique bid identifier
     pub invoice_id: BytesN<32>,       // Associated invoice
     pub investor: Address,            // Investor who placed the bid
@@ -214,7 +214,7 @@ pub struct Bid {
     pub expected_return: i128,        // Expected return amount
     pub timestamp: u64,               // When bid was placed
     pub status: BidStatus,            // Current bid status
-    pub expiration_timestamp: u64,    // When bid expires (default: 7 days)
+    pub expiration_timestamp: u64,    // When bid expires (default: 7 days). Admin-configurable (1–30 days)
 }
 ```
 
@@ -234,7 +234,7 @@ pub enum BidStatus {
 
 1. **Place Bid**: Investor places a bid on a verified invoice
    - Status: `Placed`
-   - Expiration: 7 days from placement (configurable via `DEFAULT_BID_TTL`)
+    - Expiration: 7 days from placement by default. Admin can update TTL via `set_bid_ttl_days` (bounds 1–30 days).
 
 2. **Withdraw Bid**: Investor withdraws their bid before acceptance
    - Status: `Withdrawn`

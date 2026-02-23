@@ -1,6 +1,8 @@
 use core::cmp::Ordering;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Vec};
 
+use crate::storage::ConfigStorage;
+
 use crate::events::emit_bid_expired;
 
 const DEFAULT_BID_TTL: u64 = 7 * 24 * 60 * 60;
@@ -33,8 +35,9 @@ impl Bid {
         current_timestamp > self.expiration_timestamp
     }
 
-    pub fn default_expiration(now: u64) -> u64 {
-        now.saturating_add(DEFAULT_BID_TTL)
+    pub fn default_expiration(env: &Env, now: u64) -> u64 {
+        let ttl = ConfigStorage::get_bid_ttl_seconds(env).unwrap_or(DEFAULT_BID_TTL);
+        now.saturating_add(ttl)
     }
 }
 

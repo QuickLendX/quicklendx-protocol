@@ -26,6 +26,35 @@ mod test_admin {
         (env, client)
     }
 
+    #[test]
+    fn test_admin_can_set_bid_ttl() {
+        let (env, client, _admin) = setup_with_admin();
+
+        let result = client.try_set_bid_ttl_days(&5);
+        assert!(result.is_ok(), "Admin should be able to set bid TTL");
+        assert_eq!(client.get_bid_ttl_days(), 5);
+    }
+
+    #[test]
+    fn test_set_bid_ttl_without_admin_fails() {
+        let (env, client) = setup();
+        env.mock_all_auths();
+
+        let result = client.try_set_bid_ttl_days(&5);
+        assert!(result.is_err(), "Setting bid TTL without admin must fail");
+    }
+
+    #[test]
+    fn test_set_bid_ttl_out_of_bounds_fails() {
+        let (_env, client, _admin) = setup_with_admin();
+
+        let zero = client.try_set_bid_ttl_days(&0);
+        assert!(zero.is_err(), "Zero days must be rejected");
+
+        let high = client.try_set_bid_ttl_days(&31);
+        assert!(high.is_err(), ">30 days must be rejected");
+    }
+
     fn setup_with_admin() -> (Env, QuickLendXContractClient<'static>, Address) {
         let (env, client) = setup();
         env.mock_all_auths();

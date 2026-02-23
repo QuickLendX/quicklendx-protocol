@@ -288,7 +288,7 @@ fn test_compare_bids_equal_profit_ordering() {
 #[test]
 fn test_timestamp_bid_default_expiration_saturates() {
     let env = Env::default();
-    let result = Bid::default_expiration(u64::MAX);
+    let result = Bid::default_expiration(&env, u64::MAX);
     assert_eq!(result, u64::MAX);
 }
 

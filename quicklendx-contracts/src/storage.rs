@@ -46,6 +46,11 @@ impl StorageKeys {
     pub fn platform_fees() -> Symbol {
         symbol_short!("fees")
     }
+    
+    /// Key for bid TTL configuration (seconds)
+    pub fn bid_ttl() -> Symbol {
+        symbol_short!("bid_ttl")
+    }
 
     /// Key for invoice count
     pub fn invoice_count() -> Symbol {
@@ -482,5 +487,15 @@ impl ConfigStorage {
     /// Get platform fee configuration
     pub fn get_platform_fees(env: &Env) -> Option<PlatformFeeConfig> {
         env.storage().instance().get(&StorageKeys::platform_fees())
+    }
+
+    /// Set bid TTL in seconds (stored as u64)
+    pub fn set_bid_ttl_seconds(env: &Env, seconds: &u64) {
+        env.storage().instance().set(&StorageKeys::bid_ttl(), seconds);
+    }
+
+    /// Get bid TTL in seconds if set
+    pub fn get_bid_ttl_seconds(env: &Env) -> Option<u64> {
+        env.storage().instance().get(&StorageKeys::bid_ttl())
     }
 }

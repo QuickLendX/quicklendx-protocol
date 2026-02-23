@@ -720,7 +720,7 @@ impl QuickLendXContract {
             expected_return,
             timestamp: current_timestamp,
             status: BidStatus::Placed,
-            expiration_timestamp: Bid::default_expiration(current_timestamp),
+            expiration_timestamp: Bid::default_expiration(&env, current_timestamp),
         };
         BidStorage::store_bid(&env, &bid);
         // Track bid for this invoice
@@ -1065,6 +1065,31 @@ impl QuickLendXContract {
     pub fn set_platform_fee(env: Env, new_fee_bps: i128) -> Result<(), QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         PlatformFee::set_config(&env, &admin, new_fee_bps)?;
+        Ok(())
+    }
+
+    /// Get current bid TTL in days (returns configured value or default 7)
+    pub fn get_bid_ttl_days(env: Env) -> u32 {
+        // Default is 7 days
+        const DEFAULT_DAYS: u64 = 7;
+        let secs = crate::storage::ConfigStorage::get_bid_ttl_seconds(&env)
+            .unwrap_or(DEFAULT_DAYS * 24 * 60 * 60);
+        (secs / (24 * 60 * 60)) as u32
+    }
+
+    /// Set bid TTL in days (admin only). Bounds: 1..=30 days
+    pub fn set_bid_ttl_days(env: Env, days: u32) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
+        if days < 1 || days > 30 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let seconds = (days as u64).saturating_mul(24 * 60 * 60);
+        crate::storage::ConfigStorage::set_bid_ttl_seconds(&env, &seconds);
+        // Emit an event for transparency (reuse existing symbol)
+        env.events().publish((symbol_short!("bid_ttl"),), (days, env.ledger().timestamp(), admin));
         Ok(())
     }
 
