@@ -101,6 +101,31 @@ The fee system integrates seamlessly with the invoice settlement process:
    - Contract receives: `platform_fee` (if no treasury configured)
 4. **Event Emission**: `platform_fee_routed` event is emitted with routing details
 
+### Deterministic Profit/Fee Formula (Soroban)
+
+Core formula implemented in `quicklendx-contracts/src/profits.rs`:
+
+```text
+safe_investment = max(0, investment_amount)
+safe_payment    = max(0, payment_amount)
+safe_fee_bps    = clamp(fee_bps, 0, 10_000)
+
+if safe_payment <= safe_investment:
+    platform_fee    = 0
+    investor_return = safe_payment
+else:
+    gross_profit    = safe_payment - safe_investment
+    platform_fee    = floor(gross_profit * safe_fee_bps / 10_000)
+    investor_return = safe_payment - platform_fee
+```
+
+Security and correctness properties:
+
+- **No dust**: `investor_return + platform_fee == safe_payment`
+- **Overflow-safe i128 math**: uses saturating arithmetic for multiply/subtract paths
+- **Deterministic rounding**: integer floor division (round down) favors investors
+- **Input hardening**: negative amounts are normalized to `0`, and fee bps is clamped to `[0, 10_000]`
+
 ### Revenue Distribution (Treasury / Developer / Platform)
 
 - **Configuration**: `configure_revenue_distribution` (admin only) sets `treasury_share_bps`, `developer_share_bps`, `platform_share_bps` (must sum to 10_000), plus `min_distribution_amount` and `auto_distribution`.
