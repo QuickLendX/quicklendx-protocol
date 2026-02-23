@@ -36,9 +36,11 @@ mod test_overflow;
 #[cfg(test)]
 mod test_profit_fee;
 #[cfg(test)]
-mod test_storage;
-#[cfg(test)]
 mod test_refund;
+#[cfg(test)]
+mod test_cancel_refund;
+#[cfg(test)]
+mod test_storage;
 mod verification;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
@@ -192,6 +194,36 @@ impl QuickLendXContract {
     /// Get all whitelisted token addresses.
     pub fn get_whitelisted_currencies(env: Env) -> Vec<Address> {
         currency::CurrencyWhitelist::get_whitelisted_currencies(&env)
+    }
+
+    /// Replace the entire currency whitelist atomically (admin only).
+    pub fn set_currencies(
+        env: Env,
+        admin: Address,
+        currencies: Vec<Address>,
+    ) -> Result<(), QuickLendXError> {
+        currency::CurrencyWhitelist::set_currencies(&env, &admin, &currencies)
+    }
+
+    /// Clear the entire currency whitelist (admin only).
+    /// After this call all currencies are allowed (empty-list backward-compat rule).
+    pub fn clear_currencies(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        currency::CurrencyWhitelist::clear_currencies(&env, &admin)
+    }
+
+    /// Return the number of whitelisted currencies.
+    pub fn currency_count(env: Env) -> u32 {
+        currency::CurrencyWhitelist::currency_count(&env)
+    }
+
+    /// Return a paginated slice of the whitelist.
+    pub fn get_whitelisted_currencies_paged(env: Env, offset: u32, limit: u32) -> Vec<Address> {
+        currency::CurrencyWhitelist::get_whitelisted_currencies_paged(&env, offset, limit)
+    }
+
+    /// Cancel a pending emergency withdrawal (admin only).
+    pub fn cancel_emergency_withdraw(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        emergency::EmergencyWithdraw::cancel(&env, &admin)
     }
 
     // ============================================================================
@@ -942,9 +974,12 @@ impl QuickLendXContract {
         do_process_partial_payment(&env, &invoice_id, payment_amount, transaction_id)
     }
 
-    /// Handle invoice default (admin or automated process)
+    /// Handle invoice default (admin only)
     /// This is the internal handler - use mark_invoice_defaulted for public API
     pub fn handle_default(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
         // Get the investment to track investor analytics
         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
@@ -960,8 +995,9 @@ impl QuickLendXContract {
         result
     }
 
-    /// Mark an invoice as defaulted (admin or automated process)
-    /// Checks due date + grace period before marking as defaulted
+    /// Mark an invoice as defaulted (admin only)
+    /// Checks due date + grace period before marking as defaulted.
+    /// Requires admin authorization to prevent unauthorized default marking.
     ///
     /// # Arguments
     /// * `invoice_id` - The invoice ID to mark as defaulted
@@ -970,11 +1006,21 @@ impl QuickLendXContract {
     /// # Returns
     /// * `Ok(())` if the invoice was successfully marked as defaulted
     /// * `Err(QuickLendXError)` if the operation fails
+    ///
+    /// # Errors
+    /// * `NotAdmin` - No admin configured or caller is not admin
+    /// * `InvoiceNotFound` - Invoice does not exist
+    /// * `InvoiceAlreadyDefaulted` - Invoice is already defaulted
+    /// * `InvoiceNotAvailableForFunding` - Invoice is not in Funded status
+    /// * `OperationNotAllowed` - Grace period has not expired yet
     pub fn mark_invoice_defaulted(
         env: Env,
         invoice_id: BytesN<32>,
         grace_period: Option<u64>,
     ) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
         // Get the investment to track investor analytics
         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
@@ -2574,14 +2620,15 @@ mod test_reentrancy;
 
 #[cfg(test)]
 mod test_insurance;
+#[cfg(test)]
 mod test_investor_kyc;
 #[cfg(test)]
 mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
-//#[cfg(test)]
-//mod test_escrow_refund;
 #[cfg(test)]
-mod test_revenue_split;
+mod test_escrow_refund;
 #[cfg(test)]
 mod test_fuzz;
+#[cfg(test)]
+mod test_revenue_split;

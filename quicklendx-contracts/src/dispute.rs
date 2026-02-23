@@ -30,10 +30,14 @@ pub enum InvoiceStatus {
     Defaulted,
 }
 
+#[allow(dead_code)]
 const MAX_REASON_LENGTH: u32 = 500;
+#[allow(dead_code)]
 const MAX_EVIDENCE_LENGTH: u32 = 2000;
+#[allow(dead_code)]
 const MAX_RESOLUTION_LENGTH: u32 = 1000;
 
+#[allow(dead_code)]
 pub fn create_dispute(
     env: Env,
     invoice_id: u64,
@@ -94,6 +98,7 @@ pub fn create_dispute(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn put_dispute_under_review(
     env: &Env,
     admin: Address,
@@ -130,6 +135,7 @@ pub fn put_dispute_under_review(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn resolve_dispute(
     env: &Env,
     admin: Address,
@@ -177,6 +183,7 @@ pub fn resolve_dispute(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn get_dispute_details(env: &Env, invoice_id: u64) -> Result<Dispute, QuickLendXError> {
     env.storage()
         .persistent()
@@ -184,6 +191,7 @@ pub fn get_dispute_details(env: &Env, invoice_id: u64) -> Result<Dispute, QuickL
         .ok_or(QuickLendXError::DisputeNotFound)
 }
 
+#[allow(dead_code)]
 pub fn get_disputes_by_status(
     env: &Env,
     status: DisputeStatus,

@@ -715,6 +715,7 @@ pub fn emit_platform_fee_config_updated(
 /// - gross_profit: Profit before fees
 /// - platform_fee: Fee charged
 /// - investor_return: Net amount to investor
+#[allow(dead_code)]
 pub fn emit_profit_fee_breakdown(
     env: &Env,
     invoice_id: &BytesN<32>,
