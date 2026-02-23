@@ -1,1 +1,2113 @@
-zsh: command not found: cargo
+ Downloading crates ...
+  Downloaded cfg-if v1.0.1
+  Downloaded ref-cast-impl v1.0.24
+  Downloaded base64ct v1.8.0
+  Downloaded ref-cast v1.0.24
+  Downloaded serde_with_macros v3.14.0
+  Downloaded soroban-spec v22.0.8
+  Downloaded soroban-ledger-snapshot v22.0.8
+  Downloaded prettyplease v0.2.36
+  Downloaded soroban-spec-rust v22.0.8
+  Downloaded schemars v1.0.4
+  Downloaded memchr v2.7.5
+  Downloaded soroban-sdk-macros v22.0.8
+  Downloaded hashbrown v0.15.4
+  Downloaded serde_json v1.0.141
+  Downloaded serde_with v3.14.0
+  Downloaded zerocopy v0.8.26
+  Downloaded syn v2.0.104
+  Downloaded libc v0.2.174
+  Downloaded soroban-sdk v22.0.8
+   Compiling proc-macro2 v1.0.95
+   Compiling unicode-ident v1.0.18
+   Compiling version_check v0.9.5
+   Compiling cfg-if v1.0.1
+   Compiling typenum v1.18.0
+   Compiling libc v0.2.174
+   Compiling serde v1.0.219
+   Compiling serde_json v1.0.141
+   Compiling autocfg v1.5.0
+   Compiling ryu v1.0.20
+   Compiling itoa v1.0.15
+   Compiling subtle v2.6.1
+   Compiling memchr v2.7.5
+   Compiling const-oid v0.9.6
+   Compiling generic-array v0.14.7
+   Compiling fnv v1.0.7
+   Compiling semver v1.0.26
+   Compiling zerocopy v0.8.26
+   Compiling ident_case v1.0.1
+   Compiling num-traits v0.2.19
+   Compiling strsim v0.11.1
+   Compiling quote v1.0.40
+   Compiling syn v2.0.104
+   Compiling getrandom v0.2.16
+   Compiling thiserror v1.0.69
+   Compiling syn v1.0.109
+   Compiling rand_core v0.6.4
+   Compiling rustc_version v0.4.1
+   Compiling paste v1.0.15
+   Compiling data-encoding v2.9.0
+   Compiling once_cell v1.21.3
+   Compiling cpufeatures v0.2.17
+   Compiling escape-bytes v0.1.1
+   Compiling num-integer v0.1.46
+   Compiling ff v0.13.1
+   Compiling ahash v0.8.12
+   Compiling equivalent v1.0.2
+   Compiling base16ct v0.2.0
+   Compiling hashbrown v0.15.4
+   Compiling either v1.15.0
+   Compiling num-bigint v0.4.6
+   Compiling itertools v0.10.5
+   Compiling group v0.13.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling indexmap v2.10.0
+   Compiling base64 v0.13.1
+   Compiling getrandom v0.3.4
+   Compiling rand_chacha v0.3.1
+   Compiling rand v0.8.5
+   Compiling libm v0.2.15
+   Compiling wasmparser v0.116.1
+   Compiling hashbrown v0.13.2
+   Compiling ark-std v0.4.0
+   Compiling darling_core v0.20.11
+   Compiling curve25519-dalek v4.1.3
+   Compiling indexmap-nostd v0.4.0
+   Compiling static_assertions v1.1.0
+   Compiling downcast-rs v1.2.1
+   Compiling ethnum v1.5.2
+   Compiling wasmparser-nostd v0.100.2
+   Compiling crypto-common v0.1.6
+   Compiling block-buffer v0.10.4
+   Compiling wasmi_arena v0.4.1
+   Compiling spin v0.9.8
+   Compiling wasmi_core v0.13.0
+   Compiling prettyplease v0.2.36
+   Compiling smallvec v1.15.1
+   Compiling digest v0.10.7
+   Compiling rustix v1.1.2
+   Compiling soroban-env-host v22.1.3
+   Compiling keccak v0.1.5
+   Compiling sha2 v0.10.9
+   Compiling serde_derive v1.0.219
+   Compiling zeroize_derive v1.4.2
+   Compiling thiserror-impl v1.0.69
+   Compiling ark-serialize-derive v0.4.2
+   Compiling zeroize v1.8.1
+   Compiling ark-ff-asm v0.4.2
+   Compiling der v0.7.10
+   Compiling derivative v2.2.0
+   Compiling darling_macro v0.20.11
+   Compiling darling v0.20.11
+   Compiling serde_with_macros v3.14.0
+   Compiling sec1 v0.7.3
+   Compiling signature v2.2.0
+   Compiling crypto-bigint v0.5.5
+   Compiling hmac v0.12.1
+   Compiling ark-serialize v0.4.2
+   Compiling ark-ff-macros v0.4.2
+   Compiling rfc6979 v0.4.0
+   Compiling derive_arbitrary v1.3.2
+   Compiling num-derive v0.4.2
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling ark-ff v0.4.2
+   Compiling elliptic-curve v0.13.8
+   Compiling arbitrary v1.3.2
+   Compiling ecdsa v0.16.9
+   Compiling primeorder v0.13.6
+   Compiling ed25519 v2.2.3
+   Compiling soroban-wasmi v0.31.1-soroban.20.0.1
+   Compiling k256 v0.13.4
+   Compiling p256 v0.13.2
+   Compiling sha3 v0.10.8
+   Compiling ed25519-dalek v2.2.0
+   Compiling soroban-builtin-sdk-macros v22.1.3
+   Compiling rand_core v0.9.5
+   Compiling linux-raw-sys v0.11.0
+   Compiling hex-literal v0.4.1
+   Compiling bitflags v2.11.0
+   Compiling soroban-sdk v22.0.8
+   Compiling fastrand v2.3.0
+   Compiling ctor v0.2.9
+   Compiling bytes-lit v0.0.5
+   Compiling wait-timeout v0.2.1
+   Compiling quick-error v1.2.3
+   Compiling bit-vec v0.8.0
+   Compiling rand_xorshift v0.4.0
+   Compiling rand v0.9.2
+   Compiling rand_chacha v0.9.0
+   Compiling regex-syntax v0.8.9
+   Compiling bit-set v0.8.0
+   Compiling unarray v0.1.4
+   Compiling hex v0.4.3
+   Compiling serde_with v3.14.0
+   Compiling tempfile v3.23.0
+   Compiling crate-git-revision v0.0.6
+   Compiling ark-poly v0.4.2
+   Compiling rusty-fork v0.3.1
+   Compiling stellar-strkey v0.0.9
+   Compiling stellar-xdr v22.1.0
+   Compiling soroban-env-common v22.1.3
+   Compiling ark-ec v0.4.2
+   Compiling soroban-sdk-macros v22.0.8
+   Compiling proptest v1.10.0
+   Compiling ark-bls12-381 v0.4.0
+   Compiling soroban-spec v22.0.8
+   Compiling soroban-spec-rust v22.0.8
+   Compiling soroban-env-macros v22.1.3
+   Compiling soroban-ledger-snapshot v22.0.8
+   Compiling quicklendx-contracts v0.1.0 (/home/knights/Documents/Project/Drips/quicklendx-protocol/quicklendx-contracts)
+warning: unused import: `BytesN as _`
+  --> src/test_dispute.rs:15:31
+   |
+15 | ...ress as _, BytesN as _},
+   |               ^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `PlatformFeeConfig` and `PlatformFee`
+  --> src/test_storage.rs:18:22
+   |
+18 | ...::{PlatformFee, PlatformFeeConfig};
+   |       ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ConfigStorage`
+  --> src/test_storage.rs:20:17
+   |
+20 |     BidStorage, ConfigStorage, Index...
+   |                 ^^^^^^^^^^^^^
+
+warning: unused import: `crate::verification::BusinessVerificationStatus`
+  --> src/test/test_invoice.rs:11:5
+   |
+11 | use crate::verification::BusinessVerificationStatus;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test/test_invoice.rs:13:31
+   |
+13 |     testutils::{Address as _, Ledger},
+   |                               ^^^^^^
+
+warning: unused imports: `AnalyticsStorage`, `FinancialMetrics`, and `PlatformMetrics`
+  --> src/test/test_analytics.rs:14:26
+   |
+14 | ...r, AnalyticsStorage, FinancialMetrics, PlatformMetrics, T...
+   |       ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: unused import: `soroban_sdk::testutils::Address as _`
+ --> src/test_partial_payments.rs:4:9
+  |
+4 | ...se soroban_sdk::testutils::Address as _;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::bid::BidStatus`
+ --> src/test_queries.rs:3:5
+  |
+3 | use crate::bid::BidStatus;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+ --> src/test_queries.rs:6:31
+  |
+6 |     testutils::{Address as _, Ledger},
+  |                               ^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test_investor_kyc.rs:17:35
+   |
+17 | ...ddress as _, Ledger},
+   |                 ^^^^^^
+
+warning: unused import: `crate::errors::QuickLendXError`
+ --> src/test_limit.rs:3:5
+  |
+3 | use crate::errors::QuickLendXError;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:361:24
+    |
+361 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:932:24
+    |
+932 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:988:24
+    |
+988 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1040:24
+     |
+1040 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1097:24
+     |
+1097 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1179:24
+     |
+1179 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test_audit.rs:10:31
+   |
+10 |     testutils::{Address as _, Ledger},
+   |                               ^^^^^^
+
+warning: unused import: `Ledger`
+ --> src/test_currency.rs:9:31
+  |
+9 |     testutils::{Address as _, Ledger},
+  |                               ^^^^^^
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:159:10
+    |
+159 |     let (env, client, _admin) = set...
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:290:9
+    |
+290 |     let env = Env::default();
+    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:335:10
+    |
+335 |     let (env, client, _admin) = set...
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `business`
+   --> src/test/test_invoice.rs:270:9
+    |
+270 |     let business = setup_verified_b...
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `other_user`
+   --> src/test/test_invoice.rs:775:9
+    |
+775 |     let other_user = Address::gener...
+    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_other_user`
+
+warning: unused variable: `non_admin`
+   --> src/test/test_invoice.rs:807:9
+    |
+807 |     let non_admin = Address::genera...
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `token_client`
+   --> src/test.rs:362:9
+    |
+362 |     let token_client = token::Clien...
+    |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_token_client`
+
+warning: unused variable: `admin`
+  --> src/test_fees.rs:21:65
+   |
+21 | ...actClient, admin: &Address) -> Ad...
+   |               ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_fees.rs:73:9
+   |
+73 |     let admin = setup_admin(&env, &c...
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_fees.rs:103:9
+    |
+103 |     let admin = setup_admin(&env, &...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_fees.rs:195:9
+    |
+195 |     let non_admin = Address::genera...
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `admin`
+  --> src/test_audit.rs:52:23
+   |
+52 | ...v, client, admin, business) = set...
+   |               ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_currency.rs:166:23
+    |
+166 | ...v, client, admin) = setup();
+    |               ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `token_client`
+  --> src/test_events.rs:91:9
+   |
+91 |     let token_client = token::Client...
+   |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_token_client`
+
+warning: unused variable: `invoice2`
+   --> src/test_default.rs:418:9
+    |
+418 |     let invoice2 = client.get_invoi...
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_invoice2`
+
+warning: unused variable: `actor`
+   --> src/test_queries.rs:242:9
+    |
+242 |     let actor = Address::generate(&...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `filter_inv1`
+   --> src/test_queries.rs:288:9
+    |
+288 |     let filter_inv1 = AuditQueryFil...
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_filter_inv1`
+
+warning: unused variable: `filter_created`
+   --> src/test_queries.rs:311:9
+    |
+311 |     let filter_created = AuditQuery...
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_filter_created`
+
+warning: unused variable: `contract_id`
+   --> src/test_insurance.rs:147:23
+    |
+147 | ... client, contract_id) = setup();
+    |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_contract_id`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:102:27
+    |
+102 | ...v, client, admin) = setup();
+    |               ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_investor_kyc.rs:179:13
+    |
+179 |         let non_admin = Address::ge...
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `result`
+   --> src/test_investor_kyc.rs:192:13
+    |
+192 |         let result = client.try_ver...
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:199:27
+    |
+199 | ...v, client, admin) = setup();
+    |               ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `business`
+   --> src/test_investor_kyc.rs:482:13
+    |
+482 |         let business = Address::gen...
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `high_risk`
+   --> src/test_investor_kyc.rs:610:13
+    |
+610 |         let high_risk = client.get_...
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_high_risk`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:752:27
+    |
+752 | ...v, client, admin) = setup();
+    |               ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:40:65
+   |
+40 | ...actClient, admin: &Address) -> Ad...
+   |               ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:80:9
+   |
+80 |     let admin = setup_admin(&env, &c...
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:103:9
+    |
+103 |     let admin = setup_admin(&env, &...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:126:9
+    |
+126 |     let admin = setup_admin(&env, &...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:301:9
+    |
+301 |     let admin = setup_admin(&env, &...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:343:9
+    |
+343 |     let admin = setup_admin(&env, &...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:374:9
+    |
+374 |     let admin = setup_admin(&env, &...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:590:9
+    |
+590 |     let admin = setup_admin(&env, &...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:604:9
+    |
+604 |     let admin = setup_admin(&env, &...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: function `make_breakdown` is never used
+   --> src/profits.rs:491:8
+    |
+491 |     fn make_breakdown(
+    |        ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `ConfigStorage` is never constructed
+   --> src/storage.rs:472:12
+    |
+472 | pub struct ConfigStorage;
+    |            ^^^^^^^^^^^^^
+
+warning: associated functions `set_platform_fees` and `get_platform_fees` are never used
+   --> src/storage.rs:476:12
+    |
+474 | impl ConfigStorage {
+    | ------------------ associated functions in this implementation
+475 |     /// Store platform fee configur...
+476 |     pub fn set_platform_fees(env: &...
+    |            ^^^^^^^^^^^^^^^^^
+...
+483 |     pub fn get_platform_fees(env: &...
+    |            ^^^^^^^^^^^^^^^^^
+
+warning: associated function `is_business_verified` is never used
+   --> src/verification.rs:121:12
+    |
+ 69 | impl BusinessVerificationStorage {
+    | -------------------------------- associated function in this implementation
+...
+121 |     pub fn is_business_verified(env...
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: associated constants `INVESTOR_HISTORY_KEY` and `INVESTOR_ANALYTICS_KEY` are never used
+   --> src/verification.rs:252:11
+    |
+247 | impl InvestorVerificationStorage {
+    | -------------------------------- associated constants in this implementation
+...
+252 |     const INVESTOR_HISTORY_KEY: &'s...
+    |           ^^^^^^^^^^^^^^^^^^^^
+253 |     #[cfg(test)]
+254 |     const INVESTOR_ANALYTICS_KEY: &...
+    |           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `require_business_verification` is never used
+   --> src/verification.rs:623:8
+    |
+623 | ...fn require_business_verification(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_trail_creation` is never used
+    --> src/test.rs:2142:4
+     |
+2142 | fn test_audit_trail_creation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_integrity_validation` is never used
+    --> src/test.rs:2186:4
+     |
+2186 | fn test_audit_integrity_validation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_query_functionality` is never used
+    --> src/test.rs:2225:4
+     |
+2225 | fn test_audit_query_functionality() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_statistics` is never used
+    --> src/test.rs:2294:4
+     |
+2294 | fn test_audit_statistics() {
+     |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_create_dispute` is never used
+    --> src/test.rs:2818:4
+     |
+2818 | fn test_create_dispute() {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_create_dispute_as_investor` is never used
+    --> src/test.rs:2863:4
+     |
+2863 | fn test_create_dispute_as_investor() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_unauthorized_dispute_creation` is never used
+    --> src/test.rs:2912:4
+     |
+2912 | fn test_unauthorized_dispute_creation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_duplicate_dispute_prevention` is never used
+    --> src/test.rs:2947:4
+     |
+2947 | fn test_duplicate_dispute_prevention() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_dispute_under_review` is never used
+    --> src/test.rs:2987:4
+     |
+2987 | fn test_dispute_under_review() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_resolve_dispute` is never used
+    --> src/test.rs:3030:4
+     |
+3030 | fn test_resolve_dispute() {
+     |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_get_invoices_with_disputes` is never used
+    --> src/test.rs:3088:4
+     |
+3088 | fn test_get_invoices_with_disputes() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_get_invoices_by_dispute_status` is never used
+    --> src/test.rs:3141:4
+     |
+3141 | fn test_get_invoices_by_dispute_status() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_dispute_validation` is never used
+    --> src/test.rs:3200:4
+     |
+3200 | fn test_dispute_validation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `setup_business` is never used
+  --> src/test_fees.rs:13:4
+   |
+13 | fn setup_business(env: &Env, client:...
+   |    ^^^^^^^^^^^^^^
+
+warning: function `setup_business` is never used
+  --> src/test_profit_fee_formula.rs:32:4
+   |
+32 | fn setup_business(env: &Env, client:...
+   |    ^^^^^^^^^^^^^^
+
+warning: function `setup_investor` is never used
+  --> src/test_profit_fee_formula.rs:40:4
+   |
+40 | fn setup_investor(env: &Env, client:...
+   |    ^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2583:13
+     |
+2583 |     assert!(stats.total_sent >= 0);
+     |             ^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_comparisons)]` on by default
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2584:13
+     |
+2584 | ...t!(stats.total_delivered >= 0);
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2585:13
+     |
+2585 |     assert!(stats.total_read >= 0);
+     |             ^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2586:13
+     |
+2586 |     assert!(stats.total_failed >= 0);
+     |             ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2681:13
+     |
+2681 |     assert!(overdue_count >= 0);
+     |             ^^^^^^^^^^^^^^^^^^
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/test/test_analytics.rs:26:24
+   |
+26 | ...v: &Env) -> (QuickLendXContractClient, A...
+   |       ^^^^      ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |       |
+   |       the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+   = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+   |
+26 | fn setup_contract(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address) {
+   |                                                          ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/test_events.rs:25:24
+   |
+25 | ...v: &Env) -> (QuickLendXContractClient, A...
+   |       ^^^^      ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |       |
+   |       the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+25 | fn setup_contract(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address) {
+   |                                                          ++++
+
+warning: `quicklendx-contracts` (lib test) generated 83 warnings (run `cargo fix --lib -p quicklendx-contracts --tests` to apply 48 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 33s
+     Running unittests src/lib.rs (target/debug/deps/quicklendx_contracts-499f385657744bc9)
+
+running 522 tests
+test profits::tests::test_breakdown_complete ... ok
+test profits::tests::test_basic_profit_calculation ... ok
+test profits::tests::test_exact_payment_no_profit ... ok
+test profits::tests::test_max_fee ... ok
+test profits::tests::test_overpayment_high_profit ... ok
+test profits::tests::test_rounding_boundary ... ok
+test profits::tests::test_rounding_down_small_profit ... ok
+test profits::tests::test_rounding_just_below_boundary ... ok
+test profits::tests::test_treasury_split_basic ... ok
+test profits::tests::test_treasury_split_rounding ... ok
+test profits::tests::test_treasury_split_uneven ... ok
+test profits::tests::test_treasury_split_zero_fee ... ok
+test profits::tests::test_treasury_split_zero_share ... ok
+test profits::tests::test_underpayment_loss ... ok
+test profits::tests::test_validate_inputs_negative ... ok
+test profits::tests::test_validate_inputs_valid ... ok
+test profits::tests::test_various_fee_percentages ... ok
+test profits::tests::test_verify_no_dust_negative ... ok
+test profits::tests::test_verify_no_dust_positive ... ok
+test profits::tests::test_zero_fee ... ok
+test profits::tests::test_zero_investment ... ok
+test profits::tests::test_zero_payment ... ok
+test profits::tests::test_large_amounts ... ok
+test profits::tests::test_breakdown_no_profit ... ok
+test profits::tests::test_treasury_split_full_share ... ok
+Writing test snapshot file for test "test::test_analytics::test_financial_metrics_empty_data" to "test_snapshots/test/test_analytics/test_financial_metrics_empty_data.1.json".
+Writing test snapshot file for test "test::test_analytics::test_business_report_empty" to "test_snapshots/test/test_analytics/test_business_report_empty.1.json".
+Writing test snapshot file for test "test::test_analytics::test_analytics_summary_returns_tuple" to "test_snapshots/test/test_analytics/test_analytics_summary_returns_tuple.1.json".
+test test::test_analytics::test_financial_metrics_empty_data ... ok
+Writing test snapshot file for test "test::test_analytics::test_financial_metrics_with_invoices_all_time" to "test_snapshots/test/test_analytics/test_financial_metrics_with_invoices_all_time.1.json".
+test test::test_analytics::test_business_report_empty ... ok
+Writing test snapshot file for test "test::test_analytics::test_business_report_stored_and_retrievable" to "test_snapshots/test/test_analytics/test_business_report_stored_and_retrievable.1.json".
+Writing test snapshot file for test "test::test_analytics::test_financial_metrics_period_boundary" to "test_snapshots/test/test_analytics/test_financial_metrics_period_boundary.1.json".
+Writing test snapshot file for test "test::test_analytics::test_investor_report_empty" to "test_snapshots/test/test_analytics/test_investor_report_empty.1.json".
+Writing test snapshot file for test "test::test_add_invoice_rating" to "test_snapshots/test/test_add_invoice_rating.1.json".
+Writing test snapshot file for test "test::test_add_invoice_rating_validation" to "test_snapshots/test/test_add_invoice_rating_validation.1.json".
+Writing test snapshot file for test "test::test_analytics::test_business_report_with_invoices" to "test_snapshots/test/test_analytics/test_business_report_with_invoices.1.json".
+test test::test_analytics::test_analytics_summary_returns_tuple ... ok
+test test::test_analytics::test_financial_metrics_with_invoices_all_time ... ok
+Writing test snapshot file for test "test::test_analytics::test_investor_report_stored_and_retrievable" to "test_snapshots/test/test_analytics/test_investor_report_stored_and_retrievable.1.json".
+Writing test snapshot file for test "test::test_analytics::test_performance_metrics_empty_data" to "test_snapshots/test/test_analytics/test_performance_metrics_empty_data.1.json".
+test test::test_analytics::test_financial_metrics_period_boundary ... ok
+Writing test snapshot file for test "test::test_analytics::test_performance_metrics_storage_round_trip" to "test_snapshots/test/test_analytics/test_performance_metrics_storage_round_trip.1.json".
+test test::test_analytics::test_performance_metrics_empty_data ... ok
+test test::test_analytics::test_investor_report_empty ... ok
+test test::test_analytics::test_investor_report_stored_and_retrievable ... ok
+test test::test_analytics::test_period_dates_all_periods ... ok
+test test::test_analytics::test_performance_metrics_storage_round_trip ... ok
+Writing test snapshot file for test "test::test_analytics::test_platform_metrics_empty_data" to "test_snapshots/test/test_analytics/test_platform_metrics_empty_data.1.json".
+test test::test_analytics::test_period_dates_all_time ... ok
+test test::test_analytics::test_platform_metrics_empty_data ... ok
+Writing test snapshot file for test "test::test_analytics::test_platform_metrics_storage_round_trip" to "test_snapshots/test/test_analytics/test_platform_metrics_storage_round_trip.1.json".
+test test::test_analytics::test_business_report_stored_and_retrievable ... ok
+Writing test snapshot file for test "test::test_analytics::test_performance_metrics_with_invoices" to "test_snapshots/test/test_analytics/test_performance_metrics_with_invoices.1.json".
+test test::test_analytics::test_platform_metrics_storage_round_trip ... ok
+Writing test snapshot file for test "test::test_analytics::test_update_performance_metrics_requires_admin" to "test_snapshots/test/test_analytics/test_update_performance_metrics_requires_admin.1.json".
+Writing test snapshot file for test "test::test_analytics::test_platform_metrics_with_invoices" to "test_snapshots/test/test_analytics/test_platform_metrics_with_invoices.1.json".
+test test::test_analytics::test_update_performance_metrics_requires_admin ... ok
+Writing test snapshot file for test "test::test_analytics::test_update_platform_metrics_requires_admin" to "test_snapshots/test/test_analytics/test_update_platform_metrics_requires_admin.1.json".
+Writing test snapshot file for test "test::test_analytics::test_platform_metrics_after_status_changes" to "test_snapshots/test/test_analytics/test_platform_metrics_after_status_changes.1.json".
+test test::test_analytics::test_update_platform_metrics_requires_admin ... ok
+Writing test snapshot file for test "test::test_analytics::test_user_behavior_new_user" to "test_snapshots/test/test_analytics/test_user_behavior_new_user.1.json".
+Writing test snapshot file for test "test::test_analytics::test_update_user_behavior_metrics" to "test_snapshots/test/test_analytics/test_update_user_behavior_metrics.1.json".
+test test::test_analytics::test_user_behavior_new_user ... ok
+test test::test_add_invoice_rating_validation ... ok
+Writing test snapshot file for test "test::test_analytics::test_user_behavior_with_invoices" to "test_snapshots/test/test_analytics/test_user_behavior_with_invoices.1.json".
+Writing test snapshot file for test "test::test_archive_backup" to "test_snapshots/test/test_archive_backup.1.json".
+test test::test_add_invoice_rating ... ok
+test test::test_analytics::test_business_report_with_invoices ... ok
+test test::test_archive_backup ... ok
+test test::test_analytics::test_update_user_behavior_metrics ... ok
+Writing test snapshot file for test "test::test_backup_validation" to "test_snapshots/test/test_backup_validation.1.json".
+test test::test_analytics::test_performance_metrics_with_invoices ... ok
+Writing test snapshot file for test "test::test_backup_cleanup" to "test_snapshots/test/test_backup_cleanup.1.json".
+test test::test_analytics::test_platform_metrics_after_status_changes ... ok
+test test::test_analytics::test_platform_metrics_with_invoices ... ok
+test test::test_analytics::test_user_behavior_with_invoices ... ok
+test test::test_backup_validation ... ok
+Writing test snapshot file for test "test::test_bid_expiration_cleanup" to "test_snapshots/test/test_bid_expiration_cleanup.1.json".
+Writing test snapshot file for test "test::test_cancel_invoice_pending" to "test_snapshots/test/test_cancel_invoice_pending.1.json".
+Writing test snapshot file for test "test::test_cancel_invoice_verified" to "test_snapshots/test/test_cancel_invoice_verified.1.json".
+Writing test snapshot file for test "test::test_bid_validation_rules" to "test_snapshots/test/test_bid_validation_rules.1.json".
+
+thread 'test::test_cancel_invoice_funded' (260527) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+Writing test snapshot file for test "test::test_cancel_invoice_funded" to "test_snapshots/test/test_cancel_invoice_funded.1.json".
+test test::test_backup_cleanup ... ok
+Writing test snapshot file for test "test::test_complete_invoice_lifecycle_with_cancellation" to "test_snapshots/test/test_complete_invoice_lifecycle_with_cancellation.1.json".
+test test::test_bid_expiration_cleanup ... ok
+Writing test snapshot file for test "test::test_bid_ranking_and_filters" to "test_snapshots/test/test_bid_ranking_and_filters.1.json".
+test test::test_cancel_invoice_pending ... ok
+test test::test_bid_validation_rules ... ok
+Writing test snapshot file for test "test::test_duplicate_rating_prevention" to "test_snapshots/test/test_duplicate_rating_prevention.1.json".
+test test::test_cancel_invoice_funded - should panic ... ok
+test test::test_cancel_invoice_verified ... ok
+Writing test snapshot file for test "test::test_escrow_error_cases" to "test_snapshots/test/test_escrow_error_cases.1.json".
+test test::test_escrow_error_cases ... ok
+Writing test snapshot file for test "test::test_create_and_restore_backup" to "test_snapshots/test/test_create_and_restore_backup.1.json".
+test test::test_complete_invoice_lifecycle_with_cancellation ... ok
+test test::test_duplicate_rating_prevention ... ok
+Writing test snapshot file for test "test::test_escrow_creation_on_bid_acceptance" to "test_snapshots/test/test_escrow_creation_on_bid_acceptance.1.json".
+Writing test snapshot file for test "test::test_escrow_double_operation_prevention" to "test_snapshots/test/test_escrow_double_operation_prevention.1.json".
+Writing test snapshot file for test "test::test_escrow_release_on_verification" to "test_snapshots/test/test_escrow_release_on_verification.1.json".
+Writing test snapshot file for test "test::test_basic_readme_queries" to "test_snapshots/test/test_basic_readme_queries.1.json".
+Writing test snapshot file for test "test::test_escrow_refund" to "test_snapshots/test/test_escrow_refund.1.json".
+test test::test_bid_ranking_and_filters ... ok
+test test::test_create_and_restore_backup ... ok
+Writing test snapshot file for test "test::test_get_available_invoices" to "test_snapshots/test/test_get_available_invoices.1.json".
+Writing test snapshot file for test "test::test_escrow_status_tracking" to "test_snapshots/test/test_escrow_status_tracking.1.json".
+test test::test_escrow_creation_on_bid_acceptance ... ok
+Writing test snapshot file for test "test::test_get_business_invoices" to "test_snapshots/test/test_get_business_invoices.1.json".
+test test::test_get_available_invoices ... ok
+Writing test snapshot file for test "test::test_get_bids_for_invoice" to "test_snapshots/test/test_get_bids_for_invoice.1.json".
+Writing test snapshot file for test "test::test_get_invoices_by_status" to "test_snapshots/test/test_get_invoices_by_status.1.json".
+test test::test_get_business_invoices ... ok
+test test::test_get_invoices_by_status ... ok
+test test::test_escrow_double_operation_prevention ... ok
+Writing test snapshot file for test "test::test_get_verification_lists" to "test_snapshots/test/test_get_verification_lists.1.json".
+test test::test_escrow_release_on_verification ... ok
+test test::test_get_verification_lists ... ok
+test test::test_get_bids_for_invoice ... ok
+test test::test_escrow_refund ... ok
+Writing test snapshot file for test "test::test_get_invoices_by_status_cancelled" to "test_snapshots/test/test_get_invoices_by_status_cancelled.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_creation_invalid_amount_negative" to "test_snapshots/test/test_invoice/test_invoice_creation_invalid_amount_negative.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_cannot_verify_already_verified" to "test_snapshots/test/test_invoice/test_invoice_cannot_verify_already_verified.1.json".
+test test::test_invoice::test_invoice_creation_invalid_amount_negative ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_creation_invalid_amount_zero" to "test_snapshots/test/test_invoice/test_invoice_creation_invalid_amount_zero.1.json".
+test test::test_invoice::test_invoice_creation_invalid_amount_zero ... ok
+Writing test snapshot file for test "test::test_investor_verification_enforced" to "test_snapshots/test/test_investor_verification_enforced.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_creation_invalid_description_empty" to "test_snapshots/test/test_invoice/test_invoice_creation_invalid_description_empty.1.json".
+test test::test_invoice::test_invoice_creation_invalid_description_empty ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_creation_invalid_due_date_current" to "test_snapshots/test/test_invoice/test_invoice_creation_invalid_due_date_current.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_business_cannot_accept_own_bid" to "test_snapshots/test/test_invoice/test_invoice_business_cannot_accept_own_bid.1.json".
+test test::test_invoice::test_invoice_creation_invalid_due_date_current ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_creation_invalid_due_date_past" to "test_snapshots/test/test_invoice/test_invoice_creation_invalid_due_date_past.1.json".
+test test::test_invoice::test_invoice_creation_invalid_due_date_past ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_creation_valid" to "test_snapshots/test/test_invoice/test_invoice_creation_valid.1.json".
+Writing test snapshot file for test "test::test_investment_insurance_lifecycle" to "test_snapshots/test/test_investment_insurance_lifecycle.1.json".
+test test::test_escrow_status_tracking ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_far_future_due_date" to "test_snapshots/test/test_invoice/test_invoice_far_future_due_date.1.json".
+test test::test_invoice::test_invoice_cannot_verify_already_verified ... ok
+test test::test_invoice::test_invoice_creation_valid ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_invalid_payment_amount_negative" to "test_snapshots/test/test_invoice/test_invoice_invalid_payment_amount_negative.1.json".
+test test::test_basic_readme_queries ... ok
+test test::test_invoice::test_invoice_invalid_payment_amount_negative ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_invalid_payment_amount_zero" to "test_snapshots/test/test_invoice/test_invoice_invalid_payment_amount_zero.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_invalid_status_transition" to "test_snapshots/test/test_invoice/test_invoice_invalid_status_transition.1.json".
+test test::test_invoice::test_invoice_business_cannot_accept_own_bid ... ok
+test test::test_invoice::test_invoice_far_future_due_date ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_large_amount" to "test_snapshots/test/test_invoice/test_invoice_large_amount.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_full_lifecycle_with_status_assertions" to "test_snapshots/test/test_invoice/test_invoice_full_lifecycle_with_status_assertions.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_metadata_update_requires_business_owner" to "test_snapshots/test/test_invoice/test_invoice_metadata_update_requires_business_owner.1.json".
+test test::test_investor_verification_enforced ... ok
+test test::test_invoice::test_invoice_invalid_payment_amount_zero ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_minimum_amount" to "test_snapshots/test/test_invoice/test_invoice_minimum_amount.1.json".
+test test::test_invoice::test_invoice_large_amount ... ok
+test test::test_invoice::test_invoice_metadata_update_requires_business_owner ... ok
+test test::test_invoice::test_invoice_invalid_status_transition ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_non_admin_cannot_verify" to "test_snapshots/test/test_invoice/test_invoice_non_admin_cannot_verify.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_non_admin_cannot_update_status" to "test_snapshots/test/test_invoice/test_invoice_non_admin_cannot_update_status.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_multiple_invoices_same_business" to "test_snapshots/test/test_invoice/test_invoice_multiple_invoices_same_business.1.json".
+test test::test_get_invoices_by_status_cancelled ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_non_owner_cannot_update_metadata" to "test_snapshots/test/test_invoice/test_invoice_non_owner_cannot_update_metadata.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_not_found" to "test_snapshots/test/test_invoice/test_invoice_not_found.1.json".
+test test::test_invoice::test_invoice_not_found ... ok
+test test::test_invoice::test_invoice_minimum_amount ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_overpayment_capped_at_100_percent" to "test_snapshots/test/test_invoice/test_invoice_overpayment_capped_at_100_percent.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_payment_progress_calculation" to "test_snapshots/test/test_invoice/test_invoice_payment_progress_calculation.1.json".
+test test::test_investment_insurance_lifecycle ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_payment_tracking" to "test_snapshots/test/test_invoice/test_invoice_payment_tracking.1.json".
+test test::test_invoice::test_invoice_non_owner_cannot_update_metadata ... ok
+test test::test_invoice::test_invoice_non_admin_cannot_verify ... ok
+test test::test_invoice::test_invoice_overpayment_capped_at_100_percent ... ok
+test test::test_invoice::test_invoice_non_admin_cannot_update_status ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_rating_only_investor_can_rate" to "test_snapshots/test/test_invoice/test_invoice_rating_only_investor_can_rate.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_rating_invalid_value_too_high" to "test_snapshots/test/test_invoice/test_invoice_rating_invalid_value_too_high.1.json".
+test test::test_invoice::test_invoice_payment_tracking ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_rating_invalid_value_zero" to "test_snapshots/test/test_invoice/test_invoice_rating_invalid_value_zero.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_rating_requires_funded_status" to "test_snapshots/test/test_invoice/test_invoice_rating_requires_funded_status.1.json".
+test test::test_invoice::test_invoice_payment_progress_calculation ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_reject_cancel_defaulted_invoice" to "test_snapshots/test/test_invoice/test_invoice_reject_cancel_defaulted_invoice.1.json".
+test test::test_invoice::test_invoice_multiple_invoices_same_business ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_reject_cancel_paid_invoice" to "test_snapshots/test/test_invoice/test_invoice_reject_cancel_paid_invoice.1.json".
+test test::test_invoice::test_invoice_full_lifecycle_with_status_assertions ... ok
+test test::test_invoice::test_invoice_rating_only_investor_can_rate ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_reject_cancel_funded_invoice" to "test_snapshots/test/test_invoice/test_invoice_reject_cancel_funded_invoice.1.json".
+test test::test_invoice::test_invoice_rating_invalid_value_too_high ... ok
+test test::test_invoice::test_invoice_reject_cancel_defaulted_invoice ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_reject_update_to_pending_or_cancelled" to "test_snapshots/test/test_invoice/test_invoice_reject_update_to_pending_or_cancelled.1.json".
+test test::test_invoice::test_invoice_rating_requires_funded_status ... ok
+test test::test_invoice::test_invoice_rating_invalid_value_zero ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_status_list_tracking" to "test_snapshots/test/test_invoice/test_invoice_status_list_tracking.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_status_transition_funded_to_defaulted" to "test_snapshots/test/test_invoice/test_invoice_status_transition_funded_to_defaulted.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_status_transition_pending_to_cancelled" to "test_snapshots/test/test_invoice/test_invoice_status_transition_pending_to_cancelled.1.json".
+test test::test_invoice::test_invoice_reject_cancel_paid_invoice ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_status_transition_pending_to_verified" to "test_snapshots/test/test_invoice/test_invoice_status_transition_pending_to_verified.1.json".
+test test::test_invoice::test_invoice_reject_update_to_pending_or_cancelled ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_status_transition_funded_to_paid" to "test_snapshots/test/test_invoice/test_invoice_status_transition_funded_to_paid.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_status_transition_verified_to_funded" to "test_snapshots/test/test_invoice/test_invoice_status_transition_verified_to_funded.1.json".
+test test::test_invoice::test_invoice_status_list_tracking ... ok
+test test::test_invoice::test_invoice_status_transition_pending_to_cancelled ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_status_transition_verified_to_cancelled" to "test_snapshots/test/test_invoice/test_invoice_status_transition_verified_to_cancelled.1.json".
+test test::test_invoice::test_invoice_reject_cancel_funded_invoice ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_transition_defaulted_to_paid_behavior" to "test_snapshots/test/test_invoice/test_invoice_transition_defaulted_to_paid_behavior.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_transition_cancelled_to_verified_behavior" to "test_snapshots/test/test_invoice/test_invoice_transition_cancelled_to_verified_behavior.1.json".
+test test::test_invoice::test_invoice_status_transition_pending_to_verified ... ok
+test test::test_invoice::test_invoice_status_transition_funded_to_defaulted ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_transition_paid_to_funded_behavior" to "test_snapshots/test/test_invoice/test_invoice_transition_paid_to_funded_behavior.1.json".
+test test::test_invoice::test_invoice_status_transition_verified_to_cancelled ... ok
+test test::test_invoice::test_invoice_status_transition_verified_to_funded ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_transition_funded_to_verified_behavior" to "test_snapshots/test/test_invoice/test_invoice_transition_funded_to_verified_behavior.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_transition_pending_to_defaulted_behavior" to "test_snapshots/test/test_invoice/test_invoice_transition_pending_to_defaulted_behavior.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_upload_requires_business_auth" to "test_snapshots/test/test_invoice/test_invoice_upload_requires_business_auth.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_transition_pending_to_paid_behavior" to "test_snapshots/test/test_invoice/test_invoice_transition_pending_to_paid_behavior.1.json".
+test test::test_invoice::test_invoice_transition_defaulted_to_paid_behavior ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_upload_requires_business_verification" to "test_snapshots/test/test_invoice/test_invoice_upload_requires_business_verification.1.json".
+test test::test_invoice::test_invoice_upload_requires_business_verification ... ok
+test test::test_invoice::test_invoice_status_transition_funded_to_paid ... ok
+test test::test_invoice::test_invoice_transition_cancelled_to_verified_behavior ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_verify_requires_admin" to "test_snapshots/test/test_invoice/test_invoice_verify_requires_admin.1.json".
+Writing test snapshot file for test "test::test_invoice::test_invoice_upload_verified_business_succeeds" to "test_snapshots/test/test_invoice/test_invoice_upload_verified_business_succeeds.1.json".
+test test::test_invoice::test_invoice_upload_requires_business_auth ... ok
+Writing test snapshot file for test "test::test_invoice::test_invoice_verify_admin_succeeds" to "test_snapshots/test/test_invoice/test_invoice_verify_admin_succeeds.1.json".
+test test::test_invoice::test_invoice_transition_pending_to_defaulted_behavior ... ok
+test test::test_invoice::test_invoice_transition_paid_to_funded_behavior ... ok
+
+thread 'test::test_invoice_categories::test_invoice_category_and_tags' (260599) panicked at src/test/test_invoice_categories.rs:61:5:
+assertion `left == right` failed
+  left: 4
+ right: 2
+Writing test snapshot file for test "test::test_invoice_categories::test_invoice_category_and_tags" to "test_snapshots/test/test_invoice_categories/test_invoice_category_and_tags.1.json".
+test test::test_invoice::test_invoice_verify_requires_admin ... ok
+Writing test snapshot file for test "test::test_invoice_count_functions" to "test_snapshots/test/test_invoice_count_functions.1.json".
+test test::test_invoice::test_invoice_transition_pending_to_paid_behavior ... ok
+test test::test_invoice::test_invoice_upload_verified_business_succeeds ... ok
+Writing test snapshot file for test "test::test_invoice_metadata_validation" to "test_snapshots/test/test_invoice_metadata_validation.1.json".
+test test::test_invoice::test_invoice_transition_funded_to_verified_behavior ... ok
+Writing test snapshot file for test "test::test_invoice_lifecycle" to "test_snapshots/test/test_invoice_lifecycle.1.json".
+test test::test_invoice::test_invoice_verify_admin_succeeds ... ok
+Writing test snapshot file for test "test::test_kyc_already_pending" to "test_snapshots/test/test_kyc_already_pending.1.json".
+Writing test snapshot file for test "test::test_invoice_not_found" to "test_snapshots/test/test_invoice_not_found.1.json".
+Writing test snapshot file for test "test::test_invoice_expiration_triggers_default" to "test_snapshots/test/test_invoice_expiration_triggers_default.1.json".
+Writing test snapshot file for test "test::test_invoice_lifecycle_counts" to "test_snapshots/test/test_invoice_lifecycle_counts.1.json".
+test test::test_invoice_not_found ... ok
+test test::test_kyc_already_pending ... ok
+test test::test_invoice_count_functions ... ok
+test test::test_invoice_metadata_validation ... ok
+test test::test_invoice_categories::test_invoice_category_and_tags ... FAILED
+test test::test_invoice_lifecycle ... ok
+test test::test_invoice_expiration_triggers_default ... ok
+Writing test snapshot file for test "test::test_kyc_already_verified" to "test_snapshots/test/test_kyc_already_verified.1.json".
+Writing test snapshot file for test "test::test_notification_creation_on_invoice_upload" to "test_snapshots/test/test_notification_creation_on_invoice_upload.1.json".
+Writing test snapshot file for test "test::test_notification_delivery_status_update" to "test_snapshots/test/test_notification_delivery_status_update.1.json".
+Writing test snapshot file for test "test::test_multiple_ratings" to "test_snapshots/test/test_multiple_ratings.1.json".
+Writing test snapshot file for test "test::test_kyc_resubmission_after_rejection" to "test_snapshots/test/test_kyc_resubmission_after_rejection.1.json".
+test test::test_kyc_already_verified ... ok
+Writing test snapshot file for test "test::test_notification_preferences_default" to "test_snapshots/test/test_notification_preferences_default.1.json".
+test test::test_notification_preferences_default ... ok
+Writing test snapshot file for test "test::test_notification_creation_on_invoice_status_change" to "test_snapshots/test/test_notification_creation_on_invoice_status_change.1.json".
+test test::test_kyc_resubmission_after_rejection ... ok
+Writing test snapshot file for test "test::test_overdue_invoice_notifications" to "test_snapshots/test/test_overdue_invoice_notifications.1.json".
+Writing test snapshot file for test "test::test_notification_creation_on_bid_placement" to "test_snapshots/test/test_notification_creation_on_bid_placement.1.json".
+test test::test_notification_delivery_status_update ... ok
+test test::test_notification_creation_on_invoice_upload ... ok
+test test::test_multiple_ratings ... ok
+Writing test snapshot file for test "test::test_query_investment_insurance_nonexistent_investment" to "test_snapshots/test/test_query_investment_insurance_nonexistent_investment.1.json".
+Writing test snapshot file for test "test::test_platform_fee_configuration" to "test_snapshots/test/test_platform_fee_configuration.1.json".
+test test::test_query_investment_insurance_nonexistent_investment ... ok
+test test::test_platform_fee_configuration ... ok
+test test::test_notification_creation_on_invoice_status_change ... ok
+
+thread 'test::test_partial_payments_trigger_settlement' (260616) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #1006)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1006)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1006)], data:["contract call failed", process_partial_payment, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), 600, "tx-2"]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1006)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, process_partial_payment], data:Error(Contract, #1006)
+   4: [Failed Contract Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[inv_pp], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 600, 1000, 100, "tx-2"]
+   5: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, process_partial_payment], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), 600, "tx-2"]
+
+Writing test snapshot file for test "test::test_partial_payments_trigger_settlement" to "test_snapshots/test/test_partial_payments_trigger_settlement.1.json".
+Writing test snapshot file for test "test::test_rating_on_unfunded_invoice" to "test_snapshots/test/test_rating_on_unfunded_invoice.1.json".
+test test::test_notification_creation_on_bid_placement ... ok
+Writing test snapshot file for test "test::test_rating_queries" to "test_snapshots/test/test_rating_queries.1.json".
+test test::test_rating_on_unfunded_invoice ... ok
+Writing test snapshot file for test "test::test_query_investment_insurance_inactive_coverage" to "test_snapshots/test/test_query_investment_insurance_inactive_coverage.1.json".
+Writing test snapshot file for test "test::test_query_investment_insurance_premium_calculation" to "test_snapshots/test/test_query_investment_insurance_premium_calculation.1.json".
+Writing test snapshot file for test "test::test_query_investment_insurance_single_coverage" to "test_snapshots/test/test_query_investment_insurance_single_coverage.1.json".
+Writing test snapshot file for test "test::test_rating_statistics" to "test_snapshots/test/test_rating_statistics.1.json".
+test test::test_overdue_invoice_notifications ... ok
+Writing test snapshot file for test "test::test_reject_business" to "test_snapshots/test/test_reject_business.1.json".
+test test::test_invoice_lifecycle_counts ... ok
+test test::test_rating_queries ... ok
+Writing test snapshot file for test "test::test_store_invoice" to "test_snapshots/test/test_store_invoice.1.json".
+test test::test_reject_business ... ok
+test test::test_rating_statistics ... ok
+Writing test snapshot file for test "test::test_submit_kyc_application" to "test_snapshots/test/test_submit_kyc_application.1.json".
+Writing test snapshot file for test "test::test_store_invoice_validation" to "test_snapshots/test/test_store_invoice_validation.1.json".
+Writing test snapshot file for test "test::test_simple_bid_storage" to "test_snapshots/test/test_simple_bid_storage.1.json".
+test test::test_submit_kyc_application ... ok
+test test::test_partial_payments_trigger_settlement ... FAILED
+test test::test_store_invoice ... ok
+Writing test snapshot file for test "test::test_update_invoice_metadata_and_queries" to "test_snapshots/test/test_update_invoice_metadata_and_queries.1.json".
+test test::test_store_invoice_validation ... ok
+test test::test_query_investment_insurance_inactive_coverage ... ok
+test test::test_query_investment_insurance_single_coverage ... ok
+Writing test snapshot file for test "test::test_update_notification_preferences" to "test_snapshots/test/test_update_notification_preferences.1.json".
+
+thread 'test::test_upload_invoice_invalid_amount' (260636) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #1002)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1002)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1002)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, -100, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Test invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1002)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1002)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, -100, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Test invoice", [Services], []]
+
+Writing test snapshot file for test "test::test_upload_invoice_invalid_amount" to "test_snapshots/test/test_upload_invoice_invalid_amount.1.json".
+test test::test_update_notification_preferences ... ok
+Writing test snapshot file for test "test::test_update_invoice_status" to "test_snapshots/test/test_update_invoice_status.1.json".
+test test::test_query_investment_insurance_premium_calculation ... ok
+
+thread 'test::test_upload_invoice_not_verified_business' (260637) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #1007)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1007)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1007)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 86400, "Test invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1007)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1007)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 86400, "Test invoice", [Services], []]
+
+Writing test snapshot file for test "test::test_upload_invoice_not_verified_business" to "test_snapshots/test/test_upload_invoice_not_verified_business.1.json".
+test test::test_upload_invoice_not_verified_business - should panic ... ok
+Writing test snapshot file for test "test::test_unique_bid_id_generation" to "test_snapshots/test/test_unique_bid_id_generation.1.json".
+test test::test_upload_invoice_invalid_amount - should panic ... ok
+
+thread 'test::test_upload_invoice_past_due_date' (260638) panicked at src/test.rs:3867:20:
+attempt to subtract with overflow
+Writing test snapshot file for test "test::test_upload_invoice_past_due_date" to "test_snapshots/test/test_upload_invoice_past_due_date.1.json".
+Writing test snapshot file for test "test::test_unique_investment_id_generation" to "test_snapshots/test/test_unique_investment_id_generation.1.json".
+Writing test snapshot file for test "test::test_upload_invoice_requires_verification" to "test_snapshots/test/test_upload_invoice_requires_verification.1.json".
+test test::test_simple_bid_storage ... ok
+test test::test_unique_investment_id_generation ... ok
+Writing test snapshot file for test "test::test_verification_unauthorized_access" to "test_snapshots/test/test_verification_unauthorized_access.1.json".
+test test::test_update_invoice_metadata_and_queries ... ok
+Writing test snapshot file for test "test::test_upload_invoice_success" to "test_snapshots/test/test_upload_invoice_success.1.json".
+Writing test snapshot file for test "test::test_verify_business" to "test_snapshots/test/test_verify_business.1.json".
+test test::test_upload_invoice_past_due_date - should panic ... ok
+Writing test snapshot file for test "test::test_user_notification_stats" to "test_snapshots/test/test_user_notification_stats.1.json".
+test test::test_verification_unauthorized_access ... ok
+test test::test_verify_business ... ok
+test test::test_update_invoice_status ... ok
+Writing test snapshot file for test "test::test_verify_invoice_not_admin" to "test_snapshots/test/test_verify_invoice_not_admin.1.json".
+
+thread 'test::test_verify_invoice_already_verified' (260645) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #1003)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1003)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1003)], data:["contract call failed", verify_invoice, [Bytes(0000000000000000000000000000000000000000000000000000000000000000)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1003)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, verify_invoice], data:Error(Contract, #1003)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, verify_invoice], data:Bytes(0000000000000000000000000000000000000000000000000000000000000000)
+
+Writing test snapshot file for test "test::test_verify_invoice_already_verified" to "test_snapshots/test/test_verify_invoice_already_verified.1.json".
+test test::test_unique_bid_id_generation ... ok
+Writing test snapshot file for test "test::test_verify_invoice_requires_admin" to "test_snapshots/test/test_verify_invoice_requires_admin.1.json".
+Writing test snapshot file for test "test::test_verify_invoice_success" to "test_snapshots/test/test_verify_invoice_success.1.json".
+test test::test_upload_invoice_requires_verification ... ok
+test test::test_upload_invoice_success ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_admin_can_set_platform_fee" to "test_snapshots/test_admin/test_admin/test_admin_can_set_platform_fee.1.json".
+Writing test snapshot file for test "test_admin::test_admin::test_admin_can_verify_invoice" to "test_snapshots/test_admin/test_admin/test_admin_can_verify_invoice.1.json".
+test test_admin::test_admin::test_admin_can_set_platform_fee ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_get_admin_returns_none_before_init" to "test_snapshots/test_admin/test_admin/test_get_admin_returns_none_before_init.1.json".
+test test_admin::test_admin::test_get_admin_returns_none_before_init ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_get_current_admin_after_init_returns_address" to "test_snapshots/test_admin/test_admin/test_get_current_admin_after_init_returns_address.1.json".
+test test::test_user_notification_stats ... ok
+test test_admin::test_admin::test_get_current_admin_after_init_returns_address ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_get_current_admin_after_transfer_returns_new_address" to "test_snapshots/test_admin/test_admin/test_get_current_admin_after_transfer_returns_new_address.1.json".
+Writing test snapshot file for test "test_admin::test_admin::test_get_current_admin_before_init_returns_none" to "test_snapshots/test_admin/test_admin/test_get_current_admin_before_init_returns_none.1.json".
+test test_admin::test_admin::test_get_current_admin_before_init_returns_none ... ok
+test test_admin::test_admin::test_get_current_admin_after_transfer_returns_new_address ... ok
+test test::test_verify_invoice_already_verified - should panic ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_get_current_admin_tracks_full_lifecycle" to "test_snapshots/test_admin/test_admin/test_get_current_admin_tracks_full_lifecycle.1.json".
+test test::test_verify_invoice_requires_admin ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_initialize_admin_double_init_fails" to "test_snapshots/test_admin/test_admin/test_initialize_admin_double_init_fails.1.json".
+Writing test snapshot file for test "test_admin::test_admin::test_initialize_admin_same_address_twice_fails" to "test_snapshots/test_admin/test_admin/test_initialize_admin_same_address_twice_fails.1.json".
+test test::test_verify_invoice_not_admin ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_initialize_admin_succeeds" to "test_snapshots/test_admin/test_admin/test_initialize_admin_succeeds.1.json".
+test test_admin::test_admin::test_get_current_admin_tracks_full_lifecycle ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_initialize_emits_admin_set_event" to "test_snapshots/test_admin/test_admin/test_initialize_emits_admin_set_event.1.json".
+Writing test snapshot file for test "test_admin::test_admin::test_is_admin_returns_false_before_init" to "test_snapshots/test_admin/test_admin/test_is_admin_returns_false_before_init.1.json".
+test test_admin::test_admin::test_initialize_admin_same_address_twice_fails ... ok
+test test_admin::test_admin::test_initialize_admin_double_init_fails ... ok
+test test_admin::test_admin::test_is_admin_returns_false_before_init ... ok
+test test_admin::test_admin::test_initialize_emits_admin_set_event ... ok
+test test_admin::test_admin::test_initialize_admin_succeeds ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_is_admin_returns_true_for_current_admin" to "test_snapshots/test_admin/test_admin/test_is_admin_returns_true_for_current_admin.1.json".
+Writing test snapshot file for test "test_admin::test_admin::test_require_admin_succeeds_for_admin" to "test_snapshots/test_admin/test_admin/test_require_admin_succeeds_for_admin.1.json".
+test test::test_verify_invoice_success ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_require_admin_fails_for_non_admin" to "test_snapshots/test_admin/test_admin/test_require_admin_fails_for_non_admin.1.json".
+Writing test snapshot file for test "test::test_withdraw_bid" to "test_snapshots/test/test_withdraw_bid.1.json".
+Writing test snapshot file for test "test_admin::test_admin::test_is_admin_returns_false_for_different_address" to "test_snapshots/test_admin/test_admin/test_is_admin_returns_false_for_different_address.1.json".
+Writing test snapshot file for test "test_admin::test_admin::test_require_admin_fails_before_init" to "test_snapshots/test_admin/test_admin/test_require_admin_fails_before_init.1.json".
+test test_admin::test_admin::test_is_admin_returns_true_for_current_admin ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_set_admin_rejects_non_admin_caller" to "test_snapshots/test_admin/test_admin/test_set_admin_rejects_non_admin_caller.1.json".
+Writing test snapshot file for test "test_admin::test_admin::test_set_platform_fee_without_admin_fails" to "test_snapshots/test_admin/test_admin/test_set_platform_fee_without_admin_fails.1.json".
+test test_admin::test_admin::test_require_admin_fails_before_init ... ok
+test test_admin::test_admin::test_set_platform_fee_without_admin_fails ... ok
+test test_admin::test_admin::test_require_admin_fails_for_non_admin ... ok
+test test_admin::test_admin::test_require_admin_succeeds_for_admin ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_transfer_admin_succeeds" to "test_snapshots/test_admin/test_admin/test_transfer_admin_succeeds.1.json".
+Writing test snapshot file for test "test_admin::test_admin::test_transfer_admin_to_self" to "test_snapshots/test_admin/test_admin/test_transfer_admin_to_self.1.json".
+test test_admin::test_admin::test_is_admin_returns_false_for_different_address ... ok
+test test_admin::test_admin::test_set_admin_rejects_non_admin_caller ... ok
+Writing test snapshot file for test "test_admin::test_admin::test_transfer_admin_chain" to "test_snapshots/test_admin/test_admin/test_transfer_admin_chain.1.json".
+Writing test snapshot file for test "test_admin::test_admin::test_verify_invoice_without_admin_fails" to "test_snapshots/test_admin/test_admin/test_verify_invoice_without_admin_fails.1.json".
+Writing test snapshot file for test "test_admin::test_admin::test_transfer_emits_admin_transferred_event" to "test_snapshots/test_admin/test_admin/test_transfer_emits_admin_transferred_event.1.json".
+Writing test snapshot file for test "test_admin::test_admin::test_transfer_admin_without_init_fails" to "test_snapshots/test_admin/test_admin/test_transfer_admin_without_init_fails.1.json".
+test test_admin::test_admin::test_transfer_admin_without_init_fails ... ok
+test test_admin::test_admin::test_admin_can_verify_invoice ... ok
+test test_admin::test_admin::test_transfer_admin_succeeds ... ok
+test test_admin::test_admin::test_transfer_admin_to_self ... ok
+
+thread 'test_audit::test_audit_get_entry_not_found' (260675) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #1029)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1029)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1029)], data:["contract call failed", get_audit_entry, [Bytes(0000000000000000000000000000000000000000000000000000000000000000)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1029)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, get_audit_entry], data:Error(Contract, #1029)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, get_audit_entry], data:Bytes(0000000000000000000000000000000000000000000000000000000000000000)
+
+Writing test snapshot file for test "test_audit::test_audit_get_entry_not_found" to "test_snapshots/test_audit/test_audit_get_entry_not_found.1.json".
+test test_admin::test_admin::test_transfer_admin_chain ... ok
+test test_audit::test_audit_get_entry_not_found - should panic ... ok
+Writing test snapshot file for test "test_audit::test_audit_integrity_no_invoice" to "test_snapshots/test_audit/test_audit_integrity_no_invoice.1.json".
+Writing test snapshot file for test "test_audit::test_audit_integrity_valid" to "test_snapshots/test_audit/test_audit_integrity_valid.1.json".
+Writing test snapshot file for test "test_audit::test_audit_invoice_created_and_trail" to "test_snapshots/test_audit/test_audit_invoice_created_and_trail.1.json".
+test test_audit::test_audit_integrity_no_invoice ... ok
+test test_admin::test_admin::test_transfer_emits_admin_transferred_event ... ok
+Writing test snapshot file for test "test_audit::test_audit_query_time_range" to "test_snapshots/test_audit/test_audit_query_time_range.1.json".
+Writing test snapshot file for test "test_audit::test_audit_query_by_operation" to "test_snapshots/test_audit/test_audit_query_by_operation.1.json".
+test test_admin::test_admin::test_verify_invoice_without_admin_fails ... ok
+Writing test snapshot file for test "test_audit::test_audit_query_by_actor" to "test_snapshots/test_audit/test_audit_query_by_actor.1.json".
+Writing test snapshot file for test "test_audit::test_audit_query_by_invoice" to "test_snapshots/test_audit/test_audit_query_by_invoice.1.json".
+Writing test snapshot file for test "test_audit::test_audit_stats" to "test_snapshots/test_audit/test_audit_stats.1.json".
+test test_audit::test_audit_query_time_range ... ok
+test test_audit::test_audit_integrity_valid ... ok
+test test_audit::test_audit_invoice_created_and_trail ... ok
+test test::test_withdraw_bid ... ok
+test test_audit::test_audit_query_by_operation ... ok
+Writing test snapshot file for test "test_audit::test_audit_verify_produces_entry" to "test_snapshots/test_audit/test_audit_verify_produces_entry.1.json".
+test test_audit::test_audit_stats ... ok
+Writing test snapshot file for test "test_bid::test_bid_placement_non_verified_invoice_fails" to "test_snapshots/test_bid/test_bid_placement_non_verified_invoice_fails.1.json".
+Writing test snapshot file for test "test_bid::test_bid_placement_respects_investment_limit" to "test_snapshots/test_bid/test_bid_placement_respects_investment_limit.1.json".
+test test_audit::test_audit_query_by_actor ... ok
+test test_audit::test_audit_query_by_invoice ... ok
+Writing test snapshot file for test "test_bid::test_bid_expiration_and_cleanup" to "test_snapshots/test_bid/test_bid_expiration_and_cleanup.1.json".
+Writing test snapshot file for test "test_bid::test_bid_placement_verified_invoice_succeeds" to "test_snapshots/test_bid/test_bid_placement_verified_invoice_succeeds.1.json".
+Writing test snapshot file for test "test_bid::test_best_bid_excludes_withdrawn" to "test_snapshots/test_bid/test_best_bid_excludes_withdrawn.1.json".
+test test_bid::test_bid_placement_non_verified_invoice_fails ... ok
+Writing test snapshot file for test "test_bid::test_bid_withdrawal_by_owner_succeeds" to "test_snapshots/test_bid/test_bid_withdrawal_by_owner_succeeds.1.json".
+Writing test snapshot file for test "test_bid::test_bid_ranking_by_profit" to "test_snapshots/test_bid/test_bid_ranking_by_profit.1.json".
+test test_audit::test_audit_verify_produces_entry ... ok
+Writing test snapshot file for test "test_bid::test_bid_withdrawal_only_placed_bids" to "test_snapshots/test_bid/test_bid_withdrawal_only_placed_bids.1.json".
+test test_bid::test_bid_placement_respects_investment_limit ... ok
+test test_bid::test_bid_placement_verified_invoice_succeeds ... ok
+Writing test snapshot file for test "test_bid::test_set_investment_limit_invalid_amount_fails" to "test_snapshots/test_bid/test_set_investment_limit_invalid_amount_fails.1.json".
+test test_bid::test_set_investment_limit_invalid_amount_fails ... ok
+Writing test snapshot file for test "test_bid::test_set_investment_limit_non_admin_fails" to "test_snapshots/test_bid/test_set_investment_limit_non_admin_fails.1.json".
+test test_bid::test_set_investment_limit_non_admin_fails ... ok
+Writing test snapshot file for test "test_bid::test_set_investment_limit_succeeds" to "test_snapshots/test_bid/test_set_investment_limit_succeeds.1.json".
+test test_bid::test_best_bid_excludes_withdrawn ... ok
+Writing test snapshot file for test "test_bid::test_set_investment_limit_unverified_fails" to "test_snapshots/test_bid/test_set_investment_limit_unverified_fails.1.json".
+test test_bid::test_bid_expiration_and_cleanup ... ok
+test test_bid::test_bid_ranking_by_profit ... ok
+test test_bid::test_set_investment_limit_unverified_fails ... ok
+test test_bid::test_set_investment_limit_succeeds ... ok
+test test_bid::test_bid_withdrawal_by_owner_succeeds ... ok
+test test_bid_ranking::test_compare_bids_by_expected_return_when_profit_equal ... ok
+test test_bid_ranking::test_compare_bids_tie_break_timestamp ... ok
+test test_bid_ranking::test_compare_bids_equal ... ok
+Writing test snapshot file for test "test_bid_ranking::test_empty_ranked_and_best_for_nonexistent_invoice" to "test_snapshots/test_bid_ranking/test_empty_ranked_and_best_for_nonexistent_invoice.1.json".
+test test_bid_ranking::test_compare_bids_by_profit ... ok
+Writing test snapshot file for test "test_bid::test_multiple_bids_indexing_and_query" to "test_snapshots/test_bid/test_multiple_bids_indexing_and_query.1.json".
+test test_bid_ranking::test_empty_ranked_and_best_for_nonexistent_invoice ... ok
+Writing test snapshot file for test "test_bid_ranking::test_empty_bid_list" to "test_snapshots/test_bid_ranking/test_empty_bid_list.1.json".
+test test_bid::test_bid_withdrawal_only_placed_bids ... ok
+Writing test snapshot file for test "test_bid::test_updated_limit_enforced_in_bidding" to "test_snapshots/test_bid/test_updated_limit_enforced_in_bidding.1.json".
+Writing test snapshot file for test "test_bid::test_query_bids_by_investor" to "test_snapshots/test_bid/test_query_bids_by_investor.1.json".
+Writing test snapshot file for test "test_bid_ranking::test_ranking_with_multiple_bids" to "test_snapshots/test_bid_ranking/test_ranking_with_multiple_bids.1.json".
+test test_bid_ranking::test_empty_bid_list ... ok
+Writing test snapshot file for test "test_bid_ranking::test_equal_bids_tie_break_by_timestamp" to "test_snapshots/test_bid_ranking/test_equal_bids_tie_break_by_timestamp.1.json".
+Writing test snapshot file for test "test_bid_ranking::test_single_bid_ranking_and_best_selection" to "test_snapshots/test_bid_ranking/test_single_bid_ranking_and_best_selection.1.json".
+Writing test snapshot file for test "test_bid_ranking::test_best_bid_equals_first_ranked" to "test_snapshots/test_bid_ranking/test_best_bid_equals_first_ranked.1.json".
+Writing test snapshot file for test "test_bid_ranking::test_ranked_excludes_withdrawn_and_expired" to "test_snapshots/test_bid_ranking/test_ranked_excludes_withdrawn_and_expired.1.json".
+test test_bid::test_multiple_bids_indexing_and_query ... ok
+Writing test snapshot file for test "test_business_kyc::test_business_can_submit_own_kyc" to "test_snapshots/test_business_kyc/test_business_can_submit_own_kyc.1.json".
+test test_bid::test_updated_limit_enforced_in_bidding ... ok
+Writing test snapshot file for test "test_business_kyc::test_business_cannot_submit_kyc_for_another_business" to "test_snapshots/test_business_kyc/test_business_cannot_submit_kyc_for_another_business.1.json".
+test test_business_kyc::test_business_can_submit_own_kyc ... ok
+test test_bid_ranking::test_single_bid_ranking_and_best_selection ... ok
+test test_business_kyc::test_business_cannot_submit_kyc_for_another_business ... ok
+Writing test snapshot file for test "test_business_kyc::test_get_business_verification_status_returns_none_for_unsubmitted" to "test_snapshots/test_business_kyc/test_get_business_verification_status_returns_none_for_unsubmitted.1.json".
+test test_business_kyc::test_get_business_verification_status_returns_none_for_unsubmitted ... ok
+test test_bid_ranking::test_equal_bids_tie_break_by_timestamp ... ok
+Writing test snapshot file for test "test_business_kyc::test_get_verification_lists" to "test_snapshots/test_business_kyc/test_get_verification_lists.1.json".
+Writing test snapshot file for test "test_business_kyc::test_kyc_already_verified_error" to "test_snapshots/test_business_kyc/test_kyc_already_verified_error.1.json".
+Writing test snapshot file for test "test_business_kyc::test_kyc_already_pending_error" to "test_snapshots/test_business_kyc/test_kyc_already_pending_error.1.json".
+test test_bid_ranking::test_ranking_with_multiple_bids ... ok
+test test_bid::test_query_bids_by_investor ... ok
+Writing test snapshot file for test "test_business_kyc::test_complete_business_kyc_to_invoice_flow" to "test_snapshots/test_business_kyc/test_complete_business_kyc_to_invoice_flow.1.json".
+Writing test snapshot file for test "test_business_kyc::test_kyc_data_integrity" to "test_snapshots/test_business_kyc/test_kyc_data_integrity.1.json".
+test test_business_kyc::test_kyc_already_verified_error ... ok
+Writing test snapshot file for test "test_business_kyc::test_kyc_submission_with_empty_data" to "test_snapshots/test_business_kyc/test_kyc_submission_with_empty_data.1.json".
+Writing test snapshot file for test "test_business_kyc::test_kyc_resubmission_after_rejection" to "test_snapshots/test_business_kyc/test_kyc_resubmission_after_rejection.1.json".
+test test_business_kyc::test_get_verification_lists ... ok
+test test_business_kyc::test_kyc_data_integrity ... ok
+test test_business_kyc::test_kyc_already_pending_error ... ok
+Writing test snapshot file for test "test_business_kyc::test_only_admin_can_reject_business" to "test_snapshots/test_business_kyc/test_only_admin_can_reject_business.1.json".
+test test_business_kyc::test_kyc_resubmission_after_rejection ... ok
+test test_business_kyc::test_kyc_submission_with_empty_data ... ok
+Writing test snapshot file for test "test_business_kyc::test_only_admin_can_verify_business" to "test_snapshots/test_business_kyc/test_only_admin_can_verify_business.1.json".
+Writing test snapshot file for test "test_business_kyc::test_multiple_businesses_independent_kyc_processes" to "test_snapshots/test_business_kyc/test_multiple_businesses_independent_kyc_processes.1.json".
+Writing test snapshot file for test "test_business_kyc::test_timestamp_accuracy" to "test_snapshots/test_business_kyc/test_timestamp_accuracy.1.json".
+test test_business_kyc::test_only_admin_can_reject_business ... ok
+Writing test snapshot file for test "test_business_kyc::test_unverified_business_cannot_upload_invoice" to "test_snapshots/test_business_kyc/test_unverified_business_cannot_upload_invoice.1.json".
+Writing test snapshot file for test "test_business_kyc::test_rejected_business_resubmission_flow" to "test_snapshots/test_business_kyc/test_rejected_business_resubmission_flow.1.json".
+test test_business_kyc::test_unverified_business_cannot_upload_invoice ... ok
+Writing test snapshot file for test "test_business_kyc::test_verified_business_can_upload_invoice" to "test_snapshots/test_business_kyc/test_verified_business_can_upload_invoice.1.json".
+test test_business_kyc::test_only_admin_can_verify_business ... ok
+test test_business_kyc::test_timestamp_accuracy ... ok
+test test_business_kyc::test_multiple_businesses_independent_kyc_processes ... ok
+Writing test snapshot file for test "test_currency::test_add_currency_idempotent" to "test_snapshots/test_currency/test_add_currency_idempotent.1.json".
+test test_currency::test_add_currency_idempotent ... ok
+Writing test snapshot file for test "test_currency::test_add_remove_currency_admin_only" to "test_snapshots/test_currency/test_add_remove_currency_admin_only.1.json".
+Writing test snapshot file for test "test_currency::test_clear_currencies_allows_all" to "test_snapshots/test_currency/test_clear_currencies_allows_all.1.json".
+test test_business_kyc::test_complete_business_kyc_to_invoice_flow ... ok
+test test_bid_ranking::test_ranked_excludes_withdrawn_and_expired ... ok
+test test_currency::test_add_remove_currency_admin_only ... ok
+test test_bid_ranking::test_best_bid_equals_first_ranked ... ok
+Writing test snapshot file for test "test_currency::test_currency_count" to "test_snapshots/test_currency/test_currency_count.1.json".
+Writing test snapshot file for test "test_currency::test_get_whitelisted_currencies_paged" to "test_snapshots/test_currency/test_get_whitelisted_currencies_paged.1.json".
+Writing test snapshot file for test "test_currency::test_invoice_with_non_whitelisted_currency_fails_when_whitelist_set" to "test_snapshots/test_currency/test_invoice_with_non_whitelisted_currency_fails_when_whitelist_set.1.json".
+Writing test snapshot file for test "test_currency::test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set" to "test_snapshots/test_currency/test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set.1.json".
+test test_currency::test_currency_count ... ok
+Writing test snapshot file for test "test_currency::test_non_admin_cannot_add_currency" to "test_snapshots/test_currency/test_non_admin_cannot_add_currency.1.json".
+test test_currency::test_invoice_with_non_whitelisted_currency_fails_when_whitelist_set ... ok
+test test_currency::test_non_admin_cannot_add_currency ... ok
+Writing test snapshot file for test "test_currency::test_invoice_with_whitelisted_currency_succeeds" to "test_snapshots/test_currency/test_invoice_with_whitelisted_currency_succeeds.1.json".
+Writing test snapshot file for test "test_currency::test_non_admin_cannot_clear_currencies" to "test_snapshots/test_currency/test_non_admin_cannot_clear_currencies.1.json".
+test test_currency::test_get_whitelisted_currencies_paged ... ok
+Writing test snapshot file for test "test_currency::test_non_admin_cannot_set_currencies" to "test_snapshots/test_currency/test_non_admin_cannot_set_currencies.1.json".
+test test_currency::test_non_admin_cannot_clear_currencies ... ok
+test test_currency::test_clear_currencies_allows_all ... ok
+Writing test snapshot file for test "test_currency::test_non_admin_cannot_remove_currency" to "test_snapshots/test_currency/test_non_admin_cannot_remove_currency.1.json".
+test test_currency::test_non_admin_cannot_set_currencies ... ok
+Writing test snapshot file for test "test_currency::test_set_currencies_replaces_whitelist" to "test_snapshots/test_currency/test_set_currencies_replaces_whitelist.1.json".
+test test_business_kyc::test_verified_business_can_upload_invoice ... ok
+test test_currency::test_non_admin_cannot_remove_currency ... ok
+Writing test snapshot file for test "test_currency::test_set_currencies_deduplicates" to "test_snapshots/test_currency/test_set_currencies_deduplicates.1.json".
+test test_currency::test_set_currencies_replaces_whitelist ... ok
+test test_currency::test_invoice_with_whitelisted_currency_succeeds ... ok
+Writing test snapshot file for test "test_default::test_cannot_default_pending_invoice" to "test_snapshots/test_default/test_cannot_default_pending_invoice.1.json".
+test test_currency::test_set_currencies_deduplicates ... ok
+test test_business_kyc::test_rejected_business_resubmission_flow ... ok
+Writing test snapshot file for test "test_default::test_cannot_default_unfunded_invoice" to "test_snapshots/test_default/test_cannot_default_unfunded_invoice.1.json".
+
+thread 'test_default::test_cannot_default_already_defaulted_invoice' (260743) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_cannot_default_already_defaulted_invoice" to "test_snapshots/test_default/test_cannot_default_already_defaulted_invoice.1.json".
+
+thread 'test_default::test_custom_grace_period' (260747) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_custom_grace_period" to "test_snapshots/test_default/test_custom_grace_period.1.json".
+test test_default::test_cannot_default_pending_invoice ... ok
+
+thread 'test_default::test_cannot_default_paid_invoice' (260744) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_cannot_default_paid_invoice" to "test_snapshots/test_default/test_cannot_default_paid_invoice.1.json".
+test test_currency::test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set ... ok
+
+thread 'test_default::test_default_exactly_at_grace_deadline' (260749) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_default_exactly_at_grace_deadline" to "test_snapshots/test_default/test_default_exactly_at_grace_deadline.1.json".
+
+thread 'test_default::test_default_after_grace_period' (260748) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_default_after_grace_period" to "test_snapshots/test_default/test_default_after_grace_period.1.json".
+test test_default::test_cannot_default_unfunded_invoice ... ok
+
+thread 'test_default::test_default_status_transition' (260751) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_default_status_transition" to "test_snapshots/test_default/test_default_status_transition.1.json".
+
+thread 'test_default::test_default_investment_status_update' (260750) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_default_investment_status_update" to "test_snapshots/test_default/test_default_investment_status_update.1.json".
+test test_default::test_cannot_default_already_defaulted_invoice ... FAILED
+
+thread 'test_default::test_default_uses_default_grace_period_when_none_provided' (260752) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_default_uses_default_grace_period_when_none_provided" to "test_snapshots/test_default/test_default_uses_default_grace_period_when_none_provided.1.json".
+test test_default::test_default_after_grace_period ... FAILED
+test test_default::test_cannot_default_paid_invoice ... FAILED
+test test_default::test_default_exactly_at_grace_deadline ... FAILED
+
+thread 'test_default::test_multiple_invoices_default_handling' (260753) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_multiple_invoices_default_handling" to "test_snapshots/test_default/test_multiple_invoices_default_handling.1.json".
+test test_default::test_custom_grace_period ... FAILED
+Writing test snapshot file for test "test_dispute::test_create_dispute_by_business" to "test_snapshots/test_dispute/test_create_dispute_by_business.1.json".
+Writing test snapshot file for test "test_dispute::test_complete_dispute_lifecycle" to "test_snapshots/test_dispute/test_complete_dispute_lifecycle.1.json".
+test test_default::test_default_status_transition ... FAILED
+
+thread 'test_default::test_no_default_before_grace_period' (260754) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_no_default_before_grace_period" to "test_snapshots/test_default/test_no_default_before_grace_period.1.json".
+test test_default::test_default_uses_default_grace_period_when_none_provided ... FAILED
+
+thread 'test_default::test_zero_grace_period_defaults_immediately_after_due_date' (260755) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_zero_grace_period_defaults_immediately_after_due_date" to "test_snapshots/test_default/test_zero_grace_period_defaults_immediately_after_due_date.1.json".
+Writing test snapshot file for test "test_dispute::test_create_dispute_duplicate" to "test_snapshots/test_dispute/test_create_dispute_duplicate.1.json".
+Writing test snapshot file for test "test_dispute::test_create_dispute_empty_evidence" to "test_snapshots/test_dispute/test_create_dispute_empty_evidence.1.json".
+test test_dispute::test_create_dispute_by_business ... ok
+test test_default::test_default_investment_status_update ... FAILED
+Writing test snapshot file for test "test_dispute::test_create_dispute_empty_reason" to "test_snapshots/test_dispute/test_create_dispute_empty_reason.1.json".
+test test_dispute::test_complete_dispute_lifecycle ... ok
+Writing test snapshot file for test "test_dispute::test_create_dispute_nonexistent_invoice" to "test_snapshots/test_dispute/test_create_dispute_nonexistent_invoice.1.json".
+test test_dispute::test_create_dispute_duplicate ... ok
+test test_default::test_multiple_invoices_default_handling ... FAILED
+Writing test snapshot file for test "test_dispute::test_create_dispute_evidence_too_long" to "test_snapshots/test_dispute/test_create_dispute_evidence_too_long.1.json".
+test test_dispute::test_create_dispute_nonexistent_invoice ... ok
+Writing test snapshot file for test "test_dispute::test_create_dispute_reason_boundary_max" to "test_snapshots/test_dispute/test_create_dispute_reason_boundary_max.1.json".
+Writing test snapshot file for test "test_dispute::test_create_dispute_reason_boundary_min" to "test_snapshots/test_dispute/test_create_dispute_reason_boundary_min.1.json".
+test test_dispute::test_create_dispute_empty_evidence ... ok
+Writing test snapshot file for test "test_dispute::test_create_dispute_reason_too_long" to "test_snapshots/test_dispute/test_create_dispute_reason_too_long.1.json".
+Writing test snapshot file for test "test_dispute::test_create_dispute_unauthorized" to "test_snapshots/test_dispute/test_create_dispute_unauthorized.1.json".
+test test_dispute::test_create_dispute_evidence_too_long ... ok
+test test_dispute::test_create_dispute_empty_reason ... ok
+Writing test snapshot file for test "test_dispute::test_put_under_review_invalid_transition" to "test_snapshots/test_dispute/test_put_under_review_invalid_transition.1.json".
+test test_default::test_zero_grace_period_defaults_immediately_after_due_date ... FAILED
+test test_dispute::test_create_dispute_reason_boundary_max ... ok
+Writing test snapshot file for test "test_dispute::test_query_dispute_none_exists" to "test_snapshots/test_dispute/test_query_dispute_none_exists.1.json".
+test test_dispute::test_create_dispute_unauthorized ... ok
+Writing test snapshot file for test "test_dispute::test_multiple_disputes_different_invoices" to "test_snapshots/test_dispute/test_multiple_disputes_different_invoices.1.json".
+test test_default::test_no_default_before_grace_period ... FAILED
+test test_dispute::test_create_dispute_reason_boundary_min ... ok
+test test_dispute::test_create_dispute_reason_too_long ... ok
+Writing test snapshot file for test "test_dispute::test_put_under_review_status_transition" to "test_snapshots/test_dispute/test_put_under_review_status_transition.1.json".
+Writing test snapshot file for test "test_dispute::test_resolve_dispute_empty_resolution" to "test_snapshots/test_dispute/test_resolve_dispute_empty_resolution.1.json".
+Writing test snapshot file for test "test_emergency_withdraw::test_cancel_clears_pending" to "test_snapshots/test_emergency_withdraw/test_cancel_clears_pending.1.json".
+test test_dispute::test_put_under_review_invalid_transition ... ok
+test test_emergency_withdraw::test_cancel_clears_pending ... ok
+test test_dispute::test_query_dispute_none_exists ... ok
+Writing test snapshot file for test "test_emergency_withdraw::test_cancel_without_pending_fails" to "test_snapshots/test_emergency_withdraw/test_cancel_without_pending_fails.1.json".
+Writing test snapshot file for test "test_dispute::test_resolve_dispute_invalid_transition" to "test_snapshots/test_dispute/test_resolve_dispute_invalid_transition.1.json".
+Writing test snapshot file for test "test_emergency_withdraw::test_cancel_prevents_execute" to "test_snapshots/test_emergency_withdraw/test_cancel_prevents_execute.1.json".
+Writing test snapshot file for test "test_dispute::test_resolve_dispute_resolution_too_long" to "test_snapshots/test_dispute/test_resolve_dispute_resolution_too_long.1.json".
+test test_emergency_withdraw::test_cancel_without_pending_fails ... ok
+Writing test snapshot file for test "test_emergency_withdraw::test_execute_after_timelock_succeeds" to "test_snapshots/test_emergency_withdraw/test_execute_after_timelock_succeeds.1.json".
+test test_emergency_withdraw::test_cancel_prevents_execute ... ok
+Writing test snapshot file for test "test_emergency_withdraw::test_execute_before_timelock_fails" to "test_snapshots/test_emergency_withdraw/test_execute_before_timelock_fails.1.json".
+Writing test snapshot file for test "test_emergency_withdraw::test_execute_without_pending_fails" to "test_snapshots/test_emergency_withdraw/test_execute_without_pending_fails.1.json".
+test test_emergency_withdraw::test_execute_before_timelock_fails ... ok
+test test_dispute::test_multiple_disputes_different_invoices ... ok
+Writing test snapshot file for test "test_emergency_withdraw::test_get_pending_returns_withdrawal_after_initiate" to "test_snapshots/test_emergency_withdraw/test_get_pending_returns_withdrawal_after_initiate.1.json".
+test test_dispute::test_resolve_dispute_empty_resolution ... ok
+Writing test snapshot file for test "test_emergency_withdraw::test_initiate_zero_amount_fails" to "test_snapshots/test_emergency_withdraw/test_initiate_zero_amount_fails.1.json".
+test test_emergency_withdraw::test_execute_without_pending_fails ... ok
+test test_emergency_withdraw::test_get_pending_returns_withdrawal_after_initiate ... ok
+test test_emergency_withdraw::test_initiate_zero_amount_fails ... ok
+Writing test snapshot file for test "test_emergency_withdraw::test_non_admin_cannot_cancel" to "test_snapshots/test_emergency_withdraw/test_non_admin_cannot_cancel.1.json".
+Writing test snapshot file for test "test_emergency_withdraw::test_only_admin_can_initiate" to "test_snapshots/test_emergency_withdraw/test_only_admin_can_initiate.1.json".
+test test_dispute::test_resolve_dispute_invalid_transition ... ok
+Writing test snapshot file for test "test_errors::test_business_not_verified_error" to "test_snapshots/test_errors/test_business_not_verified_error.1.json".
+test test_emergency_withdraw::test_non_admin_cannot_cancel ... ok
+test test_errors::test_business_not_verified_error ... ok
+
+thread 'test_errors::test_error_message_consistency' (260788) panicked at src/test_errors.rs:405:5:
+assertion `left == right` failed
+  left: 1004
+ right: 1100
+test test_errors::test_error_message_consistency ... FAILED
+Writing test snapshot file for test "test_emergency_withdraw::test_get_pending_none_after_execute" to "test_snapshots/test_emergency_withdraw/test_get_pending_none_after_execute.1.json".
+Writing test snapshot file for test "test_emergency_withdraw::test_target_receives_correct_amount_when_funded" to "test_snapshots/test_emergency_withdraw/test_target_receives_correct_amount_when_funded.1.json".
+test test_emergency_withdraw::test_only_admin_can_initiate ... ok
+test test_dispute::test_resolve_dispute_resolution_too_long ... ok
+test test_emergency_withdraw::test_execute_after_timelock_succeeds ... ok
+test test_dispute::test_put_under_review_status_transition ... ok
+Writing test snapshot file for test "test_errors::test_invalid_description_error" to "test_snapshots/test_errors/test_invalid_description_error.1.json".
+Writing test snapshot file for test "test_errors::test_invoice_amount_invalid_error" to "test_snapshots/test_errors/test_invoice_amount_invalid_error.1.json".
+test test_errors::test_invalid_description_error ... ok
+Writing test snapshot file for test "test_errors::test_invoice_not_found_error" to 
+thread 'test_errors::test_invoice_due_date_invalid_error' (260794) panicked at src/test_errors.rs:127:10:
+attempt to subtract with overflow
+"test_snapshots/test_errors/test_invoice_not_found_error.1.json".
+Writing test snapshot file for test "test_errors::test_invoice_due_date_invalid_error" to "test_snapshots/test_errors/test_invoice_due_date_invalid_error.1.json".
+test test_errors::test_invoice_not_found_error ... ok
+test test_errors::test_invoice_amount_invalid_error ... ok
+test test_errors::test_invoice_due_date_invalid_error ... FAILED
+Writing test snapshot file for test "test_errors::test_invoice_not_verified_error" to "test_snapshots/test_errors/test_invoice_not_verified_error.1.json".
+Writing test snapshot file for test "test_errors::test_invalid_status_error" to "test_snapshots/test_errors/test_invalid_status_error.1.json".
+test test_emergency_withdraw::test_target_receives_correct_amount_when_funded ... ok
+
+thread 'test_errors::test_invoice_already_defaulted_error' (260791) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_errors::test_invoice_already_defaulted_error" to "test_snapshots/test_errors/test_invoice_already_defaulted_error.1.json".
+
+thread 'test_errors::test_no_panics_on_error_conditions' (260798) panicked at src/test_errors.rs:392:10:
+attempt to subtract with overflow
+Writing test snapshot file for test "test_errors::test_no_panics_on_error_conditions" to "test_snapshots/test_errors/test_no_panics_on_error_conditions.1.json".
+test test_errors::test_no_panics_on_error_conditions ... FAILED
+
+thread 'test_errors::test_invoice_already_funded_error' (260792) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_errors::test_invoice_already_funded_error" to "test_snapshots/test_errors/test_invoice_already_funded_error.1.json".
+Writing test snapshot file for test "test_errors::test_invoice_not_funded_error" to "test_snapshots/test_errors/test_invoice_not_funded_error.1.json".
+Writing test snapshot file for test "test_errors::test_not_admin_error" to "test_snapshots/test_errors/test_not_admin_error.1.json".
+test test_emergency_withdraw::test_get_pending_none_after_execute ... ok
+Writing test snapshot file for test "test_errors::test_storage_key_not_found_error" to "test_snapshots/test_errors/test_storage_key_not_found_error.1.json".
+test test_errors::test_storage_key_not_found_error ... ok
+
+thread 'test_errors::test_operation_not_allowed_before_grace_period' (260800) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_errors::test_operation_not_allowed_before_grace_period" to "test_snapshots/test_errors/test_operation_not_allowed_before_grace_period.1.json".
+
+thread 'test_errors::test_unauthorized_error' (260802) panicked at src/test_errors.rs:174:5:
+assertion failed: result.is_err()
+Writing test snapshot file for test "test_errors::test_unauthorized_error" to "test_snapshots/test_errors/test_unauthorized_error.1.json".
+test test_errors::test_invoice_not_verified_error ... ok
+test test_errors::test_invalid_status_error ... ok
+test test_errors::test_invoice_already_funded_error ... FAILED
+test test_errors::test_invoice_not_funded_error ... ok
+test test_errors::test_not_admin_error ... ok
+test test_errors::test_operation_not_allowed_before_grace_period ... FAILED
+test test_errors::test_invoice_already_defaulted_error ... FAILED
+Writing test snapshot file for test "test_escrow::test_cannot_accept_withdrawn_bid" to "test_snapshots/test_escrow/test_cannot_accept_withdrawn_bid.1.json".
+test test_errors::test_unauthorized_error ... FAILED
+Writing test snapshot file for test "test_escrow::test_escrow_creation_validates_amount" to "test_snapshots/test_escrow/test_escrow_creation_validates_amount.1.json".
+Writing test snapshot file for test "test_escrow::test_escrow_invariants" to "test_snapshots/test_escrow/test_escrow_invariants.1.json".
+Writing test snapshot file for test "test_escrow::test_funds_locked_exactly_once" to "test_snapshots/test_escrow/test_funds_locked_exactly_once.1.json".
+Writing test snapshot file for test "test_escrow::test_accept_bid_state_transitions" to "test_snapshots/test_escrow/test_accept_bid_state_transitions.1.json".
+Writing test snapshot file for test "test_escrow::test_only_verified_invoice_can_be_funded" to "test_snapshots/test_escrow/test_only_verified_invoice_can_be_funded.1.json".
+Writing test snapshot file for test "test_escrow::test_only_invoice_owner_can_accept_bid" to "test_snapshots/test_escrow/test_only_invoice_owner_can_accept_bid.1.json".
+Writing test snapshot file for test "test_escrow::test_multiple_bids_only_one_accepted" to "test_snapshots/test_escrow/test_multiple_bids_only_one_accepted.1.json".
+test test_escrow::test_cannot_accept_withdrawn_bid ... ok
+test test_escrow::test_funds_locked_exactly_once ... ok
+test test_escrow::test_only_verified_invoice_can_be_funded ... ok
+test test_escrow::test_escrow_creation_validates_amount ... ok
+test test_escrow::test_escrow_invariants ... ok
+Writing test snapshot file for test "test_escrow::test_token_transfer_idempotency" to "test_snapshots/test_escrow/test_token_transfer_idempotency.1.json".
+test test_escrow::test_accept_bid_state_transitions ... ok
+test test_escrow::test_only_invoice_owner_can_accept_bid ... ok
+Writing test snapshot file for test "test_escrow::test_rejects_double_accept" to "test_snapshots/test_escrow/test_rejects_double_accept.1.json".
+test test_escrow::test_multiple_bids_only_one_accepted ... ok
+Writing test snapshot file for test "test_escrow_refund::test_refund_idempotency_and_release_blocked" to "test_snapshots/test_escrow_refund/test_refund_idempotency_and_release_blocked.1.json".
+Writing test snapshot file for test "test_escrow_refund::test_refund_authorization_current_behavior_and_security_note" to "test_snapshots/test_escrow_refund/test_refund_authorization_current_behavior_and_security_note.1.json".
+Writing test snapshot file for test "test_events::test_bid_placed_event" to "test_snapshots/test_events/test_bid_placed_event.1.json".
+Writing test snapshot file for test "test_escrow_refund::test_refund_transfers_and_updates_status" to "test_snapshots/test_escrow_refund/test_refund_transfers_and_updates_status.1.json".
+Writing test snapshot file for test "test_events::test_bid_withdrawn_event" to "test_snapshots/test_events/test_bid_withdrawn_event.1.json".
+Writing test snapshot file for test "test_events::test_bid_accepted_event" to "test_snapshots/test_events/test_bid_accepted_event.1.json".
+test test_escrow::test_token_transfer_idempotency ... ok
+test test_escrow_refund::test_refund_authorization_current_behavior_and_security_note ... ok
+test test_escrow_refund::test_refund_transfers_and_updates_status ... ok
+test test_escrow_refund::test_refund_idempotency_and_release_blocked ... ok
+Writing test snapshot file for test "test_events::test_event_data_completeness" to "test_snapshots/test_events/test_event_data_completeness.1.json".
+Writing test snapshot file for test "test_events::test_invoice_cancelled_event" to "test_snapshots/test_events/test_invoice_cancelled_event.1.json".
+Writing test snapshot file for test "test_events::test_escrow_created_event" to "test_snapshots/test_events/test_escrow_created_event.1.json".
+test test_events::test_bid_placed_event ... ok
+test test_escrow::test_rejects_double_accept ... ok
+Writing test snapshot file for test "test_events::test_invoice_uploaded_event" to "test_snapshots/test_events/test_invoice_uploaded_event.1.json".
+Writing test snapshot file for test "test_events::test_invoice_defaulted_event" to "test_snapshots/test_events/test_invoice_defaulted_event.1.json".
+test test_events::test_bid_withdrawn_event ... ok
+test test_events::test_event_data_completeness ... ok
+test test_events::test_invoice_cancelled_event ... ok
+Writing test snapshot file for test "test_fees::test_custom_platform_fee_bps" to "test_snapshots/test_fees/test_custom_platform_fee_bps.1.json".
+Writing test snapshot file for test "test_events::test_invoice_verified_event" to "test_snapshots/test_events/test_invoice_verified_event.1.json".
+test test_fees::test_custom_platform_fee_bps ... ok
+Writing test snapshot file for test "test_fees::test_default_platform_fee" to "test_snapshots/test_fees/test_default_platform_fee.1.json".
+test test_fees::test_default_platform_fee ... ok
+Writing test snapshot file for test "test_fees::test_comprehensive_fee_calculation" to "test_snapshots/test_fees/test_comprehensive_fee_calculation.1.json".
+Writing test snapshot file for test "test_fees::test_early_payment_discounts" to "test_snapshots/test_fees/test_early_payment_discounts.1.json".
+test test_events::test_invoice_uploaded_event ... ok
+Writing test snapshot file for test "test_events::test_multiple_events_in_sequence" to "test_snapshots/test_events/test_multiple_events_in_sequence.1.json".
+Writing test snapshot file for test "test_fees::test_fee_analytics" to "test_snapshots/test_fees/test_fee_analytics.1.json".
+test test_events::test_escrow_created_event ... ok
+Writing test snapshot file for test "test_fees::test_fee_parameter_validation" to "test_snapshots/test_fees/test_fee_parameter_validation.1.json".
+test test_fees::test_fee_parameter_validation ... ok
+test test_events::test_bid_accepted_event ... ok
+Writing test snapshot file for test "test_fees::test_fee_structure_updates" to "test_snapshots/test_fees/test_fee_structure_updates.1.json".
+Writing test snapshot file for test "test_fees::test_fee_system_initialization" to "test_snapshots/test_fees/test_fee_system_initialization.1.json".
+test test_fees::test_comprehensive_fee_calculation ... ok
+test test_fees::test_early_payment_discounts ... ok
+test test_fees::test_fee_system_initialization ... ok
+Writing test snapshot file for test "test_fees::test_late_payment_penalties" to "test_snapshots/test_fees/test_late_payment_penalties.1.json".
+test test_fees::test_module_loaded ... ok
+test test_fees::test_fee_structure_updates ... ok
+Writing test snapshot file for test "test_fees::test_only_admin_can_update_fee_structure" to "test_snapshots/test_fees/test_only_admin_can_update_fee_structure.1.json".
+test test_fees::test_fee_analytics ... ok
+Writing test snapshot file for test "test_fees::test_only_admin_can_update_platform_fee" to "test_snapshots/test_fees/test_only_admin_can_update_platform_fee.1.json".
+Writing test snapshot file for test "test_fees::test_platform_fee_calculation" to "test_snapshots/test_fees/test_platform_fee_calculation.1.json".
+Writing test snapshot file for test "test_fees::test_platform_fee_edge_cases" to "test_snapshots/test_fees/test_platform_fee_edge_cases.1.json".
+test test_fees::test_platform_fee_edge_cases ... ok
+Writing test snapshot file for test "test_fees::test_revenue_distribution_config" to "test_snapshots/test_fees/test_revenue_distribution_config.1.json".
+test test_fees::test_platform_fee_calculation ... ok
+test test_fees::test_only_admin_can_update_platform_fee ... ok
+test test_events::test_invoice_defaulted_event ... ok
+test test_fees::test_revenue_distribution_config ... ok
+test test_events::test_invoice_verified_event ... ok
+test test_fees::test_late_payment_penalties ... ok
+Writing test snapshot file for test "test_fees::test_revenue_distribution_execution" to "test_snapshots/test_fees/test_revenue_distribution_execution.1.json".
+Writing test snapshot file for test "test_fees::test_transaction_fee_calculation" to "test_snapshots/test_fees/test_transaction_fee_calculation.1.json".
+Writing test snapshot file for test "test_insurance::test_add_insurance_requires_investor_auth" to "test_snapshots/test_insurance/test_add_insurance_requires_investor_auth.1.json".
+test test_insurance::test_add_insurance_requires_investor_auth ... ok
+test test_fees::test_only_admin_can_update_fee_structure ... ok
+Writing test snapshot file for test "test_insurance::test_add_insurance_storage_key_not_found" to "test_snapshots/test_insurance/test_add_insurance_storage_key_not_found.1.json".
+test test_insurance::test_add_insurance_storage_key_not_found ... ok
+Writing test snapshot file for test "test_fees::test_treasury_receives_exact_amount" to "test_snapshots/test_fees/test_treasury_receives_exact_amount.1.json".
+test test_insurance::test_investment_helpers_cover_branches ... ok
+Writing test snapshot file for test "test_insurance::test_add_insurance_requires_active_investment" to "test_snapshots/test_insurance/test_add_insurance_requires_active_investment.1.json".
+Writing test snapshot file for test "test_insurance::test_duplicate_submission_rejected_and_state_unchanged" to "test_snapshots/test_insurance/test_duplicate_submission_rejected_and_state_unchanged.1.json".
+Writing test snapshot file for test "test_insurance::test_large_values_handle_saturation" to "test_snapshots/test_insurance/test_large_values_handle_saturation.1.json".
+test test_insurance::test_add_insurance_requires_active_investment ... ok
+test test_fees::test_transaction_fee_calculation ... ok
+Writing test snapshot file for test "test_fees::test_volume_tier_discounts" to "test_snapshots/test_fees/test_volume_tier_discounts.1.json".
+test test_insurance::test_duplicate_submission_rejected_and_state_unchanged ... ok
+Writing test snapshot file for test "test_insurance::test_multiple_entries_and_no_cross_investment_leakage" to "test_snapshots/test_insurance/test_multiple_entries_and_no_cross_investment_leakage.1.json".
+Writing test snapshot file for test "test_insurance::test_state_transition_before_add_rejected" to "test_snapshots/test_insurance/test_state_transition_before_add_rejected.1.json".
+test test_insurance::test_large_values_handle_saturation ... ok
+test test_fees::test_revenue_distribution_execution ... ok
+test test_insurance::test_state_transition_before_add_rejected ... ok
+Writing test snapshot file for test "test_insurance::test_premium_and_coverage_math_exact" to "test_snapshots/test_insurance/test_premium_and_coverage_math_exact.1.json".
+Writing test snapshot file for test "test_insurance::test_zero_coverage_and_invalid_inputs" to "test_snapshots/test_insurance/test_zero_coverage_and_invalid_inputs.1.json".
+Writing test snapshot file for test "test_investment_queries::test_get_investment_by_invoice_not_found" to "test_snapshots/test_investment_queries/test_get_investment_by_invoice_not_found.1.json".
+test test_insurance::test_multiple_entries_and_no_cross_investment_leakage ... ok
+test test_fees::test_volume_tier_discounts ... ok
+Writing test snapshot file for test "test_investment_queries::test_get_investments_by_investor_empty" to "test_snapshots/test_investment_queries/test_get_investments_by_investor_empty.1.json".
+test test_insurance::test_zero_coverage_and_invalid_inputs ... ok
+test test_investment_queries::test_get_investments_by_investor_empty ... ok
+test test_insurance::test_premium_and_coverage_math_exact ... ok
+test test_fees::test_treasury_receives_exact_amount ... ok
+test test_investment_queries::test_get_investment_by_invoice_not_found ... ok
+test test_events::test_multiple_events_in_sequence ... ok
+Writing test snapshot file for test "test_investment_queries::test_get_investment_by_invoice_at_most_one" to "test_snapshots/test_investment_queries/test_get_investment_by_invoice_at_most_one.1.json".
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_risk_level" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_admin_can_query_investors_by_risk_level.1.json".
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_risk_level ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_tier" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_admin_can_query_investors_by_tier.1.json".
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_tier ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_admin_can_reject_investor" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_admin_can_reject_investor.1.json".
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_admin_can_query_investor_lists" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_admin_can_query_investor_lists.1.json".
+test test_investor_kyc::test_investor_kyc::test_admin_can_reject_investor ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_admin_can_verify_investor" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_admin_can_verify_investor.1.json".
+test test_investor_kyc::test_investor_kyc::test_admin_can_verify_investor ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_bid_exceeding_investment_limit_fails.1.json".
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investor_lists ... ok
+Writing test snapshot file for test "test_investment_queries::test_get_investments_by_investor_correctness" to "test_snapshots/test_investment_queries/test_get_investments_by_investor_correctness.1.json".
+test test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails ... ok
+test test_investment_queries::test_get_investment_by_invoice_at_most_one ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_comprehensive_kyc_improves_risk_assessment" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_comprehensive_kyc_improves_risk_assessment.1.json".
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_bid_within_investment_limit_succeeds.1.json".
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_complete_investor_workflow" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_complete_investor_workflow.1.json".
+test test_investor_kyc::test_investor_kyc::test_comprehensive_kyc_improves_risk_assessment ... ok
+Writing test snapshot file for test "test_investment_queries::test_get_investor_investments_paged_status_filter" to "test_snapshots/test_investment_queries/test_get_investor_investments_paged_status_filter.1.json".
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investor_analytics_tracking" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_investor_analytics_tracking.1.json".
+test test_investor_kyc::test_investor_kyc::test_investor_analytics_tracking ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investor_kyc_duplicate_submission_fails" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_investor_kyc_duplicate_submission_fails.1.json".
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_duplicate_submission_fails ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investor_kyc_resubmission_after_rejection" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_investor_kyc_resubmission_after_rejection.1.json".
+test test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investor_kyc_submission_requires_auth" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_investor_kyc_submission_requires_auth.1.json".
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_submission_requires_auth ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investor_kyc_submission_succeeds" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_investor_kyc_submission_succeeds.1.json".
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_submission_succeeds ... ok
+test test_investor_kyc::test_investor_kyc::test_complete_investor_workflow ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_resubmission_after_rejection ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investor_verification_data_integrity" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_investor_verification_data_integrity.1.json".
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investor_verification_status_transitions" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_investor_verification_status_transitions.1.json".
+test test_investor_kyc::test_investor_kyc::test_investor_verification_data_integrity ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_investor_without_kyc_cannot_bid.1.json".
+test test_investment_queries::test_get_investments_by_investor_correctness ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_verification_status_transitions ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_limit_update_applies_to_new_bids_only.1.json".
+test test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_negative_investment_limit_verification_fails" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_negative_investment_limit_verification_fails.1.json".
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_multiple_investors_competitive_bidding.1.json".
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_multiple_investors_different_limits" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_multiple_investors_different_limits.1.json".
+test test_investor_kyc::test_investor_kyc::test_negative_investment_limit_verification_fails ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_non_admin_cannot_verify_investor" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_non_admin_cannot_verify_investor.1.json".
+test test_investor_kyc::test_investor_kyc::test_non_admin_cannot_verify_investor ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_rejected_investor_cannot_bid.1.json".
+Writing test snapshot file for test "test_investment_queries::test_get_investor_investments_paged_filter_and_pagination" to "test_snapshots/test_investment_queries/test_get_investor_investments_paged_filter_and_pagination.1.json".
+test test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_risk_level_affects_investment_limits" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_risk_level_affects_investment_limits.1.json".
+test test_investment_queries::test_get_investor_investments_paged_status_filter ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_unverified_investor_cannot_bid.1.json".
+test test_investor_kyc::test_investor_kyc::test_risk_level_affects_investment_limits ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_verify_already_verified_investor_fails" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_verify_already_verified_investor_fails.1.json".
+test test_investor_kyc::test_investor_kyc::test_multiple_investors_different_limits ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_verify_investor_with_invalid_limit_fails" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_verify_investor_with_invalid_limit_fails.1.json".
+test test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_verify_investor_without_kyc_submission_fails" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_verify_investor_without_kyc_submission_fails.1.json".
+test test_investor_kyc::test_investor_kyc::test_verify_investor_without_kyc_submission_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_verify_investor_with_invalid_limit_fails ... ok
+Writing test snapshot file for test "test_limit::test_admin_operations_require_authorization" to "test_snapshots/test_limit/test_admin_operations_require_authorization.1.json".
+test test_investor_kyc::test_investor_kyc::test_verify_already_verified_investor_fails ... ok
+test test_limit::test_admin_operations_require_authorization ... ok
+Writing test snapshot file for test "test_limit::test_bid_amount_limits" to "test_snapshots/test_limit/test_bid_amount_limits.1.json".
+Writing test snapshot file for test "test_limit::test_description_length_limits" to "test_snapshots/test_limit/test_description_length_limits.1.json".
+test test_limit::test_description_length_limits ... ok
+Writing test snapshot file for test "test_limit::test_due_date_limits" to "test_snapshots/test_limit/test_due_date_limits.1.json".
+test test_limit::test_bid_amount_limits ... ok
+test test_limit::test_due_date_limits ... ok
+test test_overflow::test_calculate_treasury_split_large_amounts ... ok
+test test_overflow::test_compare_bids_equal_profit_ordering ... ok
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_zero_amount_bid_fails_regardless_of_limit.1.json".
+Writing test snapshot file for test "test_limit::test_invoice_amount_limits" to "test_snapshots/test_limit/test_invoice_amount_limits.1.json".
+test test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding ... ok
+test test_overflow::test_compare_bids_safe_overflow ... ok
+test test_limit::test_invoice_amount_limits ... ok
+test test_overflow::test_compare_bids_underflow_safe ... ok
+Writing test snapshot file for test "test_overflow::test_fee_calculation_at_zero_bps" to "test_snapshots/test_overflow/test_fee_calculation_at_zero_bps.1.json".
+Writing test snapshot file for test "test_overflow::test_fee_calculation_at_limit" to "test_snapshots/test_overflow/test_fee_calculation_at_limit.1.json".
+Writing test snapshot file for test "test_overflow::test_fee_calculation_large_amounts_no_overflow" to "test_snapshots/test_overflow/test_fee_calculation_large_amounts_no_overflow.1.json".
+Writing test snapshot file for test "test_investment_queries::test_get_investor_investments_paged_offset" to "test_snapshots/test_investment_queries/test_get_investor_investments_paged_offset.1.json".
+Writing test snapshot file for test "test_investment_queries::test_get_investor_investments_paged_limit" to "test_snapshots/test_investment_queries/test_get_investor_investments_paged_limit.1.json".
+test test_overflow::test_fee_calculation_at_limit ... ok
+test test_overflow::test_fee_calculation_at_zero_bps ... ok
+Writing test snapshot file for test "test_overflow::test_fee_calculation_no_profit" to "test_snapshots/test_overflow/test_fee_calculation_no_profit.1.json".
+Writing test snapshot file for test "test_overflow::test_investor_investments_pagination_overflow_safe" to "test_snapshots/test_overflow/test_investor_investments_pagination_overflow_safe.1.json".
+test test_overflow::test_fee_calculation_large_amounts_no_overflow ... ok
+test test_overflow::test_profit_fee_bps_max ... ok
+test test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid ... ok
+Writing test snapshot file for test "test_overflow::test_revenue_accumulation_overflow" to "test_snapshots/test_overflow/test_revenue_accumulation_overflow.1.json".
+test test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit ... ok
+Writing test snapshot file for test "test_overflow::test_revenue_accumulation_saturates_at_max" to "test_snapshots/test_overflow/test_revenue_accumulation_saturates_at_max.1.json".
+test test_overflow::test_timestamp_bid_default_expiration_saturates ... ok
+test test_overflow::test_investor_investments_pagination_overflow_safe ... ok
+test test_overflow::test_fee_calculation_no_profit ... ok
+Writing test snapshot file for test "test_overflow::test_timestamp_pagination_overflow_safe" to "test_snapshots/test_overflow/test_timestamp_pagination_overflow_safe.1.json".
+Writing test snapshot file for test "test_overflow::test_timestamp_boundaries" to "test_snapshots/test_overflow/test_timestamp_boundaries.1.json".
+
+thread 'test_overflow::test_timestamp_invoice_grace_deadline_saturates' (260927) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/storage.rs:141:9:
+this function is not accessible outside of a contract, wrap the call with `env.as_contract()` to access it from a particular contract
+test test_overflow::test_timestamp_invoice_grace_deadline_saturates ... FAILED
+test test_overflow::test_revenue_accumulation_overflow ... ok
+
+thread 'test_overflow::test_verify_no_dust_large_amounts' (260930) panicked at src/test_overflow.rs:368:5:
+assertion failed: verify_no_dust(investor_return, platform_fee, payment)
+test test_overflow::test_verify_no_dust_large_amounts ... FAILED
+Writing test snapshot file for test "test_overflow::test_total_invoice_count_saturating" to "test_snapshots/test_overflow/test_total_invoice_count_saturating.1.json".
+Writing test snapshot file for test "test_overflow::test_volume_accumulation_overflow" to "test_snapshots/test_overflow/test_volume_accumulation_overflow.1.json".
+test test_overflow::test_volume_accumulation_overflow ... ok
+test test_overflow::test_timestamp_pagination_overflow_safe ... ok
+Writing test snapshot file for test "test_overflow::test_volume_accumulation_saturates_at_max" to "test_snapshots/test_overflow/test_volume_accumulation_saturates_at_max.1.json".
+test test_overflow::test_total_invoice_count_saturating ... ok
+Writing test snapshot file for test "test_partial_payments::tests::test_partial_payments_validation" to "test_snapshots/test_partial_payments/tests/test_partial_payments_validation.1.json".
+Writing test snapshot file for test "test_partial_payments::tests::test_settlement_validation" to "test_snapshots/test_partial_payments/tests/test_settlement_validation.1.json".
+test test_overflow::test_revenue_accumulation_saturates_at_max ... ok
+test test_partial_payments::tests::test_partial_payments_validation ... ok
+test test_partial_payments::tests::test_settlement_validation ... ok
+Writing test snapshot file for test "test_profit_fee::test_calculate_platform_fee_large_numbers" to "test_snapshots/test_profit_fee/test_calculate_platform_fee_large_numbers.1.json".
+Writing test snapshot file for test "test_profit_fee::test_calculate_platform_fee_no_profit" to "test_snapshots/test_profit_fee/test_calculate_platform_fee_no_profit.1.json".
+Writing test snapshot file for test "test_profit_fee::test_calculate_platform_fee_full_payment" to "test_snapshots/test_profit_fee/test_calculate_platform_fee_full_payment.1.json".
+test test_profit_fee::test_calculate_platform_fee_large_numbers ... ok
+test test_overflow::test_timestamp_boundaries ... ok
+test test_profit_fee::test_calculate_platform_fee_no_profit ... ok
+Writing test snapshot file for test "test_profit_fee::test_calculate_platform_fee_rounding" to "test_snapshots/test_profit_fee/test_calculate_platform_fee_rounding.1.json".
+Writing test snapshot file for test "test_profit_fee::test_calculate_platform_fee_small_fee" to "test_snapshots/test_profit_fee/test_calculate_platform_fee_small_fee.1.json".
+Writing test snapshot file for test "test_profit_fee::test_calculate_platform_fee_partial_loss" to "test_snapshots/test_profit_fee/test_calculate_platform_fee_partial_loss.1.json".
+test test_overflow::test_volume_accumulation_saturates_at_max ... ok
+test test_profit_fee::test_calculate_platform_fee_small_fee ... ok
+Writing test snapshot file for test "test_profit_fee::test_calculate_platform_fee_updated_bps" to "test_snapshots/test_profit_fee/test_calculate_platform_fee_updated_bps.1.json".
+test test_profit_fee::test_calculate_platform_fee_rounding ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_default_scenario_no_profit" to "test_snapshots/test_profit_fee_formula/test_default_scenario_no_profit.1.json".
+Writing test snapshot file for test "test_profit_fee_formula::test_exact_payment_no_profit" to "test_snapshots/test_profit_fee_formula/test_exact_payment_no_profit.1.json".
+test test_profit_fee::test_calculate_platform_fee_full_payment ... ok
+test test_profit_fee_formula::test_exact_payment_no_profit ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_extreme_large_amounts" to "test_snapshots/test_profit_fee_formula/test_extreme_large_amounts.1.json".
+test test_profit_fee_formula::test_default_scenario_no_profit ... ok
+test test_profit_fee::test_calculate_platform_fee_partial_loss ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_exact_payment_one_unit_profit" to "test_snapshots/test_profit_fee_formula/test_exact_payment_one_unit_profit.1.json".
+test test_profit_fee_formula::test_extreme_large_amounts ... ok
+test test_profit_fee_formula::test_exact_payment_one_unit_profit ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_fee_config_max_boundary" to "test_snapshots/test_profit_fee_formula/test_fee_config_max_boundary.1.json".
+Writing test snapshot file for test "test_profit_fee_formula::test_fee_config_default" to "test_snapshots/test_profit_fee_formula/test_fee_config_default.1.json".
+Writing test snapshot file for test "test_profit_fee_formula::test_fee_config_update" to "test_snapshots/test_profit_fee_formula/test_fee_config_update.1.json".
+test test_profit_fee_formula::test_fee_config_default ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_fee_config_exceeds_max" to "test_snapshots/test_profit_fee_formula/test_fee_config_exceeds_max.1.json".
+Writing test snapshot file for test "test_profit_fee_formula::test_large_amounts_no_overflow" to "test_snapshots/test_profit_fee_formula/test_large_amounts_no_overflow.1.json".
+test test_profit_fee_formula::test_fee_config_max_boundary ... ok
+test test_profit_fee_formula::test_fee_config_update ... ok
+test test_profit_fee_formula::test_large_amounts_no_overflow ... ok
+test test_profit_fee_formula::test_fee_config_exceeds_max ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_minimal_profit_scenario" to "test_snapshots/test_profit_fee_formula/test_minimal_profit_scenario.1.json".
+Writing test snapshot file for test "test_profit_fee_formula::test_overpayment_extreme_profit" to "test_snapshots/test_profit_fee_formula/test_overpayment_extreme_profit.1.json".
+test test_profit_fee_formula::test_minimal_profit_scenario ... ok
+test test_profit_fee::test_calculate_platform_fee_updated_bps ... ok
+test test_profit_fee_formula::test_overpayment_extreme_profit ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_profit_fee_basic_calculation" to "test_snapshots/test_profit_fee_formula/test_profit_fee_basic_calculation.1.json".
+Writing test snapshot file for test "test_profit_fee_formula::test_overpayment_large_profit" to "test_snapshots/test_profit_fee_formula/test_overpayment_large_profit.1.json".
+test test_profit_fee_formula::test_overpayment_large_profit ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_profit_calculation_integration_with_fee_manager" to "test_snapshots/test_profit_fee_formula/test_profit_calculation_integration_with_fee_manager.1.json".
+test test_profit_fee_formula::test_profit_fee_basic_calculation ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_profit_fee_max_rate" to "test_snapshots/test_profit_fee_formula/test_profit_fee_max_rate.1.json".
+Writing test snapshot file for test "test_profit_fee_formula::test_profit_fee_with_custom_rate" to "test_snapshots/test_profit_fee_formula/test_profit_fee_with_custom_rate.1.json".
+Writing test snapshot file for test "test test_profit_fee_formula::test_profit_calculation_integration_with_fee_manager ... test_profit_fee_formula::test_many_calculations_no_dustok"
+ to "test_snapshots/test_profit_fee_formula/test_many_calculations_no_dust.1.json".
+test test_profit_fee_formula::test_profit_fee_max_rate ... ok
+test test_profit_fee_formula::test_many_calculations_no_dust ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_profit_fee_zero_rate" to "test_snapshots/test_profit_fee_formula/test_profit_fee_zero_rate.1.json".
+test test_profit_fee_formula::test_profit_fee_with_custom_rate ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_rounding_boundary_cases" to "test_snapshots/test_profit_fee_formula/test_rounding_boundary_cases.1.json".
+Writing test snapshot file for test "test_profit_fee_formula::test_realistic_invoice_scenario" to "test_snapshots/test_profit_fee_formula/test_realistic_invoice_scenario.1.json".
+test test_profit_fee_formula::test_realistic_invoice_scenario ... ok
+test test_profit_fee_formula::test_profit_fee_zero_rate ... ok
+test test_profit_fee_formula::test_treasury_split_full_share ... ok
+test test_profit_fee_formula::test_treasury_split_over_100_percent ... ok
+test test_profit_fee_formula::test_treasury_split_unequal ... ok
+test test_profit_fee_formula::test_treasury_split_with_rounding ... ok
+test test_profit_fee_formula::test_treasury_split_zero_fee ... ok
+test test_profit_fee_formula::test_treasury_split_zero_share ... ok
+test test_profit_fee_formula::test_treasury_split_equal ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_underpayment_partial_loss" to "test_snapshots/test_profit_fee_formula/test_underpayment_partial_loss.1.json".
+test test_profit_fee_formula::test_rounding_boundary_cases ... ok
+test test_profit_fee_formula::test_underpayment_partial_loss ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_underpayment_zero_payment" to "test_snapshots/test_profit_fee_formula/test_underpayment_zero_payment.1.json".
+Writing test snapshot file for test "test_profit_fee_formula::test_underpayment_severe_loss" to "test_snapshots/test_profit_fee_formula/test_underpayment_severe_loss.1.json".
+Writing test snapshot file for test "test_profit_fee_formula::test_rounding_small_profit_various_fees" to "test_snapshots/test_profit_fee_formula/test_rounding_small_profit_various_fees.1.json".
+test test_profit_fee_formula::test_underpayment_zero_payment ... ok
+test test_profit_fee_formula::test_validate_inputs_negative_investment ... ok
+test test_profit_fee_formula::test_validate_inputs_negative_payment ... ok
+test test_profit_fee_formula::test_validate_inputs_valid ... ok
+test test_profit_fee_formula::test_underpayment_severe_loss ... ok
+Writing test snapshot file for test "test_profit_fee_formula::test_zero_investment_all_profit" to "test_snapshots/test_profit_fee_formula/test_zero_investment_all_profit.1.json".
+test test_profit_fee_formula::test_zero_investment_all_profit ... ok
+test test_profit_fee_formula::test_rounding_small_profit_various_fees ... ok
+Writing test snapshot file for test "test_reentrancy::test_guard_allows_entry_when_lock_is_explicitly_false" to "test_snapshots/test_reentrancy/test_guard_allows_entry_when_lock_is_explicitly_false.1.json".
+test test_reentrancy::test_guard_allows_entry_when_lock_is_explicitly_false ... ok
+Writing test snapshot file for test "test_queries::test_query_audit_logs_filters_and_limit" to "test_snapshots/test_queries/test_query_audit_logs_filters_and_limit.1.json".
+Writing test snapshot file for test "test_queries::test_get_business_invoices_paged_empty_and_pagination" to "test_snapshots/test_queries/test_get_business_invoices_paged_empty_and_pagination.1.json".
+Writing test snapshot file for test "test_profit_fee_formula::test_no_dust_comprehensive" to "test_snapshots/test_profit_fee_formula/test_no_dust_comprehensive.1.json".
+Writing test snapshot file for test "test_reentrancy::test_guard_blocks_when_lock_is_set" to "test_snapshots/test_reentrancy/test_guard_blocks_when_lock_is_set.1.json".
+Writing test snapshot file for test "test_queries::test_get_available_invoices_paged_filters_and_bounds" to "test_snapshots/test_queries/test_get_available_invoices_paged_filters_and_bounds.1.json".
+test test_profit_fee_formula::test_no_dust_comprehensive ... ok
+Writing test snapshot file for test "test_reentrancy::test_guard_error_variant_is_operation_not_allowed" to "test_snapshots/test_reentrancy/test_guard_error_variant_is_operation_not_allowed.1.json".
+test test_reentrancy::test_guard_error_variant_is_operation_not_allowed ... ok
+Writing test snapshot file for test "test_reentrancy::test_guard_releases_lock_after_failure" to "test_snapshots/test_reentrancy/test_guard_releases_lock_after_failure.1.json".
+test test_investment_queries::test_get_investor_investments_paged_limit ... ok
+test test_queries::test_query_audit_logs_filters_and_limit ... ok
+Writing test snapshot file for test "test_reentrancy::test_guard_releases_lock_when_closure_returns_err" to "test_snapshots/test_reentrancy/test_guard_releases_lock_when_closure_returns_err.1.json".
+test test_reentrancy::test_guard_releases_lock_when_closure_returns_err ... ok
+test test_reentrancy::test_guard_blocks_when_lock_is_set ... ok
+Writing test snapshot file for test "test_reentrancy::test_guard_returns_closure_value" to "test_snapshots/test_reentrancy/test_guard_returns_closure_value.1.json".
+test test_reentrancy::test_guard_returns_closure_value ... ok
+Writing test snapshot file for test "test_reentrancy::test_initial_lock_state_is_absent" to "test_snapshots/test_reentrancy/test_initial_lock_state_is_absent.1.json".
+Writing test snapshot file for test "test_reentrancy::test_multiple_lock_release_cycles" to "test_snapshots/test_reentrancy/test_multiple_lock_release_cycles.1.json".
+test test_reentrancy::test_initial_lock_state_is_absent ... ok
+test test_reentrancy::test_multiple_lock_release_cycles ... ok
+test test_queries::test_get_business_invoices_paged_empty_and_pagination ... ok
+Writing test snapshot file for test "test_reentrancy::test_guard_releases_lock_after_success" to "test_snapshots/test_reentrancy/test_guard_releases_lock_after_success.1.json".
+Writing test snapshot file for test "test_refund::test_business_can_trigger_refund" to "test_snapshots/test_refund/test_business_can_trigger_refund.1.json".
+test test_reentrancy::test_guard_releases_lock_after_failure ... ok
+test test_investment_queries::test_get_investor_investments_paged_filter_and_pagination ... ok
+Writing test snapshot file for test "test_refund::test_admin_can_trigger_refund" to "test_snapshots/test_refund/test_admin_can_trigger_refund.1.json".
+Writing test snapshot file for test "test_refund::test_cannot_refund_unfunded_invoice" to "test_snapshots/test_refund/test_cannot_refund_unfunded_invoice.1.json".
+test test_queries::test_get_available_invoices_paged_filters_and_bounds ... ok
+Writing test snapshot file for test "test_reentrancy::test_sequential_protected_calls_succeed" to "test_snapshots/test_reentrancy/test_sequential_protected_calls_succeed.1.json".
+test test_investment_queries::test_get_investor_investments_paged_offset ... ok
+Writing test snapshot file for test "test_refund::test_cannot_refund_twice" to "test_snapshots/test_refund/test_cannot_refund_twice.1.json".
+Writing test snapshot file for test "test_revenue_split::test_50_50_split" to "test_snapshots/test_revenue_split/test_50_50_split.1.json".
+test test_reentrancy::test_guard_releases_lock_after_success ... ok
+Writing test snapshot file for test "test_revenue_split::test_60_20_20_split" to "test_snapshots/test_revenue_split/test_60_20_20_split.1.json".
+test test_revenue_split::test_50_50_split ... ok
+Writing test snapshot file for test "test_revenue_split::test_get_revenue_split_config" to "test_snapshots/test_revenue_split/test_get_revenue_split_config.1.json".
+Writing test snapshot file for test "test_refund::test_unauthorized_caller_cannot_trigger_refund" to "test_snapshots/test_refund/test_unauthorized_caller_cannot_trigger_refund.1.json".
+test test_revenue_split::test_get_revenue_split_config ... ok
+Writing test snapshot file for test "test_revenue_split::test_only_admin_can_update_config" to "test_snapshots/test_revenue_split/test_only_admin_can_update_config.1.json".
+test test_revenue_split::test_60_20_20_split ... ok
+test test_revenue_split::test_only_admin_can_update_config ... ok
+test test_refund::test_cannot_refund_unfunded_invoice ... ok
+
+thread 'test_storage::test_bid_storage' (261002) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+test test_storage::test_bid_storage ... FAILED
+
+thread 'test_storage::test_config_storage' (261004) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+test test_storage::test_config_storage ... FAILED
+
+thread 'test_storage::test_deterministic_behavior' (261005) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+test test_storage::test_deterministic_behavior ... FAILED
+
+thread 'test_storage::test_index_consistency' (261006) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+test test_storage::test_index_consistency ... FAILED
+
+thread 'test_storage::test_indexes' (261007) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+test test_storage::test_indexes ... FAILED
+
+thread 'test_storage::test_investment_storage' (261008) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+test test_storage::test_investment_storage ... FAILED
+
+thread 'test_storage::test_invoice_storage' (261009) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+test test_storage::test_invoice_storage ... FAILED
+
+thread 'test_storage::test_concurrent_index_updates' (261003) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+thread 'test_storage::test_storage_edge_cases' (261010) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+test test_storage::test_concurrent_index_updates ... FAILED
+test test_storage::test_storage_edge_cases ... FAILED
+
+thread 'test_storage::test_storage_isolation' (261011) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+test test_storage::test_storage_isolation ... FAILED
+
+thread 'test_storage::test_storage_key_collision_detection' (261012) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+thread 'test_storage::test_storage_keys' (261013) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+test test_storage::test_storage_key_collision_detection ... FAILED
+test test_storage::test_storage_keys ... FAILED
+Writing test snapshot file for test "test_revenue_split::test_rounding" to 
+thread 'test_storage::test_type_serialization_integrity' (261014) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+"test_snapshots/test_revenue_split/test_rounding.1.json".
+test test_storage::test_type_serialization_integrity ... FAILED
+test test_refund::test_business_can_trigger_refund ... ok
+test test_revenue_split::test_rounding ... ok
+test test_refund::test_admin_can_trigger_refund ... ok
+test test_refund::test_cannot_refund_twice ... ok
+test test_reentrancy::test_sequential_protected_calls_succeed ... ok
+test test_refund::test_unauthorized_caller_cannot_trigger_refund ... ok
+
+failures:
+
+failures:
+    test::test_invoice_categories::test_invoice_category_and_tags
+    test::test_partial_payments_trigger_settlement
+    test_default::test_cannot_default_already_defaulted_invoice
+    test_default::test_cannot_default_paid_invoice
+    test_default::test_custom_grace_period
+    test_default::test_default_after_grace_period
+    test_default::test_default_exactly_at_grace_deadline
+    test_default::test_default_investment_status_update
+    test_default::test_default_status_transition
+    test_default::test_default_uses_default_grace_period_when_none_provided
+    test_default::test_multiple_invoices_default_handling
+    test_default::test_no_default_before_grace_period
+    test_default::test_zero_grace_period_defaults_immediately_after_due_date
+    test_errors::test_error_message_consistency
+    test_errors::test_invoice_already_defaulted_error
+    test_errors::test_invoice_already_funded_error
+    test_errors::test_invoice_due_date_invalid_error
+    test_errors::test_no_panics_on_error_conditions
+    test_errors::test_operation_not_allowed_before_grace_period
+    test_errors::test_unauthorized_error
+    test_overflow::test_timestamp_invoice_grace_deadline_saturates
+    test_overflow::test_verify_no_dust_large_amounts
+    test_storage::test_bid_storage
+    test_storage::test_concurrent_index_updates
+    test_storage::test_config_storage
+    test_storage::test_deterministic_behavior
+    test_storage::test_index_consistency
+    test_storage::test_indexes
+    test_storage::test_investment_storage
+    test_storage::test_invoice_storage
+    test_storage::test_storage_edge_cases
+    test_storage::test_storage_isolation
+    test_storage::test_storage_key_collision_detection
+    test_storage::test_storage_keys
+    test_storage::test_type_serialization_integrity
+
+test result: FAILED. 487 passed; 35 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.00s
+
+error: test failed, to rerun pass `--lib`
