@@ -942,9 +942,12 @@ impl QuickLendXContract {
         do_process_partial_payment(&env, &invoice_id, payment_amount, transaction_id)
     }
 
-    /// Handle invoice default (admin or automated process)
+    /// Handle invoice default (admin only)
     /// This is the internal handler - use mark_invoice_defaulted for public API
     pub fn handle_default(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
         // Get the investment to track investor analytics
         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
@@ -960,8 +963,9 @@ impl QuickLendXContract {
         result
     }
 
-    /// Mark an invoice as defaulted (admin or automated process)
-    /// Checks due date + grace period before marking as defaulted
+    /// Mark an invoice as defaulted (admin only)
+    /// Checks due date + grace period before marking as defaulted.
+    /// Requires admin authorization to prevent unauthorized default marking.
     ///
     /// # Arguments
     /// * `invoice_id` - The invoice ID to mark as defaulted
@@ -970,11 +974,21 @@ impl QuickLendXContract {
     /// # Returns
     /// * `Ok(())` if the invoice was successfully marked as defaulted
     /// * `Err(QuickLendXError)` if the operation fails
+    ///
+    /// # Errors
+    /// * `NotAdmin` - No admin configured or caller is not admin
+    /// * `InvoiceNotFound` - Invoice does not exist
+    /// * `InvoiceAlreadyDefaulted` - Invoice is already defaulted
+    /// * `InvoiceNotAvailableForFunding` - Invoice is not in Funded status
+    /// * `OperationNotAllowed` - Grace period has not expired yet
     pub fn mark_invoice_defaulted(
         env: Env,
         invoice_id: BytesN<32>,
         grace_period: Option<u64>,
     ) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
         // Get the investment to track investor analytics
         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
