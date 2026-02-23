@@ -211,3 +211,145 @@ fn test_refund_authorization_current_behavior_and_security_note() {
     // Security note: Consider adding `admin.require_auth()` or `invoice.business.require_auth()`
     // to `refund_escrow_funds` to limit who can initiate refunds.
 }
+
+#[test]
+fn test_refund_fails_when_caller_is_neither_admin_nor_business() {
+    let (env, client, _, contract_id) = setup_env();
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let stranger = Address::generate(&env);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    // Create funded invoice
+    let amount = 1_000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Stranger Auth Check"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
+    client.verify_investor(&investor, &10_000i128);
+    let token_client = token::Client::new(&env, &currency);
+    token_client.approve(
+        &investor,
+        &contract_id,
+        &10_000i128,
+        &(env.ledger().sequence() + 10_000),
+    );
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Call refund using stranger address
+    let result = client.try_refund_escrow_funds(&invoice_id, &stranger);
+    assert!(
+        result.is_err(),
+        "Refund must fail if caller is neither business nor admin"
+    );
+}
+
+#[test]
+fn test_refund_fails_if_invoice_status_not_funded() {
+    let (env, client, admin, contract_id) = setup_env();
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 1_000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Setup verifiable invoice but omit bid acceptance
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Unfunded Status Check"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+
+    let result = client.try_refund_escrow_funds(&invoice_id, &admin);
+    assert!(
+        result.is_err(),
+        "Refund must fail if invoice is not in Funded status (no escrow locked)"
+    );
+}
+
+#[test]
+fn test_refund_events_emitted_correctly() {
+    use soroban_sdk::{testutils::Events, Symbol, TryFromVal, TryIntoVal};
+
+    let (env, client, _, contract_id) = setup_env();
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+
+    let amount = 1_000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Event Emitting Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
+    client.verify_investor(&investor, &10_000i128);
+    token_client.approve(
+        &investor,
+        &contract_id,
+        &10_000i128,
+        &(env.ledger().sequence() + 10_000),
+    );
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let escrow_details = client.get_escrow_details(&invoice_id);
+
+    // Refund escrow
+    client.refund_escrow_funds(&invoice_id, &business);
+
+    // Search events for the escrow refund
+    let events = env.events().all();
+    let mut found_refund_event = false;
+
+    for (contract, topics, data) in events.iter() {
+        if let Some(topic0_val) = topics.get(0) {
+            if let Ok(topic_sym) = Symbol::try_from_val(&env, &topic0_val) {
+                if topic_sym == Symbol::new(&env, "esc_ref") {
+                    found_refund_event = true;
+                    // topics signature should be: ["esc_ref"]
+                    assert_eq!(topics.len(), 1, "Topic signature size must be 1");
+
+                    let data_tuple: (
+                        soroban_sdk::BytesN<32>,
+                        soroban_sdk::BytesN<32>,
+                        Address,
+                        i128,
+                    ) = data.try_into_val(&env).unwrap();
+                    let event_amount = data_tuple.3;
+                    assert_eq!(
+                        event_amount, escrow_details.amount,
+                        "Event data amount must match escrow amount"
+                    );
+                    break;
+                }
+            }
+        }
+    }
+
+    assert!(found_refund_event, "escrow_refunded event must be emitted");
+}
