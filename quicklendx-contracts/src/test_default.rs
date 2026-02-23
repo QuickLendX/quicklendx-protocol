@@ -12,7 +12,7 @@ use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, BytesN, Env, String, Vec,
+    token, Address, BytesN, Env, String, Vec,
 };
 
 // Helper: Setup contract with admin
@@ -63,7 +63,22 @@ fn create_and_fund_invoice(
     amount: i128,
     due_date: u64,
 ) -> BytesN<32> {
-    let currency = Address::generate(env);
+    // Register a test token and seed balances/allowances so token calls succeed
+    let token_admin = Address::generate(env);
+    let currency = env.register_stellar_asset_contract(token_admin);
+    let token_client = token::Client::new(env, &currency);
+    let sac_client = token::StellarAssetClient::new(env, &currency);
+
+    // Seed both business and investor with sufficient balance
+    let initial_balance = amount.saturating_mul(10);
+    sac_client.mint(business, &initial_balance);
+    sac_client.mint(investor, &initial_balance);
+
+    // Approve the contract to transfer funds on behalf of business/investor
+    let expiration = env.ledger().sequence() + 1_000;
+    token_client.approve(business, &client.address, &initial_balance, &expiration);
+    token_client.approve(investor, &client.address, &initial_balance, &expiration);
+
     let invoice_id = client.store_invoice(
         business,
         &amount,
@@ -487,4 +502,22 @@ fn test_cannot_default_paid_invoice() {
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
     assert_eq!(contract_err, QuickLendXError::InvoiceNotAvailableForFunding);
+}
+
+// Debug helper - do not commit to main branch long-term
+#[test]
+fn debug_index_after_funding() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    // Emit the number of funded invoices for debugging
+    let funded = client.get_invoices_by_status(&InvoiceStatus::Funded);
+    env.events().publish((symbol_short!("dbg_fnd"),), (funded.len(),));
 }

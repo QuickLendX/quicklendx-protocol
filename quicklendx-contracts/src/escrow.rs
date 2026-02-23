@@ -82,6 +82,7 @@ pub fn accept_bid_and_fund(
 
     // Update Invoice
     // mark_as_funded updates status, funded_amount, investor, and logs audit
+    let previous_status = invoice.status.clone();
     invoice.mark_as_funded(
         env,
         bid.investor.clone(),
@@ -89,6 +90,10 @@ pub fn accept_bid_and_fund(
         env.ledger().timestamp(),
     );
     InvoiceStorage::update_invoice(env, &invoice);
+
+    // Update status indexes: remove from previous status and add to Funded
+    InvoiceStorage::remove_from_status_invoices(env, &previous_status, invoice_id);
+    InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
 
     // Create Investment
     let investment_id = InvestmentStorage::generate_unique_investment_id(env);
