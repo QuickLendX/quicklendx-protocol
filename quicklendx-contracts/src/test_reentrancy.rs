@@ -389,6 +389,228 @@ fn test_guard_releases_lock_when_closure_returns_err() {
     });
 }
 
+// ============================================================================
+// Unit Tests for with_payment_guard
+// ============================================================================
+
+/// Test 5: with_payment_guard returns Ok on success
+///
+/// Directly invokes with_payment_guard with a closure that succeeds.
+#[test]
+fn test_guard_unit_success() {
+    let ctx = setup_context();
+
+    let result: Result<i32, _> = ctx.env.as_contract(&ctx.contract_id, || {
+        crate::reentrancy::with_payment_guard(&ctx.env, || Ok(42))
+    });
+
+    assert_eq!(result.unwrap(), 42);
+
+    // Lock must be cleared
+    let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
+        let key = symbol_short!("pay_lock");
+        ctx.env.storage().instance().get(&key).unwrap_or(false)
+    });
+    assert!(!lock_value, "Lock should be false after successful guard");
+}
+
+/// Test 6: with_payment_guard clears lock after inner error
+///
+/// Verifies the guard releases the lock even when the closure returns Err.
+#[test]
+fn test_guard_unit_failure_clears_lock() {
+    let ctx = setup_context();
+
+    let result: Result<(), _> = ctx.env.as_contract(&ctx.contract_id, || {
+        crate::reentrancy::with_payment_guard(&ctx.env, || {
+            Err(crate::errors::QuickLendXError::InvalidStatus)
+        })
+    });
+
+    assert!(result.is_err());
+
+    // Lock must be cleared despite error
+    let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
+        let key = symbol_short!("pay_lock");
+        ctx.env.storage().instance().get(&key).unwrap_or(false)
+    });
+    assert!(
+        !lock_value,
+        "Lock should be false after guard failure"
+    );
+}
+
+/// Test 7: with_payment_guard blocks reentrant calls
+///
+/// Manually sets lock then calls guard — should return OperationNotAllowed.
+#[test]
+fn test_guard_unit_reentrant_blocked() {
+    let ctx = setup_context();
+
+    let result: Result<(), _> = ctx.env.as_contract(&ctx.contract_id, || {
+        // Set lock manually
+        let key = symbol_short!("pay_lock");
+        ctx.env.storage().instance().set(&key, &true);
+
+        crate::reentrancy::with_payment_guard(&ctx.env, || Ok(()))
+    });
+
+    assert!(result.is_err(), "Should return OperationNotAllowed");
+
+    // Clean up
+    ctx.env.as_contract(&ctx.contract_id, || {
+        let key = symbol_short!("pay_lock");
+        ctx.env.storage().instance().set(&key, &false);
+    });
+}
+
+/// Test 8: Lock defaults to false on fresh contract
+///
+/// Verifies pay_lock is not set on a fresh contract (defaults to false).
+#[test]
+fn test_lock_not_set_on_fresh_contract() {
+    let ctx = setup_context();
+
+    let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
+        let key = symbol_short!("pay_lock");
+        ctx.env.storage().instance().get(&key).unwrap_or(false)
+    });
+
+    assert!(!lock_value, "pay_lock should default to false");
+}
+
+// ============================================================================
+// Guard Blocking on All Guarded Endpoints
+// ============================================================================
+
+/// Test 9: accept_bid_and_fund blocked by pre-set lock
+#[test]
+fn test_accept_bid_and_fund_guard_blocks() {
+    let ctx = setup_context();
+
+    let business = Address::generate(&ctx.env);
+    let investor = Address::generate(&ctx.env);
+
+    setup_business(&ctx, &business);
+    setup_investor(&ctx, &investor, 50_000);
+
+    let (invoice_id, bid_id) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
+
+    // Set lock before calling
+    ctx.env.as_contract(&ctx.contract_id, || {
+        let key = symbol_short!("pay_lock");
+        ctx.env.storage().instance().set(&key, &true);
+    });
+
+    let result = ctx.client.try_accept_bid_and_fund(&invoice_id, &bid_id);
+    assert!(result.is_err(), "accept_bid_and_fund should fail when lock is set");
+
+    // Clean up
+    ctx.env.as_contract(&ctx.contract_id, || {
+        let key = symbol_short!("pay_lock");
+        ctx.env.storage().instance().set(&key, &false);
+    });
+}
+
+/// Test 10: release_escrow_funds blocked by pre-set lock
+#[test]
+fn test_release_escrow_guard_blocks() {
+    let ctx = setup_context();
+
+    let business = Address::generate(&ctx.env);
+    let investor = Address::generate(&ctx.env);
+
+    setup_business(&ctx, &business);
+    setup_investor(&ctx, &investor, 50_000);
+
+    let (invoice_id, bid_id) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
+
+    // Accept bid to create escrow
+    let result = ctx.client.try_accept_bid(&invoice_id, &bid_id);
+    assert!(result.is_ok(), "accept_bid should succeed first");
+
+    // Set lock before calling release
+    ctx.env.as_contract(&ctx.contract_id, || {
+        let key = symbol_short!("pay_lock");
+        ctx.env.storage().instance().set(&key, &true);
+    });
+
+    let result = ctx.client.try_release_escrow_funds(&invoice_id);
+    assert!(result.is_err(), "release_escrow_funds should fail when lock is set");
+
+    // Clean up
+    ctx.env.as_contract(&ctx.contract_id, || {
+        let key = symbol_short!("pay_lock");
+        ctx.env.storage().instance().set(&key, &false);
+    });
+}
+
+/// Test 11: refund_escrow_funds blocked by pre-set lock
+#[test]
+fn test_refund_escrow_guard_blocks() {
+    let ctx = setup_context();
+
+    let business = Address::generate(&ctx.env);
+    let investor = Address::generate(&ctx.env);
+
+    setup_business(&ctx, &business);
+    setup_investor(&ctx, &investor, 50_000);
+
+    let (invoice_id, bid_id) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
+
+    // Accept bid to create escrow
+    let result = ctx.client.try_accept_bid(&invoice_id, &bid_id);
+    assert!(result.is_ok(), "accept_bid should succeed first");
+
+    // Set lock before calling refund
+    ctx.env.as_contract(&ctx.contract_id, || {
+        let key = symbol_short!("pay_lock");
+        ctx.env.storage().instance().set(&key, &true);
+    });
+
+    let result = ctx.client.try_refund_escrow_funds(&invoice_id, &ctx.admin);
+    assert!(result.is_err(), "refund_escrow_funds should fail when lock is set");
+
+    // Clean up
+    ctx.env.as_contract(&ctx.contract_id, || {
+        let key = symbol_short!("pay_lock");
+        ctx.env.storage().instance().set(&key, &false);
+    });
+}
+
+/// Test 12: Mixed sequential calls to different guarded endpoints
+///
+/// Verifies that calling different guarded functions sequentially works
+/// because the lock is released between each call.
+#[test]
+fn test_mixed_sequential_endpoints() {
+    let ctx = setup_context();
+
+    let business = Address::generate(&ctx.env);
+    let investor = Address::generate(&ctx.env);
+
+    setup_business(&ctx, &business);
+    setup_investor(&ctx, &investor, 100_000);
+
+    // Create two invoices with bids
+    let (invoice_1, bid_1) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
+    let (invoice_2, bid_2) = create_invoice_with_bid(&ctx, &business, &investor, 2_000);
+
+    // First: accept_bid (guarded)
+    let r1 = ctx.client.try_accept_bid(&invoice_1, &bid_1);
+    assert!(r1.is_ok(), "First accept_bid should succeed");
+
+    // Second: accept_bid_and_fund (different guarded endpoint)
+    let r2 = ctx.client.try_accept_bid_and_fund(&invoice_2, &bid_2);
+    assert!(r2.is_ok(), "accept_bid_and_fund should succeed after accept_bid");
+
+    // Lock should be clear after both
+    let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
+        let key = symbol_short!("pay_lock");
+        ctx.env.storage().instance().get(&key).unwrap_or(false)
+    });
+    assert!(!lock_value, "Lock should be released after mixed sequential calls");
+}
 /// Test 9: Multiple lock/release cycles complete without deadlock.
 ///
 /// Calls `with_payment_guard` five times in sequence — each must find
