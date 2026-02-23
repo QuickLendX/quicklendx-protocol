@@ -351,6 +351,35 @@
       ]
     ],
     [],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "function_name": "process_partial_payment",
+              "args": [
+                {
+                  "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 600
+                  }
+                },
+                {
+                  "string": "tx-2"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [],
     []
   ],
   "ledger": {
@@ -422,6 +451,339 @@
             "ext": "v0"
           },
           6311999
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "Payment"
+                },
+                {
+                  "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                {
+                  "u32": 0
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "Payment"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "u32": 0
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "amount"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 400
+                        }
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "nonce"
+                      },
+                      "val": {
+                        "string": "tx-1"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "payer"
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "timestamp"
+                      },
+                      "val": {
+                        "u64": 0
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "Payment"
+                },
+                {
+                  "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                {
+                  "u32": 1
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "Payment"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "u32": 1
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "amount"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 600
+                        }
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "nonce"
+                      },
+                      "val": {
+                        "string": "tx-2"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "payer"
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "timestamp"
+                      },
+                      "val": {
+                        "u64": 0
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "PaymentCount"
+                },
+                {
+                  "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "PaymentCount"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 2
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "PaymentNonce"
+                },
+                {
+                  "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "string": "tx-1"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "PaymentNonce"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                    },
+                    {
+                      "string": "tx-1"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "bool": true
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "PaymentNonce"
+                },
+                {
+                  "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "string": "tx-2"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "PaymentNonce"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                    },
+                    {
+                      "string": "tx-2"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "bool": true
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
         ]
       ],
       [
@@ -702,6 +1064,37 @@
                                         }
                                       }
                                     ]
+                                  },
+                                  {
+                                    "map": [
+                                      {
+                                        "key": {
+                                          "symbol": "amount"
+                                        },
+                                        "val": {
+                                          "i128": {
+                                            "hi": 0,
+                                            "lo": 600
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "key": {
+                                          "symbol": "timestamp"
+                                        },
+                                        "val": {
+                                          "u64": 0
+                                        }
+                                      },
+                                      {
+                                        "key": {
+                                          "symbol": "transaction_id"
+                                        },
+                                        "val": {
+                                          "string": "tx-2"
+                                        }
+                                      }
+                                    ]
                                   }
                                 ]
                               }
@@ -718,7 +1111,9 @@
                               "key": {
                                 "symbol": "settled_at"
                               },
-                              "val": "void"
+                              "val": {
+                                "u64": 0
+                              }
                             },
                             {
                               "key": {
@@ -727,7 +1122,7 @@
                               "val": {
                                 "vec": [
                                   {
-                                    "symbol": "Funded"
+                                    "symbol": "Paid"
                                   }
                                 ]
                               }
@@ -747,7 +1142,7 @@
                               "val": {
                                 "i128": {
                                   "hi": 0,
-                                  "lo": 400
+                                  "lo": 1000
                                 }
                               }
                             },
@@ -764,7 +1159,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
+                          "bytes": "1a4e000000000000000000000000000000014f4f4f4f4f4f4f4f4f4f4f4f4f4f"
                         },
                         "val": {
                           "map": [
@@ -800,7 +1195,7 @@
                                 "symbol": "investment_id"
                               },
                               "val": {
-                                "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
+                                "bytes": "1a4e000000000000000000000000000000014f4f4f4f4f4f4f4f4f4f4f4f4f4f"
                               }
                             },
                             {
@@ -826,7 +1221,7 @@
                               "val": {
                                 "vec": [
                                   {
-                                    "symbol": "Active"
+                                    "symbol": "Completed"
                                   }
                                 ]
                               }
@@ -836,7 +1231,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                          "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                         },
                         "val": {
                           "map": [
@@ -872,7 +1267,7 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
-                                "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                                "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                               }
                             },
                             {
@@ -913,101 +1308,6 @@
                                 "vec": [
                                   {
                                     "symbol": "InvoiceCreated"
-                                  }
-                                ]
-                              }
-                            },
-                            {
-                              "key": {
-                                "symbol": "timestamp"
-                              },
-                              "val": {
-                                "u64": 0
-                              }
-                            },
-                            {
-                              "key": {
-                                "symbol": "transaction_hash"
-                              },
-                              "val": "void"
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "key": {
-                          "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
-                        },
-                        "val": {
-                          "map": [
-                            {
-                              "key": {
-                                "symbol": "actor"
-                              },
-                              "val": {
-                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                              }
-                            },
-                            {
-                              "key": {
-                                "symbol": "additional_data"
-                              },
-                              "val": "void"
-                            },
-                            {
-                              "key": {
-                                "symbol": "amount"
-                              },
-                              "val": "void"
-                            },
-                            {
-                              "key": {
-                                "symbol": "audit_id"
-                              },
-                              "val": {
-                                "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
-                              }
-                            },
-                            {
-                              "key": {
-                                "symbol": "block_height"
-                              },
-                              "val": {
-                                "u32": 0
-                              }
-                            },
-                            {
-                              "key": {
-                                "symbol": "invoice_id"
-                              },
-                              "val": {
-                                "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                              }
-                            },
-                            {
-                              "key": {
-                                "symbol": "new_value"
-                              },
-                              "val": {
-                                "string": "Status updated"
-                              }
-                            },
-                            {
-                              "key": {
-                                "symbol": "old_value"
-                              },
-                              "val": {
-                                "string": "Status changed"
-                              }
-                            },
-                            {
-                              "key": {
-                                "symbol": "operation"
-                              },
-                              "val": {
-                                "vec": [
-                                  {
-                                    "symbol": "InvoiceStatusChanged"
                                   }
                                 ]
                               }
@@ -1084,6 +1384,101 @@
                                 "symbol": "new_value"
                               },
                               "val": {
+                                "string": "Status updated"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "old_value"
+                              },
+                              "val": {
+                                "string": "Status changed"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "operation"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "InvoiceStatusChanged"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "timestamp"
+                              },
+                              "val": {
+                                "u64": 0
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "transaction_hash"
+                              },
+                              "val": "void"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "actor"
+                              },
+                              "val": {
+                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "additional_data"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "amount"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "audit_id"
+                              },
+                              "val": {
+                                "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "block_height"
+                              },
+                              "val": {
+                                "u32": 0
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "invoice_id"
+                              },
+                              "val": {
+                                "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "new_value"
+                              },
+                              "val": {
                                 "string": "Invoice verified"
                               }
                             },
@@ -1124,7 +1519,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
+                          "bytes": "ad1f000000000000000000000000000000000000000423232323232323232323"
                         },
                         "val": {
                           "map": [
@@ -1158,7 +1553,7 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
-                                "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
+                                "bytes": "ad1f000000000000000000000000000000000000000423232323232323232323"
                               }
                             },
                             {
@@ -1222,7 +1617,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "ad1f000000000000000000000000000000000000000423232323232323232323"
+                          "bytes": "ad1f000000000000000000000000000000000000000524242424242424242424"
                         },
                         "val": {
                           "map": [
@@ -1251,7 +1646,7 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
-                                "bytes": "ad1f000000000000000000000000000000000000000423232323232323232323"
+                                "bytes": "ad1f000000000000000000000000000000000000000524242424242424242424"
                               }
                             },
                             {
@@ -1317,7 +1712,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "ad1f000000000000000000000000000000000000000524242424242424242424"
+                          "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
                         },
                         "val": {
                           "map": [
@@ -1351,7 +1746,7 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
-                                "bytes": "ad1f000000000000000000000000000000000000000524242424242424242424"
+                                "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
                               }
                             },
                             {
@@ -1415,7 +1810,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
+                          "bytes": "ad1f000000000000000000000000000000000000000726262626262626262626"
                         },
                         "val": {
                           "map": [
@@ -1449,7 +1844,7 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
-                                "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
+                                "bytes": "ad1f000000000000000000000000000000000000000726262626262626262626"
                               }
                             },
                             {
@@ -1513,7 +1908,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "ad1f000000000000000000000000000000000000000726262626262626262626"
+                          "bytes": "ad1f000000000000000000000000000000000000000827272727272727272727"
                         },
                         "val": {
                           "map": [
@@ -1547,7 +1942,7 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
-                                "bytes": "ad1f000000000000000000000000000000000000000726262626262626262626"
+                                "bytes": "ad1f000000000000000000000000000000000000000827272727272727272727"
                               }
                             },
                             {
@@ -1611,7 +2006,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "ad1f000000000000000000000000000000000000000827272727272727272727"
+                          "bytes": "ad1f000000000000000000000000000000000000000928282828282828282828"
                         },
                         "val": {
                           "map": [
@@ -1628,7 +2023,7 @@
                                 "symbol": "additional_data"
                               },
                               "val": {
-                                "string": "partial"
+                                "string": "recorded"
                               }
                             },
                             {
@@ -1647,7 +2042,7 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
-                                "bytes": "ad1f000000000000000000000000000000000000000827272727272727272727"
+                                "bytes": "ad1f000000000000000000000000000000000000000928282828282828282828"
                               }
                             },
                             {
@@ -1688,6 +2083,299 @@
                                 "vec": [
                                   {
                                     "symbol": "PaymentProcessed"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "timestamp"
+                              },
+                              "val": {
+                                "u64": 0
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "transaction_hash"
+                              },
+                              "val": "void"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "bytes": "ad1f000000000000000000000000000000000000000a29292929292929292929"
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "actor"
+                              },
+                              "val": {
+                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "additional_data"
+                              },
+                              "val": {
+                                "string": "recorded"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "amount"
+                              },
+                              "val": {
+                                "i128": {
+                                  "hi": 0,
+                                  "lo": 600
+                                }
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "audit_id"
+                              },
+                              "val": {
+                                "bytes": "ad1f000000000000000000000000000000000000000a29292929292929292929"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "block_height"
+                              },
+                              "val": {
+                                "u32": 0
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "invoice_id"
+                              },
+                              "val": {
+                                "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "new_value"
+                              },
+                              "val": {
+                                "string": "Payment processed"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "old_value"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "operation"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "PaymentProcessed"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "timestamp"
+                              },
+                              "val": {
+                                "u64": 0
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "transaction_hash"
+                              },
+                              "val": "void"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "bytes": "ad1f000000000000000000000000000000000000000b2a2a2a2a2a2a2a2a2a2a"
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "actor"
+                              },
+                              "val": {
+                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "additional_data"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "amount"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "audit_id"
+                              },
+                              "val": {
+                                "bytes": "ad1f000000000000000000000000000000000000000b2a2a2a2a2a2a2a2a2a2a"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "block_height"
+                              },
+                              "val": {
+                                "u32": 0
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "invoice_id"
+                              },
+                              "val": {
+                                "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "new_value"
+                              },
+                              "val": {
+                                "string": "Status updated"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "old_value"
+                              },
+                              "val": {
+                                "string": "Status changed"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "operation"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "InvoiceStatusChanged"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "timestamp"
+                              },
+                              "val": {
+                                "u64": 0
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "transaction_hash"
+                              },
+                              "val": "void"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "bytes": "ad1f000000000000000000000000000000000000000c2b2b2b2b2b2b2b2b2b2b"
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "actor"
+                              },
+                              "val": {
+                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "additional_data"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "amount"
+                              },
+                              "val": {
+                                "i128": {
+                                  "hi": 0,
+                                  "lo": 1000
+                                }
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "audit_id"
+                              },
+                              "val": {
+                                "bytes": "ad1f000000000000000000000000000000000000000c2b2b2b2b2b2b2b2b2b2b"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "block_height"
+                              },
+                              "val": {
+                                "u32": 0
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "invoice_id"
+                              },
+                              "val": {
+                                "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "new_value"
+                              },
+                              "val": {
+                                "string": "Settlement completed"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "old_value"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "operation"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "SettlementCompleted"
                                   }
                                 ]
                               }
@@ -1794,7 +2482,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "e5c000000000000000000000000000000000c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
+                          "bytes": "e5c000000000000000000000000000000001c1c1c1c1c1c1c1c1c1c1c1c1c1c1"
                         },
                         "val": {
                           "map": [
@@ -1838,7 +2526,7 @@
                                 "symbol": "escrow_id"
                               },
                               "val": {
-                                "bytes": "e5c000000000000000000000000000000000c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
+                                "bytes": "e5c000000000000000000000000000000001c1c1c1c1c1c1c1c1c1c1c1c1c1c1"
                               }
                             },
                             {
@@ -1943,9 +2631,6 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
-                            },
-                            {
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             },
                             {
@@ -1968,6 +2653,18 @@
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000827272727272727272727"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000928282828282828282828"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000a29292929292929292929"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000b2a2a2a2a2a2a2a2a2a2a"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000c2b2b2b2b2b2b2b2b2b2b"
                             }
                           ]
                         }
@@ -1977,7 +2674,7 @@
                           "symbol": "aud_cnt"
                         },
                         "val": {
-                          "u64": 9
+                          "u64": 12
                         }
                       },
                       {
@@ -1998,6 +2695,14 @@
                       },
                       {
                         "key": {
+                          "symbol": "funded"
+                        },
+                        "val": {
+                          "vec": []
+                        }
+                      },
+                      {
+                        "key": {
                           "symbol": "inv_cnt"
                         },
                         "val": {
@@ -2010,6 +2715,18 @@
                         },
                         "val": {
                           "u64": 1
+                        }
+                      },
+                      {
+                        "key": {
+                          "symbol": "paid"
+                        },
+                        "val": {
+                          "vec": [
+                            {
+                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                            }
+                          ]
                         }
                       },
                       {
@@ -2092,7 +2809,7 @@
                                 "symbol": "message"
                               },
                               "val": {
-                                "string": "Your invoice has been funded by an investor"
+                                "string": "Payment has been received for an invoice you funded"
                               }
                             },
                             {
@@ -2110,7 +2827,7 @@
                               "val": {
                                 "vec": [
                                   {
-                                    "symbol": "InvoiceStatusChanged"
+                                    "symbol": "PaymentReceived"
                                   }
                                 ]
                               }
@@ -2154,7 +2871,7 @@
                                 "symbol": "title"
                               },
                               "val": {
-                                "string": "Invoice Status Updated"
+                                "string": "Investment Payment Received"
                               }
                             }
                           ]
@@ -2181,6 +2898,9 @@
                             },
                             {
                               "bytes": "011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce"
+                            },
+                            {
+                              "bytes": "011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce"
                             }
                           ]
                         }
@@ -2198,6 +2918,9 @@
                         },
                         "val": {
                           "vec": [
+                            {
+                              "bytes": "011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce"
+                            },
                             {
                               "bytes": "011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce"
                             },
@@ -2221,10 +2944,10 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+                              "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
                             },
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
+                              "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
                             }
                           ]
                         }
@@ -2243,13 +2966,22 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             },
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
+                              "bytes": "ad1f000000000000000000000000000000000000000726262626262626262626"
                             },
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000827272727272727272727"
+                              "bytes": "ad1f000000000000000000000000000000000000000928282828282828282828"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000a29292929292929292929"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000b2a2a2a2a2a2a2a2a2a2a"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000c2b2b2b2b2b2b2b2b2b2b"
                             }
                           ]
                         }
@@ -2268,16 +3000,16 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
-                            },
-                            {
                               "bytes": "ad1f000000000000000000000000000000000000000423232323232323232323"
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000524242424242424242424"
                             },
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000726262626262626262626"
+                              "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000827272727272727272727"
                             }
                           ]
                         }
@@ -2374,7 +3106,7 @@
                           ]
                         },
                         "val": {
-                          "bytes": "e5c000000000000000000000000000000000c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
+                          "bytes": "e5c000000000000000000000000000000001c1c1c1c1c1c1c1c1c1c1c1c1c1c1"
                         }
                       },
                       {
@@ -2390,9 +3122,6 @@
                         },
                         "val": {
                           "vec": [
-                            {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
-                            },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             },
@@ -2416,6 +3145,18 @@
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000827272727272727272727"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000928282828282828282828"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000a29292929292929292929"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000b2a2a2a2a2a2a2a2a2a2a"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000c2b2b2b2b2b2b2b2b2b2b"
                             }
                           ]
                         }
@@ -2432,7 +3173,7 @@
                           ]
                         },
                         "val": {
-                          "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
+                          "bytes": "1a4e000000000000000000000000000000014f4f4f4f4f4f4f4f4f4f4f4f4f4f"
                         }
                       },
                       {
@@ -2449,7 +3190,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
+                              "bytes": "1a4e000000000000000000000000000000014f4f4f4f4f4f4f4f4f4f4f4f4f4f"
                             }
                           ]
                         }
@@ -2472,7 +3213,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
+                              "bytes": "ad1f000000000000000000000000000000000000000726262626262626262626"
                             }
                           ]
                         }
@@ -2495,7 +3236,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
+                              "bytes": "ad1f000000000000000000000000000000000000000423232323232323232323"
                             }
                           ]
                         }
@@ -2518,7 +3259,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000726262626262626262626"
+                              "bytes": "ad1f000000000000000000000000000000000000000827272727272727272727"
                             }
                           ]
                         }
@@ -2541,7 +3282,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             }
                           ]
                         }
@@ -2564,7 +3305,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000524242424242424242424"
+                              "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
                             }
                           ]
                         }
@@ -2587,10 +3328,13 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+                              "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
                             },
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000423232323232323232323"
+                              "bytes": "ad1f000000000000000000000000000000000000000524242424242424242424"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000b2a2a2a2a2a2a2a2a2a2a"
                             }
                           ]
                         }
@@ -2613,7 +3357,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
+                              "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
                             }
                           ]
                         }
@@ -2636,7 +3380,33 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000827272727272727272727"
+                              "bytes": "ad1f000000000000000000000000000000000000000928282828282828282828"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000a29292929292929292929"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "op_aud"
+                            },
+                            {
+                              "vec": [
+                                {
+                                  "symbol": "SettlementCompleted"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "val": {
+                          "vec": [
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000c2b2b2b2b2b2b2b2b2b2b"
                             }
                           ]
                         }
@@ -2654,9 +3424,6 @@
                         },
                         "val": {
                           "vec": [
-                            {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
-                            },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             },
@@ -2680,6 +3447,18 @@
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000827272727272727272727"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000928282828282828282828"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000a29292929292929292929"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000b2a2a2a2a2a2a2a2a2a2a"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000c2b2b2b2b2b2b2b2b2b2b"
                             }
                           ]
                         }
@@ -3162,6 +3941,39 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
+                "nonce": 7270604957039011794
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": 7270604957039011794
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          6311999
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "ledger_key_nonce": {
                 "nonce": 8370022561469687789
               }
             },
@@ -3432,7 +4244,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 5000
+                          "lo": 4000
                         }
                       }
                     },
@@ -3669,7 +4481,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 5000
+                          "lo": 4000
                         }
                       }
                     },
@@ -3742,7 +4554,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 4000
+                          "lo": 5000
                         }
                       }
                     },
@@ -3906,51 +4718,5 @@
       ]
     ]
   },
-  "events": [
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "contract",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "inv_pp"
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                },
-                {
-                  "i128": {
-                    "hi": 0,
-                    "lo": 600
-                  }
-                },
-                {
-                  "i128": {
-                    "hi": 0,
-                    "lo": 1000
-                  }
-                },
-                {
-                  "u32": 100
-                },
-                {
-                  "string": "tx-2"
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": true
-    }
-  ]
+  "events": []
 }
