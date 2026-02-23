@@ -2,6 +2,7 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 
 use crate::QuickLendXError;
 
+#[allow(dead_code)]
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtocolLimits {
@@ -10,14 +11,20 @@ pub struct ProtocolLimits {
     pub grace_period_seconds: u64,
 }
 
+#[allow(dead_code)]
 const LIMITS_KEY: &str = "protocol_limits";
+#[allow(dead_code)]
 const DEFAULT_MIN_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
+#[allow(dead_code)]
 const DEFAULT_MAX_DUE_DAYS: u64 = 365;
+#[allow(dead_code)]
 const DEFAULT_GRACE_PERIOD: u64 = 86400; // 24 hours
 
+#[allow(dead_code)]
 #[contract]
 pub struct ProtocolLimitsContract;
 
+#[allow(dead_code)]
 #[contractimpl]
 impl ProtocolLimitsContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), QuickLendXError> {
