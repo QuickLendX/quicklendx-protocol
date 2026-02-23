@@ -39,11 +39,7 @@ fn create_verified_business(
     business
 }
 
-fn create_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    limit: i128,
-) -> Address {
+fn create_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i128) -> Address {
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &limit);
@@ -117,21 +113,12 @@ fn test_process_partial_payment_zero_amount() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     // Try to process zero payment - should fail
-    let result = client.try_process_partial_payment(
-        &invoice_id,
-        &0,
-        &String::from_str(&env, "tx-zero"),
-    );
+    let result =
+        client.try_process_partial_payment(&invoice_id, &0, &String::from_str(&env, "tx-zero"));
     assert!(result.is_err(), "Zero payment should fail");
 }
 
@@ -144,13 +131,7 @@ fn test_process_partial_payment_negative_amount() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     // Try to process negative payment - should fail
@@ -171,13 +152,7 @@ fn test_process_partial_payment_valid() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     // Process valid partial payment
@@ -202,13 +177,7 @@ fn test_payment_progress_zero_percent() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     let invoice = client.get_invoice(&invoice_id);
@@ -224,13 +193,7 @@ fn test_payment_progress_25_percent() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     client.process_partial_payment(&invoice_id, &250, &String::from_str(&env, "tx-1"));
@@ -248,13 +211,7 @@ fn test_payment_progress_50_percent() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     client.process_partial_payment(&invoice_id, &500, &String::from_str(&env, "tx-1"));
@@ -272,13 +229,7 @@ fn test_payment_progress_75_percent() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     client.process_partial_payment(&invoice_id, &750, &String::from_str(&env, "tx-1"));
@@ -296,13 +247,7 @@ fn test_payment_progress_100_percent() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     // Pay 99% to test progress without triggering settlement
@@ -322,13 +267,7 @@ fn test_payment_progress_multiple_payments() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     // Make multiple partial payments (stop before 100% to avoid auto-settlement)
@@ -360,13 +299,7 @@ fn test_payment_progress_calculation_caps_at_100() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     // Make payment up to 99% to avoid auto-settlement
@@ -375,7 +308,7 @@ fn test_payment_progress_calculation_caps_at_100() {
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.total_paid, 990);
     assert_eq!(invoice.payment_progress(), 99);
-    
+
     // Progress calculation should cap at 100% if we were to pay more
     // (testing the calculation logic, not actual overpayment)
 }
@@ -393,13 +326,7 @@ fn test_payment_records_single_payment() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     let tx_id = String::from_str(&env, "tx-12345");
@@ -419,13 +346,7 @@ fn test_payment_records_multiple_payments() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     // Record multiple payments with different transaction IDs
@@ -446,13 +367,7 @@ fn test_payment_records_unique_transaction_ids() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     // Each payment should have unique transaction ID
@@ -486,11 +401,8 @@ fn test_partial_payment_on_unfunded_invoice() {
     );
 
     // Try to process payment on unfunded invoice - should fail
-    let result = client.try_process_partial_payment(
-        &invoice_id,
-        &500,
-        &String::from_str(&env, "tx-1"),
-    );
+    let result =
+        client.try_process_partial_payment(&invoice_id, &500, &String::from_str(&env, "tx-1"));
     assert!(result.is_err(), "Payment on unfunded invoice should fail");
 }
 
@@ -499,12 +411,12 @@ fn test_partial_payment_on_nonexistent_invoice() {
     let (env, client, _admin) = setup_env();
     let fake_id = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
 
-    let result = client.try_process_partial_payment(
-        &fake_id,
-        &500,
-        &String::from_str(&env, "tx-1"),
+    let result =
+        client.try_process_partial_payment(&fake_id, &500, &String::from_str(&env, "tx-1"));
+    assert!(
+        result.is_err(),
+        "Payment on nonexistent invoice should fail"
     );
-    assert!(result.is_err(), "Payment on nonexistent invoice should fail");
 }
 
 #[test]
@@ -516,13 +428,7 @@ fn test_payment_after_reaching_full_amount() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     // Pay up to 99% to avoid auto-settlement
@@ -531,7 +437,7 @@ fn test_payment_after_reaching_full_amount() {
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.total_paid, 990);
     assert_eq!(invoice.status, InvoiceStatus::Funded);
-    
+
     // Note: Paying the final 10 would trigger auto-settlement
     // This test verifies we can make payments up to but not including full amount
 }
@@ -549,13 +455,7 @@ fn test_complete_partial_payment_workflow() {
     let currency = setup_token(&env, &business, &investor, &contract_id);
 
     let invoice_id = create_funded_invoice(
-        &env,
-        &client,
-        &admin,
-        &business,
-        &investor,
-        1_000,
-        &currency,
+        &env, &client, &admin, &business, &investor, 1_000, &currency,
     );
 
     // Step 1: Initial state
@@ -591,7 +491,7 @@ fn test_complete_partial_payment_workflow() {
     assert_eq!(invoice.total_paid, 990);
     assert_eq!(invoice.payment_progress(), 99);
     assert_eq!(invoice.status, InvoiceStatus::Funded);
-    
+
     // Note: Final 10 payment would trigger auto-settlement
 }
 

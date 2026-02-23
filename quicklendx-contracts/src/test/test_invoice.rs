@@ -1392,7 +1392,10 @@ fn test_invoice_transition_pending_to_paid_behavior() {
     let invoice_id = create_test_invoice(&env, &client, &business, 1000);
 
     // Confirm starts as Pending
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Pending);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Pending
+    );
 
     // Current contract allows Pending→Paid via update_invoice_status
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
@@ -1412,7 +1415,10 @@ fn test_invoice_transition_pending_to_defaulted_behavior() {
     let business = Address::generate(&env);
     let invoice_id = create_test_invoice(&env, &client, &business, 1000);
 
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Pending);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Pending
+    );
 
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
 
@@ -1454,11 +1460,17 @@ fn test_invoice_transition_funded_to_verified_behavior() {
         invoice.mark_as_funded(&env, investor.clone(), 900, env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice);
     });
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
 
     // Current contract allows Funded→Verified
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Verified);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Verified
+    );
 }
 
 /// Documents current behavior: Paid→Funded via update_invoice_status.
@@ -1477,7 +1489,10 @@ fn test_invoice_transition_paid_to_funded_behavior() {
 
     // Current contract allows Paid→Funded
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Funded);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
 }
 
 /// Documents current behavior: Defaulted→Paid via update_invoice_status.
@@ -1492,7 +1507,10 @@ fn test_invoice_transition_defaulted_to_paid_behavior() {
 
     // Move to Defaulted
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Defaulted);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Defaulted
+    );
 
     // Current contract allows Defaulted→Paid
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
@@ -1514,11 +1532,17 @@ fn test_invoice_transition_cancelled_to_verified_behavior() {
 
     // Cancel the invoice
     client.cancel_invoice(&invoice_id);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Cancelled);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Cancelled
+    );
 
     // Current contract allows Cancelled→Verified via update_invoice_status
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Verified);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Verified
+    );
 }
 
 // ============================================================================
@@ -1558,7 +1582,10 @@ fn test_invoice_reject_cancel_funded_invoice() {
         invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice);
     });
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
 
     // Cancel should fail on a Funded invoice
     let result = client.try_cancel_invoice(&invoice_id);
@@ -1604,7 +1631,10 @@ fn test_invoice_reject_cancel_defaulted_invoice() {
     let invoice_id = create_test_invoice(&env, &client, &business, 1000);
 
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Defaulted);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Defaulted
+    );
 
     // Cancel should fail on a Defaulted invoice
     let result = client.try_cancel_invoice(&invoice_id);

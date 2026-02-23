@@ -16,11 +16,11 @@ mod test_admin {
     use crate::admin::AdminStorage;
     use crate::errors::QuickLendXError;
     use crate::{QuickLendXContract, QuickLendXContractClient};
+    use alloc::format;
     use soroban_sdk::{
         testutils::{Address as _, Events},
         Address, Env, String, Vec,
     };
-    use alloc::format;
 
     fn setup() -> (Env, QuickLendXContractClient<'static>) {
         let env = Env::default();
@@ -464,7 +464,7 @@ mod test_admin {
         let client = QuickLendXContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
-        
+
         // Use set_admin (verification module's backward-compatible method)
         client.set_admin(&admin);
 
@@ -828,10 +828,7 @@ mod test_admin {
         // Perform multiple operations
         for i in 0..5 {
             let business = Address::generate(&env);
-            let kyc_data = String::from_str(
-                &env,
-                &format!("{{\"business_name\":\"Test{}\"}}", i),
-            );
+            let kyc_data = String::from_str(&env, &format!("{{\"business_name\":\"Test{}\"}}", i));
             client.submit_kyc_application(&business, &kyc_data);
             client.verify_business(&admin, &business);
 
@@ -863,10 +860,7 @@ mod test_admin {
                 .instance()
                 .get(&crate::admin::ADMIN_INITIALIZED_KEY)
                 .unwrap_or(false);
-            assert!(
-                is_initialized,
-                "set_admin must set the initialization flag"
-            );
+            assert!(is_initialized, "set_admin must set the initialization flag");
         });
 
         // Verify initialize_admin fails
@@ -894,10 +888,7 @@ mod test_admin {
 
         // Admin should be able to verify investor
         let result = client.try_verify_investor(&investor, &100_000);
-        assert!(
-            result.is_ok(),
-            "Admin must be able to verify investors"
-        );
+        assert!(result.is_ok(), "Admin must be able to verify investors");
     }
 
     #[test]
@@ -945,10 +936,7 @@ mod test_admin {
         // Admin should be able to reject investor
         let rejection_reason = String::from_str(&env, "Insufficient funds proof");
         let result = client.try_reject_investor(&investor, &rejection_reason);
-        assert!(
-            result.is_ok(),
-            "Admin must be able to reject investors"
-        );
+        assert!(result.is_ok(), "Admin must be able to reject investors");
     }
 
     #[test]
@@ -976,6 +964,9 @@ mod test_admin {
         let kyc_data = String::from_str(&env, "{\"business_name\":\"Test\"}");
         client.submit_kyc_application(&business, &kyc_data);
         let result = client.try_verify_business(&admin, &business);
-        assert!(result.is_ok(), "Admin must still be functional after self-transfer");
+        assert!(
+            result.is_ok(),
+            "Admin must still be functional after self-transfer"
+        );
     }
 }

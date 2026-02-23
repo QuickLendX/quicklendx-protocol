@@ -811,8 +811,7 @@ impl InvoiceStorage {
 
     /// Get invoices by category
     pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
-        env
-            .storage()
+        env.storage()
             .instance()
             .get(&Self::category_key(category))
             .unwrap_or_else(|| Vec::new(env))
@@ -839,8 +838,7 @@ impl InvoiceStorage {
 
     /// Get invoices by tag
     pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
-        env
-            .storage()
+        env.storage()
             .instance()
             .get(&Self::tag_key(tag))
             .unwrap_or_else(|| Vec::new(env))

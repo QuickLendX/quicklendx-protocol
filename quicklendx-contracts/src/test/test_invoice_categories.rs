@@ -71,7 +71,10 @@ fn test_get_invoices_by_category_services() {
 
     // Query Services category
     let services = client.get_invoices_by_category(&InvoiceCategory::Services);
-    assert!(services.len() >= 2, "Should have at least 2 services invoices");
+    assert!(
+        services.len() >= 2,
+        "Should have at least 2 services invoices"
+    );
     assert!(services.contains(&invoice1_id));
     assert!(services.contains(&invoice3_id));
     assert!(!services.contains(&invoice2_id));
@@ -127,19 +130,31 @@ fn test_get_invoices_by_category_all_categories() {
 
     // Verify each category
     let services = client.get_invoices_by_category(&InvoiceCategory::Services);
-    assert!(services.len() >= 1, "Should have at least 1 services invoice");
+    assert!(
+        services.len() >= 1,
+        "Should have at least 1 services invoice"
+    );
     assert!(services.contains(&services_id));
 
     let products = client.get_invoices_by_category(&InvoiceCategory::Products);
-    assert!(products.len() >= 1, "Should have at least 1 products invoice");
+    assert!(
+        products.len() >= 1,
+        "Should have at least 1 products invoice"
+    );
     assert!(products.contains(&products_id));
 
     let consulting = client.get_invoices_by_category(&InvoiceCategory::Consulting);
-    assert!(consulting.len() >= 1, "Should have at least 1 consulting invoice");
+    assert!(
+        consulting.len() >= 1,
+        "Should have at least 1 consulting invoice"
+    );
     assert!(consulting.contains(&consulting_id));
 
     let technology = client.get_invoices_by_category(&InvoiceCategory::Technology);
-    assert!(technology.len() >= 1, "Should have at least 1 technology invoice");
+    assert!(
+        technology.len() >= 1,
+        "Should have at least 1 technology invoice"
+    );
     assert!(technology.contains(&goods_id));
 }
 
@@ -197,13 +212,19 @@ fn test_get_invoices_by_category_with_status_filter() {
 
     // Query Services category (should get both pending and verified)
     let services = client.get_invoices_by_category(&InvoiceCategory::Services);
-    assert!(services.len() >= 2, "Should have at least 2 services invoices");
+    assert!(
+        services.len() >= 2,
+        "Should have at least 2 services invoices"
+    );
     assert!(services.contains(&pending_id));
     assert!(services.contains(&verified_id));
 
     // Query Products category
     let products = client.get_invoices_by_category(&InvoiceCategory::Products);
-    assert!(products.len() >= 1, "Should have at least 1 products invoice");
+    assert!(
+        products.len() >= 1,
+        "Should have at least 1 products invoice"
+    );
 }
 
 // ============================================================================
@@ -256,13 +277,19 @@ fn test_get_invoices_by_tag_single_tag() {
 
     // Query by "urgent" tag
     let urgent_invoices = client.get_invoices_by_tag(&String::from_str(&env, "urgent"));
-    assert!(urgent_invoices.len() >= 2, "Should have at least 2 urgent invoices");
+    assert!(
+        urgent_invoices.len() >= 2,
+        "Should have at least 2 urgent invoices"
+    );
     assert!(urgent_invoices.contains(&invoice1_id));
     assert!(urgent_invoices.contains(&invoice2_id));
 
     // Query by "tech" tag
     let tech_invoices = client.get_invoices_by_tag(&String::from_str(&env, "tech"));
-    assert!(tech_invoices.len() >= 1, "Should have at least 1 tech invoice");
+    assert!(
+        tech_invoices.len() >= 1,
+        "Should have at least 1 tech invoice"
+    );
     assert!(tech_invoices.contains(&invoice2_id));
 }
 
@@ -320,7 +347,10 @@ fn test_get_invoices_by_tags_multiple() {
 
     let matching_invoices = client.get_invoices_by_tags(&search_tags);
     // Should only return invoice1 which has both tags
-    assert!(matching_invoices.len() >= 1, "Should have at least 1 matching invoice");
+    assert!(
+        matching_invoices.len() >= 1,
+        "Should have at least 1 matching invoice"
+    );
     assert!(matching_invoices.contains(&invoice1_id));
     assert!(!matching_invoices.contains(&invoice2_id));
     assert!(!matching_invoices.contains(&invoice3_id));
