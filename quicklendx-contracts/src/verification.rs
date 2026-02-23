@@ -117,6 +117,7 @@ impl BusinessVerificationStorage {
         Self::store_verification(env, verification);
     }
 
+    #[cfg(test)]
     pub fn is_business_verified(env: &Env, business: &Address) -> bool {
         if let Some(verification) = Self::get_verification(env, business) {
             matches!(verification.status, BusinessVerificationStatus::Verified)
@@ -247,7 +248,9 @@ impl InvestorVerificationStorage {
     const VERIFIED_INVESTORS_KEY: &'static str = "verified_investors";
     const PENDING_INVESTORS_KEY: &'static str = "pending_investors";
     const REJECTED_INVESTORS_KEY: &'static str = "rejected_investors";
+    #[cfg(test)]
     const INVESTOR_HISTORY_KEY: &'static str = "investor_history";
+    #[cfg(test)]
     const INVESTOR_ANALYTICS_KEY: &'static str = "investor_analytics";
 
     pub fn submit(env: &Env, investor: &Address, kyc_data: String) -> Result<(), QuickLendXError> {
@@ -616,6 +619,7 @@ pub fn get_business_verification_status(
     BusinessVerificationStorage::get_verification(env, business)
 }
 
+#[cfg(test)]
 pub fn require_business_verification(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
     if !BusinessVerificationStorage::is_business_verified(env, business) {
         return Err(QuickLendXError::BusinessNotVerified);

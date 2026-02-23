@@ -262,6 +262,31 @@ impl BidStorage {
 
         ranked
     }
+
+    /// Cancel a placed bid by bid_id. Only transitions Placed → Cancelled.
+    /// Returns false if bid not found or already not Placed.
+    pub fn cancel_bid(env: &Env, bid_id: &BytesN<32>) -> bool {
+        if let Some(mut bid) = Self::get_bid(env, bid_id) {
+            if bid.status == BidStatus::Placed {
+                bid.status = BidStatus::Cancelled;
+                Self::update_bid(env, &bid);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Return all bids placed by an investor across all invoices, with their full Bid records.
+    pub fn get_all_bids_by_investor(env: &Env, investor: &Address) -> Vec<Bid> {
+        let bid_ids = Self::get_bids_by_investor_all(env, investor);
+        let mut result = Vec::new(env);
+        for bid_id in bid_ids.iter() {
+            if let Some(bid) = Self::get_bid(env, &bid_id) {
+                result.push_back(bid);
+            }
+        }
+        result
+    }
     /// Generates a unique 32-byte bid ID using timestamp and a simple counter.
     /// This approach avoids potential serialization issues with large counters.
     pub fn generate_unique_bid_id(env: &Env) -> BytesN<32> {
@@ -280,7 +305,9 @@ impl BidStorage {
         // Embed counter in next 8 bytes
         bytes[10..18].copy_from_slice(&next_counter.to_be_bytes());
         // Fill remaining bytes with a pattern to ensure uniqueness (overflow-safe)
-        let mix = timestamp.saturating_add(next_counter).saturating_add(0xB1D0);
+        let mix = timestamp
+            .saturating_add(next_counter)
+            .saturating_add(0xB1D0);
         for i in 18..32 {
             bytes[i] = (mix % 256) as u8;
         }

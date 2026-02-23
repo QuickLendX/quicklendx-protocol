@@ -230,8 +230,189 @@ fn test_invoice_creation_invalid_description_empty() {
 }
 
 // ============================================================================
-// AUTHORIZATION AND ACCESS CONTROL TESTS
+// STORE_INVOICE: CURRENCY AND TAGS (Issue #269 – cover all error variants)
 // ============================================================================
+
+#[test]
+fn test_invoice_creation_invalid_non_whitelisted_currency() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
+    client.set_admin(&admin);
+    let allowed = Address::generate(&env);
+    client.add_currency(&admin, &allowed);
+    let business = Address::generate(&env);
+    let disallowed_currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let result = client.try_store_invoice(
+        &business,
+        &1000,
+        &disallowed_currency,
+        &due_date,
+        &String::from_str(&env, "Valid description"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidCurrency);
+}
+
+#[test]
+fn test_invoice_creation_valid_categories() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Category test");
+
+    for category in [
+        InvoiceCategory::Services,
+        InvoiceCategory::Products,
+        InvoiceCategory::Consulting,
+        InvoiceCategory::Manufacturing,
+        InvoiceCategory::Technology,
+        InvoiceCategory::Healthcare,
+        InvoiceCategory::Other,
+    ] {
+        let invoice_id = client.store_invoice(
+            &business,
+            &1000,
+            &currency,
+            &due_date,
+            &description,
+            &category,
+            &Vec::new(&env),
+        );
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.category, category);
+    }
+}
+
+#[test]
+fn test_invoice_creation_valid_tags() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, "urgent"));
+    tags.push_back(String::from_str(&env, "q1"));
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Tagged invoice"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.tags.len(), 2);
+}
+
+#[test]
+fn test_invoice_creation_invalid_tag_empty() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, ""));
+
+    let result = client.try_store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Description"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidTag);
+}
+
+#[test]
+fn test_invoice_creation_invalid_tag_too_long() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let mut tags = Vec::new(&env);
+    // Tag length must be 1-50; 51 chars is invalid
+    const LONG_TAG: &str = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    assert_eq!(LONG_TAG.len(), 51);
+    tags.push_back(String::from_str(&env, LONG_TAG));
+
+    let result = client.try_store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Description"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidTag);
+}
+
+#[test]
+fn test_invoice_creation_invalid_tag_limit_exceeded() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let mut tags = Vec::new(&env);
+    for i in 0..11 {
+        let tag = match i {
+            0 => "a",
+            1 => "b",
+            2 => "c",
+            3 => "d",
+            4 => "e",
+            5 => "f",
+            6 => "g",
+            7 => "h",
+            8 => "i",
+            9 => "j",
+            _ => "k",
+        };
+        tags.push_back(String::from_str(&env, tag));
+    }
+
+    let result = client.try_store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Description"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::TagLimitExceeded);
+}
 
 #[test]
 fn test_invoice_upload_requires_business_verification() {
@@ -1141,3 +1322,385 @@ fn test_invoice_rating_only_investor_can_rate() {
 //    - Audit all status transitions
 //    - Validate all external inputs
 //    - Use time-based locks for sensitive operations
+
+// ============================================================================
+// STATUS TRANSITION TESTS – CANCELLATION PATH (Issue #270)
+// ============================================================================
+
+#[test]
+fn test_invoice_status_transition_pending_to_cancelled() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    // Confirm starts as Pending
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Pending);
+
+    // Cancel from Pending – should succeed
+    client.cancel_invoice(&invoice_id);
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Cancelled);
+}
+
+#[test]
+fn test_invoice_status_transition_verified_to_cancelled() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    // Transition to Verified first
+    client.verify_invoice(&invoice_id);
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Verified);
+
+    // Cancel from Verified – should succeed
+    client.cancel_invoice(&invoice_id);
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Cancelled);
+}
+
+// ============================================================================
+// STATUS TRANSITION TESTS – INVALID TRANSITIONS (Issue #270)
+// ============================================================================
+
+/// Documents current behavior: update_invoice_status allows Pending→Paid
+/// because the match arm does not enforce from-state.
+#[test]
+fn test_invoice_transition_pending_to_paid_behavior() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    // Confirm starts as Pending
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Pending);
+
+    // Current contract allows Pending→Paid via update_invoice_status
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Paid);
+    assert!(invoice.settled_at.is_some());
+}
+
+/// Documents current behavior: update_invoice_status allows Pending→Defaulted.
+#[test]
+fn test_invoice_transition_pending_to_defaulted_behavior() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Pending);
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Defaulted);
+}
+
+/// Documents current behavior: Funded→Verified via update_invoice_status
+/// re-sets the status to Verified.
+#[test]
+fn test_invoice_transition_funded_to_verified_behavior() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = setup_verified_business(&env, &client);
+    let investor = setup_verified_investor(&env, &client);
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Transition test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    // Move to Funded via internal state
+    client.verify_invoice(&invoice_id);
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.mark_as_funded(&env, investor.clone(), 900, env.ledger().timestamp());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+
+    // Current contract allows Funded→Verified
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Verified);
+}
+
+/// Documents current behavior: Paid→Funded via update_invoice_status.
+#[test]
+fn test_invoice_transition_paid_to_funded_behavior() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    // Move to Paid
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Paid);
+
+    // Current contract allows Paid→Funded
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Funded);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+}
+
+/// Documents current behavior: Defaulted→Paid via update_invoice_status.
+#[test]
+fn test_invoice_transition_defaulted_to_paid_behavior() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    // Move to Defaulted
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Defaulted);
+
+    // Current contract allows Defaulted→Paid
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Paid);
+}
+
+/// Documents current behavior: Cancelled→Verified via update_invoice_status.
+#[test]
+fn test_invoice_transition_cancelled_to_verified_behavior() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    // Cancel the invoice
+    client.cancel_invoice(&invoice_id);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Cancelled);
+
+    // Current contract allows Cancelled→Verified via update_invoice_status
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Verified);
+}
+
+// ============================================================================
+// CANCEL REJECTION TESTS (Issue #270)
+// ============================================================================
+
+/// cancel_invoice must reject a Funded invoice with InvalidStatus.
+#[test]
+fn test_invoice_reject_cancel_funded_invoice() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = setup_verified_business(&env, &client);
+    let investor = setup_verified_investor(&env, &client);
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Cancel reject test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.verify_invoice(&invoice_id);
+
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+
+    // Cancel should fail on a Funded invoice
+    let result = client.try_cancel_invoice(&invoice_id);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidStatus);
+}
+
+/// cancel_invoice must reject a Paid invoice with InvalidStatus.
+#[test]
+fn test_invoice_reject_cancel_paid_invoice() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Paid);
+
+    // Cancel should fail on a Paid invoice
+    let result = client.try_cancel_invoice(&invoice_id);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidStatus);
+}
+
+/// cancel_invoice must reject a Defaulted invoice with InvalidStatus.
+#[test]
+fn test_invoice_reject_cancel_defaulted_invoice() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Defaulted);
+
+    // Cancel should fail on a Defaulted invoice
+    let result = client.try_cancel_invoice(&invoice_id);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidStatus);
+}
+
+/// update_invoice_status rejects Pending and Cancelled as target statuses
+/// (they fall into the `_ =>` catch-all returning InvalidStatus).
+#[test]
+fn test_invoice_reject_update_to_pending_or_cancelled() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    // Attempting to set status to Pending should fail
+    let result_pending = client.try_update_invoice_status(&invoice_id, &InvoiceStatus::Pending);
+    assert!(result_pending.is_err());
+    let err_pending = result_pending.unwrap_err().unwrap();
+    assert_eq!(err_pending, QuickLendXError::InvalidStatus);
+
+    // Attempting to set status to Cancelled should fail
+    let result_cancelled = client.try_update_invoice_status(&invoice_id, &InvoiceStatus::Cancelled);
+    assert!(result_cancelled.is_err());
+    let err_cancelled = result_cancelled.unwrap_err().unwrap();
+    assert_eq!(err_cancelled, QuickLendXError::InvalidStatus);
+}
+
+// ============================================================================
+// FULL LIFECYCLE TEST (Issue #270)
+// ============================================================================
+
+/// Walk through the full invoice lifecycle: Pending → Verified → Funded → Paid
+/// and assert status at every step.
+#[test]
+fn test_invoice_full_lifecycle_with_status_assertions() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = setup_verified_business(&env, &client);
+    let investor = setup_verified_investor(&env, &client);
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &5000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Full lifecycle test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    // Step 1: Pending
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Pending);
+    assert_eq!(invoice.funded_amount, 0);
+    assert!(invoice.investor.is_none());
+    assert!(invoice.settled_at.is_none());
+
+    // Step 2: Verified
+    client.verify_invoice(&invoice_id);
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Verified);
+    assert_eq!(invoice.funded_amount, 0);
+    assert!(invoice.investor.is_none());
+    assert!(invoice.settled_at.is_none());
+
+    // Step 3: Funded
+    env.as_contract(&contract_id, || {
+        let mut inv = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        inv.mark_as_funded(&env, investor.clone(), 4500, env.ledger().timestamp());
+        InvoiceStorage::update_invoice(&env, &inv);
+    });
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+    assert_eq!(invoice.funded_amount, 4500);
+    assert_eq!(invoice.investor, Some(investor.clone()));
+    assert!(invoice.funded_at.is_some());
+    assert!(invoice.settled_at.is_none());
+
+    // Step 4: Paid
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Paid);
+    assert!(invoice.settled_at.is_some());
+    assert_eq!(invoice.funded_amount, 4500);
+    assert_eq!(invoice.investor, Some(investor));
+}
