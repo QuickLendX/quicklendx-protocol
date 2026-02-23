@@ -37,3 +37,18 @@ fn test_initiate_zero_amount_fails() {
     let result = client.try_initiate_emergency_withdraw(&admin, &token, &0i128, &target);
     assert!(result.is_err());
 }
+
+#[test]
+fn test_execute_before_timelock_fails() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let token = Address::generate(&env);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+
+    client.initiate_emergency_withdraw(&admin, &token, &amount, &target);
+
+    // Attempt to execute immediately - should fail due to timelock
+    let result = client.try_execute_emergency_withdraw(&admin);
+    assert!(result.is_err());
+}
