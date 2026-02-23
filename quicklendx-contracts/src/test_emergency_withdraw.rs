@@ -165,3 +165,55 @@ fn test_execute_without_pending_fails() {
     let result = client.try_execute_emergency_withdraw(&admin);
     assert!(result.is_err());
 }
+
+#[test]
+fn test_cancel_clears_pending() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let token = Address::generate(&env);
+    let target = Address::generate(&env);
+
+    client.initiate_emergency_withdraw(&admin, &token, &500i128, &target);
+    assert!(client.get_pending_emergency_withdraw().is_some());
+
+    client.cancel_emergency_withdraw(&admin);
+    assert!(client.get_pending_emergency_withdraw().is_none());
+}
+
+#[test]
+fn test_cancel_without_pending_fails() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let res = client.try_cancel_emergency_withdraw(&admin);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_non_admin_cannot_cancel() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let token = Address::generate(&env);
+    let target = Address::generate(&env);
+    client.initiate_emergency_withdraw(&admin, &token, &500i128, &target);
+
+    let non_admin = Address::generate(&env);
+    let res = client.try_cancel_emergency_withdraw(&non_admin);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_cancel_prevents_execute() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let token = Address::generate(&env);
+    let target = Address::generate(&env);
+
+    client.initiate_emergency_withdraw(&admin, &token, &500i128, &target);
+    client.cancel_emergency_withdraw(&admin);
+
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
+
+    let res = client.try_execute_emergency_withdraw(&admin);
+    assert!(res.is_err());
+}
