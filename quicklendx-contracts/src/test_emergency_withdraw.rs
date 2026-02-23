@@ -52,3 +52,32 @@ fn test_execute_before_timelock_fails() {
     let result = client.try_execute_emergency_withdraw(&admin);
     assert!(result.is_err());
 }
+
+#[test]
+fn test_execute_after_timelock_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
+    client.initialize_fee_system(&admin);
+
+    let token_admin = Address::generate(&env);
+    let token_id = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac = token::StellarAssetClient::new(&env, &token_id);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+    sac.mint(&contract_id, &amount);
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+    
+    // Advance time past the timelock period
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
+
+    let result = client.try_execute_emergency_withdraw(&admin);
+    assert!(result.is_ok());
+}
