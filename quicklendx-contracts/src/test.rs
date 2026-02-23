@@ -1,6 +1,7 @@
 mod test_invoice;
 mod test_invoice_categories;
 mod test_analytics;
+mod test_investment_queries;
 
 use super::*;
 use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};

@@ -322,6 +322,141 @@ fn test_multiple_entries_and_no_cross_investment_leakage() {
 }
 
 // ============================================================================
+// query_investment_insurance Tests
+// ============================================================================
+
+#[test]
+fn test_query_investment_insurance_empty() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let investment_id = store_investment(&env, &contract_id, &investor, 5_000, InvestmentStatus::Active, 20);
+
+    let result = client.query_investment_insurance(&investment_id);
+    assert_eq!(result.len(), 0);
+}
+
+#[test]
+fn test_query_investment_insurance_single_active() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let provider = Address::generate(&env);
+    let investment_id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 21);
+
+    client.add_investment_insurance(&investment_id, &provider, &60u32);
+
+    let result = client.query_investment_insurance(&investment_id);
+    assert_eq!(result.len(), 1);
+    
+    let coverage = result.get(0).unwrap();
+    assert_eq!(coverage.provider, provider);
+    assert_eq!(coverage.coverage_percentage, 60);
+    assert_eq!(coverage.coverage_amount, 6_000);
+    assert_eq!(coverage.premium_amount, 120);
+    assert!(coverage.active);
+}
+
+#[test]
+fn test_query_investment_insurance_multiple_entries() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let provider1 = Address::generate(&env);
+    let provider2 = Address::generate(&env);
+    let investment_id = store_investment(&env, &contract_id, &investor, 20_000, InvestmentStatus::Active, 22);
+
+    client.add_investment_insurance(&investment_id, &provider1, &50u32);
+    set_insurance_inactive(&env, &contract_id, &investment_id, 0);
+    client.add_investment_insurance(&investment_id, &provider2, &75u32);
+
+    let result = client.query_investment_insurance(&investment_id);
+    assert_eq!(result.len(), 2);
+
+    let first = result.get(0).unwrap();
+    assert_eq!(first.provider, provider1);
+    assert!(!first.active);
+    assert_eq!(first.coverage_percentage, 50);
+
+    let second = result.get(1).unwrap();
+    assert_eq!(second.provider, provider2);
+    assert!(second.active);
+    assert_eq!(second.coverage_percentage, 75);
+}
+
+#[test]
+fn test_query_investment_insurance_nonexistent_investment() {
+    let (env, client, _) = setup();
+    env.mock_all_auths();
+
+    let nonexistent_id = BytesN::from_array(&env, &[0u8; 32]);
+    let result = client.try_query_investment_insurance(&nonexistent_id);
+    
+    let err = result.err().expect("expected error for nonexistent investment");
+    let contract_error = err.expect("expected contract error");
+    assert_eq!(contract_error, QuickLendXError::StorageKeyNotFound);
+}
+
+#[test]
+fn test_query_investment_insurance_no_auth_required() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+    
+    let investor = Address::generate(&env);
+    let provider = Address::generate(&env);
+    
+    let investment_id = store_investment(&env, &contract_id, &investor, 8_000, InvestmentStatus::Active, 23);
+    client.add_investment_insurance(&investment_id, &provider, &40u32);
+
+    // Query without any special auth setup should work (queries are public)
+    let result = client.query_investment_insurance(&investment_id);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result.get(0).unwrap().provider, provider);
+    assert_eq!(result.get(0).unwrap().coverage_percentage, 40);
+}
+
+#[test]
+fn test_query_investment_insurance_historical_tracking() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let provider1 = Address::generate(&env);
+    let provider2 = Address::generate(&env);
+    let provider3 = Address::generate(&env);
+    
+    let investment_id = store_investment(&env, &contract_id, &investor, 15_000, InvestmentStatus::Active, 24);
+
+    // Add first insurance
+    client.add_investment_insurance(&investment_id, &provider1, &30u32);
+    let after_first = client.query_investment_insurance(&investment_id);
+    assert_eq!(after_first.len(), 1);
+
+    // Deactivate and add second
+    set_insurance_inactive(&env, &contract_id, &investment_id, 0);
+    client.add_investment_insurance(&investment_id, &provider2, &50u32);
+    let after_second = client.query_investment_insurance(&investment_id);
+    assert_eq!(after_second.len(), 2);
+
+    // Deactivate and add third
+    set_insurance_inactive(&env, &contract_id, &investment_id, 1);
+    client.add_investment_insurance(&investment_id, &provider3, &70u32);
+    let after_third = client.query_investment_insurance(&investment_id);
+    assert_eq!(after_third.len(), 3);
+
+    // Verify all historical entries are preserved
+    assert_eq!(after_third.get(0).unwrap().provider, provider1);
+    assert!(!after_third.get(0).unwrap().active);
+    assert_eq!(after_third.get(1).unwrap().provider, provider2);
+    assert!(!after_third.get(1).unwrap().active);
+    assert_eq!(after_third.get(2).unwrap().provider, provider3);
+    assert!(after_third.get(2).unwrap().active);
+}
+
+// ============================================================================
 // Security / Edge Scenarios
 // ============================================================================
 
