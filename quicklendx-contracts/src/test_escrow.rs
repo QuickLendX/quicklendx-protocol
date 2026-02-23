@@ -579,6 +579,75 @@ fn test_escrow_invariants() {
 }
 
 // ============================================================================
+// release_escrow_funds tests (Issue #273 – authorized, idempotency blocked)
+// ============================================================================
+
+#[test]
+fn test_release_escrow_funds_success() {
+    let (env, client, _admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &_admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1000);
+
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let business_balance_before = token_client.balance(&business);
+    let escrow_before = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow_before.status, EscrowStatus::Held);
+
+    let result = client.try_release_escrow_funds(&invoice_id);
+    assert!(result.is_ok(), "release_escrow_funds should succeed");
+
+    let business_balance_after = token_client.balance(&business);
+    assert_eq!(
+        business_balance_after - business_balance_before,
+        amount,
+        "Business should receive escrow amount"
+    );
+
+    let escrow_after = client.get_escrow_details(&invoice_id);
+    assert_eq!(
+        escrow_after.status,
+        EscrowStatus::Released,
+        "Escrow status should be Released after release"
+    );
+}
+
+#[test]
+fn test_release_escrow_funds_idempotency_blocked() {
+    let (env, client, _admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &_admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1000);
+
+    client.accept_bid(&invoice_id, &bid_id);
+    client.release_escrow_funds(&invoice_id);
+
+    let result = client.try_release_escrow_funds(&invoice_id);
+    assert!(
+        result.is_err(),
+        "Second release_escrow_funds should fail (idempotency blocked)"
+    );
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidStatus);
+}
+
+// ============================================================================
 // verify_invoice and auto-release when funded (Issue #300)
 // ============================================================================
 
