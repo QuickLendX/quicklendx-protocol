@@ -108,7 +108,9 @@ mod tests {
         assert_eq!(invoice.total_paid, 500);
         assert_eq!(invoice.status, InvoiceStatus::Funded);
 
-        let progress = env.as_contract(&contract_id, || get_invoice_progress(&env, &invoice_id).unwrap());
+        let progress = env.as_contract(&contract_id, || {
+            get_invoice_progress(&env, &invoice_id).unwrap()
+        });
         assert_eq!(progress.total_due, 1_000);
         assert_eq!(progress.total_paid, 500);
         assert_eq!(progress.remaining_due, 500);
@@ -136,7 +138,9 @@ mod tests {
         assert_eq!(invoice.total_paid, 1_000);
         assert_eq!(invoice.status, InvoiceStatus::Paid);
 
-        let progress = env.as_contract(&contract_id, || get_invoice_progress(&env, &invoice_id).unwrap());
+        let progress = env.as_contract(&contract_id, || {
+            get_invoice_progress(&env, &invoice_id).unwrap()
+        });
         assert_eq!(progress.progress_percent, 100);
         assert_eq!(progress.remaining_due, 0);
     }
@@ -161,10 +165,14 @@ mod tests {
         assert_eq!(invoice.total_paid, 1_000);
         assert_eq!(invoice.status, InvoiceStatus::Paid);
 
-        let progress = env.as_contract(&contract_id, || get_invoice_progress(&env, &invoice_id).unwrap());
+        let progress = env.as_contract(&contract_id, || {
+            get_invoice_progress(&env, &invoice_id).unwrap()
+        });
         assert_eq!(progress.total_paid, progress.total_due);
 
-        let second_record = env.as_contract(&contract_id, || get_payment_record(&env, &invoice_id, 1).unwrap());
+        let second_record = env.as_contract(&contract_id, || {
+            get_payment_record(&env, &invoice_id, 1).unwrap()
+        });
         assert_eq!(second_record.amount, 200);
         assert_eq!(second_record.timestamp, 3_100);
     }
@@ -179,7 +187,8 @@ mod tests {
         let (invoice_id, _business, _investor, _currency) =
             setup_funded_invoice(&env, &client, &contract_id, 1_000);
 
-        let result = client.try_process_partial_payment(&invoice_id, &0, &String::from_str(&env, "zero"));
+        let result =
+            client.try_process_partial_payment(&invoice_id, &0, &String::from_str(&env, "zero"));
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidAmount);
     }
@@ -194,7 +203,8 @@ mod tests {
         let (invoice_id, _business, _investor, _currency) =
             setup_funded_invoice(&env, &client, &contract_id, 1_000);
 
-        let result = client.try_process_partial_payment(&invoice_id, &-50, &String::from_str(&env, "neg"));
+        let result =
+            client.try_process_partial_payment(&invoice_id, &-50, &String::from_str(&env, "neg"));
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidAmount);
     }
@@ -212,8 +222,11 @@ mod tests {
         env.ledger().set_timestamp(4_000);
         client.process_partial_payment(&invoice_id, &1_000, &String::from_str(&env, "full"));
 
-        let result =
-            client.try_process_partial_payment(&invoice_id, &1, &String::from_str(&env, "after-paid"));
+        let result = client.try_process_partial_payment(
+            &invoice_id,
+            &1,
+            &String::from_str(&env, "after-paid"),
+        );
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
     }
@@ -227,8 +240,11 @@ mod tests {
 
         let (invoice_id, _business) = setup_cancelled_invoice(&env, &client);
 
-        let result =
-            client.try_process_partial_payment(&invoice_id, &100, &String::from_str(&env, "cancelled"));
+        let result = client.try_process_partial_payment(
+            &invoice_id,
+            &100,
+            &String::from_str(&env, "cancelled"),
+        );
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
     }
@@ -252,10 +268,14 @@ mod tests {
         env.ledger().set_timestamp(5_003);
         client.process_partial_payment(&invoice_id, &300, &String::from_str(&env, "ord-3"));
 
-        let count = env.as_contract(&contract_id, || get_payment_count(&env, &invoice_id).unwrap());
+        let count = env.as_contract(&contract_id, || {
+            get_payment_count(&env, &invoice_id).unwrap()
+        });
         assert_eq!(count, 3);
 
-        let records = env.as_contract(&contract_id, || get_payment_records(&env, &invoice_id, 0, 10).unwrap());
+        let records = env.as_contract(&contract_id, || {
+            get_payment_records(&env, &invoice_id, 0, 10).unwrap()
+        });
         assert_eq!(records.len(), 3);
 
         let first = records.get(0).unwrap();
@@ -298,7 +318,9 @@ mod tests {
         assert_eq!(invoice.total_paid, 1_000);
         assert_eq!(invoice.status, InvoiceStatus::Paid);
 
-        let progress = env.as_contract(&contract_id, || get_invoice_progress(&env, &invoice_id).unwrap());
+        let progress = env.as_contract(&contract_id, || {
+            get_invoice_progress(&env, &invoice_id).unwrap()
+        });
         assert_eq!(progress.payment_count, 3);
         assert_eq!(progress.progress_percent, 100);
         assert_eq!(progress.remaining_due, 0);

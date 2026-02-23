@@ -90,8 +90,12 @@ fn test_update_validates_days_boundary() {
     let (env, admin) = setup();
     let client = create_client(&env);
     client.initialize(&admin);
-    assert!(client.try_set_protocol_limits(&admin, &5_000_000, &1, &43200).is_ok());
-    assert!(client.try_set_protocol_limits(&admin, &5_000_000, &730, &43200).is_ok());
+    assert!(client
+        .try_set_protocol_limits(&admin, &5_000_000, &1, &43200)
+        .is_ok());
+    assert!(client
+        .try_set_protocol_limits(&admin, &5_000_000, &730, &43200)
+        .is_ok());
     let result = client.try_set_protocol_limits(&admin, &5_000_000, &731, &43200);
     assert_eq!(result, Err(Ok(QuickLendXError::InvoiceDueDateInvalid)));
 }
@@ -101,8 +105,12 @@ fn test_update_validates_grace_period() {
     let (env, admin) = setup();
     let client = create_client(&env);
     client.initialize(&admin);
-    assert!(client.try_set_protocol_limits(&admin, &5_000_000, &180, &0).is_ok());
-    assert!(client.try_set_protocol_limits(&admin, &5_000_000, &180, &2_592_000).is_ok());
+    assert!(client
+        .try_set_protocol_limits(&admin, &5_000_000, &180, &0)
+        .is_ok());
+    assert!(client
+        .try_set_protocol_limits(&admin, &5_000_000, &180, &2_592_000)
+        .is_ok());
     let result = client.try_set_protocol_limits(&admin, &5_000_000, &180, &2_592_001);
     assert_eq!(result, Err(Ok(QuickLendXError::InvalidTimestamp)));
 }

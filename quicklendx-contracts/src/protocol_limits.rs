@@ -214,7 +214,8 @@ impl ProtocolLimitsContract {
         }
 
         // Check maximum due date (current time + max days in seconds)
-        let max_due_date = current_time.saturating_add(limits.max_due_date_days.saturating_mul(86400));
+        let max_due_date =
+            current_time.saturating_add(limits.max_due_date_days.saturating_mul(86400));
         if due_date > max_due_date {
             return false;
         }

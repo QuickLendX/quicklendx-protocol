@@ -28,6 +28,8 @@ mod test_admin;
 #[cfg(test)]
 mod test_business_kyc;
 #[cfg(test)]
+mod test_cancel_refund;
+#[cfg(test)]
 mod test_dispute;
 #[cfg(test)]
 mod test_emergency_withdraw;
@@ -37,8 +39,6 @@ mod test_overflow;
 mod test_profit_fee;
 #[cfg(test)]
 mod test_refund;
-#[cfg(test)]
-mod test_cancel_refund;
 #[cfg(test)]
 mod test_storage;
 mod verification;
@@ -250,10 +250,7 @@ impl QuickLendXContract {
     /// - Can only be called once
     /// - No authorization required for initial setup
     /// - Admin address is permanently stored
-    pub fn initialize_protocol_limits(
-        env: Env,
-        admin: Address,
-    ) -> Result<(), QuickLendXError> {
+    pub fn initialize_protocol_limits(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         protocol_limits::ProtocolLimitsContract::initialize(env, admin)
     }
 
@@ -2708,6 +2705,10 @@ mod test_queries;
 mod test_reentrancy;
 
 #[cfg(test)]
+mod test_escrow_refund;
+#[cfg(test)]
+mod test_fuzz;
+#[cfg(test)]
 mod test_insurance;
 #[cfg(test)]
 mod test_investor_kyc;
@@ -2716,10 +2717,6 @@ mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
 #[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
+mod test_protocol_limits;
 #[cfg(test)]
 mod test_revenue_split;
-#[cfg(test)]
-mod test_protocol_limits;
