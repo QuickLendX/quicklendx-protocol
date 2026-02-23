@@ -3,6 +3,7 @@ use crate::events::{
     emit_dispute_created, emit_dispute_resolved, emit_dispute_under_review, emit_insurance_claimed,
     emit_invoice_defaulted, emit_invoice_expired,
 };
+use crate::init::ProtocolInitializer;
 use crate::investment::{InvestmentStatus, InvestmentStorage};
 use crate::invoice::{Dispute, DisputeStatus, InvoiceStatus, InvoiceStorage};
 use crate::notifications::NotificationSystem;
@@ -17,7 +18,8 @@ pub const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60;
 /// # Arguments
 /// * `env` - The environment
 /// * `invoice_id` - The invoice ID to mark as defaulted
-/// * `grace_period` - Optional grace period in seconds (defaults to DEFAULT_GRACE_PERIOD)
+/// * `grace_period` - Optional grace period in seconds. If `None`, uses protocol config or
+///   `DEFAULT_GRACE_PERIOD` when not configured.
 ///
 /// # Returns
 /// * `Ok(())` if the invoice was successfully marked as defaulted
@@ -41,7 +43,7 @@ pub fn mark_invoice_defaulted(
     }
 
     let current_timestamp = env.ledger().timestamp();
-    let grace = grace_period.unwrap_or(DEFAULT_GRACE_PERIOD);
+    let grace = resolve_grace_period(env, grace_period);
     let grace_deadline = invoice.grace_deadline(grace);
 
     // Check if grace period has passed
@@ -51,6 +53,16 @@ pub fn mark_invoice_defaulted(
 
     // Proceed with default handling
     handle_default(env, invoice_id)
+}
+
+/// Resolve grace period using per-call override, protocol config, or default.
+pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> u64 {
+    match grace_period {
+        Some(value) => value,
+        None => ProtocolInitializer::get_protocol_config(env)
+            .map(|config| config.grace_period_seconds)
+            .unwrap_or(DEFAULT_GRACE_PERIOD),
+    }
 }
 
 /// Handle invoice default - internal function that performs the actual defaulting
