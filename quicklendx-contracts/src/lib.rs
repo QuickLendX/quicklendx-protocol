@@ -39,6 +39,8 @@ mod test_profit_fee;
 mod test_storage;
 #[cfg(test)]
 mod test_refund;
+#[cfg(test)]
+mod test_cancel_refund;
 mod verification;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
