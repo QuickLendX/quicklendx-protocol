@@ -2,6 +2,10 @@ use core::cmp::{max, min};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec};
 
 use crate::errors::QuickLendXError;
+use crate::protocol_limits::{
+    check_string_length, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FEEDBACK_LENGTH,
+    MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
+};
 
 const DEFAULT_INVOICE_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days default grace period
 
@@ -137,7 +141,8 @@ impl Invoice {
         description: String,
         category: InvoiceCategory,
         tags: Vec<String>,
-    ) -> Self {
+    ) -> Result<Self, QuickLendXError> {
+        check_string_length(&description, MAX_DESCRIPTION_LENGTH)?;
         let id = Self::generate_unique_invoice_id(env);
         let created_at = env.ledger().timestamp();
 
@@ -187,7 +192,7 @@ impl Invoice {
         // Log invoice creation
         log_invoice_created(env, &invoice);
 
-        invoice
+        Ok(invoice)
     }
 
     /// Generate a unique invoice ID
@@ -307,6 +312,8 @@ impl Invoice {
             return Err(QuickLendXError::InvalidAmount);
         }
 
+        check_string_length(&transaction_id, MAX_TRANSACTION_ID_LENGTH)?;
+
         let record = PaymentRecord {
             amount,
             timestamp: env.ledger().timestamp(),
@@ -355,9 +362,22 @@ impl Invoice {
     }
 
     /// Update structured metadata attached to the invoice
-    pub fn set_metadata(&mut self, env: &Env, metadata: Option<InvoiceMetadata>) {
+    pub fn set_metadata(
+        &mut self,
+        env: &Env,
+        metadata: Option<InvoiceMetadata>,
+    ) -> Result<(), QuickLendXError> {
         match metadata {
             Some(data) => {
+                check_string_length(&data.customer_name, MAX_NAME_LENGTH)?;
+                check_string_length(&data.customer_address, MAX_ADDRESS_LENGTH)?;
+                check_string_length(&data.tax_id, MAX_TAX_ID_LENGTH)?;
+                check_string_length(&data.notes, MAX_NOTES_LENGTH)?;
+
+                for item in data.line_items.iter() {
+                    check_string_length(&item.0, MAX_DESCRIPTION_LENGTH)?;
+                }
+
                 self.metadata_customer_name = Some(data.customer_name);
                 self.metadata_customer_address = Some(data.customer_address);
                 self.metadata_tax_id = Some(data.tax_id);
@@ -372,6 +392,7 @@ impl Invoice {
                 self.metadata_line_items = Vec::new(env);
             }
         }
+        Ok(())
     }
 
     /// Verify the invoice with audit logging
@@ -416,6 +437,8 @@ impl Invoice {
         if self.status != InvoiceStatus::Funded && self.status != InvoiceStatus::Paid {
             return Err(QuickLendXError::NotFunded);
         }
+
+        check_string_length(&feedback, MAX_FEEDBACK_LENGTH)?;
 
         // Verify rater is the investor
         if self.investor.as_ref() != Some(&rater) {

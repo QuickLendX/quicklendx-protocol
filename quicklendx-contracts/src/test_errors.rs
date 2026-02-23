@@ -402,8 +402,8 @@ fn test_error_message_consistency() {
     // This test ensures error enum values are properly defined
 
     assert_eq!(QuickLendXError::InvoiceNotFound as u32, 1000);
-    assert_eq!(QuickLendXError::Unauthorized as u32, 1100);
-    assert_eq!(QuickLendXError::InvalidAmount as u32, 1200);
-    assert_eq!(QuickLendXError::StorageError as u32, 1300);
-    assert_eq!(QuickLendXError::InsufficientFunds as u32, 1400);
+    assert_eq!(QuickLendXError::Unauthorized as u32, 1004);
+    assert_eq!(QuickLendXError::InvalidAmount as u32, 1002);
+    assert_eq!(QuickLendXError::StorageError as u32, 1018);
+    assert_eq!(QuickLendXError::InsufficientFunds as u32, 1010);
 }

@@ -25,6 +25,8 @@ mod settlement;
 #[cfg(test)]
 mod storage;
 #[cfg(test)]
+mod test_string_limits;
+#[cfg(test)]
 mod test_admin;
 #[cfg(test)]
 mod test_business_kyc;
@@ -294,7 +296,7 @@ impl QuickLendXContract {
             description,
             category,
             tags,
-        );
+        )?;
 
         // Store the invoice
         InvoiceStorage::store_invoice(&env, &invoice);
@@ -351,7 +353,7 @@ impl QuickLendXContract {
             description.clone(),
             category,
             tags,
-        );
+        )?;
         InvoiceStorage::store_invoice(&env, &invoice);
         emit_invoice_uploaded(&env, &invoice);
         audit::log_invoice_uploaded(&env, invoice.id.clone(), business, invoice.amount);
@@ -488,7 +490,7 @@ impl QuickLendXContract {
             InvoiceStorage::remove_metadata_indexes(&env, &existing, &invoice.id);
         }
 
-        invoice.set_metadata(&env, Some(metadata.clone()));
+        invoice.set_metadata(&env, Some(metadata.clone()))?;
         InvoiceStorage::update_invoice(&env, &invoice);
         InvoiceStorage::add_metadata_indexes(&env, &invoice);
 
@@ -505,7 +507,7 @@ impl QuickLendXContract {
 
         if let Some(existing) = invoice.metadata() {
             InvoiceStorage::remove_metadata_indexes(&env, &existing, &invoice.id);
-            invoice.set_metadata(&env, None);
+            invoice.set_metadata(&env, None)?;
             InvoiceStorage::update_invoice(&env, &invoice);
             emit_invoice_metadata_cleared(&env, &invoice);
         }
