@@ -59,7 +59,9 @@ impl EmergencyWithdraw {
             initiated_by: admin.clone(),
         };
 
-        env.storage().instance().set(&PENDING_WITHDRAWAL_KEY, &pending);
+        env.storage()
+            .instance()
+            .set(&PENDING_WITHDRAWAL_KEY, &pending);
         env.events().publish(
             (symbol_short!("emg_init"),),
             (token, amount, target, unlock_at, admin.clone()),
@@ -118,5 +120,35 @@ impl EmergencyWithdraw {
     /// Get the current pending emergency withdrawal, if any.
     pub fn get_pending(env: &Env) -> Option<PendingEmergencyWithdrawal> {
         env.storage().instance().get(&PENDING_WITHDRAWAL_KEY)
+    }
+
+    /// Cancel a pending emergency withdrawal (admin only).
+    /// Useful if initiate was triggered by mistake or a threat has passed.
+    ///
+    /// # Errors
+    /// * `NotAdmin` if caller is not admin
+    /// * `StorageKeyNotFound` if no pending withdrawal exists
+    pub fn cancel(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(env, admin)?;
+
+        let pending: PendingEmergencyWithdrawal = env
+            .storage()
+            .instance()
+            .get(&PENDING_WITHDRAWAL_KEY)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+        env.storage().instance().remove(&PENDING_WITHDRAWAL_KEY);
+        env.events().publish(
+            (symbol_short!("emg_cncl"),),
+            (
+                pending.token.clone(),
+                pending.amount,
+                pending.target.clone(),
+                admin.clone(),
+            ),
+        );
+
+        Ok(())
     }
 }
