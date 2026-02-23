@@ -54,6 +54,7 @@ pub const MAX_PLATFORM_FEE_BPS: i128 = 1_000;
 pub const BPS_DENOMINATOR: i128 = 10_000;
 
 /// Minimum valid amount for calculations (must be positive)
+#[allow(dead_code)]
 pub const MIN_VALID_AMOUNT: i128 = 0;
 
 // ============================================================================
@@ -280,6 +281,7 @@ impl PlatformFee {
     /// assert_eq!(breakdown.investor_profit, 98);
     /// assert_eq!(breakdown.investor_return, 1098);
     /// ```
+    #[allow(dead_code)]
     pub fn calculate_breakdown(
         env: &Env,
         investment_amount: i128,
@@ -292,6 +294,7 @@ impl PlatformFee {
     /// Calculate breakdown with explicit fee basis points (pure function)
     ///
     /// Deterministic calculation without storage access.
+    #[allow(dead_code)]
     pub fn calculate_breakdown_with_fee_bps(
         investment_amount: i128,
         payment_amount: i128,
@@ -344,6 +347,7 @@ impl PlatformFee {
 /// let profit = calculate_investor_profit(&env, 1000, 1100);
 /// assert_eq!(profit, 98); // 100 profit - 2 fee
 /// ```
+#[allow(dead_code)]
 pub fn calculate_investor_profit(env: &Env, investment_amount: i128, payment_amount: i128) -> i128 {
     let breakdown = PlatformFee::calculate_breakdown(env, investment_amount, payment_amount);
     breakdown.investor_profit
@@ -373,6 +377,7 @@ pub fn calculate_investor_profit(env: &Env, investment_amount: i128, payment_amo
 /// let fee = calculate_platform_fee(&env, 1000, 1100);
 /// assert_eq!(fee, 2); // 2% of 100 profit
 /// ```
+#[allow(dead_code)]
 pub fn calculate_platform_fee(env: &Env, investment_amount: i128, payment_amount: i128) -> i128 {
     let breakdown = PlatformFee::calculate_breakdown(env, investment_amount, payment_amount);
     breakdown.platform_fee
@@ -417,6 +422,7 @@ pub fn calculate_profit(env: &Env, investment_amount: i128, payment_amount: i128
 /// assert_eq!(treasury, 50);     // 50% of 100
 /// assert_eq!(remaining, 50);    // remaining 50%
 /// ```
+#[allow(dead_code)]
 pub fn calculate_treasury_split(platform_fee: i128, treasury_share_bps: i128) -> (i128, i128) {
     if platform_fee <= 0 || treasury_share_bps <= 0 {
         return (0, platform_fee.max(0));
@@ -447,6 +453,7 @@ pub fn calculate_treasury_split(platform_fee: i128, treasury_share_bps: i128) ->
 ///
 /// # Returns
 /// `true` if calculation is dust-free, `false` otherwise
+#[allow(dead_code)]
 pub fn verify_no_dust(investor_return: i128, platform_fee: i128, payment_amount: i128) -> bool {
     investor_return.saturating_add(platform_fee) == payment_amount
 }
@@ -461,6 +468,7 @@ pub fn verify_no_dust(investor_return: i128, platform_fee: i128, payment_amount:
 ///
 /// # Returns
 /// `Ok(())` if valid, `Err(InvalidAmount)` otherwise
+#[allow(dead_code)]
 pub fn validate_calculation_inputs(
     investment_amount: i128,
     payment_amount: i128,

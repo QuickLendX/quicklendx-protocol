@@ -203,6 +203,7 @@ impl AnalyticsStorage {
         (symbol_short!("inv_perf"),)
     }
 
+    #[allow(dead_code)]
     fn analytics_data_key() -> (soroban_sdk::Symbol,) {
         (symbol_short!("analytics"),)
     }
