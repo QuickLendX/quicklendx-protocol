@@ -26,6 +26,18 @@ The QuickLendX platform implements a configurable fee system with treasury routi
 - **Profit-based Calculation**: Fees are only applied to the profit portion (payment amount - investment amount)
 - **Transparent Calculation**: Clear separation between investor returns and platform fees
 
+### 4. Volume Tiers
+
+- **Tiered Discounts**: User transaction volume determines a discount (basis points) applied to fee calculation: Standard (0), Silver (5%), Gold (10%), Platinum (15%).
+- **Tier Thresholds**: Volume is accumulated via `update_user_transaction_volume`; tiers are derived from `total_volume` (e.g. Platinum at 1e12+).
+- **Usage**: `calculate_total_fees` and `calculate_transaction_fees` use `get_tier_discount` for volume-based fee reduction.
+
+### 5. Fee Bounds Validation
+
+- **Admin-only Config**: Fee structures (base_fee_bps, min_fee, max_fee) and platform fee BPS are updated only by admin; all such functions require admin auth and validate bounds.
+- **Validate Fee Parameters**: `validate_fee_parameters(base_fee_bps, min_fee, max_fee)` enforces: `base_fee_bps <= 1000` (10% max), `min_fee >= 0`, `max_fee >= min_fee`. Used before updating fee structures.
+- **Zero Fee**: Supported; when fee_bps is 0 or profit is zero, platform fee is 0 and investor receives full payment. Overflow-safe math uses `saturating_mul` / `saturating_sub` in fee and revenue calculations.
+
 ## Technical Implementation
 
 ### Core Components
@@ -88,6 +100,11 @@ The fee system integrates seamlessly with the invoice settlement process:
    - Treasury receives: `platform_fee` (if configured)
    - Contract receives: `platform_fee` (if no treasury configured)
 4. **Event Emission**: `platform_fee_routed` event is emitted with routing details
+
+### Revenue Distribution (Treasury / Developer / Platform)
+
+- **Configuration**: `configure_revenue_distribution` (admin only) sets `treasury_share_bps`, `developer_share_bps`, `platform_share_bps` (must sum to 10_000), plus `min_distribution_amount` and `auto_distribution`.
+- **Distribution**: `distribute_revenue(admin, period)` splits collected fees for the period according to the configured BPS; returns `(treasury_amount, developer_amount, platform_amount)`. Tests cover rounding and zero-fee cases (`test_fees.rs`, `test_revenue_split.rs`).
 
 ## Security Considerations
 
