@@ -228,8 +228,13 @@ impl AuditStorage {
         filter: &AuditQueryFilter,
         limit: u32,
     ) -> Vec<AuditLogEntry> {
+        let capped_limit = limit.min(crate::MAX_QUERY_LIMIT);
         let mut results = Vec::new(env);
         let mut count = 0u32;
+
+        if capped_limit == 0 {
+            return results;
+        }
 
         // Start with invoice-specific entries if invoice_id is provided
         let audit_ids = if let Some(invoice_id) = &filter.invoice_id {
@@ -244,7 +249,7 @@ impl AuditStorage {
         };
 
         for audit_id in audit_ids.iter() {
-            if count >= limit {
+            if count >= capped_limit {
                 break;
             }
 

@@ -36,9 +36,9 @@ mod test_overflow;
 #[cfg(test)]
 mod test_profit_fee;
 #[cfg(test)]
-mod test_storage;
-#[cfg(test)]
 mod test_refund;
+#[cfg(test)]
+mod test_storage;
 mod verification;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
@@ -92,6 +92,14 @@ use audit::{AuditLogEntry, AuditOperation, AuditQueryFilter, AuditStats, AuditSt
 
 #[contract]
 pub struct QuickLendXContract;
+
+/// Maximum number of records returned by paginated query endpoints.
+pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
+
+#[inline]
+fn cap_query_limit(limit: u32) -> u32 {
+    limit.min(MAX_QUERY_LIMIT)
+}
 
 #[contractimpl]
 impl QuickLendXContract {
@@ -1569,7 +1577,8 @@ impl QuickLendXContract {
 
     /// Query audit logs with filters
     pub fn query_audit_logs(env: Env, filter: AuditQueryFilter, limit: u32) -> Vec<AuditLogEntry> {
-        let results = AuditStorage::query_audit_logs(&env, &filter, limit);
+        let capped_limit = cap_query_limit(limit);
+        let results = AuditStorage::query_audit_logs(&env, &filter, capped_limit);
         emit_audit_query(
             &env,
             String::from_str(&env, "query_audit_logs"),
@@ -2018,8 +2027,9 @@ impl QuickLendXContract {
         filters: Vec<String>,
         limit: u32,
     ) -> Result<Vec<String>, QuickLendXError> {
+        let capped_limit = cap_query_limit(limit);
         // Emit event
-        events::emit_analytics_query(&env, &query_type, filters.len() as u32, limit);
+        events::emit_analytics_query(&env, &query_type, filters.len() as u32, capped_limit);
 
         // Return basic analytics data
         let mut results = Vec::new(&env);
@@ -2332,6 +2342,7 @@ impl QuickLendXContract {
         offset: u32,
         limit: u32,
     ) -> Vec<BytesN<32>> {
+        let capped_limit = cap_query_limit(limit);
         let all_invoices = InvoiceStorage::get_business_invoices(&env, &business);
         let mut filtered = Vec::new(&env);
 
@@ -2351,7 +2362,7 @@ impl QuickLendXContract {
         let mut result = Vec::new(&env);
         let len_u32 = filtered.len() as u32;
         let start = offset.min(len_u32);
-        let end = start.saturating_add(limit).min(len_u32);
+        let end = start.saturating_add(capped_limit).min(len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(invoice_id) = filtered.get(idx) {
@@ -2370,6 +2381,7 @@ impl QuickLendXContract {
         offset: u32,
         limit: u32,
     ) -> Vec<BytesN<32>> {
+        let capped_limit = cap_query_limit(limit);
         let all_investment_ids = InvestmentStorage::get_investments_by_investor(&env, &investor);
         let mut filtered = Vec::new(&env);
 
@@ -2389,7 +2401,7 @@ impl QuickLendXContract {
         let mut result = Vec::new(&env);
         let len_u32 = filtered.len() as u32;
         let start = offset.min(len_u32);
-        let end = start.saturating_add(limit).min(len_u32);
+        let end = start.saturating_add(capped_limit).min(len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(investment_id) = filtered.get(idx) {
@@ -2409,6 +2421,7 @@ impl QuickLendXContract {
         offset: u32,
         limit: u32,
     ) -> Vec<BytesN<32>> {
+        let capped_limit = cap_query_limit(limit);
         let verified_invoices =
             InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified);
         let mut filtered = Vec::new(&env);
@@ -2440,7 +2453,7 @@ impl QuickLendXContract {
         let mut result = Vec::new(&env);
         let len_u32 = filtered.len() as u32;
         let start = offset.min(len_u32);
-        let end = start.saturating_add(limit).min(len_u32);
+        let end = start.saturating_add(capped_limit).min(len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(invoice_id) = filtered.get(idx) {
@@ -2459,6 +2472,7 @@ impl QuickLendXContract {
         offset: u32,
         limit: u32,
     ) -> Vec<Bid> {
+        let capped_limit = cap_query_limit(limit);
         let all_bids = BidStorage::get_bid_records_for_invoice(&env, &invoice_id);
         let mut filtered = Vec::new(&env);
 
@@ -2476,7 +2490,7 @@ impl QuickLendXContract {
         let mut result = Vec::new(&env);
         let len_u32 = filtered.len() as u32;
         let start = offset.min(len_u32);
-        let end = start.saturating_add(limit).min(len_u32);
+        let end = start.saturating_add(capped_limit).min(len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(bid) = filtered.get(idx) {
@@ -2495,6 +2509,7 @@ impl QuickLendXContract {
         offset: u32,
         limit: u32,
     ) -> Vec<Bid> {
+        let capped_limit = cap_query_limit(limit);
         let all_bid_ids = BidStorage::get_bids_by_investor_all(&env, &investor);
         let mut filtered = Vec::new(&env);
 
@@ -2514,7 +2529,7 @@ impl QuickLendXContract {
         let mut result = Vec::new(&env);
         let len_u32 = filtered.len() as u32;
         let start = offset.min(len_u32);
-        let end = start.saturating_add(limit).min(len_u32);
+        let end = start.saturating_add(capped_limit).min(len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(bid) = filtered.get(idx) {
@@ -2582,6 +2597,6 @@ mod test_profit_fee_formula;
 //#[cfg(test)]
 //mod test_escrow_refund;
 #[cfg(test)]
-mod test_revenue_split;
-#[cfg(test)]
 mod test_fuzz;
+#[cfg(test)]
+mod test_revenue_split;

@@ -187,6 +187,40 @@ fn test_audit_query_time_range() {
 }
 
 #[test]
+fn test_audit_query_limit_is_capped_to_max_query_limit() {
+    let (env, client, _admin, business) = setup();
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    for i in 0..130u32 {
+        let _ = client.store_invoice(
+            &business,
+            &(1_000i128 + i as i128),
+            &currency,
+            &due_date,
+            &String::from_str(&env, "Cap"),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
+    }
+
+    let filter = AuditQueryFilter {
+        invoice_id: None,
+        operation: AuditOperationFilter::Specific(AuditOperation::InvoiceCreated),
+        actor: Some(business),
+        start_timestamp: None,
+        end_timestamp: None,
+    };
+
+    let results = client.query_audit_logs(&filter, &500u32);
+    assert_eq!(
+        results.len(),
+        crate::MAX_QUERY_LIMIT,
+        "audit query should enforce MAX_QUERY_LIMIT cap"
+    );
+}
+
+#[test]
 fn test_audit_integrity_valid() {
     let (env, client, _admin, business) = setup();
     let currency = Address::generate(&env);
