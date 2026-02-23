@@ -214,3 +214,20 @@ fn test_cannot_refund_twice() {
     let result = client.try_refund_escrow_funds(&invoice_id, &business);
     assert!(result.is_err(), "Cannot refund an already refunded invoice");
 }
+
+#[test]
+fn test_cannot_refund_nonexistent_invoice() {
+    let (env, client, admin) = setup();
+    
+    // Generate a random invoice ID that doesn't exist
+    let nonexistent_invoice_id = BytesN::from_array(&env, &[1u8; 32]);
+    
+    // Attempt to refund
+    let result = client.try_refund_escrow_funds(&nonexistent_invoice_id, &admin);
+    
+    // Verify it returns an error
+    assert!(
+        result.is_err(),
+        "Cannot refund a nonexistent invoice"
+    );
+}
