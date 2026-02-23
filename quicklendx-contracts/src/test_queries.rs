@@ -1,9 +1,13 @@
+//! Query tests for get_business_invoices, get_business_invoices_paged, and related endpoints.
+//!
+//! Covers: empty business, single/multiple status filters, pagination correctness,
+//! and integration with available-invoices and audit queries.
+
 use super::*;
 use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
-use crate::bid::BidStatus;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::Address as _,
     Address, BytesN, Env, String, Vec,
 };
 
@@ -98,6 +102,153 @@ fn test_get_business_invoices_paged_empty_and_pagination() {
     let p_zero =
         client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &0u32, &0u32);
     assert_eq!(p_zero.len(), 0, "Limit zero should return empty results");
+}
+
+// ============================================================================
+// get_business_invoices and get_business_invoices_paged — status_filter & pagination
+// ============================================================================
+
+/// get_business_invoices returns an empty vector for a business that has no invoices.
+#[test]
+fn test_get_business_invoices_empty_business() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+
+    let ids = client.get_business_invoices(&business);
+    assert!(ids.is_empty(), "Expected no invoices for business with no invoices");
+}
+
+/// get_business_invoices returns all invoice IDs created for that business.
+#[test]
+fn test_get_business_invoices_returns_created_invoices() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+
+    let id1 = create_invoice(&env, &client, &business, 1000, InvoiceCategory::Services, false);
+    let id2 = create_invoice(&env, &client, &business, 2000, InvoiceCategory::Products, false);
+
+    let ids = client.get_business_invoices(&business);
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&id1));
+    assert!(ids.contains(&id2));
+}
+
+/// get_business_invoices_paged with status_filter: None returns all; Some(status) returns only that status.
+#[test]
+fn test_get_business_invoices_paged_status_filter_single_and_none() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let business = Address::generate(&env);
+    let id_pending1 = create_invoice(&env, &client, &business, 1000, InvoiceCategory::Services, false);
+    let id_pending2 = create_invoice(&env, &client, &business, 2000, InvoiceCategory::Products, false);
+    let id_verified = create_invoice(&env, &client, &business, 3000, InvoiceCategory::Services, true);
+
+    // No filter => all 3
+    let all = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(all.len(), 3);
+    assert!(all.contains(&id_pending1));
+    assert!(all.contains(&id_pending2));
+    assert!(all.contains(&id_verified));
+
+    // Single status: Pending => only the two pending
+    let pending_only = client.get_business_invoices_paged(
+        &business,
+        &Some(InvoiceStatus::Pending),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(pending_only.len(), 2);
+    assert!(pending_only.contains(&id_pending1));
+    assert!(pending_only.contains(&id_pending2));
+    assert!(!pending_only.contains(&id_verified));
+
+    // Single status: Verified => only the verified one
+    let verified_only = client.get_business_invoices_paged(
+        &business,
+        &Some(InvoiceStatus::Verified),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(verified_only.len(), 1);
+    assert_eq!(verified_only.get(0), Some(id_verified));
+}
+
+/// Pagination: consecutive pages return disjoint slices; order and size match offset/limit.
+#[test]
+fn test_get_business_invoices_paged_pagination_correctness() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+
+    for i in 0..5 {
+        create_invoice(
+            &env,
+            &client,
+            &business,
+            1000 + i * 100,
+            InvoiceCategory::Services,
+            false,
+        );
+    }
+
+    let all = client.get_business_invoices(&business);
+    assert_eq!(all.len(), 5);
+
+    let page0 = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &2u32,
+    );
+    let page1 = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &2u32,
+        &2u32,
+    );
+    let page2 = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &4u32,
+        &2u32,
+    );
+
+    assert_eq!(page0.len(), 2);
+    assert_eq!(page1.len(), 2);
+    assert_eq!(page2.len(), 1);
+
+    // No overlap: page0 and page1 and page2 should be disjoint
+    for a in page0.iter() {
+        for b in page1.iter() {
+            assert!(a != b, "page0 and page1 must not overlap");
+        }
+        for b in page2.iter() {
+            assert!(a != b, "page0 and page2 must not overlap");
+        }
+    }
+    for a in page1.iter() {
+        for b in page2.iter() {
+            assert!(a != b, "page1 and page2 must not overlap");
+        }
+    }
+
+    // Every returned id must be in the full list
+    for id in page0.iter() {
+        assert!(all.contains(&id));
+    }
+    for id in page1.iter() {
+        assert!(all.contains(&id));
+    }
+    for id in page2.iter() {
+        assert!(all.contains(&id));
+    }
 }
 
 #[test]
