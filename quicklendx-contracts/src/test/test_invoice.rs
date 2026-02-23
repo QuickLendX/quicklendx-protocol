@@ -230,8 +230,189 @@ fn test_invoice_creation_invalid_description_empty() {
 }
 
 // ============================================================================
-// AUTHORIZATION AND ACCESS CONTROL TESTS
+// STORE_INVOICE: CURRENCY AND TAGS (Issue #269 – cover all error variants)
 // ============================================================================
+
+#[test]
+fn test_invoice_creation_invalid_non_whitelisted_currency() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
+    client.set_admin(&admin);
+    let allowed = Address::generate(&env);
+    client.add_currency(&admin, &allowed);
+    let business = Address::generate(&env);
+    let disallowed_currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let result = client.try_store_invoice(
+        &business,
+        &1000,
+        &disallowed_currency,
+        &due_date,
+        &String::from_str(&env, "Valid description"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidCurrency);
+}
+
+#[test]
+fn test_invoice_creation_valid_categories() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Category test");
+
+    for category in [
+        InvoiceCategory::Services,
+        InvoiceCategory::Products,
+        InvoiceCategory::Consulting,
+        InvoiceCategory::Manufacturing,
+        InvoiceCategory::Technology,
+        InvoiceCategory::Healthcare,
+        InvoiceCategory::Other,
+    ] {
+        let invoice_id = client.store_invoice(
+            &business,
+            &1000,
+            &currency,
+            &due_date,
+            &description,
+            &category,
+            &Vec::new(&env),
+        );
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.category, category);
+    }
+}
+
+#[test]
+fn test_invoice_creation_valid_tags() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, "urgent"));
+    tags.push_back(String::from_str(&env, "q1"));
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Tagged invoice"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.tags.len(), 2);
+}
+
+#[test]
+fn test_invoice_creation_invalid_tag_empty() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, ""));
+
+    let result = client.try_store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Description"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidTag);
+}
+
+#[test]
+fn test_invoice_creation_invalid_tag_too_long() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let mut tags = Vec::new(&env);
+    // Tag length must be 1-50; 51 chars is invalid
+    const LONG_TAG: &str = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    assert_eq!(LONG_TAG.len(), 51);
+    tags.push_back(String::from_str(&env, LONG_TAG));
+
+    let result = client.try_store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Description"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidTag);
+}
+
+#[test]
+fn test_invoice_creation_invalid_tag_limit_exceeded() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let mut tags = Vec::new(&env);
+    for i in 0..11 {
+        let tag = match i {
+            0 => "a",
+            1 => "b",
+            2 => "c",
+            3 => "d",
+            4 => "e",
+            5 => "f",
+            6 => "g",
+            7 => "h",
+            8 => "i",
+            9 => "j",
+            _ => "k",
+        };
+        tags.push_back(String::from_str(&env, tag));
+    }
+
+    let result = client.try_store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Description"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::TagLimitExceeded);
+}
 
 #[test]
 fn test_invoice_upload_requires_business_verification() {

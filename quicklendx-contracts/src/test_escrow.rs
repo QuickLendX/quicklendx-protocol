@@ -579,8 +579,7 @@ fn test_escrow_invariants() {
 }
 
 // ============================================================================
-// release_escrow_funds: success and idempotency (Issue #243 – double-release blocked)
-// ============================================================================
+
 
 #[test]
 fn test_release_escrow_funds_success() {
