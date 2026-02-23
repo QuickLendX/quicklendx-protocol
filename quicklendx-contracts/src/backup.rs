@@ -40,7 +40,9 @@ impl BackupStorage {
         // Embed counter
         id_bytes[10..18].copy_from_slice(&next_counter.to_be_bytes());
         // Fill remaining bytes (overflow-safe)
-        let mix = timestamp.saturating_add(next_counter).saturating_add(0xB4C4);
+        let mix = timestamp
+            .saturating_add(next_counter)
+            .saturating_add(0xB4C4);
         for i in 18..32 {
             id_bytes[i] = (mix % 256) as u8;
         }

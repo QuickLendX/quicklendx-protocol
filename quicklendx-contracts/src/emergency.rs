@@ -59,7 +59,9 @@ impl EmergencyWithdraw {
             initiated_by: admin.clone(),
         };
 
-        env.storage().instance().set(&PENDING_WITHDRAWAL_KEY, &pending);
+        env.storage()
+            .instance()
+            .set(&PENDING_WITHDRAWAL_KEY, &pending);
         env.events().publish(
             (symbol_short!("emg_init"),),
             (token, amount, target, unlock_at, admin.clone()),

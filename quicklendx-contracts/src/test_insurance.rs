@@ -83,7 +83,14 @@ fn test_add_insurance_requires_investor_auth() {
     let attacker = Address::generate(&env);
     let provider = Address::generate(&env);
 
-    let investment_id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 1);
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        1,
+    );
 
     let auth = MockAuth {
         address: &attacker,
@@ -129,8 +136,14 @@ fn test_add_insurance_requires_active_investment() {
     ];
 
     for (idx, status) in statuses.iter().enumerate() {
-        let investment_id =
-            store_investment(&env, &contract_id, &investor, 5_000, status.clone(), (idx + 2) as u8);
+        let investment_id = store_investment(
+            &env,
+            &contract_id,
+            &investor,
+            5_000,
+            status.clone(),
+            (idx + 2) as u8,
+        );
 
         let result = client.try_add_investment_insurance(&investment_id, &provider, &50u32);
         let err = result.err().expect("expected invalid status error");
@@ -164,7 +177,14 @@ fn test_state_transition_before_add_rejected() {
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
 
-    let investment_id = store_investment(&env, &contract_id, &investor, 7_500, InvestmentStatus::Active, 9);
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        7_500,
+        InvestmentStatus::Active,
+        9,
+    );
 
     env.as_contract(&contract_id, || {
         let mut investment = InvestmentStorage::get_investment(&env, &investment_id).unwrap();
@@ -193,7 +213,14 @@ fn test_premium_and_coverage_math_exact() {
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
 
-    let investment_id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 4);
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        4,
+    );
 
     client.add_investment_insurance(&investment_id, &provider, &80u32);
 
@@ -206,7 +233,14 @@ fn test_premium_and_coverage_math_exact() {
         Investment::calculate_premium(10_000, 80)
     );
 
-    let investment_id_small = store_investment(&env, &contract_id, &investor, 500, InvestmentStatus::Active, 5);
+    let investment_id_small = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        500,
+        InvestmentStatus::Active,
+        5,
+    );
     client.add_investment_insurance(&investment_id_small, &provider, &1u32);
 
     let stored_small = client.get_investment(&investment_id_small);
@@ -223,7 +257,14 @@ fn test_zero_coverage_and_invalid_inputs() {
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
 
-    let investment_id = store_investment(&env, &contract_id, &investor, 1_000, InvestmentStatus::Active, 6);
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        1_000,
+        InvestmentStatus::Active,
+        6,
+    );
 
     let result = client.try_add_investment_insurance(&investment_id, &provider, &0u32);
     let err = result.err().expect("expected invalid amount error");
@@ -235,13 +276,27 @@ fn test_zero_coverage_and_invalid_inputs() {
     let contract_error = err.expect("expected contract error");
     assert_eq!(contract_error, QuickLendXError::InvalidCoveragePercentage);
 
-    let small_amount_id = store_investment(&env, &contract_id, &investor, 50, InvestmentStatus::Active, 7);
+    let small_amount_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        50,
+        InvestmentStatus::Active,
+        7,
+    );
     let result = client.try_add_investment_insurance(&small_amount_id, &provider, &1u32);
     let err = result.err().expect("expected invalid amount error");
     let contract_error = err.expect("expected contract error");
     assert_eq!(contract_error, QuickLendXError::InvalidAmount);
 
-    let negative_amount_id = store_investment(&env, &contract_id, &investor, -10, InvestmentStatus::Active, 8);
+    let negative_amount_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        -10,
+        InvestmentStatus::Active,
+        8,
+    );
     let result = client.try_add_investment_insurance(&negative_amount_id, &provider, &10u32);
     let err = result.err().expect("expected invalid amount error");
     let contract_error = err.expect("expected contract error");
@@ -257,7 +312,14 @@ fn test_large_values_handle_saturation() {
     let provider = Address::generate(&env);
 
     let amount = i128::MAX;
-    let investment_id = store_investment(&env, &contract_id, &investor, amount, InvestmentStatus::Active, 10);
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        amount,
+        InvestmentStatus::Active,
+        10,
+    );
 
     client.add_investment_insurance(&investment_id, &provider, &100u32);
 
@@ -288,8 +350,22 @@ fn test_multiple_entries_and_no_cross_investment_leakage() {
     let provider_two = Address::generate(&env);
     let provider_three = Address::generate(&env);
 
-    let investment_a = store_investment(&env, &contract_id, &investor, 12_000, InvestmentStatus::Active, 11);
-    let investment_b = store_investment(&env, &contract_id, &investor, 8_000, InvestmentStatus::Active, 12);
+    let investment_a = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        12_000,
+        InvestmentStatus::Active,
+        11,
+    );
+    let investment_b = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        8_000,
+        InvestmentStatus::Active,
+        12,
+    );
 
     client.add_investment_insurance(&investment_a, &provider_one, &60u32);
 
@@ -334,7 +410,14 @@ fn test_duplicate_submission_rejected_and_state_unchanged() {
     let provider = Address::generate(&env);
     let provider_two = Address::generate(&env);
 
-    let investment_id = store_investment(&env, &contract_id, &investor, 9_000, InvestmentStatus::Active, 13);
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        9_000,
+        InvestmentStatus::Active,
+        13,
+    );
     client.add_investment_insurance(&investment_id, &provider, &70u32);
 
     let before = client.get_investment(&investment_id);
