@@ -81,7 +81,7 @@ use verification::{
     InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
 };
 
-use crate::backup::{Backup, BackupStatus, BackupStorage};
+use crate::backup::{Backup, BackupRetentionPolicy, BackupStatus, BackupStorage};
 use crate::notifications::{
     Notification, NotificationDeliveryStatus, NotificationPreferences, NotificationStats,
     NotificationSystem,
@@ -1506,8 +1506,8 @@ impl QuickLendXContract {
         BackupStorage::store_backup_data(&env, &backup_id, &all_invoices);
         BackupStorage::add_to_backup_list(&env, &backup_id);
 
-        // Clean up old backups (keep last 5)
-        BackupStorage::cleanup_old_backups(&env, 5)?;
+        // Clean up old backups based on retention policy
+        BackupStorage::cleanup_old_backups(&env)?;
 
         // Emit event
         events::emit_backup_created(&env, &backup_id, backup.invoice_count);
@@ -1577,6 +1577,52 @@ impl QuickLendXContract {
     /// Get backup details
     pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<Backup> {
         BackupStorage::get_backup(&env, &backup_id)
+    }
+
+    /// Set backup retention policy (admin only)
+    pub fn set_backup_retention_policy(
+        env: Env,
+        max_backups: u32,
+        max_age_seconds: u64,
+        auto_cleanup_enabled: bool,
+    ) -> Result<(), QuickLendXError> {
+        // Only admin can configure retention policy
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
+        let policy = BackupRetentionPolicy {
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+        };
+
+        BackupStorage::set_retention_policy(&env, &policy);
+
+        // Emit event
+        events::emit_retention_policy_updated(&env, max_backups, max_age_seconds, auto_cleanup_enabled);
+
+        Ok(())
+    }
+
+    /// Get current backup retention policy
+    pub fn get_backup_retention_policy(env: Env) -> BackupRetentionPolicy {
+        BackupStorage::get_retention_policy(&env)
+    }
+
+    /// Manually trigger backup cleanup (admin only)
+    pub fn cleanup_backups(env: Env) -> Result<u32, QuickLendXError> {
+        // Only admin can manually trigger cleanup
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
+        let removed_count = BackupStorage::cleanup_old_backups(&env)?;
+
+        // Emit event
+        events::emit_backups_cleaned(&env, removed_count);
+
+        Ok(removed_count)
     }
 
     /// Internal function to clear all invoice data

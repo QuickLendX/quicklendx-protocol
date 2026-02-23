@@ -2137,6 +2137,266 @@ fn test_archive_backup() {
     assert!(!backups.contains(&backup_id));
 }
 
+#[test]
+fn test_backup_retention_policy_by_count() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Set up admin
+    let admin = Address::generate(&env);
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    // Set retention policy to keep only 3 backups
+    env.mock_all_auths();
+    client.set_backup_retention_policy(&3, &0, &true);
+
+    // Verify policy was set
+    let policy = client.get_backup_retention_policy();
+    assert_eq!(policy.max_backups, 3);
+    assert_eq!(policy.max_age_seconds, 0);
+    assert_eq!(policy.auto_cleanup_enabled, true);
+
+    // Create 5 backups
+    env.mock_all_auths();
+    for i in 0..5 {
+        let desc = String::from_str(&env, "Backup");
+        client.create_backup(&desc);
+        // Advance time slightly between backups
+        env.ledger().with_mut(|li| li.timestamp += 10);
+    }
+
+    // Should only have 3 backups (oldest 2 removed)
+    let backups = client.get_backups();
+    assert_eq!(backups.len(), 3);
+}
+
+#[test]
+fn test_backup_retention_policy_by_age() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Set up admin
+    let admin = Address::generate(&env);
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    // Set retention policy to keep backups for 100 seconds, unlimited count
+    // Disable auto cleanup initially to create all backups
+    env.mock_all_auths();
+    client.set_backup_retention_policy(&0, &100, &false);
+
+    // Create 3 backups with time gaps
+    env.mock_all_auths();
+    let backup1 = client.create_backup(&String::from_str(&env, "Old backup 1"));
+    env.ledger().with_mut(|li| li.timestamp += 50);
+    
+    let backup2 = client.create_backup(&String::from_str(&env, "Old backup 2"));
+    env.ledger().with_mut(|li| li.timestamp += 60); // Total 110 seconds from backup1
+    
+    let backup3 = client.create_backup(&String::from_str(&env, "Recent backup"));
+
+    // All 3 should exist initially
+    let backups = client.get_backups();
+    assert_eq!(backups.len(), 3);
+
+    // Advance time by 10 more seconds (backup1 is now 120 seconds old)
+    env.ledger().with_mut(|li| li.timestamp += 10);
+
+    // Manually trigger cleanup
+    env.mock_all_auths();
+    let removed = client.cleanup_backups();
+    assert_eq!(removed, 0); // No cleanup because auto_cleanup is disabled
+
+    // Enable auto cleanup
+    env.mock_all_auths();
+    client.set_backup_retention_policy(&0, &100, &true);
+
+    // Manually trigger cleanup
+    env.mock_all_auths();
+    let removed = client.cleanup_backups();
+    assert_eq!(removed, 1); // backup1 should be removed
+
+    // Should have 2 backups left
+    let backups = client.get_backups();
+    assert_eq!(backups.len(), 2);
+    assert!(!backups.contains(&backup1));
+    assert!(backups.contains(&backup2));
+    assert!(backups.contains(&backup3));
+}
+
+#[test]
+fn test_backup_retention_policy_combined() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Set up admin
+    let admin = Address::generate(&env);
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    // Set retention policy: max 5 backups AND max age 200 seconds
+    env.mock_all_auths();
+    client.set_backup_retention_policy(&5, &200, &true);
+
+    // Create 7 backups with time gaps
+    env.mock_all_auths();
+    for i in 0..7 {
+        client.create_backup(&String::from_str(&env, "Backup"));
+        env.ledger().with_mut(|li| li.timestamp += 30);
+    }
+
+    // Should have 5 backups (count limit applied)
+    let backups = client.get_backups();
+    assert_eq!(backups.len(), 5);
+
+    // Advance time significantly
+    env.ledger().with_mut(|li| li.timestamp += 300);
+
+    // Create one more backup (triggers cleanup)
+    env.mock_all_auths();
+    client.create_backup(&String::from_str(&env, "New backup"));
+
+    // All old backups should be removed by age, only the new one remains
+    let backups = client.get_backups();
+    assert_eq!(backups.len(), 1);
+}
+
+#[test]
+fn test_backup_retention_policy_disabled_cleanup() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Set up admin
+    let admin = Address::generate(&env);
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    // Set retention policy with cleanup disabled
+    env.mock_all_auths();
+    client.set_backup_retention_policy(&2, &0, &false);
+
+    // Create 5 backups
+    env.mock_all_auths();
+    for i in 0..5 {
+        client.create_backup(&String::from_str(&env, "Backup"));
+    }
+
+    // All 5 should still exist (cleanup disabled)
+    let backups = client.get_backups();
+    assert_eq!(backups.len(), 5);
+}
+
+#[test]
+fn test_backup_retention_policy_unlimited() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Set up admin
+    let admin = Address::generate(&env);
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    // Set retention policy with unlimited backups (0 = unlimited)
+    env.mock_all_auths();
+    client.set_backup_retention_policy(&0, &0, &true);
+
+    // Create 10 backups
+    env.mock_all_auths();
+    for i in 0..10 {
+        client.create_backup(&String::from_str(&env, "Backup"));
+    }
+
+    // All 10 should exist (unlimited)
+    let backups = client.get_backups();
+    assert_eq!(backups.len(), 10);
+}
+
+#[test]
+fn test_backup_retention_policy_archived_not_cleaned() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Set up admin
+    let admin = Address::generate(&env);
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    // Set retention policy to keep only 2 backups
+    env.mock_all_auths();
+    client.set_backup_retention_policy(&2, &0, &true);
+
+    // Create 3 backups
+    env.mock_all_auths();
+    let backup1 = client.create_backup(&String::from_str(&env, "Backup 1"));
+    let backup2 = client.create_backup(&String::from_str(&env, "Backup 2"));
+    
+    // Archive the first backup
+    env.mock_all_auths();
+    client.archive_backup(&backup1);
+    
+    let backup3 = client.create_backup(&String::from_str(&env, "Backup 3"));
+
+    // Should have 2 active backups (backup2 and backup3)
+    let backups = client.get_backups();
+    assert_eq!(backups.len(), 2);
+    assert!(backups.contains(&backup2));
+    assert!(backups.contains(&backup3));
+    
+    // Archived backup should still exist but not in active list
+    let archived = client.get_backup_details(&backup1);
+    assert!(archived.is_some());
+    assert_eq!(archived.unwrap().status, BackupStatus::Archived);
+}
+
+#[test]
+fn test_manual_cleanup_backups() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Set up admin
+    let admin = Address::generate(&env);
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    // Set retention policy
+    env.mock_all_auths();
+    client.set_backup_retention_policy(&3, &0, &true);
+
+    // Create 6 backups with auto-cleanup disabled temporarily
+    env.mock_all_auths();
+    client.set_backup_retention_policy(&3, &0, &false);
+    
+    for i in 0..6 {
+        client.create_backup(&String::from_str(&env, "Backup"));
+    }
+
+    // Should have all 6 (cleanup was disabled)
+    let backups = client.get_backups();
+    assert_eq!(backups.len(), 6);
+
+    // Re-enable cleanup
+    env.mock_all_auths();
+    client.set_backup_retention_policy(&3, &0, &true);
+
+    // Manually trigger cleanup
+    env.mock_all_auths();
+    let removed = client.cleanup_backups();
+    assert_eq!(removed, 3);
+
+    // Should have 3 backups left
+    let backups = client.get_backups();
+    assert_eq!(backups.len(), 3);
+}
+
+
 // TODO: Fix authorization issues in test environment
 // #[test]
 fn test_audit_trail_creation() {
