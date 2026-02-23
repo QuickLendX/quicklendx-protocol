@@ -193,3 +193,35 @@ fn test_cancel_without_pending_fails() {
     let res = client.try_cancel_emergency_withdraw(&admin);
     assert!(res.is_err());
 }
+
+#[test]
+fn test_non_admin_cannot_cancel() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let token = Address::generate(&env);
+    let target = Address::generate(&env);
+    client.initiate_emergency_withdraw(&admin, &token, &500i128, &target);
+
+    let non_admin = Address::generate(&env);
+    let res = client.try_cancel_emergency_withdraw(&non_admin);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_cancel_prevents_execute() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let token = Address::generate(&env);
+    let target = Address::generate(&env);
+
+    client.initiate_emergency_withdraw(&admin, &token, &500i128, &target);
+    client.cancel_emergency_withdraw(&admin);
+
+    // Advance time past timelock
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
+
+    // Execute should fail because withdrawal was cancelled
+    let res = client.try_execute_emergency_withdraw(&admin);
+    assert!(res.is_err());
+}
