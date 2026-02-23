@@ -39,6 +39,8 @@ mod test_profit_fee;
 #[cfg(test)]
 mod test_refund;
 #[cfg(test)]
+mod test_cancel_refund;
+#[cfg(test)]
 mod test_storage;
 mod verification;
 use admin::AdminStorage;
