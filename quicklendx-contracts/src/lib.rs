@@ -9,6 +9,7 @@ mod bid;
 mod currency;
 mod defaults;
 mod dispute;
+mod emergency;
 mod errors;
 mod escrow;
 mod events;
@@ -28,6 +29,8 @@ mod test_admin;
 mod test_business_kyc;
 #[cfg(test)]
 mod test_dispute;
+#[cfg(test)]
+mod test_emergency_withdraw;
 #[cfg(test)]
 mod test_overflow;
 #[cfg(test)]
@@ -137,6 +140,30 @@ impl QuickLendXContract {
     /// * `None` if admin has not been initialized
     pub fn get_current_admin(env: Env) -> Option<Address> {
         AdminStorage::get_admin(&env)
+    }
+
+    /// Initiate emergency withdraw for stuck funds (admin only). Timelock applies before execute.
+    /// See docs/contracts/emergency-recovery.md. Last-resort only.
+    pub fn initiate_emergency_withdraw(
+        env: Env,
+        admin: Address,
+        token: Address,
+        amount: i128,
+        target_address: Address,
+    ) -> Result<(), QuickLendXError> {
+        emergency::EmergencyWithdraw::initiate(&env, &admin, token, amount, target_address)
+    }
+
+    /// Execute emergency withdraw after timelock has elapsed (admin only).
+    pub fn execute_emergency_withdraw(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        emergency::EmergencyWithdraw::execute(&env, &admin)
+    }
+
+    /// Get pending emergency withdrawal if any.
+    pub fn get_pending_emergency_withdraw(
+        env: Env,
+    ) -> Option<emergency::PendingEmergencyWithdrawal> {
+        emergency::EmergencyWithdraw::get_pending(&env)
     }
 
     /// Add a token address to the currency whitelist (admin only).
@@ -548,7 +575,12 @@ impl QuickLendXContract {
         let defaulted = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Defaulted);
         let cancelled = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Cancelled);
 
-        pending + verified + funded + paid + defaulted + cancelled
+        pending
+            .saturating_add(verified)
+            .saturating_add(funded)
+            .saturating_add(paid)
+            .saturating_add(defaulted)
+            .saturating_add(cancelled)
     }
 
     /// Get a bid by ID
@@ -2315,10 +2347,11 @@ impl QuickLendXContract {
             }
         }
 
-        // Apply pagination
+        // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let start = offset.min(filtered.len() as u32);
-        let end = (start + limit).min(filtered.len() as u32);
+        let len_u32 = filtered.len() as u32;
+        let start = offset.min(len_u32);
+        let end = start.saturating_add(limit).min(len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(invoice_id) = filtered.get(idx) {
@@ -2352,10 +2385,11 @@ impl QuickLendXContract {
             }
         }
 
-        // Apply pagination
+        // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let start = offset.min(filtered.len() as u32);
-        let end = (start + limit).min(filtered.len() as u32);
+        let len_u32 = filtered.len() as u32;
+        let start = offset.min(len_u32);
+        let end = start.saturating_add(limit).min(len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(investment_id) = filtered.get(idx) {
@@ -2402,10 +2436,11 @@ impl QuickLendXContract {
             }
         }
 
-        // Apply pagination
+        // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let start = offset.min(filtered.len() as u32);
-        let end = (start + limit).min(filtered.len() as u32);
+        let len_u32 = filtered.len() as u32;
+        let start = offset.min(len_u32);
+        let end = start.saturating_add(limit).min(len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(invoice_id) = filtered.get(idx) {
@@ -2437,10 +2472,11 @@ impl QuickLendXContract {
             }
         }
 
-        // Apply pagination
+        // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let start = offset.min(filtered.len() as u32);
-        let end = (start + limit).min(filtered.len() as u32);
+        let len_u32 = filtered.len() as u32;
+        let start = offset.min(len_u32);
+        let end = start.saturating_add(limit).min(len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(bid) = filtered.get(idx) {
@@ -2474,10 +2510,11 @@ impl QuickLendXContract {
             }
         }
 
-        // Apply pagination
+        // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let start = offset.min(filtered.len() as u32);
-        let end = (start + limit).min(filtered.len() as u32);
+        let len_u32 = filtered.len() as u32;
+        let start = offset.min(len_u32);
+        let end = start.saturating_add(limit).min(len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(bid) = filtered.get(idx) {

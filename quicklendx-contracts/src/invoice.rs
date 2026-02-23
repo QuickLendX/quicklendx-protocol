@@ -196,7 +196,9 @@ impl Invoice {
         let sequence = env.ledger().sequence();
         let counter_key = symbol_short!("inv_cnt");
         let counter: u32 = env.storage().instance().get(&counter_key).unwrap_or(0);
-        env.storage().instance().set(&counter_key, &(counter + 1));
+        env.storage()
+            .instance()
+            .set(&counter_key, &counter.saturating_add(1));
 
         // Create a unique ID from timestamp, sequence, and counter
         let mut id_bytes = [0u8; 32];
@@ -323,9 +325,12 @@ impl Invoice {
         }
 
         let capped_total = max(self.total_paid, 0i128);
-        let mut percentage = (capped_total.saturating_mul(100i128)) / max(self.amount, 1i128);
-        percentage = min(percentage, 100i128);
-        percentage as u32
+        let denominator = max(self.amount, 1i128);
+        let percentage = capped_total
+            .saturating_mul(100i128)
+            .checked_div(denominator)
+            .unwrap_or(0);
+        min(percentage, 100i128) as u32
     }
 
     /// Check if the invoice has been fully paid
@@ -439,11 +444,17 @@ impl Invoice {
 
         // Add rating
         self.ratings.push_back(invoice_rating);
-        self.total_ratings += 1;
+        self.total_ratings = self.total_ratings.saturating_add(1);
 
-        // Calculate new average rating
+        // Calculate new average rating (overflow-safe: sum is u64, count is u32)
         let sum: u64 = self.ratings.iter().map(|r| r.rating as u64).sum();
-        self.average_rating = Some((sum / self.total_ratings as u64) as u32);
+        let count = self.total_ratings as u64;
+        let avg = if count > 0 {
+            (sum / count).min(5) as u32
+        } else {
+            0
+        };
+        self.average_rating = Some(avg);
 
         Ok(())
     }

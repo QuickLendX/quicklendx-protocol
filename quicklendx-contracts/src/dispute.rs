@@ -194,7 +194,8 @@ pub fn get_disputes_by_status(
     let max_limit = 50u32;
     let query_limit = if limit > max_limit { max_limit } else { limit };
 
-    for i in start..(start + query_limit as u64) {
+    let end = start.saturating_add(query_limit as u64);
+    for i in start..end {
         if let Some(dispute) = env
             .storage()
             .persistent()

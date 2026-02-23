@@ -107,7 +107,8 @@ impl AuditLogEntry {
         let sequence = env.ledger().sequence();
         let counter_key = symbol_short!("aud_cnt");
         let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
-        env.storage().instance().set(&counter_key, &(counter + 1));
+        let next_counter = counter.saturating_add(1);
+        env.storage().instance().set(&counter_key, &next_counter);
 
         let mut id_bytes = [0u8; 32];
         // Add audit prefix
@@ -118,10 +119,14 @@ impl AuditLogEntry {
         // Embed sequence
         id_bytes[10..14].copy_from_slice(&sequence.to_be_bytes());
         // Embed counter
-        id_bytes[14..22].copy_from_slice(&counter.to_be_bytes());
-        // Fill remaining with pattern
+        id_bytes[14..22].copy_from_slice(&next_counter.to_be_bytes());
+        // Fill remaining with pattern (overflow-safe)
+        let mix = timestamp
+            .saturating_add(sequence as u64)
+            .saturating_add(next_counter)
+            .saturating_add(0xAD1F);
         for i in 22..32 {
-            id_bytes[i] = ((timestamp + sequence as u64 + counter + 0xAD1F) % 256) as u8;
+            id_bytes[i] = (mix % 256) as u8;
         }
         BytesN::from_array(env, &id_bytes)
     }

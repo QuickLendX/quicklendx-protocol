@@ -64,7 +64,8 @@ impl EscrowStorage {
         let timestamp = env.ledger().timestamp();
         let counter_key = symbol_short!("esc_cnt");
         let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
-        env.storage().instance().set(&counter_key, &(counter + 1));
+        let next_counter = counter.saturating_add(1);
+        env.storage().instance().set(&counter_key, &next_counter);
 
         let mut id_bytes = [0u8; 32];
         // Add escrow prefix to distinguish from other entity types
@@ -73,10 +74,11 @@ impl EscrowStorage {
                             // Embed timestamp in next 8 bytes
         id_bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
         // Embed counter in next 8 bytes
-        id_bytes[10..18].copy_from_slice(&counter.to_be_bytes());
-        // Fill remaining bytes with a pattern to ensure uniqueness
+        id_bytes[10..18].copy_from_slice(&next_counter.to_be_bytes());
+        // Fill remaining bytes with a pattern to ensure uniqueness (overflow-safe)
+        let mix = timestamp.saturating_add(next_counter).saturating_add(0xE5C0);
         for i in 18..32 {
-            id_bytes[i] = ((timestamp + counter + 0xE5C0) % 256) as u8;
+            id_bytes[i] = (mix % 256) as u8;
         }
 
         BytesN::from_array(env, &id_bytes)
