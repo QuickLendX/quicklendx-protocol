@@ -422,24 +422,16 @@ fn test_bid_query_pagination_limit_is_capped_to_max_query_limit() {
         }
     });
 
-    let invoice_bids = client.get_bid_history_paged(
-        &invoice_id,
-        &Option::<BidStatus>::None,
-        &0u32,
-        &500u32,
-    );
+    let invoice_bids =
+        client.get_bid_history_paged(&invoice_id, &Option::<BidStatus>::None, &0u32, &500u32);
     assert_eq!(
         invoice_bids.len(),
         crate::MAX_QUERY_LIMIT,
         "invoice bid history should enforce MAX_QUERY_LIMIT cap"
     );
 
-    let investor_bids = client.get_investor_bids_paged(
-        &investor,
-        &Option::<BidStatus>::None,
-        &0u32,
-        &500u32,
-    );
+    let investor_bids =
+        client.get_investor_bids_paged(&investor, &Option::<BidStatus>::None, &0u32, &500u32);
     assert_eq!(
         investor_bids.len(),
         crate::MAX_QUERY_LIMIT,
