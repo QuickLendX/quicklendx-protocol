@@ -2621,6 +2621,8 @@ mod test_events;
 mod test_default;
 
 #[cfg(test)]
+mod test_invariants;
+#[cfg(test)]
 mod test_investment_queries;
 #[cfg(test)]
 mod test_partial_payments;
