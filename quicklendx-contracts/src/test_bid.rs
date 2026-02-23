@@ -500,3 +500,126 @@ fn test_updated_limit_enforced_in_bidding() {
     let result = client.try_place_bid(&investor, &invoice_id, &15_000, &16_000);
     assert!(result.is_ok(), "Bid should succeed after limit increase");
 }
+
+/// Test: cancel_bid transitions Placed → Cancelled
+#[test]
+fn test_cancel_bid_succeeds() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+
+    let result = client.cancel_bid(&bid_id);
+    assert!(result, "cancel_bid should return true for a Placed bid");
+
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Cancelled, "Bid must be Cancelled");
+}
+
+/// Test: cancel_bid on already Withdrawn bid returns false
+#[test]
+fn test_cancel_bid_on_withdrawn_returns_false() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+
+    client.withdraw_bid(&bid_id);
+    let result = client.cancel_bid(&bid_id);
+    assert!(!result, "cancel_bid must return false for non-Placed bid");
+}
+
+/// Test: cancel_bid on already Cancelled bid returns false
+#[test]
+fn test_cancel_bid_on_cancelled_returns_false() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+
+    client.cancel_bid(&bid_id);
+    let result = client.cancel_bid(&bid_id);
+    assert!(!result, "Double cancel must return false");
+}
+
+/// Test: cancel_bid on non-existent bid_id returns false
+#[test]
+fn test_cancel_bid_nonexistent_returns_false() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let fake_bid_id = BytesN::from_array(&env, &[0u8; 32]);
+    let result = client.cancel_bid(&fake_bid_id);
+    assert!(!result, "cancel_bid on unknown ID must return false");
+}
+
+/// Test: cancelled bid excluded from ranking
+#[test]
+fn test_cancelled_bid_excluded_from_ranking() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // investor1 profit = 5k (best)
+    let bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &15_000);
+    // investor2 profit = 2k
+    let _bid_2 = client.place_bid(&investor2, &invoice_id, &10_000, &12_000);
+
+    client.cancel_bid(&bid_1);
+
+    let best = client.get_best_bid(&invoice_id).unwrap();
+    assert_eq!(
+        best.investor, investor2,
+        "Cancelled bid must be excluded from ranking"
+    );
+}
+
+/// Test: get_all_bids_by_investor returns bids across multiple invoices
+#[test]
+fn test_get_all_bids_by_investor_cross_invoice() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id_1 = create_verified_invoice(&env, &client, &admin, &business, 50_000);
+    let invoice_id_2 = create_verified_invoice(&env, &client, &admin, &business, 50_000);
+
+    client.place_bid(&investor, &invoice_id_1, &10_000, &12_000);
+    client.place_bid(&investor, &invoice_id_2, &15_000, &18_000);
+
+    let all_bids = client.get_all_bids_by_investor(&investor);
+    assert_eq!(all_bids.len(), 2, "Must return bids across all invoices");
+}
+
+/// Test: get_all_bids_by_investor returns empty for investor with no bids
+#[test]
+fn test_get_all_bids_by_investor_empty() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let investor = Address::generate(&env);
+    let all_bids = client.get_all_bids_by_investor(&investor);
+    assert_eq!(all_bids.len(), 0, "Must return empty for unknown investor");
+}

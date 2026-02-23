@@ -22,6 +22,7 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
+#[cfg(test)]
 mod storage;
 #[cfg(test)]
 mod test_admin;
@@ -736,6 +737,16 @@ impl QuickLendXContract {
     /// Remove bids that have passed their expiration window
     pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> u32 {
         BidStorage::cleanup_expired_bids(&env, &invoice_id)
+    }
+
+    /// Cancel a placed bid (investor only, Placed → Cancelled).
+    pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> bool {
+        bid::BidStorage::cancel_bid(&env, &bid_id)
+    }
+
+    /// Get all bids placed by an investor across all invoices.
+    pub fn get_all_bids_by_investor(env: Env, investor: Address) -> Vec<Bid> {
+        bid::BidStorage::get_all_bids_by_investor(&env, &investor)
     }
 
     /// Place a bid on an invoice
@@ -2716,7 +2727,5 @@ mod test_investor_kyc;
 mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_protocol_limits;
 #[cfg(test)]
 mod test_revenue_split;
