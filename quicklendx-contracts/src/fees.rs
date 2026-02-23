@@ -464,8 +464,10 @@ impl FeeManager {
         config: RevenueConfig,
     ) -> Result<(), QuickLendXError> {
         admin.require_auth();
-        let total_shares =
-            config.treasury_share_bps + config.developer_share_bps + config.platform_share_bps;
+        let total_shares = config
+            .treasury_share_bps
+            .saturating_add(config.developer_share_bps)
+            .saturating_add(config.platform_share_bps);
         if total_shares != 10_000 {
             return Err(QuickLendXError::InvalidAmount);
         }
@@ -525,13 +527,19 @@ impl FeeManager {
             .get(&revenue_key)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
         let average_fee_rate = if revenue_data.transaction_count > 0 {
-            revenue_data.total_collected / revenue_data.transaction_count as i128
+            revenue_data
+                .total_collected
+                .checked_div(revenue_data.transaction_count as i128)
+                .unwrap_or(0)
         } else {
             0
         };
         let efficiency_score = if revenue_data.total_collected > 0 {
-            let distributed_pct =
-                revenue_data.total_distributed * 100 / revenue_data.total_collected;
+            let distributed_pct = revenue_data
+                .total_distributed
+                .saturating_mul(100)
+                .checked_div(revenue_data.total_collected)
+                .unwrap_or(0);
             distributed_pct.min(100) as u32
         } else {
             0

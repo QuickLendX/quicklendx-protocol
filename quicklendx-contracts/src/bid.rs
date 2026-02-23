@@ -267,9 +267,9 @@ impl BidStorage {
     pub fn generate_unique_bid_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let counter_key = symbol_short!("bid_cnt");
-        let mut counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
-        counter += 1;
-        env.storage().instance().set(&counter_key, &counter);
+        let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
+        let next_counter = counter.saturating_add(1);
+        env.storage().instance().set(&counter_key, &next_counter);
 
         let mut bytes = [0u8; 32];
         // Add bid prefix to distinguish from other entity types
@@ -278,10 +278,11 @@ impl BidStorage {
                          // Embed timestamp in next 8 bytes
         bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
         // Embed counter in next 8 bytes
-        bytes[10..18].copy_from_slice(&counter.to_be_bytes());
-        // Fill remaining bytes with a pattern to ensure uniqueness
+        bytes[10..18].copy_from_slice(&next_counter.to_be_bytes());
+        // Fill remaining bytes with a pattern to ensure uniqueness (overflow-safe)
+        let mix = timestamp.saturating_add(next_counter).saturating_add(0xB1D0);
         for i in 18..32 {
-            bytes[i] = ((timestamp + counter as u64 + 0xB1D0) % 256) as u8;
+            bytes[i] = (mix % 256) as u8;
         }
         BytesN::from_array(env, &bytes)
     }

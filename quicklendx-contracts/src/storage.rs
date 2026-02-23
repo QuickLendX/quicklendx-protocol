@@ -218,7 +218,7 @@ impl InvoiceStorage {
             .persistent()
             .get(&StorageKeys::invoice_count())
             .unwrap_or(0);
-        let next = current + 1;
+        let next = current.saturating_add(1);
         env.storage()
             .persistent()
             .set(&StorageKeys::invoice_count(), &next);
@@ -333,7 +333,7 @@ impl BidStorage {
             .persistent()
             .get(&StorageKeys::bid_count())
             .unwrap_or(0);
-        let next = current + 1;
+        let next = current.saturating_add(1);
         env.storage()
             .persistent()
             .set(&StorageKeys::bid_count(), &next);
@@ -460,7 +460,7 @@ impl InvestmentStorage {
             .persistent()
             .get(&StorageKeys::investment_count())
             .unwrap_or(0);
-        let next = current + 1;
+        let next = current.saturating_add(1);
         env.storage()
             .persistent()
             .set(&StorageKeys::investment_count(), &next);
