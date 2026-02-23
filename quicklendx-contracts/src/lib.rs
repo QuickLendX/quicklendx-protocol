@@ -387,6 +387,12 @@ impl QuickLendXContract {
 
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        // When invoice is already funded, verify_invoice triggers release_escrow_funds (Issue #300)
+        if invoice.status == InvoiceStatus::Funded {
+            return Self::release_escrow_funds(env, invoice_id);
+        }
+
         // Only allow verification if pending
         if invoice.status != InvoiceStatus::Pending {
             return Err(QuickLendXError::InvalidStatus);
