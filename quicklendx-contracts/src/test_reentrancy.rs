@@ -22,13 +22,24 @@
 //!
 //! # Test Coverage
 //!
-//! 1. Guard blocks when lock is already held
-//! 2. Lock is released after successful operation
-//! 3. Lock is released after failed operation
-//! 4. Sequential protected operations work correctly
+//! Integration tests (via contract client):
+//!   1. Guard blocks when lock is already held
+//!   2. Lock is released after successful operation
+//!   3. Lock is released after failed operation
+//!   4. Sequential protected operations work correctly
+//!
+//! Unit tests (directly exercising `with_payment_guard`):
+//!   5. Initial lock state is absent/false before any operation
+//!   6. Guard returns the closure's value on success
+//!   7. Error variant is specifically `OperationNotAllowed`
+//!   8. Guard handles `Err` returned by the closure, releases lock
+//!   9. Multiple lock/release cycles complete without deadlock
+//!  10. Guard with a non-unit return type passes value through
 
 use super::*;
+use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
+use crate::reentrancy::with_payment_guard;
 use soroban_sdk::{
     symbol_short, testutils::Address as _, token, Address, BytesN, Env, String, Vec,
 };
@@ -79,7 +90,6 @@ fn setup_context() -> TestContext<'static> {
     let admin = Address::generate(&env);
     client.set_admin(&admin);
 
-    // Single token for all tests
     let token_admin = Address::generate(&env);
     let currency = env
         .register_stellar_asset_contract_v2(token_admin)
@@ -104,7 +114,7 @@ fn setup_investor(ctx: &TestContext, investor: &Address, limit: i128) {
     ctx.client.verify_investor(investor, &limit);
 }
 
-/// Create a verified invoice with a placed bid (ready to accept)
+/// Create a verified invoice with a placed bid (ready to accept).
 fn create_invoice_with_bid(
     ctx: &TestContext,
     business: &Address,
@@ -133,13 +143,13 @@ fn create_invoice_with_bid(
 }
 
 // ============================================================================
-// Test Cases
+// Integration Tests (via contract client)
 // ============================================================================
 
-/// Test 1: Guard blocks when lock is already set
+/// Test 1: Guard blocks when lock is already set.
 ///
-/// Simulates a reentrant call by manually setting the pay_lock before
-/// calling a protected function. Verifies OperationNotAllowed is returned.
+/// Simulates a reentrant call by manually setting `pay_lock` before
+/// calling a protected function. Verifies the call is rejected.
 #[test]
 fn test_guard_blocks_when_lock_is_set() {
     let ctx = setup_context();
@@ -150,31 +160,32 @@ fn test_guard_blocks_when_lock_is_set() {
     setup_business(&ctx, &business);
     setup_investor(&ctx, &investor, 50_000);
 
-    // Create invoice with bid (ready to accept)
     let (invoice_id, bid_id) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
 
-    // Manually set the reentrancy lock BEFORE calling protected function
+    // Manually hold the lock before calling the protected function.
     ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().set(&key, &true);
+        ctx.env
+            .storage()
+            .instance()
+            .set(&symbol_short!("pay_lock"), &true);
     });
 
-    // Attempt to call protected function (accept_bid) - should fail
     let result = ctx.client.try_accept_bid(&invoice_id, &bid_id);
-
     assert!(result.is_err(), "Should fail when lock is already set");
 
-    // Clean up: release lock for other tests
+    // Clean up so the env can be reused safely.
     ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().set(&key, &false);
+        ctx.env
+            .storage()
+            .instance()
+            .set(&symbol_short!("pay_lock"), &false);
     });
 }
 
-/// Test 2: Guard releases lock after successful operation
+/// Test 2: Guard releases lock after successful operation.
 ///
 /// Verifies that after a successful protected operation completes,
-/// the lock is released (set to false).
+/// the lock is set back to false.
 #[test]
 fn test_guard_releases_lock_after_success() {
     let ctx = setup_context();
@@ -185,29 +196,26 @@ fn test_guard_releases_lock_after_success() {
     setup_business(&ctx, &business);
     setup_investor(&ctx, &investor, 50_000);
 
-    // Create invoice with bid
     let (invoice_id, bid_id) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
 
-    // Call protected function (accept_bid) successfully
     let result = ctx.client.try_accept_bid(&invoice_id, &bid_id);
     assert!(result.is_ok(), "accept_bid should succeed");
 
-    // Verify lock is released
     let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().get(&key).unwrap_or(false)
+        ctx.env
+            .storage()
+            .instance()
+            .get(&symbol_short!("pay_lock"))
+            .unwrap_or(false)
     });
 
-    assert!(
-        !lock_value,
-        "Lock should be released (false) after successful operation"
-    );
+    assert!(!lock_value, "Lock must be false after successful operation");
 }
 
-/// Test 3: Guard releases lock after failed operation
+/// Test 3: Guard releases lock after failed operation.
 ///
-/// Verifies that even when a protected operation fails,
-/// the lock is still released to prevent deadlock.
+/// Verifies that even when the protected closure panics/errors,
+/// the lock is still cleared to prevent deadlock.
 #[test]
 fn test_guard_releases_lock_after_failure() {
     let ctx = setup_context();
@@ -218,32 +226,28 @@ fn test_guard_releases_lock_after_failure() {
     setup_business(&ctx, &business);
     setup_investor(&ctx, &investor, 50_000);
 
-    // Create invoice with bid (verified, ready to accept)
-    let (invoice_id, _bid_id) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
+    let (invoice_id, _) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
 
-    // Create a fake bid_id that doesn't exist
+    // Use a bid_id that does not exist so the call fails inside the guard.
     let fake_bid_id = BytesN::from_array(&ctx.env, &[99u8; 32]);
-
-    // Try to accept non-existent bid - will fail inside the protected function
     let result = ctx.client.try_accept_bid(&invoice_id, &fake_bid_id);
     assert!(result.is_err(), "Should fail for non-existent bid");
 
-    // Verify lock is still released despite failure
     let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().get(&key).unwrap_or(false)
+        ctx.env
+            .storage()
+            .instance()
+            .get(&symbol_short!("pay_lock"))
+            .unwrap_or(false)
     });
 
-    assert!(
-        !lock_value,
-        "Lock should be released (false) even after failed operation"
-    );
+    assert!(!lock_value, "Lock must be false even after failed operation");
 }
 
-/// Test 4: Sequential protected calls succeed
+/// Test 4: Sequential protected calls succeed.
 ///
-/// Verifies that multiple protected operations can be called
-/// sequentially, proving the lock is properly released between calls.
+/// Verifies that multiple protected operations can run one after the other,
+/// proving the lock is released between each call.
 #[test]
 fn test_sequential_protected_calls_succeed() {
     let ctx = setup_context();
@@ -254,26 +258,199 @@ fn test_sequential_protected_calls_succeed() {
     setup_business(&ctx, &business);
     setup_investor(&ctx, &investor, 100_000);
 
-    // Create two invoices with bids
     let (invoice_1, bid_1) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
     let (invoice_2, bid_2) = create_invoice_with_bid(&ctx, &business, &investor, 2_000);
 
-    // Accept first bid (protected operation)
     let result_1 = ctx.client.try_accept_bid(&invoice_1, &bid_1);
     assert!(result_1.is_ok(), "First accept_bid should succeed");
 
-    // Accept second bid - should also succeed (lock was released)
     let result_2 = ctx.client.try_accept_bid(&invoice_2, &bid_2);
     assert!(
         result_2.is_ok(),
         "Second accept_bid should succeed (lock released after first)"
     );
 
-    // Verify final lock state
     let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().get(&key).unwrap_or(false)
+        ctx.env
+            .storage()
+            .instance()
+            .get(&symbol_short!("pay_lock"))
+            .unwrap_or(false)
     });
 
-    assert!(!lock_value, "Lock should be released after all operations");
+    assert!(!lock_value, "Lock should be false after all operations");
+}
+
+// ============================================================================
+// Unit Tests (directly exercising `with_payment_guard`)
+// ============================================================================
+
+/// Test 5: Initial lock state is absent before any operation.
+///
+/// Before `with_payment_guard` has ever been called, the storage key
+/// should not exist — `unwrap_or(false)` must treat it as unlocked.
+#[test]
+fn test_initial_lock_state_is_absent() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+
+    let lock_before: bool = env.as_contract(&contract_id, || {
+        env.storage()
+            .instance()
+            .get(&symbol_short!("pay_lock"))
+            .unwrap_or(false)
+    });
+
+    assert!(
+        !lock_before,
+        "Lock must be absent (treated as false) before any guard call"
+    );
+}
+
+/// Test 6: Guard passes the closure's return value through on success.
+///
+/// `with_payment_guard` must return whatever the closure returns, not just `()`.
+#[test]
+fn test_guard_returns_closure_value() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+
+    let outcome: Result<u32, QuickLendXError> = env.as_contract(&contract_id, || {
+        with_payment_guard(&env, || Ok(42u32))
+    });
+
+    assert_eq!(
+        outcome,
+        Ok(42u32),
+        "Guard must pass the closure's Ok value through unchanged"
+    );
+}
+
+/// Test 7: Error variant is specifically `OperationNotAllowed`.
+///
+/// When the lock is held, the returned error must be exactly
+/// `QuickLendXError::OperationNotAllowed`, not a generic/unknown variant.
+#[test]
+fn test_guard_error_variant_is_operation_not_allowed() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+
+    env.as_contract(&contract_id, || {
+        // Hold the lock manually.
+        env.storage()
+            .instance()
+            .set(&symbol_short!("pay_lock"), &true);
+
+        let result: Result<(), QuickLendXError> =
+            with_payment_guard(&env, || Ok(()));
+
+        assert_eq!(
+            result,
+            Err(QuickLendXError::OperationNotAllowed),
+            "Must return OperationNotAllowed when lock is held"
+        );
+
+        // Release so env stays clean.
+        env.storage()
+            .instance()
+            .set(&symbol_short!("pay_lock"), &false);
+    });
+}
+
+/// Test 8: Guard releases lock when the closure itself returns `Err`.
+///
+/// If the user's closure returns `Err`, the guard must still clear the lock
+/// before propagating the error.
+#[test]
+fn test_guard_releases_lock_when_closure_returns_err() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+
+    env.as_contract(&contract_id, || {
+        // Guard runs, closure returns Err.
+        let result: Result<(), QuickLendXError> = with_payment_guard(&env, || {
+            Err(QuickLendXError::InvoiceNotFound)
+        });
+
+        assert_eq!(
+            result,
+            Err(QuickLendXError::InvoiceNotFound),
+            "Closure error must be propagated"
+        );
+
+        // Lock must be released despite the closure error.
+        let lock: bool = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("pay_lock"))
+            .unwrap_or(false);
+
+        assert!(!lock, "Lock must be false after closure returns Err");
+    });
+}
+
+/// Test 9: Multiple lock/release cycles complete without deadlock.
+///
+/// Calls `with_payment_guard` five times in sequence — each must find
+/// the lock free and release it cleanly for the next.
+#[test]
+fn test_multiple_lock_release_cycles() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+
+    env.as_contract(&contract_id, || {
+        for i in 0u32..5 {
+            let result: Result<u32, QuickLendXError> =
+                with_payment_guard(&env, || Ok(i));
+
+            assert_eq!(
+                result,
+                Ok(i),
+                "Cycle {i} must succeed — lock should be free between calls"
+            );
+
+            let lock: bool = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("pay_lock"))
+                .unwrap_or(false);
+
+            assert!(!lock, "Lock must be false after cycle {i}");
+        }
+    });
+}
+
+/// Test 10: Guard with explicit `Some(false)` in storage treats it as unlocked.
+///
+/// `unwrap_or(false)` handles absent keys, but the key may also be explicitly
+/// stored as `false` (e.g., after a previous run). Guard must allow entry in
+/// that case too.
+#[test]
+fn test_guard_allows_entry_when_lock_is_explicitly_false() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+
+    env.as_contract(&contract_id, || {
+        // Explicitly write false — simulates state after a previous guard run.
+        env.storage()
+            .instance()
+            .set(&symbol_short!("pay_lock"), &false);
+
+        let result: Result<u64, QuickLendXError> =
+            with_payment_guard(&env, || Ok(99u64));
+
+        assert_eq!(
+            result,
+            Ok(99u64),
+            "Guard must allow entry when lock is explicitly false"
+        );
+
+        let lock: bool = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("pay_lock"))
+            .unwrap_or(false);
+
+        assert!(!lock, "Lock must remain false after successful call");
+    });
 }

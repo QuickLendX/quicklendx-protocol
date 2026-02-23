@@ -851,8 +851,8 @@ impl InvoiceStorage {
         if tags.is_empty() {
             return Vec::new(env);
         }
-        let mut tagged_invoices: Vec<BytesN<32>> = Vec::new(env);
-        let all_statuses = [
+        let _tagged_invoices: Vec<BytesN<32>> = Vec::new(env);
+        let _all_statuses = [
             InvoiceStatus::Pending,
             InvoiceStatus::Verified,
             InvoiceStatus::Funded,

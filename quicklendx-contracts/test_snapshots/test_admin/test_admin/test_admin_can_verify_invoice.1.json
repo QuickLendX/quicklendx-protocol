@@ -142,7 +142,7 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "string": "Test Invoice"
+                                "string": "Admin gate test"
                               }
                             },
                             {
@@ -376,7 +376,7 @@
                                 "symbol": "additional_data"
                               },
                               "val": {
-                                "string": "Test Invoice"
+                                "string": "Admin gate test"
                               }
                             },
                             {

@@ -41,29 +41,26 @@ jobs:
         cd quicklendx-contracts
         cargo check --lib --verbose
 
-    - name: Build Soroban contract
+    - name: Install wasm-opt (binaryen) for size reduction
+      run: brew install binaryen
+
+    - name: Build and check WASM size budget
       run: |
         source $HOME/.cargo/env
-        cd quicklendx-contracts
-        stellar contract build --verbose
+        quicklendx-contracts/scripts/check-wasm-size.sh
 
-    - name: Check WASM size budget
-      run: |
-        cd quicklendx-contracts
-        WASM_PATH="target/wasm32v1-none/release/quicklendx_contracts.wasm"
-        MAX_BYTES=262144
-        SIZE=$(wc -c < "$WASM_PATH" | tr -d ' ')
-        echo "WASM size: $SIZE bytes (max $MAX_BYTES)"
-        if [ "$SIZE" -gt "$MAX_BYTES" ]; then
-          echo "::error::WASM size $SIZE exceeds budget $MAX_BYTES bytes"
-          exit 1
-        fi
+    # WASM size budget is also covered by integration test: cargo test wasm_release_build_fits_size_budget
 
     # Note: Tests temporarily disabled due to known soroban-sdk 22.0.x compilation issue
-    # The contract builds successfully and is functional
     # Uncomment when soroban-sdk test issue is resolved
     # - name: Run Cargo tests
     #   run: |
     #     source $HOME/.cargo/env
     #     cd quicklendx-contracts
     #     cargo test --verbose
+    # - name: Test coverage (minimum 95%)
+    #   run: |
+    #     source $HOME/.cargo/env
+    #     cd quicklendx-contracts
+    #     cargo install cargo-llvm-cov
+    #     cargo llvm-cov --lib --fail-under 95

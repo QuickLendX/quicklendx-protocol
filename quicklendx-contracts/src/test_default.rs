@@ -222,12 +222,12 @@ fn test_cannot_default_already_defaulted_invoice() {
     // Mark as defaulted first time
     client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
 
-    // Try to mark as defaulted again - should fail
+    // Try to mark as defaulted again - should fail with InvoiceAlreadyDefaulted
     let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
-    assert_eq!(contract_err, QuickLendXError::InvalidStatus);
+    assert_eq!(contract_err, QuickLendXError::InvoiceAlreadyDefaulted);
 }
 
 #[test]
@@ -436,4 +436,55 @@ fn test_multiple_invoices_default_handling() {
         client.get_invoice(&invoice2_id).status,
         InvoiceStatus::Funded
     );
+}
+
+#[test]
+fn test_zero_grace_period_defaults_immediately_after_due_date() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+
+    // With zero grace period, default should be possible right after due date
+    env.ledger().set_timestamp(invoice.due_date + 1);
+
+    client.mark_invoice_defaulted(&invoice_id, &Some(0));
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Defaulted
+    );
+}
+
+#[test]
+fn test_cannot_default_paid_invoice() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    // Mark as paid via status update
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+
+    // Move time well past any grace period
+    let grace_period = 7 * 24 * 60 * 60;
+    env.ledger().set_timestamp(due_date + grace_period + 1);
+
+    // Paid invoices cannot be defaulted
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, QuickLendXError::InvoiceNotAvailableForFunding);
 }
