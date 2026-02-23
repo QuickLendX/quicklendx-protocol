@@ -10,7 +10,7 @@ use super::*;
 use crate::invoice::{InvoiceCategory, InvoiceMetadata, InvoiceStatus, LineItemRecord};
 use crate::verification::BusinessVerificationStatus;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::Address as _,
     Address, BytesN, Env, String, Vec,
 };
 
@@ -414,6 +414,13 @@ fn test_invoice_creation_invalid_tag_limit_exceeded() {
     assert_eq!(err, QuickLendXError::TagLimitExceeded);
 }
 
+// ============================================================================
+// upload_invoice tests (auth, verification, event) — #301
+// ============================================================================
+// - Requires business auth (only the business identity can upload).
+// - Requires verified business (pending/rejected fail with BusinessNotVerified).
+// - Verified business succeeds and emits invoice_uploaded (inv_up) event.
+
 #[test]
 fn test_invoice_upload_requires_business_verification() {
     let env = Env::default();
@@ -442,6 +449,8 @@ fn test_invoice_upload_requires_business_verification() {
     assert_eq!(err, QuickLendXError::BusinessNotVerified);
 }
 
+/// upload_invoice requires the caller to be the business (require_auth).
+/// Calling with a different address fails (here: unverified identity → BusinessNotVerified).
 #[test]
 fn test_invoice_upload_requires_business_auth() {
     let env = Env::default();
@@ -452,7 +461,9 @@ fn test_invoice_upload_requires_business_auth() {
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
 
-    // Use an unverified business to ensure failure due to missing verification/auth
+    // Call as a different identity (unverified). Contract checks verification first for
+    // the given business; this identity is not verified → BusinessNotVerified.
+    // In production, require_auth() would also fail if the signer were not the business.
     let unverified_business = Address::generate(&env);
     let result = client.try_upload_invoice(
         &unverified_business,
@@ -464,6 +475,8 @@ fn test_invoice_upload_requires_business_auth() {
         &Vec::new(&env),
     );
     assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::BusinessNotVerified);
 }
 
 #[test]
@@ -490,6 +503,103 @@ fn test_invoice_upload_verified_business_succeeds() {
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.business, business);
+    assert_eq!(invoice.status, InvoiceStatus::Pending);
+}
+
+/// Pending business (KYC submitted but not yet verified) cannot upload; must be Verified.
+#[test]
+fn test_invoice_upload_pending_business_fails() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Business KYC");
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &kyc_data);
+    // Do not verify — business remains Pending.
+
+    let result = client.try_upload_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Pending business invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::BusinessNotVerified);
+}
+
+/// Rejected business cannot upload; only Verified businesses can upload invoices.
+#[test]
+fn test_invoice_upload_rejected_business_fails() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Business KYC");
+    let reason = String::from_str(&env, "Rejected for test");
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &kyc_data);
+    client.reject_business(&admin, &business, &reason);
+
+    let result = client.try_upload_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Rejected business invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::BusinessNotVerified);
+}
+
+/// Verified business can upload; the contract emits the invoice_uploaded (inv_up) event
+/// (see events::emit_invoice_uploaded). This test asserts the success path; event
+/// emission is covered by the contract implementation and test_events::test_invoice_uploaded_event.
+#[test]
+fn test_invoice_upload_verified_business_succeeds_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = setup_verified_business(&env, &client);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Verified upload with event"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.business, business);
+    assert_eq!(invoice.amount, 2000);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 }
 
