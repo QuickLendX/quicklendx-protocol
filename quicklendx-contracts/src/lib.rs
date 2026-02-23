@@ -22,7 +22,6 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
-#[cfg(test)]
 mod storage;
 #[cfg(test)]
 mod test_admin;
@@ -38,6 +37,8 @@ mod test_overflow;
 mod test_profit_fee;
 #[cfg(test)]
 mod test_refund;
+#[cfg(test)]
+mod test_cancel_refund;
 #[cfg(test)]
 mod test_storage;
 mod verification;
