@@ -31,12 +31,22 @@ if [[ ! -f "$WASM_PATH" ]]; then
   exit 1
 fi
 
+# Optional: shrink further with wasm-opt (binaryen) if available
+if command -v wasm-opt &>/dev/null; then
+  echo "==> Running wasm-opt -Oz to reduce size..."
+  wasm-opt --enable-bulk-memory -Oz "$WASM_PATH" -o "$WASM_PATH.opt" && mv "$WASM_PATH.opt" "$WASM_PATH"
+fi
+
 SIZE=$(wc -c < "$WASM_PATH" | tr -d ' ')
 echo "WASM path: $WASM_PATH"
 echo "WASM size: $SIZE bytes (max $MAX_BYTES bytes)"
 
 if [[ "$SIZE" -gt "$MAX_BYTES" ]]; then
   echo "::error::WASM size $SIZE exceeds budget $MAX_BYTES bytes (256 KB)"
+  echo ""
+  echo "To get under the budget:"
+  echo "  1. Install wasm-opt and re-run:  brew install binaryen"
+  echo "  2. Or use Stellar CLI (often smaller):  stellar contract build"
   exit 1
 fi
 

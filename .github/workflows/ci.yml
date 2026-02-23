@@ -41,6 +41,9 @@ jobs:
         cd quicklendx-contracts
         cargo check --lib --verbose
 
+    - name: Install wasm-opt (binaryen) for size reduction
+      run: brew install binaryen
+
     - name: Build and check WASM size budget
       run: |
         source $HOME/.cargo/env

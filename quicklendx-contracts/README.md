@@ -503,7 +503,7 @@ The release build is tuned for minimal WASM size (opt-level = "z", LTO, strip, c
 ```
 Or run the integration test: `cargo test wasm_release_build_fits_size_budget`. Both build the contract (script uses `stellar contract build` when available, else `cargo build --target wasm32-unknown-unknown --release`) and assert the WASM is ≤ 256 KB. Test-only code is excluded from the release build via `#[cfg(test)]`.
 
-To reduce size: avoid large inline data, use smaller types where safe, and keep all test modules behind `#[cfg(test)]`.
+To reduce size: use **Stellar CLI** (`stellar contract build`) when possible; the size-check script optionally runs **wasm-opt -Oz** (install with `brew install binaryen`) for further reduction. Keep test-only code behind `#[cfg(test)]` and avoid large inline data.
 
 #### Production Deployment Steps
 
