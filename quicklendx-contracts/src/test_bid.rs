@@ -515,6 +515,88 @@ fn test_get_best_bid_excludes_expired() {
     let best_after = client.get_best_bid(&invoice_id);
     assert!(best_after.is_none(), "Best bid should be None after all bids expire");
 }
+
+/// Test: place_bid cleans up expired bids before placing new bid
+#[test]
+fn test_place_bid_cleans_up_expired_before_placing() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place initial bid
+    let bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    
+    // Verify bid is placed
+    let placed_before = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
+    assert_eq!(placed_before.len(), 1, "Should have 1 placed bid");
+    
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+    
+    // Place new bid - should trigger cleanup of expired bid
+    let _bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
+    
+    // Verify old bid is expired and new bid is placed
+    let placed_after = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
+    assert_eq!(placed_after.len(), 1, "Should have only 1 placed bid (new one)");
+    
+    let expired_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Expired);
+    assert_eq!(expired_bids.len(), 1, "Should have 1 expired bid (old one)");
+    
+    // Verify the expired bid is the first one
+    let bid_1_status = client.get_bid(&bid_1).unwrap();
+    assert_eq!(bid_1_status.status, BidStatus::Expired, "First bid should be expired");
+}
+
+/// Test: Partial expiration - only expired bids are cleaned up
+#[test]
+fn test_partial_expiration_cleanup() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let investor3 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place first bid
+    let bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    
+    // Advance time by 3 days (not expired yet)
+    env.ledger().set_timestamp(env.ledger().timestamp() + (3 * 24 * 60 * 60));
+    
+    // Place second bid
+    let bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
+    
+    // Advance time by 5 more days (total 8 days - first bid expired, second not)
+    env.ledger().set_timestamp(env.ledger().timestamp() + (5 * 24 * 60 * 60));
+    
+    // Place third bid - should clean up only first expired bid
+    let _bid_3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
+    
+    // Verify first bid is expired
+    let bid_1_status = client.get_bid(&bid_1).unwrap();
+    assert_eq!(bid_1_status.status, BidStatus::Expired, "First bid should be expired");
+    
+    // Verify second and third bids are still placed
+    let bid_2_status = client.get_bid(&bid_2).unwrap();
+    assert_eq!(bid_2_status.status, BidStatus::Placed, "Second bid should still be placed");
+    
+    let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
+    assert_eq!(placed_bids.len(), 2, "Should have 2 placed bids (second and third)");
+    
+    let expired_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Expired);
+    assert_eq!(expired_bids.len(), 1, "Should have 1 expired bid (first)");
+}
 // ============================================================================
 // Category 5: Investment Limit Management
 // ============================================================================
