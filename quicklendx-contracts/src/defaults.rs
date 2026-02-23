@@ -30,14 +30,14 @@ pub fn mark_invoice_defaulted(
     let invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
+    // Check if invoice is already defaulted (no double default)
+    if invoice.status == InvoiceStatus::Defaulted {
+        return Err(QuickLendXError::InvoiceAlreadyDefaulted);
+    }
+
     // Only funded invoices can be defaulted
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvoiceNotAvailableForFunding);
-    }
-
-    // Check if invoice is already defaulted
-    if invoice.status == InvoiceStatus::Defaulted {
-        return Err(QuickLendXError::InvalidStatus);
     }
 
     let current_timestamp = env.ledger().timestamp();
@@ -59,13 +59,13 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    // Validate invoice is in funded status
-    if invoice.status != InvoiceStatus::Funded {
-        return Err(QuickLendXError::InvalidStatus);
+    // Check if already defaulted (no double default)
+    if invoice.status == InvoiceStatus::Defaulted {
+        return Err(QuickLendXError::InvoiceAlreadyDefaulted);
     }
 
-    // Check if already defaulted
-    if invoice.status == InvoiceStatus::Defaulted {
+    // Validate invoice is in funded status
+    if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvalidStatus);
     }
 

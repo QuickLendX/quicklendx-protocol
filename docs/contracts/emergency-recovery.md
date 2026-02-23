@@ -14,6 +14,7 @@ It must **not** be used to bypass normal escrow, settlement, or refund flows.
 
 1. **Initiate** (`initiate_emergency_withdraw`): Admin specifies token, amount, and target address. A pending withdrawal is stored with an **unlock timestamp** = current time + timelock (default 24 hours).
 2. **Execute** (`execute_emergency_withdraw`): After the timelock has elapsed, admin calls execute. The contract transfers the specified amount of the token from the contract balance to the target address and clears the pending withdrawal.
+3. **Cancel** (`cancel_emergency_withdraw`): Admin can abort a pending withdrawal at any time before execute. Clears the pending slot. Use immediately if initiate was triggered by mistake or account compromise.
 
 Only one pending emergency withdrawal exists at a time; a new initiate overwrites any existing pending withdrawal.
 
@@ -23,7 +24,9 @@ Only one pending emergency withdrawal exists at a time; a new initiate overwrite
 |----------|-----|-------------|
 | `initiate_emergency_withdraw(admin, token, amount, target_address)` | Admin | Schedules a withdrawal; callable only by admin. Fails if amount ≤ 0. |
 | `execute_emergency_withdraw(admin)` | Admin | Executes the pending withdrawal after timelock. Fails if no pending withdrawal or timelock not elapsed. |
-| `get_pending_emergency_withdraw()` | Anyone | Returns the current pending withdrawal, if any. |
+| `get_pending_emergency_withdraw()` | Anyone | Returns the current pending withdrawal, 
+| `cancel_emergency_withdraw(admin)` | Admin | Cancels pending withdrawal. Fails if no pending withdrawal exists. |
+if any. |
 
 ## Security
 
@@ -37,11 +40,13 @@ Only one pending emergency withdrawal exists at a time; a new initiate overwrite
 - **StorageKeyNotFound**: execute called when there is no pending withdrawal.
 - **OperationNotAllowed**: execute called before the timelock has elapsed.
 - **InsufficientFunds** / **OperationNotAllowed**: token transfer fails (e.g. contract balance less than amount).
+- **StorageKeyNotFound**: cancel called when there is no pending withdrawal.
 
 ## Events
 
 - `emg_init`: On successful initiate (token, amount, target, unlock_at, admin).
 - `emg_exec`: On successful execute (token, amount, target, admin).
+- `emg_cncl`: On successful cancel (token, amount, target, admin).
 
 ## Governance and Documentation
 
