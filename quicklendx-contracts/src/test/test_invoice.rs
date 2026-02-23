@@ -1110,6 +1110,98 @@ fn test_invoice_payment_progress_calculation() {
     assert!(invoice.is_fully_paid());
 }
 
+/// Multiple partial payments summing to < 100%, then a final payment to 100%.
+/// Verifies payment progress at each step and that get_invoice(...).payment_progress() is correct.
+#[test]
+fn test_invoice_payment_progress_multiple_partials_then_full() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+
+        // Partial payments that sum to 60% (100 + 200 + 300)
+        invoice
+            .record_payment(&env, 100, String::from_str(&env, "TXN01"))
+            .unwrap();
+        assert_eq!(invoice.total_paid, 100);
+        assert_eq!(invoice.payment_progress(), 10);
+        assert!(!invoice.is_fully_paid());
+
+        invoice
+            .record_payment(&env, 200, String::from_str(&env, "TXN02"))
+            .unwrap();
+        assert_eq!(invoice.total_paid, 300);
+        assert_eq!(invoice.payment_progress(), 30);
+        assert!(!invoice.is_fully_paid());
+
+        invoice
+            .record_payment(&env, 300, String::from_str(&env, "TXN03"))
+            .unwrap();
+        assert_eq!(invoice.total_paid, 600);
+        assert_eq!(invoice.payment_progress(), 60);
+        assert!(!invoice.is_fully_paid());
+
+        // Final payment to 100%
+        invoice
+            .record_payment(&env, 400, String::from_str(&env, "TXN04"))
+            .unwrap();
+        assert_eq!(invoice.total_paid, 1000);
+        assert_eq!(invoice.payment_progress(), 100);
+        assert!(invoice.is_fully_paid());
+
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    // Verify get_invoice payment progress value after persistence
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.payment_progress(), 100);
+    assert!(invoice.is_fully_paid());
+}
+
+/// Explicitly test that get_invoice(...).payment_progress() returns the correct value at 0%, 50%, and 100%.
+#[test]
+fn test_invoice_get_payment_progress_value() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    // 0% before any payment
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.payment_progress(), 0, "payment progress should be 0 when no payments");
+
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .record_payment(&env, 500, String::from_str(&env, "TXN50"))
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    // 50% after half payment
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.payment_progress(), 50, "payment progress should be 50 after half payment");
+
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .record_payment(&env, 500, String::from_str(&env, "TXN100"))
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    // 100% after full payment
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.payment_progress(), 100, "payment progress should be 100 when fully paid");
+}
+
 #[test]
 fn test_invoice_overpayment_capped_at_100_percent() {
     let env = Env::default();
