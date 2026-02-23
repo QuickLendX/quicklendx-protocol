@@ -504,6 +504,13 @@ impl Invoice {
         _env: &Env,
         tag: String,
     ) -> Result<(), crate::errors::QuickLendXError> {
+        // If the tag already exists, nothing to do
+        for existing_tag in self.tags.iter() {
+            if existing_tag == tag {
+                return Ok(());
+            }
+        }
+
         // Validate tag length (1-50 characters)
         if tag.len() < 1 || tag.len() > 50 {
             return Err(crate::errors::QuickLendXError::InvalidTag);
@@ -512,13 +519,6 @@ impl Invoice {
         // Check tag limit (max 10 tags per invoice)
         if self.tags.len() >= 10 {
             return Err(crate::errors::QuickLendXError::TagLimitExceeded);
-        }
-
-        // Check if tag already exists
-        for existing_tag in self.tags.iter() {
-            if existing_tag == tag {
-                return Ok(()); // Tag already exists, no need to add
-            }
         }
 
         self.tags.push_back(tag);
