@@ -22,6 +22,7 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
+#[cfg(test)]
 mod storage;
 #[cfg(test)]
 mod test_admin;
@@ -2618,13 +2619,14 @@ mod test_reentrancy;
 
 #[cfg(test)]
 mod test_insurance;
+#[cfg(test)]
 mod test_investor_kyc;
 #[cfg(test)]
 mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
-//#[cfg(test)]
-//mod test_escrow_refund;
+#[cfg(test)]
+mod test_escrow_refund;
 #[cfg(test)]
 mod test_fuzz;
 #[cfg(test)]
