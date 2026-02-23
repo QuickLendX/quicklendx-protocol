@@ -450,6 +450,71 @@ fn test_cleanup_expired_bids_returns_count() {
     let expired_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Expired);
     assert_eq!(expired_bids.len(), 3, "All 3 bids should be Expired");
 }
+
+/// Test: get_ranked_bids excludes expired bids
+#[test]
+fn test_get_ranked_bids_excludes_expired() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let investor3 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // Place 3 bids with different profits
+    // investor1: profit = 2k
+    let _bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    // investor2: profit = 3k (best)
+    let _bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
+    // investor3: profit = 1k
+    let _bid_3 = client.place_bid(&investor3, &invoice_id, &12_000, &13_000);
+    
+    // Verify all 3 bids are ranked
+    let ranked_before = client.get_ranked_bids(&invoice_id);
+    assert_eq!(ranked_before.len(), 3, "Should have 3 ranked bids initially");
+    
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+    
+    // get_ranked_bids should trigger cleanup and exclude expired bids
+    let ranked_after = client.get_ranked_bids(&invoice_id);
+    assert_eq!(ranked_after.len(), 0, "Ranked bids should be empty after expiration");
+}
+
+/// Test: get_best_bid excludes expired bids
+#[test]
+fn test_get_best_bid_excludes_expired() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    
+    // investor1: profit = 2k
+    let _bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    // investor2: profit = 10k (best)
+    let _bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &25_000);
+    
+    // Verify best bid is investor2
+    let best_before = client.get_best_bid(&invoice_id);
+    assert!(best_before.is_some());
+    assert_eq!(best_before.unwrap().investor, investor2, "Best bid should be investor2");
+    
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+    
+    // get_best_bid should return None after all bids expire
+    let best_after = client.get_best_bid(&invoice_id);
+    assert!(best_after.is_none(), "Best bid should be None after all bids expire");
+}
 // ============================================================================
 // Category 5: Investment Limit Management
 // ============================================================================
