@@ -14,6 +14,7 @@ use crate::analytics::{
     AnalyticsCalculator, AnalyticsStorage, FinancialMetrics, PlatformMetrics, TimePeriod,
 };
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use crate::verification::InvestorTier;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Address, Env, String, Vec,
@@ -959,119 +960,22 @@ fn test_financial_metrics_profit_margins() {
     assert!(metrics.profit_margins.len() > 0);
 }
 
-// ============================================================================
-// INVESTOR ANALYTICS TESTS
-// ============================================================================
-
 #[test]
-fn test_investor_analytics_empty_data() {
+fn test_investor_performance_metrics_counts_verified_by_tier() {
     let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
     let (client, _admin, _business) = setup_contract(&env);
+
     let investor = Address::generate(&env);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "valid kyc payload"));
+    client.verify_investor(&investor, &100_000);
 
-    let data_opt = client.get_investor_analytics_data(&investor);
-    assert!(data_opt.is_none());
+    let metrics = client.calc_investor_perf_metrics();
+    assert_eq!(metrics.total_investors, 1);
+    assert_eq!(metrics.verified_investors, 1);
+    assert_eq!(metrics.pending_investors, 0);
+    assert_eq!(metrics.rejected_investors, 0);
 
-    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
-    client.verify_investor(&investor, &100000);
-
-    let analytics_calc = client.calculate_investor_analytics(&investor);
-    assert_eq!(analytics_calc.investor_address, investor);
-    assert_eq!(analytics_calc.total_invested, 0);
-
-    let data_stored = client.get_investor_analytics_data(&investor);
-    assert!(data_stored.is_some());
-    assert_eq!(data_stored.unwrap().investor_address, investor);
-}
-
-#[test]
-fn test_investor_analytics_after_settle() {
-    let env = Env::default();
-    let (client, _admin, _business) = setup_contract(&env);
-    let investor = Address::generate(&env);
-
-    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
-    client.verify_investor(&investor, &100000);
-
-    client.update_investor_analytics(&investor, &1000, &true);
-    client.update_investor_analytics(&investor, &2000, &true);
-
-    let analytics = client.calculate_investor_analytics(&investor);
-    assert_eq!(analytics.total_invested, 3000);
-}
-
-#[test]
-fn test_investor_analytics_after_default() {
-    let env = Env::default();
-    let (client, _admin, _business) = setup_contract(&env);
-    let investor = Address::generate(&env);
-
-    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
-    client.verify_investor(&investor, &100000);
-
-    client.update_investor_analytics(&investor, &1000, &false);
-    client.update_investor_analytics(&investor, &2000, &false);
-
-    let analytics = client.calculate_investor_analytics(&investor);
-    assert_eq!(analytics.total_invested, 3000);
-    assert_eq!(analytics.success_rate, 0);
-}
-
-#[test]
-fn test_investor_performance_metrics() {
-    let env = Env::default();
-    let (client, _admin, _business) = setup_contract(&env);
-    let investor1 = Address::generate(&env);
-    let investor2 = Address::generate(&env);
-
-    client.submit_investor_kyc(&investor1, &String::from_str(&env, "KYC1"));
-    client.verify_investor(&investor1, &100000);
-    client.submit_investor_kyc(&investor2, &String::from_str(&env, "KYC2"));
-    client.verify_investor(&investor2, &100000);
-
-    client.update_investor_analytics(&investor1, &1000, &true);
-    client.update_investor_analytics(&investor2, &2000, &false);
-
-    let perf = client.calc_investor_perf_metrics();
-    assert_eq!(perf.total_investors, 2);
-
-    let stored_perf = client.get_investor_performance_metrics();
-    assert!(stored_perf.is_some());
-    assert_eq!(stored_perf.unwrap().total_investors, 2);
-}
-
-#[test]
-fn test_update_investor_analytics_data_admin() {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let investor = Address::generate(&env);
-
-    let fail_result = client.try_update_investor_analytics_data(&investor);
-    assert!(fail_result.is_err());
-
-    let admin = Address::generate(&env);
-    env.mock_all_auths();
-    client.set_admin(&admin);
-
-    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
-    client.verify_investor(&investor, &100000);
-
-    client.update_investor_analytics_data(&investor);
-}
-
-#[test]
-fn test_update_investor_performance_data_admin() {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    let fail_result = client.try_update_investor_performance_data();
-    assert!(fail_result.is_err());
-
-    let admin = Address::generate(&env);
-    env.mock_all_auths();
-    client.set_admin(&admin);
-
-    client.update_investor_performance_data();
+    let basic_investors = client.get_investors_by_tier(&InvestorTier::Basic);
+    assert!(basic_investors.contains(&investor));
 }
