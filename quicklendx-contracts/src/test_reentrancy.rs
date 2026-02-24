@@ -241,7 +241,10 @@ fn test_guard_releases_lock_after_failure() {
             .unwrap_or(false)
     });
 
-    assert!(!lock_value, "Lock must be false even after failed operation");
+    assert!(
+        !lock_value,
+        "Lock must be false even after failed operation"
+    );
 }
 
 /// Test 4: Sequential protected calls succeed.
@@ -315,9 +318,8 @@ fn test_guard_returns_closure_value() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
 
-    let outcome: Result<u32, QuickLendXError> = env.as_contract(&contract_id, || {
-        with_payment_guard(&env, || Ok(42u32))
-    });
+    let outcome: Result<u32, QuickLendXError> =
+        env.as_contract(&contract_id, || with_payment_guard(&env, || Ok(42u32)));
 
     assert_eq!(
         outcome,
@@ -341,8 +343,7 @@ fn test_guard_error_variant_is_operation_not_allowed() {
             .instance()
             .set(&symbol_short!("pay_lock"), &true);
 
-        let result: Result<(), QuickLendXError> =
-            with_payment_guard(&env, || Ok(()));
+        let result: Result<(), QuickLendXError> = with_payment_guard(&env, || Ok(()));
 
         assert_eq!(
             result,
@@ -368,9 +369,8 @@ fn test_guard_releases_lock_when_closure_returns_err() {
 
     env.as_contract(&contract_id, || {
         // Guard runs, closure returns Err.
-        let result: Result<(), QuickLendXError> = with_payment_guard(&env, || {
-            Err(QuickLendXError::InvoiceNotFound)
-        });
+        let result: Result<(), QuickLendXError> =
+            with_payment_guard(&env, || Err(QuickLendXError::InvoiceNotFound));
 
         assert_eq!(
             result,
@@ -434,10 +434,7 @@ fn test_guard_unit_failure_clears_lock() {
         let key = symbol_short!("pay_lock");
         ctx.env.storage().instance().get(&key).unwrap_or(false)
     });
-    assert!(
-        !lock_value,
-        "Lock should be false after guard failure"
-    );
+    assert!(!lock_value, "Lock should be false after guard failure");
 }
 
 /// Test 7: with_payment_guard blocks reentrant calls
@@ -503,7 +500,10 @@ fn test_accept_bid_and_fund_guard_blocks() {
     });
 
     let result = ctx.client.try_accept_bid_and_fund(&invoice_id, &bid_id);
-    assert!(result.is_err(), "accept_bid_and_fund should fail when lock is set");
+    assert!(
+        result.is_err(),
+        "accept_bid_and_fund should fail when lock is set"
+    );
 
     // Clean up
     ctx.env.as_contract(&ctx.contract_id, || {
@@ -536,7 +536,10 @@ fn test_release_escrow_guard_blocks() {
     });
 
     let result = ctx.client.try_release_escrow_funds(&invoice_id);
-    assert!(result.is_err(), "release_escrow_funds should fail when lock is set");
+    assert!(
+        result.is_err(),
+        "release_escrow_funds should fail when lock is set"
+    );
 
     // Clean up
     ctx.env.as_contract(&ctx.contract_id, || {
@@ -569,7 +572,10 @@ fn test_refund_escrow_guard_blocks() {
     });
 
     let result = ctx.client.try_refund_escrow_funds(&invoice_id, &ctx.admin);
-    assert!(result.is_err(), "refund_escrow_funds should fail when lock is set");
+    assert!(
+        result.is_err(),
+        "refund_escrow_funds should fail when lock is set"
+    );
 
     // Clean up
     ctx.env.as_contract(&ctx.contract_id, || {
@@ -602,14 +608,20 @@ fn test_mixed_sequential_endpoints() {
 
     // Second: accept_bid_and_fund (different guarded endpoint)
     let r2 = ctx.client.try_accept_bid_and_fund(&invoice_2, &bid_2);
-    assert!(r2.is_ok(), "accept_bid_and_fund should succeed after accept_bid");
+    assert!(
+        r2.is_ok(),
+        "accept_bid_and_fund should succeed after accept_bid"
+    );
 
     // Lock should be clear after both
     let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
         let key = symbol_short!("pay_lock");
         ctx.env.storage().instance().get(&key).unwrap_or(false)
     });
-    assert!(!lock_value, "Lock should be released after mixed sequential calls");
+    assert!(
+        !lock_value,
+        "Lock should be released after mixed sequential calls"
+    );
 }
 /// Test 9: Multiple lock/release cycles complete without deadlock.
 ///
@@ -622,8 +634,7 @@ fn test_multiple_lock_release_cycles() {
 
     env.as_contract(&contract_id, || {
         for i in 0u32..5 {
-            let result: Result<u32, QuickLendXError> =
-                with_payment_guard(&env, || Ok(i));
+            let result: Result<u32, QuickLendXError> = with_payment_guard(&env, || Ok(i));
 
             assert_eq!(
                 result,
@@ -658,8 +669,7 @@ fn test_guard_allows_entry_when_lock_is_explicitly_false() {
             .instance()
             .set(&symbol_short!("pay_lock"), &false);
 
-        let result: Result<u64, QuickLendXError> =
-            with_payment_guard(&env, || Ok(99u64));
+        let result: Result<u64, QuickLendXError> = with_payment_guard(&env, || Ok(99u64));
 
         assert_eq!(
             result,
