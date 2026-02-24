@@ -2093,13 +2093,13 @@ fn test_get_total_invoice_count_equals_sum_of_status_counts() {
     assert_eq!(client.get_total_invoice_count(), 0);
 
     // Create 3 pending invoices
-    for i in 1..=3 {
+    for _i in 1..=3 {
         client.store_invoice(
             &business,
-            &(1000 * i),
+            &(1000 * _i),
             &currency,
             &due_date,
-            &String::from_str(&env, &format!("Invoice {}", i)),
+            &String::from_str(&env, "Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
         );
@@ -2324,13 +2324,13 @@ fn test_invoice_counts_with_multiple_status_updates() {
 
     // Create 10 invoices and transition them through various states
     let mut invoice_ids = Vec::new(&env);
-    for i in 1..=10 {
+    for _i in 1..=10 {
         let id = client.store_invoice(
             &business,
-            &(1000 * i),
+            &(1000 * _i),
             &currency,
             &due_date,
-            &String::from_str(&env, &format!("Invoice {}", i)),
+            &String::from_str(&env, "Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
         );
@@ -2469,13 +2469,13 @@ fn test_invoice_count_consistency() {
     verify_consistency();
 
     // Create multiple invoices
-    for i in 3..=5 {
+    for _i in 3..=5 {
         client.store_invoice(
             &business,
-            &(i * 1000),
+            &(_i * 1000),
             &currency,
             &due_date,
-            &String::from_str(&env, &format!("Invoice {}", i)),
+            &String::from_str(&env, "Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
         );
