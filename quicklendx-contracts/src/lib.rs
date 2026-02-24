@@ -145,6 +145,17 @@ impl QuickLendXContract {
         AdminStorage::get_admin(&env)
     }
 
+    /// Admin-only: configure default bid TTL (days). Bounds: 1..=30.
+    pub fn set_bid_ttl_days(env: Env, days: u64) -> Result<u64, QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        bid::BidStorage::set_bid_ttl_days(&env, &admin, days)
+    }
+
+    /// Get configured bid TTL in days (returns default 7 if not set)
+    pub fn get_bid_ttl_days(env: Env) -> u64 {
+        bid::BidStorage::get_bid_ttl_days(&env)
+    }
+
     /// Initiate emergency withdraw for stuck funds (admin only). Timelock applies before execute.
     /// See docs/contracts/emergency-recovery.md. Last-resort only.
     pub fn initiate_emergency_withdraw(
@@ -720,7 +731,7 @@ impl QuickLendXContract {
             expected_return,
             timestamp: current_timestamp,
             status: BidStatus::Placed,
-            expiration_timestamp: Bid::default_expiration(current_timestamp),
+            expiration_timestamp: Bid::default_expiration_with_env(&env, current_timestamp),
         };
         BidStorage::store_bid(&env, &bid);
         // Track bid for this invoice

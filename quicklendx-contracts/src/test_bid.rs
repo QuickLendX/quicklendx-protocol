@@ -218,6 +218,67 @@ fn test_multiple_bids_indexing_and_query() {
         "Should have 2 placed bids after withdrawal"
     );
 
+// ============================================================================
+// Bid TTL configuration tests
+// ============================================================================
+
+#[test]
+fn test_default_bid_ttl_used_in_place_bid() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
+
+    let current_ts = env.ledger().timestamp();
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid = client.get_bid(&bid_id).unwrap();
+
+    let expected = current_ts + (7u64 * 86400u64);
+    assert_eq!(bid.expiration_timestamp, expected);
+}
+
+#[test]
+fn test_admin_can_update_ttl_and_bid_uses_new_value() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    // Update TTL to 14 days
+    let _ = client.set_bid_ttl_days(&14u64);
+
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
+
+    let current_ts = env.ledger().timestamp();
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid = client.get_bid(&bid_id).unwrap();
+
+    let expected = current_ts + (14u64 * 86400u64);
+    assert_eq!(bid.expiration_timestamp, expected);
+}
+
+#[test]
+fn test_set_bid_ttl_bounds_enforced() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    // Too small
+    let result = client.try_set_bid_ttl_days(&0u64);
+    assert!(result.is_err());
+
+    // Too large
+    let result = client.try_set_bid_ttl_days(&31u64);
+    assert!(result.is_err());
+}
+
     let withdrawn_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Withdrawn);
     assert_eq!(withdrawn_bids.len(), 1, "Should have 1 withdrawn bid");
 }
