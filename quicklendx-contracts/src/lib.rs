@@ -1283,7 +1283,6 @@ impl QuickLendXContract {
         )
     }
 
-<<<<<<< featured
     /// Update protocol limits (admin only).
     pub fn update_protocol_limits(
         env: Env,
@@ -1301,8 +1300,6 @@ impl QuickLendXContract {
         )
     }
 
-=======
->>>>>>> main
     /// Get all verified businesses
     pub fn get_verified_businesses(env: Env) -> Vec<Address> {
         BusinessVerificationStorage::get_verified_businesses(&env)
