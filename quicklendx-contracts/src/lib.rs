@@ -29,6 +29,8 @@ mod storage;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
+mod test_bid_ranking;
+#[cfg(test)]
 mod test_business_kyc;
 #[cfg(test)]
 mod test_cancel_refund;
@@ -472,7 +474,10 @@ impl QuickLendXContract {
         }
 
         // Validate due date is not too far in the future using protocol limits
-        protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
+        if !protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)
+        {
+            return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
 
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
@@ -2926,6 +2931,8 @@ mod test_reentrancy;
 mod test_backup;
 #[cfg(test)]
 mod test_escrow_refund;
+#[cfg(test)]
+mod test_fuzz;
 #[cfg(test)]
 mod test_fuzz;
 #[cfg(test)]
