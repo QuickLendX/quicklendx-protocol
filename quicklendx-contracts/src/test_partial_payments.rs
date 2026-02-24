@@ -325,27 +325,21 @@ mod tests {
         assert_eq!(progress.progress_percent, 100);
         assert_eq!(progress.remaining_due, 0);
     }
-//! Comprehensive tests for partial payments and settlement
-//!
-//! This module provides 95%+ test coverage for:
-//! - process_partial_payment validation (zero/negative amounts)
-//! - Payment progress tracking
-//! - Overpayment capped at 100%
-//! - Payment records and transaction IDs
-//! - Edge cases and error handling
 
-use super::*;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    token, Address, Env, String, Vec,
-};
+    // Comprehensive tests for partial payments and settlement
+    //
+    // This module provides 95%+ test coverage for:
+    // - process_partial_payment validation (zero/negative amounts)
+    // - Payment progress tracking
+    // - Overpayment capped at 100%
+    // - Payment records and transaction IDs
+    // - Edge cases and error handling
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
+    // ============================================================================
+    // HELPER FUNCTIONS (second set for tests below)
+    // ============================================================================
 
-fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address) {
+    fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
@@ -995,5 +989,4 @@ fn test_complete_partial_payment_workflow() {
 //    ✓ Complete workflow from 0% to 100% with auto-settlement
 //
 // ESTIMATED COVERAGE: 95%+
-
 }

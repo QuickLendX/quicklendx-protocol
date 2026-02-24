@@ -13,6 +13,7 @@ fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.set_admin(&admin);
+    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
     (env, client, admin)
 }
 
@@ -748,6 +749,138 @@ fn test_remove_invoice_tag_business_auth() {
 
     let urgent = client.get_invoices_by_tag(&String::from_str(&env, "urgent"));
     assert!(!urgent.contains(&invoice_id));
+}
+
+// ============================================================================
+// get_invoice_tags and invoice_has_tag (#351)
+// ============================================================================
+
+#[test]
+fn test_get_invoice_tags_returns_all_tags() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.add_invoice_tag(&invoice_id, &String::from_str(&env, "a"));
+    client.add_invoice_tag(&invoice_id, &String::from_str(&env, "b"));
+    client.add_invoice_tag(&invoice_id, &String::from_str(&env, "c"));
+
+    let tags = client.get_invoice_tags(&invoice_id);
+    assert_eq!(tags.len(), 3);
+    assert!(tags.contains(&String::from_str(&env, "a")));
+    assert!(tags.contains(&String::from_str(&env, "b")));
+    assert!(tags.contains(&String::from_str(&env, "c")));
+}
+
+#[test]
+fn test_invoice_has_tag_true_and_false() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.add_invoice_tag(&invoice_id, &String::from_str(&env, "present"));
+
+    assert!(client.invoice_has_tag(&invoice_id, &String::from_str(&env, "present")));
+    assert!(!client.invoice_has_tag(&invoice_id, &String::from_str(&env, "absent")));
+}
+
+#[test]
+fn test_add_invoice_tag_duplicate_idempotent() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let tag = String::from_str(&env, "dup");
+    client.add_invoice_tag(&invoice_id, &tag);
+    client.add_invoice_tag(&invoice_id, &tag);
+
+    let tags = client.get_invoice_tags(&invoice_id);
+    assert_eq!(tags.len(), 1);
+    assert!(client.invoice_has_tag(&invoice_id, &tag));
+}
+
+#[test]
+fn test_remove_invoice_tag_nonexistent_fails() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let result = client.try_remove_invoice_tag(
+        &invoice_id,
+        &String::from_str(&env, "nonexistent"),
+    );
+    assert!(result.is_err(), "remove_invoice_tag should fail for nonexistent tag");
+}
+
+#[test]
+fn test_update_invoice_category_index_update() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert!(client.get_invoices_by_category(&InvoiceCategory::Services).contains(&invoice_id));
+    assert!(!client.get_invoices_by_category(&InvoiceCategory::Products).contains(&invoice_id));
+
+    client.update_invoice_category(&invoice_id, &InvoiceCategory::Products);
+
+    assert!(!client.get_invoices_by_category(&InvoiceCategory::Services).contains(&invoice_id));
+    assert!(client.get_invoices_by_category(&InvoiceCategory::Products).contains(&invoice_id));
+    assert_eq!(client.get_invoice(&invoice_id).category, InvoiceCategory::Products);
 }
 
 // ============================================================================
