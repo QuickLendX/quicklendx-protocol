@@ -161,7 +161,7 @@ impl Invoice {
         /// Update invoice metadata (business only)
         pub fn update_metadata(
             &mut self,
-            env: &Env,
+            _env: &Env,
             business: &Address,
             metadata: InvoiceMetadata,
         ) -> Result<(), QuickLendXError> {

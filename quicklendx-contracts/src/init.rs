@@ -205,7 +205,7 @@ impl ProtocolInitializer {
     /// Performs comprehensive validation of all parameters before
     /// any state changes are made.
     fn validate_initialization_params(
-        env: &Env,
+        _env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // Validate fee basis points (0% to 10%)
