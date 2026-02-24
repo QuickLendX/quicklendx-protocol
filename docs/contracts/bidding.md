@@ -6,6 +6,7 @@ The bidding system enables verified investors to place and withdraw bids on veri
 
 ## Entrypoints
 
+
 ### `place_bid`
 
 Places a bid on a verified invoice.
@@ -206,7 +207,7 @@ pub fn get_all_bids_by_investor(env: Env, investor: Address) -> Vec<Bid>
 ### `Bid`
 
 ```rust
-pub struct Bid {
+    pub struct Bid {
     pub bid_id: BytesN<32>,           // Unique bid identifier
     pub invoice_id: BytesN<32>,       // Associated invoice
     pub investor: Address,            // Investor who placed the bid
@@ -214,7 +215,7 @@ pub struct Bid {
     pub expected_return: i128,        // Expected return amount
     pub timestamp: u64,               // When bid was placed
     pub status: BidStatus,            // Current bid status
-    pub expiration_timestamp: u64,    // When bid expires (default: 7 days)
+    pub expiration_timestamp: u64,    // When bid expires (default: 7 days, admin-configurable 1–30 days)
 }
 ```
 
@@ -233,8 +234,15 @@ pub enum BidStatus {
 ## Bid Lifecycle
 
 1. **Place Bid**: Investor places a bid on a verified invoice
-   - Status: `Placed`
-   - Expiration: 7 days from placement (configurable via `DEFAULT_BID_TTL`)
+    - Status: `Placed`
+    - Expiration: Default is 7 days from placement. This TTL is admin-configurable in days (1–30) without a code change.
+
+### Bid TTL Configuration (Admin)
+
+- `set_bid_ttl_days(env, days: u64) -> Result<u64, QuickLendXError>`: Admin-only entrypoint to set the default bid TTL in days. Must be between 1 and 30. The stored value is used for subsequent bids.
+- `get_bid_ttl_days(env) -> u64`: Read-only entrypoint returning the configured TTL in days (returns 7 if not set).
+
+Security: only the configured protocol admin may call `set_bid_ttl_days`. Calls require the admin to authorize the transaction.
 
 2. **Withdraw Bid**: Investor withdraws their bid before acceptance
    - Status: `Withdrawn`

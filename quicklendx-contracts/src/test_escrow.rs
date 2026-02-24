@@ -579,8 +579,7 @@ fn test_escrow_invariants() {
 }
 
 // ============================================================================
-// release_escrow_funds tests (Issue #273 – authorized, idempotency blocked)
-// ============================================================================
+
 
 #[test]
 fn test_release_escrow_funds_success() {
@@ -645,4 +644,50 @@ fn test_release_escrow_funds_idempotency_blocked() {
     );
     let err = result.unwrap_err().unwrap();
     assert_eq!(err, QuickLendXError::InvalidStatus);
+}
+
+// ============================================================================
+// verify_invoice and auto-release when funded (Issue #300)
+// ============================================================================
+
+#[test]
+fn test_verify_invoice_when_funded_triggers_release_escrow_funds() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1000);
+
+    client.accept_bid(&invoice_id, &bid_id);
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+
+    let escrow_before = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow_before.status, EscrowStatus::Held);
+
+    let business_balance_before = token_client.balance(&business);
+
+    let result = client.try_verify_invoice(&invoice_id);
+    assert!(result.is_ok(), "verify_invoice when funded should trigger release");
+
+    let business_balance_after = token_client.balance(&business);
+    assert_eq!(
+        business_balance_after - business_balance_before,
+        amount,
+        "Business should receive escrow amount after verify_invoice on funded invoice"
+    );
+
+    let escrow_after = client.get_escrow_details(&invoice_id);
+    assert_eq!(
+        escrow_after.status,
+        EscrowStatus::Released,
+        "Escrow should be Released after verify_invoice on funded invoice"
+    );
 }
