@@ -995,3 +995,5 @@ fn test_complete_partial_payment_workflow() {
 //    ✓ Complete workflow from 0% to 100% with auto-settlement
 //
 // ESTIMATED COVERAGE: 95%+
+
+}
