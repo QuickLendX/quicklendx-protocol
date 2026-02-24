@@ -2,9 +2,9 @@ name: Soroban Smart Contracts CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -14,40 +14,40 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Install Rust
-      run: |
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source $HOME/.cargo/env
-    - name: Install Rust target for Soroban
-      run: |
-        source $HOME/.cargo/env
-        rustup target add wasm32v1-none
-    - name: Install Stellar CLI with Homebrew
-      run: |
-        brew update
-        brew install stellar-cli
-        stellar --version
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
+      - name: Install Rust target for Soroban
+        run: |
+          source $HOME/.cargo/env
+          rustup target add wasm32v1-none
+      - name: Install Stellar CLI with Homebrew
+        run: |
+          brew update
+          brew install stellar-cli
+          stellar --version
 
-    - name: Build Cargo project
-      run: |
-        cd quicklendx-contracts
-        cargo build --verbose
+      - name: Build Cargo project
+        run: |
+          cd quicklendx-contracts
+          cargo build --verbose
 
-    - name: Check code quality
-      run: |
-        source $HOME/.cargo/env
-        cd quicklendx-contracts
-        cargo check --lib --verbose
+      - name: Check code quality
+        run: |
+          source $HOME/.cargo/env
+          cd quicklendx-contracts
+          cargo check --lib --verbose
 
-    - name: Install wasm-opt (binaryen) for size reduction
-      run: brew install binaryen
+      - name: Install wasm-opt (binaryen) for size reduction
+        run: brew install binaryen
 
-    - name: Build and check WASM size budget
-      run: |
-        source $HOME/.cargo/env
-        quicklendx-contracts/scripts/check-wasm-size.sh
+      - name: Build and check WASM size budget
+        run: |
+          source $HOME/.cargo/env
+          quicklendx-contracts/scripts/check-wasm-size.sh
 
     # WASM size budget is also covered by integration test: cargo test wasm_release_build_fits_size_budget
 

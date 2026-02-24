@@ -10,21 +10,21 @@ All arithmetic in QuickLendX contracts is overflow- and underflow-safe. This doc
 
 ## Modules and Usage
 
-| Module | Usage |
-|--------|--------|
-| **invoice** | Counter increment (`saturating_add(1)`), `total_ratings`, `total_paid`, `payment_progress` (saturating/checked), rating average (checked division). |
-| **bid** | `default_expiration` (saturating add), `compare_bids` (saturating_sub), bid ID generation counter and timestamp mix (saturating). |
-| **payments** | Escrow ID generation: counter and timestamp (saturating_add). |
-| **investment** | Investment ID generation: counter and timestamp (saturating); premium/coverage (saturating_mul, checked_div). |
-| **fees** | Fee and revenue calculations (saturating_mul, saturating_add, checked_div), revenue share sum (saturating_add), user volume and transaction count (saturating_add), analytics average and efficiency (checked_div, saturating_mul). |
-| **profits** | Profit and fee formulas (saturating_sub, saturating_mul, checked_div). |
-| **settlement** | Uses fee module and payment amounts; no raw arithmetic. |
-| **escrow** | Uses payments; no raw arithmetic. |
-| **backup** | Backup ID generation: counter and timestamp (saturating_add). |
-| **audit** | Audit ID generation: counter and timestamp (saturating_add). |
-| **storage** | Invoice/bid/investment `next_count` (saturating_add(1)). |
-| **dispute** | Query range end (saturating_add for start + limit). |
-| **lib** | `get_total_invoice_count` (saturating_add for status counts), pagination (saturating_add for start + limit). |
+| Module         | Usage                                                                                                                                                                                                                               |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **invoice**    | Counter increment (`saturating_add(1)`), `total_ratings`, `total_paid`, `payment_progress` (saturating/checked), rating average (checked division).                                                                                 |
+| **bid**        | `default_expiration` (saturating add), `compare_bids` (saturating_sub), bid ID generation counter and timestamp mix (saturating).                                                                                                   |
+| **payments**   | Escrow ID generation: counter and timestamp (saturating_add).                                                                                                                                                                       |
+| **investment** | Investment ID generation: counter and timestamp (saturating); premium/coverage (saturating_mul, checked_div).                                                                                                                       |
+| **fees**       | Fee and revenue calculations (saturating_mul, saturating_add, checked_div), revenue share sum (saturating_add), user volume and transaction count (saturating_add), analytics average and efficiency (checked_div, saturating_mul). |
+| **profits**    | Profit and fee formulas (saturating_sub, saturating_mul, checked_div).                                                                                                                                                              |
+| **settlement** | Uses fee module and payment amounts; no raw arithmetic.                                                                                                                                                                             |
+| **escrow**     | Uses payments; no raw arithmetic.                                                                                                                                                                                                   |
+| **backup**     | Backup ID generation: counter and timestamp (saturating_add).                                                                                                                                                                       |
+| **audit**      | Audit ID generation: counter and timestamp (saturating_add).                                                                                                                                                                        |
+| **storage**    | Invoice/bid/investment `next_count` (saturating_add(1)).                                                                                                                                                                            |
+| **dispute**    | Query range end (saturating_add for start + limit).                                                                                                                                                                                 |
+| **lib**        | `get_total_invoice_count` (saturating_add for status counts), pagination (saturating_add for start + limit).                                                                                                                        |
 
 ## Testing
 

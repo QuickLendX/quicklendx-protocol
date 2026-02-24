@@ -132,6 +132,7 @@ pub fn create_notification(
 ```
 
 **Parameters:**
+
 - `notification_type`: Type of notification
 - `recipient`: Address of the notification recipient
 - `title`: Notification title
@@ -143,6 +144,7 @@ pub fn create_notification(
 **Returns:** Notification ID
 
 **Example:**
+
 ```rust
 let notification_id = NotificationSystem::create_notification(
     &env,
@@ -177,6 +179,7 @@ pub fn update_notification_status(
 ```
 
 **Example:**
+
 ```rust
 // Mark as sent
 NotificationSystem::update_notification_status(
@@ -209,6 +212,7 @@ pub fn get_user_notifications(env: &Env, user: &Address) -> Vec<BytesN<32>>
 ```
 
 **Example:**
+
 ```rust
 let notification_ids = NotificationSystem::get_user_notifications(&env, &user_addr);
 
@@ -241,6 +245,7 @@ pub fn update_user_preferences(
 ```
 
 **Example:**
+
 ```rust
 let mut prefs = NotificationSystem::get_user_preferences(&env, &user_addr);
 
@@ -262,6 +267,7 @@ pub fn get_user_notification_stats(env: &Env, user: &Address) -> NotificationSta
 ```
 
 **Example:**
+
 ```rust
 let stats = NotificationSystem::get_user_notification_stats(&env, &user_addr);
 
@@ -573,6 +579,7 @@ The notifications module includes comprehensive tests covering:
 - ✅ Edge cases and error handling
 
 Run tests with:
+
 ```bash
 cargo test notification
 ```

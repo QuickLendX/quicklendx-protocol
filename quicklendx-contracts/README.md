@@ -139,6 +139,7 @@ let bid_id = contract.place_bid(
 #### Invoice Management
 
 ##### `store_invoice`
+
 Creates and stores a new invoice in the contract.
 
 ```rust
@@ -155,6 +156,7 @@ pub fn store_invoice(
 ```
 
 **Parameters:**
+
 - `business`: Address of the business creating the invoice
 - `amount`: Invoice amount in smallest currency unit (e.g., cents)
 - `currency`: Token address for the invoice currency
@@ -166,6 +168,7 @@ pub fn store_invoice(
 **Returns:** Invoice ID (32-byte hash)
 
 **Example:**
+
 ```rust
 let invoice_id = contract.store_invoice(
     &env,
@@ -180,6 +183,7 @@ let invoice_id = contract.store_invoice(
 ```
 
 ##### `get_invoice`
+
 Retrieves invoice details by ID.
 
 ```rust
@@ -187,6 +191,7 @@ pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<Invoice, QuickLen
 ```
 
 ##### `update_invoice_status`
+
 Updates the status of an invoice.
 
 ```rust
@@ -200,6 +205,7 @@ pub fn update_invoice_status(
 #### Bidding System
 
 ##### `place_bid`
+
 Places a bid on an available invoice.
 
 ```rust
@@ -213,6 +219,7 @@ pub fn place_bid(
 ```
 
 **Parameters:**
+
 - `investor`: Address of the investor placing the bid
 - `invoice_id`: ID of the invoice to bid on
 - `bid_amount`: Amount the investor is willing to pay
@@ -221,6 +228,7 @@ pub fn place_bid(
 **Returns:** Bid ID
 
 ##### `accept_bid`
+
 Accepts a bid on an invoice, creating an escrow.
 
 ```rust
@@ -234,6 +242,7 @@ pub fn accept_bid(
 #### Payment & Escrow
 
 ##### `release_escrow_funds`
+
 Releases escrow funds to the investor upon invoice verification.
 
 ```rust
@@ -241,6 +250,7 @@ pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), Quic
 ```
 
 ##### `refund_escrow_funds`
+
 Refunds escrow funds to the investor if conditions aren't met.
 
 ```rust
@@ -250,6 +260,7 @@ pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), Quick
 #### Verification & KYC
 
 ##### `submit_kyc_application`
+
 Submits KYC application for business verification.
 
 ```rust
@@ -261,6 +272,7 @@ pub fn submit_kyc_application(
 ```
 
 ##### `verify_business`
+
 Verifies a business (admin only).
 
 ```rust
@@ -274,6 +286,7 @@ pub fn verify_business(
 #### Query Functions (Paginated)
 
 ##### `get_business_invoices_paged`
+
 Retrieves invoices for a business with pagination and optional status filtering.
 
 ```rust
@@ -287,6 +300,7 @@ pub fn get_business_invoices_paged(
 ```
 
 **Parameters:**
+
 - `business`: Address of the business
 - `status_filter`: Optional status filter (None returns all statuses)
 - `offset`: Starting index for pagination (0-based)
@@ -295,6 +309,7 @@ pub fn get_business_invoices_paged(
 **Returns:** Vector of invoice IDs
 
 **Example:**
+
 ```rust
 // Get first 10 verified invoices for a business
 let invoices = contract.get_business_invoices_paged(
@@ -316,6 +331,7 @@ let more_invoices = contract.get_business_invoices_paged(
 ```
 
 ##### `get_investor_investments_paged`
+
 Retrieves investments for an investor with pagination and optional status filtering.
 
 ```rust
@@ -329,6 +345,7 @@ pub fn get_investor_investments_paged(
 ```
 
 **Parameters:**
+
 - `investor`: Address of the investor
 - `status_filter`: Optional investment status filter
 - `offset`: Starting index for pagination
@@ -337,6 +354,7 @@ pub fn get_investor_investments_paged(
 **Returns:** Vector of investment IDs
 
 **Example:**
+
 ```rust
 // Get all active investments for an investor
 let active_investments = contract.get_investor_investments_paged(
@@ -349,6 +367,7 @@ let active_investments = contract.get_investor_investments_paged(
 ```
 
 ##### `get_available_invoices_paged`
+
 Retrieves available (verified) invoices with pagination and optional filters.
 
 ```rust
@@ -363,6 +382,7 @@ pub fn get_available_invoices_paged(
 ```
 
 **Parameters:**
+
 - `min_amount`: Optional minimum invoice amount filter
 - `max_amount`: Optional maximum invoice amount filter
 - `category_filter`: Optional category filter
@@ -372,6 +392,7 @@ pub fn get_available_invoices_paged(
 **Returns:** Vector of invoice IDs
 
 **Example:**
+
 ```rust
 // Get service invoices between $100 and $1000
 let invoices = contract.get_available_invoices_paged(
@@ -385,6 +406,7 @@ let invoices = contract.get_available_invoices_paged(
 ```
 
 ##### `get_bid_history_paged`
+
 Retrieves bid history for an invoice with pagination and optional status filtering.
 
 ```rust
@@ -398,6 +420,7 @@ pub fn get_bid_history_paged(
 ```
 
 **Parameters:**
+
 - `invoice_id`: ID of the invoice
 - `status_filter`: Optional bid status filter
 - `offset`: Starting index for pagination
@@ -406,6 +429,7 @@ pub fn get_bid_history_paged(
 **Returns:** Vector of Bid objects
 
 **Example:**
+
 ```rust
 // Get all accepted bids for an invoice
 let accepted_bids = contract.get_bid_history_paged(
@@ -418,6 +442,7 @@ let accepted_bids = contract.get_bid_history_paged(
 ```
 
 ##### `get_investor_bids_paged`
+
 Retrieves bid history for an investor with pagination and optional status filtering.
 
 ```rust
@@ -431,6 +456,7 @@ pub fn get_investor_bids_paged(
 ```
 
 **Parameters:**
+
 - `investor`: Address of the investor
 - `status_filter`: Optional bid status filter
 - `offset`: Starting index for pagination
@@ -439,6 +465,7 @@ pub fn get_investor_bids_paged(
 **Returns:** Vector of Bid objects
 
 **Example:**
+
 ```rust
 // Get investor's placed bids
 let placed_bids = contract.get_investor_bids_paged(
@@ -451,6 +478,7 @@ let placed_bids = contract.get_investor_bids_paged(
 ```
 
 **Pagination Notes:**
+
 - All paginated functions use overflow-safe arithmetic (`saturating_add`, `min`)
 - Offset beyond data length returns empty results (no error)
 - Limit of 0 returns empty results
@@ -459,6 +487,7 @@ let placed_bids = contract.get_investor_bids_paged(
 #### Audit & Backup
 
 ##### `get_audit_trail`
+
 Retrieves audit trail for an invoice.
 
 ```rust
@@ -466,6 +495,7 @@ pub fn get_invoice_audit_trail(env: Env, invoice_id: BytesN<32>) -> Vec<BytesN<3
 ```
 
 ##### `create_backup`
+
 Creates a backup of contract data.
 
 ```rust
@@ -475,6 +505,7 @@ pub fn create_backup(env: Env, description: String) -> Result<BytesN<32>, QuickL
 ### Data Structures
 
 #### Invoice
+
 ```rust
 pub struct Invoice {
     pub id: BytesN<32>,
@@ -492,6 +523,7 @@ pub struct Invoice {
 ```
 
 #### Bid
+
 ```rust
 pub struct Bid {
     pub id: BytesN<32>,
@@ -625,6 +657,7 @@ let bids = contract.get_bid_history_paged(
 ```
 
 Query limit safety:
+
 - Public query endpoints with pagination/limits enforce `MAX_QUERY_LIMIT = 100`.
 - Effective limit is always `min(limit, 100)` for `query_audit_logs`, `query_analytics_data`,
   `get_business_invoices_paged`, `get_investor_investments_paged`,
@@ -659,6 +692,7 @@ match contract.store_invoice(&env, business, amount, currency, due_date, descrip
 ### Local Development
 
 1. **Set up Soroban Local Network**
+
 ```bash
 # Start local network
 stellar-cli network start
@@ -670,6 +704,7 @@ stellar-cli account create --name admin
 ```
 
 2. **Deploy Contract**
+
 ```bash
 # Build contract
 cargo build --target wasm32-unknown-unknown --release
@@ -681,6 +716,7 @@ stellar-cli contract deploy \
 ```
 
 3. **Initialize Contract**
+
 ```bash
 # Set admin
 stellar-cli contract invoke \
@@ -693,6 +729,7 @@ stellar-cli contract invoke \
 ### Testnet Deployment
 
 1. **Configure Testnet**
+
 ```bash
 # Set testnet configuration
 stellar-cli network testnet
@@ -702,6 +739,7 @@ stellar-cli account fund --source <YOUR_ACCOUNT>
 ```
 
 2. **Deploy to Testnet**
+
 ```bash
 # Deploy contract
 stellar-cli contract deploy \
@@ -731,14 +769,16 @@ stellar-cli contract deploy \
 
 The release build is tuned for minimal WASM size (opt-level = "z", LTO, strip, codegen-units = 1). The contract MUST stay within the **size budget** so it fits network limits.
 
-| Budget   | Limit   | Notes |
-|----------|---------|--------|
+| Budget    | Limit  | Notes                                 |
+| --------- | ------ | ------------------------------------- |
 | WASM size | 256 KB | CI and local script fail if exceeded. |
 
 **Local check (recommended before pushing):**
+
 ```bash
 ./scripts/check-wasm-size.sh
 ```
+
 Or run the integration test: `cargo test wasm_release_build_fits_size_budget`. Both build the contract (script uses `stellar contract build` when available, else `cargo build --target wasm32-unknown-unknown --release`) and assert the WASM is ≤ 256 KB. Test-only code is excluded from the release build via `#[cfg(test)]`.
 
 To reduce size: use **Stellar CLI** (`stellar contract build`) when possible; the size-check script optionally runs **wasm-opt -Oz** (install with `brew install binaryen`) for further reduction. Keep test-only code behind `#[cfg(test)]` and avoid large inline data.
@@ -746,6 +786,7 @@ To reduce size: use **Stellar CLI** (`stellar contract build`) when possible; th
 #### Production Deployment Steps
 
 1. **Final Build**
+
 ```bash
 # Optimized production build (uses stellar contract build → wasm32v1-none)
 stellar contract build
@@ -755,6 +796,7 @@ ls -lh target/wasm32v1-none/release/quicklendx_contracts.wasm
 ```
 
 2. **Deploy to Mainnet**
+
 ```bash
 stellar-cli contract deploy \
     --wasm target/wasm32-unknown-unknown/release/quicklendx_contracts.wasm \
@@ -763,6 +805,7 @@ stellar-cli contract deploy \
 ```
 
 3. **Initialize Contract**
+
 ```bash
 # Set admin (CRITICAL - do this immediately)
 stellar-cli contract invoke \
@@ -782,6 +825,7 @@ stellar-cli contract invoke \
 ```
 
 4. **Verify Deployment**
+
 ```bash
 # Verify admin is set
 stellar-cli contract invoke \
@@ -799,6 +843,7 @@ stellar-cli contract invoke \
 ### Environment Configuration
 
 Create a `.env` file for your deployment:
+
 ```bash
 # Network Configuration
 NETWORK=testnet
@@ -820,6 +865,7 @@ USDC_TOKEN_ADDRESS=your_usdc_token_address
 #### Build Errors
 
 **Error**: `error: linking with `cc` failed`
+
 ```bash
 # Solution: Install build tools
 sudo apt-get install build-essential  # Ubuntu/Debian
@@ -827,6 +873,7 @@ xcode-select --install                 # macOS
 ```
 
 **Error**: `error: could not find `soroban-sdk``
+
 ```bash
 # Solution: Update dependencies
 cargo update
@@ -837,20 +884,24 @@ cargo build
 #### Runtime Errors
 
 **Error**: `QuickLendXError::InvalidAmount`
+
 - **Cause**: Invoice amount is zero or negative
 - **Solution**: Ensure amount > 0
 
 **Error**: `QuickLendXError::InvoiceDueDateInvalid`
+
 - **Cause**: Due date is in the past
 - **Solution**: Use future timestamp
 
 **Error**: `QuickLendXError::Unauthorized`
+
 - **Cause**: Caller doesn't have required permissions
 - **Solution**: Check caller address and permissions
 
 #### Network Issues
 
 **Error**: `Failed to connect to network`
+
 ```bash
 # Check network status
 stellar-cli network status
@@ -863,6 +914,7 @@ stellar-cli network start
 ### Debug Mode
 
 Enable debug logging:
+
 ```bash
 # Build with debug assertions
 cargo build --profile release-with-logs
@@ -979,6 +1031,7 @@ RUST_LOG=debug cargo test -- --nocapture
 ### Security Testing
 
 The protocol includes comprehensive fuzz testing for critical operations:
+
 - **Invoice Creation**: Tests valid ranges of amount, due_date, description length
 - **Bid Placement**: Tests bid_amount and expected_return validation
 - **Settlement**: Tests payment_amount handling and state transitions

@@ -51,12 +51,14 @@ quicklendx-protocol/
 ### Installation
 
 1. **Clone the repository**
+
 ```bash
 git clone https://github.com/your-org/quicklendx-protocol.git
 cd quicklendx-protocol
 ```
 
 2. **Set up Smart Contracts**
+
 ```bash
 cd quicklendx-contracts
 cargo build
@@ -64,6 +66,7 @@ cargo test
 ```
 
 3. **Set up Frontend**
+
 ```bash
 cd ../quicklendx-frontend
 npm install
@@ -74,6 +77,7 @@ npm install
 #### Smart Contracts
 
 Create a `.env` file in `quicklendx-contracts/` (optional for local development):
+
 ```bash
 # Network Configuration
 NETWORK=testnet
@@ -86,6 +90,7 @@ ADMIN_ADDRESS=your_admin_address
 #### Frontend
 
 Create a `.env.local` file in `quicklendx-frontend/`:
+
 ```bash
 # API Configuration
 NEXT_PUBLIC_CONTRACT_ID=your_contract_id_here
@@ -96,11 +101,13 @@ NEXT_PUBLIC_RPC_URL=https://soroban-testnet.stellar.org:443
 ### Running the Project
 
 #### Start Local Soroban Network
+
 ```bash
 stellar-cli network start
 ```
 
 #### Deploy Contracts (Local)
+
 ```bash
 cd quicklendx-contracts
 cargo build --target wasm32-unknown-unknown --release
@@ -110,6 +117,7 @@ stellar-cli contract deploy \
 ```
 
 #### Start Frontend Development Server
+
 ```bash
 cd quicklendx-frontend
 npm run dev
@@ -122,12 +130,14 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 The contract must stay within the network deployment size limit (256 KB). You can **run the script** and/or the **integration test**:
 
 **Option 1 – Script (builds with Stellar CLI or cargo):**
+
 ```bash
 cd quicklendx-contracts
 ./scripts/check-wasm-size.sh
 ```
 
 **Option 2 – Integration test (builds with cargo, then asserts size):**
+
 ```bash
 cd quicklendx-contracts
 cargo test wasm_release_build_fits_size_budget
@@ -138,12 +148,14 @@ Both build the contract for Soroban (release, no test-only code) and fail if the
 ### Testing
 
 #### Test Smart Contracts
+
 ```bash
 cd quicklendx-contracts
 cargo test
 ```
 
 #### Test Frontend
+
 ```bash
 cd quicklendx-frontend
 npm run test  # If tests are configured
@@ -153,6 +165,7 @@ npm run lint
 ### Network Deployment
 
 #### Testnet Deployment
+
 ```bash
 # Configure for testnet
 stellar-cli network testnet
@@ -165,6 +178,7 @@ stellar-cli contract deploy \
 ```
 
 #### Mainnet Deployment
+
 ⚠️ **Important**: Mainnet deployment requires thorough testing and security audits.
 
 ```bash
@@ -183,20 +197,23 @@ stellar-cli contract deploy \
 ## 🔗 Helpful Links
 
 ### Stellar & Soroban
+
 - [Stellar Documentation](https://developers.stellar.org/)
 - [Soroban Documentation](https://soroban.stellar.org/)
 - [Soroban SDK Reference](https://docs.rs/soroban-sdk/)
 - [Stellar CLI Guide](https://developers.stellar.org/docs/build/smart-contracts/getting-started/setup)
 
 ### Development Resources
+
 - [Rust Documentation](https://doc.rust-lang.org/)
 - [Next.js Documentation](https://nextjs.org/docs)
 - [TypeScript Documentation](https://www.typescriptlang.org/docs/)
 
 ### Project Resources
+
 - [GitHub Repository](https://github.com/your-org/quicklendx-protocol)
 - [Issue Tracker](https://github.com/your-org/quicklendx-protocol/issues)
-- [Discord Community](https://discord.gg/quicklendx) *(if available)*
+- [Discord Community](https://discord.gg/quicklendx) _(if available)_
 
 ## 🏛️ Architecture Overview
 
@@ -257,12 +274,14 @@ We welcome contributions! Please see our [Contributing Guide](./quicklendx-contr
 ## 📋 Requirements
 
 ### Smart Contracts
+
 - Rust 1.70+
 - Stellar CLI 23.0.0+
 - WASM target: `wasm32-unknown-unknown` or `wasm32v1-none` (Soroban)
 - **WASM size budget**: 256 KB (enforced in CI and via `quicklendx-contracts/scripts/check-wasm-size.sh`)
 
 ### Frontend
+
 - Node.js 18+
 - npm or yarn
 - Modern browser with Web3 support
@@ -270,6 +289,7 @@ We welcome contributions! Please see our [Contributing Guide](./quicklendx-contr
 ## 🧪 Testing
 
 ### Smart Contracts
+
 ```bash
 cd quicklendx-contracts
 cargo test
@@ -277,6 +297,7 @@ cargo test --profile release-with-logs  # With debug logging
 ```
 
 ### Frontend
+
 ```bash
 cd quicklendx-frontend
 npm run test
@@ -291,7 +312,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 👥 Contributors
 
 <!-- Add contributors here -->
-- Your Name - *Initial work*
+
+- Your Name - _Initial work_
 
 ## 🆘 Support
 
@@ -302,4 +324,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Built with ❤️ on Stellar's Soroban platform**
-

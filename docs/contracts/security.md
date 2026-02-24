@@ -15,13 +15,13 @@ Payment and escrow flows are protected by a **reentrancy guard** so that no inte
 
 The following public functions run inside the guard:
 
-| Function | Purpose |
-|----------|---------|
-| `accept_bid_and_fund` | Transfer in: investor → contract (escrow) |
-| `accept_bid` | Transfer in: investor → contract (escrow) |
-| `release_escrow_funds` | Transfer out: contract → business |
-| `refund_escrow_funds` | Transfer out: contract → investor |
-| `settle_invoice` | Transfer out: business → investor (and fee routing) |
+| Function               | Purpose                                             |
+| ---------------------- | --------------------------------------------------- |
+| `accept_bid_and_fund`  | Transfer in: investor → contract (escrow)           |
+| `accept_bid`           | Transfer in: investor → contract (escrow)           |
+| `release_escrow_funds` | Transfer out: contract → business                   |
+| `refund_escrow_funds`  | Transfer out: contract → investor                   |
+| `settle_invoice`       | Transfer out: business → investor (and fee routing) |
 
 ### Usage
 

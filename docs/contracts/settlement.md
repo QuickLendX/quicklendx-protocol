@@ -1,6 +1,7 @@
 # Settlement Contract Flow
 
 ## Overview
+
 QuickLendX settlement now supports full and partial invoice payments with durable on-chain payment records.
 
 - Partial payments accumulate per invoice.
@@ -9,6 +10,7 @@ QuickLendX settlement now supports full and partial invoice payments with durabl
 - Every applied payment is persisted as a dedicated payment record with payer, amount, timestamp, and nonce/tx id.
 
 ## State Machine
+
 QuickLendX uses existing invoice statuses. For settlement:
 
 - `Funded`: open for repayment; may have zero or more partial payments.
@@ -22,6 +24,7 @@ Partial repayment is represented by:
 - `progress_percent < 100`
 
 ## Storage Layout
+
 Settlement storage in `src/settlement.rs` uses keyed records (no large single-value payment vector as source of truth):
 
 - `PaymentCount(invoice_id) -> u32`
@@ -42,6 +45,7 @@ Invoice fields used for progress:
 - `status`
 
 ## Overpayment Behavior
+
 Overpayment is capped at the remaining due amount:
 
 - `applied_amount = min(requested_amount, remaining_due)`
@@ -54,6 +58,7 @@ Remainder handling:
 - No refund transfer is needed because only applied amount is used for settlement accounting and payout.
 
 ## Events
+
 Settlement emits:
 
 - `pay_rec` (PaymentRecorded): `(invoice_id, payer, applied_amount, total_paid, status)`
@@ -65,6 +70,7 @@ Backward-compatible events still emitted:
 - `inv_set` (existing settlement event)
 
 ## Security Considerations
+
 - Replay/idempotency:
   - Non-empty nonce is enforced unique per `(invoice, payer, nonce)`.
   - Duplicate nonce attempts are rejected.
@@ -79,6 +85,7 @@ Backward-compatible events still emitted:
   - `total_paid <= total_due` is enforced.
 
 ## Running Tests
+
 From `quicklendx-contracts/`:
 
 ```bash

@@ -5,6 +5,7 @@ This document describes the revenue split mechanism in the QuickLendX protocol, 
 ## Overview
 
 The revenue split system enables flexible distribution of collected platform fees between:
+
 - **Treasury**: The protocol's operational treasury
 - **Developers**: Developer funding pool for ongoing development
 - **Platform**: Platform reserves for growth and maintenance
@@ -42,10 +43,12 @@ pub fn configure_revenue_distribution(
 | `min_distribution_amount` | `i128` | Minimum amount required for distribution |
 
 **Validation:**
+
 - Requires admin authorization
 - `treasury_share_bps + developer_share_bps + platform_share_bps` must equal `10,000`
 
 **Errors:**
+
 - `NotAdmin`: Caller is not the admin
 - `InvalidAmount`: Shares don't sum to 10,000 bps
 
@@ -60,6 +63,7 @@ pub fn get_revenue_split_config(env: Env) -> Result<RevenueConfig, QuickLendXErr
 **Returns:** `RevenueConfig` struct containing all configuration parameters.
 
 **Errors:**
+
 - `StorageKeyNotFound`: Configuration not yet set
 
 ## Distribution
@@ -85,6 +89,7 @@ pub fn distribute_revenue(
 **Returns:** Tuple of `(treasury_amount, developer_amount, platform_amount)`
 
 **Distribution Logic:**
+
 1. Treasury amount = `pending * treasury_bps / 10,000`
 2. Developer amount = `pending * developer_bps / 10,000`
 3. Platform amount = `pending - treasury - developer` (receives any rounding remainder)
@@ -187,6 +192,7 @@ pub fn get_fee_analytics(env: Env, period: u64) -> Result<FeeAnalytics, QuickLen
 ```
 
 Returns analytics including:
+
 - `total_fees`: Total fees collected in the period
 - `average_fee_rate`: Average fee per transaction
 - `total_transactions`: Number of fee-generating transactions

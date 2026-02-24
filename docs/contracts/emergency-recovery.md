@@ -20,13 +20,13 @@ Only one pending emergency withdrawal exists at a time; a new initiate overwrite
 
 ## Entrypoints
 
-| Function | Who | Description |
-|----------|-----|-------------|
-| `initiate_emergency_withdraw(admin, token, amount, target_address)` | Admin | Schedules a withdrawal; callable only by admin. Fails if amount ≤ 0. |
-| `execute_emergency_withdraw(admin)` | Admin | Executes the pending withdrawal after timelock. Fails if no pending withdrawal or timelock not elapsed. |
-| `get_pending_emergency_withdraw()` | Anyone | Returns the current pending withdrawal, 
-| `cancel_emergency_withdraw(admin)` | Admin | Cancels pending withdrawal. Fails if no pending withdrawal exists. |
-if any. |
+| Function                                                            | Who    | Description                                                                                             |
+| ------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------- |
+| `initiate_emergency_withdraw(admin, token, amount, target_address)` | Admin  | Schedules a withdrawal; callable only by admin. Fails if amount ≤ 0.                                    |
+| `execute_emergency_withdraw(admin)`                                 | Admin  | Executes the pending withdrawal after timelock. Fails if no pending withdrawal or timelock not elapsed. |
+| `get_pending_emergency_withdraw()`                                  | Anyone | Returns the current pending withdrawal,                                                                 |
+| `cancel_emergency_withdraw(admin)`                                  | Admin  | Cancels pending withdrawal. Fails if no pending withdrawal exists.                                      |
+| if any.                                                             |
 
 ## Security
 

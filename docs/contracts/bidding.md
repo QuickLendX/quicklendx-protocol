@@ -6,12 +6,12 @@ The bidding system enables verified investors to place and withdraw bids on veri
 
 ## Entrypoints
 
-
 ### `place_bid`
 
 Places a bid on a verified invoice.
 
 **Signature:**
+
 ```rust
 pub fn place_bid(
     env: Env,
@@ -23,16 +23,19 @@ pub fn place_bid(
 ```
 
 **Parameters:**
+
 - `investor`: Address of the investor placing the bid (must be authenticated)
 - `invoice_id`: Unique identifier of the invoice
 - `bid_amount`: Amount the investor is willing to fund (must be positive)
 - `expected_return`: Expected return amount (must be greater than bid_amount)
 
 **Returns:**
+
 - `Ok(BytesN<32>)`: The unique bid ID on success
 - `Err(QuickLendXError)`: Error code on failure
 
 **Validation Rules:**
+
 1. Invoice must exist and be in `Verified` status
 2. Investor must be authenticated (require_auth)
 3. Investor must be verified with valid KYC status
@@ -44,9 +47,11 @@ pub fn place_bid(
 9. Expired bids are automatically cleaned up before validation
 
 **Events Emitted:**
+
 - `bid_plc`: Bid placed event with bid details
 
 **Error Codes:**
+
 - `InvoiceNotFound`: Invoice does not exist
 - `InvalidStatus`: Invoice is not verified
 - `BusinessNotVerified`: Investor is not verified
@@ -55,6 +60,7 @@ pub fn place_bid(
 - `OperationNotAllowed`: Investor already has an active bid on this invoice
 
 **Example:**
+
 ```rust
 let bid_id = contract.place_bid(
     &env,
@@ -70,30 +76,37 @@ let bid_id = contract.place_bid(
 Withdraws a previously placed bid before it is accepted.
 
 **Signature:**
+
 ```rust
 pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError>
 ```
 
 **Parameters:**
+
 - `bid_id`: Unique identifier of the bid to withdraw
 
 **Returns:**
+
 - `Ok(())`: Success
 - `Err(QuickLendXError)`: Error code on failure
 
 **Validation Rules:**
+
 1. Bid must exist
 2. Only the investor who placed the bid can withdraw it (require_auth)
 3. Bid must be in `Placed` status (cannot withdraw accepted, withdrawn, or expired bids)
 
 **Events Emitted:**
+
 - `bid_wdr`: Bid withdrawn event with bid details
 
 **Error Codes:**
+
 - `StorageKeyNotFound`: Bid does not exist
 - `OperationNotAllowed`: Bid is not in Placed status
 
 **Example:**
+
 ```rust
 contract.withdraw_bid(&env, bid_id)?;
 ```
@@ -103,22 +116,27 @@ contract.withdraw_bid(&env, bid_id)?;
 Retrieves all bids for a specific invoice, including expired and withdrawn bids.
 
 **Signature:**
+
 ```rust
 pub fn get_bids_for_invoice(env: Env, invoice_id: BytesN<32>) -> Vec<Bid>
 ```
 
 **Parameters:**
+
 - `invoice_id`: Unique identifier of the invoice
 
 **Returns:**
+
 - `Vec<Bid>`: Vector of all bid records for the invoice
 
 **Notes:**
+
 - Automatically refreshes expired bids before returning results
 - Returns bids in all statuses (Placed, Withdrawn, Accepted, Expired)
 - Use `get_bids_by_status` to filter by status if needed
 
 **Example:**
+
 ```rust
 let bids = contract.get_bids_for_invoice(&env, invoice_id);
 for bid in bids.iter() {
@@ -173,6 +191,7 @@ pub fn get_bids_by_investor(env: Env, invoice_id: BytesN<32>, investor: Address)
 Cancels a placed bid. Unlike withdraw, cancel is a hard termination.
 
 **Signature:**
+
 ```rust
 pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> bool
 ```
@@ -180,6 +199,7 @@ pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> bool
 **Returns:** `true` if cancelled, `false` if bid not found or not in `Placed` status.
 
 **Validation Rules:**
+
 1. Bid must exist
 2. Bid must be in `Placed` status
 
@@ -192,6 +212,7 @@ pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> bool
 Returns all bids placed by an investor across **all invoices** (all statuses).
 
 **Signature:**
+
 ```rust
 pub fn get_all_bids_by_investor(env: Env, investor: Address) -> Vec<Bid>
 ```
@@ -199,6 +220,7 @@ pub fn get_all_bids_by_investor(env: Env, investor: Address) -> Vec<Bid>
 **Returns:** All bid records for the investor regardless of status or invoice.
 
 **Notes:**
+
 - Use `get_bids_by_investor` for per-invoice filtering
 - Includes Placed, Withdrawn, Cancelled, Accepted, Expired bids
 
@@ -234,8 +256,8 @@ pub enum BidStatus {
 ## Bid Lifecycle
 
 1. **Place Bid**: Investor places a bid on a verified invoice
-    - Status: `Placed`
-    - Expiration: Default is 7 days from placement. This TTL is admin-configurable in days (1–30) without a code change.
+   - Status: `Placed`
+   - Expiration: Default is 7 days from placement. This TTL is admin-configurable in days (1–30) without a code change.
 
 ### Bid TTL Configuration (Admin)
 
@@ -247,7 +269,7 @@ Security: only the configured protocol admin may call `set_bid_ttl_days`. Calls 
 2. **Withdraw Bid**: Investor withdraws their bid before acceptance
    - Status: `Withdrawn`
    - Only possible if status is `Placed`
-  
+
 3. **Cancel Bid**: Hard cancellation of a placed bid
    - Status: `Cancelled`
    - Returns `false` if already non-Placed
@@ -265,22 +287,26 @@ Security: only the configured protocol admin may call `set_bid_ttl_days`. Calls 
 ## Security Considerations
 
 ### Access Control
+
 - Only authenticated investors can place bids
 - Only the bid owner can withdraw their bid
 - Investor verification is required before placing bids
 
 ### Validation
+
 - Invoice must be verified before accepting bids
 - Bid amounts are validated against invoice amount and investor limits
 - Duplicate active bids from the same investor are prevented
 - Expired bids are automatically cleaned up
 
 ### Status Enforcement
+
 - Bids can only be withdrawn if in `Placed` status
 - Bids cannot be placed on non-verified invoices
 - Bid status transitions are strictly enforced
 
 ### Investment Limits
+
 - Bid amounts are validated against investor's investment limit
 - Risk-based restrictions apply for high-risk investors
 - Investment limits are calculated based on investor tier and risk level
@@ -288,9 +314,11 @@ Security: only the configured protocol admin may call `set_bid_ttl_days`. Calls 
 ## Events
 
 ### `bid_plc` (Bid Placed)
+
 Emitted when a bid is successfully placed.
 
 **Event Data:**
+
 - `bid_id`: BytesN<32>
 - `invoice_id`: BytesN<32>
 - `investor`: Address
@@ -300,9 +328,11 @@ Emitted when a bid is successfully placed.
 - `expiration_timestamp`: u64
 
 ### `bid_wdr` (Bid Withdrawn)
+
 Emitted when a bid is withdrawn.
 
 **Event Data:**
+
 - `bid_id`: BytesN<32>
 - `invoice_id`: BytesN<32>
 - `investor`: Address
@@ -310,9 +340,11 @@ Emitted when a bid is withdrawn.
 - `withdrawn_at`: u64
 
 ### `bid_exp` (Bid Expired)
+
 Emitted when a bid expires.
 
 **Event Data:**
+
 - `bid_id`: BytesN<32>
 - `invoice_id`: BytesN<32>
 - `investor`: Address
@@ -341,6 +373,7 @@ All entrypoints return `Result<T, QuickLendXError>` for proper error handling. C
 ## Testing
 
 The bidding system should be tested for:
+
 - Successful bid placement on verified invoices
 - Bid withdrawal by authorized investor
 - Rejection of bids on non-verified invoices

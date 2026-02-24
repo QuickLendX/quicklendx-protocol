@@ -4,16 +4,16 @@ On-chain audit trail for critical operations: every important state change is lo
 
 ## Entrypoints
 
-| Entrypoint | Visibility | Description |
-|------------|------------|--------------|
-| `log_operation` | Internal | Append a single audit entry (actor, timestamp, operation, payload). Used by invoice, bid, escrow, and settlement flows. |
-| `get_invoice_audit_trail` | Public | Return audit entry IDs for an invoice (chronological by append order). |
-| `query_audit_logs` | Public | Query entries with filters (invoice, actor, operation type, time range) and a bounded limit (max 100). |
-| `validate_invoice_audit_integrity` | Public | Verify that all entries for an invoice are present and pass integrity checks (timestamp, block height, operation-specific data). |
-| `get_audit_entry` | Public | Fetch a single entry by ID. |
-| `get_audit_stats` | Public | Return aggregate stats (total entries, unique actors, date range). |
-| `get_audit_entries_by_operation` | Public | Return entry IDs for a given operation type. |
-| `get_audit_entries_by_actor` | Public | Return entry IDs for a given actor. |
+| Entrypoint                         | Visibility | Description                                                                                                                      |
+| ---------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `log_operation`                    | Internal   | Append a single audit entry (actor, timestamp, operation, payload). Used by invoice, bid, escrow, and settlement flows.          |
+| `get_invoice_audit_trail`          | Public     | Return audit entry IDs for an invoice (chronological by append order).                                                           |
+| `query_audit_logs`                 | Public     | Query entries with filters (invoice, actor, operation type, time range) and a bounded limit (max 100).                           |
+| `validate_invoice_audit_integrity` | Public     | Verify that all entries for an invoice are present and pass integrity checks (timestamp, block height, operation-specific data). |
+| `get_audit_entry`                  | Public     | Fetch a single entry by ID.                                                                                                      |
+| `get_audit_stats`                  | Public     | Return aggregate stats (total entries, unique actors, date range).                                                               |
+| `get_audit_entries_by_operation`   | Public     | Return entry IDs for a given operation type.                                                                                     |
+| `get_audit_entries_by_actor`       | Public     | Return entry IDs for a given actor.                                                                                              |
 
 ## Operation Types
 

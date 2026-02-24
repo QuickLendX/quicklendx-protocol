@@ -27,12 +27,12 @@ Calculate:
 
 ### Key Properties
 
-| Property | Description |
-|----------|-------------|
-| **No Dust** | `investor_return + platform_fee == payment_amount` (always) |
-| **Fee on Profit Only** | Platform fee is only charged on profit, never on principal |
-| **Rounding** | All divisions round DOWN (truncate toward zero) |
-| **Loss Protection** | No fee is charged when payment <= investment |
+| Property               | Description                                                 |
+| ---------------------- | ----------------------------------------------------------- |
+| **No Dust**            | `investor_return + platform_fee == payment_amount` (always) |
+| **Fee on Profit Only** | Platform fee is only charged on profit, never on principal  |
+| **Rounding**           | All divisions round DOWN (truncate toward zero)             |
+| **Loss Protection**    | No fee is charged when payment <= investment                |
 
 ## Scenarios
 
@@ -116,14 +116,14 @@ All fee calculations use integer floor division, which always rounds down. This 
 
 ### Rounding Examples
 
-| Profit | Fee Rate | Raw Fee | Rounded Fee | Notes |
-|--------|----------|---------|-------------|-------|
-| 1 | 2% | 0.02 | 0 | Investor keeps full profit |
-| 49 | 2% | 0.98 | 0 | Just under 1 token threshold |
-| 50 | 2% | 1.00 | 1 | Exact boundary |
-| 51 | 2% | 1.02 | 1 | Rounds down to 1 |
-| 99 | 2% | 1.98 | 1 | Just under 2 token threshold |
-| 100 | 2% | 2.00 | 2 | Exact |
+| Profit | Fee Rate | Raw Fee | Rounded Fee | Notes                        |
+| ------ | -------- | ------- | ----------- | ---------------------------- |
+| 1      | 2%       | 0.02    | 0           | Investor keeps full profit   |
+| 49     | 2%       | 0.98    | 0           | Just under 1 token threshold |
+| 50     | 2%       | 1.00    | 1           | Exact boundary               |
+| 51     | 2%       | 1.02    | 1           | Rounds down to 1             |
+| 99     | 2%       | 1.98    | 1           | Just under 2 token threshold |
+| 100    | 2%       | 2.00    | 2           | Exact                        |
 
 ### Dust-Free Invariant
 
@@ -134,6 +134,7 @@ investor_return + platform_fee == payment_amount
 ```
 
 This is achieved by computing:
+
 1. First, calculate `platform_fee` using floor division
 2. Then, compute `investor_return = payment_amount - platform_fee`
 
@@ -155,11 +156,11 @@ let platform_fee = fee.checked_div(BPS_DENOMINATOR).unwrap_or(0);
 
 ### Maximum Supported Values
 
-| Type | Maximum Value | Notes |
-|------|---------------|-------|
-| Amount | ~1.7 x 10^38 | i128::MAX |
-| Fee BPS | 1,000 (10%) | Protocol limit |
-| Safe Product | 10^37 | For fee calculation without overflow |
+| Type         | Maximum Value | Notes                                |
+| ------------ | ------------- | ------------------------------------ |
+| Amount       | ~1.7 x 10^38  | i128::MAX                            |
+| Fee BPS      | 1,000 (10%)   | Protocol limit                       |
+| Safe Product | 10^37         | For fee calculation without overflow |
 
 For practical purposes, amounts up to 10^30 (a nonillion) are safely supported.
 
@@ -167,11 +168,11 @@ For practical purposes, amounts up to 10^30 (a nonillion) are safely supported.
 
 ### Default Settings
 
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| `DEFAULT_PLATFORM_FEE_BPS` | 200 | 2% default fee |
-| `MAX_PLATFORM_FEE_BPS` | 1,000 | 10% maximum fee |
-| `BPS_DENOMINATOR` | 10,000 | 100% in basis points |
+| Parameter                  | Value  | Description          |
+| -------------------------- | ------ | -------------------- |
+| `DEFAULT_PLATFORM_FEE_BPS` | 200    | 2% default fee       |
+| `MAX_PLATFORM_FEE_BPS`     | 1,000  | 10% maximum fee      |
+| `BPS_DENOMINATOR`          | 10,000 | 100% in basis points |
 
 ### Updating Fee Configuration
 
@@ -408,7 +409,7 @@ For displaying fee calculations to users before investment:
 // JavaScript equivalent (frontend)
 function calculateFees(investmentAmount, expectedPayment, feeBps = 200) {
   const grossProfit = Math.max(0, expectedPayment - investmentAmount);
-  const platformFee = Math.floor(grossProfit * feeBps / 10000);
+  const platformFee = Math.floor((grossProfit * feeBps) / 10000);
   const investorReturn = expectedPayment - platformFee;
 
   return {
@@ -418,7 +419,10 @@ function calculateFees(investmentAmount, expectedPayment, feeBps = 200) {
     platformFee,
     investorProfit: grossProfit - platformFee,
     investorReturn,
-    effectiveReturn: ((investorReturn - investmentAmount) / investmentAmount * 100).toFixed(2)
+    effectiveReturn: (
+      ((investorReturn - investmentAmount) / investmentAmount) *
+      100
+    ).toFixed(2),
   };
 }
 
@@ -437,9 +441,9 @@ const calc = calculateFees(10000, 11000, 200);
 
 ## Version History
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0.0 | 2025-01 | Initial implementation with centralized formula |
+| Version | Date    | Changes                                         |
+| ------- | ------- | ----------------------------------------------- |
+| 1.0.0   | 2025-01 | Initial implementation with centralized formula |
 
 ## References
 

@@ -100,12 +100,12 @@ The initialization flag is set **after** all other state changes, ensuring atomi
 
 All parameters are validated before any state changes:
 
-| Parameter | Validation | Error |
-|-----------|------------|-------|
-| `fee_bps` | 0 ≤ fee ≤ 1000 | `InvalidFeeBasisPoints` |
-| `min_invoice_amount` | > 0 | `InvalidAmount` |
-| `max_due_date_days` | 1 ≤ days ≤ 730 | `InvoiceDueDateInvalid` |
-| `grace_period_seconds` | ≤ 2,592,000 (30 days) | `InvalidTimestamp` |
+| Parameter              | Validation            | Error                   |
+| ---------------------- | --------------------- | ----------------------- |
+| `fee_bps`              | 0 ≤ fee ≤ 1000        | `InvalidFeeBasisPoints` |
+| `min_invoice_amount`   | > 0                   | `InvalidAmount`         |
+| `max_due_date_days`    | 1 ≤ days ≤ 730        | `InvoiceDueDateInvalid` |
+| `grace_period_seconds` | ≤ 2,592,000 (30 days) | `InvalidTimestamp`      |
 
 ## Configuration Parameters
 
@@ -141,12 +141,12 @@ pub struct ProtocolConfig {
 
 ### Default Values
 
-| Parameter | Default Value | Description |
-|-----------|---------------|-------------|
-| `fee_bps` | 200 | 2% platform fee |
-| `min_invoice_amount` | 1,000,000 | 1 token (6 decimals) |
-| `max_due_date_days` | 365 | 1 year maximum |
-| `grace_period_seconds` | 604,800 | 7 days |
+| Parameter              | Default Value | Description          |
+| ---------------------- | ------------- | -------------------- |
+| `fee_bps`              | 200           | 2% platform fee      |
+| `min_invoice_amount`   | 1,000,000     | 1 token (6 decimals) |
+| `max_due_date_days`    | 365           | 1 year maximum       |
+| `grace_period_seconds` | 604,800       | 7 days               |
 
 ## API Reference
 
@@ -166,6 +166,7 @@ Initializes the protocol with all configuration parameters.
 **Authorization**: Requires auth from `params.admin`
 
 **Errors**:
+
 - `OperationNotAllowed` - Already initialized
 - `InvalidFeeBasisPoints` - Fee out of range
 - `InvalidAmount` - Min amount ≤ 0
@@ -305,8 +306,8 @@ All initialization and configuration changes emit events for audit trails:
 Emitted when the protocol is successfully initialized.
 
 ```rust
-(admin: Address, treasury: Address, fee_bps: u32, 
- min_invoice_amount: i128, max_due_date_days: u64, 
+(admin: Address, treasury: Address, fee_bps: u32,
+ min_invoice_amount: i128, max_due_date_days: u64,
  grace_period_seconds: u64, timestamp: u64)
 ```
 
@@ -315,7 +316,7 @@ Emitted when the protocol is successfully initialized.
 Emitted when protocol configuration is updated.
 
 ```rust
-(admin: Address, min_invoice_amount: i128, max_due_date_days: u64, 
+(admin: Address, min_invoice_amount: i128, max_due_date_days: u64,
  grace_period_seconds: u64, timestamp: u64)
 ```
 
@@ -339,14 +340,14 @@ Emitted when treasury address is updated.
 
 ### Error Types
 
-| Error | Code | Description |
-|-------|------|-------------|
-| `OperationNotAllowed` | 1009 | Contract already initialized |
-| `NotAdmin` | 1005 | Caller is not the admin |
+| Error                   | Code | Description                      |
+| ----------------------- | ---- | -------------------------------- |
+| `OperationNotAllowed`   | 1009 | Contract already initialized     |
+| `NotAdmin`              | 1005 | Caller is not the admin          |
 | `InvalidFeeBasisPoints` | 1034 | Fee outside valid range (0-1000) |
-| `InvalidAmount` | 1002 | Amount must be positive |
-| `InvoiceDueDateInvalid` | 1013 | Due date days out of range |
-| `InvalidTimestamp` | 1017 | Grace period exceeds maximum |
+| `InvalidAmount`         | 1002 | Amount must be positive          |
+| `InvoiceDueDateInvalid` | 1013 | Due date days out of range       |
+| `InvalidTimestamp`      | 1017 | Grace period exceeds maximum     |
 
 ### Error Handling Example
 
@@ -502,12 +503,12 @@ Monitor initialization events for audit purposes:
 
 ### Threat Model
 
-| Threat | Mitigation |
-|--------|------------|
-| Re-initialization attack | Atomic initialization flag |
+| Threat                      | Mitigation                     |
+| --------------------------- | ------------------------------ |
+| Re-initialization attack    | Atomic initialization flag     |
 | Unauthorized config changes | Admin-only functions with auth |
-| Parameter manipulation | Comprehensive validation |
-| Front-running | Single-shot initialization |
+| Parameter manipulation      | Comprehensive validation       |
+| Front-running               | Single-shot initialization     |
 
 ### Audit Checklist
 

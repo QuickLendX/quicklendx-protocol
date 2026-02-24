@@ -19,6 +19,7 @@ An administrator can at any point run `validate_backup` to ensure that a given b
 ### Restoring Backups
 
 The `restore_backup` command is highly privileged and destructive to the active state. When invoked:
+
 1. It validates the integrity of the requested backup.
 2. It permanently clears all currently tracked invoice data, wiping the existing database indexes (including business mapping, tags, metadata, and status associations).
 3. It reconstitutes the original invoice state from the backup payload.
