@@ -3,6 +3,7 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, Symbol, Ve
 
 // Constants
 const MAX_FEE_BPS: u32 = 1000;
+#[allow(dead_code)]
 const MIN_FEE_BPS: u32 = 0;
 const BPS_DENOMINATOR: i128 = 10_000;
 const DEFAULT_PLATFORM_FEE_BPS: u32 = 200; // 2%
@@ -12,6 +13,7 @@ const MAX_PLATFORM_FEE_BPS: u32 = 1000; // 10%
 const FEE_CONFIG_KEY: Symbol = symbol_short!("fee_cfg");
 const REVENUE_KEY: Symbol = symbol_short!("revenue");
 const VOLUME_KEY: Symbol = symbol_short!("volume");
+#[allow(dead_code)]
 const TREASURY_CONFIG_KEY: Symbol = symbol_short!("treasury");
 const PLATFORM_FEE_KEY: Symbol = symbol_short!("plt_fee");
 

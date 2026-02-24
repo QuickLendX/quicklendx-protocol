@@ -190,18 +190,108 @@ fn test_add_currency_idempotent() {
 }
 
 #[test]
-fn test_remove_currency_when_missing_is_noop() {
+fn test_set_currencies_replaces_whitelist() {
+    let (env, client, admin) = setup();
+    let currency_a = Address::generate(&env);
+    let currency_b = Address::generate(&env);
+    client.add_currency(&admin, &currency_a);
+
+    let mut new_list = Vec::new(&env);
+    new_list.push_back(currency_b.clone());
+    client.set_currencies(&admin, &new_list);
+
+    assert!(!client.is_allowed_currency(&currency_a));
+    assert!(client.is_allowed_currency(&currency_b));
+    assert_eq!(client.currency_count(), 1);
+}
+
+#[test]
+fn test_set_currencies_deduplicates() {
     let (env, client, admin) = setup();
     let currency = Address::generate(&env);
+    let mut duped = Vec::new(&env);
+    duped.push_back(currency.clone());
+    duped.push_back(currency.clone());
+    client.set_currencies(&admin, &duped);
+    assert_eq!(client.currency_count(), 1);
+}
 
+#[test]
+fn test_non_admin_cannot_set_currencies() {
+    let (env, client, admin) = setup();
+    let currency = Address::generate(&env);
+    let mut list = Vec::new(&env);
+    list.push_back(currency.clone());
+    let non_admin = Address::generate(&env);
+    let res = client.try_set_currencies(&non_admin, &list);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_clear_currencies_allows_all() {
+    let (env, client, admin) = setup();
+    let currency = Address::generate(&env);
     client.add_currency(&admin, &currency);
-    client.remove_currency(&admin, &currency);
-    assert_eq!(client.get_whitelisted_currencies().len(), 0);
-
-    let second_remove = client.try_remove_currency(&admin, &currency);
-    assert!(
-        second_remove.is_ok(),
-        "removing an already absent currency should be a no-op"
+    client.clear_currencies(&admin);
+    assert_eq!(client.currency_count(), 0);
+    // empty whitelist = all allowed (backward-compat rule)
+    let business = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let any_token = Address::generate(&env);
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &any_token,
+        &due_date,
+        &String::from_str(&env, "Desc"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
     );
-    assert_eq!(client.get_whitelisted_currencies().len(), 0);
+    let got = client.get_invoice(&invoice_id);
+    assert_eq!(got.amount, 1000i128);
+}
+
+#[test]
+fn test_non_admin_cannot_clear_currencies() {
+    let (env, client, admin) = setup();
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+    let non_admin = Address::generate(&env);
+    let res = client.try_clear_currencies(&non_admin);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_currency_count() {
+    let (env, client, admin) = setup();
+    assert_eq!(client.currency_count(), 0);
+    let currency_a = Address::generate(&env);
+    let currency_b = Address::generate(&env);
+    client.add_currency(&admin, &currency_a);
+    assert_eq!(client.currency_count(), 1);
+    client.add_currency(&admin, &currency_b);
+    assert_eq!(client.currency_count(), 2);
+    client.remove_currency(&admin, &currency_a);
+    assert_eq!(client.currency_count(), 1);
+}
+
+#[test]
+fn test_get_whitelisted_currencies_paged() {
+    let (env, client, admin) = setup();
+    let currency_a = Address::generate(&env);
+    let currency_b = Address::generate(&env);
+    let currency_c = Address::generate(&env);
+    client.add_currency(&admin, &currency_a);
+    client.add_currency(&admin, &currency_b);
+    client.add_currency(&admin, &currency_c);
+
+    let page1 = client.get_whitelisted_currencies_paged(&0u32, &2u32);
+    assert_eq!(page1.len(), 2);
+
+    let page2 = client.get_whitelisted_currencies_paged(&2u32, &2u32);
+    assert_eq!(page2.len(), 1);
+
+    // offset beyond length returns empty
+    let page3 = client.get_whitelisted_currencies_paged(&10u32, &2u32);
+    assert_eq!(page3.len(), 0);
 }

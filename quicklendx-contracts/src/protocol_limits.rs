@@ -1,7 +1,8 @@
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String};
 
-use crate::QuickLendXError;
+use crate::errors::QuickLendXError;
 
+#[allow(dead_code)]
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtocolLimits {
@@ -10,15 +11,44 @@ pub struct ProtocolLimits {
     pub grace_period_seconds: u64,
 }
 
+#[allow(dead_code)]
 const LIMITS_KEY: &str = "protocol_limits";
+#[allow(dead_code)]
 const DEFAULT_MIN_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
+#[allow(dead_code)]
 const DEFAULT_MAX_DUE_DAYS: u64 = 365;
-const DEFAULT_GRACE_PERIOD: u64 = 86400; // 24 hours
+#[allow(dead_code)]
+const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days
 
-#[contract]
+// String length limits
+pub const MAX_DESCRIPTION_LENGTH: u32 = 1024;
+pub const MAX_NAME_LENGTH: u32 = 150;
+pub const MAX_ADDRESS_LENGTH: u32 = 300;
+pub const MAX_TAX_ID_LENGTH: u32 = 50;
+pub const MAX_NOTES_LENGTH: u32 = 2000;
+pub const MAX_TAG_LENGTH: u32 = 50;
+pub const MAX_TRANSACTION_ID_LENGTH: u32 = 124;
+pub const MAX_DISPUTE_REASON_LENGTH: u32 = 1000;
+pub const MAX_DISPUTE_EVIDENCE_LENGTH: u32 = 2000;
+pub const MAX_DISPUTE_RESOLUTION_LENGTH: u32 = 2000;
+pub const MAX_NOTIFICATION_TITLE_LENGTH: u32 = 150;
+pub const MAX_NOTIFICATION_MESSAGE_LENGTH: u32 = 1000;
+pub const MAX_KYC_DATA_LENGTH: u32 = 5000;
+pub const MAX_REJECTION_REASON_LENGTH: u32 = 500;
+pub const MAX_FEEDBACK_LENGTH: u32 = 1000;
+
+pub fn check_string_length(s: &String, max_len: u32) -> Result<(), QuickLendXError> {
+    if s.len() > max_len {
+        return Err(QuickLendXError::InvalidDescription);
+    }
+    Ok(())
+}
+
+// Separate struct for protocol limits (not a contract, just a helper)
+#[allow(dead_code)]
 pub struct ProtocolLimitsContract;
 
-#[contractimpl]
+#[allow(dead_code)]
 impl ProtocolLimitsContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         if env.storage().instance().has(&LIMITS_KEY) {

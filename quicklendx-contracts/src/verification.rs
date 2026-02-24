@@ -1,6 +1,9 @@
 use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceMetadata};
+use crate::protocol_limits::{
+    check_string_length, MAX_KYC_DATA_LENGTH, MAX_REJECTION_REASON_LENGTH,
+};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 #[contracttype]
@@ -117,6 +120,7 @@ impl BusinessVerificationStorage {
         Self::store_verification(env, verification);
     }
 
+    #[cfg(test)]
     pub fn is_business_verified(env: &Env, business: &Address) -> bool {
         if let Some(verification) = Self::get_verification(env, business) {
             matches!(verification.status, BusinessVerificationStatus::Verified)
@@ -247,10 +251,13 @@ impl InvestorVerificationStorage {
     const VERIFIED_INVESTORS_KEY: &'static str = "verified_investors";
     const PENDING_INVESTORS_KEY: &'static str = "pending_investors";
     const REJECTED_INVESTORS_KEY: &'static str = "rejected_investors";
+    #[cfg(test)]
     const INVESTOR_HISTORY_KEY: &'static str = "investor_history";
+    #[cfg(test)]
     const INVESTOR_ANALYTICS_KEY: &'static str = "investor_analytics";
 
     pub fn submit(env: &Env, investor: &Address, kyc_data: String) -> Result<(), QuickLendXError> {
+        check_string_length(&kyc_data, MAX_KYC_DATA_LENGTH)?;
         let mut verification = Self::get(env, investor);
         match verification {
             Some(ref existing) => match existing.status {
@@ -520,6 +527,7 @@ pub fn submit_kyc_application(
     business: &Address,
     kyc_data: String,
 ) -> Result<(), QuickLendXError> {
+    check_string_length(&kyc_data, MAX_KYC_DATA_LENGTH)?;
     // Only the business can submit their own KYC
     business.require_auth();
 
@@ -588,6 +596,7 @@ pub fn reject_business(
     business: &Address,
     reason: String,
 ) -> Result<(), QuickLendXError> {
+    check_string_length(&reason, MAX_REJECTION_REASON_LENGTH)?;
     // Only admin can reject businesses
     admin.require_auth();
     if !BusinessVerificationStorage::is_admin(env, admin) {
@@ -616,6 +625,7 @@ pub fn get_business_verification_status(
     BusinessVerificationStorage::get_verification(env, business)
 }
 
+#[cfg(test)]
 pub fn require_business_verification(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
     if !BusinessVerificationStorage::is_business_verified(env, business) {
         return Err(QuickLendXError::BusinessNotVerified);
@@ -640,6 +650,11 @@ pub fn verify_invoice_data(
     }
     let current_timestamp = env.ledger().timestamp();
     if due_date <= current_timestamp {
+        return Err(QuickLendXError::InvoiceDueDateInvalid);
+    }
+
+    // Validate due date is not too far in the future using protocol limits
+    if !crate::protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date) {
         return Err(QuickLendXError::InvoiceDueDateInvalid);
     }
     if description.len() == 0 {
@@ -764,6 +779,7 @@ pub fn reject_investor(
     investor: &Address,
     reason: String,
 ) -> Result<(), QuickLendXError> {
+    check_string_length(&reason, MAX_REJECTION_REASON_LENGTH)?;
     admin.require_auth();
     let mut verification =
         InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;

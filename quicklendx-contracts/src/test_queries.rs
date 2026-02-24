@@ -240,6 +240,138 @@ fn test_get_available_invoices_paged_filters_and_bounds() {
 }
 
 #[test]
+fn test_get_available_invoices() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let business = Address::generate(&env);
+
+    // Create 3 invoices: 2 verified, 1 pending
+    let id1 = create_invoice(&env, &client, &business, 1000, InvoiceCategory::Services, true);
+    let id2 = create_invoice(&env, &client, &business, 2000, InvoiceCategory::Products, true);
+    let id3 = create_invoice(&env, &client, &business, 3000, InvoiceCategory::Services, false);
+
+    let available = client.get_available_invoices();
+    
+    // Should contain exactly id1 and id2
+    assert_eq!(available.len(), 2);
+    assert!(available.contains(&id1));
+    assert!(available.contains(&id2));
+    assert!(!available.contains(&id3));
+}
+
+#[test]
+fn test_get_available_invoices_paged_empty_and_edge_cases() {
+    let (env, client) = setup();
+    
+    // 1. Empty state
+    let empty = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(empty.len(), 0);
+
+    // 2. No results after filtering
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let business = Address::generate(&env);
+    create_invoice(&env, &client, &business, 1000, InvoiceCategory::Services, true);
+
+    let no_results = client.get_available_invoices_paged(
+        &Some(5000i128),
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(no_results.len(), 0);
+
+    // 3. Offset beyond length
+    let offset_beyond = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &10u32,
+        &10u32,
+    );
+    assert_eq!(offset_beyond.len(), 0);
+
+    // 4. Limit zero
+    let limit_zero = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &0u32,
+        &0u32,
+    );
+    assert_eq!(limit_zero.len(), 0);
+}
+
+#[test]
+fn test_get_available_invoices_paged_pagination_comprehensive() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let business = Address::generate(&env);
+
+    // Create 5 verified invoices
+    let mut ids = Vec::new(&env);
+    for i in 0..5 {
+        let id = create_invoice(
+            &env, 
+            &client, 
+            &business, 
+            1000 + (i as i128 * 100), 
+            InvoiceCategory::Services, 
+            true
+        );
+        ids.push_back(id);
+    }
+
+    // Page 1: offset 0, limit 2
+    let page1 = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &0u32,
+        &2u32,
+    );
+    assert_eq!(page1.len(), 2);
+    assert_eq!(page1.get(0).unwrap(), ids.get(0).unwrap());
+    assert_eq!(page1.get(1).unwrap(), ids.get(1).unwrap());
+
+    // Page 2: offset 2, limit 2
+    let page2 = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &2u32,
+        &2u32,
+    );
+    assert_eq!(page2.len(), 2);
+    assert_eq!(page2.get(0).unwrap(), ids.get(2).unwrap());
+    assert_eq!(page2.get(1).unwrap(), ids.get(3).unwrap());
+
+    // Page 3: offset 4, limit 2 (only 1 item left)
+    let page3 = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &4u32,
+        &2u32,
+    );
+    assert_eq!(page3.len(), 1);
+    assert_eq!(page3.get(0).unwrap(), ids.get(4).unwrap());
+}
+
+#[test]
 fn test_query_audit_logs_filters_and_limit() {
     let (env, _client) = setup();
     // Create two invoices and several audit entries

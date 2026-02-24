@@ -350,6 +350,33 @@ pub fn emit_backup_archived(env: &Env, backup_id: &BytesN<32>) {
     );
 }
 
+/// Emit event when retention policy is updated
+pub fn emit_retention_policy_updated(
+    env: &Env,
+    max_backups: u32,
+    max_age_seconds: u64,
+    auto_cleanup_enabled: bool,
+) {
+    env.events().publish(
+        (symbol_short!("ret_pol"),),
+        (
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when backups are cleaned up
+pub fn emit_backups_cleaned(env: &Env, removed_count: u32) {
+    env.events().publish(
+        (symbol_short!("bkup_cln"),),
+        (removed_count, env.ledger().timestamp()),
+    );
+}
+
+
 /// Emit audit validation event
 pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool) {
     env.events().publish(
@@ -715,6 +742,7 @@ pub fn emit_platform_fee_config_updated(
 /// - gross_profit: Profit before fees
 /// - platform_fee: Fee charged
 /// - investor_return: Net amount to investor
+#[allow(dead_code)]
 pub fn emit_profit_fee_breakdown(
     env: &Env,
     invoice_id: &BytesN<32>,

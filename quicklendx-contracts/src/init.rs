@@ -48,7 +48,7 @@ const WHITELIST_KEY: Symbol = symbol_short!("curr_wl");
 /// Default values for protocol configuration
 const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
 const DEFAULT_MAX_DUE_DATE_DAYS: u64 = 365;
-const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 86400; // 24 hours
+const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 7 * 24 * 60 * 60; // 7 days
 const DEFAULT_FEE_BPS: u32 = 200; // 2%
 const MAX_FEE_BPS: u32 = 1000; // 10%
 const MIN_FEE_BPS: u32 = 0;

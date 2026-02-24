@@ -39,11 +39,14 @@ Marks an invoice as defaulted after checking the grace period.
 - `Ok(())` if successful
 - `Err(QuickLendXError)` if operation fails
 
+**Authorization:** Requires admin authentication. Only the configured admin address can call this function.
+
 **Error Conditions:**
+- `NotAdmin` (1005) - No admin configured or caller is not admin
 - `InvoiceNotFound` (1000) - Invoice does not exist
-- `InvoiceNotFunded` (1007) - Invoice must be funded before defaulting
-- `InvoiceAlreadyDefaulted` (1009) - Invoice is already defaulted
-- `OperationNotAllowed` (1402) - Grace period has not expired yet
+- `InvoiceAlreadyDefaulted` (1049) - Invoice is already defaulted (no double default)
+- `InvoiceNotAvailableForFunding` (1047) - Invoice is not in Funded status
+- `OperationNotAllowed` (1009) - Grace period has not expired yet
 
 **Example:**
 ```rust
@@ -58,6 +61,8 @@ contract.mark_invoice_defaulted(invoice_id, Some(custom_grace))?;
 ### `handle_default` (Internal)
 
 Internal function that performs the actual defaulting. Assumes all validations have been done.
+
+**Authorization:** Requires admin authentication.
 
 **Note**: This function is called internally by `mark_invoice_defaulted` after validation.
 
@@ -132,14 +137,17 @@ Comprehensive tests are available in `test_default.rs`:
 - ✅ Status transition verification
 - ✅ Investment status update
 - ✅ Edge cases (exactly at deadline, multiple invoices)
+- ✅ Zero grace period (immediate default after due date)
+- ✅ Cannot default paid invoices
 
 ## Security Considerations
 
-1. **Authorization**: Default marking can be done by admin or automated processes
+1. **Authorization**: Default marking requires admin authentication (`require_auth`)
 2. **State Validation**: Only funded invoices can be defaulted
-3. **Idempotency**: Multiple default attempts are prevented
+3. **Idempotency**: Multiple default attempts are prevented with `InvoiceAlreadyDefaulted` error
 4. **Grace Period Protection**: Investors are protected during grace period
-5. **No Double Default**: Already defaulted invoices cannot be defaulted again
+5. **No Double Default**: Already defaulted invoices return a specific `InvoiceAlreadyDefaulted` error
+6. **Check Ordering**: Defaulted status is checked before funded status to ensure correct error reporting
 
 ## Frontend Integration
 
@@ -161,15 +169,18 @@ try {
   const customGrace = 3 * 24 * 60 * 60;
   await contract.mark_invoice_defaulted(invoiceId, customGrace);
 } catch (error) {
-  if (error.code === 1007) {
-    // InvoiceNotFunded
-    console.error("Invoice must be funded first");
-  } else if (error.code === 1402) {
-    // OperationNotAllowed
-    console.error("Grace period has not expired");
-  } else if (error.code === 1009) {
+  if (error.code === 1005) {
+    // NotAdmin
+    console.error("Only admin can mark invoices as defaulted");
+  } else if (error.code === 1049) {
     // InvoiceAlreadyDefaulted
     console.error("Invoice is already defaulted");
+  } else if (error.code === 1047) {
+    // InvoiceNotAvailableForFunding
+    console.error("Invoice must be in Funded status");
+  } else if (error.code === 1009) {
+    // OperationNotAllowed
+    console.error("Grace period has not expired");
   }
 }
 ```

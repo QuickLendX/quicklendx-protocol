@@ -24,6 +24,37 @@
         }
       ]
     ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "function_name": "initialize_protocol_limits",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 1
+                  }
+                },
+                {
+                  "u64": 365
+                },
+                {
+                  "u64": 86400
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
     [],
     [],
     [
@@ -36,7 +67,7 @@
               "function_name": "create_backup",
               "args": [
                 {
-                  "string": "Initial backup"
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 }
               ]
             }
@@ -59,7 +90,10 @@
               "function_name": "restore_backup",
               "args": [
                 {
-                  "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
                 }
               ]
             }
@@ -664,7 +698,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                          "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                         },
                         "val": {
                           "map": [
@@ -700,7 +734,7 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
-                                "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                                "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                               }
                             },
                             {
@@ -764,7 +798,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+                          "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
                         },
                         "val": {
                           "map": [
@@ -800,7 +834,7 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
-                                "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+                                "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
                               }
                             },
                             {
@@ -864,7 +898,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+                          "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
                         },
                         "val": {
                           "map": [
@@ -873,7 +907,7 @@
                                 "symbol": "backup_id"
                               },
                               "val": {
-                                "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+                                "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
                               }
                             },
                             {
@@ -881,7 +915,7 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "string": "Initial backup"
+                                "string": "Admin created backup"
                               }
                             },
                             {
@@ -917,10 +951,54 @@
                       },
                       {
                         "key": {
+                          "string": "admin"
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                        }
+                      },
+                      {
+                        "key": {
                           "string": "admin_address"
                         },
                         "val": {
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                        }
+                      },
+                      {
+                        "key": {
+                          "string": "protocol_limits"
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "grace_period_seconds"
+                              },
+                              "val": {
+                                "u64": 86400
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "max_due_date_days"
+                              },
+                              "val": {
+                                "u64": 365
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "min_invoice_amount"
+                              },
+                              "val": {
+                                "i128": {
+                                  "hi": 0,
+                                  "lo": 1
+                                }
+                              }
+                            }
+                          ]
                         }
                       },
                       {
@@ -946,10 +1024,10 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             },
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+                              "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
                             }
                           ]
                         }
@@ -969,7 +1047,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+                              "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
                             }
                           ]
                         }
@@ -1019,10 +1097,10 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             },
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+                              "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
                             }
                           ]
                         }
@@ -1034,7 +1112,7 @@
                               "symbol": "bkup_data"
                             },
                             {
-                              "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+                              "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
                             }
                           ]
                         },
@@ -1609,12 +1687,6 @@
                             },
                             {
                               "bytes": "0000000000000000000000000000000100000000000000000000000000000000"
-                            },
-                            {
-                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                            },
-                            {
-                              "bytes": "0000000000000000000000000000000100000000000000000000000000000000"
                             }
                           ]
                         }
@@ -1659,7 +1731,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             }
                           ]
                         }
@@ -1678,7 +1750,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+                              "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
                             }
                           ]
                         }
@@ -1701,10 +1773,10 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             },
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+                              "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
                             }
                           ]
                         }
@@ -1723,10 +1795,10 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             },
                             {
-                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+                              "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
                             }
                           ]
                         }
@@ -1796,6 +1868,39 @@
                 "key": {
                   "ledger_key_nonce": {
                     "nonce": 1033654523790656264
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          6311999
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+            "key": {
+              "ledger_key_nonce": {
+                "nonce": 4837995959683129791
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": 4837995959683129791
                   }
                 },
                 "durability": "temporary",

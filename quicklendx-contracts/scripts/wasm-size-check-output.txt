@@ -1,0 +1,7 @@
+==> Building contract for WASM (release, no test code)...
+Stellar CLI not found; using cargo wasm32-unknown-unknown.
+    Finished `release` profile [optimized] target(s) in 0.15s
+==> Running wasm-opt -Oz to reduce size...
+WASM path: target/wasm32-unknown-unknown/release/quicklendx_contracts.wasm
+WASM size: 217668 bytes (max 262144 bytes)
+==> WASM size within budget (256 KB). OK.
