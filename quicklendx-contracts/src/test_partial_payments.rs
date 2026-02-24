@@ -707,6 +707,40 @@ fn test_payment_progress_calculation_caps_at_100() {
     // (testing the calculation logic, not actual overpayment)
 }
 
+/// Overpayment is capped at 100%: when payment amount exceeds remaining due,
+/// only the remaining amount is applied. No excess is recorded (total_paid never exceeds amount).
+#[test]
+fn test_overpayment_capped_no_excess_applied() {
+    let (env, client, admin) = setup_env();
+    let contract_id = client.address.clone();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, 100_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let invoice_id = create_funded_invoice(
+        &env,
+        &client,
+        &admin,
+        &business,
+        &investor,
+        1_000,
+        &currency,
+    );
+
+    // First partial: 500 (50% remaining)
+    client.process_partial_payment(&invoice_id, &500, &String::from_str(&env, "tx-1"));
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_paid, 500);
+    assert_eq!(invoice.payment_progress(), 50);
+
+    // Attempt overpayment: 800 when only 500 is remaining. Only 500 should be applied.
+    client.process_partial_payment(&invoice_id, &800, &String::from_str(&env, "tx-2"));
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_paid, 1_000, "total_paid must be capped at invoice amount (no excess)");
+    assert_eq!(invoice.payment_progress(), 100);
+    assert!(invoice.is_fully_paid());
+}
+
 // ============================================================================
 // PAYMENT RECORDS TESTS
 // ============================================================================
@@ -945,6 +979,7 @@ fn test_complete_partial_payment_workflow() {
 //    ✓ Single overpayment capped at 100%
 //    ✓ Multiple payments exceeding amount capped at 100%
 //    ✓ Double amount payment capped at 100%
+//    ✓ process_partial_payment: excess over remaining due not applied (no excess transfer)
 //
 // 4. PAYMENT RECORDS:
 //    ✓ Single payment recorded
