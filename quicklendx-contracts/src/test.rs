@@ -70,7 +70,7 @@ fn test_store_invoice_validation() {
 
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Valid invoice"),
@@ -98,7 +98,7 @@ fn test_get_business_invoices() {
     // Create invoices for business1
     let invoice1_id = client.store_invoice(
         &business1,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Invoice 1"),
@@ -152,7 +152,7 @@ fn test_get_invoices_by_status() {
     // Create invoices
     let invoice1_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Invoice 1"),
@@ -162,7 +162,7 @@ fn test_get_invoices_by_status() {
 
     let invoice2_id = client.store_invoice(
         &business,
-        &2000,
+        &2_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Invoice 2"),
@@ -187,13 +187,17 @@ fn test_update_invoice_status() {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
+    let admin = Address::generate(&env);
+    env.mock_all_auths();
+    client.initialize_admin(&admin);
+
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -233,7 +237,7 @@ fn test_update_invoice_metadata_and_queries() {
 
     let invoice_id = client.store_invoice(
         &business,
-        &1_000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Metadata invoice"),
@@ -425,7 +429,7 @@ fn test_get_available_invoices() {
     // Create invoices
     let invoice1_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Invoice 1"),
@@ -469,7 +473,7 @@ fn test_invoice_count_functions() {
     // Create invoices
     client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Invoice 1"),
@@ -523,7 +527,7 @@ fn test_invoice_lifecycle() {
 
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -562,7 +566,7 @@ fn test_simple_bid_storage() {
     // Create and verify invoice
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -618,7 +622,7 @@ fn test_unique_bid_id_generation() {
     // Create and verify invoice
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -765,7 +769,7 @@ fn test_bid_validation_rules() {
     // Create and verify invoice
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Validation invoice"),
@@ -821,7 +825,7 @@ fn test_withdraw_bid() {
     // Create and verify invoice
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Withdraw test invoice"),
@@ -1258,7 +1262,7 @@ fn test_add_invoice_rating() {
     // Create and fund an invoice
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -1313,7 +1317,7 @@ fn test_add_invoice_rating_validation() {
     // Create invoice
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -1381,7 +1385,7 @@ fn test_multiple_ratings() {
     // Create and fund invoice
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -1431,7 +1435,7 @@ fn test_duplicate_rating_prevention() {
     // Create and fund invoice
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -1498,7 +1502,7 @@ fn test_rating_queries() {
     // Create and fund a single invoice first
     let invoice1_id = client.store_invoice(
         &business1,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Invoice 1"),
@@ -1567,7 +1571,7 @@ fn test_rating_statistics() {
     // Create and fund invoice
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -1617,7 +1621,7 @@ fn test_rating_on_unfunded_invoice() {
     // Create invoice but don't fund it
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Unfunded invoice"),
@@ -1713,7 +1717,7 @@ fn test_verify_invoice_requires_admin() {
 
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Admin gating"),
@@ -1985,7 +1989,7 @@ fn test_create_and_restore_backup() {
 
     let invoice1_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Invoice 1"),
@@ -2057,7 +2061,7 @@ fn test_backup_validation() {
 
     client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -2397,7 +2401,7 @@ fn test_notification_creation_on_invoice_upload() {
     // Upload invoice (should trigger notification)
     let _invoice_id = client.upload_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -2432,7 +2436,7 @@ fn test_notification_creation_on_bid_placement() {
     // Upload and verify invoice
     let invoice_id = client.upload_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -2478,7 +2482,7 @@ fn test_notification_creation_on_invoice_status_change() {
     // Upload invoice
     let invoice_id = client.upload_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -2519,7 +2523,7 @@ fn test_notification_delivery_status_update() {
     // Upload invoice to trigger notification
     let _invoice_id = client.upload_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -2566,7 +2570,7 @@ fn test_user_notification_stats() {
     // Upload invoice to trigger notification
     let _invoice_id = client.upload_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test invoice"),
@@ -2650,7 +2654,7 @@ fn test_overdue_invoice_notifications() {
     let future_due_date = env.ledger().timestamp() + 86400;
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &future_due_date,
         &String::from_str(&env, "Test invoice"),
