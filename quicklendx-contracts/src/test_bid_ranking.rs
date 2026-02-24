@@ -25,13 +25,13 @@ fn create_bid(
     status: BidStatus,
 ) -> Bid {
     // Generate a simple deterministic bid ID for testing (no storage access needed)
-    // Combine all parameters into a unique ID
+    // Combine parameters into unique ID
     let mut bid_id_bytes = [0u8; 32];
     bid_id_bytes[0] = 0xB1; // Bid prefix
     bid_id_bytes[1] = 0xD0;
     bid_id_bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
-    bid_id_bytes[10..18].copy_from_slice(&bid_amount.to_be_bytes());
-    bid_id_bytes[18..26].copy_from_slice(&expected_return.to_be_bytes());
+    bid_id_bytes[10..12].copy_from_slice(&(bid_amount as u16).to_be_bytes());
+    bid_id_bytes[12..14].copy_from_slice(&(expected_return as u16).to_be_bytes());
     
     let bid_id = BytesN::from_array(env, &bid_id_bytes);
     
