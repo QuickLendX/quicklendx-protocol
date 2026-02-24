@@ -9,6 +9,7 @@
 use super::*;
 use crate::bid::BidStatus;
 use crate::invoice::InvoiceCategory;
+use crate::protocol_limits::compute_min_bid_amount;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Address, BytesN, Env, String, Vec,
@@ -106,6 +107,38 @@ fn test_bid_placement_verified_invoice_succeeds() {
     let bid = client.get_bid(&bid_id);
     assert!(bid.is_some());
     assert_eq!(bid.unwrap().status, BidStatus::Placed);
+}
+
+/// Core Test: Minimum bid amount enforced (absolute floor + percentage of invoice)
+#[test]
+fn test_bid_minimum_amount_enforced() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 1_000_000);
+    let business = Address::generate(&env);
+
+    let invoice_amount = 200_000;
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, invoice_amount);
+
+    let min_bid = compute_min_bid_amount(
+        invoice_amount,
+        &crate::protocol_limits::ProtocolLimits {
+            min_invoice_amount: 1_000_000,
+            min_bid_amount: 100,
+            min_bid_bps: 100,
+            max_due_date_days: 365,
+            grace_period_seconds: 86400,
+        },
+    );
+    let below_min = min_bid.saturating_sub(1);
+
+    let result = client.try_place_bid(&investor, &invoice_id, &below_min, &(min_bid + 100));
+    assert!(result.is_err(), "Bid below minimum must fail");
+
+    let result = client.try_place_bid(&investor, &invoice_id, &min_bid, &(min_bid + 100));
+    assert!(result.is_ok(), "Bid at minimum must succeed");
 }
 
 /// Core Test: Investment limit enforced

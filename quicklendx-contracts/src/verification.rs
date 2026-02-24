@@ -2,7 +2,8 @@ use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::protocol_limits::{
-    check_string_length, MAX_KYC_DATA_LENGTH, MAX_REJECTION_REASON_LENGTH,
+    check_string_length, compute_min_bid_amount, ProtocolLimitsContract, MAX_KYC_DATA_LENGTH,
+    MAX_REJECTION_REASON_LENGTH,
 };
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
@@ -64,8 +65,6 @@ pub struct InvestorVerification {
     pub rejection_reason: Option<String>,
     pub compliance_notes: Option<String>,
 }
-
-const MIN_BID_AMOUNT: i128 = 100;
 
 pub struct BusinessVerificationStorage;
 
@@ -494,7 +493,13 @@ pub fn validate_bid(
     expected_return: i128,
     investor: &Address,
 ) -> Result<(), QuickLendXError> {
-    if bid_amount <= 0 || bid_amount < MIN_BID_AMOUNT {
+    if bid_amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    let min_bid_amount = compute_min_bid_amount(invoice.amount, &limits);
+    if bid_amount < min_bid_amount {
         return Err(QuickLendXError::InvalidAmount);
     }
 
