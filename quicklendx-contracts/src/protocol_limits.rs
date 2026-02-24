@@ -1,4 +1,4 @@
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String};
+use soroban_sdk::{contracttype, Address, Env, String};
 
 use crate::errors::QuickLendXError;
 
@@ -45,11 +45,9 @@ pub fn check_string_length(s: &String, max_len: u32) -> Result<(), QuickLendXErr
 }
 
 #[allow(dead_code)]
-#[contract]
 pub struct ProtocolLimitsContract;
 
 #[allow(dead_code)]
-#[contractimpl]
 impl ProtocolLimitsContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         if env.storage().instance().has(&LIMITS_KEY) {

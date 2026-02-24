@@ -16,6 +16,10 @@ use soroban_sdk::{
     token, Address, Env, String, TryFromVal, Val, Vec,
 };
 
+const TEST_INVOICE_AMOUNT: i128 = 1_500_000;
+const TEST_INVESTOR_LIMIT: i128 = 5_000_000;
+const TEST_EXPECTED_RETURN: i128 = 1_650_000;
+
 fn setup_contract(env: &Env) -> (QuickLendXContractClient, Address, Address) {
     let contract_id = env.register(QuickLendXContract, ());
     env.ledger().set_timestamp(1);
@@ -58,7 +62,7 @@ fn init_currency_for_test(
     let token_client = token::Client::new(env, &currency);
     let sac_client = token::StellarAssetClient::new(env, &currency);
 
-    let initial_balance = 10_000i128;
+    let initial_balance = 10_000_000i128;
     sac_client.mint(business, &initial_balance);
     sac_client.mint(contract_id, &1i128);
 
@@ -120,7 +124,7 @@ fn test_invoice_events_emit_correct_topics_and_payloads() {
     let (client, admin, contract_id) = setup_contract(&env);
     let business = Address::generate(&env);
     let currency = init_currency_for_test(&env, &contract_id, &business, None);
-    let amount = 1000i128;
+    let amount = TEST_INVOICE_AMOUNT;
     let due_date = env.ledger().timestamp() + 86_400;
 
     verify_business_for_test(&env, &client, &admin, &business);
@@ -180,11 +184,11 @@ fn test_bid_placed_and_withdrawn_events_emit_correct_payloads() {
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
-    let amount = 1000i128;
+    let amount = TEST_INVOICE_AMOUNT;
     let due_date = env.ledger().timestamp() + 86_400;
 
     verify_business_for_test(&env, &client, &admin, &business);
-    verify_investor_for_test(&env, &client, &investor, 5_000i128);
+    verify_investor_for_test(&env, &client, &investor, TEST_INVESTOR_LIMIT);
 
     let invoice_id = client.upload_invoice(
         &business,
@@ -197,8 +201,8 @@ fn test_bid_placed_and_withdrawn_events_emit_correct_payloads() {
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_amount = 1000i128;
-    let expected_return = 1100i128;
+    let bid_amount = TEST_INVOICE_AMOUNT;
+    let expected_return = TEST_EXPECTED_RETURN;
     let placed_ts = 100u64;
     env.ledger().set_timestamp(placed_ts);
     let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
@@ -244,11 +248,11 @@ fn test_bid_accepted_and_escrow_created_events_emit_correct_payloads() {
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
-    let amount = 1000i128;
+    let amount = TEST_INVOICE_AMOUNT;
     let due_date = env.ledger().timestamp() + 86_400;
 
     verify_business_for_test(&env, &client, &admin, &business);
-    verify_investor_for_test(&env, &client, &investor, 5_000i128);
+    verify_investor_for_test(&env, &client, &investor, TEST_INVESTOR_LIMIT);
 
     let invoice_id = client.upload_invoice(
         &business,
@@ -261,7 +265,12 @@ fn test_bid_accepted_and_escrow_created_events_emit_correct_payloads() {
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &TEST_INVOICE_AMOUNT,
+        &TEST_EXPECTED_RETURN,
+    );
     let accepted_ts = 200u64;
     env.ledger().set_timestamp(accepted_ts);
     client.accept_bid(&invoice_id, &bid_id);
@@ -277,8 +286,8 @@ fn test_bid_accepted_and_escrow_created_events_emit_correct_payloads() {
     assert_eq!(bid_accepted_payload.1, invoice_id.clone());
     assert_eq!(bid_accepted_payload.2, investor.clone());
     assert_eq!(bid_accepted_payload.3, business.clone());
-    assert_eq!(bid_accepted_payload.4, 1000i128);
-    assert_eq!(bid_accepted_payload.5, 1100i128);
+    assert_eq!(bid_accepted_payload.4, TEST_INVOICE_AMOUNT);
+    assert_eq!(bid_accepted_payload.5, TEST_EXPECTED_RETURN);
     assert_eq!(bid_accepted_payload.6, accepted_ts);
 
     assert_eq!(escrow_created_payload.0, escrow.escrow_id.clone());
@@ -298,11 +307,11 @@ fn test_escrow_released_event_emits_correct_topic_and_payload() {
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
-    let amount = 1000i128;
+    let amount = TEST_INVOICE_AMOUNT;
     let due_date = env.ledger().timestamp() + 86_400;
 
     verify_business_for_test(&env, &client, &admin, &business);
-    verify_investor_for_test(&env, &client, &investor, 5_000i128);
+    verify_investor_for_test(&env, &client, &investor, TEST_INVESTOR_LIMIT);
 
     let invoice_id = client.upload_invoice(
         &business,
@@ -314,7 +323,7 @@ fn test_escrow_released_event_emits_correct_topic_and_payload() {
         &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &TEST_EXPECTED_RETURN);
     client.accept_bid(&invoice_id, &bid_id);
 
     let escrow = client.get_escrow_details(&invoice_id);
@@ -342,11 +351,11 @@ fn test_invoice_defaulted_event_emits_correct_topic_and_payload() {
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
-    let amount = 1000i128;
+    let amount = TEST_INVOICE_AMOUNT;
     let due_date = env.ledger().timestamp() + 86_400;
 
     verify_business_for_test(&env, &client, &admin, &business);
-    verify_investor_for_test(&env, &client, &investor, 5_000i128);
+    verify_investor_for_test(&env, &client, &investor, TEST_INVESTOR_LIMIT);
 
     let invoice_id = client.upload_invoice(
         &business,
@@ -358,7 +367,7 @@ fn test_invoice_defaulted_event_emits_correct_topic_and_payload() {
         &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &TEST_EXPECTED_RETURN);
     client.accept_bid(&invoice_id, &bid_id);
 
     let default_ts = due_date + 1;
@@ -392,7 +401,7 @@ fn test_audit_events_emit_correct_topics_and_payloads() {
 
     let invoice_id = client.upload_invoice(
         &business,
-        &1000i128,
+        &TEST_INVOICE_AMOUNT,
         &currency,
         &due_date,
         &String::from_str(&env, "Audit events test"),
