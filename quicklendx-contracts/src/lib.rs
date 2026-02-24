@@ -640,6 +640,7 @@ impl QuickLendXContract {
         let paid = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Paid);
         let defaulted = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Defaulted);
         let cancelled = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Cancelled);
+        let refunded = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Refunded);
 
         pending
             .saturating_add(verified)
@@ -647,6 +648,7 @@ impl QuickLendXContract {
             .saturating_add(paid)
             .saturating_add(defaulted)
             .saturating_add(cancelled)
+            .saturating_add(refunded)
     }
 
     /// Get a bid by ID
@@ -808,6 +810,9 @@ impl QuickLendXContract {
         )?;
         bid.status = BidStatus::Accepted;
         BidStorage::update_bid(&env, &bid);
+        // Remove from old status list before changing status
+        InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
+
         invoice.mark_as_funded(
             &env,
             bid.investor.clone(),
@@ -815,6 +820,9 @@ impl QuickLendXContract {
             env.ledger().timestamp(),
         );
         InvoiceStorage::update_invoice(&env, &invoice);
+
+        // Add to new status list after status change
+        InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Funded, &invoice_id);
         let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         let investment = Investment {
             investment_id: investment_id.clone(),
