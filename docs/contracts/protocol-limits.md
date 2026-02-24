@@ -17,7 +17,7 @@ Configurable system-wide constraints for invoice validation and default handling
 ```rust
 min_invoice_amount: 1_000_000      // 1 token (6 decimals)
 max_due_date_days: 365             // 1 year maximum
-grace_period_seconds: 86400        // 24 hours
+grace_period_seconds: 604800       // 7 days
 ```
 
 ## Contract Interface

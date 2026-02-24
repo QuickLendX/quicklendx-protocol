@@ -52,7 +52,7 @@ fn initialize_protocol(env: &Env) {
         fee_bps: 200,                    // 2%
         min_invoice_amount: 1_000_000,   // 1 token (6 decimals)
         max_due_date_days: 365,
-        grace_period_seconds: 86400,     // 24 hours
+        grace_period_seconds: 604800,     // 7 days
         initial_currencies: Vec::new(env),
     };
 
@@ -146,7 +146,7 @@ pub struct ProtocolConfig {
 | `fee_bps` | 200 | 2% platform fee |
 | `min_invoice_amount` | 1,000,000 | 1 token (6 decimals) |
 | `max_due_date_days` | 365 | 1 year maximum |
-| `grace_period_seconds` | 86,400 | 24 hours |
+| `grace_period_seconds` | 604,800 | 7 days |
 
 ## API Reference
 
@@ -294,7 +294,7 @@ Returns the maximum due date days (defaults to 365).
 pub fn get_grace_period_seconds(env: &Env) -> u64
 ```
 
-Returns the grace period in seconds (defaults to 86,400).
+Returns the grace period in seconds (defaults to 604,800).
 
 ## Events
 
