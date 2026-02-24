@@ -1936,3 +1936,549 @@ fn test_invoice_full_lifecycle_with_status_assertions() {
     assert_eq!(invoice.funded_amount, 4500);
     assert_eq!(invoice.investor, Some(investor));
 }
+
+// ============================================================================
+// INVOICE COUNT TESTS
+// ============================================================================
+
+/// Test get_invoice_count_by_status for each status
+#[test]
+fn test_get_invoice_count_by_status_all_statuses() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    env.mock_all_auths();
+
+    // Setup verified business and investor
+    let business = setup_verified_business(&env, &client);
+    let investor = setup_verified_investor(&env, &client);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Initially all counts should be 0
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 0);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Verified), 0);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Funded), 0);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Paid), 0);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Defaulted), 0);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Cancelled), 0);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Refunded), 0);
+
+    // Create invoice in Pending status
+    let invoice_id_1 = client.store_invoice(
+        &business,
+        &5000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 1"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 1);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Verified), 0);
+
+    // Verify invoice -> Verified status
+    client.verify_invoice(&invoice_id_1);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 0);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Verified), 1);
+
+    // Create another invoice and move to Funded status
+    let invoice_id_2 = client.store_invoice(
+        &business,
+        &7500,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 2"),
+        &InvoiceCategory::Products,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id_2);
+
+    // Mark as funded
+    env.as_contract(&contract_id, || {
+        let mut inv = crate::storage::InvoiceStorage::get(&env, &invoice_id_2).unwrap();
+        inv.mark_as_funded(&env, investor.clone(), 7000, env.ledger().timestamp());
+        crate::storage::InvoiceStorage::update(&env, &inv);
+    });
+
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Verified), 1);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Funded), 1);
+
+    // Create invoice and move to Paid status
+    let invoice_id_3 = client.store_invoice(
+        &business,
+        &3000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 3"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id_3);
+    client.update_invoice_status(&invoice_id_3, &InvoiceStatus::Paid);
+
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Paid), 1);
+
+    // Create invoice and move to Defaulted status
+    let invoice_id_4 = client.store_invoice(
+        &business,
+        &4000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 4"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id_4);
+    client.update_invoice_status(&invoice_id_4, &InvoiceStatus::Defaulted);
+
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Defaulted), 1);
+
+    // Create invoice and cancel it
+    let invoice_id_5 = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 5"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.cancel_invoice(&invoice_id_5);
+
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Cancelled), 1);
+
+    // Create invoice and move to Refunded status
+    let invoice_id_6 = client.store_invoice(
+        &business,
+        &6000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 6"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id_6);
+    client.update_invoice_status(&invoice_id_6, &InvoiceStatus::Refunded);
+
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Refunded), 1);
+
+    // Final verification of all status counts
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 0);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Verified), 1); // invoice_id_1
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Funded), 1); // invoice_id_2
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Paid), 1); // invoice_id_3
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Defaulted), 1); // invoice_id_4
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Cancelled), 1); // invoice_id_5
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Refunded), 1); // invoice_id_6
+}
+
+/// Test get_total_invoice_count and verify it equals sum of status counts
+#[test]
+fn test_get_total_invoice_count_equals_sum_of_status_counts() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    env.mock_all_auths();
+
+    let business = setup_verified_business(&env, &client);
+    let investor = setup_verified_investor(&env, &client);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Initially total should be 0
+    assert_eq!(client.get_total_invoice_count(), 0);
+
+    // Create 3 pending invoices
+    for i in 1..=3 {
+        client.store_invoice(
+            &business,
+            &(1000 * i),
+            &currency,
+            &due_date,
+            &String::from_str(&env, &format!("Invoice {}", i)),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
+    }
+
+    let total = client.get_total_invoice_count();
+    let pending = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
+    assert_eq!(total, 3);
+    assert_eq!(pending, 3);
+    assert_eq!(total, pending);
+
+    // Create 2 more and verify them
+    let invoice_id_4 = client.store_invoice(
+        &business,
+        &4000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 4"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let invoice_id_5 = client.store_invoice(
+        &business,
+        &5000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 5"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.verify_invoice(&invoice_id_4);
+    client.verify_invoice(&invoice_id_5);
+
+    let total = client.get_total_invoice_count();
+    let pending = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
+    let verified = client.get_invoice_count_by_status(&InvoiceStatus::Verified);
+    let funded = client.get_invoice_count_by_status(&InvoiceStatus::Funded);
+    let paid = client.get_invoice_count_by_status(&InvoiceStatus::Paid);
+    let defaulted = client.get_invoice_count_by_status(&InvoiceStatus::Defaulted);
+    let cancelled = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
+    let refunded = client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+
+    assert_eq!(total, 5);
+    assert_eq!(pending, 3);
+    assert_eq!(verified, 2);
+
+    // Verify sum equals total
+    let sum = pending + verified + funded + paid + defaulted + cancelled + refunded;
+    assert_eq!(sum, total);
+
+    // Fund one invoice
+    env.as_contract(&contract_id, || {
+        let mut inv = crate::storage::InvoiceStorage::get(&env, &invoice_id_4).unwrap();
+        inv.mark_as_funded(&env, investor.clone(), 3800, env.ledger().timestamp());
+        crate::storage::InvoiceStorage::update(&env, &inv);
+    });
+
+    let total = client.get_total_invoice_count();
+    let pending = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
+    let verified = client.get_invoice_count_by_status(&InvoiceStatus::Verified);
+    let funded = client.get_invoice_count_by_status(&InvoiceStatus::Funded);
+    let paid = client.get_invoice_count_by_status(&InvoiceStatus::Paid);
+    let defaulted = client.get_invoice_count_by_status(&InvoiceStatus::Defaulted);
+    let cancelled = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
+    let refunded = client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+
+    assert_eq!(total, 5);
+    assert_eq!(funded, 1);
+    assert_eq!(verified, 1);
+
+    // Verify sum still equals total
+    let sum = pending + verified + funded + paid + defaulted + cancelled + refunded;
+    assert_eq!(sum, total);
+}
+
+/// Test invoice counts after various status transitions
+#[test]
+fn test_invoice_counts_after_status_transitions() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    env.mock_all_auths();
+
+    let business = setup_verified_business(&env, &client);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Create invoice
+    let invoice_id = client.store_invoice(
+        &business,
+        &5000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    // Check counts after creation (Pending)
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 1);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Verified), 0);
+    assert_eq!(client.get_total_invoice_count(), 1);
+
+    // Transition to Verified
+    client.verify_invoice(&invoice_id);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 0);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Verified), 1);
+    assert_eq!(client.get_total_invoice_count(), 1);
+
+    // Transition to Paid
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Verified), 0);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Paid), 1);
+    assert_eq!(client.get_total_invoice_count(), 1);
+
+    // Verify sum equals total after all transitions
+    let sum = client.get_invoice_count_by_status(&InvoiceStatus::Pending)
+        + client.get_invoice_count_by_status(&InvoiceStatus::Verified)
+        + client.get_invoice_count_by_status(&InvoiceStatus::Funded)
+        + client.get_invoice_count_by_status(&InvoiceStatus::Paid)
+        + client.get_invoice_count_by_status(&InvoiceStatus::Defaulted)
+        + client.get_invoice_count_by_status(&InvoiceStatus::Cancelled)
+        + client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+    assert_eq!(sum, client.get_total_invoice_count());
+}
+
+/// Test invoice counts after cancellation
+#[test]
+fn test_invoice_counts_after_cancellation() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    env.mock_all_auths();
+
+    let business = setup_verified_business(&env, &client);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Create multiple invoices
+    let invoice_id_1 = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 1"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let invoice_id_2 = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 2"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let invoice_id_3 = client.store_invoice(
+        &business,
+        &3000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 3"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    // All should be pending
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 3);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Cancelled), 0);
+    assert_eq!(client.get_total_invoice_count(), 3);
+
+    // Cancel one invoice
+    client.cancel_invoice(&invoice_id_1);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 2);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Cancelled), 1);
+    assert_eq!(client.get_total_invoice_count(), 3);
+
+    // Verify one invoice
+    client.verify_invoice(&invoice_id_2);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 1);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Verified), 1);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Cancelled), 1);
+    assert_eq!(client.get_total_invoice_count(), 3);
+
+    // Cancel another invoice
+    client.cancel_invoice(&invoice_id_3);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 0);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Verified), 1);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Cancelled), 2);
+    assert_eq!(client.get_total_invoice_count(), 3);
+
+    // Verify sum equals total
+    let sum = client.get_invoice_count_by_status(&InvoiceStatus::Pending)
+        + client.get_invoice_count_by_status(&InvoiceStatus::Verified)
+        + client.get_invoice_count_by_status(&InvoiceStatus::Funded)
+        + client.get_invoice_count_by_status(&InvoiceStatus::Paid)
+        + client.get_invoice_count_by_status(&InvoiceStatus::Defaulted)
+        + client.get_invoice_count_by_status(&InvoiceStatus::Cancelled)
+        + client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+    assert_eq!(sum, client.get_total_invoice_count());
+}
+
+/// Test invoice counts with multiple status updates
+#[test]
+fn test_invoice_counts_with_multiple_status_updates() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    env.mock_all_auths();
+
+    let business = setup_verified_business(&env, &client);
+    let investor = setup_verified_investor(&env, &client);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Create 10 invoices and transition them through various states
+    let mut invoice_ids = Vec::new(&env);
+    for i in 1..=10 {
+        let id = client.store_invoice(
+            &business,
+            &(1000 * i),
+            &currency,
+            &due_date,
+            &String::from_str(&env, &format!("Invoice {}", i)),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
+        invoice_ids.push_back(id);
+    }
+
+    // All should be pending
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 10);
+    assert_eq!(client.get_total_invoice_count(), 10);
+
+    // Verify 5 invoices
+    for i in 0..5 {
+        client.verify_invoice(&invoice_ids.get(i).unwrap());
+    }
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 5);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Verified), 5);
+    assert_eq!(client.get_total_invoice_count(), 10);
+
+    // Cancel 2 pending invoices
+    for i in 5..7 {
+        client.cancel_invoice(&invoice_ids.get(i).unwrap());
+    }
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Pending), 3);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Cancelled), 2);
+    assert_eq!(client.get_total_invoice_count(), 10);
+
+    // Fund 2 verified invoices
+    for i in 0..2 {
+        let id = invoice_ids.get(i).unwrap();
+        env.as_contract(&contract_id, || {
+            let mut inv = crate::storage::InvoiceStorage::get(&env, &id).unwrap();
+            inv.mark_as_funded(&env, investor.clone(), 900 * (i as i128 + 1), env.ledger().timestamp());
+            crate::storage::InvoiceStorage::update(&env, &inv);
+        });
+    }
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Verified), 3);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Funded), 2);
+    assert_eq!(client.get_total_invoice_count(), 10);
+
+    // Mark 1 funded invoice as paid
+    client.update_invoice_status(&invoice_ids.get(0).unwrap(), &InvoiceStatus::Paid);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Funded), 1);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Paid), 1);
+    assert_eq!(client.get_total_invoice_count(), 10);
+
+    // Mark 1 funded invoice as defaulted
+    client.update_invoice_status(&invoice_ids.get(1).unwrap(), &InvoiceStatus::Defaulted);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Funded), 0);
+    assert_eq!(client.get_invoice_count_by_status(&InvoiceStatus::Defaulted), 1);
+    assert_eq!(client.get_total_invoice_count(), 10);
+
+    // Final count verification
+    let pending = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
+    let verified = client.get_invoice_count_by_status(&InvoiceStatus::Verified);
+    let funded = client.get_invoice_count_by_status(&InvoiceStatus::Funded);
+    let paid = client.get_invoice_count_by_status(&InvoiceStatus::Paid);
+    let defaulted = client.get_invoice_count_by_status(&InvoiceStatus::Defaulted);
+    let cancelled = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
+    let refunded = client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+    let total = client.get_total_invoice_count();
+
+    assert_eq!(pending, 3);
+    assert_eq!(verified, 3);
+    assert_eq!(funded, 0);
+    assert_eq!(paid, 1);
+    assert_eq!(defaulted, 1);
+    assert_eq!(cancelled, 2);
+    assert_eq!(refunded, 0);
+    assert_eq!(total, 10);
+
+    // Verify sum equals total
+    let sum = pending + verified + funded + paid + defaulted + cancelled + refunded;
+    assert_eq!(sum, total);
+}
+
+/// Test that invoice counts remain consistent across complex operations
+#[test]
+fn test_invoice_count_consistency() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    env.mock_all_auths();
+
+    let business = setup_verified_business(&env, &client);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Helper function to verify consistency
+    let verify_consistency = || {
+        let pending = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
+        let verified = client.get_invoice_count_by_status(&InvoiceStatus::Verified);
+        let funded = client.get_invoice_count_by_status(&InvoiceStatus::Funded);
+        let paid = client.get_invoice_count_by_status(&InvoiceStatus::Paid);
+        let defaulted = client.get_invoice_count_by_status(&InvoiceStatus::Defaulted);
+        let cancelled = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
+        let refunded = client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+        let total = client.get_total_invoice_count();
+        let sum = pending + verified + funded + paid + defaulted + cancelled + refunded;
+        
+        assert_eq!(sum, total, "Sum of status counts must equal total count");
+    };
+
+    // Test consistency at each step
+    verify_consistency(); // Empty state
+
+    // Create invoice
+    let id1 = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 1"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    verify_consistency();
+
+    // Verify invoice
+    client.verify_invoice(&id1);
+    verify_consistency();
+
+    // Create and cancel invoice
+    let id2 = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 2"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    verify_consistency();
+
+    client.cancel_invoice(&id2);
+    verify_consistency();
+
+    // Create multiple invoices
+    for i in 3..=5 {
+        client.store_invoice(
+            &business,
+            &(i * 1000),
+            &currency,
+            &due_date,
+            &String::from_str(&env, &format!("Invoice {}", i)),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
+        verify_consistency();
+    }
+}
