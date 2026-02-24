@@ -1284,7 +1284,7 @@ impl QuickLendXContract {
     }
 
     /// Update protocol limits (admin only).
-    pub fn set_protocol_limits(
+    pub fn update_protocol_limits(
         env: Env,
         admin: Address,
         min_invoice_amount: i128,

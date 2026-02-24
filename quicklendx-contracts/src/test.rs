@@ -4502,7 +4502,7 @@ fn test_custom_max_due_date_limits() {
     assert_eq!(result, Err(Ok(QuickLendXError::InvoiceDueDateInvalid)));
 
     // Test 3: Update limits to 730 days and test old boundary now succeeds
-    client.set_protocol_limits(&admin, &1000000i128, &730u64, &86400u64);
+    client.update_protocol_limits(&admin, &1000000i128, &730u64, &86400u64);
     let old_over_max_due_date = current_time + (365 * 86400);
     let invoice_id2 = client.store_invoice(
         &business,
