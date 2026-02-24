@@ -80,6 +80,33 @@ pub struct InvoiceMetadata {
     pub notes: String,
 }
 
+impl InvoiceMetadata {
+    pub fn validate(&self) -> Result<(), QuickLendXError> {
+        if self.customer_name.len() == 0 || self.customer_name.len() > 100 {
+            return Err(QuickLendXError::InvalidDescription);
+        }
+        if self.customer_address.len() > 200 {
+            return Err(QuickLendXError::InvalidDescription);
+        }
+        if self.tax_id.len() > 40 {
+            return Err(QuickLendXError::InvalidDescription);
+        }
+        if self.line_items.len() > 50 {
+            return Err(QuickLendXError::TagLimitExceeded);
+        }
+        for item in self.line_items.iter() {
+            if item.0.len() == 0 || item.0.len() > 100 {
+                return Err(QuickLendXError::InvalidDescription);
+            }
+        }
+        if self.notes.len() > 500 {
+            return Err(QuickLendXError::InvalidDescription);
+        }
+        Ok(())
+    }
+// ...existing code...
+}
+
 /// Individual payment record for an invoice
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -127,6 +154,43 @@ use crate::audit::{
 };
 
 impl Invoice {
+        /// Update invoice metadata (business only)
+        pub fn update_metadata(
+            &mut self,
+            env: &Env,
+            business: &Address,
+            metadata: InvoiceMetadata,
+        ) -> Result<(), QuickLendXError> {
+            if self.business != *business {
+                return Err(QuickLendXError::Unauthorized);
+            }
+            business.require_auth();
+            metadata.validate()?;
+            self.metadata_customer_name = Some(metadata.customer_name.clone());
+            self.metadata_customer_address = Some(metadata.customer_address.clone());
+            self.metadata_tax_id = Some(metadata.tax_id.clone());
+            self.metadata_notes = Some(metadata.notes.clone());
+            self.metadata_line_items = metadata.line_items.clone();
+            Ok(())
+        }
+
+        /// Clear invoice metadata (business only)
+        pub fn clear_metadata(
+            &mut self,
+            env: &Env,
+            business: &Address,
+        ) -> Result<(), QuickLendXError> {
+            if self.business != *business {
+                return Err(QuickLendXError::Unauthorized);
+            }
+            business.require_auth();
+            self.metadata_customer_name = None;
+            self.metadata_customer_address = None;
+            self.metadata_tax_id = None;
+            self.metadata_notes = None;
+            self.metadata_line_items = Vec::new(env);
+            Ok(())
+        }
     /// Create a new invoice with audit logging
     pub fn new(
         env: &Env,
