@@ -86,7 +86,7 @@ use verification::{
     InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
 };
 
-use crate::backup::{Backup, BackupStatus, BackupStorage};
+use crate::backup::{Backup, BackupRetentionPolicy, BackupStatus, BackupStorage};
 use crate::notifications::{
     Notification, NotificationDeliveryStatus, NotificationPreferences, NotificationStats,
     NotificationSystem,
@@ -1287,23 +1287,6 @@ impl QuickLendXContract {
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
         let _ = protocol_limits::ProtocolLimitsContract::initialize(env.clone(), admin.clone());
-        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
-            env,
-            admin,
-            min_invoice_amount,
-            max_due_date_days,
-            grace_period_seconds,
-        )
-    }
-
-    /// Update protocol limits (admin only).
-    pub fn set_protocol_limits(
-        env: Env,
-        admin: Address,
-        min_invoice_amount: i128,
-        max_due_date_days: u64,
-        grace_period_seconds: u64,
-    ) -> Result<(), QuickLendXError> {
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
@@ -2564,8 +2547,8 @@ impl QuickLendXContract {
         BackupStorage::store_backup_data(&env, &backup_id, &all_invoices);
         BackupStorage::add_to_backup_list(&env, &backup_id);
 
-        // Keep only last 5 backups
-        BackupStorage::cleanup_old_backups(&env, 5)?;
+        // Clean up old backups based on retention policy
+        BackupStorage::cleanup_old_backups(&env)?;
 
         events::emit_backup_created(&env, &backup_id, count);
         Ok(backup_id)
@@ -2645,6 +2628,51 @@ impl QuickLendXContract {
 
         events::emit_backup_archived(&env, &backup_id);
         Ok(())
+    }
+
+    /// Set backup retention policy (admin only)
+    pub fn set_backup_retention_policy(
+        env: Env,
+        admin: Address,
+        max_backups: u32,
+        max_age_seconds: u64,
+        auto_cleanup_enabled: bool,
+    ) -> Result<(), QuickLendXError> {
+        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        if current_admin != admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
+        admin.require_auth();
+
+        let policy = BackupRetentionPolicy {
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+        };
+
+        BackupStorage::set_retention_policy(&env, &policy);
+        events::emit_retention_policy_updated(&env, max_backups, max_age_seconds, auto_cleanup_enabled);
+
+        Ok(())
+    }
+
+    /// Get current backup retention policy
+    pub fn get_backup_retention_policy(env: Env) -> BackupRetentionPolicy {
+        BackupStorage::get_retention_policy(&env)
+    }
+
+    /// Manually trigger backup cleanup (admin only)
+    pub fn cleanup_backups(env: Env, admin: Address) -> Result<u32, QuickLendXError> {
+        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        if current_admin != admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
+        admin.require_auth();
+
+        let removed_count = BackupStorage::cleanup_old_backups(&env)?;
+        events::emit_backups_cleaned(&env, removed_count);
+
+        Ok(removed_count)
     }
 
     /// Get all available backup IDs
