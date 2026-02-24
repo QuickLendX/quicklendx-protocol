@@ -1,4 +1,4 @@
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address, Env};
 
 use crate::QuickLendXError;
 
@@ -21,11 +21,9 @@ const DEFAULT_MAX_DUE_DAYS: u64 = 365;
 const DEFAULT_GRACE_PERIOD: u64 = 86400; // 24 hours
 
 #[allow(dead_code)]
-#[contract]
 pub struct ProtocolLimitsContract;
 
 #[allow(dead_code)]
-#[contractimpl]
 impl ProtocolLimitsContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         if env.storage().instance().has(&LIMITS_KEY) {
