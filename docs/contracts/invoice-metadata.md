@@ -11,6 +11,19 @@ Invoices now support extended metadata, categorization, and tagging to facilitat
 - **Metadata**: Structured optional data including Customer Name, Tax ID, Address, Line Items, and Notes.
 - **Categorization**: Enum-based categorization (e.g., Services, Products, Technology).
 - **Tagging**: Flexible string-based tags (up to 10 per invoice).
+- **Tagging**: Flexible string-based tags (up to 10 per invoice).
+
+### Limits & Errors
+
+- Maximum tags per invoice: **10**. The contract enforces this limit in both creation and mutation flows:
+    - Creation-time validation: `store_invoice` and `upload_invoice` call `verification::validate_invoice_tags`, which rejects inputs with more than 10 tags.
+    - Mutation-time validation: `add_invoice_tag` enforces the same limit and will return an error if adding a tag would exceed the limit. Adding an already-present tag is idempotent and does not count as an addition.
+
+- Errors returned:
+    - `QuickLendXError::TagLimitExceeded` (symbol: `TAG_LIM`) — returned when the maximum tag count would be exceeded.
+    - `QuickLendXError::InvalidTag` (symbol: `INV_TAG`) — returned for invalid tag values (e.g., length outside 1..=50).
+
+See the implementation in the contract (`src/invoice.rs` and `src/verification.rs`) and the added unit tests at `src/test/test_tag_limits.rs` for examples and behavior expectations.
 - **Indexing**: Efficient on-chain indexing allowing queries by category, tag, customer name, and tax ID.
 
 ## Data Structures
