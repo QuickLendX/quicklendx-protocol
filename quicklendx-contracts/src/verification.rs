@@ -654,7 +654,13 @@ pub fn verify_invoice_data(
     }
 
     // Validate due date is not too far in the future using protocol limits
-    if !crate::protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date) {
+    let limits = crate::protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+    if amount < limits.min_invoice_amount {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let max_due_date = current_timestamp + (limits.max_due_date_days * 86400);
+    if due_date > max_due_date {
         return Err(QuickLendXError::InvoiceDueDateInvalid);
     }
     if description.len() == 0 {
