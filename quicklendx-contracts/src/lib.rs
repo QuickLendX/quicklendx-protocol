@@ -52,6 +52,8 @@ mod test_init;
 mod test_storage;
 #[cfg(test)]
 mod test_vesting;
+#[cfg(test)]
+mod test_invoice;
 mod verification;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
