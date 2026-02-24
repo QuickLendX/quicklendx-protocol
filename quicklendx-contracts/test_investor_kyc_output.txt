@@ -1,0 +1,100 @@
+  --> src/test_investor_kyc.rs:17:35
+   |
+17 |         testutils::{Address as _, Ledger},
+--
+   --> src/test_investor_kyc.rs:102:27
+    |
+102 |         let (env, client, admin) = setup();
+--
+   --> src/test_investor_kyc.rs:179:13
+    |
+179 |         let non_admin = Address::generate(&env);
+--
+   --> src/test_investor_kyc.rs:192:13
+    |
+192 |         let result = client.try_verify_investor(&investor, &investment_limit);
+--
+   --> src/test_investor_kyc.rs:199:27
+    |
+199 |         let (env, client, admin) = setup();
+--
+   --> src/test_investor_kyc.rs:482:13
+    |
+482 |         let business = Address::generate(&env);
+--
+   --> src/test_investor_kyc.rs:610:13
+    |
+610 |         let high_risk = client.get_investors_by_risk_level(&InvestorRiskLevel::High);
+--
+   --> src/test_investor_kyc.rs:752:27
+    |
+752 |         let (env, client, admin) = setup();
+--
+   --> src/test_limit.rs:498:9
+    |
+498 |     let low_risk_list = client.get_investors_by_risk_level(&InvestorRiskLevel::Low);
+--
+   --> src/test_limit.rs:499:9
+    |
+499 |     let high_risk_list = client.get_investors_by_risk_level(&InvestorRiskLevel::High);
+--
+   --> src/test_limit.rs:526:9
+    |
+526 |     let result_at_limit = client.try_place_bid(&investor, &invoice_id, &limit, &(limit + 1000));
+--
+    --> src/test_investor_kyc.rs:1117:13
+     |
+1117 |             verification_after_submit.last_activity >= 0,
+--
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investor_lists ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_risk_level ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_tier ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_reject_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_verify_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_cannot_reject_without_kyc_submission ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_cannot_verify_without_kyc_submission ... ok
+test test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails ... ok
+test test_investment_queries::test_get_investor_investments_paged_status_filter ... ok
+test test_investment_queries::test_get_investor_investments_paged_filter_and_pagination ... ok
+test test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds ... ok
+test test_investor_kyc::test_investor_kyc::test_comprehensive_kyc_improves_risk_assessment ... ok
+test test_investor_kyc::test_investor_kyc::test_complete_investor_workflow ... ok
+test test_investor_kyc::test_investor_kyc::test_empty_kyc_data_handling ... ok
+test test_investor_kyc::test_investor_kyc::test_get_pending_verified_rejected_investors ... ok
+test test_investor_kyc::test_investor_kyc::test_bid_validation_checks_investor_verification_status ... ok
+test test_investor_kyc::test_investor_kyc::test_concurrent_investor_verifications ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_analytics_tracking ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_cannot_resubmit_kyc_while_verified ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_duplicate_submission_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_investment_limit_calculation_with_different_tiers ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_submission_requires_auth ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_compliance_notes ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_resubmission_after_rejection ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_rejection_reason_stored ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_submission_succeeds ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_tier_assignment ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_verification_data_integrity ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_risk_score_calculation ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_verification_status_transitions ... ok
+test test_investment_queries::test_get_investor_investments_paged_offset ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_verification_timestamps ... ok
+test test_investor_kyc::test_investor_kyc::test_maximum_investment_limit ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid ... ok
+test test_investor_kyc::test_investor_kyc::test_negative_investment_limit_verification_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_non_admin_cannot_verify_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_rejected_investor_can_resubmit_with_updated_kyc ... ok
+test test_investor_kyc::test_investor_kyc::test_multiple_investors_different_limits ... ok
+test test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only ... ok
+test test_investor_kyc::test_investor_kyc::test_risk_level_affects_investment_limits ... ok
+test test_investor_kyc::test_investor_kyc::test_verify_already_verified_investor_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_verify_investor_with_invalid_limit_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_verify_investor_without_kyc_submission_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid ... ok
+test test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding ... ok
+test test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid ... ok
+test test_limit::test_bid_amount_limits ... ok
+test test_limit::test_admin_operations_require_authorization ... ok
+test test_limit::test_description_length_limits ... ok
+test test_limit::test_due_date_limits ... ok
+test test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit ... ok
+test test_limit::test_investor_tier_progression ... ok
