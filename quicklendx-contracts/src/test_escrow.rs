@@ -579,8 +579,7 @@ fn test_escrow_invariants() {
 }
 
 // ============================================================================
-// release_escrow_funds tests (Issue #273 – authorized, idempotency blocked)
-// ============================================================================
+
 
 #[test]
 fn test_release_escrow_funds_success() {
