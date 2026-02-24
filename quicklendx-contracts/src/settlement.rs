@@ -10,9 +10,7 @@ use crate::invoice::{
 };
 use crate::notifications::NotificationSystem;
 use crate::payments::transfer_funds;
-use soroban_sdk::{
-    contracttype, symbol_short, Address, BytesN, Env, String, Vec,
-};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
 const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
 
@@ -55,10 +53,17 @@ pub fn process_partial_payment(
     payment_amount: i128,
     transaction_id: String,
 ) -> Result<(), QuickLendXError> {
-    let invoice = InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     let payer = invoice.business.clone();
 
-    let progress = record_payment(env, invoice_id, &payer, payment_amount, transaction_id.clone())?;
+    let progress = record_payment(
+        env,
+        invoice_id,
+        &payer,
+        payment_amount,
+        transaction_id.clone(),
+    )?;
 
     // Backward-compatible event used across existing tests/consumers.
     emit_partial_payment(
@@ -95,7 +100,8 @@ pub fn record_payment(
         return Err(QuickLendXError::InvalidAmount);
     }
 
-    let mut invoice = InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
 
     if *payer != invoice.business {
@@ -156,9 +162,10 @@ pub fn record_payment(
     let next_count = payment_count
         .checked_add(1)
         .ok_or(QuickLendXError::StorageError)?;
-    env.storage()
-        .persistent()
-        .set(&SettlementDataKey::PaymentCount(invoice_id.clone()), &next_count);
+    env.storage().persistent().set(
+        &SettlementDataKey::PaymentCount(invoice_id.clone()),
+        &next_count,
+    );
 
     if payment_nonce.len() > 0 {
         env.storage().persistent().set(
@@ -168,7 +175,12 @@ pub fn record_payment(
     }
 
     invoice.total_paid = new_total_paid;
-    update_inline_payment_history(&mut invoice, applied_amount, timestamp, payment_record.nonce);
+    update_inline_payment_history(
+        &mut invoice,
+        applied_amount,
+        timestamp,
+        payment_record.nonce,
+    );
     InvoiceStorage::update_invoice(env, &invoice);
 
     log_payment_processed(
@@ -204,7 +216,8 @@ pub fn settle_invoice(
         return Err(QuickLendXError::InvalidAmount);
     }
 
-    let invoice = InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
     let payer = invoice.business.clone();
     payer.require_auth();
@@ -238,8 +251,12 @@ pub fn settle_invoice(
 }
 
 /// Returns aggregate payment progress for an invoice.
-pub fn get_invoice_progress(env: &Env, invoice_id: &BytesN<32>) -> Result<Progress, QuickLendXError> {
-    let invoice = InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+pub fn get_invoice_progress(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+) -> Result<Progress, QuickLendXError> {
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     let total_due = invoice.amount;
     let total_paid = invoice.total_paid;
     let remaining_due = compute_remaining_due(&invoice)?;
@@ -322,7 +339,8 @@ pub fn get_payment_records(
 }
 
 fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    let mut invoice = InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
 
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
@@ -360,8 +378,12 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     )?;
 
     if platform_fee > 0 {
-        let fee_recipient =
-            crate::fees::FeeManager::route_platform_fee(env, &invoice.currency, &business_address, platform_fee)?;
+        let fee_recipient = crate::fees::FeeManager::route_platform_fee(
+            env,
+            &invoice.currency,
+            &business_address,
+            platform_fee,
+        )?;
         crate::events::emit_platform_fee_routed(env, invoice_id, &fee_recipient, platform_fee);
     }
 
@@ -497,7 +519,12 @@ fn emit_payment_recorded(
     );
 }
 
-fn emit_invoice_settled_final(env: &Env, invoice_id: &BytesN<32>, final_amount: i128, paid_at: u64) {
+fn emit_invoice_settled_final(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    final_amount: i128,
+    paid_at: u64,
+) {
     env.events().publish(
         (symbol_short!("inv_stlf"),),
         (invoice_id.clone(), final_amount, paid_at),
