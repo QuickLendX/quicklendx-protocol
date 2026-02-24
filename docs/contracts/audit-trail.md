@@ -8,7 +8,7 @@ On-chain audit trail for critical operations: every important state change is lo
 |------------|------------|--------------|
 | `log_operation` | Internal | Append a single audit entry (actor, timestamp, operation, payload). Used by invoice, bid, escrow, and settlement flows. |
 | `get_invoice_audit_trail` | Public | Return audit entry IDs for an invoice (chronological by append order). |
-| `query_audit_logs` | Public | Query entries with filters (invoice, actor, operation type, time range) and a bounded limit. |
+| `query_audit_logs` | Public | Query entries with filters (invoice, actor, operation type, time range) and a bounded limit (max 100). |
 | `validate_invoice_audit_integrity` | Public | Verify that all entries for an invoice are present and pass integrity checks (timestamp, block height, operation-specific data). |
 | `get_audit_entry` | Public | Fetch a single entry by ID. |
 | `get_audit_stats` | Public | Return aggregate stats (total entries, unique actors, date range). |
@@ -31,7 +31,7 @@ On-chain audit trail for critical operations: every important state change is lo
 - **Time**: Entries grouped by day for time-range queries.
 - **Global**: Single list of all `audit_id`s for full scan when no filter narrows the set.
 
-Appends are gas-efficient (one entry + index updates). Query results are bounded by the `limit` parameter to avoid unbounded reads.
+Appends are gas-efficient (one entry + index updates). Query results are bounded by the `limit` parameter and hard-capped to `100` entries (`min(limit, 100)`) to avoid unbounded reads.
 
 ## Integrity Validation
 

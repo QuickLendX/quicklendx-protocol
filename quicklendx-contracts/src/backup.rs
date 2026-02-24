@@ -77,7 +77,9 @@ impl BackupStorage {
         // Embed counter
         id_bytes[10..18].copy_from_slice(&next_counter.to_be_bytes());
         // Fill remaining bytes (overflow-safe)
-        let mix = timestamp.saturating_add(next_counter).saturating_add(0xB4C4);
+        let mix = timestamp
+            .saturating_add(next_counter)
+            .saturating_add(0xB4C4);
         for i in 18..32 {
             id_bytes[i] = (mix % 256) as u8;
         }
@@ -231,5 +233,29 @@ impl BackupStorage {
         }
 
         Ok(removed_count)
+    }
+
+    /// Retrieve all invoices from storage across all possible statuses
+    pub fn get_all_invoices(env: &Env) -> Vec<Invoice> {
+        let mut all_invoices = Vec::new(env);
+        let all_statuses = [
+            crate::invoice::InvoiceStatus::Pending,
+            crate::invoice::InvoiceStatus::Verified,
+            crate::invoice::InvoiceStatus::Funded,
+            crate::invoice::InvoiceStatus::Paid,
+            crate::invoice::InvoiceStatus::Defaulted,
+            crate::invoice::InvoiceStatus::Cancelled,
+            crate::invoice::InvoiceStatus::Refunded,
+        ];
+
+        for status in all_statuses.iter() {
+            let invoices = crate::invoice::InvoiceStorage::get_invoices_by_status(env, status);
+            for id in invoices.iter() {
+                if let Some(inv) = crate::invoice::InvoiceStorage::get_invoice(env, &id) {
+                    all_invoices.push_back(inv);
+                }
+            }
+        }
+        all_invoices
     }
 }
