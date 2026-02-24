@@ -26,7 +26,7 @@ pub fn place_bid(
 - `investor`: Address of the investor placing the bid (must be authenticated)
 - `invoice_id`: Unique identifier of the invoice
 - `bid_amount`: Amount the investor is willing to fund (must be positive)
-- `expected_return`: Expected return amount (must be greater than bid_amount)
+- `expected_return`: Expected return amount (must be greater than or equal to bid_amount)
 
 **Returns:**
 - `Ok(BytesN<32>)`: The unique bid ID on success
@@ -38,7 +38,7 @@ pub fn place_bid(
 3. Investor must be verified with valid KYC status
 4. Bid amount must be positive and meet minimum threshold (100)
 5. Bid amount cannot exceed invoice amount
-6. Expected return must be greater than bid amount
+6. Expected return must be greater than or equal to bid amount
 7. Bid amount cannot exceed investor's investment limit
 8. Investor cannot have an existing active bid on the same invoice
 9. Expired bids are automatically cleaned up before validation
@@ -50,7 +50,8 @@ pub fn place_bid(
 - `InvoiceNotFound`: Invoice does not exist
 - `InvalidStatus`: Invoice is not verified
 - `BusinessNotVerified`: Investor is not verified
-- `InvalidAmount`: Bid amount or expected return is invalid
+- `InvalidAmount`: Bid amount is invalid
+- `InvalidExpectedReturn`: Expected return is lower than bid amount
 - `InvoiceAmountInvalid`: Bid amount exceeds invoice amount
 - `OperationNotAllowed`: Investor already has an active bid on this invoice
 
@@ -326,7 +327,8 @@ All entrypoints return `Result<T, QuickLendXError>` for proper error handling. C
 - `InvoiceNotFound`: Invoice does not exist
 - `InvalidStatus`: Invalid invoice or bid status
 - `BusinessNotVerified`: Investor verification required
-- `InvalidAmount`: Invalid bid amount or expected return
+- `InvalidAmount`: Invalid bid amount
+- `InvalidExpectedReturn`: Expected return is lower than bid amount
 - `StorageKeyNotFound`: Bid does not exist
 - `OperationNotAllowed`: Operation not allowed in current state
 
