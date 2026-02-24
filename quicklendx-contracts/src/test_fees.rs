@@ -1,5 +1,5 @@
 use super::*;
-use crate::fees::FeeType;
+use crate::{errors::QuickLendXError, fees::FeeType};
 use soroban_sdk::{testutils::Address as _, Address, Env, Map, String};
 
 /// Helper function to set up admin for testing
@@ -43,6 +43,80 @@ fn test_default_platform_fee() {
     let fee_config = client.get_platform_fee();
     assert_eq!(fee_config.fee_bps, 200); // 2%
     assert_eq!(fee_config.updated_at, 0); // Not updated yet
+    assert_eq!(fee_config.updated_by, contract_id); // Defaults to current contract address
+}
+
+/// FeeManager getter should fail before fee system initialization
+#[test]
+fn test_get_platform_fee_config_before_init_returns_storage_key_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let result = client.try_get_platform_fee_config();
+    assert!(result.is_err());
+
+    let err = result.err().expect("expected error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::StorageKeyNotFound);
+}
+
+/// FeeManager getter returns defaults after initialization
+#[test]
+fn test_get_platform_fee_config_after_init_has_defaults() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let fee_config = client.get_platform_fee_config();
+    assert_eq!(fee_config.fee_bps, 200);
+    assert_eq!(fee_config.treasury_address, None);
+    assert_eq!(fee_config.updated_by, admin);
+    assert_eq!(fee_config.updated_at, env.ledger().timestamp());
+}
+
+/// FeeManager getter reflects updates from update_platform_fee_bps
+#[test]
+fn test_get_platform_fee_config_after_update_platform_fee_bps() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+    client.update_platform_fee_bps(&450);
+
+    let fee_config = client.get_platform_fee_config();
+    assert_eq!(fee_config.fee_bps, 450);
+    assert_eq!(fee_config.treasury_address, None);
+    assert_eq!(fee_config.updated_by, admin);
+    assert_eq!(fee_config.updated_at, env.ledger().timestamp());
+}
+
+/// FeeManager getter should include treasury address when configured
+#[test]
+fn test_get_platform_fee_config_includes_treasury_when_set() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_treasury(&treasury);
+
+    let fee_config = client.get_platform_fee_config();
+    assert_eq!(fee_config.fee_bps, 200);
+    assert_eq!(fee_config.treasury_address, Some(treasury.clone()));
+    assert_eq!(fee_config.updated_by, admin);
+    assert_eq!(client.get_treasury_address(), Some(treasury));
 }
 
 /// Test custom platform fee BPS configuration
@@ -525,4 +599,341 @@ fn test_comprehensive_fee_calculation() {
     // Total: 765 + 213 + 425 = 1403
 
     assert_eq!(fees, 1403);
+}
+
+// ============================================================================
+// Treasury Configuration Tests
+// ============================================================================
+
+/// Test configure_treasury sets treasury address correctly
+#[test]
+fn test_configure_treasury() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    // Initialize fee system (creates platform fee config needed by configure_treasury)
+    client.initialize_fee_system(&admin);
+
+    // Configure treasury
+    client.configure_treasury(&treasury);
+
+    // Verify treasury address is set
+    let treasury_addr = client.get_treasury_address();
+    assert!(treasury_addr.is_some());
+    assert_eq!(treasury_addr.unwrap(), treasury);
+}
+
+/// Test get_treasury_address returns None before configuration
+#[test]
+fn test_get_treasury_address_before_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Treasury address should be None before configuration
+    let treasury_addr = client.get_treasury_address();
+    assert!(treasury_addr.is_none());
+}
+
+/// Test treasury address is reflected in platform fee config
+#[test]
+fn test_treasury_address_in_platform_fee_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    // Initialize fee system first
+    client.initialize_fee_system(&admin);
+
+    // Before treasury config, platform fee config should have no treasury
+    let config_before = client.get_platform_fee_config();
+    assert!(config_before.treasury_address.is_none());
+
+    // Configure treasury
+    client.configure_treasury(&treasury);
+
+    // After treasury config, platform fee config should have treasury address
+    let config_after = client.get_platform_fee_config();
+    assert!(config_after.treasury_address.is_some());
+    assert_eq!(config_after.treasury_address.unwrap(), treasury);
+}
+
+/// Test treasury address can be updated
+#[test]
+fn test_treasury_address_update() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury1 = Address::generate(&env);
+    let treasury2 = Address::generate(&env);
+
+    // Initialize fee system first
+    client.initialize_fee_system(&admin);
+
+    // Set first treasury
+    client.configure_treasury(&treasury1);
+    assert_eq!(client.get_treasury_address().unwrap(), treasury1);
+
+    // Update to second treasury
+    client.configure_treasury(&treasury2);
+    assert_eq!(client.get_treasury_address().unwrap(), treasury2);
+}
+
+/// Test configure_treasury fails without admin set
+#[test]
+fn test_configure_treasury_fails_without_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let treasury = Address::generate(&env);
+
+    // No admin set — should fail
+    let result = client.try_configure_treasury(&treasury);
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// Revenue Distribution Config Validation Tests
+// ============================================================================
+
+/// Helper: set up admin using initialize_admin (avoids double-auth issues)
+fn setup_admin_init(env: &Env, client: &QuickLendXContractClient) -> Address {
+    let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
+    admin
+}
+
+/// Test revenue distribution config rejects shares not summing to 10000
+#[test]
+fn test_revenue_config_invalid_shares_sum() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    // Shares sum to 9000 (not 10000) — should fail
+    let result = client.try_configure_revenue_distribution(
+        &admin, &treasury, &4000, &3000, &2000, &false, &100,
+    );
+    assert!(result.is_err());
+}
+
+/// Test revenue distribution config rejects shares exceeding 10000
+#[test]
+fn test_revenue_config_shares_exceed_10000() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    // Shares sum to 11000 — should fail
+    let result = client.try_configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &3000, &false, &100,
+    );
+    assert!(result.is_err());
+}
+
+/// Test get_revenue_split_config fails when not configured
+#[test]
+fn test_get_revenue_split_config_before_configuration() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // No revenue config set — should fail
+    let result = client.try_get_revenue_split_config();
+    assert!(result.is_err());
+}
+
+/// Test revenue config can be reconfigured by admin
+#[test]
+fn test_revenue_config_reconfiguration() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    // First configuration
+    client.configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &2000, &false, &100,
+    );
+    let config1 = client.get_revenue_split_config();
+    assert_eq!(config1.treasury_share_bps, 5000);
+
+    // Reconfigure with different shares
+    client.configure_revenue_distribution(
+        &admin, &treasury, &7000, &2000, &1000, &true, &500,
+    );
+    let config2 = client.get_revenue_split_config();
+    assert_eq!(config2.treasury_share_bps, 7000);
+    assert_eq!(config2.developer_share_bps, 2000);
+    assert_eq!(config2.platform_share_bps, 1000);
+    assert_eq!(config2.auto_distribution, true);
+    assert_eq!(config2.min_distribution_amount, 500);
+}
+
+// ============================================================================
+// Revenue Distribution Execution Edge Cases
+// ============================================================================
+
+/// Test distribute_revenue fails when pending amount is below minimum
+#[test]
+fn test_distribute_revenue_below_minimum() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let user = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // Configure with high minimum distribution amount
+    client.configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &2000, &false, &10000,
+    );
+
+    // Collect small amount of fees (below minimum)
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 50);
+    client.collect_transaction_fees(&user, &fees_by_type, &50);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    // Distribution should fail — pending (50) < min_distribution_amount (10000)
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert!(result.is_err());
+}
+
+/// Test distribute_revenue fails when revenue config is not set
+#[test]
+fn test_distribute_revenue_without_revenue_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // Collect fees but don't configure revenue distribution
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 500);
+    client.collect_transaction_fees(&user, &fees_by_type, &500);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    // Should fail — no revenue config set
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert!(result.is_err());
+}
+
+/// Test distribute_revenue clears pending amount after distribution
+#[test]
+fn test_distribute_revenue_clears_pending() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let user = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    client.configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &2000, &false, &100,
+    );
+
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 1000);
+    client.collect_transaction_fees(&user, &fees_by_type, &1000);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    // First distribution should succeed
+    let (t, d, p) = client.distribute_revenue(&admin, &current_period);
+    assert_eq!(t + d + p, 1000);
+
+    // Second distribution should fail — pending is now 0, below min (100)
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert!(result.is_err());
+}
+
+/// Test distribute_revenue fails for non-existent period
+#[test]
+fn test_distribute_revenue_nonexistent_period() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    client.configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &2000, &false, &100,
+    );
+
+    // Try to distribute for a period with no revenue data
+    let result = client.try_distribute_revenue(&admin, &9999);
+    assert!(result.is_err());
+}
+
+/// Test revenue distribution amounts sum correctly for large values
+#[test]
+fn test_distribute_revenue_large_amounts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let user = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    client.configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &2000, &false, &1,
+    );
+
+    // Collect large fee amount
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 1_000_000);
+    client.collect_transaction_fees(&user, &fees_by_type, &1_000_000);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    let (treasury_amount, developer_amount, platform_amount) =
+        client.distribute_revenue(&admin, &current_period);
+
+    // 50% of 1M = 500K
+    assert_eq!(treasury_amount, 500_000);
+    // 30% of 1M = 300K
+    assert_eq!(developer_amount, 300_000);
+    // Remainder = 200K
+    assert_eq!(platform_amount, 200_000);
+    // Total must equal original amount
+    assert_eq!(treasury_amount + developer_amount + platform_amount, 1_000_000);
 }

@@ -232,28 +232,35 @@ impl PlatformFee {
         payment_amount: i128,
         fee_bps: i128,
     ) -> (i128, i128) {
-        // Handle edge cases: no payment or negative amounts
-        if payment_amount <= 0 {
-            return (payment_amount.max(0), 0);
+        // Normalize untrusted arithmetic inputs. Core protocol callers should
+        // provide validated non-negative values, but this keeps the helper
+        // safe/deterministic if called directly in tests or future integrations.
+        let safe_investment = investment_amount.max(0);
+        let safe_payment = payment_amount.max(0);
+        let safe_fee_bps = fee_bps.clamp(0, BPS_DENOMINATOR);
+
+        // Handle no-payment scenario after normalization.
+        if safe_payment == 0 {
+            return (0, 0);
         }
 
         // No profit scenario: payment doesn't exceed investment
         // Investor gets full payment, no fee charged
-        let gross_profit = payment_amount.saturating_sub(investment_amount);
+        let gross_profit = safe_payment.saturating_sub(safe_investment);
         if gross_profit <= 0 {
-            return (payment_amount, 0);
+            return (safe_payment, 0);
         }
 
         // Calculate platform fee using integer division (rounds down)
         // This ensures no dust and favors the investor
         let platform_fee = gross_profit
-            .saturating_mul(fee_bps)
+            .saturating_mul(safe_fee_bps)
             .checked_div(BPS_DENOMINATOR)
             .unwrap_or(0);
 
         // Investor return = total payment - platform fee
         // This guarantees: investor_return + platform_fee == payment_amount
-        let investor_return = payment_amount.saturating_sub(platform_fee);
+        let investor_return = safe_payment.saturating_sub(platform_fee);
 
         (investor_return, platform_fee)
     }
@@ -300,20 +307,23 @@ impl PlatformFee {
         payment_amount: i128,
         fee_bps: i128,
     ) -> ProfitFeeBreakdown {
+        let safe_investment = investment_amount.max(0);
+        let safe_payment = payment_amount.max(0);
+        let safe_fee_bps = fee_bps.clamp(0, BPS_DENOMINATOR);
         let (investor_return, platform_fee) =
-            Self::calculate_with_fee_bps(investment_amount, payment_amount, fee_bps);
+            Self::calculate_with_fee_bps(safe_investment, safe_payment, safe_fee_bps);
 
-        let gross_profit = payment_amount.saturating_sub(investment_amount).max(0);
+        let gross_profit = safe_payment.saturating_sub(safe_investment).max(0);
         let investor_profit = gross_profit.saturating_sub(platform_fee);
 
         ProfitFeeBreakdown {
-            investment_amount,
-            payment_amount,
+            investment_amount: safe_investment,
+            payment_amount: safe_payment,
             gross_profit,
             platform_fee,
             investor_profit,
             investor_return,
-            fee_bps_applied: fee_bps,
+            fee_bps_applied: safe_fee_bps,
         }
     }
 }
