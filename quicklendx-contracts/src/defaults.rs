@@ -6,6 +6,10 @@ use crate::events::{
 use crate::investment::{InvestmentStatus, InvestmentStorage};
 use crate::invoice::{Dispute, DisputeStatus, InvoiceStatus, InvoiceStorage};
 use crate::notifications::NotificationSystem;
+use crate::protocol_limits::{
+    check_string_length, MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH,
+    MAX_DISPUTE_RESOLUTION_LENGTH,
+};
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 /// Default grace period in seconds (7 days)
@@ -148,11 +152,13 @@ pub fn create_dispute(
     }
 
     // Validate reason and evidence
-    if reason.len() == 0 || reason.len() > 500 {
+    check_string_length(&reason, MAX_DISPUTE_REASON_LENGTH)?;
+    if reason.len() == 0 {
         return Err(QuickLendXError::InvalidDisputeReason);
     }
 
-    if evidence.len() == 0 || evidence.len() > 1000 {
+    check_string_length(&evidence, MAX_DISPUTE_EVIDENCE_LENGTH)?;
+    if evidence.len() == 0 {
         return Err(QuickLendXError::InvalidDisputeEvidence);
     }
 
@@ -229,7 +235,8 @@ pub fn resolve_dispute(
     }
 
     // Validate resolution
-    if resolution.len() == 0 || resolution.len() > 500 {
+    check_string_length(&resolution, MAX_DISPUTE_RESOLUTION_LENGTH)?;
+    if resolution.len() == 0 {
         return Err(QuickLendXError::InvalidDisputeReason);
     }
 

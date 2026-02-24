@@ -1,6 +1,9 @@
 use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceMetadata};
+use crate::protocol_limits::{
+    check_string_length, MAX_KYC_DATA_LENGTH, MAX_REJECTION_REASON_LENGTH,
+};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 #[contracttype]
@@ -254,6 +257,7 @@ impl InvestorVerificationStorage {
     const INVESTOR_ANALYTICS_KEY: &'static str = "investor_analytics";
 
     pub fn submit(env: &Env, investor: &Address, kyc_data: String) -> Result<(), QuickLendXError> {
+        check_string_length(&kyc_data, MAX_KYC_DATA_LENGTH)?;
         let mut verification = Self::get(env, investor);
         match verification {
             Some(ref existing) => match existing.status {
@@ -523,6 +527,7 @@ pub fn submit_kyc_application(
     business: &Address,
     kyc_data: String,
 ) -> Result<(), QuickLendXError> {
+    check_string_length(&kyc_data, MAX_KYC_DATA_LENGTH)?;
     // Only the business can submit their own KYC
     business.require_auth();
 
@@ -591,6 +596,7 @@ pub fn reject_business(
     business: &Address,
     reason: String,
 ) -> Result<(), QuickLendXError> {
+    check_string_length(&reason, MAX_REJECTION_REASON_LENGTH)?;
     // Only admin can reject businesses
     admin.require_auth();
     if !BusinessVerificationStorage::is_admin(env, admin) {
@@ -773,6 +779,7 @@ pub fn reject_investor(
     investor: &Address,
     reason: String,
 ) -> Result<(), QuickLendXError> {
+    check_string_length(&reason, MAX_REJECTION_REASON_LENGTH)?;
     admin.require_auth();
     let mut verification =
         InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
