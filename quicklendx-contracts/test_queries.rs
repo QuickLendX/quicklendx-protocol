@@ -48,7 +48,10 @@ pub fn test_all_documented_queries() {
         Ok(_) => println!("✅ Business verified successfully"),
         Err(e) => println!("❌ Failed to verify business: {:?}", e),
     }
-    
+
+    // Add currency to whitelist (required for invoice creation)
+    let _ = client.add_currency(&admin, &currency);
+
     // Test 4: Create invoice
     println!("\n4. Testing invoice creation...");
     let invoice_id = match client.try_store_invoice(

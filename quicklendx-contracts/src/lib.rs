@@ -15,6 +15,7 @@ mod notifications;
 mod payments;
 mod profits;
 mod settlement;
+mod currency;
 mod verification;
 
 use bid::{Bid, BidStatus, BidStorage};
@@ -62,6 +63,7 @@ use analytics::{
     UserBehaviorMetrics,
 };
 use audit::{AuditLogEntry, AuditOperation, AuditQueryFilter, AuditStats, AuditStorage};
+use crate::currency::CurrencyWhitelistStorage;
 
 #[contract]
 pub struct QuickLendXContract;
@@ -101,6 +103,11 @@ impl QuickLendXContract {
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&tags)?;
+
+        // Check currency is whitelisted
+        if !CurrencyWhitelistStorage::is_allowed_currency(&env, &currency) {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
 
         // Create new invoice
         let invoice = Invoice::new(
@@ -157,6 +164,11 @@ impl QuickLendXContract {
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&tags)?;
+
+        // Check currency is whitelisted
+        if !CurrencyWhitelistStorage::is_allowed_currency(&env, &currency) {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
 
         // Create and store invoice
         let invoice = Invoice::new(
@@ -465,6 +477,11 @@ impl QuickLendXContract {
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
+        }
+
+        // Check invoice currency is whitelisted
+        if !CurrencyWhitelistStorage::is_allowed_currency(&env, &invoice.currency) {
+            return Err(QuickLendXError::InvalidCurrency);
         }
 
         let verification = do_get_investor_verification(&env, &investor)
@@ -903,6 +920,48 @@ impl QuickLendXContract {
     /// Get all rejected businesses
     pub fn get_rejected_businesses(env: Env) -> Vec<Address> {
         BusinessVerificationStorage::get_rejected_businesses(&env)
+    }
+
+    /// Add a currency to the whitelist (admin only)
+    pub fn add_currency(
+        env: Env,
+        admin: Address,
+        currency: Address,
+    ) -> Result<(), QuickLendXError> {
+        let stored_admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        if stored_admin != admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
+        admin.require_auth();
+        CurrencyWhitelistStorage::add_currency(&env, &currency);
+        Ok(())
+    }
+
+    /// Remove a currency from the whitelist (admin only)
+    pub fn remove_currency(
+        env: Env,
+        admin: Address,
+        currency: Address,
+    ) -> Result<(), QuickLendXError> {
+        let stored_admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        if stored_admin != admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
+        admin.require_auth();
+        CurrencyWhitelistStorage::remove_currency(&env, &currency);
+        Ok(())
+    }
+
+    /// Check if a currency is whitelisted
+    pub fn is_allowed_currency(env: Env, currency: Address) -> bool {
+        CurrencyWhitelistStorage::is_allowed_currency(&env, &currency)
+    }
+
+    /// Get all whitelisted currencies
+    pub fn get_whitelisted_currencies(env: Env) -> Vec<Address> {
+        CurrencyWhitelistStorage::get_whitelisted_currencies(&env)
     }
 
     // ========================================
@@ -1986,3 +2045,6 @@ mod test;
 
 #[cfg(test)]
 mod test_bid;
+
+#[cfg(test)]
+mod test_currency;
