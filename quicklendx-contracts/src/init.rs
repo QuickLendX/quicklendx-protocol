@@ -48,7 +48,7 @@ const WHITELIST_KEY: Symbol = symbol_short!("curr_wl");
 /// Default values for protocol configuration
 const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
 const DEFAULT_MAX_DUE_DATE_DAYS: u64 = 365;
-const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 86400; // 24 hours
+const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 7 * 24 * 60 * 60; // 7 days
 const DEFAULT_FEE_BPS: u32 = 200; // 2%
 const MAX_FEE_BPS: u32 = 1000; // 10%
 const MIN_FEE_BPS: u32 = 0;
@@ -121,10 +121,7 @@ impl ProtocolInitializer {
     /// - Can only be called once (atomic check-and-set)
     /// - Validates all parameters before any state changes
     /// - Emits initialization event for audit trail
-    pub fn initialize(
-        env: &Env,
-        params: &InitializationParams,
-    ) -> Result<(), QuickLendXError> {
+    pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
         // Require authorization from the admin
         params.admin.require_auth();
 
@@ -138,13 +135,15 @@ impl ProtocolInitializer {
 
         // Initialize admin (this also checks admin_initialized flag)
         // We set this first as it's the foundation for all admin operations
+        env.storage().instance().set(&ADMIN_INITIALIZED_KEY, &true);
         env.storage()
             .instance()
-            .set(&ADMIN_INITIALIZED_KEY, &true);
-        env.storage().instance().set(&crate::admin::ADMIN_KEY, &params.admin);
+            .set(&crate::admin::ADMIN_KEY, &params.admin);
 
         // Store treasury address
-        env.storage().instance().set(&TREASURY_KEY, &params.treasury);
+        env.storage()
+            .instance()
+            .set(&TREASURY_KEY, &params.treasury);
 
         // Store fee configuration
         env.storage().instance().set(&FEE_BPS_KEY, &params.fee_bps);
@@ -310,11 +309,7 @@ impl ProtocolInitializer {
     /// * `Ok(())` if update succeeds
     /// * `Err(QuickLendXError::NotAdmin)` if caller is not admin
     /// * `Err(QuickLendXError::InvalidFeeBasisPoints)` if fee is out of range
-    pub fn set_fee_config(
-        env: &Env,
-        admin: &Address,
-        fee_bps: u32,
-    ) -> Result<(), QuickLendXError> {
+    pub fn set_fee_config(env: &Env, admin: &Address, fee_bps: u32) -> Result<(), QuickLendXError> {
         // Require admin authorization
         admin.require_auth();
 

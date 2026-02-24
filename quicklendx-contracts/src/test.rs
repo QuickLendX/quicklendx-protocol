@@ -1,6 +1,7 @@
 mod test_analytics;
 mod test_invoice;
 mod test_invoice_categories;
+mod test_invoice_metadata;
 
 use super::*;
 use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
@@ -1971,10 +1972,11 @@ fn test_create_and_restore_backup() {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    // Set up admin
+    // Set up admin and protocol limits (allow small amounts for test)
     let admin = Address::generate(&env);
     env.mock_all_auths();
     client.set_admin(&admin);
+    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
 
     // Create test invoices
     let business = Address::generate(&env);
@@ -2003,7 +2005,7 @@ fn test_create_and_restore_backup() {
 
     // Create backup
     env.mock_all_auths();
-    let backup_id = client.create_backup(&String::from_str(&env, "Initial backup"));
+    let backup_id = client.create_backup(&admin);
 
     // Verify backup was created
     let backup = client.get_backup_details(&backup_id);
@@ -2012,10 +2014,13 @@ fn test_create_and_restore_backup() {
     assert_eq!(backup.invoice_count, 2);
     assert_eq!(backup.status, BackupStatus::Active);
 
-    // Clear invoices - use the contract's clear method
+    // Clear invoices by deleting each (restore will repopulate)
     env.mock_all_auths();
     env.as_contract(&contract_id, || {
-        QuickLendXContract::clear_all_invoices(&env).unwrap();
+        let all = crate::backup::BackupStorage::get_all_invoices(&env);
+        for inv in all.iter() {
+            crate::invoice::InvoiceStorage::delete_invoice(&env, &inv.id);
+        }
     });
 
     // Verify invoices are gone
@@ -2024,7 +2029,7 @@ fn test_create_and_restore_backup() {
 
     // Restore backup
     env.mock_all_auths();
-    client.restore_backup(&backup_id);
+    client.restore_backup(&admin, &backup_id);
 
     // Verify invoices are back
     let invoice1 = client.get_invoice(&invoice1_id);
@@ -2039,10 +2044,11 @@ fn test_backup_validation() {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    // Set up admin
+    // Set up admin and protocol limits (allow small amounts for test)
     let admin = Address::generate(&env);
     env.mock_all_auths();
     client.set_admin(&admin);
+    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
 
     // Create test invoice
     let business = Address::generate(&env);
@@ -2061,7 +2067,7 @@ fn test_backup_validation() {
 
     // Create backup
     env.mock_all_auths();
-    let backup_id = client.create_backup(&String::from_str(&env, "Test backup"));
+    let backup_id = client.create_backup(&admin);
 
     // Validate backup
     let is_valid = client.validate_backup(&backup_id);
@@ -2093,15 +2099,7 @@ fn test_backup_cleanup() {
     // Create multiple backups with simple descriptions
     env.mock_all_auths();
     for i in 0..10 {
-        let description = if i == 0 {
-            String::from_str(&env, "Backup 0")
-        } else if i == 1 {
-            String::from_str(&env, "Backup 1")
-        } else {
-            // Continue this pattern or just use a generic description
-            String::from_str(&env, "Backup")
-        };
-        client.create_backup(&description);
+        client.create_backup(&admin);
     }
 
     // Verify only last 5 backups are kept
@@ -2122,10 +2120,10 @@ fn test_archive_backup() {
 
     // Create backup
     env.mock_all_auths();
-    let backup_id = client.create_backup(&String::from_str(&env, "Test backup"));
+    let backup_id = client.create_backup(&admin);
 
     // Archive backup
-    client.archive_backup(&backup_id);
+    client.archive_backup(&admin, &backup_id);
 
     // Verify backup is archived
     let backup = client.get_backup_details(&backup_id);
@@ -3706,7 +3704,8 @@ fn test_basic_readme_queries() {
     let _audit_stats = client.get_audit_stats();
 
     // Test 16: Backup queries
-    let backup_id = client.create_backup(&String::from_str(&env, "Test backup"));
+    env.mock_all_auths();
+    let backup_id = client.create_backup(&admin);
     let _backup_details = client.get_backup_details(&backup_id);
     let _backups = client.get_backups();
 
@@ -4323,4 +4322,262 @@ fn test_get_invoices_by_status_cancelled() {
         let found = cancelled_invoices.iter().any(|invoice_id| invoice_id == id);
         assert!(found);
     }
+}
+
+#[test]
+fn test_store_invoice_max_due_date_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and add currency to whitelist
+    client.set_admin(&admin);
+    client.add_currency(&admin, &currency);
+
+    // Initialize protocol limits
+    client.initialize_protocol_limits(&admin, &1000000i128, &365u64, &86400u64);
+
+    let amount = 1000000i128;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+    let current_time = env.ledger().timestamp();
+
+    // Test 1: Due date exactly at max boundary (365 days) should succeed
+    let max_due_date = current_time + (365 * 86400);
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &max_due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(invoice_id.len() == 32);
+
+    // Test 2: Due date just over max boundary (366 days) should fail
+    let over_max_due_date = current_time + (366 * 86400);
+    let result = client.try_store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &over_max_due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert_eq!(result, Err(Ok(QuickLendXError::InvoiceDueDateInvalid)));
+
+    // Test 3: Due date well within bounds (30 days) should succeed
+    let normal_due_date = current_time + (30 * 86400);
+    let invoice_id2 = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &normal_due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(invoice_id2.len() == 32);
+}
+
+#[test]
+fn test_upload_invoice_max_due_date_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin, verify business, and add currency
+    client.set_admin(&admin);
+    client.add_currency(&admin, &currency);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    // Initialize protocol limits
+    client.initialize_protocol_limits(&admin, &1000000i128, &365u64, &86400u64);
+
+    let amount = 1000000i128;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+    let current_time = env.ledger().timestamp();
+
+    // Test 1: Due date exactly at max boundary (365 days) should succeed
+    let max_due_date = current_time + (365 * 86400);
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &max_due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(invoice_id.len() == 32);
+
+    // Test 2: Due date just over max boundary (366 days) should fail
+    let over_max_due_date = current_time + (366 * 86400);
+    let result = client.try_upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &over_max_due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert_eq!(result, Err(Ok(QuickLendXError::InvoiceDueDateInvalid)));
+
+    // Test 3: Due date well within bounds (30 days) should succeed
+    let normal_due_date = current_time + (30 * 86400);
+    let invoice_id2 = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &normal_due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(invoice_id2.len() == 32);
+}
+
+#[test]
+fn test_custom_max_due_date_limits() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and add currency to whitelist
+    client.set_admin(&admin);
+    client.add_currency(&admin, &currency);
+
+    // Initialize protocol limits with custom max due date (30 days)
+    client.initialize_protocol_limits(&admin, &1000000i128, &30u64, &86400u64);
+
+    let amount = 1000000i128;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+    let current_time = env.ledger().timestamp();
+
+    // Test 1: Due date exactly at custom max boundary (30 days) should succeed
+    let max_due_date = current_time + (30 * 86400);
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &max_due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(invoice_id.len() == 32);
+
+    // Test 2: Due date just over custom max boundary (31 days) should fail
+    let over_max_due_date = current_time + (31 * 86400);
+    let result = client.try_store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &over_max_due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert_eq!(result, Err(Ok(QuickLendXError::InvoiceDueDateInvalid)));
+
+    // Test 3: Update limits to 730 days and test old boundary now succeeds
+    client.set_protocol_limits(&admin, &1000000i128, &730u64, &86400u64);
+    let old_over_max_due_date = current_time + (365 * 86400);
+    let invoice_id2 = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &old_over_max_due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(invoice_id2.len() == 32);
+}
+
+#[test]
+fn test_due_date_bounds_edge_cases() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and add currency to whitelist
+    client.set_admin(&admin);
+    client.add_currency(&admin, &currency);
+
+    // Initialize with minimum max due date (1 day)
+    client.initialize_protocol_limits(&admin, &1000000i128, &1u64, &86400u64);
+
+    let amount = 1000000i128;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+    let current_time = env.ledger().timestamp();
+
+    // Test 1: Due date exactly 1 day ahead should succeed
+    let one_day_due = current_time + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &one_day_due,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(invoice_id.len() == 32);
+
+    // Test 2: Due date 1 second over limit should fail
+    let one_second_over = current_time + 86401;
+    let result = client.try_store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &one_second_over,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert_eq!(result, Err(Ok(QuickLendXError::InvoiceDueDateInvalid)));
+
+    // Test 3: Future timestamp (current time + 1 second) should still respect max due date
+    let future_current = current_time + 1;
+    env.ledger().set_timestamp(future_current);
+
+    let one_day_from_future = future_current + 86400;
+    let invoice_id2 = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &one_day_from_future,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(invoice_id2.len() == 32);
 }

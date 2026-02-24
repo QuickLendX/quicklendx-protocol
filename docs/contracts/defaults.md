@@ -19,7 +19,7 @@ Public contract entry point for marking an invoice as defaulted.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `invoice_id` | `BytesN<32>` | The invoice to mark as defaulted |
-| `grace_period` | `Option<u64>` | Grace period in seconds. Defaults to 7 days (604,800s) if `None` |
+| `grace_period` | `Option<u64>` | Grace period in seconds. If `None`, uses protocol config; if not configured, defaults to 7 days (604,800s). |
 
 **Validation order:**
 
@@ -61,13 +61,13 @@ Lower-level contract entry point that performs the default without grace period 
 
 ### Configuration
 
-The default grace period is defined in `src/defaults.rs`:
+Grace period resolution order:
 
-```rust
-pub const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days
-```
+1. `grace_period` argument (per-call override)
+2. Protocol config (`ProtocolInitializer::get_protocol_config`)
+3. Default of 7 days (604,800 seconds)
 
-Callers can override this per invocation by passing `Some(custom_seconds)`.
+Callers can override the protocol config per invocation by passing `Some(custom_seconds)`.
 
 ### Calculation
 
@@ -125,6 +125,9 @@ Tests are in `src/test_default.rs` (12 tests):
 | `test_cannot_default_already_defaulted_invoice` | Double default returns `InvoiceAlreadyDefaulted` |
 | `test_custom_grace_period` | Custom 3-day grace period works correctly |
 | `test_default_uses_default_grace_period_when_none_provided` | `None` grace period uses 7-day default |
+| `test_default_uses_protocol_config_when_none` | `None` grace period uses protocol-configured grace |
+| `test_check_invoice_expiration_uses_protocol_config_when_none` | Expiration checks honor protocol-configured grace |
+| `test_per_invoice_grace_overrides_protocol_config` | Per-invoice grace period overrides protocol config |
 | `test_default_status_transition` | Status lists updated correctly |
 | `test_default_investment_status_update` | Investment status changes to `Defaulted` |
 | `test_default_exactly_at_grace_deadline` | Boundary: cannot default at exact deadline, can at deadline+1 |

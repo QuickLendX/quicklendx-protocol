@@ -433,6 +433,127 @@ fn test_duplicate_submission_rejected_and_state_unchanged() {
     assert_eq!(after.insurance.get(0).unwrap().provider, provider);
 }
 
+// ============================================================================
+// Multiple coverages, premium, query returns all, cannot add when not Active (#359)
+// ============================================================================
+
+#[test]
+fn test_insurance_multiple_coverages_different_providers_and_percentages() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let provider_a = Address::generate(&env);
+    let provider_b = Address::generate(&env);
+
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        20_000,
+        InvestmentStatus::Active,
+        20,
+    );
+
+    client.add_investment_insurance(&investment_id, &provider_a, &50u32);
+    let stored_one = client.get_investment(&investment_id);
+    assert_eq!(stored_one.insurance.len(), 1);
+    assert_eq!(stored_one.insurance.get(0).unwrap().coverage_percentage, 50);
+    assert_eq!(stored_one.insurance.get(0).unwrap().coverage_amount, 10_000);
+
+    set_insurance_inactive(&env, &contract_id, &investment_id, 0);
+    client.add_investment_insurance(&investment_id, &provider_b, &75u32);
+
+    let stored_two = client.get_investment(&investment_id);
+    assert_eq!(stored_two.insurance.len(), 2);
+    assert_eq!(stored_two.insurance.get(0).unwrap().provider, provider_a);
+    assert_eq!(stored_two.insurance.get(0).unwrap().coverage_percentage, 50);
+    assert!(!stored_two.insurance.get(0).unwrap().active);
+    assert_eq!(stored_two.insurance.get(1).unwrap().provider, provider_b);
+    assert_eq!(stored_two.insurance.get(1).unwrap().coverage_percentage, 75);
+    assert_eq!(stored_two.insurance.get(1).unwrap().coverage_amount, 15_000);
+    assert!(stored_two.insurance.get(1).unwrap().active);
+}
+
+#[test]
+fn test_query_investment_insurance_returns_all_entries() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let provider_a = Address::generate(&env);
+    let provider_b = Address::generate(&env);
+
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        21,
+    );
+
+    client.add_investment_insurance(&investment_id, &provider_a, &40u32);
+    set_insurance_inactive(&env, &contract_id, &investment_id, 0);
+    client.add_investment_insurance(&investment_id, &provider_b, &60u32);
+
+    let all = client.query_investment_insurance(&investment_id);
+    assert_eq!(all.len(), 2);
+    assert_eq!(all.get(0).unwrap().provider, provider_a);
+    assert_eq!(all.get(1).unwrap().provider, provider_b);
+}
+
+#[test]
+fn test_insurance_premium_calculation_multiple_coverages() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let provider = Address::generate(&env);
+
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        1_000,
+        InvestmentStatus::Active,
+        22,
+    );
+
+    client.add_investment_insurance(&investment_id, &provider, &80u32);
+    let stored = client.get_investment(&investment_id);
+    let cov = stored.insurance.get(0).unwrap();
+    assert_eq!(cov.coverage_amount, 800);
+    assert_eq!(cov.premium_amount, Investment::calculate_premium(1_000, 80));
+    assert_eq!(cov.premium_amount, 16);
+}
+
+#[test]
+fn test_add_insurance_when_not_active_rejected() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let provider = Address::generate(&env);
+
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        5_000,
+        InvestmentStatus::Completed,
+        23,
+    );
+
+    let result = client.try_add_investment_insurance(&investment_id, &provider, &50u32);
+    let err = result.err().expect("expected error");
+    let contract_error = err.expect("expected contract error");
+    assert_eq!(contract_error, QuickLendXError::InvalidStatus);
+
+    let stored = client.get_investment(&investment_id);
+    assert_eq!(stored.insurance.len(), 0);
+}
+
 #[test]
 fn test_investment_helpers_cover_branches() {
     let env = Env::default();

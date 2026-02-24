@@ -624,6 +624,12 @@ let bids = contract.get_bid_history_paged(
 );
 ```
 
+Query limit safety:
+- Public query endpoints with pagination/limits enforce `MAX_QUERY_LIMIT = 100`.
+- Effective limit is always `min(limit, 100)` for `query_audit_logs`, `query_analytics_data`,
+  `get_business_invoices_paged`, `get_investor_investments_paged`,
+  `get_available_invoices_paged`, `get_bid_history_paged`, and `get_investor_bids_paged`.
+
 ### Error Handling
 
 ```rust
