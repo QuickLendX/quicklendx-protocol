@@ -82,12 +82,14 @@ pub struct Escrow {
 
 ## Security Considerations
 
-*   **Authorization**: Only the business owner can accept a bid. Only admins can verify invoices. Both Admins and Business Owners can trigger a refund of funded invoices.
+*   **Authorization**: Only the business owner can accept a bid. Only admins can verify invoices (or trigger release when invoice is funded). Only Admins and Business Owners can trigger a refund of funded invoices. Wrong-caller attempts return `Unauthorized`.
+*   **Reentrancy**: All payment flows (`accept_bid`, `release_escrow_funds`, `refund_escrow_funds`, `settle_invoice`) are protected by a payment reentrancy guard so that token callbacks cannot re-enter and double-release or double-refund.
 *   **Invariants**:
-    *   Escrow can only be created if the invoice is `Verified` (or ready for funding) and the bid is `Placed`.
-    *   Funds can only be released if the escrow is in `Held` status.
-    *   Double-spending prevention: Bids are marked `Accepted` immediately.
-*   **Token Safety**: Uses Soroban token interface for secure transfers. Checks balances and allowances (though allowance is handled by `transfer_from`).
+    *   Escrow can only be created if the invoice is `Verified` and the bid is `Placed`.
+    *   Funds can only be released if the escrow is in `Held` status; a second release returns `InvalidStatus` (idempotency blocked).
+    *   Refund is only allowed when escrow is `Held`; double-refund is blocked (second call returns `InvalidStatus`).
+    *   Bids are marked `Accepted` immediately to prevent double-accept.
+*   **Token integration**: Uses the Stellar token contract interface (`transfer`, `transfer_from`) for moving funds. Balances and allowances are checked before transfers; insufficient funds or allowance return `InsufficientFunds` or `OperationNotAllowed`.
 
 ## Events
 

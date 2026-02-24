@@ -271,6 +271,191 @@ pub fn verify_business(
 ) -> Result<(), QuickLendXError>
 ```
 
+#### Query Functions (Paginated)
+
+##### `get_business_invoices_paged`
+Retrieves invoices for a business with pagination and optional status filtering.
+
+```rust
+pub fn get_business_invoices_paged(
+    env: Env,
+    business: Address,
+    status_filter: Option<InvoiceStatus>,
+    offset: u32,
+    limit: u32,
+) -> Vec<BytesN<32>>
+```
+
+**Parameters:**
+- `business`: Address of the business
+- `status_filter`: Optional status filter (None returns all statuses)
+- `offset`: Starting index for pagination (0-based)
+- `limit`: Maximum number of results to return
+
+**Returns:** Vector of invoice IDs
+
+**Example:**
+```rust
+// Get first 10 verified invoices for a business
+let invoices = contract.get_business_invoices_paged(
+    &env,
+    business_addr,
+    Some(InvoiceStatus::Verified),
+    0,  // offset
+    10  // limit
+);
+
+// Get next 10 invoices
+let more_invoices = contract.get_business_invoices_paged(
+    &env,
+    business_addr,
+    Some(InvoiceStatus::Verified),
+    10, // offset
+    10  // limit
+);
+```
+
+##### `get_investor_investments_paged`
+Retrieves investments for an investor with pagination and optional status filtering.
+
+```rust
+pub fn get_investor_investments_paged(
+    env: Env,
+    investor: Address,
+    status_filter: Option<InvestmentStatus>,
+    offset: u32,
+    limit: u32,
+) -> Vec<BytesN<32>>
+```
+
+**Parameters:**
+- `investor`: Address of the investor
+- `status_filter`: Optional investment status filter
+- `offset`: Starting index for pagination
+- `limit`: Maximum number of results to return
+
+**Returns:** Vector of investment IDs
+
+**Example:**
+```rust
+// Get all active investments for an investor
+let active_investments = contract.get_investor_investments_paged(
+    &env,
+    investor_addr,
+    Some(InvestmentStatus::Active),
+    0,
+    50
+);
+```
+
+##### `get_available_invoices_paged`
+Retrieves available (verified) invoices with pagination and optional filters.
+
+```rust
+pub fn get_available_invoices_paged(
+    env: Env,
+    min_amount: Option<i128>,
+    max_amount: Option<i128>,
+    category_filter: Option<InvoiceCategory>,
+    offset: u32,
+    limit: u32,
+) -> Vec<BytesN<32>>
+```
+
+**Parameters:**
+- `min_amount`: Optional minimum invoice amount filter
+- `max_amount`: Optional maximum invoice amount filter
+- `category_filter`: Optional category filter
+- `offset`: Starting index for pagination
+- `limit`: Maximum number of results to return
+
+**Returns:** Vector of invoice IDs
+
+**Example:**
+```rust
+// Get service invoices between $100 and $1000
+let invoices = contract.get_available_invoices_paged(
+    &env,
+    Some(10000),  // $100.00 minimum
+    Some(100000), // $1000.00 maximum
+    Some(InvoiceCategory::Services),
+    0,
+    20
+);
+```
+
+##### `get_bid_history_paged`
+Retrieves bid history for an invoice with pagination and optional status filtering.
+
+```rust
+pub fn get_bid_history_paged(
+    env: Env,
+    invoice_id: BytesN<32>,
+    status_filter: Option<BidStatus>,
+    offset: u32,
+    limit: u32,
+) -> Vec<Bid>
+```
+
+**Parameters:**
+- `invoice_id`: ID of the invoice
+- `status_filter`: Optional bid status filter
+- `offset`: Starting index for pagination
+- `limit`: Maximum number of results to return
+
+**Returns:** Vector of Bid objects
+
+**Example:**
+```rust
+// Get all accepted bids for an invoice
+let accepted_bids = contract.get_bid_history_paged(
+    &env,
+    invoice_id,
+    Some(BidStatus::Accepted),
+    0,
+    10
+);
+```
+
+##### `get_investor_bids_paged`
+Retrieves bid history for an investor with pagination and optional status filtering.
+
+```rust
+pub fn get_investor_bids_paged(
+    env: Env,
+    investor: Address,
+    status_filter: Option<BidStatus>,
+    offset: u32,
+    limit: u32,
+) -> Vec<Bid>
+```
+
+**Parameters:**
+- `investor`: Address of the investor
+- `status_filter`: Optional bid status filter
+- `offset`: Starting index for pagination
+- `limit`: Maximum number of results to return
+
+**Returns:** Vector of Bid objects
+
+**Example:**
+```rust
+// Get investor's placed bids
+let placed_bids = contract.get_investor_bids_paged(
+    &env,
+    investor_addr,
+    Some(BidStatus::Placed),
+    0,
+    25
+);
+```
+
+**Pagination Notes:**
+- All paginated functions use overflow-safe arithmetic (`saturating_add`, `min`)
+- Offset beyond data length returns empty results (no error)
+- Limit of 0 returns empty results
+- Filters are applied before pagination for accurate results
+
 #### Audit & Backup
 
 ##### `get_audit_trail`
@@ -390,7 +575,60 @@ let filter = AuditQueryFilter {
     end_time: Some(1672531200),   // Jan 1, 2023
 };
 let audit_logs = contract.query_audit_logs(&env, filter, 100);
+
+// Paginated queries for large datasets
+// Get first page of business invoices (10 per page)
+let page1 = contract.get_business_invoices_paged(
+    &env,
+    business_addr,
+    None, // all statuses
+    0,    // offset
+    10    // limit
+);
+
+// Get second page
+let page2 = contract.get_business_invoices_paged(
+    &env,
+    business_addr,
+    None,
+    10,   // offset
+    10    // limit
+);
+
+// Get available invoices with filters
+let filtered_invoices = contract.get_available_invoices_paged(
+    &env,
+    Some(5000),   // min $50.00
+    Some(50000),  // max $500.00
+    Some(InvoiceCategory::Services),
+    0,
+    20
+);
+
+// Get investor's active investments
+let active_investments = contract.get_investor_investments_paged(
+    &env,
+    investor_addr,
+    Some(InvestmentStatus::Active),
+    0,
+    50
+);
+
+// Get bid history for an invoice
+let bids = contract.get_bid_history_paged(
+    &env,
+    invoice_id,
+    Some(BidStatus::Placed),
+    0,
+    25
+);
 ```
+
+Query limit safety:
+- Public query endpoints with pagination/limits enforce `MAX_QUERY_LIMIT = 100`.
+- Effective limit is always `min(limit, 100)` for `query_audit_logs`, `query_analytics_data`,
+  `get_business_invoices_paged`, `get_investor_investments_paged`,
+  `get_available_invoices_paged`, `get_bid_history_paged`, and `get_investor_bids_paged`.
 
 ### Error Handling
 

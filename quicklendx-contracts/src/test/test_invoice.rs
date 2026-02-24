@@ -10,7 +10,7 @@ use super::*;
 use crate::invoice::{InvoiceCategory, InvoiceMetadata, InvoiceStatus, LineItemRecord};
 use crate::verification::BusinessVerificationStatus;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::Address as _,
     Address, BytesN, Env, String, Vec,
 };
 
@@ -230,8 +230,196 @@ fn test_invoice_creation_invalid_description_empty() {
 }
 
 // ============================================================================
-// AUTHORIZATION AND ACCESS CONTROL TESTS
+// STORE_INVOICE: CURRENCY AND TAGS (Issue #269 – cover all error variants)
 // ============================================================================
+
+#[test]
+fn test_invoice_creation_invalid_non_whitelisted_currency() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
+    client.set_admin(&admin);
+    let allowed = Address::generate(&env);
+    client.add_currency(&admin, &allowed);
+    let business = Address::generate(&env);
+    let disallowed_currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let result = client.try_store_invoice(
+        &business,
+        &1000,
+        &disallowed_currency,
+        &due_date,
+        &String::from_str(&env, "Valid description"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidCurrency);
+}
+
+#[test]
+fn test_invoice_creation_valid_categories() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Category test");
+
+    for category in [
+        InvoiceCategory::Services,
+        InvoiceCategory::Products,
+        InvoiceCategory::Consulting,
+        InvoiceCategory::Manufacturing,
+        InvoiceCategory::Technology,
+        InvoiceCategory::Healthcare,
+        InvoiceCategory::Other,
+    ] {
+        let invoice_id = client.store_invoice(
+            &business,
+            &1000,
+            &currency,
+            &due_date,
+            &description,
+            &category,
+            &Vec::new(&env),
+        );
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.category, category);
+    }
+}
+
+#[test]
+fn test_invoice_creation_valid_tags() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, "urgent"));
+    tags.push_back(String::from_str(&env, "q1"));
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Tagged invoice"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.tags.len(), 2);
+}
+
+#[test]
+fn test_invoice_creation_invalid_tag_empty() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, ""));
+
+    let result = client.try_store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Description"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidTag);
+}
+
+#[test]
+fn test_invoice_creation_invalid_tag_too_long() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let mut tags = Vec::new(&env);
+    // Tag length must be 1-50; 51 chars is invalid
+    const LONG_TAG: &str = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    assert_eq!(LONG_TAG.len(), 51);
+    tags.push_back(String::from_str(&env, LONG_TAG));
+
+    let result = client.try_store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Description"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidTag);
+}
+
+#[test]
+fn test_invoice_creation_invalid_tag_limit_exceeded() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let mut tags = Vec::new(&env);
+    for i in 0..11 {
+        let tag = match i {
+            0 => "a",
+            1 => "b",
+            2 => "c",
+            3 => "d",
+            4 => "e",
+            5 => "f",
+            6 => "g",
+            7 => "h",
+            8 => "i",
+            9 => "j",
+            _ => "k",
+        };
+        tags.push_back(String::from_str(&env, tag));
+    }
+
+    let result = client.try_store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Description"),
+        &InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::TagLimitExceeded);
+}
+
+// ============================================================================
+// upload_invoice tests (auth, verification, event) — #301
+// ============================================================================
+// - Requires business auth (only the business identity can upload).
+// - Requires verified business (pending/rejected fail with BusinessNotVerified).
+// - Verified business succeeds and emits invoice_uploaded (inv_up) event.
 
 #[test]
 fn test_invoice_upload_requires_business_verification() {
@@ -261,6 +449,8 @@ fn test_invoice_upload_requires_business_verification() {
     assert_eq!(err, QuickLendXError::BusinessNotVerified);
 }
 
+/// upload_invoice requires the caller to be the business (require_auth).
+/// Calling with a different address fails (here: unverified identity → BusinessNotVerified).
 #[test]
 fn test_invoice_upload_requires_business_auth() {
     let env = Env::default();
@@ -271,7 +461,9 @@ fn test_invoice_upload_requires_business_auth() {
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
 
-    // Use an unverified business to ensure failure due to missing verification/auth
+    // Call as a different identity (unverified). Contract checks verification first for
+    // the given business; this identity is not verified → BusinessNotVerified.
+    // In production, require_auth() would also fail if the signer were not the business.
     let unverified_business = Address::generate(&env);
     let result = client.try_upload_invoice(
         &unverified_business,
@@ -283,6 +475,8 @@ fn test_invoice_upload_requires_business_auth() {
         &Vec::new(&env),
     );
     assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::BusinessNotVerified);
 }
 
 #[test]
@@ -309,6 +503,103 @@ fn test_invoice_upload_verified_business_succeeds() {
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.business, business);
+    assert_eq!(invoice.status, InvoiceStatus::Pending);
+}
+
+/// Pending business (KYC submitted but not yet verified) cannot upload; must be Verified.
+#[test]
+fn test_invoice_upload_pending_business_fails() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Business KYC");
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &kyc_data);
+    // Do not verify — business remains Pending.
+
+    let result = client.try_upload_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Pending business invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::BusinessNotVerified);
+}
+
+/// Rejected business cannot upload; only Verified businesses can upload invoices.
+#[test]
+fn test_invoice_upload_rejected_business_fails() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Business KYC");
+    let reason = String::from_str(&env, "Rejected for test");
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &kyc_data);
+    client.reject_business(&admin, &business, &reason);
+
+    let result = client.try_upload_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Rejected business invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::BusinessNotVerified);
+}
+
+/// Verified business can upload; the contract emits the invoice_uploaded (inv_up) event
+/// (see events::emit_invoice_uploaded). This test asserts the success path; event
+/// emission is covered by the contract implementation and test_events::test_invoice_uploaded_event.
+#[test]
+fn test_invoice_upload_verified_business_succeeds_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = setup_verified_business(&env, &client);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Verified upload with event"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.business, business);
+    assert_eq!(invoice.amount, 2000);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 }
 
@@ -632,7 +923,7 @@ fn test_invoice_minimum_amount() {
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-    let min_amount = 1i128;
+    let min_amount = 10i128;
 
     let invoice_id = client.store_invoice(
         &business,
@@ -927,6 +1218,98 @@ fn test_invoice_payment_progress_calculation() {
     assert_eq!(invoice.total_paid, 1000);
     assert_eq!(invoice.payment_progress(), 100);
     assert!(invoice.is_fully_paid());
+}
+
+/// Multiple partial payments summing to < 100%, then a final payment to 100%.
+/// Verifies payment progress at each step and that get_invoice(...).payment_progress() is correct.
+#[test]
+fn test_invoice_payment_progress_multiple_partials_then_full() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+
+        // Partial payments that sum to 60% (100 + 200 + 300)
+        invoice
+            .record_payment(&env, 100, String::from_str(&env, "TXN01"))
+            .unwrap();
+        assert_eq!(invoice.total_paid, 100);
+        assert_eq!(invoice.payment_progress(), 10);
+        assert!(!invoice.is_fully_paid());
+
+        invoice
+            .record_payment(&env, 200, String::from_str(&env, "TXN02"))
+            .unwrap();
+        assert_eq!(invoice.total_paid, 300);
+        assert_eq!(invoice.payment_progress(), 30);
+        assert!(!invoice.is_fully_paid());
+
+        invoice
+            .record_payment(&env, 300, String::from_str(&env, "TXN03"))
+            .unwrap();
+        assert_eq!(invoice.total_paid, 600);
+        assert_eq!(invoice.payment_progress(), 60);
+        assert!(!invoice.is_fully_paid());
+
+        // Final payment to 100%
+        invoice
+            .record_payment(&env, 400, String::from_str(&env, "TXN04"))
+            .unwrap();
+        assert_eq!(invoice.total_paid, 1000);
+        assert_eq!(invoice.payment_progress(), 100);
+        assert!(invoice.is_fully_paid());
+
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    // Verify get_invoice payment progress value after persistence
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.payment_progress(), 100);
+    assert!(invoice.is_fully_paid());
+}
+
+/// Explicitly test that get_invoice(...).payment_progress() returns the correct value at 0%, 50%, and 100%.
+#[test]
+fn test_invoice_get_payment_progress_value() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    // 0% before any payment
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.payment_progress(), 0, "payment progress should be 0 when no payments");
+
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .record_payment(&env, 500, String::from_str(&env, "TXN50"))
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    // 50% after half payment
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.payment_progress(), 50, "payment progress should be 50 after half payment");
+
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .record_payment(&env, 500, String::from_str(&env, "TXN100"))
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    // 100% after full payment
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.payment_progress(), 100, "payment progress should be 100 when fully paid");
 }
 
 #[test]

@@ -314,7 +314,7 @@ fn test_timestamp_invoice_grace_deadline_saturates() {
             Vec::new(&env),
         )
     });
-    let deadline = inv.grace_deadline(grace_period);
+    let deadline = inv.unwrap().grace_deadline(grace_period);
     assert_eq!(deadline, u64::MAX);
 }
 
