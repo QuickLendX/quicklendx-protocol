@@ -292,9 +292,7 @@ impl QuickLendXContract {
         }
 
         // Validate due date is not too far in the future using protocol limits
-        if !protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date) {
-            return Err(QuickLendXError::InvoiceDueDateInvalid);
-        }
+        protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
 
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
@@ -350,12 +348,12 @@ impl QuickLendXContract {
         business.require_auth();
 
         // Check if business is verified
-        let verification = get_business_verification_status(&env, &business);
-        if verification.is_none()
-            || !matches!(
-                verification.unwrap().status,
-                verification::BusinessVerificationStatus::Verified
-            )
+        let verification = get_business_verification_status(&env, &business)
+            .ok_or(QuickLendXError::BusinessNotVerified)?;
+        if !matches!(
+            verification.status,
+            verification::BusinessVerificationStatus::Verified
+        )
         {
             return Err(QuickLendXError::BusinessNotVerified);
         }
@@ -828,7 +826,7 @@ impl QuickLendXContract {
         InvestmentStorage::store_investment(&env, &investment);
 
         let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
-            .expect("Escrow should exist after creation");
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
         audit::log_bid_accepted(
@@ -1968,11 +1966,17 @@ impl QuickLendXContract {
     pub fn get_analytics_summary(
         env: Env,
     ) -> Result<(PlatformMetrics, PerformanceMetrics), QuickLendXError> {
-        let platform_metrics = AnalyticsStorage::get_platform_metrics(&env)
-            .unwrap_or_else(|| AnalyticsCalculator::calculate_platform_metrics(&env).unwrap());
+        let platform_metrics = match AnalyticsStorage::get_platform_metrics(&env) {
+            Some(metrics) => metrics,
+            None => AnalyticsCalculator::calculate_platform_metrics(&env)
+                .map_err(|_| QuickLendXError::StorageError)?,
+        };
 
-        let performance_metrics = AnalyticsStorage::get_performance_metrics(&env)
-            .unwrap_or_else(|| AnalyticsCalculator::calculate_performance_metrics(&env).unwrap());
+        let performance_metrics = match AnalyticsStorage::get_performance_metrics(&env) {
+            Some(metrics) => metrics,
+            None => AnalyticsCalculator::calculate_performance_metrics(&env)
+                .map_err(|_| QuickLendXError::StorageError)?,
+        };
 
         Ok((platform_metrics, performance_metrics))
     }
