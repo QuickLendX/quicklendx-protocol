@@ -14,6 +14,7 @@ mod errors;
 mod escrow;
 mod events;
 mod fees;
+mod init;
 mod investment;
 mod invoice;
 mod notifications;
@@ -1451,7 +1452,8 @@ impl QuickLendXContract {
 
     /// Check for overdue invoices and send notifications (admin or automated process)
     pub fn check_overdue_invoices(env: Env) -> Result<u32, QuickLendXError> {
-        Self::check_overdue_invoices_grace(env, Invoice::DEFAULT_GRACE_PERIOD)
+        let grace_period = defaults::resolve_grace_period(&env, None);
+        Self::check_overdue_invoices_grace(env, grace_period)
     }
 
     /// Check for overdue invoices with a custom grace period (in seconds)
@@ -1484,7 +1486,7 @@ impl QuickLendXContract {
     ) -> Result<bool, QuickLendXError> {
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        let grace = grace_period.unwrap_or(Invoice::DEFAULT_GRACE_PERIOD);
+        let grace = defaults::resolve_grace_period(&env, grace_period);
         invoice.check_and_handle_expiration(&env, grace)
     }
 

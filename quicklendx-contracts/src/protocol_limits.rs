@@ -18,7 +18,7 @@ const DEFAULT_MIN_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
 #[allow(dead_code)]
 const DEFAULT_MAX_DUE_DAYS: u64 = 365;
 #[allow(dead_code)]
-const DEFAULT_GRACE_PERIOD: u64 = 86400; // 24 hours
+const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days
 
 // String length limits
 pub const MAX_DESCRIPTION_LENGTH: u32 = 1024;
