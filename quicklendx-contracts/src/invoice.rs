@@ -811,8 +811,7 @@ impl InvoiceStorage {
 
     /// Get invoices by category
     pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
-        env
-            .storage()
+        env.storage()
             .instance()
             .get(&Self::category_key(category))
             .unwrap_or_else(|| Vec::new(env))
@@ -839,8 +838,7 @@ impl InvoiceStorage {
 
     /// Get invoices by tag
     pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
-        env
-            .storage()
+        env.storage()
             .instance()
             .get(&Self::tag_key(tag))
             .unwrap_or_else(|| Vec::new(env))
@@ -993,5 +991,45 @@ impl InvoiceStorage {
             .instance()
             .get(&Self::metadata_tax_key(tax_id))
             .unwrap_or_else(|| Vec::new(env))
+    }
+
+    /// Completely remove an invoice from storage and all its indexes (used by backup restore)
+    pub fn delete_invoice(env: &Env, invoice_id: &BytesN<32>) {
+        if let Some(invoice) = Self::get_invoice(env, invoice_id) {
+            // Remove from status index
+            Self::remove_from_status_invoices(env, &invoice.status, invoice_id);
+
+            // Remove from business index
+            let business_key = (symbol_short!("business"), invoice.business.clone());
+            if let Some(invoices) = env
+                .storage()
+                .instance()
+                .get::<_, Vec<BytesN<32>>>(&business_key)
+            {
+                let mut new_invoices = Vec::new(env);
+                for id in invoices.iter() {
+                    if id != *invoice_id {
+                        new_invoices.push_back(id);
+                    }
+                }
+                env.storage().instance().set(&business_key, &new_invoices);
+            }
+
+            // Remove from category index
+            Self::remove_category_index(env, &invoice.category, invoice_id);
+
+            // Remove from tag indexes
+            for tag in invoice.tags.iter() {
+                Self::remove_tag_index(env, &tag, invoice_id);
+            }
+
+            // Remove metadata indexes if present
+            if let Some(md) = invoice.metadata() {
+                Self::remove_metadata_indexes(env, &md, invoice_id);
+            }
+
+            // Remove invoice itself
+            env.storage().instance().remove(invoice_id);
+        }
     }
 }

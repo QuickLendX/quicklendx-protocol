@@ -171,4 +171,28 @@ impl BackupStorage {
 
         Ok(())
     }
+
+    /// Retrieve all invoices from storage across all possible statuses
+    pub fn get_all_invoices(env: &Env) -> Vec<Invoice> {
+        let mut all_invoices = Vec::new(env);
+        let all_statuses = [
+            crate::invoice::InvoiceStatus::Pending,
+            crate::invoice::InvoiceStatus::Verified,
+            crate::invoice::InvoiceStatus::Funded,
+            crate::invoice::InvoiceStatus::Paid,
+            crate::invoice::InvoiceStatus::Defaulted,
+            crate::invoice::InvoiceStatus::Cancelled,
+            crate::invoice::InvoiceStatus::Refunded,
+        ];
+
+        for status in all_statuses.iter() {
+            let invoices = crate::invoice::InvoiceStorage::get_invoices_by_status(env, status);
+            for id in invoices.iter() {
+                if let Some(inv) = crate::invoice::InvoiceStorage::get_invoice(env, &id) {
+                    all_invoices.push_back(inv);
+                }
+            }
+        }
+        all_invoices
+    }
 }

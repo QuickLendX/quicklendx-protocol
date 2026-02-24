@@ -1481,150 +1481,6 @@ impl QuickLendXContract {
         invoice.check_and_handle_expiration(&env, grace)
     }
 
-    /// Create a backup of all invoice data
-    pub fn create_backup(env: Env, description: String) -> Result<BytesN<32>, QuickLendXError> {
-        // Only admin can create backups
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
-
-        // Get all invoices
-        let pending = InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Pending);
-        let verified = InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified);
-        let funded = InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Funded);
-        let paid = InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Paid);
-        let defaulted = InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Defaulted);
-
-        // Combine all invoices
-        let mut all_invoices = Vec::new(&env);
-        for status_vec in [pending, verified, funded, paid, defaulted].iter() {
-            for invoice_id in status_vec.iter() {
-                if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
-                    all_invoices.push_back(invoice);
-                }
-            }
-        }
-
-        // Create backup
-        let backup_id = BackupStorage::generate_backup_id(&env);
-        let backup = Backup {
-            backup_id: backup_id.clone(),
-            timestamp: env.ledger().timestamp(),
-            description,
-            invoice_count: all_invoices.len() as u32,
-            status: BackupStatus::Active,
-        };
-
-        // Store backup and data
-        BackupStorage::store_backup(&env, &backup);
-        BackupStorage::store_backup_data(&env, &backup_id, &all_invoices);
-        BackupStorage::add_to_backup_list(&env, &backup_id);
-
-        // Clean up old backups (keep last 5)
-        BackupStorage::cleanup_old_backups(&env, 5)?;
-
-        // Emit event
-        events::emit_backup_created(&env, &backup_id, backup.invoice_count);
-
-        Ok(backup_id)
-    }
-
-    /// Restore invoice data from a backup
-    pub fn restore_backup(env: Env, backup_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        // Only admin can restore backups
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
-
-        // Validate backup first
-        BackupStorage::validate_backup(&env, &backup_id)?;
-
-        // Get backup data
-        let invoices = BackupStorage::get_backup_data(&env, &backup_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
-
-        // Clear current invoice data
-        Self::clear_all_invoices(&env)?;
-
-        // Restore invoices
-        for invoice in invoices.iter() {
-            InvoiceStorage::store_invoice(&env, &invoice);
-        }
-
-        // Emit event
-        events::emit_backup_restored(&env, &backup_id, invoices.len() as u32);
-
-        Ok(())
-    }
-
-    /// Validate a backup's integrity
-    pub fn validate_backup(env: Env, backup_id: BytesN<32>) -> Result<bool, QuickLendXError> {
-        let result = BackupStorage::validate_backup(&env, &backup_id).is_ok();
-        events::emit_backup_validated(&env, &backup_id, result);
-        Ok(result)
-    }
-
-    /// Archive a backup (mark as no longer active)
-    pub fn archive_backup(env: Env, backup_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        // Only admin can archive backups
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
-
-        let mut backup = BackupStorage::get_backup(&env, &backup_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
-
-        backup.status = BackupStatus::Archived;
-        BackupStorage::update_backup(&env, &backup);
-        BackupStorage::remove_from_backup_list(&env, &backup_id);
-
-        events::emit_backup_archived(&env, &backup_id);
-
-        Ok(())
-    }
-
-    /// Get all available backups
-    pub fn get_backups(env: Env) -> Vec<BytesN<32>> {
-        BackupStorage::get_all_backups(&env)
-    }
-
-    /// Get backup details
-    pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<Backup> {
-        BackupStorage::get_backup(&env, &backup_id)
-    }
-
-    /// Internal function to clear all invoice data
-    fn clear_all_invoices(env: &Env) -> Result<(), QuickLendXError> {
-        // Clear all status lists
-        for status in [
-            InvoiceStatus::Pending,
-            InvoiceStatus::Verified,
-            InvoiceStatus::Funded,
-            InvoiceStatus::Paid,
-            InvoiceStatus::Defaulted,
-            InvoiceStatus::Cancelled,
-        ]
-        .iter()
-        {
-            let invoices = InvoiceStorage::get_invoices_by_status(env, status);
-            for invoice_id in invoices.iter() {
-                // Remove from status list
-                InvoiceStorage::remove_from_status_invoices(env, status, &invoice_id);
-                // Remove the invoice itself
-                env.storage().instance().remove(&invoice_id);
-            }
-        }
-
-        // Clear all business invoices
-        let verified_businesses = BusinessVerificationStorage::get_verified_businesses(env);
-        for business in verified_businesses.iter() {
-            let _ = InvoiceStorage::get_business_invoices(env, &business);
-            let key = (symbol_short!("business"), business.clone());
-            env.storage().instance().remove(&key);
-        }
-
-        Ok(())
-    }
     /// Get audit trail for an invoice
     pub fn get_invoice_audit_trail(env: Env, invoice_id: BytesN<32>) -> Vec<BytesN<32>> {
         AuditStorage::get_invoice_audit_trail(&env, &invoice_id)
@@ -2611,6 +2467,127 @@ impl QuickLendXContract {
     pub fn get_bid_history(env: Env, invoice_id: BytesN<32>) -> Vec<Bid> {
         BidStorage::get_bid_records_for_invoice(&env, &invoice_id)
     }
+
+    // ============================================================================
+    // Backup and Restore Methods
+    // ============================================================================
+
+    /// Create a backup of all current invoice data (admin only)
+    pub fn create_backup(env: Env, admin: Address) -> Result<BytesN<32>, QuickLendXError> {
+        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        if current_admin != admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
+        admin.require_auth();
+
+        let all_invoices = BackupStorage::get_all_invoices(&env);
+        let backup_id = BackupStorage::generate_backup_id(&env);
+        let count = all_invoices.len() as u32;
+
+        let backup = Backup {
+            backup_id: backup_id.clone(),
+            timestamp: env.ledger().timestamp(),
+            description: String::from_str(&env, "Admin created backup"),
+            invoice_count: count,
+            status: BackupStatus::Active,
+        };
+
+        BackupStorage::store_backup(&env, &backup);
+        BackupStorage::store_backup_data(&env, &backup_id, &all_invoices);
+        BackupStorage::add_to_backup_list(&env, &backup_id);
+
+        // Keep only last 5 backups
+        BackupStorage::cleanup_old_backups(&env, 5)?;
+
+        events::emit_backup_created(&env, &backup_id, count);
+        Ok(backup_id)
+    }
+
+    /// Restore a backup, clearing current invoices and reinstating the backup (admin only)
+    pub fn restore_backup(
+        env: Env,
+        admin: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        if current_admin != admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
+        admin.require_auth();
+
+        let backup = BackupStorage::get_backup(&env, &backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        if backup.status == BackupStatus::Corrupted {
+            return Err(QuickLendXError::StorageError); // Cannot restore a corrupted backup
+        }
+
+        let saved_invoices = BackupStorage::get_backup_data(&env, &backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+        // Clear current invoice data
+        let current_invoices = BackupStorage::get_all_invoices(&env);
+        for inv in current_invoices.iter() {
+            crate::invoice::InvoiceStorage::delete_invoice(&env, &inv.id);
+        }
+
+        // Re-insert backed up data
+        for inv in saved_invoices.iter() {
+            crate::invoice::InvoiceStorage::store_invoice(&env, &inv);
+        }
+
+        events::emit_backup_restored(&env, &backup_id, saved_invoices.len() as u32);
+        Ok(())
+    }
+
+    /// Validate a backup's integrity
+    pub fn validate_backup(env: Env, backup_id: BytesN<32>) -> Result<bool, QuickLendXError> {
+        match BackupStorage::validate_backup(&env, &backup_id) {
+            Ok(_) => {
+                events::emit_backup_validated(&env, &backup_id, true);
+                Ok(true)
+            }
+            Err(_) => {
+                if let Some(mut backup) = BackupStorage::get_backup(&env, &backup_id) {
+                    backup.status = BackupStatus::Corrupted;
+                    BackupStorage::update_backup(&env, &backup);
+                }
+                events::emit_backup_validated(&env, &backup_id, false);
+                Ok(false)
+            }
+        }
+    }
+
+    /// Archive a backup
+    pub fn archive_backup(
+        env: Env,
+        admin: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        if current_admin != admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
+        admin.require_auth();
+
+        let mut backup = BackupStorage::get_backup(&env, &backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        backup.status = BackupStatus::Archived;
+        BackupStorage::update_backup(&env, &backup);
+        BackupStorage::remove_from_backup_list(&env, &backup_id);
+
+        events::emit_backup_archived(&env, &backup_id);
+        Ok(())
+    }
+
+    /// Get all available backup IDs
+    pub fn get_backups(env: Env) -> Vec<BytesN<32>> {
+        BackupStorage::get_all_backups(&env)
+    }
+
+    /// Get backup details
+    pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<Backup> {
+        BackupStorage::get_backup(&env, &backup_id)
+    }
 }
 
 #[cfg(test)]
@@ -2649,6 +2626,8 @@ mod test_queries;
 #[cfg(test)]
 mod test_reentrancy;
 
+#[cfg(test)]
+mod test_backup;
 #[cfg(test)]
 mod test_escrow_refund;
 #[cfg(test)]
