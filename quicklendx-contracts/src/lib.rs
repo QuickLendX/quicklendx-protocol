@@ -1,4 +1,5 @@
 #![no_std]
+// QuickLendX Protocol - Invoice Financing Smart Contract
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 mod admin;
