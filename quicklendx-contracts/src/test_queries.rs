@@ -1,6 +1,6 @@
 use super::*;
 use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
-use crate::bid::BidStatus;
+use crate::bid::{Bid, BidStatus, BidStorage};
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -98,6 +98,35 @@ fn test_get_business_invoices_paged_empty_and_pagination() {
     let p_zero =
         client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &0u32, &0u32);
     assert_eq!(p_zero.len(), 0, "Limit zero should return empty results");
+}
+
+#[test]
+fn test_get_business_invoices_paged_limit_is_capped_to_max_query_limit() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+
+    for i in 0..120u32 {
+        let _ = create_invoice(
+            &env,
+            &client,
+            &business,
+            1_000 + i as i128,
+            InvoiceCategory::Services,
+            false,
+        );
+    }
+
+    let capped = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &500u32,
+    );
+    assert_eq!(
+        capped.len(),
+        crate::MAX_QUERY_LIMIT,
+        "business invoice query should enforce MAX_QUERY_LIMIT cap"
+    );
 }
 
 #[test]
@@ -488,5 +517,64 @@ fn test_query_audit_logs_filters_and_limit() {
         results_limited.len(),
         1,
         "Limit should restrict number of returned entries"
+    );
+}
+
+#[test]
+fn test_bid_query_pagination_limit_is_capped_to_max_query_limit() {
+    let (env, client) = setup();
+    let contract_id = client.address.clone();
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+
+    let invoice_id = create_invoice(
+        &env,
+        &client,
+        &business,
+        5_000,
+        InvoiceCategory::Services,
+        false,
+    );
+
+    env.as_contract(&contract_id, || {
+        for i in 0..130u32 {
+            let bid_id = BidStorage::generate_unique_bid_id(&env);
+            let bid = Bid {
+                bid_id: bid_id.clone(),
+                invoice_id: invoice_id.clone(),
+                investor: investor.clone(),
+                bid_amount: 1_000 + i as i128,
+                expected_return: 1_100 + i as i128,
+                timestamp: env.ledger().timestamp(),
+                status: BidStatus::Placed,
+                expiration_timestamp: env.ledger().timestamp().saturating_add(86_400),
+            };
+            BidStorage::store_bid(&env, &bid);
+            BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
+        }
+    });
+
+    let invoice_bids = client.get_bid_history_paged(
+        &invoice_id,
+        &Option::<BidStatus>::None,
+        &0u32,
+        &500u32,
+    );
+    assert_eq!(
+        invoice_bids.len(),
+        crate::MAX_QUERY_LIMIT,
+        "invoice bid history should enforce MAX_QUERY_LIMIT cap"
+    );
+
+    let investor_bids = client.get_investor_bids_paged(
+        &investor,
+        &Option::<BidStatus>::None,
+        &0u32,
+        &500u32,
+    );
+    assert_eq!(
+        investor_bids.len(),
+        crate::MAX_QUERY_LIMIT,
+        "investor bid history should enforce MAX_QUERY_LIMIT cap"
     );
 }

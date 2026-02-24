@@ -145,6 +145,5 @@ fn test_admin_operations_require_authorization() {
     assert!(result.is_err());
 }
 
-
 // casting of References
 // perequisites for method chaining
