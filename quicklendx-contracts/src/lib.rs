@@ -277,6 +277,11 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
         }
 
+        // Validate due date is not too far in the future using protocol limits
+        if !protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date) {
+            return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
+
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
         }
