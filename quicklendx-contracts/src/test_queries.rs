@@ -631,7 +631,7 @@ fn test_get_business_invoices_paged_filter_combinations_and_overflow_safety() {
 
     let pending = client.get_business_invoices_paged(
         &business,
-        &Some(InvoiceStatus::PendingVerification),
+        &Some(InvoiceStatus::Pending),
         &0u32,
         &10u32,
     );
@@ -639,7 +639,7 @@ fn test_get_business_invoices_paged_filter_combinations_and_overflow_safety() {
 
     let no_results = client.get_business_invoices_paged(
         &business,
-        &Some(InvoiceStatus::Rejected),
+        &Some(InvoiceStatus::Defaulted),
         &0u32,
         &10u32,
     );

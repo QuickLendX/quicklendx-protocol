@@ -325,15 +325,23 @@ mod tests {
         assert_eq!(progress.progress_percent, 100);
         assert_eq!(progress.remaining_due, 0);
     }
+}
 
-    // Comprehensive tests for partial payments and settlement
-    //
-    // This module provides 95%+ test coverage for:
-    // - process_partial_payment validation (zero/negative amounts)
-    // - Payment progress tracking
-    // - Overpayment capped at 100%
-    // - Payment records and transaction IDs
-    // - Edge cases and error handling
+// Comprehensive tests for partial payments and settlement
+//
+// This module provides 95%+ test coverage for:
+// - process_partial_payment validation (zero/negative amounts)
+// - Payment progress tracking
+// - Overpayment capped at 100%
+// - Payment records and transaction IDs
+// - Edge cases and error handling
+
+use super::*;
+use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, Env, String, Vec,
+};
 
     // ============================================================================
     // HELPER FUNCTIONS (second set for tests below)
