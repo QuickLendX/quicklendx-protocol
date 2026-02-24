@@ -1972,10 +1972,11 @@ fn test_create_and_restore_backup() {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    // Set up admin
+    // Set up admin and protocol limits (allow small amounts for test)
     let admin = Address::generate(&env);
     env.mock_all_auths();
     client.set_admin(&admin);
+    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
 
     // Create test invoices
     let business = Address::generate(&env);
@@ -2004,7 +2005,7 @@ fn test_create_and_restore_backup() {
 
     // Create backup
     env.mock_all_auths();
-    let backup_id = client.create_backup(&String::from_str(&env, "Initial backup"));
+    let backup_id = client.create_backup(&admin);
 
     // Verify backup was created
     let backup = client.get_backup_details(&backup_id);
@@ -2013,10 +2014,13 @@ fn test_create_and_restore_backup() {
     assert_eq!(backup.invoice_count, 2);
     assert_eq!(backup.status, BackupStatus::Active);
 
-    // Clear invoices - use the contract's clear method
+    // Clear invoices by deleting each (restore will repopulate)
     env.mock_all_auths();
     env.as_contract(&contract_id, || {
-        QuickLendXContract::clear_all_invoices(&env).unwrap();
+        let all = crate::backup::BackupStorage::get_all_invoices(&env);
+        for inv in all.iter() {
+            crate::invoice::InvoiceStorage::delete_invoice(&env, &inv.id);
+        }
     });
 
     // Verify invoices are gone
@@ -2025,7 +2029,7 @@ fn test_create_and_restore_backup() {
 
     // Restore backup
     env.mock_all_auths();
-    client.restore_backup(&backup_id);
+    client.restore_backup(&admin, &backup_id);
 
     // Verify invoices are back
     let invoice1 = client.get_invoice(&invoice1_id);
@@ -2040,10 +2044,11 @@ fn test_backup_validation() {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    // Set up admin
+    // Set up admin and protocol limits (allow small amounts for test)
     let admin = Address::generate(&env);
     env.mock_all_auths();
     client.set_admin(&admin);
+    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
 
     // Create test invoice
     let business = Address::generate(&env);
@@ -2062,7 +2067,7 @@ fn test_backup_validation() {
 
     // Create backup
     env.mock_all_auths();
-    let backup_id = client.create_backup(&String::from_str(&env, "Test backup"));
+    let backup_id = client.create_backup(&admin);
 
     // Validate backup
     let is_valid = client.validate_backup(&backup_id);
@@ -2094,15 +2099,7 @@ fn test_backup_cleanup() {
     // Create multiple backups with simple descriptions
     env.mock_all_auths();
     for i in 0..10 {
-        let description = if i == 0 {
-            String::from_str(&env, "Backup 0")
-        } else if i == 1 {
-            String::from_str(&env, "Backup 1")
-        } else {
-            // Continue this pattern or just use a generic description
-            String::from_str(&env, "Backup")
-        };
-        client.create_backup(&description);
+        client.create_backup(&admin);
     }
 
     // Verify only last 5 backups are kept
@@ -2123,10 +2120,10 @@ fn test_archive_backup() {
 
     // Create backup
     env.mock_all_auths();
-    let backup_id = client.create_backup(&String::from_str(&env, "Test backup"));
+    let backup_id = client.create_backup(&admin);
 
     // Archive backup
-    client.archive_backup(&backup_id);
+    client.archive_backup(&admin, &backup_id);
 
     // Verify backup is archived
     let backup = client.get_backup_details(&backup_id);
@@ -3707,7 +3704,8 @@ fn test_basic_readme_queries() {
     let _audit_stats = client.get_audit_stats();
 
     // Test 16: Backup queries
-    let backup_id = client.create_backup(&String::from_str(&env, "Test backup"));
+    env.mock_all_auths();
+    let backup_id = client.create_backup(&admin);
     let _backup_details = client.get_backup_details(&backup_id);
     let _backups = client.get_backups();
 
