@@ -1,7 +1,5 @@
 #![cfg(test)]
 //! Tests for emergency withdraw: timelock, auth, and execution conditions.
-//! Covers: execute before timelock fails, execute after succeeds, only admin can initiate/execute,
-//! target receives correct amount, zero amount fails.
 
 use crate::emergency::DEFAULT_EMERGENCY_TIMELOCK_SECS;
 use crate::{QuickLendXContract, QuickLendXContractClient};
@@ -50,6 +48,7 @@ fn test_execute_before_timelock_fails() {
 
     client.initiate_emergency_withdraw(&admin, &token, &amount, &target);
 
+    // Attempt to execute immediately - should fail due to timelock
     let result = client.try_execute_emergency_withdraw(&admin);
     assert!(result.is_err());
 }
@@ -74,40 +73,13 @@ fn test_execute_after_timelock_succeeds() {
     sac.mint(&contract_id, &amount);
 
     client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+    
+    // Advance time past the timelock period
     env.ledger()
         .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
 
     let result = client.try_execute_emergency_withdraw(&admin);
     assert!(result.is_ok());
-}
-
-#[test]
-fn test_target_receives_correct_amount_when_funded() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    client.initialize_admin(&admin);
-    client.initialize_fee_system(&admin);
-
-    let token_admin = Address::generate(&env);
-    let token_id = env
-        .register_stellar_asset_contract_v2(token_admin.clone())
-        .address();
-    let sac = token::StellarAssetClient::new(&env, &token_id);
-    let token_client = token::Client::new(&env, &token_id);
-    let target = Address::generate(&env);
-    let amount = 1_000i128;
-    sac.mint(&contract_id, &amount);
-
-    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
-    env.ledger()
-        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
-    client.execute_emergency_withdraw(&admin);
-
-    assert_eq!(token_client.balance(&target), amount);
-    assert_eq!(token_client.balance(&contract_id), 0);
 }
 
 #[test]
@@ -118,10 +90,12 @@ fn test_get_pending_returns_withdrawal_after_initiate() {
     let target = Address::generate(&env);
     let amount = 500i128;
 
+    // Initially no pending withdrawal
     assert!(client.get_pending_emergency_withdraw().is_none());
 
     client.initiate_emergency_withdraw(&admin, &token, &amount, &target);
 
+    // After initiate, pending withdrawal should exist with correct data
     let pending = client.get_pending_emergency_withdraw().unwrap();
     assert_eq!(pending.token, token);
     assert_eq!(pending.amount, amount);
@@ -154,7 +128,38 @@ fn test_get_pending_none_after_execute() {
         .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
     client.execute_emergency_withdraw(&admin);
 
+    // After execution, pending withdrawal should be cleared
     assert!(client.get_pending_emergency_withdraw().is_none());
+}
+
+#[test]
+fn test_target_receives_correct_amount_when_funded() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
+    client.initialize_fee_system(&admin);
+
+    let token_admin = Address::generate(&env);
+    let token_id = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac = token::StellarAssetClient::new(&env, &token_id);
+    let token_client = token::Client::new(&env, &token_id);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+    sac.mint(&contract_id, &amount);
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
+    client.execute_emergency_withdraw(&admin);
+
+    // Verify target received the correct amount and contract balance is zero
+    assert_eq!(token_client.balance(&target), amount);
+    assert_eq!(token_client.balance(&contract_id), 0);
 }
 
 #[test]
@@ -162,6 +167,7 @@ fn test_execute_without_pending_fails() {
     let env = Env::default();
     let (client, admin) = setup(&env);
 
+    // Attempting to execute without initiating should fail
     let result = client.try_execute_emergency_withdraw(&admin);
     assert!(result.is_err());
 }
@@ -211,9 +217,11 @@ fn test_cancel_prevents_execute() {
     client.initiate_emergency_withdraw(&admin, &token, &500i128, &target);
     client.cancel_emergency_withdraw(&admin);
 
+    // Advance time past timelock
     env.ledger()
         .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
 
+    // Execute should fail because withdrawal was cancelled
     let res = client.try_execute_emergency_withdraw(&admin);
     assert!(res.is_err());
 }
