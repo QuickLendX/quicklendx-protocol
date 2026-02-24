@@ -1,8 +1,10 @@
-# Invoice Categories and Tags
+# Invoice Categories, Tags, and Due Date Validation
 
 ## Overview
 
 The QuickLendX protocol supports invoice categorization and tagging to improve discoverability, filtering, and organization of invoices. This feature enables businesses to classify their invoices and investors to efficiently search for investment opportunities that match their preferences.
+
+Additionally, the protocol enforces due date bounds to ensure invoices cannot be created with arbitrarily far future due dates, maintaining system stability and risk management.
 
 ## Features
 
@@ -20,6 +22,51 @@ Invoices can be assigned to one of the following predefined categories:
 
 Each invoice must have exactly one category, which can be updated after creation.
 
+### Due Date Bounds Validation
+
+The protocol enforces strict bounds on invoice due dates to prevent excessive risk exposure and maintain system stability:
+
+- **Maximum Due Date**: Configurable via protocol limits (default: 365 days from current timestamp)
+- **Minimum Due Date**: Must be in the future (greater than current timestamp)
+- **Protocol Limits**: Managed through `ProtocolLimitsContract` with admin controls
+- **Validation Applied**: Both `store_invoice` and `upload_invoice` functions enforce bounds
+
+#### Configuration
+
+Admins can configure due date bounds using:
+
+```rust
+// Initialize protocol limits
+initialize_protocol_limits(
+    admin,
+    min_invoice_amount: i128,     // Minimum invoice amount
+    max_due_date_days: u64,      // Maximum days from now (default: 365)
+    grace_period_seconds: u64     // Grace period for defaults
+);
+
+// Update existing limits
+set_protocol_limits(
+    admin,
+    min_invoice_amount: i128,
+    max_due_date_days: u64,      // Can be 1-730 days
+    grace_period_seconds: u64
+);
+```
+
+#### Validation Logic
+
+Due date validation follows these rules:
+
+1. **Future Requirement**: `due_date > current_timestamp`
+2. **Upper Bound**: `due_date <= current_timestamp + (max_due_date_days * 86400)`
+3. **Dynamic Calculation**: Bounds calculated based on current ledger timestamp
+4. **Protocol Defaults**: Falls back to 365 days if limits not initialized
+
+#### Error Handling
+
+Invalid due dates result in:
+- `InvoiceDueDateInvalid` (1008): Due date is in the past or exceeds maximum bounds
+
 ### Invoice Tags
 
 Tags provide flexible, user-defined labels for invoices:
@@ -30,6 +77,18 @@ Tags provide flexible, user-defined labels for invoices:
 - **Multi-tag Queries**: Support for querying invoices with multiple tags (AND logic)
 
 ## Validation Rules
+
+### Due Date Validation
+
+Due dates must meet the following criteria:
+
+1. **Future Requirement**: Due date must be greater than current ledger timestamp
+2. **Upper Bound**: Due date cannot exceed `current_timestamp + (max_due_date_days * 86400)`
+3. **Dynamic Limits**: Bounds calculated at validation time using current protocol limits
+4. **Default Limits**: 365 days maximum if protocol limits not initialized
+
+Violations result in:
+- `InvoiceDueDateInvalid` (1008): Due date is invalid
 
 ### Category Validation
 
