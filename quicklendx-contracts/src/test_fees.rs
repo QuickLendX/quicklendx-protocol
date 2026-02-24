@@ -1,5 +1,5 @@
 use super::*;
-use crate::fees::FeeType;
+use crate::{errors::QuickLendXError, fees::FeeType};
 use soroban_sdk::{testutils::Address as _, Address, Env, Map, String};
 
 /// Helper function to set up admin for testing
@@ -43,6 +43,80 @@ fn test_default_platform_fee() {
     let fee_config = client.get_platform_fee();
     assert_eq!(fee_config.fee_bps, 200); // 2%
     assert_eq!(fee_config.updated_at, 0); // Not updated yet
+    assert_eq!(fee_config.updated_by, contract_id); // Defaults to current contract address
+}
+
+/// FeeManager getter should fail before fee system initialization
+#[test]
+fn test_get_platform_fee_config_before_init_returns_storage_key_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let result = client.try_get_platform_fee_config();
+    assert!(result.is_err());
+
+    let err = result.err().expect("expected error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::StorageKeyNotFound);
+}
+
+/// FeeManager getter returns defaults after initialization
+#[test]
+fn test_get_platform_fee_config_after_init_has_defaults() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let fee_config = client.get_platform_fee_config();
+    assert_eq!(fee_config.fee_bps, 200);
+    assert_eq!(fee_config.treasury_address, None);
+    assert_eq!(fee_config.updated_by, admin);
+    assert_eq!(fee_config.updated_at, env.ledger().timestamp());
+}
+
+/// FeeManager getter reflects updates from update_platform_fee_bps
+#[test]
+fn test_get_platform_fee_config_after_update_platform_fee_bps() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+    client.update_platform_fee_bps(&450);
+
+    let fee_config = client.get_platform_fee_config();
+    assert_eq!(fee_config.fee_bps, 450);
+    assert_eq!(fee_config.treasury_address, None);
+    assert_eq!(fee_config.updated_by, admin);
+    assert_eq!(fee_config.updated_at, env.ledger().timestamp());
+}
+
+/// FeeManager getter should include treasury address when configured
+#[test]
+fn test_get_platform_fee_config_includes_treasury_when_set() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_treasury(&treasury);
+
+    let fee_config = client.get_platform_fee_config();
+    assert_eq!(fee_config.fee_bps, 200);
+    assert_eq!(fee_config.treasury_address, Some(treasury.clone()));
+    assert_eq!(fee_config.updated_by, admin);
+    assert_eq!(client.get_treasury_address(), Some(treasury));
 }
 
 /// Test custom platform fee BPS configuration
