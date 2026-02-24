@@ -4,7 +4,7 @@
 //! returns correct subset; integrity check passes (and fails when expected).
 
 use super::*;
-use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
+use crate::audit::{AuditLogEntry, AuditOperation, AuditOperationFilter, AuditQueryFilter, AuditStorage};
 use crate::invoice::InvoiceCategory;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -376,4 +376,188 @@ fn test_query_audit_logs_operation_actor_time_combinations_and_limits() {
     assert_eq!(client.query_audit_logs(&op_actor, &0u32).len(), 0);
     assert_eq!(client.query_audit_logs(&op_actor, &1u32).len(), 1);
     assert_eq!(client.query_audit_logs(&op_actor, &100u32).len(), 2);
+}
+
+#[test]
+fn test_get_audit_entries_by_operation_each_type_empty_and_non_empty() {
+    let (env, client, admin, business) = setup();
+    let investor = Address::generate(&env);
+    let contract_id = client.address.clone();
+
+    // Empty cases before any entry is stored
+    assert_eq!(
+        client
+            .get_audit_entries_by_operation(&AuditOperation::InvoiceCreated)
+            .len(),
+        0
+    );
+    assert_eq!(
+        client
+            .get_audit_entries_by_operation(&AuditOperation::SettlementCompleted)
+            .len(),
+        0
+    );
+
+    let operations = [
+        AuditOperation::InvoiceCreated,
+        AuditOperation::InvoiceUploaded,
+        AuditOperation::InvoiceVerified,
+        AuditOperation::InvoiceFunded,
+        AuditOperation::InvoicePaid,
+        AuditOperation::InvoiceDefaulted,
+        AuditOperation::InvoiceStatusChanged,
+        AuditOperation::InvoiceRated,
+        AuditOperation::BidPlaced,
+        AuditOperation::BidAccepted,
+        AuditOperation::BidWithdrawn,
+        AuditOperation::EscrowCreated,
+        AuditOperation::EscrowReleased,
+        AuditOperation::EscrowRefunded,
+        AuditOperation::PaymentProcessed,
+        AuditOperation::SettlementCompleted,
+    ];
+
+    for (idx, operation) in operations.iter().enumerate() {
+        let mut id_bytes = [0u8; 32];
+        id_bytes[0] = (idx as u8).saturating_add(1);
+        let invoice_id = BytesN::from_array(&env, &id_bytes);
+
+        let actor = match idx % 3 {
+            0 => business.clone(),
+            1 => investor.clone(),
+            _ => admin.clone(),
+        };
+
+        env.as_contract(&contract_id, || {
+            let entry = AuditLogEntry::new(
+                &env,
+                invoice_id,
+                operation.clone(),
+                actor,
+                None,
+                None,
+                None,
+                None,
+            );
+            AuditStorage::store_audit_entry(&env, &entry);
+        });
+    }
+
+    // Add one extra InvoiceCreated entry to cover multiple entries for one operation.
+    let mut extra_id_bytes = [0u8; 32];
+    extra_id_bytes[0] = 250;
+    let extra_invoice_id = BytesN::from_array(&env, &extra_id_bytes);
+    env.as_contract(&contract_id, || {
+        let entry = AuditLogEntry::new(
+            &env,
+            extra_invoice_id,
+            AuditOperation::InvoiceCreated,
+            business.clone(),
+            None,
+            None,
+            None,
+            None,
+        );
+        AuditStorage::store_audit_entry(&env, &entry);
+    });
+
+    for operation in operations.iter() {
+        let ids = client.get_audit_entries_by_operation(operation);
+        let expected_len = if *operation == AuditOperation::InvoiceCreated {
+            2
+        } else {
+            1
+        };
+        assert_eq!(ids.len(), expected_len, "unexpected operation index size");
+        for id in ids.iter() {
+            let entry = client.get_audit_entry(&id);
+            assert_eq!(entry.operation, *operation);
+        }
+    }
+}
+
+#[test]
+fn test_get_audit_entries_by_actor_business_investor_admin_empty_and_multiple() {
+    let (env, client, admin, business) = setup();
+    let investor = Address::generate(&env);
+    let contract_id = client.address.clone();
+
+    let add_entry = |env: &Env, contract_id: &Address, invoice_seed: u8, operation: AuditOperation, actor: Address| {
+        let mut id_bytes = [0u8; 32];
+        id_bytes[0] = invoice_seed;
+        let invoice_id = BytesN::from_array(env, &id_bytes);
+        env.as_contract(contract_id, || {
+            let entry = AuditLogEntry::new(
+                env,
+                invoice_id,
+                operation,
+                actor,
+                None,
+                None,
+                None,
+                None,
+            );
+            AuditStorage::store_audit_entry(env, &entry);
+        });
+    };
+
+    // Multiple for business and investor, single for admin.
+    add_entry(
+        &env,
+        &contract_id,
+        1,
+        AuditOperation::InvoiceCreated,
+        business.clone(),
+    );
+    add_entry(
+        &env,
+        &contract_id,
+        2,
+        AuditOperation::InvoiceUploaded,
+        business.clone(),
+    );
+    add_entry(
+        &env,
+        &contract_id,
+        3,
+        AuditOperation::BidPlaced,
+        investor.clone(),
+    );
+    add_entry(
+        &env,
+        &contract_id,
+        4,
+        AuditOperation::InvoiceFunded,
+        investor.clone(),
+    );
+    add_entry(
+        &env,
+        &contract_id,
+        5,
+        AuditOperation::InvoiceVerified,
+        admin.clone(),
+    );
+
+    let business_ids = client.get_audit_entries_by_actor(&business);
+    assert_eq!(business_ids.len(), 2);
+    for id in business_ids.iter() {
+        let entry = client.get_audit_entry(&id);
+        assert_eq!(entry.actor, business);
+    }
+
+    let investor_ids = client.get_audit_entries_by_actor(&investor);
+    assert_eq!(investor_ids.len(), 2);
+    for id in investor_ids.iter() {
+        let entry = client.get_audit_entry(&id);
+        assert_eq!(entry.actor, investor);
+    }
+
+    let admin_ids = client.get_audit_entries_by_actor(&admin);
+    assert_eq!(admin_ids.len(), 1);
+    let admin_entry = client.get_audit_entry(&admin_ids.get(0).unwrap());
+    assert_eq!(admin_entry.actor, admin);
+
+    // Empty case
+    let unknown = Address::generate(&env);
+    assert_eq!(client.get_audit_entries_by_actor(&unknown).len(), 0);
 }
