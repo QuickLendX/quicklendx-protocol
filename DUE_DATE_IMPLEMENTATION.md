@@ -1,6 +1,7 @@
 # Invoice Due Date Bounds Implementation Summary
 
 ## Overview
+
 Successfully implemented invoice due date bounds validation to prevent invoices with arbitrarily far future due dates.
 
 ## Changes Made
@@ -8,6 +9,7 @@ Successfully implemented invoice due date bounds validation to prevent invoices 
 ### 1. Code Implementation
 
 #### `src/lib.rs` - store_invoice function (lines 272-275)
+
 ```rust
 // Validate due date is not too far in the future using protocol limits
 if !protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date) {
@@ -16,6 +18,7 @@ if !protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amoun
 ```
 
 #### `src/verification.rs` - verify_invoice_data function (lines 650-653)
+
 ```rust
 // Validate due date is not too far in the future using protocol limits
 if !crate::protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date) {
@@ -49,6 +52,7 @@ if !crate::protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone()
 ### 3. Documentation Updated
 
 #### `docs/contracts/invoice.md`
+
 - Added "Due Date Bounds Validation" section
 - Updated title to include due date validation
 - Added configuration examples
@@ -67,6 +71,7 @@ if !crate::protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone()
 ## Protocol Integration
 
 The implementation leverages existing `ProtocolLimitsContract`:
+
 - `validate_invoice()` function handles the validation logic
 - Uses `max_due_date_days` from protocol configuration
 - Integrates seamlessly with existing error handling
@@ -75,6 +80,7 @@ The implementation leverages existing `ProtocolLimitsContract`:
 ## Test Coverage
 
 The implementation provides comprehensive test coverage:
+
 - ✅ Boundary conditions (exact max, over max, normal range)
 - ✅ Custom limit configuration
 - ✅ Dynamic limit updates
@@ -85,6 +91,7 @@ The implementation provides comprehensive test coverage:
 ## Pipeline Status
 
 Based on test output analysis:
+
 - ✅ Code compiles successfully (only unused import warnings)
 - ✅ No compilation errors related to due date validation
 - ✅ Existing due date tests continue to pass
@@ -93,6 +100,7 @@ Based on test output analysis:
 ## Verification
 
 The implementation enforces:
+
 1. **Future Requirement**: `due_date > current_timestamp`
 2. **Upper Bound**: `due_date <= current_timestamp + (max_due_date_days * 86400)`
 3. **Admin Control**: Configurable via `set_protocol_limits()`

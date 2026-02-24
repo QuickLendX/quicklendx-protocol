@@ -15,9 +15,11 @@ The QuickLendX contract provides comprehensive read-only query functions to supp
 ### Invoice Queries
 
 #### get_invoices_by_business_paginated
+
 Get invoices for a specific business with optional status filter and pagination.
 
 **Parameters:**
+
 - `business: Address` - Business address
 - `status_filter: Option<InvoiceStatus>` - Optional status filter (Pending, Verified, Funded, Paid, Defaulted, Cancelled)
 - `offset: u32` - Pagination offset (0-based)
@@ -26,6 +28,7 @@ Get invoices for a specific business with optional status filter and pagination.
 **Returns:** `Vec<BytesN<32>>` - List of invoice IDs
 
 **Example:**
+
 ```rust
 // Get first 10 verified invoices for a business
 let invoices = client.get_invoices_by_business_paginated(
@@ -37,9 +40,11 @@ let invoices = client.get_invoices_by_business_paginated(
 ```
 
 #### get_available_invoices_paginated
+
 Get available invoices (verified and not funded) with optional filters and pagination.
 
 **Parameters:**
+
 - `min_amount: Option<i128>` - Optional minimum amount filter
 - `max_amount: Option<i128>` - Optional maximum amount filter
 - `category_filter: Option<InvoiceCategory>` - Optional category filter
@@ -49,6 +54,7 @@ Get available invoices (verified and not funded) with optional filters and pagin
 **Returns:** `Vec<BytesN<32>>` - List of invoice IDs
 
 **Example:**
+
 ```rust
 // Get invoices between 1000 and 5000 in Services category
 let invoices = client.get_available_invoices_paginated(
@@ -61,6 +67,7 @@ let invoices = client.get_available_invoices_paginated(
 ```
 
 #### get_available_invoices
+
 Get all available invoices (verified and not funded) - simple version without pagination.
 
 **Returns:** `Vec<BytesN<32>>` - List of invoice IDs
@@ -68,9 +75,11 @@ Get all available invoices (verified and not funded) - simple version without pa
 ### Investment Queries
 
 #### get_investments_by_investor_paginated
+
 Get investments for a specific investor with optional status filter and pagination.
 
 **Parameters:**
+
 - `investor: Address` - Investor address
 - `status_filter: Option<InvestmentStatus>` - Optional status filter (Active, Withdrawn, Completed, Defaulted)
 - `offset: u32` - Pagination offset
@@ -79,6 +88,7 @@ Get investments for a specific investor with optional status filter and paginati
 **Returns:** `Vec<BytesN<32>>` - List of investment IDs
 
 **Example:**
+
 ```rust
 // Get first 10 active investments for an investor
 let investments = client.get_investments_by_investor_paginated(
@@ -90,9 +100,11 @@ let investments = client.get_investments_by_investor_paginated(
 ```
 
 #### get_investments_by_investor
+
 Get all investments for an investor - simple version without pagination.
 
 **Parameters:**
+
 - `investor: Address` - Investor address
 
 **Returns:** `Vec<BytesN<32>>` - List of investment IDs
@@ -100,9 +112,11 @@ Get all investments for an investor - simple version without pagination.
 ### Bid Queries
 
 #### get_bid_history_paginated
+
 Get bid history for an invoice with optional status filter and pagination.
 
 **Parameters:**
+
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `status_filter: Option<BidStatus>` - Optional status filter (Placed, Withdrawn, Accepted, Expired)
 - `offset: u32` - Pagination offset
@@ -111,6 +125,7 @@ Get bid history for an invoice with optional status filter and pagination.
 **Returns:** `Vec<Bid>` - List of bid records
 
 **Example:**
+
 ```rust
 // Get first 5 placed bids for an invoice
 let bids = client.get_bid_history_paginated(
@@ -122,9 +137,11 @@ let bids = client.get_bid_history_paginated(
 ```
 
 #### get_investor_bid_history_paginated
+
 Get bid history for an investor with optional status filter and pagination.
 
 **Parameters:**
+
 - `investor: Address` - Investor address
 - `status_filter: Option<BidStatus>` - Optional status filter
 - `offset: u32` - Pagination offset
@@ -133,6 +150,7 @@ Get bid history for an investor with optional status filter and pagination.
 **Returns:** `Vec<Bid>` - List of bid records
 
 **Example:**
+
 ```rust
 // Get all accepted bids for an investor
 let bids = client.get_investor_bid_history_paginated(
@@ -144,9 +162,11 @@ let bids = client.get_investor_bid_history_paginated(
 ```
 
 #### get_bid_history
+
 Get all bid history for an invoice - simple version without pagination.
 
 **Parameters:**
+
 - `invoice_id: BytesN<32>` - Invoice identifier
 
 **Returns:** `Vec<Bid>` - List of bid records
@@ -154,6 +174,7 @@ Get all bid history for an invoice - simple version without pagination.
 ## Pagination Patterns
 
 ### Basic Pagination
+
 ```rust
 // Page 1: First 10 results
 let page1 = client.get_invoices_by_business_paginated(&business, &None, &0, &10);
@@ -166,6 +187,7 @@ let page3 = client.get_invoices_by_business_paginated(&business, &None, &20, &10
 ```
 
 ### Filtered Pagination
+
 ```rust
 // Get verified invoices only, paginated
 let verified = client.get_invoices_by_business_paginated(
@@ -177,6 +199,7 @@ let verified = client.get_invoices_by_business_paginated(
 ```
 
 ### Amount Range Filtering
+
 ```rust
 // Get invoices between 1000 and 10000
 let filtered = client.get_available_invoices_paginated(
@@ -191,16 +214,19 @@ let filtered = client.get_available_invoices_paginated(
 ## Best Practices
 
 ### Pagination
+
 - Use reasonable page sizes (10-50 items) to balance gas costs and user experience
 - Always check if results are fewer than the limit to detect end of data
 - Store offset values for efficient navigation
 
 ### Filtering
+
 - Use status filters to reduce data transfer and processing
 - Combine multiple filters for precise queries
 - Cache frequently accessed filtered results
 
 ### Performance
+
 - Query functions are read-only and gas-efficient
 - Use pagination for large datasets
 - Filter at the contract level to minimize data transfer
@@ -208,6 +234,7 @@ let filtered = client.get_available_invoices_paginated(
 ## Frontend Integration
 
 ### Dashboard Queries
+
 ```rust
 // Business dashboard: Get recent invoices
 let recent_invoices = client.get_invoices_by_business_paginated(
@@ -227,6 +254,7 @@ let active_investments = client.get_investments_by_investor_paginated(
 ```
 
 ### Search and Filter
+
 ```rust
 // Search available invoices by amount range
 let search_results = client.get_available_invoices_paginated(
@@ -239,6 +267,7 @@ let search_results = client.get_available_invoices_paginated(
 ```
 
 ### Analytics
+
 ```rust
 // Get all investments for analytics
 let all_investments = client.get_investments_by_investor(&investor);
@@ -253,4 +282,3 @@ let bid_history = client.get_bid_history(&invoice_id);
 - No authorization required for queries (public data)
 - Pagination limits prevent excessive gas usage
 - Filters are applied at contract level for efficiency
-

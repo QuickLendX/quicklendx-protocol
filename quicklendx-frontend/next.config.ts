@@ -3,13 +3,13 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  
+
   // Image optimization
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [],
   },
-  
+
   // Security headers
   async headers() {
     return [

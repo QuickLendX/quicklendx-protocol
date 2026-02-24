@@ -18,6 +18,7 @@ Invoices now support extended metadata, categorization, and tagging to facilitat
 ### InvoiceCategory
 
 Enum representing the industry or type of invoice:
+
 - `Services`
 - `Products`
 - `Consulting`
@@ -29,6 +30,7 @@ Enum representing the industry or type of invoice:
 ### InvoiceMetadata
 
 Optional struct attached to invoices:
+
 ```rust
 struct InvoiceMetadata {
     customer_name: String,
@@ -81,6 +83,7 @@ fn remove_invoice_tag(env: Env, invoice_id: BytesN<32>, tag: String)
 ## Storage and Indexing
 
 Invoices are indexed using `(Symbol, Key)` tuples in the contract storage:
+
 - **Category Index**: `("cat_idx", category) -> Vec<InvoiceId>`
 - **Tag Index**: `("tag_idx", tag) -> Vec<InvoiceId>`
 - **Customer Index**: `("meta_c", customer_name) -> Vec<InvoiceId>`

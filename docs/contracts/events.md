@@ -9,11 +9,13 @@ The QuickLendX protocol emits structured events for all major contract operation
 ### Invoice Events
 
 #### InvoiceUploaded
+
 Emitted when a business uploads an invoice.
 
 **Topic:** `inv_up`
 
 **Data:**
+
 - `invoice_id: BytesN<32>` - Unique invoice identifier
 - `business: Address` - Business address that uploaded the invoice
 - `amount: i128` - Invoice amount
@@ -22,31 +24,37 @@ Emitted when a business uploads an invoice.
 - `timestamp: u64` - Event timestamp
 
 #### InvoiceVerified
+
 Emitted when an invoice is verified by admin.
 
 **Topic:** `inv_ver`
 
 **Data:**
+
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `business: Address` - Business address
 - `timestamp: u64` - Event timestamp
 
 #### InvoiceCancelled
+
 Emitted when an invoice is cancelled by the business owner.
 
 **Topic:** `inv_canc`
 
 **Data:**
+
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `business: Address` - Business address
 - `timestamp: u64` - Event timestamp
 
 #### InvoiceSettled
+
 Emitted when an invoice is fully settled.
 
 **Topic:** `inv_set`
 
 **Data:**
+
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `business: Address` - Business address
 - `investor: Address` - Investor address
@@ -55,11 +63,13 @@ Emitted when an invoice is fully settled.
 - `timestamp: u64` - Event timestamp
 
 #### InvoiceDefaulted
+
 Emitted when an invoice defaults after grace period.
 
 **Topic:** `inv_def`
 
 **Data:**
+
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `business: Address` - Business address
 - `investor: Address` - Investor address
@@ -68,11 +78,13 @@ Emitted when an invoice defaults after grace period.
 ### Bid Events
 
 #### BidPlaced
+
 Emitted when an investor places a bid on an invoice.
 
 **Topic:** `bid_plc`
 
 **Data:**
+
 - `bid_id: BytesN<32>` - Unique bid identifier
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `investor: Address` - Investor address
@@ -82,11 +94,13 @@ Emitted when an investor places a bid on an invoice.
 - `expiration_timestamp: u64` - Bid expiration timestamp
 
 #### BidAccepted
+
 Emitted when a business accepts a bid.
 
 **Topic:** `bid_acc`
 
 **Data:**
+
 - `bid_id: BytesN<32>` - Bid identifier
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `investor: Address` - Investor address
@@ -96,11 +110,13 @@ Emitted when a business accepts a bid.
 - `timestamp: u64` - Event timestamp
 
 #### BidWithdrawn
+
 Emitted when an investor withdraws their bid.
 
 **Topic:** `bid_wdr`
 
 **Data:**
+
 - `bid_id: BytesN<32>` - Bid identifier
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `investor: Address` - Investor address
@@ -108,11 +124,13 @@ Emitted when an investor withdraws their bid.
 - `timestamp: u64` - Event timestamp
 
 #### BidExpired
+
 Emitted when a bid expires.
 
 **Topic:** `bid_exp`
 
 **Data:**
+
 - `bid_id: BytesN<32>` - Bid identifier
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `investor: Address` - Investor address
@@ -122,11 +140,13 @@ Emitted when a bid expires.
 ### Escrow Events
 
 #### EscrowCreated
+
 Emitted when escrow is created for an invoice.
 
 **Topic:** `esc_cr`
 
 **Data:**
+
 - `escrow_id: BytesN<32>` - Escrow identifier
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `investor: Address` - Investor address
@@ -134,22 +154,26 @@ Emitted when escrow is created for an invoice.
 - `amount: i128` - Escrow amount
 
 #### EscrowReleased
+
 Emitted when escrow funds are released to business.
 
 **Topic:** `esc_rel`
 
 **Data:**
+
 - `escrow_id: BytesN<32>` - Escrow identifier
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `business: Address` - Business address
 - `amount: i128` - Released amount
 
 #### EscrowRefunded
+
 Emitted when escrow funds are refunded to investor.
 
 **Topic:** `esc_ref`
 
 **Data:**
+
 - `escrow_id: BytesN<32>` - Escrow identifier
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `investor: Address` - Investor address
@@ -158,11 +182,13 @@ Emitted when escrow funds are refunded to investor.
 ### Other Events
 
 #### PartialPayment
+
 Emitted when a partial payment is made towards an invoice.
 
 **Topic:** `inv_pp`
 
 **Data:**
+
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `business: Address` - Business address
 - `payment_amount: i128` - Payment amount
@@ -171,11 +197,13 @@ Emitted when a partial payment is made towards an invoice.
 - `transaction_id: String` - Transaction identifier
 
 #### InvoiceExpired
+
 Emitted when an invoice expires.
 
 **Topic:** `inv_exp`
 
 **Data:**
+
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `business: Address` - Business address
 - `due_date: u64` - Due date timestamp
@@ -183,20 +211,25 @@ Emitted when an invoice expires.
 ## Indexing Guidelines
 
 ### Event Topics
+
 All events use short symbol topics (6 characters) for efficient storage and querying.
 
 ### Timestamps
+
 All events include timestamps for chronological indexing and filtering.
 
 ### Addresses
+
 All relevant addresses (business, investor) are included for efficient filtering by participant.
 
 ### Amounts
+
 All financial amounts are included for analytics and reporting.
 
 ## Usage for Indexers
 
 Indexers should:
+
 1. Listen for all event topics
 2. Store events with their full data payload
 3. Index by invoice_id, business, investor for fast lookups
@@ -209,4 +242,3 @@ Indexers should:
 - Events cannot be forged or modified
 - All events include authorization context (who performed the action)
 - Events are immutable once emitted
-

@@ -9,6 +9,7 @@ The investment insurance module enables investors to attach insurance coverage t
 ### Core Components
 
 #### InsuranceCoverage Structure
+
 ```rust
 pub struct InsuranceCoverage {
     pub provider: Address,           // Insurance provider address
@@ -20,6 +21,7 @@ pub struct InsuranceCoverage {
 ```
 
 #### Investment Structure (Extended)
+
 ```rust
 pub struct Investment {
     pub investment_id: BytesN<32>,
@@ -45,6 +47,7 @@ premium = coverage_amount * DEFAULT_INSURANCE_PREMIUM_BPS / 10_000
 ```
 
 **Example:**
+
 - Investment amount: 10,000 USDC
 - Coverage percentage: 80%
 - Coverage amount: 8,000 USDC
@@ -66,17 +69,20 @@ pub fn add_investment_insurance(
 ```
 
 **Parameters:**
+
 - `investment_id`: Unique identifier of the investment
 - `provider`: Address of the insurance provider
 - `coverage_percentage`: Coverage as percentage (1-100)
 
 **Preconditions:**
+
 - Investment must exist and be in `Active` status
 - Coverage percentage must be between 1 and 100
 - Caller must be the investment owner (investor)
 - Investment cannot already have active insurance
 
 **Behavior:**
+
 1. Validates coverage percentage
 2. Calculates coverage amount: `investment_amount * coverage_percentage / 100`
 3. Calculates premium using basis points formula
@@ -86,11 +92,13 @@ pub fn add_investment_insurance(
 7. Emits `InsurancePremiumCollected` event
 
 **Security Checks:**
+
 - `investor.require_auth()` - Only the investor can add insurance
 - Status validation - Only Active investments can be insured
 - Parameter validation - Coverage percentage bounds checked
 
 **Errors:**
+
 - `StorageKeyNotFound` - Investment does not exist
 - `InvalidStatus` - Investment is not in Active status
 - `InvalidCoveragePercentage` - Coverage percentage < 1 or > 100
@@ -109,18 +117,22 @@ pub fn query_investment_insurance(
 ```
 
 **Parameters:**
+
 - `investment_id`: Unique identifier of the investment to query
 
 **Returns:**
+
 - `Ok(Vec<InsuranceCoverage>)` - All insurance records (active and inactive)
 - `Err(StorageKeyNotFound)` - Investment does not exist
 
 **Security Notes:**
+
 - No authorization required - Query function is read-only
 - Returns all insurance records regardless of state
 - Can be called by any address
 
 **Use Cases:**
+
 1. Display insurance status in UI
 2. Calculate total coverage for an investment
 3. Retrieve provider information
@@ -159,6 +171,7 @@ Insured Investment (Status Changed + Insurance.active=false)
 ## Events
 
 ### InsuranceAdded
+
 Emitted when insurance is successfully added to an investment.
 
 ```rust
@@ -177,6 +190,7 @@ pub fn emit_insurance_added(
 **Event Topics:** `("ins_add",)`
 
 **Data:**
+
 - investment_id: BytesN<32>
 - invoice_id: BytesN<32>
 - investor: Address
@@ -186,6 +200,7 @@ pub fn emit_insurance_added(
 - premium_amount: i128
 
 ### InsurancePremiumCollected
+
 Emitted when insurance premium is processed.
 
 ```rust
@@ -200,11 +215,13 @@ pub fn emit_insurance_premium_collected(
 **Event Topics:** `("ins_prm",)`
 
 **Data:**
+
 - investment_id: BytesN<32>
 - provider: Address
 - premium_amount: i128
 
 ### InsuranceClaimed
+
 Emitted when insurance coverage is claimed (on default).
 
 ```rust
@@ -220,6 +237,7 @@ pub fn emit_insurance_claimed(
 **Event Topics:** `("ins_clm",)`
 
 **Data:**
+
 - investment_id: BytesN<32>
 - invoice_id: BytesN<32>
 - provider: Address
@@ -288,18 +306,19 @@ Reason: Prevents overlapping coverage and simplifies settlement logic
 
 ### Potential Vulnerabilities & Mitigations
 
-| Vulnerability | Mitigation |
-|---|---|
-| Unauthorized insurance addition | `investor.require_auth()` enforces caller identity |
-| Invalid coverage percentages | Input validation (1-100 range) |
-| Coverage on inactive investments | Status check before allowing addition |
-| Multiple active insurances | `has_active_insurance()` check prevents duplicates |
-| Integer overflow in premium calc | Uses `saturating_mul` and `checked_div` |
-| Stale coverage data | Vec<> is updated atomically with investment |
+| Vulnerability                    | Mitigation                                         |
+| -------------------------------- | -------------------------------------------------- |
+| Unauthorized insurance addition  | `investor.require_auth()` enforces caller identity |
+| Invalid coverage percentages     | Input validation (1-100 range)                     |
+| Coverage on inactive investments | Status check before allowing addition              |
+| Multiple active insurances       | `has_active_insurance()` check prevents duplicates |
+| Integer overflow in premium calc | Uses `saturating_mul` and `checked_div`            |
+| Stale coverage data              | Vec<> is updated atomically with investment        |
 
 ## Storage Schema
 
 ### Investment Storage Key
+
 ```
 Key: investment_id (BytesN<32>)
 Value: Investment {
@@ -309,12 +328,14 @@ Value: Investment {
 ```
 
 ### Investor Index Key
+
 ```
 Key: ("invst_inv", investor_address)
 Value: Vec<investment_id>
 ```
 
 ### Invoice Index Key
+
 ```
 Key: ("inv_map", invoice_id)
 Value: investment_id
@@ -411,17 +432,20 @@ cargo test test_investment_insurance_lifecycle --lib -- --nocapture
 ## Future Enhancements
 
 ### Phase 2: Settlement Integration
+
 - Automatic payout to insurance providers on default
 - Multi-provider insurance support
 - Insurance fund management
 
 ### Phase 3: Advanced Features
+
 - Variable premium rates based on risk tier
 - Multiple active insurances per investment
 - Partial insurance claims
 - Insurance provider reputation system
 
 ### Phase 4: Governance
+
 - Dynamic insurance premium adjustment
 - Approved provider registry
 - Insurance claim dispute resolution

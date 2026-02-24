@@ -16,9 +16,9 @@ Public contract entry point for marking an invoice as defaulted.
 
 **Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `invoice_id` | `BytesN<32>` | The invoice to mark as defaulted |
+| Parameter      | Type          | Description                                                                                                 |
+| -------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
+| `invoice_id`   | `BytesN<32>`  | The invoice to mark as defaulted                                                                            |
 | `grace_period` | `Option<u64>` | Grace period in seconds. If `None`, uses protocol config; if not configured, defaults to 7 days (604,800s). |
 
 **Validation order:**
@@ -31,13 +31,13 @@ Public contract entry point for marking an invoice as defaulted.
 
 **Errors:**
 
-| Error | Code | Condition |
-|-------|------|-----------|
-| `NotAdmin` | 1005 | Caller is not the configured admin |
-| `InvoiceNotFound` | 1000 | Invoice ID does not exist |
-| `InvoiceAlreadyDefaulted` | 1049 | Invoice has already been defaulted |
-| `InvoiceNotAvailableForFunding` | 1047 | Invoice is not in `Funded` status |
-| `OperationNotAllowed` | 1009 | Grace period has not yet expired |
+| Error                           | Code | Condition                          |
+| ------------------------------- | ---- | ---------------------------------- |
+| `NotAdmin`                      | 1005 | Caller is not the configured admin |
+| `InvoiceNotFound`               | 1000 | Invoice ID does not exist          |
+| `InvoiceAlreadyDefaulted`       | 1049 | Invoice has already been defaulted |
+| `InvoiceNotAvailableForFunding` | 1047 | Invoice is not in `Funded` status  |
+| `OperationNotAllowed`           | 1009 | Grace period has not yet expired   |
 
 ### `handle_default(invoice_id)`
 
@@ -80,13 +80,13 @@ The check uses strict greater-than (`>`), meaning the invoice cannot be defaulte
 
 ### Examples
 
-| Scenario | Due Date | Grace Period | Deadline | Current Time | Can Default? |
-|----------|----------|-------------|----------|-------------|-------------|
-| Default 7-day grace | Day 0 | 7 days | Day 7 | Day 8 | Yes |
-| Before grace expires | Day 0 | 7 days | Day 7 | Day 3 | No |
-| Exactly at deadline | Day 0 | 7 days | Day 7 | Day 7 | No |
-| Custom 3-day grace | Day 0 | 3 days | Day 3 | Day 4 | Yes |
-| Zero grace period | Day 0 | 0 seconds | Day 0 | Day 0 + 1s | Yes |
+| Scenario             | Due Date | Grace Period | Deadline | Current Time | Can Default? |
+| -------------------- | -------- | ------------ | -------- | ------------ | ------------ |
+| Default 7-day grace  | Day 0    | 7 days       | Day 7    | Day 8        | Yes          |
+| Before grace expires | Day 0    | 7 days       | Day 7    | Day 3        | No           |
+| Exactly at deadline  | Day 0    | 7 days       | Day 7    | Day 7        | No           |
+| Custom 3-day grace   | Day 0    | 3 days       | Day 3    | Day 4        | Yes          |
+| Zero grace period    | Day 0    | 0 seconds    | Day 0    | Day 0 + 1s   | Yes          |
 
 ## State Transitions
 
@@ -116,24 +116,24 @@ When an invoice is defaulted:
 
 Tests are in `src/test_default.rs` (12 tests):
 
-| Test | Description |
-|------|-------------|
-| `test_default_after_grace_period` | Default succeeds after grace period expires |
-| `test_no_default_before_grace_period` | Default rejected during grace period |
-| `test_cannot_default_unfunded_invoice` | Verified-only invoice cannot be defaulted |
-| `test_cannot_default_pending_invoice` | Pending invoice cannot be defaulted |
-| `test_cannot_default_already_defaulted_invoice` | Double default returns `InvoiceAlreadyDefaulted` |
-| `test_custom_grace_period` | Custom 3-day grace period works correctly |
-| `test_default_uses_default_grace_period_when_none_provided` | `None` grace period uses 7-day default |
-| `test_default_uses_protocol_config_when_none` | `None` grace period uses protocol-configured grace |
-| `test_check_invoice_expiration_uses_protocol_config_when_none` | Expiration checks honor protocol-configured grace |
-| `test_per_invoice_grace_overrides_protocol_config` | Per-invoice grace period overrides protocol config |
-| `test_default_status_transition` | Status lists updated correctly |
-| `test_default_investment_status_update` | Investment status changes to `Defaulted` |
-| `test_default_exactly_at_grace_deadline` | Boundary: cannot default at exact deadline, can at deadline+1 |
-| `test_multiple_invoices_default_handling` | Independent invoices default independently |
-| `test_zero_grace_period_defaults_immediately_after_due_date` | Zero grace allows immediate default after due date |
-| `test_cannot_default_paid_invoice` | Paid invoices cannot be defaulted |
+| Test                                                           | Description                                                   |
+| -------------------------------------------------------------- | ------------------------------------------------------------- |
+| `test_default_after_grace_period`                              | Default succeeds after grace period expires                   |
+| `test_no_default_before_grace_period`                          | Default rejected during grace period                          |
+| `test_cannot_default_unfunded_invoice`                         | Verified-only invoice cannot be defaulted                     |
+| `test_cannot_default_pending_invoice`                          | Pending invoice cannot be defaulted                           |
+| `test_cannot_default_already_defaulted_invoice`                | Double default returns `InvoiceAlreadyDefaulted`              |
+| `test_custom_grace_period`                                     | Custom 3-day grace period works correctly                     |
+| `test_default_uses_default_grace_period_when_none_provided`    | `None` grace period uses 7-day default                        |
+| `test_default_uses_protocol_config_when_none`                  | `None` grace period uses protocol-configured grace            |
+| `test_check_invoice_expiration_uses_protocol_config_when_none` | Expiration checks honor protocol-configured grace             |
+| `test_per_invoice_grace_overrides_protocol_config`             | Per-invoice grace period overrides protocol config            |
+| `test_default_status_transition`                               | Status lists updated correctly                                |
+| `test_default_investment_status_update`                        | Investment status changes to `Defaulted`                      |
+| `test_default_exactly_at_grace_deadline`                       | Boundary: cannot default at exact deadline, can at deadline+1 |
+| `test_multiple_invoices_default_handling`                      | Independent invoices default independently                    |
+| `test_zero_grace_period_defaults_immediately_after_due_date`   | Zero grace allows immediate default after due date            |
+| `test_cannot_default_paid_invoice`                             | Paid invoices cannot be defaulted                             |
 
 Run tests:
 

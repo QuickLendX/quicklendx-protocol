@@ -23,6 +23,7 @@ Allows a verified business to upload an invoice to the platform.
 **Authorization**: Business owner only (requires authentication)
 
 **Parameters**:
+
 - `env: Env` - Contract environment
 - `business: Address` - Address of the business uploading the invoice
 - `amount: i128` - Total invoice amount (must be > 0)
@@ -35,6 +36,7 @@ Allows a verified business to upload an invoice to the platform.
 **Returns**: `Result<BytesN<32>, QuickLendXError>` - Invoice ID on success
 
 **Validations**:
+
 - Business must be verified
 - Amount must be greater than 0
 - Due date must be in the future (after current timestamp)
@@ -43,9 +45,11 @@ Allows a verified business to upload an invoice to the platform.
 - Tags must be valid (max 10 tags, 1-50 characters each)
 
 **Events Emitted**:
+
 - `inv_up` (invoice_uploaded) - Contains invoice ID, business address, amount, currency, and due date
 
 **Failure Cases**:
+
 - `BusinessNotVerified` - Business is not verified
 - `InvalidAmount` - Amount is <= 0
 - `InvoiceDueDateInvalid` - Due date is not in the future
@@ -61,23 +65,28 @@ Allows an admin or oracle to verify an uploaded invoice, making it available for
 **Authorization**: Admin only (requires authentication)
 
 **Parameters**:
+
 - `env: Env` - Contract environment
 - `invoice_id: BytesN<32>` - ID of the invoice to verify
 
 **Returns**: `Result<(), QuickLendXError>` - Success or error
 
 **Validations**:
+
 - Caller must be an admin
 - Invoice must exist
 - Invoice status must be `Pending`
 
 **State Transitions**:
+
 - `Pending` → `Verified`
 
 **Events Emitted**:
+
 - `inv_ver` (invoice_verified) - Contains invoice ID and business address
 
 **Failure Cases**:
+
 - `NotAdmin` - Caller is not an admin
 - `InvoiceNotFound` - Invoice does not exist
 - `InvalidStatus` - Invoice is not in Pending status
@@ -91,29 +100,35 @@ Allows a business to cancel their own invoice before it has been funded by an in
 **Authorization**: Business owner only (requires authentication)
 
 **Parameters**:
+
 - `env: Env` - Contract environment
 - `invoice_id: BytesN<32>` - ID of the invoice to cancel
 
 **Returns**: `Result<(), QuickLendXError>` - Success or error
 
 **Validations**:
+
 - Caller must be the business owner of the invoice
 - Invoice must exist
 - Invoice status must be either `Pending` or `Verified` (cannot cancel if already funded)
 
 **State Transitions**:
+
 - `Pending` → `Cancelled`
 - `Verified` → `Cancelled`
 
 **Events Emitted**:
+
 - `inv_canc` (invoice_cancelled) - Contains invoice ID, business address, and timestamp
 
 **Failure Cases**:
+
 - `InvoiceNotFound` - Invoice does not exist
 - `Unauthorized` - Caller is not the business owner
 - `InvalidStatus` - Invoice is already funded, paid, defaulted, or cancelled
 
 ---
+
 ### 4. `refund_escrow_funds`
 
 Allows an admin or the business owner to refund a funded invoice, returning funds to the investor.
@@ -121,6 +136,7 @@ Allows an admin or the business owner to refund a funded invoice, returning fund
 **Authorization**: Admin or Business owner (requires authentication)
 
 **Parameters**:
+
 - `env: Env` - Contract environment
 - `invoice_id: BytesN<32>` - ID of the invoice to refund
 - `caller: Address` - Address of the party initiating the refund
@@ -128,22 +144,27 @@ Allows an admin or the business owner to refund a funded invoice, returning fund
 **Returns**: `Result<(), QuickLendXError>` - Success or error
 
 **Validations**:
+
 - Caller must be an admin or the business owner
 - Invoice must be in `Funded` status
 
 **State Transitions**:
+
 - `Funded` → `Refunded`
 
 **Related Updates**:
+
 - Bid status → `Cancelled`
 - Investment status → `Refunded`
 - Escrow status → `Refunded`
 
 **Events Emitted**:
+
 - `esc_ref` (escrow_refunded) - Transferred funds back to investor
 - Audit logs for status change and refund
 
 **Failure Cases**:
+
 - `InvoiceNotFound` - Invoice does not exist
 - `Unauthorized` - Caller is not authorized (Admin/Business)
 - `InvalidStatus` - Invoice is not in Funded status
@@ -153,6 +174,7 @@ Allows an admin or the business owner to refund a funded invoice, returning fund
 ## Authorization Rules
 
 ### Business (Invoice Owner)
+
 - Can upload invoices (if verified)
 - Can cancel their own invoices (before funding)
 - Can refund their own invoices (after funding, before release)
@@ -160,11 +182,13 @@ Allows an admin or the business owner to refund a funded invoice, returning fund
 - Can update invoice category and tags
 
 ### Admin/Oracle
+
 - Can verify invoices
 - Can reject verification
 - Can set admin address
 
 ### Investor
+
 - Cannot directly interact with invoice lifecycle (can only bid on verified invoices)
 
 ---
@@ -205,6 +229,7 @@ Alternative paths:
 ## Complete Lifecycle Flow
 
 ### 1. Invoice Upload
+
 ```rust
 // Business uploads an invoice
 let invoice_id = upload_invoice(
@@ -220,6 +245,7 @@ let invoice_id = upload_invoice(
 ```
 
 ### 2. Invoice Verification
+
 ```rust
 // Admin verifies the invoice
 verify_invoice(env, invoice_id)?;
@@ -227,6 +253,7 @@ verify_invoice(env, invoice_id)?;
 ```
 
 ### 3. Invoice Cancellation (Optional)
+
 ```rust
 // Business can cancel before funding
 cancel_invoice(env, invoice_id)?;
@@ -269,28 +296,28 @@ cancel_invoice(env, invoice_id)?;
 
 All invoice lifecycle events can be monitored by off-chain systems:
 
-| Event Symbol | Event Name | Data |
-|-------------|------------|------|
-| `inv_up` | invoice_uploaded | (invoice_id, business, amount, currency, due_date) |
-| `inv_ver` | invoice_verified | (invoice_id, business) |
-| `inv_canc` | invoice_cancelled | (invoice_id, business, timestamp) |
+| Event Symbol | Event Name        | Data                                               |
+| ------------ | ----------------- | -------------------------------------------------- |
+| `inv_up`     | invoice_uploaded  | (invoice_id, business, amount, currency, due_date) |
+| `inv_ver`    | invoice_verified  | (invoice_id, business)                             |
+| `inv_canc`   | invoice_cancelled | (invoice_id, business, timestamp)                  |
 
 ---
 
 ## Error Codes
 
-| Error | Code | Description |
-|-------|------|-------------|
-| `InvoiceNotFound` | 1000 | Invoice does not exist |
-| `InvalidAmount` | 1200 | Amount is invalid (e.g., <= 0) |
-| `InvoiceDueDateInvalid` | 1005 | Due date is not in the future |
-| `InvalidDescription` | 1204 | Description is empty |
-| `InvalidStatus` | 1401 | Operation not allowed in current status |
-| `BusinessNotVerified` | 1600 | Business is not verified |
-| `NotAdmin` | 1103 | Caller is not an admin |
-| `Unauthorized` | 1100 | Caller is not authorized |
-| `InvalidTag` | 1802 | Invalid tag format |
-| `TagLimitExceeded` | 1803 | Too many tags (max 10) |
+| Error                   | Code | Description                             |
+| ----------------------- | ---- | --------------------------------------- |
+| `InvoiceNotFound`       | 1000 | Invoice does not exist                  |
+| `InvalidAmount`         | 1200 | Amount is invalid (e.g., <= 0)          |
+| `InvoiceDueDateInvalid` | 1005 | Due date is not in the future           |
+| `InvalidDescription`    | 1204 | Description is empty                    |
+| `InvalidStatus`         | 1401 | Operation not allowed in current status |
+| `BusinessNotVerified`   | 1600 | Business is not verified                |
+| `NotAdmin`              | 1103 | Caller is not an admin                  |
+| `Unauthorized`          | 1100 | Caller is not authorized                |
+| `InvalidTag`            | 1802 | Invalid tag format                      |
+| `TagLimitExceeded`      | 1803 | Too many tags (max 10)                  |
 
 ---
 

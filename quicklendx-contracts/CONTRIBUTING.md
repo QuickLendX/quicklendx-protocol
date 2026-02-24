@@ -21,11 +21,13 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 - Install the [stellar-CLI](https://developers.stellar.org/docs/build/smart-contracts/getting-started/setup#install-the-stellar-cli)
 
 Install with Homebrew (macOS, Linux):
+
 ```bash
 brew install stellar-cli
 ```
 
 Install with cargo from source:
+
 ```bash
 cargo install --locked stellar-cli@23.0.0
 ```
@@ -53,6 +55,7 @@ cargo test
 ### 🔬 Running Fuzz Tests
 
 The project includes property-based fuzz tests for critical paths (invoice creation, bid placement, and settlement). These tests use `proptest` to generate many random inputs and verify that:
+
 - No panics occur
 - State remains consistent
 - Invalid inputs are properly rejected
@@ -73,11 +76,13 @@ cargo test --features fuzz-tests fuzz_store_invoice_valid_ranges
 ```
 
 **Fuzz test coverage:**
+
 - `fuzz_store_invoice_*`: Tests invoice creation with various amounts, due dates, and description lengths
 - `fuzz_place_bid_*`: Tests bid placement with different amounts and expected returns
 - `fuzz_settle_invoice_*`: Tests settlement with various payment amounts
 
 **Security notes:**
+
 - Fuzz tests validate input ranges and boundary conditions
 - All critical math operations are tested for overflow/underflow
 - State consistency is verified after each operation

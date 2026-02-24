@@ -4,12 +4,12 @@ Admin-managed whitelist of token addresses allowed for invoice currency. Invoice
 
 ## Entrypoints
 
-| Entrypoint | Visibility | Description |
-|------------|------------|--------------|
-| `add_currency` | Public (admin) | Add a token address to the whitelist. Idempotent if already present. |
-| `remove_currency` | Public (admin) | Remove a token address from the whitelist. |
-| `is_allowed_currency` | Public | Return whether a token is currently whitelisted. |
-| `get_whitelisted_currencies` | Public | Return the full list of whitelisted token addresses. |
+| Entrypoint                   | Visibility     | Description                                                          |
+| ---------------------------- | -------------- | -------------------------------------------------------------------- |
+| `add_currency`               | Public (admin) | Add a token address to the whitelist. Idempotent if already present. |
+| `remove_currency`            | Public (admin) | Remove a token address from the whitelist.                           |
+| `is_allowed_currency`        | Public         | Return whether a token is currently whitelisted.                     |
+| `get_whitelisted_currencies` | Public         | Return the full list of whitelisted token addresses.                 |
 
 ## Enforcement
 

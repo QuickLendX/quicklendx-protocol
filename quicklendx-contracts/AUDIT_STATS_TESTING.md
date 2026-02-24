@@ -57,13 +57,13 @@ cargo test test_audit_stats_empty_state --lib
 
 Based on testing, the following operations create audit entries:
 
-| Operation | Audit Entries Created |
-|-----------|----------------------|
-| Invoice Creation | 1 entry |
-| Invoice Verification | 2 entries |
-| Bid Placement | 1 entry (requires investor verification) |
-| Bid Acceptance | Multiple entries |
-| Escrow Creation | 1 entry |
+| Operation            | Audit Entries Created                    |
+| -------------------- | ---------------------------------------- |
+| Invoice Creation     | 1 entry                                  |
+| Invoice Verification | 2 entries                                |
+| Bid Placement        | 1 entry (requires investor verification) |
+| Bid Acceptance       | Multiple entries                         |
+| Escrow Creation      | 1 entry                                  |
 
 ## Notes
 

@@ -9,6 +9,7 @@ The Invoice Storage module provides comprehensive storage, indexing, and retriev
 ### Primary Storage
 
 Invoices are stored using a key-value pattern:
+
 - **Key**: `(Symbol("invoice"), invoice_id: BytesN<32>)`
 - **Value**: `Invoice` struct
 
@@ -117,6 +118,7 @@ pub fn store_invoice(env: &Env, invoice: &Invoice)
 ```
 
 **Operations:**
+
 1. Stores invoice in primary storage
 2. Adds to business index
 3. Adds to status index
@@ -125,6 +127,7 @@ pub fn store_invoice(env: &Env, invoice: &Invoice)
 6. Adds to metadata indexes (if metadata exists)
 
 **Example:**
+
 ```rust
 let invoice = Invoice::new(
     &env,
@@ -149,6 +152,7 @@ pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice>
 ```
 
 **Example:**
+
 ```rust
 if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
     // Process invoice
@@ -194,6 +198,7 @@ pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>>
 Returns all invoice IDs for a specific business.
 
 **Example:**
+
 ```rust
 let invoice_ids = InvoiceStorage::get_business_invoices(&env, &business_addr);
 for id in invoice_ids.iter() {
@@ -212,6 +217,7 @@ pub fn get_invoices_by_status(env: &Env, status: &InvoiceStatus) -> Vec<BytesN<3
 Returns all invoice IDs with a specific status.
 
 **Example:**
+
 ```rust
 // Get all verified invoices
 let verified_invoices = InvoiceStorage::get_invoices_by_status(
@@ -229,6 +235,7 @@ pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<By
 Returns all invoice IDs in a specific category.
 
 **Example:**
+
 ```rust
 let service_invoices = InvoiceStorage::get_invoices_by_category(
     &env,
@@ -249,6 +256,7 @@ pub fn get_invoices_by_category_and_status(
 Returns invoice IDs matching both category and status.
 
 **Example:**
+
 ```rust
 // Get verified service invoices
 let invoices = InvoiceStorage::get_invoices_by_category_and_status(
@@ -267,6 +275,7 @@ pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>>
 Returns all invoice IDs with a specific tag.
 
 **Example:**
+
 ```rust
 let tech_invoices = InvoiceStorage::get_invoices_by_tag(
     &env,
@@ -283,6 +292,7 @@ pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>>
 Returns invoice IDs that have ALL specified tags (intersection).
 
 **Example:**
+
 ```rust
 let tags = vec![
     &env,
@@ -301,6 +311,7 @@ pub fn get_invoices_with_rating_above(env: &Env, threshold: u32) -> Vec<BytesN<3
 Returns invoices with average rating above threshold.
 
 **Example:**
+
 ```rust
 // Get invoices with rating >= 4
 let high_rated = InvoiceStorage::get_invoices_with_rating_above(&env, 4);
@@ -328,6 +339,7 @@ pub fn get_invoices_by_tax_id(env: &Env, tax_id: &String) -> Vec<BytesN<32>>
 Query invoices by metadata fields.
 
 **Example:**
+
 ```rust
 let customer_invoices = InvoiceStorage::get_invoices_by_customer(
     &env,
@@ -345,6 +357,7 @@ pub fn remove_category_index(env: &Env, category: &InvoiceCategory, invoice_id: 
 ```
 
 **Usage:**
+
 ```rust
 // When creating invoice
 InvoiceStorage::add_category_index(&env, &invoice.category, &invoice.id);
@@ -362,6 +375,7 @@ pub fn remove_tag_index(env: &Env, tag: &String, invoice_id: &BytesN<32>)
 ```
 
 **Usage:**
+
 ```rust
 // When adding tag
 InvoiceStorage::add_tag_index(&env, &tag, &invoice.id);
@@ -378,6 +392,7 @@ pub fn remove_from_status_invoices(env: &Env, status: &InvoiceStatus, invoice_id
 ```
 
 **Usage:**
+
 ```rust
 // When changing status
 InvoiceStorage::remove_from_status_invoices(&env, &old_status, &invoice.id);
@@ -392,6 +407,7 @@ pub fn remove_metadata_indexes(env: &Env, metadata: &InvoiceMetadata, invoice_id
 ```
 
 **Usage:**
+
 ```rust
 // When adding metadata
 InvoiceStorage::add_metadata_indexes(&env, &invoice);
@@ -529,7 +545,7 @@ let mut verified_services = Vec::new(&env);
 
 for id in business_invoices.iter() {
     if let Some(invoice) = InvoiceStorage::get_invoice(&env, &id) {
-        if invoice.status == InvoiceStatus::Verified 
+        if invoice.status == InvoiceStatus::Verified
             && invoice.category == InvoiceCategory::Services {
             verified_services.push_back(id);
         }
@@ -626,6 +642,7 @@ The invoice storage module includes comprehensive tests covering:
 - ✅ Edge cases and error handling
 
 Run tests with:
+
 ```bash
 cargo test invoice
 ```
@@ -635,6 +652,7 @@ cargo test invoice
 ### Creating Invoices
 
 1. **Validate before storage**:
+
    ```rust
    if amount <= 0 {
        return Err(QuickLendXError::InvalidAmount);
@@ -656,6 +674,7 @@ cargo test invoice
 ### Updating Invoices
 
 1. **Maintain index consistency**:
+
    ```rust
    // Always remove from old index before adding to new
    InvoiceStorage::remove_from_status_invoices(&env, &old_status, &id);
@@ -663,6 +682,7 @@ cargo test invoice
    ```
 
 2. **Update timestamp**:
+
    ```rust
    invoice.updated_at = env.ledger().timestamp();
    ```
@@ -680,6 +700,7 @@ cargo test invoice
    - Query by tag for tag-based discovery
 
 2. **Handle empty results**:
+
    ```rust
    let invoices = InvoiceStorage::get_business_invoices(&env, &business);
    if invoices.is_empty() {
@@ -702,14 +723,14 @@ impl Invoice {
         let old_status = self.status.clone();
         self.status = InvoiceStatus::Verified;
         self.updated_at = env.ledger().timestamp();
-        
+
         // Update indexes
         InvoiceStorage::remove_from_status_invoices(env, &old_status, &self.id);
         InvoiceStorage::add_to_status_invoices(env, &self.status, &self.id);
-        
+
         // Save
         InvoiceStorage::update_invoice(env, self);
-        
+
         // Emit event
         events::emit_invoice_verified(env, &self.id, &self.business);
     }

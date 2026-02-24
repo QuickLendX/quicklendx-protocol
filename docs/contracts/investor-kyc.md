@@ -15,6 +15,7 @@ The QuickLendX protocol implements a comprehensive investor verification system 
 ## Investor Verification Process
 
 ### 1. KYC Submission
+
 Investors submit their KYC data using the `submit_investor_kyc` function:
 
 ```rust
@@ -26,11 +27,13 @@ pub fn submit_investor_kyc(
 ```
 
 **Requirements:**
+
 - Only the investor can submit their own KYC
 - KYC data should contain comprehensive verification information
 - Cannot resubmit if already pending or verified (can resubmit if previously rejected)
 
 ### 2. Admin Verification
+
 Admins review and verify investors using the `verify_investor` function:
 
 ```rust
@@ -42,6 +45,7 @@ pub fn verify_investor(
 ```
 
 **Process:**
+
 1. Admin reviews submitted KYC data
 2. Sets a base investment limit
 3. System calculates risk score based on KYC data
@@ -49,6 +53,7 @@ pub fn verify_investor(
 5. Final investment limit is calculated using tier and risk multipliers
 
 ### 3. Investment Limit Management
+
 Admins can update investment limits for verified investors:
 
 ```rust
@@ -62,6 +67,7 @@ pub fn set_investment_limit(
 ## Investor Tiers and Risk Levels
 
 ### Investor Tiers
+
 - **VIP**: Very low risk, high investment volume (>$5M), many successful investments (>50)
 - **Platinum**: Low risk, high investment volume (>$1M), good track record (>20)
 - **Gold**: Medium-low risk, moderate investment volume (>$100K), decent history (>10)
@@ -69,6 +75,7 @@ pub fn set_investment_limit(
 - **Basic**: Default tier for new or low-volume investors
 
 ### Risk Levels
+
 - **Low** (0-25): Minimal risk, full investment privileges
 - **Medium** (26-50): Moderate risk, 75% of calculated limit
 - **High** (51-75): High risk, 50% of calculated limit, max $50K per investment
@@ -81,6 +88,7 @@ final_limit = base_limit × tier_multiplier × risk_multiplier / 100
 ```
 
 **Tier Multipliers:**
+
 - VIP: 10x
 - Platinum: 5x
 - Gold: 3x
@@ -88,6 +96,7 @@ final_limit = base_limit × tier_multiplier × risk_multiplier / 100
 - Basic: 1x
 
 **Risk Multipliers:**
+
 - Low: 100% (no reduction)
 - Medium: 75%
 - High: 50%
@@ -117,6 +126,7 @@ The system uses specific error codes for investor verification:
 ## Query Functions
 
 ### Get Investor Information
+
 ```rust
 // Get full verification record
 pub fn get_investor_verification(env: Env, investor: Address) -> Option<InvestorVerification>
@@ -129,6 +139,7 @@ pub fn get_investor_analytics(env: Env, investor: Address) -> Result<InvestorVer
 ```
 
 ### List Investors by Status
+
 ```rust
 // Get all verified investors
 pub fn get_verified_investors(env: Env) -> Vec<Address>
@@ -141,6 +152,7 @@ pub fn get_rejected_investors(env: Env) -> Vec<Address>
 ```
 
 ### Filter by Tier and Risk
+
 ```rust
 // Get investors by tier
 pub fn get_investors_by_tier(env: Env, tier: InvestorTier) -> Vec<Address>
@@ -185,6 +197,7 @@ contract.set_investment_limit(&investor_addr, &200_000);
 ## Testing
 
 The system includes comprehensive tests covering:
+
 - KYC submission and verification flows
 - Investment limit enforcement
 - Risk assessment calculations

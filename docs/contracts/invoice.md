@@ -65,6 +65,7 @@ Due date validation follows these rules:
 #### Error Handling
 
 Invalid due dates result in:
+
 - `InvoiceDueDateInvalid` (1008): Due date is in the past or exceeds maximum bounds
 
 ### Invoice Tags
@@ -88,6 +89,7 @@ Due dates must meet the following criteria:
 4. **Default Limits**: 365 days maximum if protocol limits not initialized
 
 Violations result in:
+
 - `InvoiceDueDateInvalid` (1008): Due date is invalid
 
 ### Category Validation
@@ -103,6 +105,7 @@ Tags must meet the following criteria:
 3. **Non-empty**: Tags cannot be empty strings
 
 Violations result in the following errors:
+
 - `TagLimitExceeded` (1036): More than 10 tags
 - `InvalidTag` (1035): Tag length outside 1-50 character range
 
@@ -111,6 +114,7 @@ Violations result in the following errors:
 ### Category Index
 
 Categories are indexed using the storage key pattern:
+
 ```
 ("cat_idx", InvoiceCategory) -> Vec<BytesN<32>>
 ```
@@ -120,6 +124,7 @@ This enables efficient retrieval of all invoices in a specific category.
 ### Tag Index
 
 Tags are indexed using the storage key pattern:
+
 ```
 ("tag_idx", String) -> Vec<BytesN<32>>
 ```
@@ -129,6 +134,7 @@ Each tag maintains a list of invoice IDs that have been tagged with it.
 ### Index Maintenance
 
 Indexes are automatically maintained during:
+
 - Invoice creation
 - Category updates
 - Tag additions
@@ -143,6 +149,7 @@ Indexes are automatically maintained during:
 Returns all invoice IDs in the specified category.
 
 **Example:**
+
 ```rust
 let services_invoices = client.get_invoices_by_category(&InvoiceCategory::Services);
 ```
@@ -152,6 +159,7 @@ let services_invoices = client.get_invoices_by_category(&InvoiceCategory::Servic
 Returns all invoice IDs with the specified tag.
 
 **Example:**
+
 ```rust
 let urgent_invoices = client.get_invoices_by_tag(&String::from_str(&env, "urgent"));
 ```
@@ -161,6 +169,7 @@ let urgent_invoices = client.get_invoices_by_tag(&String::from_str(&env, "urgent
 Returns invoice IDs that have ALL specified tags (AND logic).
 
 **Example:**
+
 ```rust
 let mut tags = Vec::new(&env);
 tags.push_back(String::from_str(&env, "urgent"));
@@ -173,6 +182,7 @@ let results = client.get_invoices_by_tags(&tags);
 Returns invoices filtered by both category and status.
 
 **Example:**
+
 ```rust
 let verified_services = client.get_invoices_by_cat_status(
     &InvoiceCategory::Services,
@@ -209,6 +219,7 @@ Updates an invoice's category. Automatically maintains category indexes.
 **Security**: Requires invoice owner authorization.
 
 **Example:**
+
 ```rust
 client.update_invoice_category(&invoice_id, &InvoiceCategory::Technology)?;
 ```
@@ -218,6 +229,7 @@ client.update_invoice_category(&invoice_id, &InvoiceCategory::Technology)?;
 Adds a tag to an invoice.
 
 **Validation**:
+
 - Tag must be 1-50 characters
 - Total tags must not exceed 10
 - Duplicate tags are prevented
@@ -225,6 +237,7 @@ Adds a tag to an invoice.
 **Security**: Requires invoice owner authorization.
 
 **Example:**
+
 ```rust
 client.add_invoice_tag(&invoice_id, &String::from_str(&env, "urgent"))?;
 ```
@@ -236,6 +249,7 @@ Removes a tag from an invoice.
 **Security**: Requires invoice owner authorization.
 
 **Example:**
+
 ```rust
 client.remove_invoice_tag(&invoice_id, &String::from_str(&env, "urgent"))?;
 ```
@@ -249,6 +263,7 @@ The following events are emitted for category and tag operations:
 Emitted when an invoice category is changed.
 
 **Fields**:
+
 - `invoice_id`: BytesN<32>
 - `old_category`: InvoiceCategory
 - `new_category`: InvoiceCategory
@@ -259,6 +274,7 @@ Emitted when an invoice category is changed.
 Emitted when a tag is added to an invoice.
 
 **Fields**:
+
 - `invoice_id`: BytesN<32>
 - `tag`: String
 - `added_by`: Address
@@ -268,6 +284,7 @@ Emitted when a tag is added to an invoice.
 Emitted when a tag is removed from an invoice.
 
 **Fields**:
+
 - `invoice_id`: BytesN<32>
 - `tag`: String
 - `removed_by`: Address
@@ -319,12 +336,12 @@ Test coverage exceeds 95% for all category and tag functionality.
 
 ## Error Handling
 
-| Error Code | Error Name | Description |
-|------------|------------|-------------|
-| 1035 | InvalidTag | Tag length outside 1-50 character range |
-| 1036 | TagLimitExceeded | More than 10 tags per invoice |
-| 1001 | InvoiceNotFound | Invoice ID does not exist |
-| 1002 | Unauthorized | Caller not authorized for operation |
+| Error Code | Error Name       | Description                             |
+| ---------- | ---------------- | --------------------------------------- |
+| 1035       | InvalidTag       | Tag length outside 1-50 character range |
+| 1036       | TagLimitExceeded | More than 10 tags per invoice           |
+| 1001       | InvoiceNotFound  | Invoice ID does not exist               |
+| 1002       | Unauthorized     | Caller not authorized for operation     |
 
 ## Best Practices
 
