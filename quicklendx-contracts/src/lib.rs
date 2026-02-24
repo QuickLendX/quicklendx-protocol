@@ -2932,6 +2932,8 @@ mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
 #[cfg(test)]
+mod test_overdue_expiration;
+#[cfg(test)]
 mod test_revenue_split;
 #[cfg(test)]
 mod test_types;
