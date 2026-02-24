@@ -122,6 +122,7 @@ fn test_create_and_validate_backup() {
 fn test_restore_backup() {
     let (env, client, admin) = setup_env();
 
+    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, 50_000);
     let currency = setup_token(&env, &business, &investor, &client.address);
@@ -273,7 +274,7 @@ fn test_get_backup_details_some_with_correct_fields() {
 /// get_backup_details returns None for an invalid/unknown backup id.
 #[test]
 fn test_get_backup_details_none_for_invalid_id() {
-    let (env, client, _admin) = setup();
+    let (env, client, _admin) = setup_env();
 
     let invalid_id = BytesN::from_array(&env, &[0u8; 32]);
     let details = client.get_backup_details(&invalid_id);
