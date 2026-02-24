@@ -653,39 +653,7 @@ impl QuickLendXContract {
             .saturating_add(cancelled)
     }
 
-    /// Initialize protocol limits (admin only)
-    pub fn initialize_protocol_limits(
-        env: Env,
-        admin: Address,
-        min_invoice_amount: i128,
-        max_due_date_days: u64,
-        grace_period_seconds: u64,
-    ) -> Result<(), QuickLendXError> {
-        admin.require_auth();
-        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        if current_admin != admin {
-            return Err(QuickLendXError::NotAdmin);
-        }
-        use crate::protocol_limits::ProtocolLimits;
-        let limits = ProtocolLimits {
-            min_invoice_amount,
-            max_due_date_days,
-            grace_period_seconds,
-        };
-        env.storage().instance().set(&"protocol_limits", &limits);
-        Ok(())
-    }
 
-    /// Update protocol limits (admin only)
-    pub fn set_protocol_limits(
-        env: Env,
-        admin: Address,
-        min_invoice_amount: i128,
-        max_due_date_days: u64,
-        grace_period_seconds: u64,
-    ) -> Result<(), QuickLendXError> {
-        Self::initialize_protocol_limits(env, admin, min_invoice_amount, max_due_date_days, grace_period_seconds)
-    }
 
     /// Clear all invoices from storage (admin only, used for restore operations)
     pub fn clear_all_invoices(env: &Env) -> Result<(), QuickLendXError> {
