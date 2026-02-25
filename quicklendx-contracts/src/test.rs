@@ -24,6 +24,91 @@ fn verify_investor_for_test(
     client.verify_investor(investor, &limit);
 }
 
+/// Public helper: set up environment, register contract, create admin
+pub fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+    let contract_addr = contract_id.clone();
+    (env, client, admin, contract_addr)
+}
+
+/// Public helper: verify and return a business address
+pub fn setup_verified_business(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    admin: &Address,
+) -> Address {
+    let business = Address::generate(env);
+    client.submit_kyc_application(&business, &String::from_str(env, "Business KYC"));
+    client.verify_business(admin, &business);
+    business
+}
+
+/// Public helper: verify and return an investor address
+pub fn setup_verified_investor(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    limit: i128,
+) -> Address {
+    let investor = Address::generate(env);
+    client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
+    client.verify_investor(&investor, &limit);
+    investor
+}
+
+/// Public helper: register token, mint and approve for business and investor
+pub fn setup_token(
+    env: &Env,
+    business: &Address,
+    investor: &Address,
+    contract_id: &Address,
+) -> Address {
+    let token_admin = Address::generate(env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac = token::StellarAssetClient::new(env, &currency);
+    let tok = token::Client::new(env, &currency);
+    let initial = 100_000i128;
+    sac.mint(business, &initial);
+    sac.mint(investor, &initial);
+    let expiry = env.ledger().sequence() + 10_000;
+    tok.approve(business, contract_id, &initial, &expiry);
+    tok.approve(investor, contract_id, &initial, &expiry);
+    currency
+}
+
+/// Public helper: create a fully funded invoice
+pub fn create_funded_invoice(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    admin: &Address,
+) -> (BytesN<32>, Address, Address, Address, Address) {
+    let business = setup_verified_business(env, client, admin);
+    let investor = setup_verified_investor(env, client, 50_000);
+    let contract_id = client.address.clone();
+    let currency = setup_token(env, &business, &investor, &contract_id);
+    let amount = 1_000i128;
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(env, "Test Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(env),
+    );
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    client.accept_bid(&invoice_id, &bid_id);
+    (invoice_id, business, investor, currency, contract_id)
+}
+
 #[test]
 fn test_store_invoice() {
     let env = Env::default();
@@ -2096,7 +2181,7 @@ fn test_backup_cleanup() {
     env.mock_all_auths();
     client.set_admin(&admin);
 
-    // Create multiple backups with simple descriptions
+    // Create multiple backups
     env.mock_all_auths();
     for i in 0..10 {
         client.create_backup(&admin);

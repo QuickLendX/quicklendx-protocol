@@ -761,6 +761,34 @@ impl InvoiceStorage {
         env.storage().instance().set(&invoice.id, invoice);
     }
 
+    /// Clear all invoices from storage (used by backup restore)
+    pub fn clear_all(env: &Env) {
+        // Clear each invoice from each status list
+        for status in [
+            InvoiceStatus::Pending,
+            InvoiceStatus::Verified,
+            InvoiceStatus::Funded,
+            InvoiceStatus::Paid,
+            InvoiceStatus::Defaulted,
+            InvoiceStatus::Cancelled,
+        ] {
+            let ids = Self::get_invoices_by_status(env, &status);
+            for id in ids.iter() {
+                env.storage().instance().remove(&id);
+            }
+            let key = match status {
+                InvoiceStatus::Pending => symbol_short!("pending"),
+                InvoiceStatus::Verified => symbol_short!("verified"),
+                InvoiceStatus::Funded => symbol_short!("funded"),
+                InvoiceStatus::Paid => symbol_short!("paid"),
+                InvoiceStatus::Defaulted => symbol_short!("default"),
+                InvoiceStatus::Cancelled => symbol_short!("cancel"),
+                InvoiceStatus::Refunded => symbol_short!("refunded"),
+            };
+            env.storage().instance().remove(&key);
+        }
+    }
+
     /// Get all invoices for a business
     pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
         let key = (symbol_short!("business"), business.clone());
