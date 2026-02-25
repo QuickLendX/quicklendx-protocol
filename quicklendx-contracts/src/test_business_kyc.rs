@@ -641,6 +641,10 @@ fn test_cannot_reject_already_rejected_business() {
 
     // Try to reject again - should fail (status is no longer Pending)
     let result = client.try_reject_business(&admin, &business, &reason);
+    assert!(result.is_err());
+}
+
+#[test]
 fn test_double_rejection_fails() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);
@@ -668,6 +672,11 @@ fn test_cannot_verify_rejected_business_without_resubmission() {
     client.reject_business(&admin, &business, &reason);
 
     // Try to verify the rejected business directly - should fail
+    let result = client.try_verify_business(&admin, &business);
+    assert!(result.is_err());
+}
+
+#[test]
 fn test_verify_already_rejected_business_fails() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);
