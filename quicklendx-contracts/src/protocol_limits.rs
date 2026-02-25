@@ -49,7 +49,6 @@ pub fn check_string_length(s: &String, max_len: u32) -> Result<(), QuickLendXErr
 pub struct ProtocolLimitsContract;
 
 #[allow(dead_code)]
-#[contractimpl]
 impl ProtocolLimitsContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         if env.storage().instance().has(&LIMITS_KEY) {
