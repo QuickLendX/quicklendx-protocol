@@ -1351,7 +1351,6 @@ mod test_investor_kyc {
             "Should appear exactly once in verified list"
         );
     }
-}
 
     // ============================================================================
     // Category 10: Single Investor Multiple Invoices Tests
