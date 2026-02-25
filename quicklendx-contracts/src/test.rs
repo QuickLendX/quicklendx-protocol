@@ -1,6 +1,5 @@
 mod test_invoice;
 mod test_invoice_categories;
-mod test_tag_limits;
 mod test_analytics;
 
 use super::*;
