@@ -1,272 +1,262 @@
-# Verification Module
+# Verification System
 
-The verification module implements the complete KYC (Know Your Customer) and verification system for the QuickLendX protocol. It covers both **business verification** (required for invoice uploads) and **investor verification** (required for bidding and investing).
+The QuickLendX verification module (`verification.rs`) provides KYC and compliance infrastructure for both businesses and investors. This document covers the investor verification flow, investment limits, risk assessment, and integration with the bidding system.
 
-## Overview
+> For business KYC specifically, see [business-kyc.md](./business-kyc.md).  
+> For detailed investor tier/limit mechanics, see [investor-kyc.md](./investor-kyc.md).
 
-QuickLendX enforces a mandatory verification flow for all participants:
+## Architecture Overview
 
-- **Businesses** must submit KYC data and be verified by an admin before uploading invoices.
-- **Investors** must submit KYC data and be verified before placing bids or making investments.
-
-All verification state transitions, timestamps, and rejection reasons are stored on-chain for full auditability.
+```
+┌─────────────┐     submit_investor_kyc     ┌────────────────────────────┐
+│   Investor   │ ─────────────────────────▶  │  InvestorVerificationStorage│
+└─────────────┘                              │   status: Pending           │
+                                             └────────────┬───────────────┘
+                                                          │
+                          ┌───────────────────────────────┴───────────────────┐
+                          ▼                                                   ▼
+                   verify_investor                                   reject_investor
+                   ┌──────────────┐                                ┌──────────────┐
+                   │ risk_score   │                                │ status:      │
+                   │ tier         │                                │  Rejected    │
+                   │ risk_level   │                                │ reason: ...  │
+                   │ limit calc   │                                └──────────────┘
+                   │ status:      │
+                   │  Verified    │
+                   └──────┬───────┘
+                          │
+                          ▼
+                     place_bid
+                  ┌──────────────┐
+                  │ check status │
+                  │ check limit  │
+                  │ validate_bid │
+                  └──────────────┘
+```
 
 ## Data Structures
 
-### BusinessVerificationStatus
-
-```rust
-enum BusinessVerificationStatus {
-    Pending,
-    Verified,
-    Rejected,
-}
-```
-
-### BusinessVerification
-
-```rust
-struct BusinessVerification {
-    business: Address,
-    status: BusinessVerificationStatus,
-    verified_at: Option<u64>,
-    verified_by: Option<Address>,
-    kyc_data: String,          // Encrypted KYC data (JSON)
-    submitted_at: u64,
-    rejection_reason: Option<String>,
-}
-```
-
 ### InvestorVerification
 
+Complete on-chain record for each investor.
+
 ```rust
-struct InvestorVerification {
-    investor: Address,
-    status: BusinessVerificationStatus,
-    verified_at: Option<u64>,
-    verified_by: Option<Address>,
-    kyc_data: String,
-    investment_limit: i128,
-    submitted_at: u64,
-    tier: InvestorTier,
-    risk_level: InvestorRiskLevel,
-    risk_score: u32,
-    total_invested: i128,
-    total_returns: i128,
-    successful_investments: u32,
-    defaulted_investments: u32,
-    last_activity: u64,
-    rejection_reason: Option<String>,
-    compliance_notes: Option<String>,
+pub struct InvestorVerification {
+    pub investor: Address,
+    pub status: BusinessVerificationStatus,   // Pending | Verified | Rejected
+    pub verified_at: Option<u64>,
+    pub verified_by: Option<Address>,
+    pub kyc_data: String,
+    pub investment_limit: i128,
+    pub submitted_at: u64,
+    pub tier: InvestorTier,                    // Basic | Silver | Gold | Platinum | VIP
+    pub risk_level: InvestorRiskLevel,         // Low | Medium | High | VeryHigh
+    pub risk_score: u32,                       // 0-100
+    pub total_invested: i128,
+    pub total_returns: i128,
+    pub successful_investments: u32,
+    pub defaulted_investments: u32,
+    pub last_activity: u64,
+    pub rejection_reason: Option<String>,
+    pub compliance_notes: Option<String>,
 }
 ```
 
-### InvestorTier
+### Storage Keys
+
+| Key Pattern | Description |
+|---|---|
+| `InvVer:{address}` | Individual investor verification record |
+| `PendInv` | List of pending investor addresses |
+| `VerInv` | List of verified investor addresses |
+| `RejInv` | List of rejected investor addresses |
+| `TierInv:{tier}` | List of investors by tier |
+| `RiskInv:{level}` | List of investors by risk level |
+
+## Investor KYC Lifecycle
+
+### 1. Submission — `submit_investor_kyc`
 
 ```rust
-enum InvestorTier {
-    Basic,
-    Silver,
-    Gold,
-    Platinum,
-    VIP,
-}
+pub fn submit_investor_kyc(env: Env, investor: Address, kyc_data: String)
+    -> Result<(), QuickLendXError>
 ```
 
-### InvestorRiskLevel
+- Requires `investor.require_auth()`
+- Validates `kyc_data` length ≤ `MAX_KYC_DATA_LENGTH`
+- **Allowed transitions**: None → Pending, Rejected → Pending
+- **Blocked if**: status is `Pending` or `Verified`
+- Defaults: `tier = Basic`, `risk_level = High`, `risk_score = 100`
+
+### 2. Verification — `verify_investor`
 
 ```rust
-enum InvestorRiskLevel {
-    Low,
-    Medium,
-    High,
-    VeryHigh,
-}
+pub fn verify_investor(env: Env, investor: Address, investment_limit: i128)
+    -> Result<InvestorVerification, QuickLendXError>
 ```
 
-## Storage
+- Requires `admin.require_auth()` and admin identity check
+- `investment_limit` must be > 0
+- Computes `risk_score` → `tier` → `risk_level` → `investment_limit`
+- Moves investor from pending list to verified list
+- Adds investor to the appropriate tier and risk-level lists
 
-### BusinessVerificationStorage
-
-Manages on-chain storage for business verification records. Maintains three indexed lists for efficient querying:
-
-| Key | Description |
-|-----|-------------|
-| `verified_businesses` | List of all verified business addresses |
-| `pending_businesses` | List of all businesses awaiting review |
-| `rejected_businesses` | List of all rejected business addresses |
-
-Individual verification records are keyed by the business `Address`.
-
-**Key methods:**
-
-- `store_verification(env, verification)` — Stores a new verification record and adds to the appropriate status list.
-- `get_verification(env, business) -> Option<BusinessVerification>` — Retrieves a business's verification record.
-- `update_verification(env, verification)` — Updates a record, moving it between status lists as needed.
-- `is_business_verified(env, business) -> bool` — Returns `true` if the business has `Verified` status.
-- `get_verified_businesses(env) -> Vec<Address>` — Returns all verified business addresses.
-- `get_pending_businesses(env) -> Vec<Address>` — Returns all pending business addresses.
-- `get_rejected_businesses(env) -> Vec<Address>` — Returns all rejected business addresses.
-
-### InvestorVerificationStorage
-
-Manages on-chain storage for investor verification records with the same indexed-list pattern.
-
-**Key methods:**
-
-- `submit(env, investor, kyc_data)` — Submits a new investor KYC application.
-- `store(env, verification)` — Stores an investor verification record.
-- `get(env, investor) -> Option<InvestorVerification>` — Retrieves an investor's verification record.
-- `update(env, verification)` — Updates a record, moving it between status lists.
-- `is_investor_verified(env, investor) -> bool` — Returns `true` if the investor has `Verified` status.
-- `get_investors_by_tier(env, tier) -> Vec<Address>` — Returns investors filtered by tier.
-- `get_investors_by_risk_level(env, risk_level) -> Vec<Address>` — Returns investors filtered by risk level.
-
-## Business KYC Functions
-
-### `submit_kyc_application(env, business, kyc_data)`
-
-Submits a new KYC application for a business.
-
-- **Authorization**: Only the business itself can submit its own KYC (`business.require_auth()`).
-- **Behavior**:
-  - If no prior record exists, creates a new `Pending` verification.
-  - If status is `Pending`, returns `KYCAlreadyPending` error.
-  - If status is `Verified`, returns `KYCAlreadyVerified` error.
-  - If status is `Rejected`, allows resubmission with updated data.
-- **Events**: Emits `kyc_sub` event.
-
-### `verify_business(env, admin, business)`
-
-Admin approves a pending business KYC application.
-
-- **Authorization**: Only the contract admin can call this.
-- **Requirements**: Business must have `Pending` status.
-- **Effect**: Sets status to `Verified`, records `verified_at` timestamp and `verified_by` admin address.
-- **Events**: Emits `bus_ver` event.
-
-### `reject_business(env, admin, business, reason)`
-
-Admin rejects a pending business KYC application.
-
-- **Authorization**: Only the contract admin can call this.
-- **Requirements**: Business must have `Pending` status.
-- **Effect**: Sets status to `Rejected`, stores the rejection reason.
-- **Events**: Emits `bus_rej` event.
-
-### `get_business_verification_status(env, business)`
-
-Returns the full `BusinessVerification` record for a business, or `None` if no KYC has been submitted.
-
-### `require_business_verification(env, business)`
-
-Helper that returns `BusinessNotVerified` error if the business is not verified. Used internally to gate invoice uploads.
-
-## Investor KYC Functions
-
-### `submit_investor_kyc(env, investor, kyc_data)`
-
-Submits a new KYC application for an investor.
-
-- **Authorization**: Only the investor itself can submit.
-- **Behavior**: Same resubmission rules as business KYC.
-
-### `verify_investor(env, admin, investor, investment_limit)`
-
-Admin approves an investor with a base investment limit.
-
-- Calculates risk score, tier, and risk level.
-- Computes final investment limit based on tier and risk multipliers.
-
-### `reject_investor(env, admin, investor, reason)`
-
-Admin rejects an investor KYC application with a reason.
-
-### Risk Assessment
-
-- **`calculate_investor_risk_score`** — Scores 0–100 based on KYC data completeness and investment history.
-- **`determine_investor_tier`** — Assigns tier (Basic → VIP) based on risk score, total invested, and successful investments.
-- **`determine_risk_level`** — Maps risk score to Low/Medium/High/VeryHigh.
-- **`calculate_investment_limit`** — Applies tier and risk multipliers to the base limit.
-
-## State Transitions
-
-```
-                  ┌──────────┐
-     submit_kyc   │          │  verify_business
-  ───────────────►│ Pending  ├──────────────────► Verified
-                  │          │
-                  └────┬─────┘
-                       │
-                       │ reject_business
-                       ▼
-                  ┌──────────┐
-                  │ Rejected │
-                  └────┬─────┘
-                       │
-                       │ submit_kyc (resubmission)
-                       ▼
-                  ┌──────────┐
-                  │ Pending  │  (cycle restarts)
-                  └──────────┘
-```
-
-## Enforcement
-
-The `upload_invoice` contract function checks business verification status before allowing invoice creation:
+### 3. Rejection — `reject_investor`
 
 ```rust
-let verification = get_business_verification_status(&env, &business);
-if verification.is_none()
-    || !matches!(verification.unwrap().status, BusinessVerificationStatus::Verified)
-{
-    return Err(QuickLendXError::BusinessNotVerified);
-}
+pub fn reject_investor(env: Env, admin: Address, investor: Address, reason: String)
+    -> Result<(), QuickLendXError>
 ```
 
-Similarly, `validate_investor_investment` checks that an investor is verified and within their investment limits before allowing bids.
+- Requires `admin.require_auth()`
+- Sets status to `Rejected` with reason string
+- Moves investor from pending list to rejected list
+- Investor may resubmit KYC after rejection
 
-## Events
+### 4. Limit Update — `set_investment_limit`
 
-| Event | Symbol | Payload | Description |
-|-------|--------|---------|-------------|
-| KYC Submitted | `kyc_sub` | `(business, timestamp)` | Business submitted KYC data |
-| Business Verified | `bus_ver` | `(business, admin, timestamp)` | Admin verified a business |
-| Business Rejected | `bus_rej` | `(business, admin)` | Admin rejected a business |
+```rust
+pub fn set_investment_limit(env: Env, admin: Address, investor: Address, new_limit: i128)
+    -> Result<(), QuickLendXError>
+```
+
+- Admin-only operation to adjust a verified investor's limit
+- Recalculates using tier and risk multipliers
+
+## Risk Assessment
+
+### Risk Score Calculation (`calculate_investor_risk_score`)
+
+| Factor | Score Impact |
+|---|---|
+| KYC data < 100 chars | +30 (incomplete KYC) |
+| KYC data 100-499 chars | +20 (moderate) |
+| KYC data ≥ 500 chars | +10 (comprehensive) |
+| Default rate (% of total) | + default_rate |
+| Total invested > 1M | -20 |
+| Total invested > 100K | -10 |
+
+Score is capped at 100.
+
+### Tier Determination (`determine_investor_tier`)
+
+| Tier | Risk Score | Total Invested | Successful Investments |
+|---|---|---|---|
+| VIP | ≤ 10 | > $5M | > 50 |
+| Platinum | ≤ 20 | > $1M | > 20 |
+| Gold | ≤ 40 | > $100K | > 10 |
+| Silver | ≤ 60 | > $10K | > 3 |
+| Basic | Any | Any | Any |
+
+### Risk Level Mapping (`determine_risk_level`)
+
+| Risk Score | Risk Level |
+|---|---|
+| 0–25 | Low |
+| 26–50 | Medium |
+| 51–75 | High |
+| 76–100 | VeryHigh |
+
+### Limit Calculation (`calculate_investment_limit`)
+
+```
+final_limit = base_limit × tier_multiplier × risk_multiplier / 100
+```
+
+| Tier | Multiplier |   | Risk Level | Multiplier |
+|---|---|---|---|---|
+| VIP | 10× |   | Low | 100% |
+| Platinum | 5× |   | Medium | 75% |
+| Gold | 3× |   | High | 50% |
+| Silver | 2× |   | VeryHigh | 25% |
+| Basic | 1× |   | | |
+
+## Bid Enforcement
+
+### In `place_bid` (lib.rs)
+
+The `place_bid` function enforces investor verification before any bid is accepted:
+
+1. Retrieves `InvestorVerification` — fails with `BusinessNotVerified` if none
+2. Checks `status`:
+   - `Verified` → proceeds; checks `bid_amount ≤ investment_limit`
+   - `Pending` → returns `KYCAlreadyPending`
+   - `Rejected` → returns `BusinessNotVerified`
+3. Calls `validate_bid` → `validate_investor_investment` for risk-level caps
+
+### In `validate_investor_investment` (verification.rs)
+
+Additional risk-level hard caps enforced independently of calculated limits:
+
+| Risk Level | Maximum per Investment |
+|---|---|
+| VeryHigh | $10,000 |
+| High | $50,000 |
+| Medium / Low | Up to calculated limit |
+
+## Query Functions
+
+### Status Lists
+
+```rust
+fn get_verified_investors(env: Env) -> Vec<Address>
+fn get_pending_investors(env: Env) -> Vec<Address>
+fn get_rejected_investors(env: Env) -> Vec<Address>
+```
+
+### By Tier and Risk Level
+
+```rust
+fn get_investors_by_tier(env: Env, tier: InvestorTier) -> Vec<Address>
+fn get_investors_by_risk_level(env: Env, risk_level: InvestorRiskLevel) -> Vec<Address>
+```
+
+### Individual Investor
+
+```rust
+fn get_investor_verification(env: Env, investor: Address) -> Option<InvestorVerification>
+fn is_investor_verified(env: Env, investor: Address) -> bool
+fn get_investor_analytics(env: Env, investor: Address) -> Result<InvestorVerification, QuickLendXError>
+```
+
+## Analytics Tracking
+
+`update_investor_analytics` is called after investment settlement to update:
+- `total_invested`, `total_returns`
+- `successful_investments` / `defaulted_investments`
+- `last_activity` timestamp
+
+These fields feed back into risk scoring and tier determination on subsequent verifications.
 
 ## Error Codes
 
-| Error | Code | Description |
-|-------|------|-------------|
-| `NotAdmin` | 1005 | Caller is not the contract admin |
-| `BusinessNotVerified` | 1007 | Business has not been verified |
-| `KYCAlreadyPending` | 1025 | KYC application is already pending review |
-| `KYCAlreadyVerified` | 1026 | Business/investor is already verified |
-| `KYCNotFound` | 1027 | No KYC record found for the address |
-| `InvalidKYCStatus` | 1028 | Operation not valid for current KYC status |
+| Error | Code | Trigger |
+|---|---|---|
+| `KYCNotFound` | — | No verification record exists |
+| `KYCAlreadyPending` | — | Submitting while status is Pending |
+| `KYCAlreadyVerified` | — | Submitting or verifying while already Verified |
+| `BusinessNotVerified` | — | Placing bid while unverified or rejected |
+| `InvalidAmount` | — | Bid exceeds limit, or limit ≤ 0 |
+| `NotAdmin` | — | Non-admin calling admin-only function |
 
-## Security Considerations
+## Security Notes
 
-- **Authorization**: All state-changing functions require `require_auth()` from the appropriate party (business for submission, admin for verify/reject).
-- **Admin-only operations**: `verify_business` and `reject_business` check `is_admin()` before proceeding.
-- **Status guards**: Only `Pending` applications can be verified or rejected. Only `Rejected` applications can be resubmitted.
-- **On-chain auditability**: All timestamps, admin addresses, and rejection reasons are stored immutably.
-- **Encrypted KYC data**: The `kyc_data` field stores encrypted JSON, keeping sensitive business information private while maintaining on-chain proof of submission.
+1. **Auth enforcement**: `investor.require_auth()` on submission, `admin.require_auth()` on verify/reject/limit-update
+2. **Admin identity check**: Admin address is verified against stored admin before verification operations
+3. **Input validation**: KYC data and rejection reason strings are length-checked against protocol maximums
+4. **Risk cap**: Even if admin sets a high base limit, risk multipliers and hard caps constrain actual exposure
+5. **Resubmission guard**: Verified investors cannot resubmit; only rejected investors can retry
+6. **List consistency**: Investors are moved between pending/verified/rejected lists atomically during status transitions
 
 ## Test Coverage
 
-Tests are located in `src/test_business_kyc.rs` and cover:
+| Test File | Tests | Coverage |
+|---|---|---|
+| `test_investor_kyc.rs` | 48 | KYC lifecycle, limit enforcement, bidding integration, status transitions, tier/risk queries, edge cases |
+| `test_limit.rs` | 6 | Invoice/bid amount limits, due-date limits, admin authorization |
 
-- **Submission**: Business self-submission, empty data, duplicate prevention
-- **Authorization**: Admin-only verify/reject, non-admin rejection
-- **Status transitions**: Pending → Verified, Pending → Rejected, Rejected → Pending (resubmission)
-- **Enforcement**: Unverified businesses blocked from invoice upload, verified businesses allowed
-- **Edge cases**: Non-existent business verify/reject, double verify/reject, concurrent multi-business flows
-- **Data integrity**: KYC data preserved through transitions, timestamp accuracy
-- **Integration**: Full KYC-to-invoice lifecycle, rejection-resubmission-verification cycle
-
-Run tests with:
-
+Run tests:
 ```bash
-cargo test test_business_kyc -- --nocapture
+cargo test test_investor_kyc  # 48 tests
+cargo test test_limit         # 6 tests
 ```
