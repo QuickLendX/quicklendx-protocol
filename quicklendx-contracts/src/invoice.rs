@@ -839,8 +839,10 @@ impl InvoiceStorage {
             .instance()
             .get(&key)
             .unwrap_or_else(|| Vec::new(env));
-        invoices.push_back(invoice_id.clone());
-        env.storage().instance().set(&key, &invoices);
+        if !invoices.iter().any(|id| id == *invoice_id) {
+            invoices.push_back(invoice_id.clone());
+            env.storage().instance().set(&key, &invoices);
+        }
     }
 
     /// Remove invoice from status invoices list

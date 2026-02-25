@@ -1,5 +1,6 @@
 mod test_analytics;
 mod test_invoice_categories;
+mod test_status_consistency;
 mod test_invoice_metadata;
 mod test_analytics_export_query;
 
