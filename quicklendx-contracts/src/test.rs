@@ -2182,7 +2182,6 @@ fn test_archive_backup() {
 }
 
 #[test]
-<<<<<<< HEAD
 fn test_backup_retention_policy_by_count() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
@@ -2439,8 +2438,6 @@ fn test_manual_cleanup_backups() {
     let backups = client.get_backups();
     assert_eq!(backups.len(), 3);
 }
-=======
->>>>>>> 58b929a (fix: remove incompatible backup retention tests from upstream rebase)
 
 // TODO: Fix authorization issues in test environment
 // #[test]
