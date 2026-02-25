@@ -16,7 +16,8 @@
 //! - Persistent storage for long-term data retention
 //! - Upgrade-safe: Keys are designed to avoid conflicts during contract upgrades
 
-use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec, String};
+ // Removed ToString import; not needed in Soroban environment.
 
 use crate::bid::{Bid, BidStatus};
 use crate::investment::{Investment, InvestmentStatus};
@@ -129,6 +130,16 @@ impl Indexes {
         };
         (symbol_short!("inv_stat"), status_symbol)
     }
+
+    /// Index: invoices by customer name
+    pub fn invoices_by_customer(customer_name: &soroban_sdk::String) -> (Symbol, soroban_sdk::String) {
+        (symbol_short!("inv_cust"), customer_name.clone())
+    }
+
+    /// Index: invoices by tax_id
+    pub fn invoices_by_tax_id(tax_id: &soroban_sdk::String) -> (Symbol, soroban_sdk::String) {
+        (symbol_short!("inv_taxid"), tax_id.clone())
+    }
 }
 
 /// Storage operations for invoices
@@ -138,10 +149,24 @@ impl InvoiceStorage {
     /// Store an invoice
     pub fn store(env: &Env, invoice: &Invoice) {
         env.storage().persistent().set(&invoice.id, invoice);
-
-        // Update indexes
         Self::add_to_business_index(env, &invoice.business, &invoice.id);
         Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
+        if let Some(ref name) = invoice.metadata_customer_name {
+            Self::add_to_customer_index(env, name, &invoice.id);
+        }
+        if let Some(ref tax_id) = invoice.metadata_tax_id {
+            Self::add_to_tax_id_index(env, tax_id, &invoice.id);
+        }
+    }
+
+    pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
+        let key = Indexes::invoices_by_business(business);
+        env.storage().persistent().get(&key).unwrap_or(Vec::new(env))
+    }
+
+    pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
+        let key = Indexes::invoices_by_status(status);
+        env.storage().persistent().get(&key).unwrap_or(Vec::new(env))
     }
 
     /// Get an invoice by ID
@@ -151,31 +176,29 @@ impl InvoiceStorage {
 
     /// Update an invoice
     pub fn update(env: &Env, invoice: &Invoice) {
-        // Remove from old status index if status changed
         if let Some(old_invoice) = Self::get(env, &invoice.id) {
             if old_invoice.status != invoice.status {
                 Self::remove_from_status_index(env, old_invoice.status, &invoice.id);
                 Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
             }
+            if old_invoice.metadata_customer_name != invoice.metadata_customer_name {
+                if let Some(ref old_name) = old_invoice.metadata_customer_name {
+                    Self::remove_from_customer_index(env, old_name, &invoice.id);
+                }
+                if let Some(ref new_name) = invoice.metadata_customer_name {
+                    Self::add_to_customer_index(env, new_name, &invoice.id);
+                }
+            }
+            if old_invoice.metadata_tax_id != invoice.metadata_tax_id {
+                if let Some(ref old_tax_id) = old_invoice.metadata_tax_id {
+                    Self::remove_from_tax_id_index(env, old_tax_id, &invoice.id);
+                }
+                if let Some(ref new_tax_id) = invoice.metadata_tax_id {
+                    Self::add_to_tax_id_index(env, new_tax_id, &invoice.id);
+                }
+            }
         }
-
         env.storage().persistent().set(&invoice.id, invoice);
-    }
-
-    /// Get invoices by business
-    pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_business(business))
-            .unwrap_or_else(|| Vec::new(env))
-    }
-
-    /// Get invoices by status
-    pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_status(status))
-            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Add invoice to business index
@@ -209,6 +232,48 @@ impl InvoiceStorage {
                 .persistent()
                 .set(&Indexes::invoices_by_status(status), &invoices);
         }
+    }
+
+    pub fn add_to_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
+        let key = Indexes::invoices_by_customer(customer_name);
+        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        if !ids.iter().any(|id| id == *invoice_id) {
+            ids.push_back(invoice_id.clone());
+            env.storage().persistent().set(&key, &ids);
+        }
+    }
+
+    pub fn remove_from_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
+        let key = Indexes::invoices_by_customer(customer_name);
+        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        let mut filtered = Vec::new(env);
+        for id in ids.iter() {
+            if id != *invoice_id {
+                filtered.push_back(id.clone());
+            }
+        }
+        env.storage().persistent().set(&key, &filtered);
+    }
+
+    pub fn add_to_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
+        let key = Indexes::invoices_by_tax_id(tax_id);
+        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        if !ids.iter().any(|id| id == *invoice_id) {
+            ids.push_back(invoice_id.clone());
+            env.storage().persistent().set(&key, &ids);
+        }
+    }
+
+    pub fn remove_from_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
+        let key = Indexes::invoices_by_tax_id(tax_id);
+        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        let mut filtered = Vec::new(env);
+        for id in ids.iter() {
+            if id != *invoice_id {
+                filtered.push_back(id.clone());
+            }
+        }
+        env.storage().persistent().set(&key, &filtered);
     }
 
     /// Get next invoice count
