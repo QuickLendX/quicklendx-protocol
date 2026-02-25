@@ -1173,7 +1173,7 @@ impl QuickLendXContract {
         submit_kyc_application(&env, &business, kyc_data)
     }
 
-    /// Submit investor verification request
+    /// Submit investor kyc verification request
     pub fn submit_investor_kyc(
         env: Env,
         investor: Address,
