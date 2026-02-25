@@ -54,7 +54,7 @@ export class AppError extends Error {
     code?: string,
     context?: Partial<ErrorContext>,
     retryable: boolean = false,
-    retryCount: number = 0,
+    retryCount: number = 0
   ) {
     super(message);
     this.name = "AppError";
@@ -77,7 +77,7 @@ export class NetworkError extends AppError {
   constructor(
     message: string,
     context?: Partial<ErrorContext>,
-    retryCount: number = 0,
+    retryCount: number = 0
   ) {
     super(
       message,
@@ -86,7 +86,7 @@ export class NetworkError extends AppError {
       "NETWORK_ERROR",
       context,
       true,
-      retryCount,
+      retryCount
     );
     this.name = "NetworkError";
   }
@@ -100,7 +100,7 @@ export class ValidationError extends AppError {
       ErrorSeverity.MEDIUM,
       "VALIDATION_ERROR",
       context,
-      false,
+      false
     );
     this.name = "ValidationError";
   }
@@ -114,7 +114,7 @@ export class AuthenticationError extends AppError {
       ErrorSeverity.HIGH,
       "AUTH_ERROR",
       context,
-      true,
+      true
     );
     this.name = "AuthenticationError";
   }
@@ -128,7 +128,7 @@ export class AuthorizationError extends AppError {
       ErrorSeverity.HIGH,
       "FORBIDDEN",
       context,
-      false,
+      false
     );
     this.name = "AuthorizationError";
   }
@@ -142,7 +142,7 @@ export class BusinessLogicError extends AppError {
       ErrorSeverity.MEDIUM,
       "BUSINESS_ERROR",
       context,
-      false,
+      false
     );
     this.name = "BusinessLogicError";
   }
@@ -156,7 +156,7 @@ export class SystemError extends AppError {
       ErrorSeverity.CRITICAL,
       "SYSTEM_ERROR",
       context,
-      true,
+      true
     );
     this.name = "SystemError";
   }
@@ -270,21 +270,21 @@ export class ErrorAnalytics {
     const byCategory = Object.values(ErrorCategory).reduce(
       (acc, category) => {
         acc[category] = this.errors.filter(
-          (e) => e.category === category,
+          (e) => e.category === category
         ).length;
         return acc;
       },
-      {} as Record<ErrorCategory, number>,
+      {} as Record<ErrorCategory, number>
     );
 
     const bySeverity = Object.values(ErrorSeverity).reduce(
       (acc, severity) => {
         acc[severity] = this.errors.filter(
-          (e) => e.severity === severity,
+          (e) => e.severity === severity
         ).length;
         return acc;
       },
-      {} as Record<ErrorSeverity, number>,
+      {} as Record<ErrorSeverity, number>
     );
 
     return {
@@ -305,7 +305,7 @@ export class ErrorRecovery {
   static async retryOperation<T>(
     operation: () => Promise<T>,
     maxRetries: number = 3,
-    delay: number = 1000,
+    delay: number = 1000
   ): Promise<T> {
     let lastError: Error;
 
@@ -336,7 +336,7 @@ export class ErrorRecovery {
   static async handleAsyncError<T>(
     promise: Promise<T>,
     fallback: T,
-    context?: Partial<ErrorContext>,
+    context?: Partial<ErrorContext>
   ): Promise<T> {
     try {
       return await promise;
@@ -346,7 +346,7 @@ export class ErrorRecovery {
           ? error
           : new SystemError(
               error instanceof Error ? error.message : "Unknown error occurred",
-              context,
+              context
             );
       return this.createFallbackValue(appError, fallback);
     }
@@ -361,7 +361,7 @@ export class ErrorPrevention {
     } catch (error) {
       throw new ValidationError(
         `Invalid input: ${error instanceof Error ? error.message : "Unknown validation error"}`,
-        { additionalData: { input } },
+        { additionalData: { input } }
       );
     }
   }
@@ -378,7 +378,7 @@ export class ErrorPrevention {
 
   static debounce<T extends (...args: any[]) => any>(
     func: T,
-    wait: number,
+    wait: number
   ): (...args: Parameters<T>) => void {
     let timeout: NodeJS.Timeout;
     return (...args: Parameters<T>) => {
@@ -389,7 +389,7 @@ export class ErrorPrevention {
 
   static throttle<T extends (...args: any[]) => any>(
     func: T,
-    limit: number,
+    limit: number
   ): (...args: Parameters<T>) => void {
     let inThrottle: boolean;
     return (...args: Parameters<T>) => {
@@ -405,7 +405,7 @@ export class ErrorPrevention {
 // Global error handler
 export const globalErrorHandler = (
   error: Error,
-  context?: Partial<ErrorContext>,
+  context?: Partial<ErrorContext>
 ): void => {
   let appError: AppError;
 
@@ -414,7 +414,7 @@ export const globalErrorHandler = (
   } else {
     appError = new SystemError(
       error.message || "An unexpected error occurred",
-      context,
+      context
     );
   }
 

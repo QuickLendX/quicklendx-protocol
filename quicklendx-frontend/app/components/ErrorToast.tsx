@@ -102,7 +102,7 @@ export class ErrorToastManager {
         | "bottom-right"
         | "bottom-center"
         | "bottom-left";
-    },
+    }
   ): string {
     const toastId = `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -145,7 +145,7 @@ export class ErrorToastManager {
         | "bottom-right"
         | "bottom-center"
         | "bottom-left";
-    },
+    }
   ): string {
     return toast.success(message, {
       duration: options?.duration ?? 3000,
@@ -169,7 +169,7 @@ export class ErrorToastManager {
         | "bottom-right"
         | "bottom-center"
         | "bottom-left";
-    },
+    }
   ): string {
     return toast(message, {
       duration: options?.duration ?? 4000,
@@ -194,7 +194,7 @@ export class ErrorToastManager {
         | "bottom-right"
         | "bottom-center"
         | "bottom-left";
-    },
+    }
   ): string {
     return toast(message, {
       duration: options?.duration ?? 3000,
@@ -230,19 +230,19 @@ export const useErrorToast = () => {
   return {
     showError: (
       error: AppError,
-      options?: Parameters<typeof toastManager.showError>[1],
+      options?: Parameters<typeof toastManager.showError>[1]
     ) => toastManager.showError(error, options),
     showSuccess: (
       message: string,
-      options?: Parameters<typeof toastManager.showSuccess>[1],
+      options?: Parameters<typeof toastManager.showSuccess>[1]
     ) => toastManager.showSuccess(message, options),
     showWarning: (
       message: string,
-      options?: Parameters<typeof toastManager.showWarning>[1],
+      options?: Parameters<typeof toastManager.showWarning>[1]
     ) => toastManager.showWarning(message, options),
     showInfo: (
       message: string,
-      options?: Parameters<typeof toastManager.showInfo>[1],
+      options?: Parameters<typeof toastManager.showInfo>[1]
     ) => toastManager.showInfo(message, options),
     dismissAll: () => toastManager.dismissAll(),
     dismissToast: (toastId: string) => toastManager.dismissToast(toastId),
@@ -252,7 +252,7 @@ export const useErrorToast = () => {
 // Global error toast handler
 export const handleErrorWithToast = (
   error: AppError,
-  context?: string,
+  context?: string
 ): void => {
   const toastManager = ErrorToastManager.getInstance();
 
@@ -265,7 +265,7 @@ export const handleErrorWithToast = (
     error.code,
     error.context,
     error.retryable,
-    error.retryCount,
+    error.retryCount
   );
 
   toastManager.showError(contextualError);

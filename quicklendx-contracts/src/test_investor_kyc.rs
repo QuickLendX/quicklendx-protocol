@@ -9,8 +9,10 @@
 /// Target: 95%+ test coverage for investor verification and limit enforcement
 #[cfg(test)]
 mod test_investor_kyc {
+    use crate::bid::BidStatus;
     use crate::errors::QuickLendXError;
     use crate::invoice::InvoiceCategory;
+    use crate::invoice::InvoiceStatus;
     use crate::verification::{BusinessVerificationStatus, InvestorRiskLevel, InvestorTier};
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{
@@ -28,6 +30,9 @@ mod test_investor_kyc {
         let admin = Address::generate(&env);
         env.mock_all_auths();
         let _ = client.try_initialize_admin(&admin);
+
+        // Initialize protocol limits (max invoice amount, min bid amount, min bid bps, max due date, grace period)
+        let _ = client.try_initialize_protocol_limits(&admin, &1_000_000i128, &1i128, &100u32, &365u64, &86400u64);
 
         (env, client, admin)
     }
@@ -1237,5 +1242,346 @@ mod test_investor_kyc {
 
         let verified_count = verified.iter().filter(|i| *i == investor).count();
         assert_eq!(verified_count, 1, "Should appear exactly once in verified list");
+    }
+
+    // ============================================================================
+    // Category 10: Single Investor Multiple Invoices Tests
+    // ============================================================================
+
+    /// Test: One investor places bids on multiple invoices
+    #[test]
+    fn test_single_investor_bids_on_multiple_invoices() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Setup verified investor with sufficient limit
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        // Create 5 verified invoices
+        let invoice_id1 = create_verified_invoice(&env, &client, &business, 20_000);
+        let invoice_id2 = create_verified_invoice(&env, &client, &business, 30_000);
+        let invoice_id3 = create_verified_invoice(&env, &client, &business, 25_000);
+        let invoice_id4 = create_verified_invoice(&env, &client, &business, 15_000);
+        let invoice_id5 = create_verified_invoice(&env, &client, &business, 40_000);
+
+        // Investor places bids on all 5 invoices
+        let bid_id1 = client.place_bid(&investor, &invoice_id1, &10_000, &12_000);
+        let bid_id2 = client.place_bid(&investor, &invoice_id2, &15_000, &18_000);
+        let bid_id3 = client.place_bid(&investor, &invoice_id3, &12_000, &14_500);
+        let bid_id4 = client.place_bid(&investor, &invoice_id4, &8_000, &9_500);
+        let bid_id5 = client.place_bid(&investor, &invoice_id5, &20_000, &24_000);
+
+        // Verify all bids were placed successfully
+        assert!(client.get_bid(&bid_id1).is_some(), "Bid 1 should exist");
+        assert!(client.get_bid(&bid_id2).is_some(), "Bid 2 should exist");
+        assert!(client.get_bid(&bid_id3).is_some(), "Bid 3 should exist");
+        assert!(client.get_bid(&bid_id4).is_some(), "Bid 4 should exist");
+        assert!(client.get_bid(&bid_id5).is_some(), "Bid 5 should exist");
+
+        // Verify all bids belong to the same investor
+        assert_eq!(client.get_bid(&bid_id1).unwrap().investor, investor);
+        assert_eq!(client.get_bid(&bid_id2).unwrap().investor, investor);
+        assert_eq!(client.get_bid(&bid_id3).unwrap().investor, investor);
+        assert_eq!(client.get_bid(&bid_id4).unwrap().investor, investor);
+        assert_eq!(client.get_bid(&bid_id5).unwrap().investor, investor);
+
+        // Verify get_all_bids_by_investor returns all 5 bids
+        let all_bids = client.get_all_bids_by_investor(&investor);
+        assert_eq!(all_bids.len(), 5, "Should have 5 bids for investor");
+    }
+
+    /// Test: Investment limit applies across all bids
+    #[test]
+    fn test_investment_limit_applies_across_all_bids() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Setup investor with limited investment capacity
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &50_000i128);
+
+        // Get actual calculated limit
+        let actual_limit = client
+            .get_investor_verification(&investor)
+            .unwrap()
+            .investment_limit;
+
+        // Create multiple invoices
+        let invoice_id1 = create_verified_invoice(&env, &client, &business, 30_000);
+        let invoice_id2 = create_verified_invoice(&env, &client, &business, 30_000);
+        let invoice_id3 = create_verified_invoice(&env, &client, &business, 30_000);
+
+        // Place bids within individual limits but respecting total limit
+        let bid_amount = actual_limit / 4; // Use 25% of limit per bid
+
+        let result1 = client.try_place_bid(&investor, &invoice_id1, &bid_amount, &(bid_amount + 1000));
+        assert!(result1.is_ok(), "First bid within limit should succeed");
+
+        let result2 = client.try_place_bid(&investor, &invoice_id2, &bid_amount, &(bid_amount + 1000));
+        assert!(result2.is_ok(), "Second bid within limit should succeed");
+
+        let result3 = client.try_place_bid(&investor, &invoice_id3, &bid_amount, &(bid_amount + 1000));
+        assert!(result3.is_ok(), "Third bid within limit should succeed");
+
+        // Verify all bids were placed
+        let all_bids = client.get_all_bids_by_investor(&investor);
+        assert_eq!(all_bids.len(), 3, "Should have 3 bids");
+
+        // Try to place a bid that would exceed the limit
+        let invoice_id4 = create_verified_invoice(&env, &client, &business, 30_000);
+        let large_bid = actual_limit; // This would exceed limit
+        let result4 = client.try_place_bid(&investor, &invoice_id4, &large_bid, &(large_bid + 1000));
+        assert!(result4.is_err(), "Bid exceeding total limit should fail");
+    }
+
+    /// Test: Business accepts bids on some invoices, others remain Placed
+    #[test]
+    fn test_investor_bids_accepted_on_some_invoices() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Setup verified investor
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        // Create 4 verified invoices
+        let invoice_id1 = create_verified_invoice(&env, &client, &business, 20_000);
+        let invoice_id2 = create_verified_invoice(&env, &client, &business, 30_000);
+        let invoice_id3 = create_verified_invoice(&env, &client, &business, 25_000);
+        let invoice_id4 = create_verified_invoice(&env, &client, &business, 15_000);
+
+        // Investor places bids on all 4 invoices
+        let bid_id1 = client.place_bid(&investor, &invoice_id1, &10_000, &12_000);
+        let bid_id2 = client.place_bid(&investor, &invoice_id2, &15_000, &18_000);
+        let bid_id3 = client.place_bid(&investor, &invoice_id3, &12_000, &14_500);
+        let bid_id4 = client.place_bid(&investor, &invoice_id4, &8_000, &9_500);
+
+        // Business accepts bids on invoice 1 and 3
+        let result1 = client.try_accept_bid(&invoice_id1, &bid_id1);
+        assert!(result1.is_ok(), "Accept bid 1 should succeed");
+
+        let result3 = client.try_accept_bid(&invoice_id3, &bid_id3);
+        assert!(result3.is_ok(), "Accept bid 3 should succeed");
+
+        // Verify bid statuses
+        assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Accepted, "Bid 1 should be Accepted");
+        assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Placed, "Bid 2 should remain Placed");
+        assert_eq!(client.get_bid(&bid_id3).unwrap().status, BidStatus::Accepted, "Bid 3 should be Accepted");
+        assert_eq!(client.get_bid(&bid_id4).unwrap().status, BidStatus::Placed, "Bid 4 should remain Placed");
+
+        // Verify invoice statuses
+        assert_eq!(client.get_invoice(&invoice_id1).status, InvoiceStatus::Funded, "Invoice 1 should be Funded");
+        assert_eq!(client.get_invoice(&invoice_id2).status, InvoiceStatus::Verified, "Invoice 2 should remain Verified");
+        assert_eq!(client.get_invoice(&invoice_id3).status, InvoiceStatus::Funded, "Invoice 3 should be Funded");
+        assert_eq!(client.get_invoice(&invoice_id4).status, InvoiceStatus::Verified, "Invoice 4 should remain Verified");
+
+        // Verify investor can still withdraw non-accepted bids
+        let result2 = client.try_withdraw_bid(&bid_id2);
+        assert!(result2.is_ok(), "Should be able to withdraw non-accepted bid");
+
+        let result4 = client.try_withdraw_bid(&bid_id4);
+        assert!(result4.is_ok(), "Should be able to withdraw non-accepted bid");
+    }
+
+    /// Test: get_all_bids_by_investor returns correct subset after acceptances
+    #[test]
+    fn test_get_all_bids_by_investor_after_acceptances() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Setup verified investor
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        // Create 3 verified invoices
+        let invoice_id1 = create_verified_invoice(&env, &client, &business, 20_000);
+        let invoice_id2 = create_verified_invoice(&env, &client, &business, 30_000);
+        let invoice_id3 = create_verified_invoice(&env, &client, &business, 25_000);
+
+        // Investor places bids on all 3 invoices
+        let bid_id1 = client.place_bid(&investor, &invoice_id1, &10_000, &12_000);
+        let bid_id2 = client.place_bid(&investor, &invoice_id2, &15_000, &18_000);
+        let bid_id3 = client.place_bid(&investor, &invoice_id3, &12_000, &14_500);
+
+        // Verify all bids are returned initially
+        let all_bids_before = client.get_all_bids_by_investor(&investor);
+        assert_eq!(all_bids_before.len(), 3, "Should have 3 bids initially");
+
+        // Business accepts bid on invoice 1
+        let _ = client.try_accept_bid(&invoice_id1, &bid_id1);
+
+        // Investor withdraws bid on invoice 3
+        let _ = client.try_withdraw_bid(&bid_id3);
+
+        // get_all_bids_by_investor should still return all 3 bids
+        let all_bids_after = client.get_all_bids_by_investor(&investor);
+        assert_eq!(all_bids_after.len(), 3, "Should still have 3 bids");
+
+        // Verify we can identify each bid by status
+        let bid1 = all_bids_after.iter().find(|b| b.bid_id == bid_id1).unwrap();
+        let bid2 = all_bids_after.iter().find(|b| b.bid_id == bid_id2).unwrap();
+        let bid3 = all_bids_after.iter().find(|b| b.bid_id == bid_id3).unwrap();
+
+        assert_eq!(bid1.status, BidStatus::Accepted, "Bid 1 should be Accepted");
+        assert_eq!(bid2.status, BidStatus::Placed, "Bid 2 should be Placed");
+        assert_eq!(bid3.status, BidStatus::Withdrawn, "Bid 3 should be Withdrawn");
+    }
+
+    /// Test: Investor can withdraw bids on non-accepted invoices
+    #[test]
+    fn test_investor_can_withdraw_non_accepted_bids() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Setup verified investor
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        // Create 3 verified invoices
+        let invoice_id1 = create_verified_invoice(&env, &client, &business, 20_000);
+        let invoice_id2 = create_verified_invoice(&env, &client, &business, 30_000);
+        let invoice_id3 = create_verified_invoice(&env, &client, &business, 25_000);
+
+        // Investor places bids on all 3 invoices
+        let bid_id1 = client.place_bid(&investor, &invoice_id1, &10_000, &12_000);
+        let bid_id2 = client.place_bid(&investor, &invoice_id2, &15_000, &18_000);
+        let bid_id3 = client.place_bid(&investor, &invoice_id3, &12_000, &14_500);
+
+        // Business accepts bid on invoice 1
+        let _ = client.try_accept_bid(&invoice_id1, &bid_id1);
+
+        // Investor cannot withdraw accepted bid
+        let result1 = client.try_withdraw_bid(&bid_id1);
+        assert!(result1.is_err(), "Cannot withdraw accepted bid");
+
+        // Investor can withdraw non-accepted bids
+        let result2 = client.try_withdraw_bid(&bid_id2);
+        assert!(result2.is_ok(), "Should be able to withdraw non-accepted bid 2");
+
+        let result3 = client.try_withdraw_bid(&bid_id3);
+        assert!(result3.is_ok(), "Should be able to withdraw non-accepted bid 3");
+
+        // Verify statuses
+        assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Accepted);
+        assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Withdrawn);
+        assert_eq!(client.get_bid(&bid_id3).unwrap().status, BidStatus::Withdrawn);
+    }
+
+    /// Test: Multiple accepted bids create multiple investments
+    #[test]
+    fn test_multiple_accepted_bids_create_multiple_investments() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Setup verified investor
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        // Create 3 verified invoices
+        let invoice_id1 = create_verified_invoice(&env, &client, &business, 20_000);
+        let invoice_id2 = create_verified_invoice(&env, &client, &business, 30_000);
+        let invoice_id3 = create_verified_invoice(&env, &client, &business, 25_000);
+
+        // Investor places bids on all 3 invoices
+        let bid_id1 = client.place_bid(&investor, &invoice_id1, &10_000, &12_000);
+        let bid_id2 = client.place_bid(&investor, &invoice_id2, &15_000, &18_000);
+        let bid_id3 = client.place_bid(&investor, &invoice_id3, &12_000, &14_500);
+
+        // Business accepts all 3 bids
+        let _ = client.try_accept_bid(&invoice_id1, &bid_id1);
+        let _ = client.try_accept_bid(&invoice_id2, &bid_id2);
+        let _ = client.try_accept_bid(&invoice_id3, &bid_id3);
+
+        // Verify investments were created for each accepted bid
+        let investment1 = client.get_invoice_investment(&invoice_id1);
+        assert_eq!(investment1.investor, investor);
+        assert_eq!(investment1.amount, 10_000);
+
+        let investment2 = client.get_invoice_investment(&invoice_id2);
+        assert_eq!(investment2.investor, investor);
+        assert_eq!(investment2.amount, 15_000);
+
+        let investment3 = client.get_invoice_investment(&invoice_id3);
+        assert_eq!(investment3.investor, investor);
+        assert_eq!(investment3.amount, 12_000);
+    }
+
+    /// Test: Investor with multiple bids on different invoices - comprehensive workflow
+    #[test]
+    fn test_investor_multiple_invoices_comprehensive_workflow() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business1 = Address::generate(&env);
+        let business2 = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Setup verified investor
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        // Create 5 verified invoices from different businesses
+        let invoice_id1 = create_verified_invoice(&env, &client, &business1, 20_000);
+        let invoice_id2 = create_verified_invoice(&env, &client, &business1, 30_000);
+        let invoice_id3 = create_verified_invoice(&env, &client, &business2, 25_000);
+        let invoice_id4 = create_verified_invoice(&env, &client, &business2, 15_000);
+        let invoice_id5 = create_verified_invoice(&env, &client, &business1, 40_000);
+
+        // Investor places bids on all 5 invoices
+        let bid_id1 = client.place_bid(&investor, &invoice_id1, &10_000, &12_000);
+        let bid_id2 = client.place_bid(&investor, &invoice_id2, &15_000, &18_000);
+        let bid_id3 = client.place_bid(&investor, &invoice_id3, &12_000, &14_500);
+        let bid_id4 = client.place_bid(&investor, &invoice_id4, &8_000, &9_500);
+        let bid_id5 = client.place_bid(&investor, &invoice_id5, &20_000, &24_000);
+
+        // Verify all bids are Placed
+        let all_bids = client.get_all_bids_by_investor(&investor);
+        assert_eq!(all_bids.len(), 5, "Should have 5 bids");
+        for bid in all_bids.iter() {
+            assert_eq!(bid.status, BidStatus::Placed, "All bids should be Placed initially");
+        }
+
+        // Business 1 accepts bids on invoices 1 and 5
+        let _ = client.try_accept_bid(&invoice_id1, &bid_id1);
+        let _ = client.try_accept_bid(&invoice_id5, &bid_id5);
+
+        // Business 2 accepts bid on invoice 3
+        let _ = client.try_accept_bid(&invoice_id3, &bid_id3);
+
+        // Investor withdraws bids on invoices 2 and 4
+        let _ = client.try_withdraw_bid(&bid_id2);
+        let _ = client.try_withdraw_bid(&bid_id4);
+
+        // Verify final bid statuses
+        assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Accepted);
+        assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Withdrawn);
+        assert_eq!(client.get_bid(&bid_id3).unwrap().status, BidStatus::Accepted);
+        assert_eq!(client.get_bid(&bid_id4).unwrap().status, BidStatus::Withdrawn);
+        assert_eq!(client.get_bid(&bid_id5).unwrap().status, BidStatus::Accepted);
+
+        // Verify investments were created for accepted bids
+        assert!(client.try_get_invoice_investment(&invoice_id1).is_ok());
+        assert!(client.try_get_invoice_investment(&invoice_id3).is_ok());
+        assert!(client.try_get_invoice_investment(&invoice_id5).is_ok());
+
+        // Verify no investments for withdrawn bids
+        assert!(client.try_get_invoice_investment(&invoice_id2).is_err());
+        assert!(client.try_get_invoice_investment(&invoice_id4).is_err());
+
+        // Verify get_all_bids_by_investor still returns all 5 bids
+        let final_bids = client.get_all_bids_by_investor(&investor);
+        assert_eq!(final_bids.len(), 5, "Should still have all 5 bids");
     }
 }

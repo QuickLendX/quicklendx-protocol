@@ -42,11 +42,7 @@ fn create_verified_business(
     business
 }
 
-fn create_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    limit: i128,
-) -> Address {
+fn create_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i128) -> Address {
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &limit);
@@ -133,7 +129,7 @@ fn test_cancel_invoice_pending_emits_event() {
 
     // Verify InvoiceCancelled event was emitted
     let events = env.events().all();
-    let event_count = events.len();
+    let event_count = events.events().len();
     assert!(event_count > 0, "Expected events to be emitted");
 }
 
@@ -158,7 +154,7 @@ fn test_cancel_invoice_pending_business_owner_only() {
     // This test documents that cancel_invoice succeeds when auth is mocked
     // In production, only the business owner can cancel
     client.cancel_invoice(&invoice_id);
-    
+
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Cancelled);
 }
@@ -220,7 +216,7 @@ fn test_cancel_invoice_verified_emits_event() {
 
     // Verify events were emitted
     let events = env.events().all();
-    assert!(events.len() > 0, "Expected events to be emitted");
+    assert!(events.events().len() > 0, "Expected events to be emitted");
 }
 
 // ============================================================================
@@ -455,7 +451,7 @@ fn test_refund_emits_event() {
     client.refund_escrow_funds(&invoice_id, &business);
 
     let events = env.events().all();
-    assert!(events.len() > 0, "Expected refund events to be emitted");
+    assert!(events.events().len() > 0, "Expected refund events to be emitted");
 }
 
 #[test]

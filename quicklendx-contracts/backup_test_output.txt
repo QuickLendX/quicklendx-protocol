@@ -1,0 +1,17 @@
+Backup Test Execution Output (2026-02-25)
+======================================
+
+1) Command: cargo test --no-run
+Result: PASS
+Summary: all test targets compiled successfully.
+
+2) Command: cargo test test_backup -- --nocapture
+Result: PASS
+Summary: test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 975 filtered out
+
+3) Command: cargo llvm-cov --summary-only -- test_backup -- --nocapture
+Result: PASS
+Coverage summary (backup module):
+- backup.rs line coverage: 98.15%
+- backup.rs region coverage: 98.30%
+- backup.rs function coverage: 85.00%

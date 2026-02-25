@@ -64,7 +64,7 @@ class ApiClient {
         });
         globalErrorHandler(appError);
         return Promise.reject(appError);
-      },
+      }
     );
 
     // Response interceptor
@@ -76,7 +76,7 @@ class ApiClient {
         const appError = this.handleAxiosError(error);
         globalErrorHandler(appError);
         return Promise.reject(appError);
-      },
+      }
     );
   }
 
@@ -95,7 +95,7 @@ class ApiClient {
             url: config?.url,
             timeout: config?.timeout,
           },
-        },
+        }
       );
     }
 
@@ -125,7 +125,7 @@ class ApiClient {
                 url: config?.url,
                 originalMessage: message,
               },
-            },
+            }
           );
 
         case 403:
@@ -137,7 +137,7 @@ class ApiClient {
                 url: config?.url,
                 originalMessage: message,
               },
-            },
+            }
           );
 
         case 404:
@@ -149,7 +149,7 @@ class ApiClient {
                 url: config?.url,
                 originalMessage: message,
               },
-            },
+            }
           );
 
         case 422:
@@ -171,7 +171,7 @@ class ApiClient {
                 retryAfter: response.headers["retry-after"],
               },
             },
-            0, // Don't retry rate limit errors
+            0 // Don't retry rate limit errors
           );
 
         case 500:
@@ -250,7 +250,7 @@ class ApiClient {
         return response.data;
       },
       API_CONFIG.retryAttempts,
-      API_CONFIG.retryDelay,
+      API_CONFIG.retryDelay
     );
 
     this.requestQueue.set(requestKey, requestPromise);
@@ -271,7 +271,7 @@ class ApiClient {
   async post<T = any>(
     url: string,
     data?: any,
-    config?: AxiosRequestConfig,
+    config?: AxiosRequestConfig
   ): Promise<T> {
     return this.request<T>({ ...config, method: "POST", url, data });
   }
@@ -279,7 +279,7 @@ class ApiClient {
   async put<T = any>(
     url: string,
     data?: any,
-    config?: AxiosRequestConfig,
+    config?: AxiosRequestConfig
   ): Promise<T> {
     return this.request<T>({ ...config, method: "PUT", url, data });
   }
@@ -287,7 +287,7 @@ class ApiClient {
   async patch<T = any>(
     url: string,
     data?: any,
-    config?: AxiosRequestConfig,
+    config?: AxiosRequestConfig
   ): Promise<T> {
     return this.request<T>({ ...config, method: "PATCH", url, data });
   }
@@ -301,7 +301,7 @@ class ApiClient {
     url: string,
     file: File,
     onProgress?: (progress: number) => void,
-    config?: AxiosRequestConfig,
+    config?: AxiosRequestConfig
   ): Promise<T> {
     const formData = new FormData();
     formData.append("file", file);
@@ -317,7 +317,7 @@ class ApiClient {
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
           const progress = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total,
+            (progressEvent.loaded * 100) / progressEvent.total
           );
           onProgress(progress);
         }
@@ -352,32 +352,32 @@ export const useApiClient = () => {
     post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) =>
       ErrorRecovery.handleAsyncError(
         apiClient.post<T>(url, data, config),
-        null as T,
+        null as T
       ),
     put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) =>
       ErrorRecovery.handleAsyncError(
         apiClient.put<T>(url, data, config),
-        null as T,
+        null as T
       ),
     patch: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) =>
       ErrorRecovery.handleAsyncError(
         apiClient.patch<T>(url, data, config),
-        null as T,
+        null as T
       ),
     delete: <T = any>(url: string, config?: AxiosRequestConfig) =>
       ErrorRecovery.handleAsyncError(
         apiClient.delete<T>(url, config),
-        null as T,
+        null as T
       ),
     upload: <T = any>(
       url: string,
       file: File,
       onProgress?: (progress: number) => void,
-      config?: AxiosRequestConfig,
+      config?: AxiosRequestConfig
     ) =>
       ErrorRecovery.handleAsyncError(
         apiClient.upload<T>(url, file, onProgress, config),
-        null as T,
+        null as T
       ),
     healthCheck: () => apiClient.healthCheck(),
   };

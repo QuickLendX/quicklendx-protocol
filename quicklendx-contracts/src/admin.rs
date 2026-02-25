@@ -49,7 +49,7 @@ impl AdminStorage {
     /// - Can only be called once (checked via ADMIN_INITIALIZED_KEY)
     /// - Emits AdminSet event for transparency
     pub fn initialize(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
-        admin.require_auth();
+        // Auth is handled by ProtocolInitializer::initialize
 
         // Check if already initialized
         let is_initialized: bool = env

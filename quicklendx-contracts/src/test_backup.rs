@@ -2,13 +2,13 @@
 extern crate std;
 
 use crate::{
-    backup::BackupStatus,
-    invoice::InvoiceCategory,
+    backup::{Backup, BackupRetentionPolicy, BackupStatus, BackupStorage},
+    invoice::{Invoice, InvoiceCategory},
     QuickLendXContract, QuickLendXContractClient,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, BytesN, Env, String, Vec,
+    token, Address, BytesN, Env, IntoVal, String, TryFromVal, Val, Vec,
 };
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
@@ -69,7 +69,7 @@ fn create_funded_invoice(
     client: &QuickLendXContractClient,
     admin: &Address,
 ) -> (BytesN<32>, Address, Address, i128, Address) {
-    client.initialize_protocol_limits(admin, &1i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
     let business = setup_verified_business(env, client, admin);
     let investor = setup_verified_investor(env, client, 50_000);
     let currency = setup_token(env, &business, &investor, &client.address);
@@ -118,7 +118,7 @@ fn test_create_and_validate_backup() {
 fn test_restore_backup() {
     let (env, client, admin) = setup();
 
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
     let business = setup_verified_business(&env, &client, &admin);
     let investor = setup_verified_investor(&env, &client, 50_000);
     let currency = setup_token(&env, &business, &investor, &client.address);
@@ -290,4 +290,263 @@ fn test_backup_id_format_and_storage() {
     assert_eq!(arr[0], 0xB4);
     assert_eq!(arr[1], 0xC4);
     assert_eq!(arr[2..10], details.timestamp.to_be_bytes());
+}
+
+#[test]
+fn test_create_backup_invoice_count_exact() {
+    let (env, client, admin) = setup();
+
+    client.initialize_protocol_limits(&admin, &1i128, &1i128, &100u32, &365u64, &86400u64);
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &client.address);
+    client.add_currency(&admin, &currency);
+
+    let due_date = env.ledger().timestamp() + 86400;
+    for amount in [1_000i128, 2_000i128] {
+        let invoice_id = client.store_invoice(
+            &business,
+            &amount,
+            &currency,
+            &due_date,
+            &String::from_str(&env, "Backup Count Test"),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
+        client.verify_invoice(&invoice_id);
+    }
+
+    assert_eq!(client.get_total_invoice_count(), 2);
+    let backup_id = client.create_backup(&admin);
+    let details = client.get_backup_details(&backup_id).unwrap();
+    assert_eq!(details.invoice_count, 2);
+}
+
+#[test]
+fn test_validate_backup_marks_corrupted_when_metadata_mismatch() {
+    let (env, client, admin) = setup();
+
+    let _ = create_funded_invoice(&env, &client, &admin);
+    let backup_id = client.create_backup(&admin);
+
+    env.as_contract(&client.address, || {
+        let mut backup = BackupStorage::get_backup(&env, &backup_id).unwrap();
+        backup.invoice_count = backup.invoice_count.saturating_add(1);
+        BackupStorage::update_backup(&env, &backup);
+    });
+
+    let is_valid = client.validate_backup(&backup_id);
+    assert_eq!(is_valid, false);
+
+    let details = client.get_backup_details(&backup_id).unwrap();
+    assert_eq!(details.status, BackupStatus::Corrupted);
+}
+
+#[test]
+fn test_archive_backup_requires_admin() {
+    let (env, client, admin) = setup();
+
+    let backup_id = client.create_backup(&admin);
+    let stranger = Address::generate(&env);
+
+    assert!(client.try_archive_backup(&stranger, &backup_id).is_err());
+
+    let active_backups = client.get_backups();
+    assert_eq!(active_backups.len(), 1);
+    assert_eq!(active_backups.get(0).unwrap(), backup_id);
+
+    let details = client.get_backup_details(&backup_id).unwrap();
+    assert_eq!(details.status, BackupStatus::Active);
+}
+
+#[test]
+fn test_cleanup_keeps_latest_five_in_order() {
+    let (env, client, admin) = setup();
+
+    let mut backup_ids = Vec::new(&env);
+    for _ in 0..7 {
+        let id = client.create_backup(&admin);
+        backup_ids.push_back(id);
+        env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    }
+
+    let active_backups = client.get_backups();
+    assert_eq!(active_backups.len(), 5);
+
+    for i in 0..5 {
+        let expected = backup_ids.get(i + 2).unwrap();
+        assert_eq!(active_backups.get(i).unwrap(), expected);
+    }
+}
+
+#[test]
+fn test_validate_backup_fails_for_unknown_backup_id() {
+    let (env, client, _admin) = setup();
+    let missing_id = BytesN::from_array(&env, &[42u8; 32]);
+
+    env.as_contract(&client.address, || {
+        let result = BackupStorage::validate_backup(&env, &missing_id);
+        assert_eq!(result, Err(crate::errors::QuickLendXError::StorageKeyNotFound));
+    });
+}
+
+#[test]
+fn test_validate_backup_fails_when_backup_data_missing() {
+    let (env, client, _admin) = setup();
+
+    env.as_contract(&client.address, || {
+        let backup_id = BackupStorage::generate_backup_id(&env);
+        let backup = Backup {
+            backup_id: backup_id.clone(),
+            timestamp: env.ledger().timestamp(),
+            description: String::from_str(&env, "missing data"),
+            invoice_count: 1,
+            status: BackupStatus::Active,
+        };
+        BackupStorage::store_backup(&env, &backup);
+
+        let result = BackupStorage::validate_backup(&env, &backup_id);
+        assert_eq!(result, Err(crate::errors::QuickLendXError::StorageKeyNotFound));
+    });
+}
+
+#[test]
+fn test_validate_backup_fails_for_non_positive_invoice_amount() {
+    let (env, client, _admin) = setup();
+
+    env.as_contract(&client.address, || {
+        let business = Address::generate(&env);
+        let currency = Address::generate(&env);
+        let due_date = env.ledger().timestamp() + 86400;
+
+        let mut invoice = Invoice::new(
+            &env,
+            business,
+            1,
+            currency,
+            due_date,
+            String::from_str(&env, "bad invoice"),
+            InvoiceCategory::Services,
+            Vec::new(&env),
+        )
+        .unwrap();
+        invoice.amount = 0;
+
+        let mut invoices = Vec::new(&env);
+        invoices.push_back(invoice);
+
+        let backup_id = BackupStorage::generate_backup_id(&env);
+        let backup = Backup {
+            backup_id: backup_id.clone(),
+            timestamp: env.ledger().timestamp(),
+            description: String::from_str(&env, "invalid amount backup"),
+            invoice_count: 1,
+            status: BackupStatus::Active,
+        };
+
+        BackupStorage::store_backup(&env, &backup);
+        BackupStorage::store_backup_data(&env, &backup_id, &invoices);
+
+        let result = BackupStorage::validate_backup(&env, &backup_id);
+        assert_eq!(result, Err(crate::errors::QuickLendXError::StorageError));
+    });
+}
+
+#[test]
+fn test_cleanup_sorts_active_and_ignores_archived_and_missing_records() {
+    let (env, client, _admin) = setup();
+
+    env.as_contract(&client.address, || {
+        BackupStorage::set_retention_policy(
+            &env,
+            &BackupRetentionPolicy {
+                max_backups: 1,
+                max_age_seconds: 0,
+                auto_cleanup_enabled: true,
+            },
+        );
+
+        let id_newer = BackupStorage::generate_backup_id(&env);
+        let id_older = BackupStorage::generate_backup_id(&env);
+        let id_archived = BackupStorage::generate_backup_id(&env);
+        let id_missing = BackupStorage::generate_backup_id(&env);
+
+        BackupStorage::store_backup(
+            &env,
+            &Backup {
+                backup_id: id_newer.clone(),
+                timestamp: 300,
+                description: String::from_str(&env, "newer"),
+                invoice_count: 0,
+                status: BackupStatus::Active,
+            },
+        );
+        BackupStorage::store_backup(
+            &env,
+            &Backup {
+                backup_id: id_older.clone(),
+                timestamp: 100,
+                description: String::from_str(&env, "older"),
+                invoice_count: 0,
+                status: BackupStatus::Active,
+            },
+        );
+        BackupStorage::store_backup(
+            &env,
+            &Backup {
+                backup_id: id_archived.clone(),
+                timestamp: 50,
+                description: String::from_str(&env, "archived"),
+                invoice_count: 0,
+                status: BackupStatus::Archived,
+            },
+        );
+
+        BackupStorage::add_to_backup_list(&env, &id_newer);
+        BackupStorage::add_to_backup_list(&env, &id_older);
+        BackupStorage::add_to_backup_list(&env, &id_archived);
+        BackupStorage::add_to_backup_list(&env, &id_missing);
+
+        let removed = BackupStorage::cleanup_old_backups(&env).unwrap();
+        assert_eq!(removed, 1);
+
+        let backups_after = BackupStorage::get_all_backups(&env);
+        assert!(!backups_after.contains(&id_older));
+        assert!(backups_after.contains(&id_newer));
+        assert!(backups_after.contains(&id_archived));
+        assert!(backups_after.contains(&id_missing));
+    });
+}
+
+#[test]
+fn test_backup_contracttype_roundtrip_conversions() {
+    let (env, client, _admin) = setup();
+
+    env.as_contract(&client.address, || {
+        let backup_id = BackupStorage::generate_backup_id(&env);
+        let backup = Backup {
+            backup_id,
+            timestamp: env.ledger().timestamp(),
+            description: String::from_str(&env, "roundtrip"),
+            invoice_count: 0,
+            status: BackupStatus::Archived,
+        };
+        let policy = BackupRetentionPolicy {
+            max_backups: 9,
+            max_age_seconds: 123,
+            auto_cleanup_enabled: true,
+        };
+
+        let backup_val: Val = backup.clone().into_val(&env);
+        let status_val: Val = BackupStatus::Corrupted.into_val(&env);
+        let policy_val: Val = policy.clone().into_val(&env);
+
+        let backup_decoded = Backup::try_from_val(&env, &backup_val).unwrap();
+        let status_decoded = BackupStatus::try_from_val(&env, &status_val).unwrap();
+        let policy_decoded = BackupRetentionPolicy::try_from_val(&env, &policy_val).unwrap();
+
+        assert_eq!(backup_decoded, backup);
+        assert_eq!(status_decoded, BackupStatus::Corrupted);
+        assert_eq!(policy_decoded, policy);
+    });
 }

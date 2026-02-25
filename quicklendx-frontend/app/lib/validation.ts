@@ -13,7 +13,7 @@ export const passwordSchema = z
   .min(8, "Password must be at least 8 characters long")
   .regex(
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-    "Password must contain at least one uppercase letter, one lowercase letter, and one number",
+    "Password must contain at least one uppercase letter, one lowercase letter, and one number"
   )
   .max(128, "Password is too long");
 
@@ -23,7 +23,7 @@ export const usernameSchema = z
   .max(30, "Username is too long")
   .regex(
     /^[a-zA-Z0-9_-]+$/,
-    "Username can only contain letters, numbers, underscores, and hyphens",
+    "Username can only contain letters, numbers, underscores, and hyphens"
   );
 
 export const phoneSchema = z
@@ -160,7 +160,7 @@ export const fileUploadSchema = z
     {
       message: "File type not allowed or file too large",
       path: ["file"],
-    },
+    }
   );
 
 // Form validation helper
@@ -180,7 +180,7 @@ export class FormValidator {
                 acc[path] = err.message;
                 return acc;
               },
-              {} as Record<string, string>,
+              {} as Record<string, string>
             ),
             input: data,
           },
@@ -205,7 +205,7 @@ export class FormValidator {
                 acc[path] = err.message;
                 return acc;
               },
-              {} as Record<string, string>,
+              {} as Record<string, string>
             ),
             input: data,
           },
@@ -217,7 +217,7 @@ export class FormValidator {
 
   static async validateAsync<T>(
     schema: z.ZodSchema<T>,
-    data: unknown,
+    data: unknown
   ): Promise<T> {
     try {
       return await schema.parseAsync(data);
@@ -233,7 +233,7 @@ export class FormValidator {
                 acc[path] = err.message;
                 return acc;
               },
-              {} as Record<string, string>,
+              {} as Record<string, string>
             ),
             input: data,
           },
@@ -279,7 +279,7 @@ export class FormValidator {
 // Real-time validation hook
 export const useValidation = <T>(schema: z.ZodSchema<T>) => {
   const validate = (
-    data: unknown,
+    data: unknown
   ): { isValid: boolean; errors: Record<string, string>; data?: T } => {
     try {
       const validatedData = FormValidator.validate(schema, data);
