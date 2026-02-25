@@ -25,8 +25,7 @@
 //! - `set_fee_config()` - Update fee configuration
 //! - `add_currency()` - Add whitelisted currencies
 
-use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY};
-use crate::currency::CurrencyWhitelist;
+use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
@@ -48,7 +47,7 @@ const WHITELIST_KEY: Symbol = symbol_short!("curr_wl");
 /// Default values for protocol configuration
 const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
 const DEFAULT_MAX_DUE_DATE_DAYS: u64 = 365;
-const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 86400; // 24 hours
+const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 7 * 24 * 60 * 60; // 7 days
 const DEFAULT_FEE_BPS: u32 = 200; // 2%
 const MAX_FEE_BPS: u32 = 1000; // 10%
 const MIN_FEE_BPS: u32 = 0;
@@ -125,8 +124,7 @@ impl ProtocolInitializer {
         env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
-        // Require authorization from the admin
-        params.admin.require_auth();
+        // Auth is checked by the outermost contract entry point
 
         // Check if already initialized (re-initialization protection)
         if Self::is_initialized(env) {
@@ -136,18 +134,20 @@ impl ProtocolInitializer {
         // Validate all parameters before making any state changes
         Self::validate_initialization_params(env, params)?;
 
-        // Initialize admin (this also checks admin_initialized flag)
-        // We set this first as it's the foundation for all admin operations
-        env.storage()
-            .instance()
-            .set(&ADMIN_INITIALIZED_KEY, &true);
-        env.storage().instance().set(&crate::admin::ADMIN_KEY, &params.admin);
+        // Initialize admin module
+        AdminStorage::initialize(env, &params.admin)?;
 
-        // Store treasury address
-        env.storage().instance().set(&TREASURY_KEY, &params.treasury);
+        // Initialize fee manager with default structures
+        crate::fees::FeeManager::initialize(env, &params.admin)?;
+        
+        // Override default platform fee with params and set treasury
+        crate::fees::FeeManager::update_platform_fee(env, &params.admin, params.fee_bps)?;
+        crate::fees::FeeManager::configure_treasury(env, &params.admin, params.treasury.clone())?;
 
-        // Store fee configuration
-        env.storage().instance().set(&FEE_BPS_KEY, &params.fee_bps);
+        // Initialize currency whitelist
+        if !params.initial_currencies.is_empty() {
+            crate::currency::CurrencyWhitelist::set_currencies(env, &params.admin, &params.initial_currencies)?;
+        }
 
         // Store protocol configuration
         let config = ProtocolConfig {
@@ -159,14 +159,7 @@ impl ProtocolInitializer {
         };
         env.storage().instance().set(&PROTOCOL_CONFIG_KEY, &config);
 
-        // Initialize currency whitelist with provided currencies
-        if !params.initial_currencies.is_empty() {
-            env.storage()
-                .instance()
-                .set(&WHITELIST_KEY, &params.initial_currencies);
-        }
-
-        // Mark protocol as initialized (this is the atomic commit point)
+        // Mark protocol as initialized (atomic commit point)
         env.storage()
             .instance()
             .set(&PROTOCOL_INITIALIZED_KEY, &true);
@@ -205,7 +198,7 @@ impl ProtocolInitializer {
     /// Performs comprehensive validation of all parameters before
     /// any state changes are made.
     fn validate_initialization_params(
-        env: &Env,
+        _env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // Validate fee basis points (0% to 10%)
