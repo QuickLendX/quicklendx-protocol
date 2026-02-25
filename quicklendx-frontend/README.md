@@ -27,11 +27,13 @@ The QuickLendX frontend provides a comprehensive interface for:
 ### Installation
 
 1. **Navigate to frontend directory**
+
 ```bash
 cd quicklendx-frontend
 ```
 
 2. **Install dependencies**
+
 ```bash
 npm install
 # or
@@ -55,6 +57,7 @@ NEXT_PUBLIC_ANALYTICS_ID=your_analytics_id
 ```
 
 4. **Run development server**
+
 ```bash
 npm run dev
 # or
@@ -132,16 +135,19 @@ Optional:
 ## 🧪 Testing
 
 ### Run Linter
+
 ```bash
 npm run lint
 ```
 
 ### Build for Production
+
 ```bash
 npm run build
 ```
 
 This will:
+
 - Type-check the codebase
 - Build optimized production bundle
 - Generate static assets
@@ -205,7 +211,7 @@ The frontend interacts with QuickLendX smart contracts through:
 ### Example Usage
 
 ```typescript
-import { apiClient } from '@/lib/api-client';
+import { apiClient } from "@/lib/api-client";
 
 // Get invoice details
 const invoice = await apiClient.getInvoice(invoiceId);
@@ -215,7 +221,7 @@ await apiClient.placeBid({
   investor: address,
   invoiceId: invoiceId,
   bidAmount: amount,
-  expectedReturn: returnAmount
+  expectedReturn: returnAmount,
 });
 ```
 

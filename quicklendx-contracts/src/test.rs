@@ -7,6 +7,7 @@ use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
 use crate::bid::{BidStatus, BidStorage};
 use crate::investment::{Investment, InvestmentStorage};
 use crate::invoice::{DisputeStatus, InvoiceCategory, InvoiceMetadata, LineItemRecord};
+use crate::notifications::NotificationType;
 use crate::verification::BusinessVerificationStatus;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -2841,6 +2842,281 @@ fn test_user_notification_stats() {
     assert!(stats.total_delivered >= 0);
     assert!(stats.total_read >= 0);
     assert!(stats.total_failed >= 0);
+}
+
+// --- Notification preferences and stats (issue #303) ---
+
+/// get_notification returns None for unknown notification ID.
+#[test]
+fn test_get_notification_returns_none_for_unknown_id() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let unknown_id = BytesN::from_array(&env, &[0u8; 32]);
+    let notification = client.get_notification(&unknown_id);
+    assert!(notification.is_none());
+}
+
+/// update_notification_status returns NotificationNotFound for unknown ID.
+#[test]
+fn test_update_notification_status_not_found() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let unknown_id = BytesN::from_array(&env, &[0u8; 32]);
+    let result = client.try_update_notification_status(&unknown_id, &NotificationDeliveryStatus::Sent);
+    let err = result.err().expect("expected contract error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::NotificationNotFound);
+}
+
+/// get_user_notifications returns empty vec for user with no notifications.
+#[test]
+fn test_get_user_notifications_empty_for_new_user() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let user = Address::generate(&env);
+    let notifications = client.get_user_notifications(&user);
+    assert!(notifications.is_empty());
+}
+
+/// get_notification_preferences returns defaults; all expected fields are present.
+#[test]
+fn test_get_notification_preferences_all_fields() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let user = Address::generate(&env);
+    let prefs = client.get_notification_preferences(&user);
+
+    assert_eq!(prefs.user, user);
+    assert!(prefs.invoice_created);
+    assert!(prefs.invoice_verified);
+    assert!(prefs.invoice_status_changed);
+    assert!(prefs.bid_received);
+    assert!(prefs.bid_accepted);
+    assert!(prefs.payment_received);
+    assert!(prefs.payment_overdue);
+    assert!(prefs.invoice_defaulted);
+    assert!(prefs.system_alerts);
+    assert!(!prefs.general);
+    assert_eq!(prefs.minimum_priority, crate::notifications::NotificationPriority::Medium);
+    // In test env the default ledger timestamp can be 0, so updated_at may be 0
+    assert!(prefs.updated_at >= 0);
+}
+
+/// update_notification_preferences requires user auth; fails without auth.
+#[test]
+fn test_update_notification_preferences_requires_auth() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let user = Address::generate(&env);
+    let mut preferences = client.get_notification_preferences(&user);
+    preferences.invoice_created = false;
+
+    // Do not call env.mock_all_auths() — user must authorize.
+    let result = client.try_update_notification_preferences(&user, &preferences);
+    assert!(result.is_err());
+}
+
+/// get_user_notification_stats: empty user returns zeros; status transitions update stats.
+#[test]
+fn test_get_user_notification_stats_detailed() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let empty_user = Address::generate(&env);
+    let stats_empty = client.get_user_notification_stats(&empty_user);
+    assert_eq!(stats_empty.total_sent, 0);
+    assert_eq!(stats_empty.total_delivered, 0);
+    assert_eq!(stats_empty.total_read, 0);
+    assert_eq!(stats_empty.total_failed, 0);
+
+    let business = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+    env.mock_all_auths();
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
+
+    let _invoice_id = client.upload_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let ids = client.get_user_notifications(&business);
+    assert!(!ids.is_empty());
+    let first_id = ids.get(0).unwrap();
+
+    client.update_notification_status(&first_id, &NotificationDeliveryStatus::Sent);
+    let stats_after_sent = client.get_user_notification_stats(&business);
+    assert!(stats_after_sent.total_sent >= 1);
+
+    client.update_notification_status(&first_id, &NotificationDeliveryStatus::Delivered);
+    let stats_after_delivered = client.get_user_notification_stats(&business);
+    assert!(stats_after_delivered.total_delivered >= 1);
+
+    client.update_notification_status(&first_id, &NotificationDeliveryStatus::Read);
+    let stats_after_read = client.get_user_notification_stats(&business);
+    assert!(stats_after_read.total_read >= 1);
+}
+
+/// update_notification_status: all delivery status transitions (Sent, Delivered, Read, Failed).
+#[test]
+fn test_update_notification_status_all_transitions() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+    env.mock_all_auths();
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
+
+    let _invoice_id = client.upload_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let ids = client.get_user_notifications(&business);
+    let nid = ids.get(0).unwrap();
+
+    client.update_notification_status(&nid, &NotificationDeliveryStatus::Sent);
+    assert_eq!(
+        client.get_notification(&nid).unwrap().delivery_status,
+        NotificationDeliveryStatus::Sent
+    );
+
+    client.update_notification_status(&nid, &NotificationDeliveryStatus::Delivered);
+    assert_eq!(
+        client.get_notification(&nid).unwrap().delivery_status,
+        NotificationDeliveryStatus::Delivered
+    );
+
+    client.update_notification_status(&nid, &NotificationDeliveryStatus::Read);
+    assert_eq!(
+        client.get_notification(&nid).unwrap().delivery_status,
+        NotificationDeliveryStatus::Read
+    );
+
+    client.update_notification_status(&nid, &NotificationDeliveryStatus::Failed);
+    assert_eq!(
+        client.get_notification(&nid).unwrap().delivery_status,
+        NotificationDeliveryStatus::Failed
+    );
+}
+
+/// check_overdue_invoices triggers PaymentOverdue notifications for funded overdue invoices.
+#[test]
+fn test_check_overdue_invoices_triggers_notifications() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    env.mock_all_auths();
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    let initial_balance = 10_000i128;
+    sac_client.mint(&business, &initial_balance);
+    sac_client.mint(&investor, &initial_balance);
+    let expiration = env.ledger().sequence() + 1_000;
+    token_client.approve(&business, &contract_id, &initial_balance, &expiration);
+    token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
+
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
+
+    // Use a fixed base time so ledger is predictable; due date 1 second ahead
+    let base_time = 1_000_000u64;
+    env.ledger().set_timestamp(base_time);
+    let due_date = base_time + 1;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Overdue test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.verify_invoice(&invoice_id);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let business_before = client.get_user_notifications(&business).len();
+    let investor_before = client.get_user_notifications(&investor).len();
+
+    // Advance past due date so the funded invoice is overdue
+    env.ledger().set_timestamp(due_date + 1);
+
+    let overdue_count = client.check_overdue_invoices();
+    assert!(
+        overdue_count >= 1,
+        "check_overdue_invoices should find at least one overdue invoice (got {})",
+        overdue_count
+    );
+
+    let business_after = client.get_user_notifications(&business);
+    let investor_after = client.get_user_notifications(&investor);
+    assert!(
+        business_after.len() > business_before,
+        "business should receive PaymentOverdue notification"
+    );
+    assert!(
+        investor_after.len() > investor_before,
+        "investor should receive PaymentOverdue notification"
+    );
+
+    let has_overdue = |ids: &Vec<BytesN<32>>| {
+        ids.iter().any(|id| {
+            client
+                .get_notification(&id)
+                .map(|n| n.notification_type == NotificationType::PaymentOverdue)
+                .unwrap_or(false)
+        })
+    };
+    assert!(has_overdue(&business_after), "business should have PaymentOverdue notification");
+    assert!(has_overdue(&investor_after), "investor should have PaymentOverdue notification");
 }
 
 #[test]
