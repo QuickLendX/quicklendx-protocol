@@ -24,6 +24,7 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
+mod vesting;
 pub mod types;
 #[cfg(test)]
 mod storage;
@@ -49,6 +50,8 @@ mod test_refund;
 mod test_init;
 #[cfg(test)]
 mod test_storage;
+#[cfg(test)]
+mod test_vesting;
 mod verification;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
@@ -93,6 +96,7 @@ use crate::notifications::{
     Notification, NotificationDeliveryStatus, NotificationPreferences, NotificationStats,
     NotificationSystem,
 };
+use crate::vesting::{Vesting, VestingSchedule};
 use analytics::{
     AnalyticsCalculator, AnalyticsStorage, BusinessReport, FinancialMetrics, InvestorAnalytics,
     InvestorPerformanceMetrics, InvestorReport, PerformanceMetrics, PlatformMetrics, TimePeriod,
@@ -220,6 +224,67 @@ impl QuickLendXContract {
         currency::CurrencyWhitelist::is_allowed_currency(&env, &currency)
     }
 
+    // ============================================================================
+    // Vesting Functions
+    // ============================================================================
+
+    /// Create a vesting schedule (admin only). Tokens are transferred into contract custody.
+    ///
+    /// # Errors
+    /// - `NotAdmin`, `InvalidAmount`, `InvalidTimestamp`, transfer errors
+    pub fn create_vesting_schedule(
+        env: Env,
+        admin: Address,
+        token: Address,
+        beneficiary: Address,
+        total_amount: i128,
+        start_time: u64,
+        cliff_seconds: u64,
+        end_time: u64,
+    ) -> Result<u64, QuickLendXError> {
+        Vesting::create_schedule(
+            &env,
+            &admin,
+            token,
+            beneficiary,
+            total_amount,
+            start_time,
+            cliff_seconds,
+            end_time,
+        )
+    }
+
+    /// Get a vesting schedule by ID.
+    pub fn get_vesting_schedule(env: Env, id: u64) -> Option<VestingSchedule> {
+        Vesting::get_schedule(&env, id)
+    }
+
+    /// Return the vested amount at current ledger time.
+    pub fn get_vested_amount(env: Env, id: u64) -> Result<i128, QuickLendXError> {
+        let schedule = Vesting::get_schedule(&env, id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Vesting::vested_amount(&env, &schedule)
+    }
+
+    /// Return releasable amount (vested minus already released).
+    pub fn get_vesting_releasable(env: Env, id: u64) -> Result<i128, QuickLendXError> {
+        let schedule = Vesting::get_schedule(&env, id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Vesting::releasable_amount(&env, &schedule)
+    }
+
+    /// Release vested tokens to beneficiary (beneficiary must authorize).
+    ///
+    /// # Errors
+    /// - `Unauthorized`, `OperationNotAllowed`, `StorageKeyNotFound`, transfer errors
+    pub fn release_vested_tokens(
+        env: Env,
+        beneficiary: Address,
+        id: u64,
+    ) -> Result<i128, QuickLendXError> {
+        Vesting::release(&env, &beneficiary, id)
+    }
+
     /// Get all whitelisted token addresses.
     pub fn get_whitelisted_currencies(env: Env) -> Vec<Address> {
         currency::CurrencyWhitelist::get_whitelisted_currencies(&env)
@@ -253,6 +318,98 @@ impl QuickLendXContract {
     /// Cancel a pending emergency withdrawal (admin only).
     pub fn cancel_emergency_withdraw(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         emergency::EmergencyWithdraw::cancel(&env, &admin)
+    }
+
+    // ============================================================================
+    // Protocol Limits Management Functions
+    // ============================================================================
+
+    /// Initialize protocol limits with default values (one-time operation).
+    ///
+    /// Sets up system-wide constraints for invoice validation and default handling.
+    /// Can only be called once. Subsequent calls will fail.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract environment
+    /// * `admin` - The address that will have permission to update limits
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Initialization successful
+    /// * `Err(QuickLendXError::OperationNotAllowed)` - Already initialized
+    ///
+    /// # Security
+    ///
+    /// - Can only be called once
+    /// - No authorization required for initial setup
+    /// - Admin address is permanently stored
+    pub fn init_protocol_limits_defaults(
+        env: Env,
+        admin: Address,
+    ) -> Result<(), QuickLendXError> {
+        protocol_limits::ProtocolLimitsContract::initialize(env, admin)
+    }
+
+    /// Update protocol limits (admin only).
+    ///
+    /// Allows the admin to update system-wide limits. All parameters are validated
+    /// before being stored.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract environment
+    /// * `admin` - The admin address (must match stored admin)
+    /// * `min_invoice_amount` - New minimum invoice amount (must be > 0)
+    /// * `max_due_date_days` - New maximum due date days (must be 1-730)
+    /// * `grace_period_seconds` - New grace period (must be 0-2,592,000)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Update successful
+    /// * `Err(QuickLendXError::NotAdmin)` - Admin not configured
+    /// * `Err(QuickLendXError::Unauthorized)` - Caller is not admin
+    /// * `Err(QuickLendXError::InvalidAmount)` - Amount validation failed
+    /// * `Err(QuickLendXError::InvoiceDueDateInvalid)` - Days validation failed
+    /// * `Err(QuickLendXError::InvalidTimestamp)` - Grace period validation failed
+    ///
+    /// # Security
+    ///
+    /// - Requires admin authorization
+    /// - All parameters validated before storage
+    pub fn set_protocol_limits_basic(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+    ) -> Result<(), QuickLendXError> {
+        let current_limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+            env,
+            admin,
+            min_invoice_amount,
+            current_limits.min_bid_amount,
+            current_limits.min_bid_bps,
+            max_due_date_days,
+            grace_period_seconds,
+        )
+    }
+
+    /// Get current protocol limits.
+    ///
+    /// Returns the currently configured limits, or default values if not initialized.
+    /// This function never fails and always returns valid limits.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    ///
+    /// Current protocol limits or defaults if uninitialized
+    pub fn get_protocol_limits(env: Env) -> protocol_limits::ProtocolLimits {
+        protocol_limits::ProtocolLimitsContract::get_protocol_limits(env)
     }
 
     // ============================================================================
@@ -2726,9 +2883,6 @@ impl QuickLendXContract {
 }
 
 #[cfg(test)]
-mod test;
-
-#[cfg(test)]
 mod test_bid;
 
 #[cfg(test)]
@@ -2736,6 +2890,9 @@ mod test_bid_ranking;
 
 #[cfg(test)]
 mod test_fees;
+
+#[cfg(test)]
+mod test_fees_extended;
 
 #[cfg(test)]
 mod test_escrow;

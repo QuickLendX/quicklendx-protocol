@@ -480,24 +480,24 @@ mod tests {
     // - Edge cases and error handling
 
     // ============================================================================
-    // HELPER FUNCTIONS (second set for tests below)
+    // HELPER FUNCTIONS
     // ============================================================================
 
     fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address) {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-    (env, client, admin)
-}
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        client.set_admin(&admin);
+        (env, client, admin)
+    }
 
-fn create_verified_business(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    admin: &Address,
-) -> Address {
+    fn create_verified_business(
+        env: &Env,
+        client: &QuickLendXContractClient,
+        admin: &Address,
+    ) -> Address {
     let business = Address::generate(env);
     client.submit_kyc_application(&business, &String::from_str(env, "Business KYC"));
     client.verify_business(admin, &business);

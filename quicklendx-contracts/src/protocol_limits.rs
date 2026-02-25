@@ -1,19 +1,24 @@
 use soroban_sdk::{contracttype, Address, Env, String};
 
-use crate::errors::QuickLendXError;
+use crate::{admin::ADMIN_KEY, errors::QuickLendXError};
 
-#[allow(dead_code)]
+/// Protocol limits configuration for invoice validation and default handling.
+///
+/// This struct defines system-wide constraints that ensure consistent risk management
+/// across the platform. All values are configurable by administrators.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtocolLimits {
+    /// Minimum acceptable invoice value in smallest currency unit (e.g., stroops)
     pub min_invoice_amount: i128,
     pub min_bid_amount: i128,
     pub min_bid_bps: u32,
     pub max_due_date_days: u64,
+    /// Grace period after due date before default can be triggered (0-2,592,000 seconds)
     pub grace_period_seconds: u64,
 }
 
-#[allow(dead_code)]
+/// Storage key for protocol limits
 const LIMITS_KEY: &str = "protocol_limits";
 #[allow(dead_code)]
 #[cfg(not(test))]
@@ -59,11 +64,40 @@ pub struct ProtocolLimitsContract;
 
 #[allow(dead_code)]
 impl ProtocolLimitsContract {
+    /// Initialize protocol limits with default values.
+    ///
+    /// This function can only be called once to set up the initial protocol limits
+    /// and designate the admin address. Subsequent calls will fail.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract environment
+    /// * `admin` - The address that will have permission to update limits
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Initialization successful
+    /// * `Err(QuickLendXError::OperationNotAllowed)` - Already initialized
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let admin = Address::generate(&env);
+    /// ProtocolLimitsContract::initialize(env.clone(), admin)?;
+    /// ```
+    ///
+    /// # Security
+    ///
+    /// - Can only be called once
+    /// - No authorization required for initial setup
+    /// - Admin address is permanently stored
     pub fn initialize(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        // Prevent double initialization
         if env.storage().instance().has(&LIMITS_KEY) {
             return Err(QuickLendXError::OperationNotAllowed);
         }
 
+        // Set default limits
         let limits = ProtocolLimits {
             min_invoice_amount: DEFAULT_MIN_AMOUNT,
             min_bid_amount: DEFAULT_MIN_BID_AMOUNT,
@@ -72,11 +106,39 @@ impl ProtocolLimitsContract {
             grace_period_seconds: DEFAULT_GRACE_PERIOD,
         };
 
+        // Store limits and admin address
         env.storage().instance().set(&LIMITS_KEY, &limits);
-        env.storage().instance().set(&"admin", &admin);
+        env.storage().instance().set(&ADMIN_KEY, &admin);
         Ok(())
     }
 
+    /// Update protocol limits with new values.
+    ///
+    /// This function allows the admin to update system-wide limits. All parameters
+    /// are validated before being stored.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract environment
+    /// * `admin` - The admin address (must match stored admin)
+    /// * `min_invoice_amount` - New minimum invoice amount (must be > 0)
+    /// * `max_due_date_days` - New maximum due date days (must be 1-730)
+    /// * `grace_period_seconds` - New grace period (must be 0-2,592,000)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Update successful
+    /// * `Err(QuickLendXError::NotAdmin)` - Admin not configured
+    /// * `Err(QuickLendXError::Unauthorized)` - Caller is not admin
+    /// * `Err(QuickLendXError::InvalidAmount)` - Amount validation failed
+    /// * `Err(QuickLendXError::InvoiceDueDateInvalid)` - Days validation failed
+    /// * `Err(QuickLendXError::InvalidTimestamp)` - Grace period validation failed
+    ///
+    /// # Security
+    ///
+    /// - Requires admin authorization via require_auth()
+    /// - Verifies caller matches stored admin address
+    /// - All parameters validated before storage
     pub fn set_protocol_limits(
         env: Env,
         admin: Address,
@@ -86,18 +148,21 @@ impl ProtocolLimitsContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
+        // Require admin authorization
         admin.require_auth();
 
+        // Verify admin address matches stored admin
         let stored_admin: Address = env
             .storage()
             .instance()
-            .get(&"admin")
+            .get(&ADMIN_KEY)
             .ok_or(QuickLendXError::NotAdmin)?;
 
         if admin != stored_admin {
             return Err(QuickLendXError::Unauthorized);
         }
 
+        // Validate min_invoice_amount (must be positive)
         if min_invoice_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
         }
@@ -114,10 +179,12 @@ impl ProtocolLimitsContract {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
         }
 
+        // Validate grace_period_seconds (must be 0-2,592,000 = 30 days)
         if grace_period_seconds > 2_592_000 {
             return Err(QuickLendXError::InvalidTimestamp);
         }
 
+        // Create and store updated limits
         let limits = ProtocolLimits {
             min_invoice_amount,
             min_bid_amount,
@@ -130,6 +197,25 @@ impl ProtocolLimitsContract {
         Ok(())
     }
 
+    /// Get current protocol limits.
+    ///
+    /// Returns the currently configured limits, or default values if not initialized.
+    /// This function never fails and always returns valid limits.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    ///
+    /// Current protocol limits or defaults if uninitialized
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    /// assert!(limits.min_invoice_amount > 0);
+    /// ```
     pub fn get_protocol_limits(env: Env) -> ProtocolLimits {
         env.storage()
             .instance()
@@ -147,11 +233,14 @@ impl ProtocolLimitsContract {
         let limits = Self::get_protocol_limits(env.clone());
         let current_time = env.ledger().timestamp();
 
+        // Check minimum amount
         if amount < limits.min_invoice_amount {
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        let max_due_date = current_time + (limits.max_due_date_days * 86400);
+        // Check maximum due date (current time + max days in seconds)
+        let max_due_date =
+            current_time.saturating_add(limits.max_due_date_days.saturating_mul(86400));
         if due_date > max_due_date {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
         }
@@ -159,9 +248,30 @@ impl ProtocolLimitsContract {
         Ok(())
     }
 
+    /// Calculate default date by adding grace period to due date.
+    ///
+    /// This function is used by the default handling module to determine when
+    /// an invoice can be marked as defaulted.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract environment
+    /// * `due_date` - The invoice due date timestamp
+    ///
+    /// # Returns
+    ///
+    /// Timestamp when default can be triggered (due_date + grace_period_seconds)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let due_date = 1000000u64;
+    /// let default_date = ProtocolLimitsContract::get_default_date(env.clone(), due_date);
+    /// // default_date = due_date + grace_period_seconds
+    /// ```
     pub fn get_default_date(env: Env, due_date: u64) -> u64 {
         let limits = Self::get_protocol_limits(env.clone());
-        due_date + limits.grace_period_seconds
+        due_date.saturating_add(limits.grace_period_seconds)
     }
 }
 
