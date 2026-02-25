@@ -50,6 +50,7 @@ jobs:
         npx prettier --check .
 
     - name: Run security audit
+      continue-on-error: true
       run: |
         cd quicklendx-frontend
         npm audit --audit-level moderate

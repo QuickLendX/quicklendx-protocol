@@ -2,7 +2,8 @@ use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::protocol_limits::{
-    check_string_length, MAX_KYC_DATA_LENGTH, MAX_REJECTION_REASON_LENGTH,
+    check_string_length, compute_min_bid_amount, ProtocolLimitsContract, MAX_KYC_DATA_LENGTH,
+    MAX_REJECTION_REASON_LENGTH,
 };
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
@@ -65,8 +66,6 @@ pub struct InvestorVerification {
     pub compliance_notes: Option<String>,
 }
 
-const MIN_BID_AMOUNT: i128 = 100;
-
 pub struct BusinessVerificationStorage;
 
 impl BusinessVerificationStorage {
@@ -120,7 +119,6 @@ impl BusinessVerificationStorage {
         Self::store_verification(env, verification);
     }
 
-    #[cfg(test)]
     pub fn is_business_verified(env: &Env, business: &Address) -> bool {
         if let Some(verification) = Self::get_verification(env, business) {
             matches!(verification.status, BusinessVerificationStatus::Verified)
@@ -494,7 +492,13 @@ pub fn validate_bid(
     expected_return: i128,
     investor: &Address,
 ) -> Result<(), QuickLendXError> {
-    if bid_amount <= 0 || bid_amount < MIN_BID_AMOUNT {
+    if bid_amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    let min_bid_amount = compute_min_bid_amount(invoice.amount, &limits);
+    if bid_amount < min_bid_amount {
         return Err(QuickLendXError::InvalidAmount);
     }
 
@@ -502,7 +506,8 @@ pub fn validate_bid(
         return Err(QuickLendXError::InvoiceAmountInvalid);
     }
 
-    if expected_return <= bid_amount {
+    // Expected return must cover the original bid to avoid negative payoff.
+    if expected_return < bid_amount {
         return Err(QuickLendXError::InvalidAmount);
     }
 
@@ -625,7 +630,6 @@ pub fn get_business_verification_status(
     BusinessVerificationStorage::get_verification(env, business)
 }
 
-#[cfg(test)]
 pub fn require_business_verification(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
     if !BusinessVerificationStorage::is_business_verified(env, business) {
         return Err(QuickLendXError::BusinessNotVerified);
