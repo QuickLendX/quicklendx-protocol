@@ -1221,20 +1221,22 @@ fn test_rating_queries_with_ratings() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let business = setup_verified_business(&env, &client);
-    let investor = setup_verified_investor(&env, &client);
+    let investor1 = setup_verified_investor(&env, &client);
+    let investor2 = setup_verified_investor(&env, &client);
+    let investor3 = setup_verified_investor(&env, &client);
     let invoice_id = create_test_invoice(&env, &client, &business, 1000);
 
     // Move to Funded
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
+        invoice.mark_as_funded(&env, investor1.clone(), 1000, env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
-    // Add ratings: 2, 4, 5
-    client.add_invoice_rating(&invoice_id, &2, &String::from_str(&env, "ok"), &investor);
-    client.add_invoice_rating(&invoice_id, &4, &String::from_str(&env, "good"), &investor);
-    client.add_invoice_rating(&invoice_id, &5, &String::from_str(&env, "great"), &investor);
+    // Add ratings: 2, 4, 5 from different investors
+    client.add_invoice_rating(&invoice_id, &2, &String::from_str(&env, "ok"), &investor1);
+    client.add_invoice_rating(&invoice_id, &4, &String::from_str(&env, "good"), &investor2);
+    client.add_invoice_rating(&invoice_id, &5, &String::from_str(&env, "great"), &investor3);
 
     // Query: above 0, 3, 4, 5
     let above_0 = client.get_invoices_with_rating_above(&0);
