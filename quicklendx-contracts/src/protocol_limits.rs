@@ -1,4 +1,4 @@
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String};
+use soroban_sdk::{contracttype, Address, Env, String};
 
 use crate::errors::QuickLendXError;
 
