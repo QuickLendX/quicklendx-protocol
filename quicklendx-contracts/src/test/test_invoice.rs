@@ -9,10 +9,7 @@
 use super::*;
 use crate::invoice::{InvoiceCategory, InvoiceMetadata, InvoiceStatus, LineItemRecord};
 use crate::verification::BusinessVerificationStatus;
-use soroban_sdk::{
-    testutils::Address as _,
-    Address, BytesN, Env, String, Vec,
-};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -1285,7 +1282,11 @@ fn test_invoice_get_payment_progress_value() {
 
     // 0% before any payment
     let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.payment_progress(), 0, "payment progress should be 0 when no payments");
+    assert_eq!(
+        invoice.payment_progress(),
+        0,
+        "payment progress should be 0 when no payments"
+    );
 
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
@@ -1297,7 +1298,11 @@ fn test_invoice_get_payment_progress_value() {
 
     // 50% after half payment
     let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.payment_progress(), 50, "payment progress should be 50 after half payment");
+    assert_eq!(
+        invoice.payment_progress(),
+        50,
+        "payment progress should be 50 after half payment"
+    );
 
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
@@ -1309,7 +1314,11 @@ fn test_invoice_get_payment_progress_value() {
 
     // 100% after full payment
     let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.payment_progress(), 100, "payment progress should be 100 when fully paid");
+    assert_eq!(
+        invoice.payment_progress(),
+        100,
+        "payment progress should be 100 when fully paid"
+    );
 }
 
 #[test]
@@ -1385,7 +1394,7 @@ fn test_invoice_invalid_payment_amount_negative() {
 // ============================================================================
 
 #[test]
-fn test_invoice_rating_requires_funded_status() {
+fn test_add_rating_success() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
@@ -1394,18 +1403,43 @@ fn test_invoice_rating_requires_funded_status() {
     let investor = Address::generate(&env);
     let invoice_id = create_test_invoice(&env, &client, &business, 1000);
 
-    // Try to rate pending invoice - should fail
+    // Simulate invoice funding directly in storage
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.status = InvoiceStatus::Funded;
+        invoice.investor = Some(investor.clone());
+        invoice.funded_amount = 1000;
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    // Successful Rating
+    env.mock_all_auths();
+
     let result = client.try_add_invoice_rating(
         &invoice_id,
         &5,
-        &String::from_str(&env, "Great!"),
+        &String::from_str(&env, "Great transaction!"),
         &investor,
     );
-    assert!(result.is_err());
+
+    assert!(result.is_ok());
+
+    // The main invoice struct STILL has named fields
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_ratings, 1);
+    assert_eq!(invoice.average_rating, Some(5));
+
+    // The stats query returns a tuple: (Option<u32>, u32, Option<u32>, Option<u32>)
+    let stats = client.get_invoice_rating_stats(&invoice_id);
+
+    assert_eq!(stats.0, Some(5)); // average_rating
+    assert_eq!(stats.1, 1); // total_ratings
+    assert_eq!(stats.2, Some(5)); // highest_rating
+    assert_eq!(stats.3, Some(5)); // lowest_rating
 }
 
 #[test]
-fn test_invoice_rating_invalid_value_zero() {
+fn test_add_rating_invalid_status() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
@@ -1414,24 +1448,56 @@ fn test_invoice_rating_invalid_value_zero() {
     let investor = Address::generate(&env);
     let invoice_id = create_test_invoice(&env, &client, &business, 1000);
 
+    // Invoice is still Pending (or Verified), NOT Funded or Paid.
+    // We just manually set the investor to satisfy the rater check for this test.
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
+        invoice.investor = Some(investor.clone());
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
-    // Try to add rating with value 0 - should fail
+    env.mock_all_auths();
+    let result =
+        client.try_add_invoice_rating(&invoice_id, &4, &String::from_str(&env, "Good!"), &investor);
+
+    // Expect Error: NotFunded
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::NotFunded);
+}
+
+#[test]
+fn test_add_rating_unauthorized_rater() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let actual_investor = Address::generate(&env);
+    let fake_investor = Address::generate(&env);
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.status = InvoiceStatus::Funded;
+        invoice.investor = Some(actual_investor.clone());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    env.mock_all_auths();
     let result = client.try_add_invoice_rating(
         &invoice_id,
-        &0,
-        &String::from_str(&env, "Invalid"),
-        &investor,
+        &4,
+        &String::from_str(&env, "Nice!"),
+        &fake_investor,
     );
+
+    // Expect Error: NotRater
     assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::NotRater);
 }
 
 #[test]
-fn test_invoice_rating_invalid_value_too_high() {
+fn test_add_rating_out_of_bounds() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
@@ -1442,45 +1508,65 @@ fn test_invoice_rating_invalid_value_too_high() {
 
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
+        invoice.status = InvoiceStatus::Funded;
+        invoice.investor = Some(investor.clone());
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
-    // Try to add rating with value 6 - should fail
-    let result = client.try_add_invoice_rating(
-        &invoice_id,
-        &6,
-        &String::from_str(&env, "Invalid"),
-        &investor,
+    env.mock_all_auths();
+
+    // Rating 0 is invalid
+    let result_low =
+        client.try_add_invoice_rating(&invoice_id, &0, &String::from_str(&env, ""), &investor);
+    assert!(result_low.is_err());
+    assert_eq!(
+        result_low.unwrap_err().unwrap(),
+        QuickLendXError::InvalidRating
     );
-    assert!(result.is_err());
+
+    // Rating 6 is invalid
+    let result_high =
+        client.try_add_invoice_rating(&invoice_id, &6, &String::from_str(&env, ""), &investor);
+    assert!(result_high.is_err());
+    assert_eq!(
+        result_high.unwrap_err().unwrap(),
+        QuickLendXError::InvalidRating
+    );
 }
 
 #[test]
-fn test_invoice_rating_only_investor_can_rate() {
+fn test_add_rating_already_rated() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
-    let other_user = Address::generate(&env);
     let invoice_id = create_test_invoice(&env, &client, &business, 1000);
 
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
+        invoice.status = InvoiceStatus::Funded;
+        invoice.investor = Some(investor.clone());
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
-    // Try to rate as non-investor - should fail
+    env.mock_all_auths();
+
+    // First rating succeeds
+    let _ =
+        client.try_add_invoice_rating(&invoice_id, &4, &String::from_str(&env, "Good!"), &investor);
+
+    // Second rating fails
     let result = client.try_add_invoice_rating(
         &invoice_id,
         &5,
-        &String::from_str(&env, "Great!"),
-        &other_user,
+        &String::from_str(&env, "Changed my mind!"),
+        &investor,
     );
+
     assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::AlreadyRated);
 }
 
 // ============================================================================
