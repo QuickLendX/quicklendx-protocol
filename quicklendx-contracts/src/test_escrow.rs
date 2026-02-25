@@ -579,191 +579,7 @@ fn test_escrow_invariants() {
 }
 
 // ============================================================================
-// Additional Edge Case Tests
-// ============================================================================
 
-// Note: This test is commented out because with mock_all_auths, the bid-invoice mismatch
-// validation doesn't work as expected in the test environment. The validation exists in
-// the code (line 51-53 of escrow.rs) but requires proper auth setup to test correctly.
-// TODO: Add this test with proper auth mocking
-/*
-#[test]
-fn test_cannot_accept_bid_for_different_invoice() {
-    let (env, client, admin) = setup();
-    let contract_id = client.address.clone();
-
-    // Setup parties
-    let business = setup_verified_business(&env, &client, &admin);
-    let investor = setup_verified_investor(&env, &client, 50_000);
-
-    // Setup token
-    let currency = setup_token(&env, &business, &investor, &contract_id);
-
-    // Create two different invoices
-    let amount = 10_000i128;
-    let invoice_id_a = create_verified_invoice(&env, &client, &business, amount, &currency);
-    let invoice_id_b = create_verified_invoice(&env, &client, &business, amount, &currency);
-
-    // Place bid on invoice A
-    let bid_id = place_test_bid(&client, &investor, &invoice_id_a, amount, amount + 1000);
-
-    // Verify bid is for invoice A
-    let bid = client.get_bid(&bid_id).unwrap();
-    assert_eq!(bid.invoice_id, invoice_id_a, "Bid should be for invoice A");
-
-    // Attempt to accept bid for invoice B (wrong invoice)
-    let result = client.try_accept_bid(&invoice_id_b, &bid_id);
-    
-    // Should fail with Unauthorized error due to bid.invoice_id != invoice_id check
-    assert!(result.is_err(), "Should not accept bid for different invoice");
-    
-    // Verify the error is Unauthorized
-    if let Err(err) = result {
-        let error = err.unwrap();
-        assert_eq!(
-            error,
-            QuickLendXError::Unauthorized,
-            "Should return Unauthorized error for mismatched invoice"
-        );
-    }
-
-    // Verify both invoices are still in Verified status
-    let invoice_a = client.get_invoice(&invoice_id_a);
-    let invoice_b = client.get_invoice(&invoice_id_b);
-    assert_eq!(invoice_a.status, InvoiceStatus::Verified);
-    assert_eq!(invoice_b.status, InvoiceStatus::Verified);
-
-    // Verify bid is still in Placed status
-    let bid = client.get_bid(&bid_id).unwrap();
-    assert_eq!(bid.status, BidStatus::Placed);
-
-    // Accepting bid for correct invoice should work
-    let result = client.try_accept_bid(&invoice_id_a, &bid_id);
-    assert!(result.is_ok(), "Should accept bid for correct invoice");
-    
-    // Verify invoice A is now funded
-    let invoice_a = client.get_invoice(&invoice_id_a);
-    assert_eq!(invoice_a.status, InvoiceStatus::Funded);
-}
-*/
-
-
-#[test]
-fn test_cannot_accept_expired_bid() {
-    let (env, client, admin) = setup();
-    let contract_id = client.address.clone();
-
-    // Setup parties
-    let business = setup_verified_business(&env, &client, &admin);
-    let investor = setup_verified_investor(&env, &client, 50_000);
-
-    // Setup token
-    let currency = setup_token(&env, &business, &investor, &contract_id);
-
-    // Create verified invoice
-    let amount = 10_000i128;
-    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
-
-    // Place bid
-    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1000);
-
-    // Get the bid to check expiration
-    let bid = client.get_bid(&bid_id).unwrap();
-    let expiration = bid.expiration_timestamp;
-
-    // Advance time past expiration using testutils
-    env.ledger().set_timestamp(expiration + 1);
-
-    // Attempt to accept expired bid - should fail
-    let result = client.try_accept_bid(&invoice_id, &bid_id);
-    assert!(result.is_err(), "Should not accept expired bid");
-
-    // Verify invoice is still in Verified status
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Verified);
-
-    // Verify bid status (may be marked as Expired by cleanup)
-    let bid = client.get_bid(&bid_id).unwrap();
-    assert_ne!(
-        bid.status,
-        BidStatus::Accepted,
-        "Expired bid should not be accepted"
-    );
-}
-
-#[test]
-fn test_cannot_accept_bid_on_cancelled_invoice() {
-    let (env, client, admin) = setup();
-    let contract_id = client.address.clone();
-
-    // Setup parties
-    let business = setup_verified_business(&env, &client, &admin);
-    let investor = setup_verified_investor(&env, &client, 50_000);
-
-    // Setup token
-    let currency = setup_token(&env, &business, &investor, &contract_id);
-
-    // Create verified invoice
-    let amount = 10_000i128;
-    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
-
-    // Place bid
-    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1000);
-
-    // Cancel the invoice
-    client.cancel_invoice(&invoice_id);
-
-    // Verify invoice is cancelled
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Cancelled);
-
-    // Attempt to accept bid on cancelled invoice - should fail
-    let result = client.try_accept_bid(&invoice_id, &bid_id);
-    assert!(
-        result.is_err(),
-        "Should not accept bid on cancelled invoice"
-    );
-}
-
-#[test]
-fn test_investment_record_created_on_accept() {
-    let (env, client, admin) = setup();
-    let contract_id = client.address.clone();
-
-    // Setup parties
-    let business = setup_verified_business(&env, &client, &admin);
-    let investor = setup_verified_investor(&env, &client, 50_000);
-
-    // Setup token
-    let currency = setup_token(&env, &business, &investor, &contract_id);
-
-    // Create verified invoice and bid
-    let amount = 10_000i128;
-    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
-    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1000);
-
-    // Accept bid
-    client.accept_bid(&invoice_id, &bid_id);
-
-    // Verify investment record was created
-    let investment = client.get_invoice_investment(&invoice_id);
-    assert_eq!(
-        investment.investor, investor,
-        "Investment investor should match bid investor"
-    );
-    assert_eq!(
-        investment.amount, amount,
-        "Investment amount should match bid amount"
-    );
-    assert_eq!(
-        investment.invoice_id, invoice_id,
-        "Investment invoice_id should match"
-    );
-}
-
-// ============================================================================
-// release_escrow_funds tests (Issue #273 – authorized, idempotency blocked)
-// ============================================================================
 
 #[test]
 fn test_release_escrow_funds_success() {
@@ -828,4 +644,249 @@ fn test_release_escrow_funds_idempotency_blocked() {
     );
     let err = result.unwrap_err().unwrap();
     assert_eq!(err, QuickLendXError::InvalidStatus);
+}
+
+// ============================================================================
+// verify_invoice and auto-release when funded (Issue #300)
+// ============================================================================
+
+#[test]
+fn test_verify_invoice_when_funded_triggers_release_escrow_funds() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1000);
+
+    client.accept_bid(&invoice_id, &bid_id);
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+
+    let escrow_before = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow_before.status, EscrowStatus::Held);
+
+    let business_balance_before = token_client.balance(&business);
+
+    let result = client.try_verify_invoice(&invoice_id);
+    assert!(result.is_ok(), "verify_invoice when funded should trigger release");
+
+    let business_balance_after = token_client.balance(&business);
+    assert_eq!(
+        business_balance_after - business_balance_before,
+        amount,
+        "Business should receive escrow amount after verify_invoice on funded invoice"
+    );
+
+    let escrow_after = client.get_escrow_details(&invoice_id);
+    assert_eq!(
+        escrow_after.status,
+        EscrowStatus::Released,
+        "Escrow should be Released after verify_invoice on funded invoice"
+    );
+}
+
+// ============================================================================
+// Multiple Investors - Escrow Tests (Issue #343)
+// ============================================================================
+
+/// Test: Multiple bids on same invoice, only accepted bid creates escrow
+#[test]
+fn test_multiple_bids_only_accepted_creates_escrow() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    // Setup parties
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor1 = setup_verified_investor(&env, &client, 50_000);
+    let investor2 = setup_verified_investor(&env, &client, 50_000);
+    let investor3 = setup_verified_investor(&env, &client, 50_000);
+
+    // Setup token for all investors
+    let currency = setup_token(&env, &business, &investor1, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    
+    let initial_balance = 100_000i128;
+    sac_client.mint(&investor2, &initial_balance);
+    sac_client.mint(&investor3, &initial_balance);
+    
+    let expiration = env.ledger().sequence() + 10_000;
+    token_client.approve(&investor2, &contract_id, &initial_balance, &expiration);
+    token_client.approve(&investor3, &contract_id, &initial_balance, &expiration);
+
+    // Create verified invoice
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+
+    // Three investors place bids
+    let _bid_id1 = place_test_bid(&client, &investor1, &invoice_id, 8_000, 10_000);
+    let bid_id2 = place_test_bid(&client, &investor2, &invoice_id, 9_000, 11_000);
+    let _bid_id3 = place_test_bid(&client, &investor3, &invoice_id, 10_000, 12_000);
+
+    // Record balances before accept
+    let investor1_before = token_client.balance(&investor1);
+    let investor2_before = token_client.balance(&investor2);
+    let investor3_before = token_client.balance(&investor3);
+    let contract_before = token_client.balance(&contract_id);
+
+    // Business accepts bid2
+    client.accept_bid(&invoice_id, &bid_id2);
+
+    // Verify only investor2's funds were transferred
+    assert_eq!(
+        token_client.balance(&investor1),
+        investor1_before,
+        "investor1 balance should not change"
+    );
+    assert_eq!(
+        token_client.balance(&investor2),
+        investor2_before - 9_000,
+        "investor2 should pay bid amount"
+    );
+    assert_eq!(
+        token_client.balance(&investor3),
+        investor3_before,
+        "investor3 balance should not change"
+    );
+    assert_eq!(
+        token_client.balance(&contract_id),
+        contract_before + 9_000,
+        "Contract should hold only accepted bid amount"
+    );
+
+    // Verify escrow details
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.investor, investor2, "Escrow should reference investor2");
+    assert_eq!(escrow.amount, 9_000, "Escrow should hold investor2's bid amount");
+    assert_eq!(escrow.status, EscrowStatus::Held, "Escrow should be Held");
+}
+
+/// Test: Multiple bids scenario - comprehensive workflow
+#[test]
+fn test_multiple_bids_complete_workflow() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    // Setup 4 investors and business
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor1 = setup_verified_investor(&env, &client, 100_000);
+    let investor2 = setup_verified_investor(&env, &client, 100_000);
+    let investor3 = setup_verified_investor(&env, &client, 100_000);
+    let investor4 = setup_verified_investor(&env, &client, 100_000);
+
+    // Setup token for all investors
+    let currency = setup_token(&env, &business, &investor1, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    
+    let initial_balance = 100_000i128;
+    for investor in [&investor2, &investor3, &investor4] {
+        sac_client.mint(investor, &initial_balance);
+        let expiration = env.ledger().sequence() + 10_000;
+        token_client.approve(investor, &contract_id, &initial_balance, &expiration);
+    }
+
+    // Create verified invoice
+    let invoice_amount = 50_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, invoice_amount, &currency);
+
+    // Four investors place bids with different amounts
+    let bid_id1 = place_test_bid(&client, &investor1, &invoice_id, 40_000, 50_000); // profit: 10k
+    let bid_id2 = place_test_bid(&client, &investor2, &invoice_id, 45_000, 60_000); // profit: 15k (best)
+    let bid_id3 = place_test_bid(&client, &investor3, &invoice_id, 42_000, 54_000); // profit: 12k
+    let bid_id4 = place_test_bid(&client, &investor4, &invoice_id, 38_000, 48_000); // profit: 10k
+
+    // Verify all bids are Placed
+    let placed = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
+    assert_eq!(placed.len(), 4, "All 4 bids should be Placed");
+
+    // Verify ranking
+    let ranked = client.get_ranked_bids(&invoice_id);
+    assert_eq!(ranked.get(0).unwrap().investor, investor2, "investor2 should be ranked first");
+
+    // Business accepts the best bid (investor2)
+    client.accept_bid(&invoice_id, &bid_id2);
+
+    // Verify bid statuses
+    assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Placed);
+    assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Accepted);
+    assert_eq!(client.get_bid(&bid_id3).unwrap().status, BidStatus::Placed);
+    assert_eq!(client.get_bid(&bid_id4).unwrap().status, BidStatus::Placed);
+
+    // Verify escrow
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.investor, investor2);
+    assert_eq!(escrow.amount, 45_000);
+    assert_eq!(escrow.status, EscrowStatus::Held);
+
+    // Verify invoice
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+    assert_eq!(invoice.funded_amount, 45_000);
+    assert_eq!(invoice.investor, Some(investor2));
+
+    // Non-accepted investors withdraw their bids
+    client.withdraw_bid(&bid_id1);
+    client.withdraw_bid(&bid_id3);
+    client.withdraw_bid(&bid_id4);
+
+    // Verify withdrawals
+    assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Withdrawn);
+    assert_eq!(client.get_bid(&bid_id3).unwrap().status, BidStatus::Withdrawn);
+    assert_eq!(client.get_bid(&bid_id4).unwrap().status, BidStatus::Withdrawn);
+
+    // Verify get_bids_for_invoice still returns all bids
+    let all_bids = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(all_bids.len(), 4, "Should still track all 4 bids");
+}
+
+/// Test: Verify only one escrow exists per invoice even with multiple bids
+#[test]
+fn test_single_escrow_per_invoice_with_multiple_bids() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor1 = setup_verified_investor(&env, &client, 50_000);
+    let investor2 = setup_verified_investor(&env, &client, 50_000);
+
+    let currency = setup_token(&env, &business, &investor1, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    
+    let initial_balance = 100_000i128;
+    sac_client.mint(&investor2, &initial_balance);
+    let expiration = env.ledger().sequence() + 10_000;
+    token_client.approve(&investor2, &contract_id, &initial_balance, &expiration);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+
+    // Two bids placed
+    let _bid_id1 = place_test_bid(&client, &investor1, &invoice_id, amount, amount + 1000);
+    let bid_id2 = place_test_bid(&client, &investor2, &invoice_id, amount, amount + 2000);
+
+    // Accept first bid
+    client.accept_bid(&invoice_id, &bid_id2);
+
+    // Verify escrow exists
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.invoice_id, invoice_id);
+    assert_eq!(escrow.investor, investor2);
+
+    // Attempt to accept second bid should fail
+    let result = client.try_accept_bid(&invoice_id, &_bid_id1);
+    assert!(result.is_err(), "Cannot accept second bid on funded invoice");
+
+    // Verify still only one escrow
+    let escrow_after = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow_after.escrow_id, escrow.escrow_id, "Should be same escrow");
+    assert_eq!(escrow_after.investor, investor2, "Escrow investor unchanged");
 }

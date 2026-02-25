@@ -1,9 +1,16 @@
 use core::cmp::Ordering;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Vec, Symbol};
 
+use crate::admin::AdminStorage;
+use crate::errors::QuickLendXError;
 use crate::events::emit_bid_expired;
 
-const DEFAULT_BID_TTL: u64 = 7 * 24 * 60 * 60;
+// TTL stored in days (admin configurable). Defaults to 7 days. Bounds: 1..=30
+const DEFAULT_BID_TTL_DAYS: u64 = 7;
+const MIN_BID_TTL_DAYS: u64 = 1;
+const MAX_BID_TTL_DAYS: u64 = 30;
+const BID_TTL_KEY: Symbol = symbol_short!("bid_ttl");
+const SECONDS_PER_DAY: u64 = 86400;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,8 +40,15 @@ impl Bid {
         current_timestamp > self.expiration_timestamp
     }
 
+    /// Backward-compatible helper used by some tests: uses compile-time default.
     pub fn default_expiration(now: u64) -> u64 {
-        now.saturating_add(DEFAULT_BID_TTL)
+        now.saturating_add(DEFAULT_BID_TTL_DAYS.saturating_mul(SECONDS_PER_DAY))
+    }
+
+    /// Compute default expiration using configured TTL (admin-configurable).
+    pub fn default_expiration_with_env(env: &Env, now: u64) -> u64 {
+        let days = BidStorage::get_bid_ttl_days(env);
+        now.saturating_add(days.saturating_mul(SECONDS_PER_DAY))
     }
 }
 
@@ -89,6 +103,31 @@ impl BidStorage {
             .instance()
             .get(&Self::invoice_key(invoice_id))
             .unwrap_or_else(|| Vec::new(env))
+    }
+
+    /// Get configured bid TTL in days (returns default if not set)
+    pub fn get_bid_ttl_days(env: &Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&BID_TTL_KEY)
+            .unwrap_or(DEFAULT_BID_TTL_DAYS)
+    }
+
+    /// Admin-only: set bid TTL in days. Enforces bounds.
+    pub fn set_bid_ttl_days(
+        env: &Env,
+        admin: &Address,
+        days: u64,
+    ) -> Result<u64, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(env, admin)?;
+
+        if days < MIN_BID_TTL_DAYS || days > MAX_BID_TTL_DAYS {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        env.storage().instance().set(&BID_TTL_KEY, &days);
+        Ok(days)
     }
     pub fn add_bid_to_invoice(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
         let mut bids = Self::get_bids_for_invoice(env, invoice_id);
