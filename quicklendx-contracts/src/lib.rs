@@ -24,12 +24,8 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
-mod vesting;
-pub mod types;
 #[cfg(test)]
 mod storage;
-#[cfg(test)]
-mod test_string_limits;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
@@ -41,18 +37,22 @@ mod test_dispute;
 #[cfg(test)]
 mod test_emergency_withdraw;
 #[cfg(test)]
+mod test_init;
+#[cfg(test)]
 mod test_overflow;
 #[cfg(test)]
 mod test_profit_fee;
 #[cfg(test)]
 mod test_refund;
 #[cfg(test)]
-mod test_init;
-#[cfg(test)]
 mod test_storage;
 #[cfg(test)]
+mod test_string_limits;
+#[cfg(test)]
 mod test_vesting;
+pub mod types;
 mod verification;
+mod vesting;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::{
@@ -122,10 +122,7 @@ impl QuickLendXContract {
     // ============================================================================
 
     /// Initialize the protocol with all required configuration (one-time setup)
-    pub fn initialize(
-        env: Env,
-        params: init::InitializationParams,
-    ) -> Result<(), QuickLendXError> {
+    pub fn initialize(env: Env, params: init::InitializationParams) -> Result<(), QuickLendXError> {
         params.admin.require_auth();
         init::ProtocolInitializer::initialize(&env, &params)
     }
@@ -261,15 +258,15 @@ impl QuickLendXContract {
 
     /// Return the vested amount at current ledger time.
     pub fn get_vested_amount(env: Env, id: u64) -> Result<i128, QuickLendXError> {
-        let schedule = Vesting::get_schedule(&env, id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let schedule =
+            Vesting::get_schedule(&env, id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         Vesting::vested_amount(&env, &schedule)
     }
 
     /// Return releasable amount (vested minus already released).
     pub fn get_vesting_releasable(env: Env, id: u64) -> Result<i128, QuickLendXError> {
-        let schedule = Vesting::get_schedule(&env, id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let schedule =
+            Vesting::get_schedule(&env, id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         Vesting::releasable_amount(&env, &schedule)
     }
 
@@ -344,10 +341,7 @@ impl QuickLendXContract {
     /// - Can only be called once
     /// - No authorization required for initial setup
     /// - Admin address is permanently stored
-    pub fn init_protocol_limits_defaults(
-        env: Env,
-        admin: Address,
-    ) -> Result<(), QuickLendXError> {
+    pub fn init_protocol_limits_defaults(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         protocol_limits::ProtocolLimitsContract::initialize(env, admin)
     }
 
@@ -384,7 +378,8 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
-        let current_limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+        let current_limits =
+            protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
@@ -455,7 +450,8 @@ impl QuickLendXContract {
         }
 
         // Validate due date is not too far in the future using protocol limits
-        if !protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date) {
+        if !protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)
+        {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
         }
 
@@ -813,8 +809,6 @@ impl QuickLendXContract {
             .saturating_add(cancelled)
             .saturating_add(refunded)
     }
-
-
 
     /// Clear all invoices from storage (admin only, used for restore operations)
     pub fn clear_all_invoices(env: &Env) -> Result<(), QuickLendXError> {
@@ -2843,7 +2837,12 @@ impl QuickLendXContract {
         };
 
         BackupStorage::set_retention_policy(&env, &policy);
-        events::emit_retention_policy_updated(&env, max_backups, max_age_seconds, auto_cleanup_enabled);
+        events::emit_retention_policy_updated(
+            &env,
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+        );
 
         Ok(())
     }
@@ -2927,12 +2926,14 @@ mod test_insurance;
 #[cfg(test)]
 mod test_investor_kyc;
 #[cfg(test)]
+mod test_lifecycle;
+#[cfg(test)]
 mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
 #[cfg(test)]
 mod test_revenue_split;
 #[cfg(test)]
-mod test_types;
+mod test_risk_tier;
 #[cfg(test)]
-mod test_lifecycle;
+mod test_types;
