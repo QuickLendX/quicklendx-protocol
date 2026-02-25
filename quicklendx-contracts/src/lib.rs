@@ -2646,3 +2646,5 @@ mod test_profit_fee_formula;
 mod test_revenue_split;
 #[cfg(test)]
 mod test_types;
+#[cfg(test)]
+mod test_lifecycle;
