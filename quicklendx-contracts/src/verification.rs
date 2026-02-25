@@ -2,7 +2,8 @@ use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::protocol_limits::{
-    check_string_length, MAX_KYC_DATA_LENGTH, MAX_REJECTION_REASON_LENGTH,
+    check_string_length, compute_min_bid_amount, ProtocolLimitsContract, MAX_KYC_DATA_LENGTH,
+    MAX_REJECTION_REASON_LENGTH,
 };
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
@@ -64,8 +65,6 @@ pub struct InvestorVerification {
     pub rejection_reason: Option<String>,
     pub compliance_notes: Option<String>,
 }
-
-const MIN_BID_AMOUNT: i128 = 100;
 
 pub struct BusinessVerificationStorage;
 
@@ -494,7 +493,13 @@ pub fn validate_bid(
     expected_return: i128,
     investor: &Address,
 ) -> Result<(), QuickLendXError> {
-    if bid_amount <= 0 || bid_amount < MIN_BID_AMOUNT {
+    if bid_amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    let min_bid_amount = compute_min_bid_amount(invoice.amount, &limits);
+    if bid_amount < min_bid_amount {
         return Err(QuickLendXError::InvalidAmount);
     }
 
@@ -502,8 +507,9 @@ pub fn validate_bid(
         return Err(QuickLendXError::InvoiceAmountInvalid);
     }
 
-    if expected_return <= bid_amount {
-        return Err(QuickLendXError::InvalidAmount);
+    // Expected return must cover the original bid to avoid negative payoff.
+    if expected_return < bid_amount {
+        return Err(QuickLendXError::InvalidExpectedReturn);
     }
 
     // Validate investor can make this investment
@@ -654,7 +660,13 @@ pub fn verify_invoice_data(
     }
 
     // Validate due date is not too far in the future using protocol limits
-    if !crate::protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date) {
+    let limits = crate::protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+    if amount < limits.min_invoice_amount {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let max_due_date = current_timestamp + (limits.max_due_date_days * 86400);
+    if due_date > max_due_date {
         return Err(QuickLendXError::InvoiceDueDateInvalid);
     }
     if description.len() == 0 {

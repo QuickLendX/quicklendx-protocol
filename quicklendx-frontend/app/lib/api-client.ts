@@ -1,21 +1,26 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
-import { 
-  AppError, 
-  NetworkError, 
-  AuthenticationError, 
-  AuthorizationError, 
-  ValidationError, 
+import axios, {
+  AxiosInstance,
+  AxiosRequestConfig,
+  AxiosResponse,
+  AxiosError,
+} from "axios";
+import {
+  AppError,
+  NetworkError,
+  AuthenticationError,
+  AuthorizationError,
+  ValidationError,
   BusinessLogicError,
   SystemError,
   ErrorRecovery,
   ErrorCategory,
   ErrorSeverity,
-  globalErrorHandler
-} from './errors';
+  globalErrorHandler,
+} from "./errors";
 
 // API configuration
 const API_CONFIG = {
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api",
   timeout: 10000,
   retryAttempts: 3,
   retryDelay: 1000,
@@ -31,7 +36,7 @@ class ApiClient {
       baseURL: API_CONFIG.baseURL,
       timeout: API_CONFIG.timeout,
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
     });
 
@@ -49,15 +54,14 @@ class ApiClient {
         }
 
         // Add request ID for tracking
-        config.headers['X-Request-ID'] = this.generateRequestId();
+        config.headers["X-Request-ID"] = this.generateRequestId();
 
         return config;
       },
       (error) => {
-        const appError = new SystemError(
-          'Failed to prepare request',
-          { action: 'request_interceptor' }
-        );
+        const appError = new SystemError("Failed to prepare request", {
+          action: "request_interceptor",
+        });
         globalErrorHandler(appError);
         return Promise.reject(appError);
       }
@@ -84,13 +88,13 @@ class ApiClient {
     // Network error (no response received)
     if (!response && request) {
       return new NetworkError(
-        'Network connection failed. Please check your internet connection.',
+        "Network connection failed. Please check your internet connection.",
         {
-          action: config?.method?.toUpperCase() || 'UNKNOWN',
+          action: config?.method?.toUpperCase() || "UNKNOWN",
           additionalData: {
             url: config?.url,
             timeout: config?.timeout,
-          }
+          },
         }
       );
     }
@@ -103,75 +107,69 @@ class ApiClient {
 
       switch (status) {
         case 400:
-          return new ValidationError(
-            message,
-            {
-              action: config?.method?.toUpperCase() || 'UNKNOWN',
-              additionalData: {
-                url: config?.url,
-                validationErrors: data?.errors,
-                field: data?.field,
-              }
-            }
-          );
+          return new ValidationError(message, {
+            action: config?.method?.toUpperCase() || "UNKNOWN",
+            additionalData: {
+              url: config?.url,
+              validationErrors: data?.errors,
+              field: data?.field,
+            },
+          });
 
         case 401:
           return new AuthenticationError(
-            'Authentication required. Please log in again.',
+            "Authentication required. Please log in again.",
             {
-              action: config?.method?.toUpperCase() || 'UNKNOWN',
+              action: config?.method?.toUpperCase() || "UNKNOWN",
               additionalData: {
                 url: config?.url,
                 originalMessage: message,
-              }
+              },
             }
           );
 
         case 403:
           return new AuthorizationError(
-            'You do not have permission to perform this action.',
+            "You do not have permission to perform this action.",
             {
-              action: config?.method?.toUpperCase() || 'UNKNOWN',
+              action: config?.method?.toUpperCase() || "UNKNOWN",
               additionalData: {
                 url: config?.url,
                 originalMessage: message,
-              }
+              },
             }
           );
 
         case 404:
           return new BusinessLogicError(
-            'The requested resource was not found.',
+            "The requested resource was not found.",
             {
-              action: config?.method?.toUpperCase() || 'UNKNOWN',
+              action: config?.method?.toUpperCase() || "UNKNOWN",
               additionalData: {
                 url: config?.url,
                 originalMessage: message,
-              }
+              },
             }
           );
 
         case 422:
-          return new ValidationError(
-            message,
-            {
-              action: config?.method?.toUpperCase() || 'UNKNOWN',
-              additionalData: {
-                url: config?.url,
-                validationErrors: data?.errors,
-              }
-            }
-          );
+          return new ValidationError(message, {
+            action: config?.method?.toUpperCase() || "UNKNOWN",
+            additionalData: {
+              url: config?.url,
+              validationErrors: data?.errors,
+            },
+          });
 
         case 429:
           return new NetworkError(
-            'Too many requests. Please try again later.',
+            "Too many requests. Please try again later.",
             {
-              action: config?.method?.toUpperCase() || 'UNKNOWN',
+              action: config?.method?.toUpperCase() || "UNKNOWN",
               additionalData: {
                 url: config?.url,
-                retryAfter: response.headers['retry-after'],
-              }
+                retryAfter: response.headers["retry-after"],
+              },
             },
             0 // Don't retry rate limit errors
           );
@@ -180,63 +178,53 @@ class ApiClient {
         case 502:
         case 503:
         case 504:
-          return new SystemError(
-            'Server error. Please try again later.',
-            {
-              action: config?.method?.toUpperCase() || 'UNKNOWN',
-              additionalData: {
-                url: config?.url,
-                status,
-                originalMessage: message,
-              }
-            }
-          );
+          return new SystemError("Server error. Please try again later.", {
+            action: config?.method?.toUpperCase() || "UNKNOWN",
+            additionalData: {
+              url: config?.url,
+              status,
+              originalMessage: message,
+            },
+          });
 
         default:
-          return new SystemError(
-            `Unexpected error (${status}): ${message}`,
-            {
-              action: config?.method?.toUpperCase() || 'UNKNOWN',
-              additionalData: {
-                url: config?.url,
-                status,
-                originalMessage: message,
-              }
-            }
-          );
+          return new SystemError(`Unexpected error (${status}): ${message}`, {
+            action: config?.method?.toUpperCase() || "UNKNOWN",
+            additionalData: {
+              url: config?.url,
+              status,
+              originalMessage: message,
+            },
+          });
       }
     }
 
     // Timeout error
-    if (error.code === 'ECONNABORTED') {
-      return new NetworkError(
-        'Request timed out. Please try again.',
-        {
-          action: config?.method?.toUpperCase() || 'UNKNOWN',
-          additionalData: {
-            url: config?.url,
-            timeout: config?.timeout,
-          }
-        }
-      );
+    if (error.code === "ECONNABORTED") {
+      return new NetworkError("Request timed out. Please try again.", {
+        action: config?.method?.toUpperCase() || "UNKNOWN",
+        additionalData: {
+          url: config?.url,
+          timeout: config?.timeout,
+        },
+      });
     }
 
     // Unknown error
-    return new SystemError(
-      'An unexpected error occurred.',
-      {
-        action: config?.method?.toUpperCase() || 'UNKNOWN',
-        additionalData: {
-          url: config?.url,
-          originalError: error.message,
-        }
-      }
-    );
+    return new SystemError("An unexpected error occurred.", {
+      action: config?.method?.toUpperCase() || "UNKNOWN",
+      additionalData: {
+        url: config?.url,
+        originalError: error.message,
+      },
+    });
   }
 
   private getAuthToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+    if (typeof window === "undefined") return null;
+    return (
+      localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+    );
   }
 
   private generateRequestId(): string {
@@ -277,46 +265,60 @@ class ApiClient {
 
   // Convenience methods
   async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return this.request<T>({ ...config, method: 'GET', url });
+    return this.request<T>({ ...config, method: "GET", url });
   }
 
-  async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return this.request<T>({ ...config, method: 'POST', url, data });
+  async post<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig
+  ): Promise<T> {
+    return this.request<T>({ ...config, method: "POST", url, data });
   }
 
-  async put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return this.request<T>({ ...config, method: 'PUT', url, data });
+  async put<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig
+  ): Promise<T> {
+    return this.request<T>({ ...config, method: "PUT", url, data });
   }
 
-  async patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return this.request<T>({ ...config, method: 'PATCH', url, data });
+  async patch<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig
+  ): Promise<T> {
+    return this.request<T>({ ...config, method: "PATCH", url, data });
   }
 
   async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return this.request<T>({ ...config, method: 'DELETE', url });
+    return this.request<T>({ ...config, method: "DELETE", url });
   }
 
   // Upload method with progress tracking
   async upload<T = any>(
-    url: string, 
-    file: File, 
+    url: string,
+    file: File,
     onProgress?: (progress: number) => void,
     config?: AxiosRequestConfig
   ): Promise<T> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
     return this.request<T>({
       ...config,
-      method: 'POST',
+      method: "POST",
       url,
       data: formData,
       headers: {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
-          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          const progress = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
           onProgress(progress);
         }
       },
@@ -326,7 +328,7 @@ class ApiClient {
   // Health check method
   async healthCheck(): Promise<boolean> {
     try {
-      await this.get('/health');
+      await this.get("/health");
       return true;
     } catch (error) {
       return false;
@@ -345,22 +347,38 @@ export const apiClient = new ApiClient();
 // Hook for using API client with error handling
 export const useApiClient = () => {
   return {
-    get: <T = any>(url: string, config?: AxiosRequestConfig) => 
+    get: <T = any>(url: string, config?: AxiosRequestConfig) =>
       ErrorRecovery.handleAsyncError(apiClient.get<T>(url, config), null as T),
-    post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) => 
-      ErrorRecovery.handleAsyncError(apiClient.post<T>(url, data, config), null as T),
-    put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) => 
-      ErrorRecovery.handleAsyncError(apiClient.put<T>(url, data, config), null as T),
-    patch: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) => 
-      ErrorRecovery.handleAsyncError(apiClient.patch<T>(url, data, config), null as T),
-    delete: <T = any>(url: string, config?: AxiosRequestConfig) => 
-      ErrorRecovery.handleAsyncError(apiClient.delete<T>(url, config), null as T),
+    post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) =>
+      ErrorRecovery.handleAsyncError(
+        apiClient.post<T>(url, data, config),
+        null as T
+      ),
+    put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) =>
+      ErrorRecovery.handleAsyncError(
+        apiClient.put<T>(url, data, config),
+        null as T
+      ),
+    patch: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) =>
+      ErrorRecovery.handleAsyncError(
+        apiClient.patch<T>(url, data, config),
+        null as T
+      ),
+    delete: <T = any>(url: string, config?: AxiosRequestConfig) =>
+      ErrorRecovery.handleAsyncError(
+        apiClient.delete<T>(url, config),
+        null as T
+      ),
     upload: <T = any>(
-      url: string, 
-      file: File, 
+      url: string,
+      file: File,
       onProgress?: (progress: number) => void,
       config?: AxiosRequestConfig
-    ) => ErrorRecovery.handleAsyncError(apiClient.upload<T>(url, file, onProgress, config), null as T),
+    ) =>
+      ErrorRecovery.handleAsyncError(
+        apiClient.upload<T>(url, file, onProgress, config),
+        null as T
+      ),
     healthCheck: () => apiClient.healthCheck(),
   };
-}; 
+};

@@ -1,4 +1,5 @@
 #![no_std]
+// QuickLendX Protocol - Invoice Financing Smart Contract
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 mod admin;
@@ -23,6 +24,7 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
+pub mod types;
 #[cfg(test)]
 mod storage;
 #[cfg(test)]
@@ -43,6 +45,8 @@ mod test_overflow;
 mod test_profit_fee;
 #[cfg(test)]
 mod test_refund;
+#[cfg(test)]
+mod test_init;
 #[cfg(test)]
 mod test_storage;
 mod verification;
@@ -113,19 +117,21 @@ impl QuickLendXContract {
     // Admin Management Functions
     // ============================================================================
 
-    /// Initialize the admin address (can only be called once)
-    ///
-    /// # Arguments
-    /// * `env` - The contract environment
-    /// * `admin` - The address to set as admin
-    ///
-    /// # Returns
-    /// * `Ok(())` if initialization succeeds
-    /// * `Err(QuickLendXError::AdminAlreadyInitialized)` if admin was already set
-    ///
-    /// # Security
-    /// - Requires authorization from the admin address
-    /// - Can only be called once
+    /// Initialize the protocol with all required configuration (one-time setup)
+    pub fn initialize(
+        env: Env,
+        params: init::InitializationParams,
+    ) -> Result<(), QuickLendXError> {
+        params.admin.require_auth();
+        init::ProtocolInitializer::initialize(&env, &params)
+    }
+
+    /// Check if the protocol has been initialized
+    pub fn is_initialized(env: Env) -> bool {
+        init::ProtocolInitializer::is_initialized(&env)
+    }
+
+    /// Initialize the admin address (deprecated: use initialize)
     pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         AdminStorage::initialize(&env, &admin)
     }
@@ -649,6 +655,15 @@ impl QuickLendXContract {
             .saturating_add(cancelled)
     }
 
+
+
+    /// Clear all invoices from storage (admin only, used for restore operations)
+    pub fn clear_all_invoices(env: &Env) -> Result<(), QuickLendXError> {
+        use crate::invoice::InvoiceStorage;
+        InvoiceStorage::clear_all(env);
+        Ok(())
+    }
+
     /// Get a bid by ID
     pub fn get_bid(env: Env, bid_id: BytesN<32>) -> Option<Bid> {
         BidStorage::get_bid(&env, &bid_id)
@@ -815,6 +830,9 @@ impl QuickLendXContract {
             env.ledger().timestamp(),
         );
         InvoiceStorage::update_invoice(&env, &invoice);
+        // Update status index so get_invoices_by_status(Funded) and check_overdue_invoices see this invoice
+        InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
+        InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Funded, &invoice_id);
         let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         let investment = Investment {
             investment_id: investment_id.clone(),
@@ -1270,6 +1288,8 @@ impl QuickLendXContract {
         env: Env,
         admin: Address,
         min_invoice_amount: i128,
+        min_bid_amount: i128,
+        min_bid_bps: u32,
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
@@ -1278,6 +1298,29 @@ impl QuickLendXContract {
             env,
             admin,
             min_invoice_amount,
+            min_bid_amount,
+            min_bid_bps,
+            max_due_date_days,
+            grace_period_seconds,
+        )
+    }
+
+    /// Update protocol limits (admin only).
+    pub fn set_protocol_limits(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        min_bid_amount: i128,
+        min_bid_bps: u32,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+    ) -> Result<(), QuickLendXError> {
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+            env,
+            admin,
+            min_invoice_amount,
+            min_bid_amount,
+            min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
         )
@@ -2726,6 +2769,8 @@ mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
 #[cfg(test)]
-mod test_fuzz;
-#[cfg(test)]
 mod test_revenue_split;
+#[cfg(test)]
+mod test_types;
+#[cfg(test)]
+mod test_lifecycle;
