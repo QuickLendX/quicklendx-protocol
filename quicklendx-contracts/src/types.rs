@@ -106,7 +106,7 @@ pub struct Dispute {
 
 /// Invoice rating structure
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceRating {
     pub rating: u32,
     pub feedback: String,

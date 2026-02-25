@@ -42,11 +42,7 @@ fn create_verified_business(
     business
 }
 
-fn create_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    limit: i128,
-) -> Address {
+fn create_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i128) -> Address {
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &limit);
@@ -158,7 +154,7 @@ fn test_cancel_invoice_pending_business_owner_only() {
     // This test documents that cancel_invoice succeeds when auth is mocked
     // In production, only the business owner can cancel
     client.cancel_invoice(&invoice_id);
-    
+
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Cancelled);
 }
