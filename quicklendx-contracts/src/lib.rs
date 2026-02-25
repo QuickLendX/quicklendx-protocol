@@ -24,6 +24,7 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
+mod vesting;
 pub mod types;
 #[cfg(test)]
 mod storage;
@@ -49,6 +50,8 @@ mod test_refund;
 mod test_init;
 #[cfg(test)]
 mod test_storage;
+#[cfg(test)]
+mod test_vesting;
 mod verification;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
@@ -93,6 +96,7 @@ use crate::notifications::{
     Notification, NotificationDeliveryStatus, NotificationPreferences, NotificationStats,
     NotificationSystem,
 };
+use crate::vesting::{Vesting, VestingSchedule};
 use analytics::{
     AnalyticsCalculator, AnalyticsStorage, BusinessReport, FinancialMetrics, InvestorAnalytics,
     InvestorPerformanceMetrics, InvestorReport, PerformanceMetrics, PlatformMetrics, TimePeriod,
@@ -218,6 +222,67 @@ impl QuickLendXContract {
     /// Check if a token is allowed for invoice currency.
     pub fn is_allowed_currency(env: Env, currency: Address) -> bool {
         currency::CurrencyWhitelist::is_allowed_currency(&env, &currency)
+    }
+
+    // ============================================================================
+    // Vesting Functions
+    // ============================================================================
+
+    /// Create a vesting schedule (admin only). Tokens are transferred into contract custody.
+    ///
+    /// # Errors
+    /// - `NotAdmin`, `InvalidAmount`, `InvalidTimestamp`, transfer errors
+    pub fn create_vesting_schedule(
+        env: Env,
+        admin: Address,
+        token: Address,
+        beneficiary: Address,
+        total_amount: i128,
+        start_time: u64,
+        cliff_seconds: u64,
+        end_time: u64,
+    ) -> Result<u64, QuickLendXError> {
+        Vesting::create_schedule(
+            &env,
+            &admin,
+            token,
+            beneficiary,
+            total_amount,
+            start_time,
+            cliff_seconds,
+            end_time,
+        )
+    }
+
+    /// Get a vesting schedule by ID.
+    pub fn get_vesting_schedule(env: Env, id: u64) -> Option<VestingSchedule> {
+        Vesting::get_schedule(&env, id)
+    }
+
+    /// Return the vested amount at current ledger time.
+    pub fn get_vested_amount(env: Env, id: u64) -> Result<i128, QuickLendXError> {
+        let schedule = Vesting::get_schedule(&env, id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Vesting::vested_amount(&env, &schedule)
+    }
+
+    /// Return releasable amount (vested minus already released).
+    pub fn get_vesting_releasable(env: Env, id: u64) -> Result<i128, QuickLendXError> {
+        let schedule = Vesting::get_schedule(&env, id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Vesting::releasable_amount(&env, &schedule)
+    }
+
+    /// Release vested tokens to beneficiary (beneficiary must authorize).
+    ///
+    /// # Errors
+    /// - `Unauthorized`, `OperationNotAllowed`, `StorageKeyNotFound`, transfer errors
+    pub fn release_vested_tokens(
+        env: Env,
+        beneficiary: Address,
+        id: u64,
+    ) -> Result<i128, QuickLendXError> {
+        Vesting::release(&env, &beneficiary, id)
     }
 
     /// Get all whitelisted token addresses.
