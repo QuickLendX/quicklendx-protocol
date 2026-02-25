@@ -168,15 +168,24 @@ use crate::audit::{
 };
 
 impl Invoice {
-    /// Update invoice metadata (business only)
-    pub fn update_metadata(
-        &mut self,
-        env: &Env,
-        business: &Address,
-        metadata: InvoiceMetadata,
-    ) -> Result<(), QuickLendXError> {
-        if self.business != *business {
-            return Err(QuickLendXError::Unauthorized);
+        /// Update invoice metadata (business only)
+        pub fn update_metadata(
+            &mut self,
+            _env: &Env,
+            business: &Address,
+            metadata: InvoiceMetadata,
+        ) -> Result<(), QuickLendXError> {
+            if self.business != *business {
+                return Err(QuickLendXError::Unauthorized);
+            }
+            business.require_auth();
+            metadata.validate()?;
+            self.metadata_customer_name = Some(metadata.customer_name.clone());
+            self.metadata_customer_address = Some(metadata.customer_address.clone());
+            self.metadata_tax_id = Some(metadata.tax_id.clone());
+            self.metadata_notes = Some(metadata.notes.clone());
+            self.metadata_line_items = metadata.line_items.clone();
+            Ok(())
         }
         business.require_auth();
         metadata.validate()?;
@@ -775,6 +784,34 @@ impl InvoiceStorage {
     /// Update an invoice
     pub fn update_invoice(env: &Env, invoice: &Invoice) {
         env.storage().instance().set(&invoice.id, invoice);
+    }
+
+    /// Clear all invoices from storage (used by backup restore)
+    pub fn clear_all(env: &Env) {
+        // Clear each invoice from each status list
+        for status in [
+            InvoiceStatus::Pending,
+            InvoiceStatus::Verified,
+            InvoiceStatus::Funded,
+            InvoiceStatus::Paid,
+            InvoiceStatus::Defaulted,
+            InvoiceStatus::Cancelled,
+        ] {
+            let ids = Self::get_invoices_by_status(env, &status);
+            for id in ids.iter() {
+                env.storage().instance().remove(&id);
+            }
+            let key = match status {
+                InvoiceStatus::Pending => symbol_short!("pending"),
+                InvoiceStatus::Verified => symbol_short!("verified"),
+                InvoiceStatus::Funded => symbol_short!("funded"),
+                InvoiceStatus::Paid => symbol_short!("paid"),
+                InvoiceStatus::Defaulted => symbol_short!("default"),
+                InvoiceStatus::Cancelled => symbol_short!("cancel"),
+                InvoiceStatus::Refunded => symbol_short!("refunded"),
+            };
+            env.storage().instance().remove(&key);
+        }
     }
 
     /// Get all invoices for a business

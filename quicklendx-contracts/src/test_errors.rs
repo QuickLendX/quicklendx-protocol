@@ -7,24 +7,38 @@
 /// 3. Validation errors - verify input validation errors
 /// 4. Storage errors - verify storage-related errors
 /// 5. Business logic errors - verify operation-specific errors
-/// 6. No panics - ensure no panics occur, all errors are typed
+/// 6. No panics    // Ensure no panics occurred during the operations by verifying we reached the end
 use super::*;
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, BytesN, Env, String, Vec,
+    token, Address, BytesN, Env, String, Vec,
 };
 
 // Helper: Setup contract with admin
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
+    env.ledger().set_timestamp(1_000_000); // Prevent due date underflow
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.set_admin(&admin);
     (env, client, admin)
+}
+
+fn create_token(env: &Env) -> Address {
+    let token_admin = Address::generate(env);
+    env.register_stellar_asset_contract_v2(token_admin).address()
+}
+
+fn mint_and_approve(env: &Env, token_id: &Address, user: &Address, amount: i128, contract_id: &Address) {
+    let sac_client = token::StellarAssetClient::new(env, token_id);
+    let token_client = token::Client::new(env, token_id);
+    sac_client.mint(user, &amount);
+    let expiration = env.ledger().sequence() + 10_000;
+    token_client.approve(user, contract_id, &amount, &expiration);
 }
 
 // Helper: Create verified business
@@ -46,13 +60,13 @@ fn create_verified_invoice(
     _admin: &Address,
     business: &Address,
     amount: i128,
+    currency: &Address,
 ) -> BytesN<32> {
-    let currency = Address::generate(env);
     let due_date = env.ledger().timestamp() + 86400;
     let invoice_id = client.store_invoice(
         business,
         &amount,
-        &currency,
+        currency,
         &due_date,
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
@@ -70,7 +84,7 @@ fn test_invoice_not_found_error() {
     let result = client.try_get_invoice(&invoice_id);
     assert!(result.is_err());
     let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
+    let contract_err = err.unwrap();
     assert_eq!(contract_err, QuickLendXError::InvoiceNotFound);
 }
 
@@ -93,7 +107,7 @@ fn test_invoice_amount_invalid_error() {
     );
     assert!(result.is_err());
     let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
+    let contract_err = err.unwrap();
     assert_eq!(contract_err, QuickLendXError::InvalidAmount);
 
     // Test negative amount
@@ -108,7 +122,7 @@ fn test_invoice_amount_invalid_error() {
     );
     assert!(result.is_err());
     let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
+    let contract_err = err.unwrap();
     assert_eq!(contract_err, QuickLendXError::InvalidAmount);
 }
 
@@ -122,7 +136,7 @@ fn test_invoice_due_date_invalid_error() {
     // Test due date in the past
     let result = client.try_store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &(current_time - 1000),
         &String::from_str(&env, "Test"),
@@ -131,7 +145,7 @@ fn test_invoice_due_date_invalid_error() {
     );
     assert!(result.is_err());
     let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
+    let contract_err = err.unwrap();
     assert_eq!(contract_err, QuickLendXError::InvoiceDueDateInvalid);
 }
 
@@ -145,7 +159,7 @@ fn test_invoice_not_verified_error() {
     // Create invoice but don't verify it
     let invoice_id = client.store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test"),
@@ -155,10 +169,10 @@ fn test_invoice_not_verified_error() {
 
     // Try to place bid on unverified invoice
     let investor = Address::generate(&env);
-    let result = client.try_place_bid(&investor, &invoice_id, &500, &600);
+    let result = client.try_place_bid(&investor, &invoice_id, &500_000, &600_000);
     assert!(result.is_err());
     let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
+    let contract_err = err.unwrap();
     assert_eq!(contract_err, QuickLendXError::InvalidStatus);
 }
 
@@ -166,23 +180,39 @@ fn test_invoice_not_verified_error() {
 fn test_unauthorized_error() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
-    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1000);
+    let currency = create_token(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1_000_000, &currency);
 
-    // Try to cancel invoice as different user
-    let _unauthorized = Address::generate(&env);
-    let result = client.try_cancel_invoice(&invoice_id);
+    // Fund the invoice so escrow is created
+    let investor = Address::generate(&env);
+    mint_and_approve(&env, &currency, &investor, 10_000_000, &client.address);
+    mint_and_approve(&env, &currency, &business, 1_000_000, &client.address);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
+    client.verify_investor(&investor, &10_000_000);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000_000, &1_100_000);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Try to call refund_escrow_funds as a non-admin, non-business user
+    let unauthorized = Address::generate(&env);
+    let result = client.try_refund_escrow_funds(&invoice_id, &unauthorized);
     assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.unwrap();
+    assert_eq!(contract_err, QuickLendXError::Unauthorized);
 }
 
 #[test]
 fn test_not_admin_error() {
     let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1000);
+    let business = Address::generate(&env);
 
-    // Try to verify invoice as non-admin (without admin auth)
-    let result = client.try_verify_invoice(&invoice_id);
+    // Try to verify business as non-admin (checking is_admin failure)
+    let non_admin = Address::generate(&env);
+    let result = client.try_verify_business(&non_admin, &business);
     assert!(result.is_err());
+    let contract_err = result.unwrap_err().unwrap();
+    assert_eq!(contract_err, QuickLendXError::NotAdmin);
 }
 
 #[test]
@@ -195,7 +225,7 @@ fn test_invalid_description_error() {
     // Test empty description
     let result = client.try_store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, ""),
@@ -204,7 +234,7 @@ fn test_invalid_description_error() {
     );
     assert!(result.is_err());
     let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
+    let contract_err = err.unwrap();
     assert_eq!(contract_err, QuickLendXError::InvalidDescription);
 }
 
@@ -212,38 +242,51 @@ fn test_invalid_description_error() {
 fn test_invoice_already_funded_error() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
-    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1000);
+    let currency = create_token(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1_000_000, &currency);
 
     // Fund the invoice
     let investor = Address::generate(&env);
+    mint_and_approve(&env, &currency, &investor, 10_000_000, &client.address);
+    mint_and_approve(&env, &currency, &business, 1_000_000, &client.address);
     client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
-    client.verify_investor(&investor, &10000);
+    client.verify_investor(&investor, &10_000_000);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000_000, &1_100_000);
+
+    // Provide second bid before accepting the first one, else place_bid fails with InvalidStatus
+    let investor2 = Address::generate(&env);
+    mint_and_approve(&env, &currency, &investor2, 10_000_000, &client.address);
+    client.submit_investor_kyc(&investor2, &String::from_str(&env, "KYC"));
+    client.verify_investor(&investor2, &10_000_000);
+    let bid_id2 = client.place_bid(&investor2, &invoice_id, &1_000_000, &1_100_000);
+
+    // Accept first
     client.accept_bid(&invoice_id, &bid_id);
 
     // Try to accept another bid
-    let investor2 = Address::generate(&env);
-    client.submit_investor_kyc(&investor2, &String::from_str(&env, "KYC"));
-    client.verify_investor(&investor2, &10000);
-
-    let bid_id2 = client.place_bid(&investor2, &invoice_id, &1000, &1100);
     let result = client.try_accept_bid(&invoice_id, &bid_id2);
     assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.unwrap();
+    assert_eq!(contract_err, QuickLendXError::InvalidStatus); // Cannot accept because status is Funded
 }
 
 #[test]
 fn test_invoice_already_defaulted_error() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
-    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1000);
+    let currency = create_token(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1_000_000, &currency);
 
     // Fund the invoice
     let investor = Address::generate(&env);
+    mint_and_approve(&env, &currency, &investor, 10_000_000, &client.address);
+    mint_and_approve(&env, &currency, &business, 1_000_000, &client.address);
     client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
-    client.verify_investor(&investor, &10000);
+    client.verify_investor(&investor, &10_000_000);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000_000, &1_100_000);
     client.accept_bid(&invoice_id, &bid_id);
 
     // Move time past due date + grace period
@@ -259,21 +302,22 @@ fn test_invoice_already_defaulted_error() {
     let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
     assert!(result.is_err());
     let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
-    assert_eq!(contract_err, QuickLendXError::InvalidStatus);
+    let contract_err = err.unwrap();
+    assert_eq!(contract_err, QuickLendXError::InvoiceAlreadyDefaulted);
 }
 
 #[test]
 fn test_invoice_not_funded_error() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
-    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1000);
+    let currency = create_token(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1_000_000, &currency);
 
     // Try to mark unfunded invoice as defaulted
     let result = client.try_mark_invoice_defaulted(&invoice_id, &None);
     assert!(result.is_err());
     let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
+    let contract_err = err.unwrap();
     assert_eq!(contract_err, QuickLendXError::InvoiceNotAvailableForFunding);
 }
 
@@ -281,14 +325,17 @@ fn test_invoice_not_funded_error() {
 fn test_operation_not_allowed_before_grace_period() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
-    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1000);
+    let currency = create_token(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1_000_000, &currency);
 
     // Fund the invoice
     let investor = Address::generate(&env);
+    mint_and_approve(&env, &currency, &investor, 10_000_000, &client.address);
+    mint_and_approve(&env, &currency, &business, 1_000_000, &client.address);
     client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
-    client.verify_investor(&investor, &10000);
+    client.verify_investor(&investor, &10_000_000);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000_000, &1_100_000);
     client.accept_bid(&invoice_id, &bid_id);
 
     // Move time past due date but before grace period
@@ -301,7 +348,7 @@ fn test_operation_not_allowed_before_grace_period() {
     let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
     assert!(result.is_err());
     let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
+    let contract_err = err.unwrap();
     assert_eq!(contract_err, QuickLendXError::OperationNotAllowed);
 }
 
@@ -318,7 +365,7 @@ fn test_storage_key_not_found_error() {
     let result = client.try_get_investment(&invalid_id);
     assert!(result.is_err());
     let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
+    let contract_err = err.unwrap();
     assert_eq!(contract_err, QuickLendXError::StorageKeyNotFound);
 }
 
@@ -326,7 +373,8 @@ fn test_storage_key_not_found_error() {
 fn test_invalid_status_error() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
-    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1000);
+    let currency = create_token(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1_000_000, &currency);
 
     // Try to update status to invalid transition
     let result = client.update_invoice_status(&invoice_id, &crate::invoice::InvoiceStatus::Paid);
@@ -344,7 +392,7 @@ fn test_business_not_verified_error() {
     // Try to upload invoice without verification
     let result = client.try_upload_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &due_date,
         &String::from_str(&env, "Test"),
@@ -353,7 +401,7 @@ fn test_business_not_verified_error() {
     );
     assert!(result.is_err());
     let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
+    let contract_err = err.unwrap();
     assert_eq!(contract_err, QuickLendXError::BusinessNotVerified);
 }
 
@@ -387,7 +435,7 @@ fn test_no_panics_on_error_conditions() {
 
     let _ = client.try_store_invoice(
         &business,
-        &1000,
+        &1_000_000,
         &currency,
         &(env.ledger().timestamp() - 1000), // Invalid due date
         &String::from_str(&env, "Test"),
