@@ -2814,9 +2814,6 @@ impl QuickLendXContract {
 }
 
 #[cfg(test)]
-mod test;
-
-#[cfg(test)]
 mod test_bid;
 
 #[cfg(test)]
@@ -2824,6 +2821,9 @@ mod test_bid_ranking;
 
 #[cfg(test)]
 mod test_fees;
+
+#[cfg(test)]
+mod test_fees_extended;
 
 #[cfg(test)]
 mod test_escrow;
