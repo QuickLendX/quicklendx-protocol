@@ -1,6 +1,6 @@
 use soroban_sdk::{contracttype, Address, Env, String};
 
-use crate::errors::QuickLendXError;
+use crate::{admin::ADMIN_KEY, errors::QuickLendXError};
 
 /// Protocol limits configuration for invoice validation and default handling.
 ///
