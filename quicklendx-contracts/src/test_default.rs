@@ -9,6 +9,7 @@
 /// 5. Edge cases - multiple defaults, already defaulted invoices
 use super::*;
 use crate::errors::QuickLendXError;
+use crate::init::ProtocolInitializer;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -24,6 +25,19 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let admin = Address::generate(&env);
     client.set_admin(&admin);
     (env, client, admin)
+}
+
+fn set_protocol_grace_period(env: &Env, admin: &Address, grace_period_seconds: u64) {
+    let min_invoice_amount = ProtocolInitializer::get_min_invoice_amount(env);
+    let max_due_date_days = ProtocolInitializer::get_max_due_date_days(env);
+    ProtocolInitializer::set_protocol_config(
+        env,
+        admin,
+        min_invoice_amount,
+        max_due_date_days,
+        grace_period_seconds,
+    )
+    .expect("protocol config update should succeed");
 }
 
 // Helper: Create verified business
@@ -139,6 +153,83 @@ fn test_no_default_before_grace_period() {
     // Verify invoice is still funded
     let invoice_after = client.get_invoice(&invoice_id);
     assert_eq!(invoice_after.status, InvoiceStatus::Funded);
+}
+
+#[test]
+fn test_default_uses_protocol_config_when_none() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let custom_grace = 3 * 24 * 60 * 60; // 3 days
+    set_protocol_grace_period(&env, &admin, custom_grace);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    env.ledger()
+        .set_timestamp(invoice.due_date + custom_grace + 1);
+
+    client.mark_invoice_defaulted(&invoice_id, &None);
+
+    let defaulted_invoice = client.get_invoice(&invoice_id);
+    assert_eq!(defaulted_invoice.status, InvoiceStatus::Defaulted);
+}
+
+#[test]
+fn test_check_invoice_expiration_uses_protocol_config_when_none() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let custom_grace = 2 * 24 * 60 * 60; // 2 days
+    set_protocol_grace_period(&env, &admin, custom_grace);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    env.ledger()
+        .set_timestamp(invoice.due_date + custom_grace + 1);
+
+    let did_default = client.check_invoice_expiration(&invoice_id, &None);
+    assert!(did_default);
+
+    let defaulted_invoice = client.get_invoice(&invoice_id);
+    assert_eq!(defaulted_invoice.status, InvoiceStatus::Defaulted);
+}
+
+#[test]
+fn test_per_invoice_grace_overrides_protocol_config() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let protocol_grace = 10 * 24 * 60 * 60; // 10 days
+    let per_invoice_grace = 2 * 24 * 60 * 60; // 2 days
+    set_protocol_grace_period(&env, &admin, protocol_grace);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    env.ledger()
+        .set_timestamp(invoice.due_date + per_invoice_grace + 1);
+
+    client.mark_invoice_defaulted(&invoice_id, &Some(per_invoice_grace));
+
+    let defaulted_invoice = client.get_invoice(&invoice_id);
+    assert_eq!(defaulted_invoice.status, InvoiceStatus::Defaulted);
 }
 
 #[test]
