@@ -1,6 +1,9 @@
 use super::*;
-use crate::fees::FeeType;
-use soroban_sdk::{testutils::Address as _, Address, Env, Map, String};
+use crate::{errors::QuickLendXError, fees::FeeType};
+use soroban_sdk::{
+    testutils::{Address as _, MockAuth, MockAuthInvoke},
+    Address, Env, IntoVal, Map, String,
+};
 
 /// Helper function to set up admin for testing
 fn setup_admin(env: &Env, client: &QuickLendXContractClient) -> Address {
@@ -43,6 +46,80 @@ fn test_default_platform_fee() {
     let fee_config = client.get_platform_fee();
     assert_eq!(fee_config.fee_bps, 200); // 2%
     assert_eq!(fee_config.updated_at, 0); // Not updated yet
+    assert_eq!(fee_config.updated_by, contract_id); // Defaults to current contract address
+}
+
+/// FeeManager getter should fail before fee system initialization
+#[test]
+fn test_get_platform_fee_config_before_init_returns_storage_key_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let result = client.try_get_platform_fee_config();
+    assert!(result.is_err());
+
+    let err = result.err().expect("expected error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::StorageKeyNotFound);
+}
+
+/// FeeManager getter returns defaults after initialization
+#[test]
+fn test_get_platform_fee_config_after_init_has_defaults() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let fee_config = client.get_platform_fee_config();
+    assert_eq!(fee_config.fee_bps, 200);
+    assert_eq!(fee_config.treasury_address, None);
+    assert_eq!(fee_config.updated_by, admin);
+    assert_eq!(fee_config.updated_at, env.ledger().timestamp());
+}
+
+/// FeeManager getter reflects updates from update_platform_fee_bps
+#[test]
+fn test_get_platform_fee_config_after_update_platform_fee_bps() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+    client.update_platform_fee_bps(&450);
+
+    let fee_config = client.get_platform_fee_config();
+    assert_eq!(fee_config.fee_bps, 450);
+    assert_eq!(fee_config.treasury_address, None);
+    assert_eq!(fee_config.updated_by, admin);
+    assert_eq!(fee_config.updated_at, env.ledger().timestamp());
+}
+
+/// FeeManager getter should include treasury address when configured
+#[test]
+fn test_get_platform_fee_config_includes_treasury_when_set() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_treasury(&treasury);
+
+    let fee_config = client.get_platform_fee_config();
+    assert_eq!(fee_config.fee_bps, 200);
+    assert_eq!(fee_config.treasury_address, Some(treasury.clone()));
+    assert_eq!(fee_config.updated_by, admin);
+    assert_eq!(client.get_treasury_address(), Some(treasury));
 }
 
 /// Test custom platform fee BPS configuration
@@ -67,17 +144,51 @@ fn test_custom_platform_fee_bps() {
 #[test]
 fn test_only_admin_can_update_platform_fee() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
 
-    // Test invalid fee (too high) - this should fail
-    let result = client.try_set_platform_fee(&1200);
-    assert!(result.is_err());
+    client.mock_all_auths().set_admin(&admin);
 
-    // Admin should be able to update fee with valid value
-    client.set_platform_fee(&300);
+    // Non-admin cannot authorize admin-only platform fee update.
+    let unauthorized_auth = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "set_platform_fee",
+            args: (300i128,).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+    let unauthorized_result = client
+        .mock_auths(&[unauthorized_auth])
+        .try_set_platform_fee(&300);
+    let unauthorized_err = unauthorized_result
+        .err()
+        .expect("non-admin platform fee update must fail");
+    let invoke_err = unauthorized_err
+        .err()
+        .expect("non-admin platform fee update should abort at auth");
+    assert_eq!(invoke_err, soroban_sdk::InvokeError::Abort);
+
+    // Stored fee stays unchanged after unauthorized attempt.
+    let fee_after_reject = client.get_platform_fee();
+    assert_eq!(fee_after_reject.fee_bps, 200);
+
+    // Admin can authorize the same update.
+    let admin_auth = MockAuth {
+        address: &admin,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "set_platform_fee",
+            args: (300i128,).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+    let admin_result = client.mock_auths(&[admin_auth]).try_set_platform_fee(&300);
+    assert!(admin_result.is_ok());
+    assert_eq!(client.get_platform_fee().fee_bps, 300);
 }
 
 /// Test platform fee calculation accuracy
@@ -188,18 +299,90 @@ fn test_fee_structure_updates() {
 #[test]
 fn test_only_admin_can_update_fee_structure() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let non_admin = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
 
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
+    client.mock_all_auths().set_admin(&admin);
 
-    // Non-admin should not be able to update (this would require a try_ method which doesn't exist)
-    // For now, we'll just test that admin can update successfully
-    client.update_fee_structure(&admin, &FeeType::Platform, &400, &50, &5000, &true);
+    let init_auth = MockAuth {
+        address: &admin,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "initialize_fee_system",
+            args: (admin.clone(),).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+    client.mock_auths(&[init_auth]).initialize_fee_system(&admin);
+
+    // Non-admin cannot authorize fee structure update for admin identity.
+    let unauthorized_auth = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "update_fee_structure",
+            args: (
+                admin.clone(),
+                FeeType::Platform,
+                400u32,
+                50i128,
+                5_000i128,
+                true,
+            )
+                .into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+    let unauthorized_result = client.mock_auths(&[unauthorized_auth]).try_update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &400,
+        &50,
+        &5_000,
+        &true,
+    );
+    let unauthorized_err = unauthorized_result
+        .err()
+        .expect("non-admin fee structure update must fail");
+    let invoke_err = unauthorized_err
+        .err()
+        .expect("non-admin fee structure update should abort at auth");
+    assert_eq!(invoke_err, soroban_sdk::InvokeError::Abort);
+
+    // Admin can update fee structure successfully.
+    let admin_auth = MockAuth {
+        address: &admin,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "update_fee_structure",
+            args: (
+                admin.clone(),
+                FeeType::Platform,
+                400u32,
+                50i128,
+                5_000i128,
+                true,
+            )
+                .into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+    let admin_result = client.mock_auths(&[admin_auth]).try_update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &400,
+        &50,
+        &5_000,
+        &true,
+    );
+    assert!(admin_result.is_ok());
+
+    let updated = client.get_fee_structure(&FeeType::Platform);
+    assert_eq!(updated.base_fee_bps, 400);
+    assert_eq!(updated.min_fee, 50);
+    assert_eq!(updated.max_fee, 5_000);
 }
 
 /// Test transaction fee calculation
@@ -432,21 +615,105 @@ fn test_fee_analytics() {
 #[test]
 fn test_fee_parameter_validation() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    // Test valid parameters
+    // Valid parameters should pass.
     client.validate_fee_parameters(&200, &10, &1000);
 
-    // Test invalid base fee BPS (too high) - this would need a try_ method
-    // For now, we'll just test the valid case
-    // let result = client.validate_fee_parameters(&1500, &10, &1000);
-    // assert!(result.is_err());
+    // Invalid base fee BPS (over max 1000).
+    let invalid_bps = client.try_validate_fee_parameters(&1001, &10, &1000);
+    let invalid_bps_err = invalid_bps
+        .err()
+        .expect("base_fee_bps > 1000 must return contract error");
+    let invalid_bps_contract_error = invalid_bps_err.expect("expected contract invoke error");
+    assert_eq!(invalid_bps_contract_error, QuickLendXError::InvalidAmount);
 
-    // Test invalid min/max fees - this would need a try_ method
-    // let result = client.validate_fee_parameters(&200, &1000, &500);
-    // assert!(result.is_err()); // min > max
+    // Invalid range: min_fee > max_fee.
+    let min_gt_max = client.try_validate_fee_parameters(&200, &1001, &1000);
+    let min_gt_max_err = min_gt_max
+        .err()
+        .expect("min_fee > max_fee must return contract error");
+    let min_gt_max_contract_error = min_gt_max_err.expect("expected contract invoke error");
+    assert_eq!(min_gt_max_contract_error, QuickLendXError::InvalidAmount);
+
+    // Invalid negative min_fee.
+    let negative_min = client.try_validate_fee_parameters(&200, &-1, &1000);
+    let negative_min_err = negative_min
+        .err()
+        .expect("negative min_fee must return contract error");
+    let negative_min_contract_error = negative_min_err.expect("expected contract invoke error");
+    assert_eq!(negative_min_contract_error, QuickLendXError::InvalidAmount);
+
+    // Invalid negative max_fee.
+    let negative_max = client.try_validate_fee_parameters(&200, &0, &-1);
+    let negative_max_err = negative_max
+        .err()
+        .expect("negative max_fee must return contract error");
+    let negative_max_contract_error = negative_max_err.expect("expected contract invoke error");
+    assert_eq!(negative_max_contract_error, QuickLendXError::InvalidAmount);
+}
+
+/// Test fee config update validation rejects invalid fee parameters
+#[test]
+fn test_update_fee_structure_rejects_invalid_values() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let invalid_bps = client.try_update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &1001,
+        &50,
+        &5_000,
+        &true,
+    );
+    let invalid_bps_err = invalid_bps
+        .err()
+        .expect("base_fee_bps > 1000 must be rejected");
+    let invalid_bps_contract_error = invalid_bps_err.expect("expected contract invoke error");
+    assert_eq!(invalid_bps_contract_error, QuickLendXError::InvalidAmount);
+
+    let min_gt_max = client.try_update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &400,
+        &5_001,
+        &5_000,
+        &true,
+    );
+    let min_gt_max_err = min_gt_max.err().expect("min_fee > max_fee must be rejected");
+    let min_gt_max_contract_error = min_gt_max_err.expect("expected contract invoke error");
+    assert_eq!(min_gt_max_contract_error, QuickLendXError::InvalidAmount);
+
+    let negative_min = client.try_update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &400,
+        &-1,
+        &5_000,
+        &true,
+    );
+    let negative_min_err = negative_min.err().expect("negative min_fee must be rejected");
+    let negative_min_contract_error = negative_min_err.expect("expected contract invoke error");
+    assert_eq!(negative_min_contract_error, QuickLendXError::InvalidAmount);
+
+    let negative_max = client.try_update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &400,
+        &0,
+        &-1,
+        &true,
+    );
+    let negative_max_err = negative_max.err().expect("negative max_fee must be rejected");
+    let negative_max_contract_error = negative_max_err.expect("expected contract invoke error");
+    assert_eq!(negative_max_contract_error, QuickLendXError::InvalidAmount);
 }
 
 /// Test treasury receives exact amount in distribution
@@ -532,6 +799,13 @@ fn test_comprehensive_fee_calculation() {
 /// Base case: no flags set, Standard tier — verifies raw fee with no modifiers
 #[test]
 fn test_calculate_transaction_fees_base_case() {
+// ============================================================================
+// Treasury Configuration Tests
+// ============================================================================
+
+/// Test configure_treasury sets treasury address correctly
+#[test]
+fn test_configure_treasury() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
@@ -551,6 +825,24 @@ fn test_calculate_transaction_fees_base_case() {
 /// is_early_payment = true: Platform fee gets an extra 10% reduction
 #[test]
 fn test_calculate_transaction_fees_early_payment_flag() {
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    // Initialize fee system (creates platform fee config needed by configure_treasury)
+    client.initialize_fee_system(&admin);
+
+    // Configure treasury
+    client.configure_treasury(&treasury);
+
+    // Verify treasury address is set
+    let treasury_addr = client.get_treasury_address();
+    assert!(treasury_addr.is_some());
+    assert_eq!(treasury_addr.unwrap(), treasury);
+}
+
+/// Test get_treasury_address returns None before configuration
+#[test]
+fn test_get_treasury_address_before_config() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
@@ -573,6 +865,41 @@ fn test_calculate_transaction_fees_early_payment_flag() {
 /// is_late_payment = true: LatePayment fee is added with 20% surcharge on top
 #[test]
 fn test_calculate_transaction_fees_late_payment_flag() {
+
+    // Treasury address should be None before configuration
+    let treasury_addr = client.get_treasury_address();
+    assert!(treasury_addr.is_none());
+}
+
+/// Test treasury address is reflected in platform fee config
+#[test]
+fn test_treasury_address_in_platform_fee_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    // Initialize fee system first
+    client.initialize_fee_system(&admin);
+
+    // Before treasury config, platform fee config should have no treasury
+    let config_before = client.get_platform_fee_config();
+    assert!(config_before.treasury_address.is_none());
+
+    // Configure treasury
+    client.configure_treasury(&treasury);
+
+    // After treasury config, platform fee config should have treasury address
+    let config_after = client.get_platform_fee_config();
+    assert!(config_after.treasury_address.is_some());
+    assert_eq!(config_after.treasury_address.unwrap(), treasury);
+}
+
+/// Test treasury address can be updated
+#[test]
+fn test_treasury_address_update() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
@@ -605,6 +932,419 @@ fn test_calculate_transaction_fees_late_payment_flag() {
 /// Both flags true: early payment discount AND late payment penalty applied together
 #[test]
 fn test_calculate_transaction_fees_both_flags() {
+    let admin = setup_admin_init(&env, &client);
+    let treasury1 = Address::generate(&env);
+    let treasury2 = Address::generate(&env);
+
+    // Initialize fee system first
+    client.initialize_fee_system(&admin);
+
+    // Set first treasury
+    client.configure_treasury(&treasury1);
+    assert_eq!(client.get_treasury_address().unwrap(), treasury1);
+
+    // Update to second treasury
+    client.configure_treasury(&treasury2);
+    assert_eq!(client.get_treasury_address().unwrap(), treasury2);
+}
+
+/// Test configure_treasury fails without admin set
+#[test]
+fn test_configure_treasury_fails_without_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let treasury = Address::generate(&env);
+
+    // No admin set — should fail
+    let result = client.try_configure_treasury(&treasury);
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// Revenue Distribution Config Validation Tests
+// ============================================================================
+
+/// Helper: set up admin using initialize_admin (avoids double-auth issues)
+fn setup_admin_init(env: &Env, client: &QuickLendXContractClient) -> Address {
+    let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
+    admin
+}
+
+/// Test revenue distribution config rejects shares not summing to 10000
+#[test]
+fn test_revenue_config_invalid_shares_sum() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    // Shares sum to 9000 (not 10000) — should fail
+    let result = client.try_configure_revenue_distribution(
+        &admin, &treasury, &4000, &3000, &2000, &false, &100,
+    );
+    assert!(result.is_err());
+}
+
+/// Test revenue distribution config rejects shares exceeding 10000
+#[test]
+fn test_revenue_config_shares_exceed_10000() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    // Shares sum to 11000 — should fail
+    let result = client.try_configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &3000, &false, &100,
+    );
+    assert!(result.is_err());
+}
+
+/// Test get_revenue_split_config fails when not configured
+#[test]
+fn test_get_revenue_split_config_before_configuration() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // No revenue config set — should fail
+    let result = client.try_get_revenue_split_config();
+    assert!(result.is_err());
+}
+
+/// Test revenue config can be reconfigured by admin
+#[test]
+fn test_revenue_config_reconfiguration() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    // First configuration
+    client.configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &2000, &false, &100,
+    );
+    let config1 = client.get_revenue_split_config();
+    assert_eq!(config1.treasury_share_bps, 5000);
+
+    // Reconfigure with different shares
+    client.configure_revenue_distribution(
+        &admin, &treasury, &7000, &2000, &1000, &true, &500,
+    );
+    let config2 = client.get_revenue_split_config();
+    assert_eq!(config2.treasury_share_bps, 7000);
+    assert_eq!(config2.developer_share_bps, 2000);
+    assert_eq!(config2.platform_share_bps, 1000);
+    assert_eq!(config2.auto_distribution, true);
+    assert_eq!(config2.min_distribution_amount, 500);
+}
+
+// ============================================================================
+// Revenue Distribution Execution Edge Cases
+// ============================================================================
+
+/// Test distribute_revenue fails when pending amount is below minimum
+#[test]
+fn test_distribute_revenue_below_minimum() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let user = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // Configure with high minimum distribution amount
+    client.configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &2000, &false, &10000,
+    );
+
+    // Collect small amount of fees (below minimum)
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 50);
+    client.collect_transaction_fees(&user, &fees_by_type, &50);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    // Distribution should fail — pending (50) < min_distribution_amount (10000)
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert!(result.is_err());
+}
+
+/// Test distribute_revenue fails when revenue config is not set
+#[test]
+fn test_distribute_revenue_without_revenue_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // Collect fees but don't configure revenue distribution
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 500);
+    client.collect_transaction_fees(&user, &fees_by_type, &500);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    // Should fail — no revenue config set
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert!(result.is_err());
+}
+
+/// Test distribute_revenue clears pending amount after distribution
+#[test]
+fn test_distribute_revenue_clears_pending() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let user = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    client.configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &2000, &false, &100,
+    );
+
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 1000);
+    client.collect_transaction_fees(&user, &fees_by_type, &1000);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    // First distribution should succeed
+    let (t, d, p) = client.distribute_revenue(&admin, &current_period);
+    assert_eq!(t + d + p, 1000);
+
+    // Second distribution should fail — pending is now 0, below min (100)
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert!(result.is_err());
+}
+
+/// Test distribute_revenue fails for non-existent period
+#[test]
+fn test_distribute_revenue_nonexistent_period() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    client.configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &2000, &false, &100,
+    );
+
+    // Try to distribute for a period with no revenue data
+    let result = client.try_distribute_revenue(&admin, &9999);
+    assert!(result.is_err());
+}
+
+/// Test revenue distribution amounts sum correctly for large values
+#[test]
+fn test_distribute_revenue_large_amounts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let user = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    client.configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &2000, &false, &1,
+    );
+
+    // Collect large fee amount
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 1_000_000);
+    client.collect_transaction_fees(&user, &fees_by_type, &1_000_000);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    let (treasury_amount, developer_amount, platform_amount) =
+        client.distribute_revenue(&admin, &current_period);
+
+    // 50% of 1M = 500K
+    assert_eq!(treasury_amount, 500_000);
+    // 30% of 1M = 300K
+    assert_eq!(developer_amount, 300_000);
+    // Remainder = 200K
+    assert_eq!(platform_amount, 200_000);
+    // Total must equal original amount
+    assert_eq!(treasury_amount + developer_amount + platform_amount, 1_000_000);
+}
+
+// ============================================================================
+// update_fee_structure Tests - Comprehensive Coverage
+// ============================================================================
+
+/// Test update_fee_structure with admin authorization
+#[test]
+fn test_update_fee_structure_with_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Update Platform fee structure
+    let updated = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &350,   // 3.5% base fee
+        &75,    // min fee
+        &10000, // max fee
+        &true,  // active
+    );
+
+    assert_eq!(updated.fee_type, FeeType::Platform);
+    assert_eq!(updated.base_fee_bps, 350);
+    assert_eq!(updated.min_fee, 75);
+    assert_eq!(updated.max_fee, 10000);
+    assert!(updated.is_active);
+    assert_eq!(updated.updated_by, admin);
+}
+
+/// Test update_fee_structure for each FeeType
+#[test]
+fn test_update_fee_structure_all_fee_types() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Test Platform fee type
+    let platform_fee = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &250,
+        &50,
+        &5000,
+        &true,
+    );
+    assert_eq!(platform_fee.fee_type, FeeType::Platform);
+
+    // Test Processing fee type
+    let processing_fee = client.update_fee_structure(
+        &admin,
+        &FeeType::Processing,
+        &75,
+        &25,
+        &2500,
+        &true,
+    );
+    assert_eq!(processing_fee.fee_type, FeeType::Processing);
+
+    // Test Verification fee type
+    let verification_fee = client.update_fee_structure(
+        &admin,
+        &FeeType::Verification,
+        &150,
+        &100,
+        &3000,
+        &true,
+    );
+    assert_eq!(verification_fee.fee_type, FeeType::Verification);
+
+    // Test EarlyPayment fee type
+    let early_payment_fee = client.update_fee_structure(
+        &admin,
+        &FeeType::EarlyPayment,
+        &50,
+        &10,
+        &1000,
+        &true,
+    );
+    assert_eq!(early_payment_fee.fee_type, FeeType::EarlyPayment);
+
+    // Test LatePayment fee type
+    let late_payment_fee = client.update_fee_structure(
+        &admin,
+        &FeeType::LatePayment,
+        &200,
+        &100,
+        &5000,
+        &true,
+    );
+    assert_eq!(late_payment_fee.fee_type, FeeType::LatePayment);
+}
+
+/// Test update_fee_structure with various base_fee_bps values
+#[test]
+fn test_update_fee_structure_base_fee_bps_variations() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Test minimum valid base_fee_bps (0)
+    let fee_zero = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &0,
+        &10,
+        &1000,
+        &true,
+    );
+    assert_eq!(fee_zero.base_fee_bps, 0);
+
+    // Test mid-range base_fee_bps
+    let fee_mid = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &500,
+        &10,
+        &1000,
+        &true,
+    );
+    assert_eq!(fee_mid.base_fee_bps, 500);
+
+    // Test maximum valid base_fee_bps (1000 = 10%)
+    let fee_max = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &1000,
+        &10,
+        &1000,
+        &true,
+    );
+    assert_eq!(fee_max.base_fee_bps, 1000);
+}
+
+/// Test update_fee_structure rejects base_fee_bps exceeding MAX_FEE_BPS
+#[test]
+fn test_update_fee_structure_base_fee_bps_exceeds_max() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
@@ -641,6 +1381,216 @@ fn test_calculate_transaction_fees_both_flags() {
 /// Volume tier discount applied correctly for Silver, Gold, and Platinum
 #[test]
 fn test_calculate_transaction_fees_volume_tier_discounts() {
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Test base_fee_bps > 1000 (MAX_FEE_BPS)
+    let result = client.try_update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &1001,
+        &10,
+        &1000,
+        &true,
+    );
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_error = err.unwrap();
+    assert_eq!(contract_error, QuickLendXError::InvalidAmount);
+}
+
+/// Test update_fee_structure with various min_fee values
+#[test]
+fn test_update_fee_structure_min_fee_variations() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Test min_fee = 0
+    let fee_zero = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &0,
+        &1000,
+        &true,
+    );
+    assert_eq!(fee_zero.min_fee, 0);
+
+    // Test min_fee = 1
+    let fee_one = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &1,
+        &1000,
+        &true,
+    );
+    assert_eq!(fee_one.min_fee, 1);
+
+    // Test large min_fee
+    let fee_large = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &50000,
+        &100000,
+        &true,
+    );
+    assert_eq!(fee_large.min_fee, 50000);
+}
+
+/// Test update_fee_structure rejects negative min_fee
+#[test]
+fn test_update_fee_structure_negative_min_fee() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Test negative min_fee
+    let result = client.try_update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &-1,
+        &1000,
+        &true,
+    );
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_error = err.unwrap();
+    assert_eq!(contract_error, QuickLendXError::InvalidAmount);
+}
+
+/// Test update_fee_structure with various max_fee values
+#[test]
+fn test_update_fee_structure_max_fee_variations() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Test max_fee equal to min_fee
+    let fee_equal = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &100,
+        &100,
+        &true,
+    );
+    assert_eq!(fee_equal.max_fee, 100);
+    assert_eq!(fee_equal.min_fee, 100);
+
+    // Test max_fee > min_fee
+    let fee_greater = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &100,
+        &5000,
+        &true,
+    );
+    assert_eq!(fee_greater.max_fee, 5000);
+
+    // Test very large max_fee
+    let fee_large = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &100,
+        &10_000_000,
+        &true,
+    );
+    assert_eq!(fee_large.max_fee, 10_000_000);
+}
+
+/// Test update_fee_structure rejects max_fee < min_fee
+#[test]
+fn test_update_fee_structure_max_fee_less_than_min_fee() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Test max_fee < min_fee
+    let result = client.try_update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &1000,
+        &500,
+        &true,
+    );
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_error = err.unwrap();
+    assert_eq!(contract_error, QuickLendXError::InvalidAmount);
+}
+
+/// Test update_fee_structure with is_active true
+#[test]
+fn test_update_fee_structure_is_active_true() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let fee = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &50,
+        &1000,
+        &true,
+    );
+    assert!(fee.is_active);
+}
+
+/// Test update_fee_structure with is_active false (deactivate fee)
+#[test]
+fn test_update_fee_structure_is_active_false() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Deactivate Platform fee
+    let fee = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &50,
+        &1000,
+        &false,
+    );
+    assert!(!fee.is_active);
+}
+
+/// Test update_fee_structure can toggle is_active
+#[test]
+fn test_update_fee_structure_toggle_is_active() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
@@ -681,6 +1631,123 @@ fn test_calculate_transaction_fees_volume_tier_discounts() {
 /// Zero amount must return an error
 #[test]
 fn test_calculate_transaction_fees_zero_amount() {
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Activate
+    let fee_active = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &50,
+        &1000,
+        &true,
+    );
+    assert!(fee_active.is_active);
+
+    // Deactivate
+    let fee_inactive = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &50,
+        &1000,
+        &false,
+    );
+    assert!(!fee_inactive.is_active);
+}
+
+/// Test update_fee_structure creates new fee type if not exists
+#[test]
+fn test_update_fee_structure_creates_new_fee_type() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // EarlyPayment fee type doesn't exist by default
+    let result = client.try_get_fee_structure(&FeeType::EarlyPayment);
+    assert!(result.is_err());
+
+    // Create it via update_fee_structure
+    let early_payment_fee = client.update_fee_structure(
+        &admin,
+        &FeeType::EarlyPayment,
+        &50,
+        &10,
+        &500,
+        &true,
+    );
+    assert_eq!(early_payment_fee.fee_type, FeeType::EarlyPayment);
+
+    // Now it should exist
+    let retrieved = client.get_fee_structure(&FeeType::EarlyPayment);
+    assert_eq!(retrieved.base_fee_bps, 50);
+}
+
+/// Test update_fee_structure updates existing fee type
+#[test]
+fn test_update_fee_structure_updates_existing() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Get initial Platform fee
+    let initial = client.get_fee_structure(&FeeType::Platform);
+    assert_eq!(initial.base_fee_bps, 200);
+
+    // Update it
+    client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &350,
+        &75,
+        &7500,
+        &true,
+    );
+
+    // Verify update
+    let updated = client.get_fee_structure(&FeeType::Platform);
+    assert_eq!(updated.base_fee_bps, 350);
+    assert_eq!(updated.min_fee, 75);
+    assert_eq!(updated.max_fee, 7500);
+}
+
+/// Test update_fee_structure sets updated_at timestamp
+#[test]
+fn test_update_fee_structure_sets_updated_at() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let fee = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &50,
+        &1000,
+        &true,
+    );
+
+    // updated_at should be set to current ledger timestamp
+    assert_eq!(fee.updated_at, env.ledger().timestamp());
+}
+
+/// Test update_fee_structure sets updated_by to admin
+#[test]
+fn test_update_fee_structure_sets_updated_by() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
@@ -692,4 +1759,261 @@ fn test_calculate_transaction_fees_zero_amount() {
 
     let result = client.try_calculate_transaction_fees(&user, &0_i128, &false, &false);
     assert!(result.is_err(), "Zero amount must return InvalidAmount error");
+}
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let fee = client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200,
+        &50,
+        &1000,
+        &true,
+    );
+
+    assert_eq!(fee.updated_by, admin);
+}
+
+// ============================================================================
+// validate_fee_parameters Tests - Comprehensive Coverage
+// ============================================================================
+
+/// Test validate_fee_parameters with valid parameters
+#[test]
+fn test_validate_fee_parameters_valid() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Valid parameters: base_fee_bps=200, min_fee=10, max_fee=1000
+    client.validate_fee_parameters(&200, &10, &1000);
+}
+
+/// Test validate_fee_parameters with base_fee_bps at minimum (0)
+#[test]
+fn test_validate_fee_parameters_base_fee_bps_zero() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // base_fee_bps = 0 is valid
+    client.validate_fee_parameters(&0, &10, &1000);
+}
+
+/// Test validate_fee_parameters with base_fee_bps at maximum (1000)
+#[test]
+fn test_validate_fee_parameters_base_fee_bps_max() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // base_fee_bps = 1000 (MAX_FEE_BPS) is valid
+    client.validate_fee_parameters(&1000, &10, &1000);
+}
+
+/// Test validate_fee_parameters rejects base_fee_bps exceeding MAX_FEE_BPS
+#[test]
+fn test_validate_fee_parameters_base_fee_bps_exceeds_max() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // base_fee_bps = 1001 exceeds MAX_FEE_BPS (1000)
+    let result = client.try_validate_fee_parameters(&1001, &10, &1000);
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_error = err.unwrap();
+    assert_eq!(contract_error, QuickLendXError::InvalidAmount);
+}
+
+/// Test validate_fee_parameters rejects base_fee_bps far exceeding MAX_FEE_BPS
+#[test]
+fn test_validate_fee_parameters_base_fee_bps_far_exceeds_max() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // base_fee_bps = 10000 far exceeds MAX_FEE_BPS
+    let result = client.try_validate_fee_parameters(&10000, &10, &1000);
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_error = err.unwrap();
+    assert_eq!(contract_error, QuickLendXError::InvalidAmount);
+}
+
+/// Test validate_fee_parameters with min_fee = 0
+#[test]
+fn test_validate_fee_parameters_min_fee_zero() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // min_fee = 0 is valid
+    client.validate_fee_parameters(&200, &0, &1000);
+}
+
+/// Test validate_fee_parameters rejects negative min_fee
+#[test]
+fn test_validate_fee_parameters_negative_min_fee() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // min_fee = -1 is invalid
+    let result = client.try_validate_fee_parameters(&200, &-1, &1000);
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_error = err.unwrap();
+    assert_eq!(contract_error, QuickLendXError::InvalidAmount);
+}
+
+/// Test validate_fee_parameters rejects large negative min_fee
+#[test]
+fn test_validate_fee_parameters_large_negative_min_fee() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // min_fee = -1000 is invalid
+    let result = client.try_validate_fee_parameters(&200, &-1000, &1000);
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_error = err.unwrap();
+    assert_eq!(contract_error, QuickLendXError::InvalidAmount);
+}
+
+/// Test validate_fee_parameters with max_fee = 0
+#[test]
+fn test_validate_fee_parameters_max_fee_zero() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // max_fee = 0 is valid if min_fee = 0
+    client.validate_fee_parameters(&200, &0, &0);
+}
+
+/// Test validate_fee_parameters rejects negative max_fee
+#[test]
+fn test_validate_fee_parameters_negative_max_fee() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // max_fee = -1 is invalid
+    let result = client.try_validate_fee_parameters(&200, &10, &-1);
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_error = err.unwrap();
+    assert_eq!(contract_error, QuickLendXError::InvalidAmount);
+}
+
+/// Test validate_fee_parameters rejects min_fee > max_fee
+#[test]
+fn test_validate_fee_parameters_min_greater_than_max() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // min_fee (1000) > max_fee (500) is invalid
+    let result = client.try_validate_fee_parameters(&200, &1000, &500);
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_error = err.unwrap();
+    assert_eq!(contract_error, QuickLendXError::InvalidAmount);
+}
+
+/// Test validate_fee_parameters with min_fee = max_fee (edge case)
+#[test]
+fn test_validate_fee_parameters_min_equals_max() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // min_fee = max_fee is valid
+    client.validate_fee_parameters(&200, &500, &500);
+}
+
+/// Test validate_fee_parameters with large valid values
+#[test]
+fn test_validate_fee_parameters_large_valid_values() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Large but valid values
+    client.validate_fee_parameters(&999, &1_000_000, &100_000_000);
+}
+
+/// Test validate_fee_parameters rejects multiple invalid conditions
+#[test]
+fn test_validate_fee_parameters_multiple_invalid_conditions() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // base_fee_bps exceeds max AND min_fee > max_fee
+    let result = client.try_validate_fee_parameters(&1500, &1000, &500);
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_error = err.unwrap();
+    assert_eq!(contract_error, QuickLendXError::InvalidAmount);
+}
+
+/// Test validate_fee_parameters with boundary values
+#[test]
+fn test_validate_fee_parameters_boundary_values() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // All boundary values: base_fee_bps=1000, min_fee=0, max_fee=i128::MAX
+    client.validate_fee_parameters(&1000, &0, &i128::MAX);
+}
+
+/// Test validate_fee_parameters rejects both negative min and max fees
+#[test]
+fn test_validate_fee_parameters_both_negative() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Both min_fee and max_fee negative
+    let result = client.try_validate_fee_parameters(&200, &-10, &-5);
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_error = err.unwrap();
+    assert_eq!(contract_error, QuickLendXError::InvalidAmount);
+}
+
+/// Test validate_fee_parameters with realistic production values
+#[test]
+fn test_validate_fee_parameters_realistic_values() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Realistic production values
+    client.validate_fee_parameters(&250, &100, &50000); // 2.5%, min 100, max 50000
+    client.validate_fee_parameters(&50, &25, &10000);   // 0.5%, min 25, max 10000
+    client.validate_fee_parameters(&100, &50, &25000);  // 1%, min 50, max 25000
 }

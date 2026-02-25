@@ -277,7 +277,10 @@ fn test_compare_bids_equal_profit_ordering() {
         bid_amount: 2000,
         ..base.clone()
     };
-    assert_eq!(BidStorage::compare_bids(&base, &higher_return), Ordering::Less);
+    assert_eq!(
+        BidStorage::compare_bids(&base, &higher_return),
+        Ordering::Less
+    );
 }
 
 // =============================================================================
@@ -311,7 +314,7 @@ fn test_timestamp_invoice_grace_deadline_saturates() {
         InvoiceCategory::Services,
         Vec::new(&env),
     );
-    let deadline = inv.grace_deadline(grace_period);
+    let deadline = inv.unwrap().grace_deadline(grace_period);
     assert_eq!(deadline, u64::MAX);
 }
 
@@ -321,12 +324,7 @@ fn test_timestamp_pagination_overflow_safe() {
     let (env, client, _admin) = setup_test();
     let business = Address::generate(&env);
 
-    let _ = client.get_business_invoices_paged(
-        &business,
-        &None,
-        &(u32::MAX - 5),
-        &10,
-    );
+    let _ = client.get_business_invoices_paged(&business, &None, &(u32::MAX - 5), &10);
 }
 
 /// get_total_invoice_count sums status counts with saturating_add; must not panic.

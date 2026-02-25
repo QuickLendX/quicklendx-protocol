@@ -13,7 +13,7 @@
 extern crate std;
 
 use super::*;
-use crate::profits::{calculate_treasury_split, validate_calculation_inputs};
+use crate::profits::{calculate_treasury_split, validate_calculation_inputs, PlatformFee};
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 use std::vec;
 
@@ -732,4 +732,37 @@ fn test_default_scenario_no_profit() {
     // No profit (actually a loss), so no fee
     assert_eq!(platform_fee, 0);
     assert_eq!(investor_return, 8_000_000_000);
+}
+
+// ============================================================================
+// Security Hardening Tests
+// ============================================================================
+
+#[test]
+fn test_calculate_with_fee_bps_clamps_invalid_fee_bounds() {
+    // Negative fee is clamped to 0.
+    let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 1100, -1);
+    assert_eq!(platform_fee, 0);
+    assert_eq!(investor_return, 1100);
+    assert_eq!(investor_return + platform_fee, 1100);
+
+    // Fee > 100% is clamped to 100%.
+    let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 1100, 20_000);
+    assert_eq!(platform_fee, 100);
+    assert_eq!(investor_return, 1000);
+    assert_eq!(investor_return + platform_fee, 1100);
+}
+
+#[test]
+fn test_calculate_with_fee_bps_normalizes_negative_amounts() {
+    // Negative payment normalizes to 0 for safe deterministic behavior.
+    let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, -1, 200);
+    assert_eq!(platform_fee, 0);
+    assert_eq!(investor_return, 0);
+
+    // Negative investment normalizes to 0 before computing profit.
+    let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(-10, 1000, 200);
+    assert_eq!(platform_fee, 20);
+    assert_eq!(investor_return, 980);
+    assert_eq!(investor_return + platform_fee, 1000);
 }
