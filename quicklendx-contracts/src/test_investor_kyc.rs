@@ -9,8 +9,10 @@
 /// Target: 95%+ test coverage for investor verification and limit enforcement
 #[cfg(test)]
 mod test_investor_kyc {
+    use crate::bid::BidStatus;
     use crate::errors::QuickLendXError;
     use crate::invoice::InvoiceCategory;
+    use crate::invoice::InvoiceStatus;
     use crate::verification::{BusinessVerificationStatus, InvestorRiskLevel, InvestorTier};
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{
@@ -1238,7 +1240,6 @@ mod test_investor_kyc {
         let verified_count = verified.iter().filter(|i| *i == investor).count();
         assert_eq!(verified_count, 1, "Should appear exactly once in verified list");
     }
-}
 
     // ============================================================================
     // Category 10: Single Investor Multiple Invoices Tests
@@ -1502,20 +1503,17 @@ mod test_investor_kyc {
         let _ = client.try_accept_bid(&invoice_id3, &bid_id3);
 
         // Verify investments were created for each accepted bid
-        let investment1 = client.get_investment_by_invoice(&invoice_id1);
-        assert!(investment1.is_some(), "Investment 1 should exist");
-        assert_eq!(investment1.unwrap().investor, investor);
-        assert_eq!(investment1.unwrap().amount, 10_000);
+        let investment1 = client.get_invoice_investment(&invoice_id1);
+        assert_eq!(investment1.investor, investor);
+        assert_eq!(investment1.amount, 10_000);
 
-        let investment2 = client.get_investment_by_invoice(&invoice_id2);
-        assert!(investment2.is_some(), "Investment 2 should exist");
-        assert_eq!(investment2.unwrap().investor, investor);
-        assert_eq!(investment2.unwrap().amount, 15_000);
+        let investment2 = client.get_invoice_investment(&invoice_id2);
+        assert_eq!(investment2.investor, investor);
+        assert_eq!(investment2.amount, 15_000);
 
-        let investment3 = client.get_investment_by_invoice(&invoice_id3);
-        assert!(investment3.is_some(), "Investment 3 should exist");
-        assert_eq!(investment3.unwrap().investor, investor);
-        assert_eq!(investment3.unwrap().amount, 12_000);
+        let investment3 = client.get_invoice_investment(&invoice_id3);
+        assert_eq!(investment3.investor, investor);
+        assert_eq!(investment3.amount, 12_000);
     }
 
     /// Test: Investor with multiple bids on different invoices - comprehensive workflow
@@ -1571,13 +1569,13 @@ mod test_investor_kyc {
         assert_eq!(client.get_bid(&bid_id5).unwrap().status, BidStatus::Accepted);
 
         // Verify investments were created for accepted bids
-        assert!(client.get_investment_by_invoice(&invoice_id1).is_some());
-        assert!(client.get_investment_by_invoice(&invoice_id3).is_some());
-        assert!(client.get_investment_by_invoice(&invoice_id5).is_some());
+        assert!(client.try_get_invoice_investment(&invoice_id1).is_ok());
+        assert!(client.try_get_invoice_investment(&invoice_id3).is_ok());
+        assert!(client.try_get_invoice_investment(&invoice_id5).is_ok());
 
         // Verify no investments for withdrawn bids
-        assert!(client.get_investment_by_invoice(&invoice_id2).is_none());
-        assert!(client.get_investment_by_invoice(&invoice_id4).is_none());
+        assert!(client.try_get_invoice_investment(&invoice_id2).is_err());
+        assert!(client.try_get_invoice_investment(&invoice_id4).is_err());
 
         // Verify get_all_bids_by_investor still returns all 5 bids
         let final_bids = client.get_all_bids_by_investor(&investor);

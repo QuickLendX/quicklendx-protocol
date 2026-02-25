@@ -1,21 +1,17 @@
-Backup Test Execution Output (2026-02-24)
+Backup Test Execution Output (2026-02-25)
 ======================================
 
-1) Command: cargo test test_backup -- --nocapture
+1) Command: cargo test --no-run
 Result: PASS
-Summary: test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out
+Summary: all test targets compiled successfully.
 
-2) Command: cargo llvm-cov --summary-only -- test_backup -- --nocapture
+2) Command: cargo test test_backup -- --nocapture
+Result: PASS
+Summary: test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 975 filtered out
+
+3) Command: cargo llvm-cov --summary-only -- test_backup -- --nocapture
 Result: PASS
 Coverage summary (backup module):
-- backup.rs line coverage: 95.08%
-- backup.rs region coverage: 90.61%
-- backup.rs function coverage: 86.67%
-
-3) Command: cargo test -- --nocapture
-Result: FAIL (pre-existing unrelated suite failures)
-Observed unrelated failures include modules such as:
-- test_refund::*
-- test_reentrancy::*
-- test_storage::*
-These failures were not introduced by this backup-test change and are outside backup scope.
+- backup.rs line coverage: 98.15%
+- backup.rs region coverage: 98.30%
+- backup.rs function coverage: 85.00%
