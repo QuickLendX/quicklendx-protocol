@@ -118,7 +118,6 @@ impl InvoiceMetadata {
         }
         Ok(())
     }
-    // ...existing code...
 }
 
 /// Individual payment record for an invoice
@@ -168,29 +167,32 @@ use crate::audit::{
 };
 
 impl Invoice {
-        /// Update invoice metadata (business only)
-        pub fn update_metadata(
-            &mut self,
-            _env: &Env,
-            business: &Address,
-            metadata: InvoiceMetadata,
-        ) -> Result<(), QuickLendXError> {
-            if self.business != *business {
-                return Err(QuickLendXError::Unauthorized);
-            }
-            business.require_auth();
-            metadata.validate()?;
-            self.metadata_customer_name = Some(metadata.customer_name.clone());
-            self.metadata_customer_address = Some(metadata.customer_address.clone());
-            self.metadata_tax_id = Some(metadata.tax_id.clone());
-            self.metadata_notes = Some(metadata.notes.clone());
-            self.metadata_line_items = metadata.line_items.clone();
-            Ok(())
+    /// Update invoice metadata (business only)
+    pub fn update_metadata(
+        &mut self,
+        _env: &Env,
+        business: &Address,
+        metadata: InvoiceMetadata,
+    ) -> Result<(), QuickLendXError> {
+        if self.business != *business {
+            return Err(QuickLendXError::Unauthorized);
         }
+        business.require_auth();
+        metadata.validate()?;
+        self.metadata_customer_name = Some(metadata.customer_name.clone());
+        self.metadata_customer_address = Some(metadata.customer_address.clone());
+        self.metadata_tax_id = Some(metadata.tax_id.clone());
+        self.metadata_notes = Some(metadata.notes.clone());
+        self.metadata_line_items = metadata.line_items.clone();
+        Ok(())
     }
 
     /// Clear invoice metadata (business only)
-    pub fn clear_metadata(&mut self, env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+    pub fn clear_metadata(
+        &mut self,
+        env: &Env,
+        business: &Address,
+    ) -> Result<(), QuickLendXError> {
         if self.business != *business {
             return Err(QuickLendXError::Unauthorized);
         }
@@ -202,6 +204,7 @@ impl Invoice {
         self.metadata_line_items = Vec::new(env);
         Ok(())
     }
+
     /// Create a new invoice with audit logging
     pub fn new(
         env: &Env,
@@ -669,7 +672,7 @@ impl Invoice {
     pub fn get_tags(&self) -> Vec<String> {
         self.tags.clone()
     }
-
+}
 
 /// Storage keys for invoice data
 pub struct InvoiceStorage;
@@ -749,6 +752,7 @@ impl InvoiceStorage {
             env.storage().instance().set(&key, &new_invoices);
         }
     }
+
     /// Store an invoice
     pub fn store_invoice(env: &Env, invoice: &Invoice) {
         env.storage().instance().set(&invoice.id, invoice);
@@ -942,10 +946,7 @@ impl InvoiceStorage {
     }
 
     /// Get rating statistics for a specific invoice from storage
-    pub fn _get_invoice_rating_stats(
-        env: &Env,
-        invoice_id: &BytesN<32>,
-    ) -> Option<InvoiceRatingStats> {
+    pub fn get_invoice_rating_stats(env: &Env, invoice_id: &BytesN<32>) -> Option<InvoiceRatingStats> {
         Self::get_invoice(env, invoice_id).map(|inv| inv.get_invoice_rating_stats())
     }
 
