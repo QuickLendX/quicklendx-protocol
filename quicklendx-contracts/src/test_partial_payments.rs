@@ -480,7 +480,7 @@ mod tests {
     // - Edge cases and error handling
 
     // ============================================================================
-    // HELPER FUNCTIONS (second set for tests below)
+    // HELPER FUNCTIONS
     // ============================================================================
 
     fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address) {
