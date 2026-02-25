@@ -843,6 +843,7 @@ fn test_bid_validation_rules() {
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let other_investor = Address::generate(&env);
+    let break_even_investor = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let admin = Address::generate(&env);
@@ -861,16 +862,30 @@ fn test_bid_validation_rules() {
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
     verify_investor_for_test(&env, &client, &other_investor, 10_000);
+    verify_investor_for_test(&env, &client, &break_even_investor, 10_000);
 
     // Amount below minimum
     assert!(client
         .try_place_bid(&investor, &invoice_id, &50, &60)
         .is_err());
 
-    // Expected return must exceed bid amount
+    // Expected return must not be less than the bid amount
+    let invalid_expected_return =
+        client.try_place_bid(&investor, &invoice_id, &150, &140);
+    let invalid_err = invalid_expected_return
+        .err()
+        .expect("expected contract error for low expected_return");
+    let invalid_contract_error =
+        invalid_err.expect("expected invoke error for low expected_return");
+    assert_eq!(
+        invalid_contract_error,
+        QuickLendXError::InvalidExpectedReturn
+    );
+
+    // Break-even expected returns are allowed
     assert!(client
-        .try_place_bid(&investor, &invoice_id, &150, &150)
-        .is_err());
+        .try_place_bid(&break_even_investor, &invoice_id, &150, &150)
+        .is_ok());
 
     // Amount cannot exceed invoice amount
     assert!(client

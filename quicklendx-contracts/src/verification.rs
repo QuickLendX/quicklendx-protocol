@@ -507,8 +507,9 @@ pub fn validate_bid(
         return Err(QuickLendXError::InvoiceAmountInvalid);
     }
 
-    if expected_return <= bid_amount {
-        return Err(QuickLendXError::InvalidAmount);
+    // Expected return must cover the original bid to avoid negative payoff.
+    if expected_return < bid_amount {
+        return Err(QuickLendXError::InvalidExpectedReturn);
     }
 
     // Validate investor can make this investment
