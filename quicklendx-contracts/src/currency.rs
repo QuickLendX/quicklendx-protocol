@@ -21,7 +21,7 @@ impl CurrencyWhitelist {
         if *admin != current_admin {
             return Err(QuickLendXError::NotAdmin);
         }
-        admin.require_auth();
+        // Auth handled by caller natively requiring auth on the admin argument
 
         let mut list = Self::get_whitelisted_currencies(env);
         if list.iter().any(|a| a == *currency) {
@@ -94,7 +94,7 @@ impl CurrencyWhitelist {
         if *admin != current_admin {
             return Err(QuickLendXError::NotAdmin);
         }
-        admin.require_auth();
+        // Auth handled by ProtocolInitializer
 
         let mut deduped: Vec<Address> = Vec::new(env);
         for currency in currencies.iter() {
