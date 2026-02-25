@@ -1,5 +1,8 @@
 use crate::bid::Bid;
 use crate::invoice::{Invoice, InvoiceStatus};
+use crate::protocol_limits::{
+    check_string_length, MAX_NOTIFICATION_MESSAGE_LENGTH, MAX_NOTIFICATION_TITLE_LENGTH,
+};
 use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, Map, String, Vec};
 
 /// Notification types for different events
@@ -231,6 +234,9 @@ impl NotificationSystem {
         message: String,
         related_invoice_id: Option<BytesN<32>>,
     ) -> Result<BytesN<32>, crate::errors::QuickLendXError> {
+        check_string_length(&title, MAX_NOTIFICATION_TITLE_LENGTH)?;
+        check_string_length(&message, MAX_NOTIFICATION_MESSAGE_LENGTH)?;
+
         // Check if user wants this type of notification
         let preferences = Self::get_user_preferences(env, &recipient);
         if !preferences.should_notify(&notification_type, &priority) {

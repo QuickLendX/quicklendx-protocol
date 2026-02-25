@@ -31,13 +31,30 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+<<<<<<< HEAD
               "function_name": "add_currency",
+=======
+              "function_name": "initialize_protocol_limits",
+>>>>>>> main
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
+<<<<<<< HEAD
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+=======
+                  "i128": {
+                    "hi": 0,
+                    "lo": 1
+                  }
+                },
+                {
+                  "u64": 365
+                },
+                {
+                  "u64": 86400
+>>>>>>> main
                 }
               ]
             }
@@ -57,7 +74,11 @@
               "function_name": "create_backup",
               "args": [
                 {
+<<<<<<< HEAD
                   "string": "Test backup"
+=======
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                 }
               ]
             }
@@ -384,7 +405,11 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+=======
+                          "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+>>>>>>> main
                         },
                         "val": {
                           "map": [
@@ -420,7 +445,11 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
+<<<<<<< HEAD
                                 "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+=======
+                                "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+>>>>>>> main
                               }
                             },
                             {
@@ -484,7 +513,11 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+=======
+                          "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
+>>>>>>> main
                         },
                         "val": {
                           "map": [
@@ -493,7 +526,11 @@
                                 "symbol": "backup_id"
                               },
                               "val": {
+<<<<<<< HEAD
                                 "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+=======
+                                "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
+>>>>>>> main
                               }
                             },
                             {
@@ -501,7 +538,11 @@
                                 "symbol": "description"
                               },
                               "val": {
+<<<<<<< HEAD
                                 "string": "Test backup"
+=======
+                                "string": "Admin created backup"
+>>>>>>> main
                               }
                             },
                             {
@@ -519,7 +560,11 @@
                               "val": {
                                 "vec": [
                                   {
+<<<<<<< HEAD
                                     "symbol": "Active"
+=======
+                                    "symbol": "Corrupted"
+>>>>>>> main
                                   }
                                 ]
                               }
@@ -537,6 +582,17 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
+=======
+                          "string": "admin"
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                        }
+                      },
+                      {
+                        "key": {
+>>>>>>> main
                           "string": "admin_address"
                         },
                         "val": {
@@ -545,12 +601,71 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
+=======
+                          "string": "protocol_limits"
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "grace_period_seconds"
+                              },
+                              "val": {
+                                "u64": 86400
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "max_due_date_days"
+                              },
+                              "val": {
+                                "u64": 365
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "min_invoice_amount"
+                              },
+                              "val": {
+                                "i128": {
+                                  "hi": 0,
+                                  "lo": 1
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "symbol": "adm_init"
+                        },
+                        "val": {
+                          "bool": true
+                        }
+                      },
+                      {
+                        "key": {
+                          "symbol": "admin"
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                        }
+                      },
+                      {
+                        "key": {
+>>>>>>> main
                           "symbol": "all_aud"
                         },
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
                               "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+=======
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+>>>>>>> main
                             }
                           ]
                         }
@@ -570,7 +685,11 @@
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
                               "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+=======
+                              "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
+>>>>>>> main
                             }
                           ]
                         }
@@ -585,6 +704,7 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "symbol": "curr_wl"
                         },
                         "val": {
@@ -597,6 +717,8 @@
                       },
                       {
                         "key": {
+=======
+>>>>>>> main
                           "symbol": "inv_cnt"
                         },
                         "val": {
@@ -629,7 +751,11 @@
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
                               "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+=======
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+>>>>>>> main
                             }
                           ]
                         }
@@ -641,7 +767,11 @@
                               "symbol": "bkup_data"
                             },
                             {
+<<<<<<< HEAD
                               "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+=======
+                              "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
+>>>>>>> main
                             }
                           ]
                         },
@@ -947,6 +1077,32 @@
                         "key": {
                           "vec": [
                             {
+<<<<<<< HEAD
+=======
+                              "symbol": "cat_idx"
+                            },
+                            {
+                              "vec": [
+                                {
+                                  "symbol": "Services"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "val": {
+                          "vec": [
+                            {
+                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+>>>>>>> main
                               "symbol": "inv_aud"
                             },
                             {
@@ -957,7 +1113,11 @@
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
                               "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+=======
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+>>>>>>> main
                             }
                           ]
                         }
@@ -980,7 +1140,11 @@
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
                               "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+=======
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+>>>>>>> main
                             }
                           ]
                         }
@@ -999,7 +1163,11 @@
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
                               "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+=======
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+>>>>>>> main
                             }
                           ]
                         }
@@ -1152,7 +1320,11 @@
             "data": {
               "vec": [
                 {
+<<<<<<< HEAD
                   "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+=======
+                  "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
+>>>>>>> main
                 },
                 {
                   "bool": false

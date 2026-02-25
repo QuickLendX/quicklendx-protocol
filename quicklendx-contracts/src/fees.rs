@@ -3,13 +3,19 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, Symbol, Ve
 
 // Constants
 const MAX_FEE_BPS: u32 = 1000;
+#[allow(dead_code)]
 const MIN_FEE_BPS: u32 = 0;
 const BPS_DENOMINATOR: i128 = 10_000;
+const DEFAULT_PLATFORM_FEE_BPS: u32 = 200; // 2%
+const MAX_PLATFORM_FEE_BPS: u32 = 1000; // 10%
 
 // Storage keys
 const FEE_CONFIG_KEY: Symbol = symbol_short!("fee_cfg");
 const REVENUE_KEY: Symbol = symbol_short!("revenue");
 const VOLUME_KEY: Symbol = symbol_short!("volume");
+#[allow(dead_code)]
+const TREASURY_CONFIG_KEY: Symbol = symbol_short!("treasury");
+const PLATFORM_FEE_KEY: Symbol = symbol_short!("plt_fee");
 
 /// Fee types supported by the platform
 #[contracttype]
@@ -56,6 +62,26 @@ pub struct UserVolumeData {
     pub last_updated: u64,
 }
 
+/// Treasury configuration for platform fees
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct TreasuryConfig {
+    pub treasury_address: Address,
+    pub is_active: bool,
+    pub updated_at: u64,
+    pub updated_by: Address,
+}
+
+/// Platform fee configuration  
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlatformFeeConfig {
+    pub fee_bps: u32,
+    pub treasury_address: Option<Address>, // Simplified - just store address directly
+    pub updated_at: u64,
+    pub updated_by: Address,
+}
+
 /// Revenue configuration
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -96,11 +122,13 @@ pub struct FeeManager;
 impl FeeManager {
     pub fn initialize(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         admin.require_auth();
+
+        // Initialize default fee structures
         let default_fees = vec![
             env,
             FeeStructure {
                 fee_type: FeeType::Platform,
-                base_fee_bps: 200,
+                base_fee_bps: DEFAULT_PLATFORM_FEE_BPS,
                 min_fee: 100,
                 max_fee: 1_000_000,
                 is_active: true,
@@ -127,7 +155,107 @@ impl FeeManager {
             },
         ];
         env.storage().instance().set(&FEE_CONFIG_KEY, &default_fees);
+
+        // Initialize platform fee configuration
+        let platform_fee_config = PlatformFeeConfig {
+            fee_bps: DEFAULT_PLATFORM_FEE_BPS,
+            treasury_address: None,
+            updated_at: env.ledger().timestamp(),
+            updated_by: admin.clone(),
+        };
+        env.storage()
+            .instance()
+            .set(&PLATFORM_FEE_KEY, &platform_fee_config);
+
         Ok(())
+    }
+
+    /// Configure treasury for platform fee routing
+    pub fn configure_treasury(
+        env: &Env,
+        admin: &Address,
+        treasury_address: Address,
+    ) -> Result<TreasuryConfig, QuickLendXError> {
+        admin.require_auth();
+
+        let treasury_config = TreasuryConfig {
+            treasury_address: treasury_address.clone(),
+            is_active: true,
+            updated_at: env.ledger().timestamp(),
+            updated_by: admin.clone(),
+        };
+
+        // Update platform fee config with treasury
+        let mut platform_config = Self::get_platform_fee_config(env)?;
+        platform_config.treasury_address = Some(treasury_address.clone());
+        platform_config.updated_at = env.ledger().timestamp();
+        platform_config.updated_by = admin.clone();
+
+        env.storage()
+            .instance()
+            .set(&PLATFORM_FEE_KEY, &platform_config);
+
+        Ok(treasury_config)
+    }
+
+    /// Update platform fee basis points
+    pub fn update_platform_fee(
+        env: &Env,
+        admin: &Address,
+        new_fee_bps: u32,
+    ) -> Result<PlatformFeeConfig, QuickLendXError> {
+        admin.require_auth();
+
+        if new_fee_bps > MAX_PLATFORM_FEE_BPS {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let mut platform_config = Self::get_platform_fee_config(env)?;
+        platform_config.fee_bps = new_fee_bps;
+        platform_config.updated_at = env.ledger().timestamp();
+        platform_config.updated_by = admin.clone();
+
+        env.storage()
+            .instance()
+            .set(&PLATFORM_FEE_KEY, &platform_config);
+
+        Ok(platform_config)
+    }
+
+    /// Get platform fee configuration
+    pub fn get_platform_fee_config(env: &Env) -> Result<PlatformFeeConfig, QuickLendXError> {
+        env.storage()
+            .instance()
+            .get(&PLATFORM_FEE_KEY)
+            .ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
+    /// Calculate platform fee for settlement
+    pub fn calculate_platform_fee(
+        env: &Env,
+        investment_amount: i128,
+        payment_amount: i128,
+    ) -> Result<(i128, i128), QuickLendXError> {
+        let config = Self::get_platform_fee_config(env)?;
+
+        if payment_amount <= investment_amount {
+            return Ok((payment_amount, 0));
+        }
+
+        let profit = payment_amount.saturating_sub(investment_amount);
+        let platform_fee = profit.saturating_mul(config.fee_bps as i128) / BPS_DENOMINATOR;
+        let investor_return = payment_amount.saturating_sub(platform_fee);
+
+        Ok((investor_return, platform_fee))
+    }
+
+    /// Get treasury address if configured
+    pub fn get_treasury_address(env: &Env) -> Option<Address> {
+        if let Ok(config) = Self::get_platform_fee_config(env) {
+            config.treasury_address
+        } else {
+            None
+        }
     }
 
     pub fn get_fee_structure(
@@ -227,21 +355,22 @@ impl FeeManager {
             }
             let mut fee = Self::calculate_base_fee(&structure, transaction_amount)?;
             if structure.fee_type != FeeType::LatePayment {
-                fee = fee - (fee * tier_discount as i128 / BPS_DENOMINATOR);
+                fee =
+                    fee.saturating_sub(fee.saturating_mul(tier_discount as i128) / BPS_DENOMINATOR);
             }
             if is_early_payment && structure.fee_type == FeeType::Platform {
-                fee = fee - (fee * 1000 / BPS_DENOMINATOR);
+                fee = fee.saturating_sub(fee.saturating_mul(1000) / BPS_DENOMINATOR);
             }
             if is_late_payment && structure.fee_type == FeeType::LatePayment {
-                fee = fee + (fee * 2000 / BPS_DENOMINATOR);
+                fee = fee.saturating_add(fee.saturating_mul(2000) / BPS_DENOMINATOR);
             }
-            total_fees += fee;
+            total_fees = total_fees.saturating_add(fee);
         }
         Ok(total_fees)
     }
 
     fn calculate_base_fee(structure: &FeeStructure, amount: i128) -> Result<i128, QuickLendXError> {
-        let fee = amount * structure.base_fee_bps as i128 / BPS_DENOMINATOR;
+        let fee = amount.saturating_mul(structure.base_fee_bps as i128) / BPS_DENOMINATOR;
         let fee = if fee < structure.min_fee {
             structure.min_fee
         } else if fee > structure.max_fee {
@@ -337,14 +466,25 @@ impl FeeManager {
         config: RevenueConfig,
     ) -> Result<(), QuickLendXError> {
         admin.require_auth();
-        let total_shares =
-            config.treasury_share_bps + config.developer_share_bps + config.platform_share_bps;
+        let total_shares = config
+            .treasury_share_bps
+            .saturating_add(config.developer_share_bps)
+            .saturating_add(config.platform_share_bps);
         if total_shares != 10_000 {
             return Err(QuickLendXError::InvalidAmount);
         }
         let key = symbol_short!("rev_cfg");
         env.storage().instance().set(&key, &config);
         Ok(())
+    }
+
+    /// Get current revenue split configuration
+    pub fn get_revenue_split_config(env: &Env) -> Result<RevenueConfig, QuickLendXError> {
+        let key = symbol_short!("rev_cfg");
+        env.storage()
+            .instance()
+            .get(&key)
+            .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
     pub fn distribute_revenue(
@@ -368,9 +508,13 @@ impl FeeManager {
             return Err(QuickLendXError::InvalidAmount);
         }
         let amount = revenue_data.pending_distribution;
-        let treasury_amount = amount * config.treasury_share_bps as i128 / BPS_DENOMINATOR;
-        let developer_amount = amount * config.developer_share_bps as i128 / BPS_DENOMINATOR;
-        let platform_amount = amount - treasury_amount - developer_amount;
+        let treasury_amount =
+            amount.saturating_mul(config.treasury_share_bps as i128) / BPS_DENOMINATOR;
+        let developer_amount =
+            amount.saturating_mul(config.developer_share_bps as i128) / BPS_DENOMINATOR;
+        let platform_amount = amount
+            .saturating_sub(treasury_amount)
+            .saturating_sub(developer_amount);
         revenue_data.total_distributed = revenue_data.total_distributed.saturating_add(amount);
         revenue_data.pending_distribution = 0;
         env.storage().instance().set(&revenue_key, &revenue_data);
@@ -385,13 +529,19 @@ impl FeeManager {
             .get(&revenue_key)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
         let average_fee_rate = if revenue_data.transaction_count > 0 {
-            revenue_data.total_collected / revenue_data.transaction_count as i128
+            revenue_data
+                .total_collected
+                .checked_div(revenue_data.transaction_count as i128)
+                .unwrap_or(0)
         } else {
             0
         };
         let efficiency_score = if revenue_data.total_collected > 0 {
-            let distributed_pct =
-                revenue_data.total_distributed * 100 / revenue_data.total_collected;
+            let distributed_pct = revenue_data
+                .total_distributed
+                .saturating_mul(100)
+                .checked_div(revenue_data.total_collected)
+                .unwrap_or(0);
             distributed_pct.min(100) as u32
         } else {
             0
@@ -410,12 +560,35 @@ impl FeeManager {
         min_fee: i128,
         max_fee: i128,
     ) -> Result<(), QuickLendXError> {
-        if base_fee_bps < MIN_FEE_BPS || base_fee_bps > MAX_FEE_BPS {
+        if base_fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidAmount);
         }
         if min_fee < 0 || max_fee < 0 || max_fee < min_fee {
             return Err(QuickLendXError::InvalidAmount);
         }
         Ok(())
+    }
+
+    /// Route platform fees to treasury if configured
+    pub fn route_platform_fee(
+        env: &Env,
+        currency: &Address,
+        from: &Address,
+        fee_amount: i128,
+    ) -> Result<Address, QuickLendXError> {
+        if fee_amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        if let Some(treasury_address) = Self::get_treasury_address(env) {
+            // Transfer to treasury
+            crate::payments::transfer_funds(env, currency, from, &treasury_address, fee_amount)?;
+            Ok(treasury_address)
+        } else {
+            // Default to contract address if no treasury configured
+            let contract_address = env.current_contract_address();
+            crate::payments::transfer_funds(env, currency, from, &contract_address, fee_amount)?;
+            Ok(contract_address)
+        }
     }
 }

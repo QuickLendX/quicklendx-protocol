@@ -43,18 +43,21 @@ This document describes the on-chain data model and storage schema for the Quick
 - `Paid` - Settled successfully
 - `Defaulted` - Payment overdue
 - `Cancelled` - Cancelled by business
+- `Refunded` - Escrow funds returned to investor
 
 ### BidStatus
 - `Placed` - Active bid
 - `Withdrawn` - Withdrawn by investor
 - `Accepted` - Accepted by business
 - `Expired` - Expired without acceptance
+- `Cancelled` - Cancelled due to refund or withdrawal
 
 ### InvestmentStatus
 - `Active` - Currently funding invoice
 - `Withdrawn` - Withdrawn by investor
 - `Completed` - Invoice paid successfully
 - `Defaulted` - Invoice defaulted
+- `Refunded` - Investment refunded to investor
 
 ## Storage Keys
 

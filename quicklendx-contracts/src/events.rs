@@ -14,6 +14,7 @@ pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
             invoice.amount,
             invoice.currency.clone(),
             invoice.due_date,
+            env.ledger().timestamp(),
         ),
     );
 }
@@ -21,7 +22,11 @@ pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
 pub fn emit_invoice_verified(env: &Env, invoice: &Invoice) {
     env.events().publish(
         (symbol_short!("inv_ver"),),
-        (invoice.id.clone(), invoice.business.clone()),
+        (
+            invoice.id.clone(),
+            invoice.business.clone(),
+            env.ledger().timestamp(),
+        ),
     );
 }
 
@@ -83,8 +88,13 @@ pub fn emit_invoice_settled(
         (
             invoice.id.clone(),
             invoice.business.clone(),
+            invoice.investor.clone().unwrap_or(Address::from_str(
+                env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            )),
             investor_return,
             platform_fee,
+            env.ledger().timestamp(),
         ),
     );
 }
@@ -124,7 +134,15 @@ pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
 pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::invoice::Invoice) {
     env.events().publish(
         (symbol_short!("inv_def"),),
-        (invoice.id.clone(), invoice.business.clone()),
+        (
+            invoice.id.clone(),
+            invoice.business.clone(),
+            invoice.investor.clone().unwrap_or(Address::from_str(
+                env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            )),
+            env.ledger().timestamp(),
+        ),
     );
 }
 
@@ -284,6 +302,22 @@ pub fn emit_bid_withdrawn(env: &Env, bid: &Bid) {
     );
 }
 
+/// Emit event when a bid is accepted
+pub fn emit_bid_accepted(env: &Env, bid: &Bid, invoice_id: &BytesN<32>, business: &Address) {
+    env.events().publish(
+        (symbol_short!("bid_acc"),),
+        (
+            bid.bid_id.clone(),
+            invoice_id.clone(),
+            bid.investor.clone(),
+            business.clone(),
+            bid.bid_amount,
+            bid.expected_return,
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
 /// Emit event when backup is created
 pub fn emit_backup_created(env: &Env, backup_id: &BytesN<32>, invoice_count: u32) {
     env.events().publish(
@@ -315,6 +349,33 @@ pub fn emit_backup_archived(env: &Env, backup_id: &BytesN<32>) {
         (backup_id.clone(), env.ledger().timestamp()),
     );
 }
+
+/// Emit event when retention policy is updated
+pub fn emit_retention_policy_updated(
+    env: &Env,
+    max_backups: u32,
+    max_age_seconds: u64,
+    auto_cleanup_enabled: bool,
+) {
+    env.events().publish(
+        (symbol_short!("ret_pol"),),
+        (
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when backups are cleaned up
+pub fn emit_backups_cleaned(env: &Env, removed_count: u32) {
+    env.events().publish(
+        (symbol_short!("bkup_cln"),),
+        (removed_count, env.ledger().timestamp()),
+    );
+}
+
 
 /// Emit audit validation event
 pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool) {
@@ -418,6 +479,18 @@ pub fn emit_dispute_resolved(
             invoice_id.clone(),
             resolved_by.clone(),
             resolution.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+pub fn emit_invoice_funded(env: &Env, invoice_id: &BytesN<32>, investor: &Address, amount: i128) {
+    env.events().publish(
+        (symbol_short!("inv_fnd"),),
+        (
+            invoice_id.clone(),
+            investor.clone(),
+            amount,
             env.ledger().timestamp(),
         ),
     );
@@ -610,6 +683,87 @@ pub fn emit_investor_performance_updated(
             verified_investors,
             platform_success_rate,
             average_risk_score,
+        ),
+    );
+}
+/// Emit event when platform fee is routed to treasury
+pub fn emit_platform_fee_routed(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    recipient: &Address,
+    fee_amount: i128,
+) {
+    env.events().publish(
+        (symbol_short!("fee_rout"),),
+        (
+            invoice_id.clone(),
+            recipient.clone(),
+            fee_amount,
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when treasury configuration is updated
+pub fn emit_treasury_configured(env: &Env, treasury_address: &Address, configured_by: &Address) {
+    env.events().publish(
+        (symbol_short!("trs_cfg"),),
+        (
+            treasury_address.clone(),
+            configured_by.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when platform fee configuration is updated
+pub fn emit_platform_fee_config_updated(
+    env: &Env,
+    old_fee_bps: u32,
+    new_fee_bps: u32,
+    updated_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("fee_cfg"),),
+        (
+            old_fee_bps,
+            new_fee_bps,
+            updated_by.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit detailed profit and fee breakdown event for transparency
+///
+/// This event provides full visibility into settlement calculations:
+/// - investment_amount: Original principal invested
+/// - payment_amount: Total payment received
+/// - gross_profit: Profit before fees
+/// - platform_fee: Fee charged
+/// - investor_return: Net amount to investor
+#[allow(dead_code)]
+pub fn emit_profit_fee_breakdown(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investment_amount: i128,
+    payment_amount: i128,
+    gross_profit: i128,
+    platform_fee: i128,
+    investor_return: i128,
+    fee_bps_applied: i128,
+) {
+    env.events().publish(
+        (symbol_short!("pf_brk"),),
+        (
+            invoice_id.clone(),
+            investment_amount,
+            payment_amount,
+            gross_profit,
+            platform_fee,
+            investor_return,
+            fee_bps_applied,
+            env.ledger().timestamp(),
         ),
     );
 }

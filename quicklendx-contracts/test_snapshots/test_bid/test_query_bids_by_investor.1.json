@@ -1,6 +1,10 @@
 {
   "generators": {
+<<<<<<< HEAD
     "address": 7,
+=======
+    "address": 6,
+>>>>>>> main
     "nonce": 0
   },
   "auth": [
@@ -118,6 +122,7 @@
         }
       ]
     ],
+<<<<<<< HEAD
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
@@ -305,6 +310,8 @@
       ]
     ],
     [],
+=======
+>>>>>>> main
     []
   ],
   "ledger": {
@@ -342,6 +349,7 @@
                     "storage": [
                       {
                         "key": {
+<<<<<<< HEAD
                           "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
                         },
                         "val": {
@@ -1539,6 +1547,8 @@
                       },
                       {
                         "key": {
+=======
+>>>>>>> main
                           "string": "admin_address"
                         },
                         "val": {
@@ -1570,6 +1580,7 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "symbol": "all_aud"
                         },
                         "val": {
@@ -1587,10 +1598,17 @@
                               "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
                             }
                           ]
+=======
+                          "symbol": "adm_init"
+                        },
+                        "val": {
+                          "bool": true
+>>>>>>> main
                         }
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "symbol": "aud_cnt"
                         },
                         "val": {
@@ -2031,6 +2049,12 @@
                               "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
                             }
                           ]
+=======
+                          "symbol": "admin"
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                         }
                       },
                       {
@@ -2473,6 +2497,7 @@
       [
         {
           "contract_data": {
+<<<<<<< HEAD
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
@@ -2671,6 +2696,8 @@
       [
         {
           "contract_data": {
+=======
+>>>>>>> main
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
@@ -2707,6 +2734,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
             "key": {
               "ledger_key_nonce": {
+<<<<<<< HEAD
                 "nonce": 3126073502131104533
               }
             },
@@ -2740,6 +2768,8 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
             "key": {
               "ledger_key_nonce": {
+=======
+>>>>>>> main
                 "nonce": 4837995959683129791
               }
             },

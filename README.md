@@ -117,6 +117,24 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+### WASM build and size budget
+
+The contract must stay within the network deployment size limit (256 KB). You can **run the script** and/or the **integration test**:
+
+**Option 1 – Script (builds with Stellar CLI or cargo):**
+```bash
+cd quicklendx-contracts
+./scripts/check-wasm-size.sh
+```
+
+**Option 2 – Integration test (builds with cargo, then asserts size):**
+```bash
+cd quicklendx-contracts
+cargo test wasm_release_build_fits_size_budget
+```
+
+Both build the contract for Soroban (release, no test-only code) and fail if the WASM exceeds 256 KB. CI runs the script on every push/PR.
+
 ### Testing
 
 #### Test Smart Contracts
@@ -241,7 +259,8 @@ We welcome contributions! Please see our [Contributing Guide](./quicklendx-contr
 ### Smart Contracts
 - Rust 1.70+
 - Stellar CLI 23.0.0+
-- WASM target: `wasm32-unknown-unknown`
+- WASM target: `wasm32-unknown-unknown` or `wasm32v1-none` (Soroban)
+- **WASM size budget**: 256 KB (enforced in CI and via `quicklendx-contracts/scripts/check-wasm-size.sh`)
 
 ### Frontend
 - Node.js 18+

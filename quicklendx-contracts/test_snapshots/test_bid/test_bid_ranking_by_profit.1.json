@@ -165,6 +165,7 @@
         }
       ]
     ],
+<<<<<<< HEAD
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
@@ -310,6 +311,8 @@
       ]
     ],
     [],
+=======
+>>>>>>> main
     []
   ],
   "ledger": {
@@ -347,6 +350,7 @@
                     "storage": [
                       {
                         "key": {
+<<<<<<< HEAD
                           "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
                         },
                         "val": {
@@ -1070,6 +1074,8 @@
                       },
                       {
                         "key": {
+=======
+>>>>>>> main
                           "string": "admin_address"
                         },
                         "val": {
@@ -1104,6 +1110,7 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "symbol": "all_aud"
                         },
                         "val": {
@@ -1115,10 +1122,17 @@
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             }
                           ]
+=======
+                          "symbol": "adm_init"
+                        },
+                        "val": {
+                          "bool": true
+>>>>>>> main
                         }
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "symbol": "aud_cnt"
                         },
                         "val": {
@@ -1491,6 +1505,12 @@
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             }
                           ]
+=======
+                          "symbol": "admin"
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                         }
                       },
                       {
@@ -2100,6 +2120,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
+<<<<<<< HEAD
                 "nonce": 5806905060045992000
               }
             },
@@ -2166,6 +2187,8 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
+=======
+>>>>>>> main
                 "nonce": 8370022561469687789
               }
             },
@@ -2199,6 +2222,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
+<<<<<<< HEAD
                 "nonce": 1194852393571756375
               }
             },
@@ -2232,6 +2256,8 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
+=======
+>>>>>>> main
                 "nonce": 5541220902715666415
               }
             },
@@ -2265,6 +2291,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
             "key": {
               "ledger_key_nonce": {
+<<<<<<< HEAD
                 "nonce": 115220454072064130
               }
             },
@@ -2298,6 +2325,8 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
             "key": {
               "ledger_key_nonce": {
+=======
+>>>>>>> main
                 "nonce": 4837995959683129791
               }
             },
@@ -2331,6 +2360,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
             "key": {
               "ledger_key_nonce": {
+<<<<<<< HEAD
                 "nonce": 3126073502131104533
               }
             },
@@ -2364,6 +2394,8 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
             "key": {
               "ledger_key_nonce": {
+=======
+>>>>>>> main
                 "nonce": 4270020994084947596
               }
             },

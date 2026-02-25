@@ -199,6 +199,7 @@
         }
       ]
     ],
+<<<<<<< HEAD
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
@@ -396,6 +397,8 @@
     [],
     [],
     [],
+=======
+>>>>>>> main
     []
   ],
   "ledger": {
@@ -494,6 +497,7 @@
                     "storage": [
                       {
                         "key": {
+<<<<<<< HEAD
                           "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
                         },
                         "val": {
@@ -1453,6 +1457,8 @@
                       },
                       {
                         "key": {
+=======
+>>>>>>> main
                           "string": "admin_address"
                         },
                         "val": {
@@ -1469,6 +1475,7 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "string": "pending_investors"
                         },
                         "val": {
@@ -1477,6 +1484,8 @@
                       },
                       {
                         "key": {
+=======
+>>>>>>> main
                           "string": "verified_businesses"
                         },
                         "val": {
@@ -1489,6 +1498,7 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "string": "verified_investors"
                         },
                         "val": {
@@ -1497,10 +1507,17 @@
                               "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                             }
                           ]
+=======
+                          "symbol": "adm_init"
+                        },
+                        "val": {
+                          "bool": true
+>>>>>>> main
                         }
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "symbol": "all_aud"
                         },
                         "val": {
@@ -2748,6 +2765,12 @@
                               "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
                             }
                           ]
+=======
+                          "symbol": "admin"
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                         }
                       },
                       {
@@ -2816,6 +2839,7 @@
                             }
                           ]
                         }
+<<<<<<< HEAD
                       },
                       {
                         "key": {
@@ -2980,6 +3004,8 @@
                             }
                           ]
                         }
+=======
+>>>>>>> main
                       }
                     ]
                   }
@@ -2997,6 +3023,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
+<<<<<<< HEAD
                 "nonce": 1194852393571756375
               }
             },
@@ -3063,6 +3090,8 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
+=======
+>>>>>>> main
                 "nonce": 4270020994084947596
               }
             },
@@ -3096,6 +3125,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
+<<<<<<< HEAD
                 "nonce": 5806905060045992000
               }
             },
@@ -3129,6 +3159,8 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
+=======
+>>>>>>> main
                 "nonce": 6277191135259896685
               }
             },
@@ -3159,6 +3191,7 @@
       [
         {
           "contract_data": {
+<<<<<<< HEAD
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
@@ -3192,6 +3225,8 @@
       [
         {
           "contract_data": {
+=======
+>>>>>>> main
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
@@ -3228,6 +3263,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
+<<<<<<< HEAD
                 "nonce": 6517132746326325848
               }
             },
@@ -3261,6 +3297,8 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
+=======
+>>>>>>> main
                 "nonce": 8370022561469687789
               }
             },
@@ -3294,6 +3332,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
             "key": {
               "ledger_key_nonce": {
+<<<<<<< HEAD
                 "nonce": 115220454072064130
               }
             },
@@ -3360,6 +3399,8 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
             "key": {
               "ledger_key_nonce": {
+=======
+>>>>>>> main
                 "nonce": 2032731177588607455
               }
             },
@@ -3630,7 +3671,11 @@
                       "val": {
                         "i128": {
                           "hi": 0,
+<<<<<<< HEAD
                           "lo": 500
+=======
+                          "lo": 10000
+>>>>>>> main
                         }
                       }
                     },
@@ -3661,6 +3706,7 @@
                   "symbol": "Balance"
                 },
                 {
+<<<<<<< HEAD
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 }
               ]
@@ -3734,6 +3780,8 @@
                   "symbol": "Balance"
                 },
                 {
+=======
+>>>>>>> main
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 }
               ]
@@ -3768,7 +3816,11 @@
                       "val": {
                         "i128": {
                           "hi": 0,
+<<<<<<< HEAD
                           "lo": 19500
+=======
+                          "lo": 10000
+>>>>>>> main
                         }
                       }
                     },
@@ -3841,7 +3893,11 @@
                       "val": {
                         "i128": {
                           "hi": 0,
+<<<<<<< HEAD
                           "lo": 500
+=======
+                          "lo": 10000
+>>>>>>> main
                         }
                       }
                     },

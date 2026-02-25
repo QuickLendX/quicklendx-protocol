@@ -69,6 +69,7 @@
         }
       ]
     ],
+<<<<<<< HEAD
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
@@ -135,6 +136,9 @@
         }
       ]
     ]
+=======
+    []
+>>>>>>> main
   ],
   "ledger": {
     "protocol_version": 22,
@@ -171,6 +175,7 @@
                     "storage": [
                       {
                         "key": {
+<<<<<<< HEAD
                           "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
                         },
                         "val": {
@@ -550,6 +555,8 @@
                       },
                       {
                         "key": {
+=======
+>>>>>>> main
                           "string": "admin_address"
                         },
                         "val": {
@@ -578,6 +585,7 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "symbol": "all_aud"
                         },
                         "val": {
@@ -586,10 +594,17 @@
                               "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
                             }
                           ]
+=======
+                          "symbol": "adm_init"
+                        },
+                        "val": {
+                          "bool": true
+>>>>>>> main
                         }
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "symbol": "aud_cnt"
                         },
                         "val": {
@@ -864,6 +879,12 @@
                               "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
                             }
                           ]
+=======
+                          "symbol": "admin"
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+>>>>>>> main
                         }
                       },
                       {
@@ -979,6 +1000,7 @@
       [
         {
           "contract_data": {
+<<<<<<< HEAD
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
@@ -1045,6 +1067,8 @@
       [
         {
           "contract_data": {
+=======
+>>>>>>> main
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
             "key": {
               "ledger_key_nonce": {
@@ -1131,6 +1155,7 @@
       ]
     ]
   },
+<<<<<<< HEAD
   "events": [
     {
       "event": {
@@ -1213,4 +1238,7 @@
       "failed_call": false
     }
   ]
+=======
+  "events": []
+>>>>>>> main
 }

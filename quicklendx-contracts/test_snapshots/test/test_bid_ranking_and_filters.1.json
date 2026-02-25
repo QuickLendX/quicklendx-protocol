@@ -24,6 +24,7 @@
         }
       ]
     ],
+<<<<<<< HEAD
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
@@ -296,6 +297,8 @@
     [],
     [],
     [],
+=======
+>>>>>>> main
     []
   ],
   "ledger": {
@@ -333,6 +336,7 @@
                     "storage": [
                       {
                         "key": {
+<<<<<<< HEAD
                           "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
                         },
                         "val": {
@@ -1056,6 +1060,8 @@
                       },
                       {
                         "key": {
+=======
+>>>>>>> main
                           "string": "admin_address"
                         },
                         "val": {
@@ -1064,14 +1070,22 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "string": "pending_investors"
                         },
                         "val": {
                           "vec": []
+=======
+                          "symbol": "adm_init"
+                        },
+                        "val": {
+                          "bool": true
+>>>>>>> main
                         }
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "string": "verified_investors"
                         },
                         "val": {
@@ -1953,6 +1967,12 @@
                               }
                             }
                           ]
+=======
+                          "symbol": "admin"
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+>>>>>>> main
                         }
                       }
                     ]
@@ -1968,6 +1988,7 @@
       [
         {
           "contract_data": {
+<<<<<<< HEAD
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
@@ -2166,6 +2187,8 @@
       [
         {
           "contract_data": {
+=======
+>>>>>>> main
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
             "key": {
               "ledger_key_nonce": {
@@ -2198,6 +2221,7 @@
       ],
       [
         {
+<<<<<<< HEAD
           "contract_data": {
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
             "key": {
@@ -2330,6 +2354,8 @@
       ],
       [
         {
+=======
+>>>>>>> main
           "contract_code": {
             "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           }

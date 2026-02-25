@@ -21,6 +21,7 @@ pub enum InvestmentStatus {
     Withdrawn,
     Completed,
     Defaulted,
+    Refunded,
 }
 
 #[contracttype]
@@ -133,7 +134,8 @@ impl InvestmentStorage {
         let timestamp = env.ledger().timestamp();
         let counter_key = symbol_short!("invst_cnt");
         let counter = env.storage().instance().get(&counter_key).unwrap_or(0u64);
-        env.storage().instance().set(&counter_key, &(counter + 1));
+        let next_counter = counter.saturating_add(1);
+        env.storage().instance().set(&counter_key, &next_counter);
 
         let mut id_bytes = [0u8; 32];
         // Add investment prefix to distinguish from other entity types
@@ -142,10 +144,13 @@ impl InvestmentStorage {
                             // Embed timestamp in next 8 bytes
         id_bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
         // Embed counter in next 8 bytes
-        id_bytes[10..18].copy_from_slice(&counter.to_be_bytes());
-        // Fill remaining bytes with a pattern to ensure uniqueness
+        id_bytes[10..18].copy_from_slice(&next_counter.to_be_bytes());
+        // Fill remaining bytes with a pattern to ensure uniqueness (overflow-safe)
+        let mix = timestamp
+            .saturating_add(next_counter)
+            .saturating_add(0x1A4E);
         for i in 18..32 {
-            id_bytes[i] = ((timestamp + counter as u64 + 0x1A4E) % 256) as u8;
+            id_bytes[i] = (mix % 256) as u8;
         }
 
         BytesN::from_array(env, &id_bytes)
@@ -160,6 +165,9 @@ impl InvestmentStorage {
             &Self::invoice_index_key(&investment.invoice_id),
             &investment.investment_id,
         );
+
+        // Add to investor index
+        Self::add_to_investor_index(env, &investment.investor, &investment.investment_id);
     }
     pub fn get_investment(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
         env.storage().instance().get(investment_id)
@@ -178,5 +186,36 @@ impl InvestmentStorage {
             &Self::invoice_index_key(&investment.invoice_id),
             &investment.investment_id,
         );
+    }
+
+    fn investor_index_key(investor: &Address) -> (Symbol, Address) {
+        (symbol_short!("invst_inv"), investor.clone())
+    }
+
+    /// Get all investments for an investor
+    pub fn get_investments_by_investor(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
+        let key = Self::investor_index_key(investor);
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    /// Add investment to investor index
+    pub fn add_to_investor_index(env: &Env, investor: &Address, investment_id: &BytesN<32>) {
+        let key = Self::investor_index_key(investor);
+        let mut investments = Self::get_investments_by_investor(env, investor);
+        // Check if already exists
+        let mut exists = false;
+        for inv_id in investments.iter() {
+            if inv_id == *investment_id {
+                exists = true;
+                break;
+            }
+        }
+        if !exists {
+            investments.push_back(investment_id.clone());
+            env.storage().instance().set(&key, &investments);
+        }
     }
 }

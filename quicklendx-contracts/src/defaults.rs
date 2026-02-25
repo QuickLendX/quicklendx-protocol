@@ -3,25 +3,102 @@ use crate::events::{
     emit_dispute_created, emit_dispute_resolved, emit_dispute_under_review, emit_insurance_claimed,
     emit_invoice_defaulted, emit_invoice_expired,
 };
+use crate::init::ProtocolInitializer;
 use crate::investment::{InvestmentStatus, InvestmentStorage};
 use crate::invoice::{Dispute, DisputeStatus, InvoiceStatus, InvoiceStorage};
 use crate::notifications::NotificationSystem;
+use crate::protocol_limits::{
+    check_string_length, MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH,
+    MAX_DISPUTE_RESOLUTION_LENGTH,
+};
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
+/// Default grace period in seconds (7 days)
+pub const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60;
+
+/// Mark an invoice as defaulted (admin or automated process)
+/// Checks due date + grace period before marking as defaulted
+///
+/// # Arguments
+/// * `env` - The environment
+/// * `invoice_id` - The invoice ID to mark as defaulted
+/// * `grace_period` - Optional grace period in seconds. If `None`, uses protocol config or
+///   `DEFAULT_GRACE_PERIOD` when not configured.
+///
+/// # Returns
+/// * `Ok(())` if the invoice was successfully marked as defaulted
+/// * `Err(QuickLendXError)` if the operation fails
+pub fn mark_invoice_defaulted(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    grace_period: Option<u64>,
+) -> Result<(), QuickLendXError> {
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+    // Check if invoice is already defaulted (no double default)
+    if invoice.status == InvoiceStatus::Defaulted {
+        return Err(QuickLendXError::InvoiceAlreadyDefaulted);
+    }
+
+    // Only funded invoices can be defaulted
+    if invoice.status != InvoiceStatus::Funded {
+        return Err(QuickLendXError::InvoiceNotAvailableForFunding);
+    }
+
+    let current_timestamp = env.ledger().timestamp();
+    let grace = resolve_grace_period(env, grace_period);
+    let grace_deadline = invoice.grace_deadline(grace);
+
+    // Check if grace period has passed
+    if current_timestamp <= grace_deadline {
+        return Err(QuickLendXError::OperationNotAllowed);
+    }
+
+    // Proceed with default handling
+    handle_default(env, invoice_id)
+}
+
+/// Resolve grace period using per-call override, protocol config, or default.
+pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> u64 {
+    match grace_period {
+        Some(value) => value,
+        None => ProtocolInitializer::get_protocol_config(env)
+            .map(|config| config.grace_period_seconds)
+            .unwrap_or(DEFAULT_GRACE_PERIOD),
+    }
+}
+
+/// Handle invoice default - internal function that performs the actual defaulting
+/// This function assumes all validations have been done (grace period, status, etc.)
 pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+    // Check if already defaulted (no double default)
+    if invoice.status == InvoiceStatus::Defaulted {
+        return Err(QuickLendXError::InvoiceAlreadyDefaulted);
+    }
+
+    // Validate invoice is in funded status
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvalidStatus);
     }
-    if !invoice.is_overdue(env.ledger().timestamp()) {
-        return Err(QuickLendXError::OperationNotAllowed);
-    }
+
+    // Remove from funded status list
     InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
+
+    // Mark invoice as defaulted
     invoice.mark_as_defaulted();
     InvoiceStorage::update_invoice(env, &invoice);
+
+    // Add to defaulted status list
     InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Defaulted, invoice_id);
+
+    // Emit expiration event
     emit_invoice_expired(env, &invoice);
+
+    // Update investment status and process insurance claims
     if let Some(mut investment) = InvestmentStorage::get_investment_by_invoice(env, invoice_id) {
         investment.status = InvestmentStatus::Defaulted;
 
@@ -47,8 +124,13 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
             );
         }
     }
+
+    // Emit default event
     emit_invoice_defaulted(env, &invoice);
+
+    // Send notification
     let _ = NotificationSystem::notify_invoice_defaulted(env, &invoice);
+
     Ok(())
 }
 
@@ -82,11 +164,13 @@ pub fn create_dispute(
     }
 
     // Validate reason and evidence
-    if reason.len() == 0 || reason.len() > 500 {
+    check_string_length(&reason, MAX_DISPUTE_REASON_LENGTH)?;
+    if reason.len() == 0 {
         return Err(QuickLendXError::InvalidDisputeReason);
     }
 
-    if evidence.len() == 0 || evidence.len() > 1000 {
+    check_string_length(&evidence, MAX_DISPUTE_EVIDENCE_LENGTH)?;
+    if evidence.len() == 0 {
         return Err(QuickLendXError::InvalidDisputeEvidence);
     }
 
@@ -163,7 +247,8 @@ pub fn resolve_dispute(
     }
 
     // Validate resolution
-    if resolution.len() == 0 || resolution.len() > 500 {
+    check_string_length(&resolution, MAX_DISPUTE_RESOLUTION_LENGTH)?;
+    if resolution.len() == 0 {
         return Err(QuickLendXError::InvalidDisputeReason);
     }
 

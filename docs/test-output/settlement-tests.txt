@@ -1,0 +1,12 @@
+Command:
+cd quicklendx-contracts && cargo test test_partial_payments -- --nocapture
+
+Output summary:
+Finished `test` profile [unoptimized + debuginfo] target(s) in 53.69s
+Running unittests src/lib.rs (target/debug/deps/quicklendx_contracts-4deb370b32daf852)
+
+running 10 tests
+...
+test test_partial_payments::tests::test_zero_amount_rejected ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 434 filtered out; finished in 121.36s

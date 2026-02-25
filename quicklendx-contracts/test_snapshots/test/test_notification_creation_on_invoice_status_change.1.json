@@ -68,6 +68,7 @@
         }
       ]
     ],
+<<<<<<< HEAD
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
@@ -136,6 +137,8 @@
     ],
     [],
     [],
+=======
+>>>>>>> main
     []
   ],
   "ledger": {
@@ -173,6 +176,7 @@
                     "storage": [
                       {
                         "key": {
+<<<<<<< HEAD
                           "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
                         },
                         "val": {
@@ -647,6 +651,8 @@
                       },
                       {
                         "key": {
+=======
+>>>>>>> main
                           "string": "admin_address"
                         },
                         "val": {
@@ -675,6 +681,7 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "symbol": "all_aud"
                         },
                         "val": {
@@ -686,10 +693,17 @@
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             }
                           ]
+=======
+                          "symbol": "adm_init"
+                        },
+                        "val": {
+                          "bool": true
+>>>>>>> main
                         }
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "symbol": "aud_cnt"
                         },
                         "val": {
@@ -1007,6 +1021,12 @@
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             }
                           ]
+=======
+                          "symbol": "admin"
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+>>>>>>> main
                         }
                       },
                       {
@@ -1092,6 +1112,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
+<<<<<<< HEAD
                 "nonce": 2032731177588607455
               }
             },
@@ -1125,6 +1146,8 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
+=======
+>>>>>>> main
                 "nonce": 5541220902715666415
               }
             },
@@ -1220,6 +1243,7 @@
       ],
       [
         {
+<<<<<<< HEAD
           "contract_data": {
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
@@ -1253,6 +1277,8 @@
       ],
       [
         {
+=======
+>>>>>>> main
           "contract_code": {
             "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           }

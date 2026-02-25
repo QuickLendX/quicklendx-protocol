@@ -1,10 +1,15 @@
 {
   "generators": {
+<<<<<<< HEAD
     "address": 4,
+=======
+    "address": 3,
+>>>>>>> main
     "nonce": 0
   },
   "auth": [
     [],
+<<<<<<< HEAD
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
@@ -47,6 +52,8 @@
       ]
     ],
     [],
+=======
+>>>>>>> main
     []
   ],
   "ledger": {
@@ -81,6 +88,7 @@
                     "executable": {
                       "wasm": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
                     },
+<<<<<<< HEAD
                     "storage": [
                       {
                         "key": {
@@ -621,6 +629,9 @@
                         }
                       }
                     ]
+=======
+                    "storage": null
+>>>>>>> main
                   }
                 }
               }
@@ -632,6 +643,7 @@
       ],
       [
         {
+<<<<<<< HEAD
           "contract_data": {
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
@@ -698,6 +710,8 @@
       ],
       [
         {
+=======
+>>>>>>> main
           "contract_code": {
             "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           }

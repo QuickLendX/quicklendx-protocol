@@ -16,11 +16,13 @@
 //! - Persistent storage for long-term data retention
 //! - Upgrade-safe: Keys are designed to avoid conflicts during contract upgrades
 
-use soroban_sdk::{symbol_short, Address, BytesN, Env, Map, Symbol, Vec};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec, String};
+ // Removed ToString import; not needed in Soroban environment.
 
-use crate::types::{
-    Bid, BidStatus, Investment, InvestmentStatus, Invoice, InvoiceStatus, PlatformFeeConfig,
-};
+use crate::bid::{Bid, BidStatus};
+use crate::investment::{Investment, InvestmentStatus};
+use crate::invoice::{Invoice, InvoiceStatus};
+use crate::profits::PlatformFeeConfig;
 
 /// Storage keys for the contract
 pub struct StorageKeys;
@@ -58,7 +60,7 @@ impl StorageKeys {
 
     /// Key for investment count
     pub fn investment_count() -> Symbol {
-        symbol_short!("invst_count")
+        symbol_short!("inv_cnt")
     }
 }
 
@@ -80,6 +82,7 @@ impl Indexes {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("defaulted"),
             InvoiceStatus::Cancelled => symbol_short!("cancelled"),
+            InvoiceStatus::Refunded => symbol_short!("refunded"),
         };
         (symbol_short!("inv_stat"), status_symbol)
     }
@@ -91,7 +94,7 @@ impl Indexes {
 
     /// Index: bids by investor
     pub fn bids_by_investor(investor: &Address) -> (Symbol, Address) {
-        (symbol_short!("bids_invstr"), investor.clone())
+        (symbol_short!("bids_inv"), investor.clone())
     }
 
     /// Index: bids by status
@@ -101,6 +104,7 @@ impl Indexes {
             BidStatus::Withdrawn => symbol_short!("withdrawn"),
             BidStatus::Accepted => symbol_short!("accepted"),
             BidStatus::Expired => symbol_short!("expired"),
+            BidStatus::Cancelled => symbol_short!("cancelled"),
         };
         (symbol_short!("bids_stat"), status_symbol)
     }
@@ -112,7 +116,7 @@ impl Indexes {
 
     /// Index: investments by investor
     pub fn investments_by_investor(investor: &Address) -> (Symbol, Address) {
-        (symbol_short!("invst_invstr"), investor.clone())
+        (symbol_short!("inv_invst"), investor.clone())
     }
 
     /// Index: investments by status
@@ -122,8 +126,19 @@ impl Indexes {
             InvestmentStatus::Withdrawn => symbol_short!("withdrawn"),
             InvestmentStatus::Completed => symbol_short!("completed"),
             InvestmentStatus::Defaulted => symbol_short!("defaulted"),
+            InvestmentStatus::Refunded => symbol_short!("refunded"),
         };
-        (symbol_short!("invst_stat"), status_symbol)
+        (symbol_short!("inv_stat"), status_symbol)
+    }
+
+    /// Index: invoices by customer name
+    pub fn invoices_by_customer(customer_name: &soroban_sdk::String) -> (Symbol, soroban_sdk::String) {
+        (symbol_short!("inv_cust"), customer_name.clone())
+    }
+
+    /// Index: invoices by tax_id
+    pub fn invoices_by_tax_id(tax_id: &soroban_sdk::String) -> (Symbol, soroban_sdk::String) {
+        (symbol_short!("inv_taxid"), tax_id.clone())
     }
 }
 
@@ -134,10 +149,24 @@ impl InvoiceStorage {
     /// Store an invoice
     pub fn store(env: &Env, invoice: &Invoice) {
         env.storage().persistent().set(&invoice.id, invoice);
-
-        // Update indexes
         Self::add_to_business_index(env, &invoice.business, &invoice.id);
         Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
+        if let Some(ref name) = invoice.metadata_customer_name {
+            Self::add_to_customer_index(env, name, &invoice.id);
+        }
+        if let Some(ref tax_id) = invoice.metadata_tax_id {
+            Self::add_to_tax_id_index(env, tax_id, &invoice.id);
+        }
+    }
+
+    pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
+        let key = Indexes::invoices_by_business(business);
+        env.storage().persistent().get(&key).unwrap_or(Vec::new(env))
+    }
+
+    pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
+        let key = Indexes::invoices_by_status(status);
+        env.storage().persistent().get(&key).unwrap_or(Vec::new(env))
     }
 
     /// Get an invoice by ID
@@ -147,31 +176,29 @@ impl InvoiceStorage {
 
     /// Update an invoice
     pub fn update(env: &Env, invoice: &Invoice) {
-        // Remove from old status index if status changed
         if let Some(old_invoice) = Self::get(env, &invoice.id) {
             if old_invoice.status != invoice.status {
                 Self::remove_from_status_index(env, old_invoice.status, &invoice.id);
                 Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
             }
+            if old_invoice.metadata_customer_name != invoice.metadata_customer_name {
+                if let Some(ref old_name) = old_invoice.metadata_customer_name {
+                    Self::remove_from_customer_index(env, old_name, &invoice.id);
+                }
+                if let Some(ref new_name) = invoice.metadata_customer_name {
+                    Self::add_to_customer_index(env, new_name, &invoice.id);
+                }
+            }
+            if old_invoice.metadata_tax_id != invoice.metadata_tax_id {
+                if let Some(ref old_tax_id) = old_invoice.metadata_tax_id {
+                    Self::remove_from_tax_id_index(env, old_tax_id, &invoice.id);
+                }
+                if let Some(ref new_tax_id) = invoice.metadata_tax_id {
+                    Self::add_to_tax_id_index(env, new_tax_id, &invoice.id);
+                }
+            }
         }
-
         env.storage().persistent().set(&invoice.id, invoice);
-    }
-
-    /// Get invoices by business
-    pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_business(business))
-            .unwrap_or_else(|| Vec::new(env))
-    }
-
-    /// Get invoices by status
-    pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_status(status))
-            .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Add invoice to business index
@@ -207,6 +234,48 @@ impl InvoiceStorage {
         }
     }
 
+    pub fn add_to_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
+        let key = Indexes::invoices_by_customer(customer_name);
+        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        if !ids.iter().any(|id| id == *invoice_id) {
+            ids.push_back(invoice_id.clone());
+            env.storage().persistent().set(&key, &ids);
+        }
+    }
+
+    pub fn remove_from_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
+        let key = Indexes::invoices_by_customer(customer_name);
+        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        let mut filtered = Vec::new(env);
+        for id in ids.iter() {
+            if id != *invoice_id {
+                filtered.push_back(id.clone());
+            }
+        }
+        env.storage().persistent().set(&key, &filtered);
+    }
+
+    pub fn add_to_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
+        let key = Indexes::invoices_by_tax_id(tax_id);
+        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        if !ids.iter().any(|id| id == *invoice_id) {
+            ids.push_back(invoice_id.clone());
+            env.storage().persistent().set(&key, &ids);
+        }
+    }
+
+    pub fn remove_from_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
+        let key = Indexes::invoices_by_tax_id(tax_id);
+        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        let mut filtered = Vec::new(env);
+        for id in ids.iter() {
+            if id != *invoice_id {
+                filtered.push_back(id.clone());
+            }
+        }
+        env.storage().persistent().set(&key, &filtered);
+    }
+
     /// Get next invoice count
     pub fn next_count(env: &Env) -> u64 {
         let current: u64 = env
@@ -214,7 +283,7 @@ impl InvoiceStorage {
             .persistent()
             .get(&StorageKeys::invoice_count())
             .unwrap_or(0);
-        let next = current + 1;
+        let next = current.saturating_add(1);
         env.storage()
             .persistent()
             .set(&StorageKeys::invoice_count(), &next);
@@ -329,7 +398,7 @@ impl BidStorage {
             .persistent()
             .get(&StorageKeys::bid_count())
             .unwrap_or(0);
-        let next = current + 1;
+        let next = current.saturating_add(1);
         env.storage()
             .persistent()
             .set(&StorageKeys::bid_count(), &next);
@@ -343,7 +412,9 @@ pub struct InvestmentStorage;
 impl InvestmentStorage {
     /// Store an investment
     pub fn store(env: &Env, investment: &Investment) {
-        env.storage().persistent().set(&investment.investment_id, investment);
+        env.storage()
+            .persistent()
+            .set(&investment.investment_id, investment);
 
         // Update indexes
         Self::add_to_invoice_index(env, &investment.invoice_id, &investment.investment_id);
@@ -361,12 +432,22 @@ impl InvestmentStorage {
         // Remove from old status index if status changed
         if let Some(old_investment) = Self::get(env, &investment.investment_id) {
             if old_investment.status != investment.status {
-                Self::remove_from_status_index(env, old_investment.status, &investment.investment_id);
-                Self::add_to_status_index(env, investment.status.clone(), &investment.investment_id);
+                Self::remove_from_status_index(
+                    env,
+                    old_investment.status,
+                    &investment.investment_id,
+                );
+                Self::add_to_status_index(
+                    env,
+                    investment.status.clone(),
+                    &investment.investment_id,
+                );
             }
         }
 
-        env.storage().persistent().set(&investment.investment_id, investment);
+        env.storage()
+            .persistent()
+            .set(&investment.investment_id, investment);
     }
 
     /// Get investments by invoice
@@ -444,7 +525,7 @@ impl InvestmentStorage {
             .persistent()
             .get(&StorageKeys::investment_count())
             .unwrap_or(0);
-        let next = current + 1;
+        let next = current.saturating_add(1);
         env.storage()
             .persistent()
             .set(&StorageKeys::investment_count(), &next);
