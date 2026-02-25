@@ -2,7 +2,7 @@
 extern crate std;
 
 use crate::{
-    backup::BackupStatus,
+    backup::{BackupStatus, BackupStorage},
     invoice::InvoiceCategory,
     QuickLendXContract, QuickLendXContractClient,
 };
@@ -290,4 +290,91 @@ fn test_backup_id_format_and_storage() {
     assert_eq!(arr[0], 0xB4);
     assert_eq!(arr[1], 0xC4);
     assert_eq!(arr[2..10], details.timestamp.to_be_bytes());
+}
+
+#[test]
+fn test_create_backup_invoice_count_exact() {
+    let (env, client, admin) = setup();
+
+    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &client.address);
+    client.add_currency(&admin, &currency);
+
+    let due_date = env.ledger().timestamp() + 86400;
+    for amount in [1_000i128, 2_000i128] {
+        let invoice_id = client.store_invoice(
+            &business,
+            &amount,
+            &currency,
+            &due_date,
+            &String::from_str(&env, "Backup Count Test"),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
+        client.verify_invoice(&invoice_id);
+    }
+
+    assert_eq!(client.get_total_invoice_count(), 2);
+    let backup_id = client.create_backup(&admin);
+    let details = client.get_backup_details(&backup_id).unwrap();
+    assert_eq!(details.invoice_count, 2);
+}
+
+#[test]
+fn test_validate_backup_marks_corrupted_when_metadata_mismatch() {
+    let (env, client, admin) = setup();
+
+    let _ = create_funded_invoice(&env, &client, &admin);
+    let backup_id = client.create_backup(&admin);
+
+    env.as_contract(&client.address, || {
+        let mut backup = BackupStorage::get_backup(&env, &backup_id).unwrap();
+        backup.invoice_count = backup.invoice_count.saturating_add(1);
+        BackupStorage::update_backup(&env, &backup);
+    });
+
+    let is_valid = client.validate_backup(&backup_id);
+    assert_eq!(is_valid, false);
+
+    let details = client.get_backup_details(&backup_id).unwrap();
+    assert_eq!(details.status, BackupStatus::Corrupted);
+}
+
+#[test]
+fn test_archive_backup_requires_admin() {
+    let (env, client, admin) = setup();
+
+    let backup_id = client.create_backup(&admin);
+    let stranger = Address::generate(&env);
+
+    assert!(client.try_archive_backup(&stranger, &backup_id).is_err());
+
+    let active_backups = client.get_backups();
+    assert_eq!(active_backups.len(), 1);
+    assert_eq!(active_backups.get(0).unwrap(), backup_id);
+
+    let details = client.get_backup_details(&backup_id).unwrap();
+    assert_eq!(details.status, BackupStatus::Active);
+}
+
+#[test]
+fn test_cleanup_keeps_latest_five_in_order() {
+    let (env, client, admin) = setup();
+
+    let mut backup_ids = Vec::new(&env);
+    for _ in 0..7 {
+        let id = client.create_backup(&admin);
+        backup_ids.push_back(id);
+        env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    }
+
+    let active_backups = client.get_backups();
+    assert_eq!(active_backups.len(), 5);
+
+    for i in 0..5 {
+        let expected = backup_ids.get(i + 2).unwrap();
+        assert_eq!(active_backups.get(i).unwrap(), expected);
+    }
 }
