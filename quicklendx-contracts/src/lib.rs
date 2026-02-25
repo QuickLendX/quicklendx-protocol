@@ -2723,9 +2723,6 @@ impl QuickLendXContract {
 }
 
 #[cfg(test)]
-mod test;
-
-#[cfg(test)]
 mod test_bid;
 
 #[cfg(test)]
@@ -2764,8 +2761,6 @@ mod test_reentrancy;
 mod test_backup;
 #[cfg(test)]
 mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
 #[cfg(test)]
 mod test_fuzz;
 #[cfg(test)]
