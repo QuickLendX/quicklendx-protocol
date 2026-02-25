@@ -145,8 +145,10 @@ impl ProtocolInitializer {
             .instance()
             .set(&TREASURY_KEY, &params.treasury);
 
-        // Store fee configuration
-        env.storage().instance().set(&FEE_BPS_KEY, &params.fee_bps);
+        // Initialize currency whitelist
+        if !params.initial_currencies.is_empty() {
+            crate::currency::CurrencyWhitelist::set_currencies(env, &params.admin, &params.initial_currencies)?;
+        }
 
         // Store protocol configuration
         let config = ProtocolConfig {
@@ -158,14 +160,7 @@ impl ProtocolInitializer {
         };
         env.storage().instance().set(&PROTOCOL_CONFIG_KEY, &config);
 
-        // Initialize currency whitelist with provided currencies
-        if !params.initial_currencies.is_empty() {
-            env.storage()
-                .instance()
-                .set(&WHITELIST_KEY, &params.initial_currencies);
-        }
-
-        // Mark protocol as initialized (this is the atomic commit point)
+        // Mark protocol as initialized (atomic commit point)
         env.storage()
             .instance()
             .set(&PROTOCOL_INITIALIZED_KEY, &true);
@@ -204,7 +199,7 @@ impl ProtocolInitializer {
     /// Performs comprehensive validation of all parameters before
     /// any state changes are made.
     fn validate_initialization_params(
-        env: &Env,
+        _env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // Validate fee basis points (0% to 10%)

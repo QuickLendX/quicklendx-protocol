@@ -9,6 +9,7 @@
 use super::*;
 use crate::bid::BidStatus;
 use crate::invoice::InvoiceCategory;
+use crate::protocol_limits::compute_min_bid_amount;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Address, BytesN, Env, String, Vec,
@@ -106,6 +107,38 @@ fn test_bid_placement_verified_invoice_succeeds() {
     let bid = client.get_bid(&bid_id);
     assert!(bid.is_some());
     assert_eq!(bid.unwrap().status, BidStatus::Placed);
+}
+
+/// Core Test: Minimum bid amount enforced (absolute floor + percentage of invoice)
+#[test]
+fn test_bid_minimum_amount_enforced() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 1_000_000);
+    let business = Address::generate(&env);
+
+    let invoice_amount = 200_000;
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, invoice_amount);
+
+    let min_bid = compute_min_bid_amount(
+        invoice_amount,
+        &crate::protocol_limits::ProtocolLimits {
+            min_invoice_amount: 1_000_000,
+            min_bid_amount: 100,
+            min_bid_bps: 100,
+            max_due_date_days: 365,
+            grace_period_seconds: 86400,
+        },
+    );
+    let below_min = min_bid.saturating_sub(1);
+
+    let result = client.try_place_bid(&investor, &invoice_id, &below_min, &(min_bid + 100));
+    assert!(result.is_err(), "Bid below minimum must fail");
+
+    let result = client.try_place_bid(&investor, &invoice_id, &min_bid, &(min_bid + 100));
+    assert!(result.is_ok(), "Bid at minimum must succeed");
 }
 
 /// Core Test: Investment limit enforced
@@ -1395,4 +1428,304 @@ fn test_get_all_bids_by_investor_empty() {
     let investor = Address::generate(&env);
     let all_bids = client.get_all_bids_by_investor(&investor);
     assert_eq!(all_bids.len(), 0, "Must return empty for unknown investor");
+}
+
+// ============================================================================
+// Multiple Investors - Same Invoice Tests (Issue #343)
+// ============================================================================
+
+/// Test: Multiple investors place bids on same invoice - all bids are tracked
+#[test]
+fn test_multiple_investors_place_bids_on_same_invoice() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    // Create 5 verified investors
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let investor3 = add_verified_investor(&env, &client, 100_000);
+    let investor4 = add_verified_investor(&env, &client, 100_000);
+    let investor5 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // All 5 investors place bids with different amounts and profits
+    let bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000); // profit: 2k
+    let bid_id2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000); // profit: 5k (best)
+    let bid_id3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000); // profit: 4k
+    let bid_id4 = client.place_bid(&investor4, &invoice_id, &12_000, &15_000); // profit: 3k
+    let bid_id5 = client.place_bid(&investor5, &invoice_id, &18_000, &21_000); // profit: 3k
+
+    // Verify all bids are in Placed status
+    let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
+    assert_eq!(placed_bids.len(), 5, "All 5 bids should be in Placed status");
+
+    // Verify get_bids_for_invoice returns all bid IDs
+    let all_bid_ids = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(all_bid_ids.len(), 5, "get_bids_for_invoice should return all 5 bid IDs");
+    
+    // Verify all specific bid IDs are present
+    assert!(all_bid_ids.iter().any(|id| id == bid_id1), "bid_id1 should be in list");
+    assert!(all_bid_ids.iter().any(|id| id == bid_id2), "bid_id2 should be in list");
+    assert!(all_bid_ids.iter().any(|id| id == bid_id3), "bid_id3 should be in list");
+    assert!(all_bid_ids.iter().any(|id| id == bid_id4), "bid_id4 should be in list");
+    assert!(all_bid_ids.iter().any(|id| id == bid_id5), "bid_id5 should be in list");
+}
+
+/// Test: Multiple investors bids are correctly ranked by profit
+#[test]
+fn test_multiple_investors_bids_ranking_order() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let investor3 = add_verified_investor(&env, &client, 100_000);
+    let investor4 = add_verified_investor(&env, &client, 100_000);
+    let investor5 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // Place bids with different profit margins
+    let _bid1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000); // profit: 2k
+    let _bid2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000); // profit: 5k (best)
+    let _bid3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000); // profit: 4k
+    let _bid4 = client.place_bid(&investor4, &invoice_id, &12_000, &15_000); // profit: 3k
+    let _bid5 = client.place_bid(&investor5, &invoice_id, &18_000, &21_000); // profit: 3k
+
+    // Get ranked bids
+    let ranked = client.get_ranked_bids(&invoice_id);
+    assert_eq!(ranked.len(), 5, "Should have 5 ranked bids");
+
+    // Verify ranking order by profit (descending)
+    assert_eq!(ranked.get(0).unwrap().investor, investor2, "Rank 1: investor2 (profit 5k)");
+    assert_eq!(ranked.get(1).unwrap().investor, investor3, "Rank 2: investor3 (profit 4k)");
+    // investor4 and investor5 both have 3k profit - either order is valid
+    let rank3_investor = ranked.get(2).unwrap().investor;
+    let rank4_investor = ranked.get(3).unwrap().investor;
+    assert!(
+        (rank3_investor == investor4 && rank4_investor == investor5) ||
+        (rank3_investor == investor5 && rank4_investor == investor4),
+        "Ranks 3-4: investor4 and investor5 (both profit 3k)"
+    );
+    assert_eq!(ranked.get(4).unwrap().investor, investor1, "Rank 5: investor1 (profit 2k)");
+
+    // Verify best bid is investor2
+    let best = client.get_best_bid(&invoice_id).unwrap();
+    assert_eq!(best.investor, investor2, "Best bid should be investor2 with highest profit");
+}
+
+/// Test: Business accepts one bid, others remain Placed
+#[test]
+fn test_business_accepts_one_bid_others_remain_placed() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let investor3 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // Three investors place bids
+    let bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let bid_id2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000);
+    let bid_id3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
+
+    // Business accepts bid2
+    let result = client.try_accept_bid(&invoice_id, &bid_id2);
+    assert!(result.is_ok(), "Business should be able to accept bid2");
+
+    // Verify bid2 is Accepted
+    let bid2 = client.get_bid(&bid_id2).unwrap();
+    assert_eq!(bid2.status, BidStatus::Accepted, "Accepted bid should have Accepted status");
+
+    // Verify bid1 and bid3 remain Placed
+    let bid1 = client.get_bid(&bid_id1).unwrap();
+    assert_eq!(bid1.status, BidStatus::Placed, "Non-accepted bid1 should remain Placed");
+    
+    let bid3 = client.get_bid(&bid_id3).unwrap();
+    assert_eq!(bid3.status, BidStatus::Placed, "Non-accepted bid3 should remain Placed");
+
+    // Verify invoice is now Funded
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded, "Invoice should be Funded after accepting bid");
+}
+
+/// Test: Only one escrow is created when business accepts a bid
+#[test]
+fn test_only_one_escrow_created_for_accepted_bid() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let investor3 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // Three investors place bids
+    let _bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let bid_id2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000);
+    let _bid_id3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
+
+    // Business accepts bid2
+    client.accept_bid(&invoice_id, &bid_id2);
+
+    // Verify exactly one escrow exists for this invoice
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.status, EscrowStatus::Held, "Escrow should be in Held status");
+    assert_eq!(escrow.investor, investor2, "Escrow should reference investor2");
+    assert_eq!(escrow.amount, 15_000, "Escrow should hold the accepted bid amount");
+    assert_eq!(escrow.invoice_id, invoice_id, "Escrow should reference correct invoice");
+
+    // Verify invoice funded amount matches escrow amount
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.funded_amount, 15_000, "Invoice funded amount should match escrow");
+    assert_eq!(invoice.investor, Some(investor2), "Invoice should reference investor2");
+}
+
+/// Test: Non-accepted investors can withdraw their bids after one is accepted
+#[test]
+fn test_non_accepted_investors_can_withdraw_after_acceptance() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let investor3 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // Three investors place bids
+    let bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let bid_id2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000);
+    let bid_id3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
+
+    // Business accepts bid2
+    client.accept_bid(&invoice_id, &bid_id2);
+
+    // investor1 withdraws their bid
+    let result1 = client.try_withdraw_bid(&bid_id1);
+    assert!(result1.is_ok(), "investor1 should be able to withdraw their bid");
+    
+    let bid1 = client.get_bid(&bid_id1).unwrap();
+    assert_eq!(bid1.status, BidStatus::Withdrawn, "bid1 should be Withdrawn");
+
+    // investor3 withdraws their bid
+    let result3 = client.try_withdraw_bid(&bid_id3);
+    assert!(result3.is_ok(), "investor3 should be able to withdraw their bid");
+    
+    let bid3 = client.get_bid(&bid_id3).unwrap();
+    assert_eq!(bid3.status, BidStatus::Withdrawn, "bid3 should be Withdrawn");
+
+    // Verify bid2 remains Accepted
+    let bid2 = client.get_bid(&bid_id2).unwrap();
+    assert_eq!(bid2.status, BidStatus::Accepted, "bid2 should remain Accepted");
+
+    // Verify only Accepted bid remains in Placed status query
+    let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
+    assert_eq!(placed_bids.len(), 0, "No bids should be in Placed status after withdrawals");
+
+    let withdrawn_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Withdrawn);
+    assert_eq!(withdrawn_bids.len(), 2, "Two bids should be Withdrawn");
+}
+
+/// Test: get_bids_for_invoice returns all bids regardless of status
+#[test]
+fn test_get_bids_for_invoice_returns_all_bids() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let investor3 = add_verified_investor(&env, &client, 100_000);
+    let investor4 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // Four investors place bids
+    let bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let bid_id2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000);
+    let bid_id3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
+    let bid_id4 = client.place_bid(&investor4, &invoice_id, &12_000, &15_000);
+
+    // Initial state: all bids should be returned
+    let all_bids = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(all_bids.len(), 4, "Should return all 4 bids initially");
+
+    // Business accepts bid2
+    client.accept_bid(&invoice_id, &bid_id2);
+
+    // investor1 withdraws
+    client.withdraw_bid(&bid_id1);
+
+    // investor4 cancels
+    client.cancel_bid(&bid_id4);
+
+    // get_bids_for_invoice should still return all bid IDs
+    // Note: This returns bid IDs, not full records
+    let all_bids_after = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(all_bids_after.len(), 4, "Should still return all 4 bid IDs");
+
+    // Verify we can retrieve each bid with different statuses
+    assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Withdrawn);
+    assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Accepted);
+    assert_eq!(client.get_bid(&bid_id3).unwrap().status, BidStatus::Placed);
+    assert_eq!(client.get_bid(&bid_id4).unwrap().status, BidStatus::Cancelled);
+}
+
+/// Test: Cannot accept second bid after one is already accepted
+#[test]
+fn test_cannot_accept_second_bid_after_first_accepted() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // Two investors place bids
+    let bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let bid_id2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000);
+
+    // Business accepts bid1
+    let result = client.try_accept_bid(&invoice_id, &bid_id1);
+    assert!(result.is_ok(), "First accept should succeed");
+
+    // Attempt to accept bid2 should fail (invoice already funded)
+    let result = client.try_accept_bid(&invoice_id, &bid_id2);
+    assert!(result.is_err(), "Second accept should fail - invoice already funded");
+
+    // Verify only bid1 is Accepted
+    assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Accepted);
+    assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Placed);
+
+    // Verify invoice is Funded with bid1's amount
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+    assert_eq!(invoice.funded_amount, 10_000);
+    assert_eq!(invoice.investor, Some(investor1));
 }

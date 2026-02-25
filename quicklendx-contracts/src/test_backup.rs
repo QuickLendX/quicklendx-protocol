@@ -63,7 +63,7 @@ fn create_funded_invoice(
     client: &QuickLendXContractClient,
     admin: &Address,
 ) -> (BytesN<32>, Address, Address, i128, Address) {
-    client.initialize_protocol_limits(admin, &1i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
     let business = setup_verified_business(env, client, admin);
     let investor = setup_verified_investor(env, client, 50_000);
     let currency = setup_token(env, &business, &investor, &client.address);
@@ -112,7 +112,7 @@ fn test_create_and_validate_backup() {
 fn test_restore_backup() {
     let (env, client, admin) = setup();
 
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
     let business = setup_verified_business(&env, &client, &admin);
     let investor = setup_verified_investor(&env, &client, 50_000);
     let currency = setup_token(&env, &business, &investor, &client.address);

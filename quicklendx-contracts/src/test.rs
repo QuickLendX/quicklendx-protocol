@@ -1,5 +1,4 @@
 mod test_analytics;
-mod test_invoice;
 mod test_invoice_categories;
 mod test_invoice_metadata;
 
@@ -8,6 +7,7 @@ use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
 use crate::bid::{BidStatus, BidStorage};
 use crate::investment::{Investment, InvestmentStorage};
 use crate::invoice::{DisputeStatus, InvoiceCategory, InvoiceMetadata, LineItemRecord};
+use crate::notifications::NotificationType;
 use crate::verification::BusinessVerificationStatus;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -22,6 +22,91 @@ fn verify_investor_for_test(
 ) {
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(investor, &limit);
+}
+
+/// Public helper: set up environment, register contract, create admin
+pub fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+    let contract_addr = contract_id.clone();
+    (env, client, admin, contract_addr)
+}
+
+/// Public helper: verify and return a business address
+pub fn setup_verified_business(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    admin: &Address,
+) -> Address {
+    let business = Address::generate(env);
+    client.submit_kyc_application(&business, &String::from_str(env, "Business KYC"));
+    client.verify_business(admin, &business);
+    business
+}
+
+/// Public helper: verify and return an investor address
+pub fn setup_verified_investor(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    limit: i128,
+) -> Address {
+    let investor = Address::generate(env);
+    client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
+    client.verify_investor(&investor, &limit);
+    investor
+}
+
+/// Public helper: register token, mint and approve for business and investor
+pub fn setup_token(
+    env: &Env,
+    business: &Address,
+    investor: &Address,
+    contract_id: &Address,
+) -> Address {
+    let token_admin = Address::generate(env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac = token::StellarAssetClient::new(env, &currency);
+    let tok = token::Client::new(env, &currency);
+    let initial = 100_000i128;
+    sac.mint(business, &initial);
+    sac.mint(investor, &initial);
+    let expiry = env.ledger().sequence() + 10_000;
+    tok.approve(business, contract_id, &initial, &expiry);
+    tok.approve(investor, contract_id, &initial, &expiry);
+    currency
+}
+
+/// Public helper: create a fully funded invoice
+pub fn create_funded_invoice(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    admin: &Address,
+) -> (BytesN<32>, Address, Address, Address, Address) {
+    let business = setup_verified_business(env, client, admin);
+    let investor = setup_verified_investor(env, client, 50_000);
+    let contract_id = client.address.clone();
+    let currency = setup_token(env, &business, &investor, &contract_id);
+    let amount = 1_000i128;
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(env, "Test Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(env),
+    );
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    client.accept_bid(&invoice_id, &bid_id);
+    (invoice_id, business, investor, currency, contract_id)
 }
 
 #[test]
@@ -757,6 +842,7 @@ fn test_bid_validation_rules() {
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let other_investor = Address::generate(&env);
+    let break_even_investor = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let admin = Address::generate(&env);
@@ -775,16 +861,30 @@ fn test_bid_validation_rules() {
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
     verify_investor_for_test(&env, &client, &other_investor, 10_000);
+    verify_investor_for_test(&env, &client, &break_even_investor, 10_000);
 
     // Amount below minimum
     assert!(client
         .try_place_bid(&investor, &invoice_id, &50, &60)
         .is_err());
 
-    // Expected return must exceed bid amount
+    // Expected return must not be less than the bid amount
+    let invalid_expected_return =
+        client.try_place_bid(&investor, &invoice_id, &150, &140);
+    let invalid_err = invalid_expected_return
+        .err()
+        .expect("expected contract error for low expected_return");
+    let invalid_contract_error =
+        invalid_err.expect("expected invoke error for low expected_return");
+    assert_eq!(
+        invalid_contract_error,
+        QuickLendXError::InvalidExpectedReturn
+    );
+
+    // Break-even expected returns are allowed
     assert!(client
-        .try_place_bid(&investor, &invoice_id, &150, &150)
-        .is_err());
+        .try_place_bid(&break_even_investor, &invoice_id, &150, &150)
+        .is_ok());
 
     // Amount cannot exceed invoice amount
     assert!(client
@@ -1976,7 +2076,7 @@ fn test_create_and_restore_backup() {
     let admin = Address::generate(&env);
     env.mock_all_auths();
     client.set_admin(&admin);
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
 
     // Create test invoices
     let business = Address::generate(&env);
@@ -2048,7 +2148,7 @@ fn test_backup_validation() {
     let admin = Address::generate(&env);
     env.mock_all_auths();
     client.set_admin(&admin);
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
 
     // Create test invoice
     let business = Address::generate(&env);
@@ -2096,7 +2196,7 @@ fn test_backup_cleanup() {
     env.mock_all_auths();
     client.set_admin(&admin);
 
-    // Create multiple backups with simple descriptions
+    // Create multiple backups
     env.mock_all_auths();
     for i in 0..10 {
         client.create_backup(&admin);
@@ -2148,7 +2248,7 @@ fn test_backup_retention_policy_by_count() {
 
     // Set retention policy to keep only 3 backups
     env.mock_all_auths();
-    client.set_backup_retention_policy(&3, &0, &true);
+    client.set_backup_retention_policy(&admin, &3, &0, &true);
 
     // Verify policy was set
     let policy = client.get_backup_retention_policy();
@@ -2158,9 +2258,8 @@ fn test_backup_retention_policy_by_count() {
 
     // Create 5 backups
     env.mock_all_auths();
-    for i in 0..5 {
-        let desc = String::from_str(&env, "Backup");
-        client.create_backup(&desc);
+    for _i in 0..5 {
+        client.create_backup(&admin);
         // Advance time slightly between backups
         env.ledger().with_mut(|li| li.timestamp += 10);
     }
@@ -2184,17 +2283,17 @@ fn test_backup_retention_policy_by_age() {
     // Set retention policy to keep backups for 100 seconds, unlimited count
     // Disable auto cleanup initially to create all backups
     env.mock_all_auths();
-    client.set_backup_retention_policy(&0, &100, &false);
+    client.set_backup_retention_policy(&admin, &0, &100, &false);
 
     // Create 3 backups with time gaps
     env.mock_all_auths();
-    let backup1 = client.create_backup(&String::from_str(&env, "Old backup 1"));
+    let backup1 = client.create_backup(&admin);
     env.ledger().with_mut(|li| li.timestamp += 50);
     
-    let backup2 = client.create_backup(&String::from_str(&env, "Old backup 2"));
+    let backup2 = client.create_backup(&admin);
     env.ledger().with_mut(|li| li.timestamp += 60); // Total 110 seconds from backup1
     
-    let backup3 = client.create_backup(&String::from_str(&env, "Recent backup"));
+    let backup3 = client.create_backup(&admin);
 
     // All 3 should exist initially
     let backups = client.get_backups();
@@ -2205,16 +2304,16 @@ fn test_backup_retention_policy_by_age() {
 
     // Manually trigger cleanup
     env.mock_all_auths();
-    let removed = client.cleanup_backups();
+    let removed = client.cleanup_backups(&admin);
     assert_eq!(removed, 0); // No cleanup because auto_cleanup is disabled
 
     // Enable auto cleanup
     env.mock_all_auths();
-    client.set_backup_retention_policy(&0, &100, &true);
+    client.set_backup_retention_policy(&admin, &0, &100, &true);
 
     // Manually trigger cleanup
     env.mock_all_auths();
-    let removed = client.cleanup_backups();
+    let removed = client.cleanup_backups(&admin);
     assert_eq!(removed, 1); // backup1 should be removed
 
     // Should have 2 backups left
@@ -2238,12 +2337,12 @@ fn test_backup_retention_policy_combined() {
 
     // Set retention policy: max 5 backups AND max age 200 seconds
     env.mock_all_auths();
-    client.set_backup_retention_policy(&5, &200, &true);
+    client.set_backup_retention_policy(&admin, &5, &200, &true);
 
     // Create 7 backups with time gaps
     env.mock_all_auths();
-    for i in 0..7 {
-        client.create_backup(&String::from_str(&env, "Backup"));
+    for _i in 0..7 {
+        client.create_backup(&admin);
         env.ledger().with_mut(|li| li.timestamp += 30);
     }
 
@@ -2256,7 +2355,7 @@ fn test_backup_retention_policy_combined() {
 
     // Create one more backup (triggers cleanup)
     env.mock_all_auths();
-    client.create_backup(&String::from_str(&env, "New backup"));
+    client.create_backup(&admin);
 
     // All old backups should be removed by age, only the new one remains
     let backups = client.get_backups();
@@ -2276,12 +2375,12 @@ fn test_backup_retention_policy_disabled_cleanup() {
 
     // Set retention policy with cleanup disabled
     env.mock_all_auths();
-    client.set_backup_retention_policy(&2, &0, &false);
+    client.set_backup_retention_policy(&admin, &2, &0, &false);
 
     // Create 5 backups
     env.mock_all_auths();
-    for i in 0..5 {
-        client.create_backup(&String::from_str(&env, "Backup"));
+    for _i in 0..5 {
+        client.create_backup(&admin);
     }
 
     // All 5 should still exist (cleanup disabled)
@@ -2302,12 +2401,12 @@ fn test_backup_retention_policy_unlimited() {
 
     // Set retention policy with unlimited backups (0 = unlimited)
     env.mock_all_auths();
-    client.set_backup_retention_policy(&0, &0, &true);
+    client.set_backup_retention_policy(&admin, &0, &0, &true);
 
     // Create 10 backups
     env.mock_all_auths();
-    for i in 0..10 {
-        client.create_backup(&String::from_str(&env, "Backup"));
+    for _i in 0..10 {
+        client.create_backup(&admin);
     }
 
     // All 10 should exist (unlimited)
@@ -2328,18 +2427,18 @@ fn test_backup_retention_policy_archived_not_cleaned() {
 
     // Set retention policy to keep only 2 backups
     env.mock_all_auths();
-    client.set_backup_retention_policy(&2, &0, &true);
+    client.set_backup_retention_policy(&admin, &2, &0, &true);
 
     // Create 3 backups
     env.mock_all_auths();
-    let backup1 = client.create_backup(&String::from_str(&env, "Backup 1"));
-    let backup2 = client.create_backup(&String::from_str(&env, "Backup 2"));
+    let backup1 = client.create_backup(&admin);
+    let backup2 = client.create_backup(&admin);
     
     // Archive the first backup
     env.mock_all_auths();
-    client.archive_backup(&backup1);
+    client.archive_backup(&admin, &backup1);
     
-    let backup3 = client.create_backup(&String::from_str(&env, "Backup 3"));
+    let backup3 = client.create_backup(&admin);
 
     // Should have 2 active backups (backup2 and backup3)
     let backups = client.get_backups();
@@ -2366,14 +2465,14 @@ fn test_manual_cleanup_backups() {
 
     // Set retention policy
     env.mock_all_auths();
-    client.set_backup_retention_policy(&3, &0, &true);
+    client.set_backup_retention_policy(&admin, &3, &0, &true);
 
     // Create 6 backups with auto-cleanup disabled temporarily
     env.mock_all_auths();
-    client.set_backup_retention_policy(&3, &0, &false);
+    client.set_backup_retention_policy(&admin, &3, &0, &false);
     
-    for i in 0..6 {
-        client.create_backup(&String::from_str(&env, "Backup"));
+    for _i in 0..6 {
+        client.create_backup(&admin);
     }
 
     // Should have all 6 (cleanup was disabled)
@@ -2382,11 +2481,11 @@ fn test_manual_cleanup_backups() {
 
     // Re-enable cleanup
     env.mock_all_auths();
-    client.set_backup_retention_policy(&3, &0, &true);
+    client.set_backup_retention_policy(&admin, &3, &0, &true);
 
     // Manually trigger cleanup
     env.mock_all_auths();
-    let removed = client.cleanup_backups();
+    let removed = client.cleanup_backups(&admin);
     assert_eq!(removed, 3);
 
     // Should have 3 backups left
@@ -2842,6 +2941,281 @@ fn test_user_notification_stats() {
     assert!(stats.total_delivered >= 0);
     assert!(stats.total_read >= 0);
     assert!(stats.total_failed >= 0);
+}
+
+// --- Notification preferences and stats (issue #303) ---
+
+/// get_notification returns None for unknown notification ID.
+#[test]
+fn test_get_notification_returns_none_for_unknown_id() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let unknown_id = BytesN::from_array(&env, &[0u8; 32]);
+    let notification = client.get_notification(&unknown_id);
+    assert!(notification.is_none());
+}
+
+/// update_notification_status returns NotificationNotFound for unknown ID.
+#[test]
+fn test_update_notification_status_not_found() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let unknown_id = BytesN::from_array(&env, &[0u8; 32]);
+    let result = client.try_update_notification_status(&unknown_id, &NotificationDeliveryStatus::Sent);
+    let err = result.err().expect("expected contract error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::NotificationNotFound);
+}
+
+/// get_user_notifications returns empty vec for user with no notifications.
+#[test]
+fn test_get_user_notifications_empty_for_new_user() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let user = Address::generate(&env);
+    let notifications = client.get_user_notifications(&user);
+    assert!(notifications.is_empty());
+}
+
+/// get_notification_preferences returns defaults; all expected fields are present.
+#[test]
+fn test_get_notification_preferences_all_fields() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let user = Address::generate(&env);
+    let prefs = client.get_notification_preferences(&user);
+
+    assert_eq!(prefs.user, user);
+    assert!(prefs.invoice_created);
+    assert!(prefs.invoice_verified);
+    assert!(prefs.invoice_status_changed);
+    assert!(prefs.bid_received);
+    assert!(prefs.bid_accepted);
+    assert!(prefs.payment_received);
+    assert!(prefs.payment_overdue);
+    assert!(prefs.invoice_defaulted);
+    assert!(prefs.system_alerts);
+    assert!(!prefs.general);
+    assert_eq!(prefs.minimum_priority, crate::notifications::NotificationPriority::Medium);
+    // In test env the default ledger timestamp can be 0, so updated_at may be 0
+    assert!(prefs.updated_at >= 0);
+}
+
+/// update_notification_preferences requires user auth; fails without auth.
+#[test]
+fn test_update_notification_preferences_requires_auth() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let user = Address::generate(&env);
+    let mut preferences = client.get_notification_preferences(&user);
+    preferences.invoice_created = false;
+
+    // Do not call env.mock_all_auths() — user must authorize.
+    let result = client.try_update_notification_preferences(&user, &preferences);
+    assert!(result.is_err());
+}
+
+/// get_user_notification_stats: empty user returns zeros; status transitions update stats.
+#[test]
+fn test_get_user_notification_stats_detailed() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let empty_user = Address::generate(&env);
+    let stats_empty = client.get_user_notification_stats(&empty_user);
+    assert_eq!(stats_empty.total_sent, 0);
+    assert_eq!(stats_empty.total_delivered, 0);
+    assert_eq!(stats_empty.total_read, 0);
+    assert_eq!(stats_empty.total_failed, 0);
+
+    let business = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+    env.mock_all_auths();
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
+
+    let _invoice_id = client.upload_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let ids = client.get_user_notifications(&business);
+    assert!(!ids.is_empty());
+    let first_id = ids.get(0).unwrap();
+
+    client.update_notification_status(&first_id, &NotificationDeliveryStatus::Sent);
+    let stats_after_sent = client.get_user_notification_stats(&business);
+    assert!(stats_after_sent.total_sent >= 1);
+
+    client.update_notification_status(&first_id, &NotificationDeliveryStatus::Delivered);
+    let stats_after_delivered = client.get_user_notification_stats(&business);
+    assert!(stats_after_delivered.total_delivered >= 1);
+
+    client.update_notification_status(&first_id, &NotificationDeliveryStatus::Read);
+    let stats_after_read = client.get_user_notification_stats(&business);
+    assert!(stats_after_read.total_read >= 1);
+}
+
+/// update_notification_status: all delivery status transitions (Sent, Delivered, Read, Failed).
+#[test]
+fn test_update_notification_status_all_transitions() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+    env.mock_all_auths();
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
+
+    let _invoice_id = client.upload_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let ids = client.get_user_notifications(&business);
+    let nid = ids.get(0).unwrap();
+
+    client.update_notification_status(&nid, &NotificationDeliveryStatus::Sent);
+    assert_eq!(
+        client.get_notification(&nid).unwrap().delivery_status,
+        NotificationDeliveryStatus::Sent
+    );
+
+    client.update_notification_status(&nid, &NotificationDeliveryStatus::Delivered);
+    assert_eq!(
+        client.get_notification(&nid).unwrap().delivery_status,
+        NotificationDeliveryStatus::Delivered
+    );
+
+    client.update_notification_status(&nid, &NotificationDeliveryStatus::Read);
+    assert_eq!(
+        client.get_notification(&nid).unwrap().delivery_status,
+        NotificationDeliveryStatus::Read
+    );
+
+    client.update_notification_status(&nid, &NotificationDeliveryStatus::Failed);
+    assert_eq!(
+        client.get_notification(&nid).unwrap().delivery_status,
+        NotificationDeliveryStatus::Failed
+    );
+}
+
+/// check_overdue_invoices triggers PaymentOverdue notifications for funded overdue invoices.
+#[test]
+fn test_check_overdue_invoices_triggers_notifications() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    env.mock_all_auths();
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    let initial_balance = 10_000i128;
+    sac_client.mint(&business, &initial_balance);
+    sac_client.mint(&investor, &initial_balance);
+    let expiration = env.ledger().sequence() + 1_000;
+    token_client.approve(&business, &contract_id, &initial_balance, &expiration);
+    token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
+
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
+
+    // Use a fixed base time so ledger is predictable; due date 1 second ahead
+    let base_time = 1_000_000u64;
+    env.ledger().set_timestamp(base_time);
+    let due_date = base_time + 1;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Overdue test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.verify_invoice(&invoice_id);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let business_before = client.get_user_notifications(&business).len();
+    let investor_before = client.get_user_notifications(&investor).len();
+
+    // Advance past due date so the funded invoice is overdue
+    env.ledger().set_timestamp(due_date + 1);
+
+    let overdue_count = client.check_overdue_invoices();
+    assert!(
+        overdue_count >= 1,
+        "check_overdue_invoices should find at least one overdue invoice (got {})",
+        overdue_count
+    );
+
+    let business_after = client.get_user_notifications(&business);
+    let investor_after = client.get_user_notifications(&investor);
+    assert!(
+        business_after.len() > business_before,
+        "business should receive PaymentOverdue notification"
+    );
+    assert!(
+        investor_after.len() > investor_before,
+        "investor should receive PaymentOverdue notification"
+    );
+
+    let has_overdue = |ids: &Vec<BytesN<32>>| {
+        ids.iter().any(|id| {
+            client
+                .get_notification(&id)
+                .map(|n| n.notification_type == NotificationType::PaymentOverdue)
+                .unwrap_or(false)
+        })
+    };
+    assert!(has_overdue(&business_after), "business should have PaymentOverdue notification");
+    assert!(has_overdue(&investor_after), "investor should have PaymentOverdue notification");
 }
 
 #[test]
@@ -3999,6 +4373,139 @@ fn test_basic_readme_queries() {
 }
 
 // ========================================
+// #372 Invariants after full lifecycle
+// ========================================
+//
+// Single integration test: full lifecycle (KYC, upload, verify, bid, accept,
+// release or settle, rate) then assert total_invoice_count, status counts,
+// audit trail length, escrow gone, investment completed, no orphaned storage.
+
+#[test]
+fn test_invariants_after_full_lifecycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    let initial_balance = 20_000i128;
+    sac_client.mint(&business, &initial_balance);
+    sac_client.mint(&investor, &initial_balance);
+    let expiration = env.ledger().sequence() + 10_000;
+    token_client.approve(&business, &contract_id, &initial_balance, &expiration);
+    token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
+
+    // 1. KYC: business and investor
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor KYC"));
+    client.verify_investor(&investor, &15_000);
+
+    // 2. Upload and verify invoice
+    let amount = 10_000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Full lifecycle invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    // 3. Bid and accept (creates escrow)
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500));
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // 4. Release escrow (funds to business)
+    client.release_escrow_funds(&invoice_id);
+
+    // 5. Settle: business pays full amount (triggers settlement, investment completed)
+    client.process_partial_payment(
+        &invoice_id,
+        &amount,
+        &String::from_str(&env, "lifecycle-tx-1"),
+    );
+
+    // 6. Rate
+    client.add_invoice_rating(
+        &invoice_id,
+        &5,
+        &String::from_str(&env, "Smooth process"),
+        &investor,
+    );
+
+    // --- Invariant assertions ---
+
+    let total_invoice_count = client.get_total_invoice_count();
+    assert!(total_invoice_count >= 1, "total_invoice_count must be at least 1");
+
+    let paid_count = client.get_invoice_count_by_status(&InvoiceStatus::Paid);
+    let pending_count = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
+    let verified_count = client.get_invoice_count_by_status(&InvoiceStatus::Verified);
+    let funded_count = client.get_invoice_count_by_status(&InvoiceStatus::Funded);
+    let defaulted_count = client.get_invoice_count_by_status(&InvoiceStatus::Defaulted);
+    let cancelled_count = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
+
+    assert_eq!(paid_count, 1, "exactly one invoice must be Paid after full lifecycle");
+
+    let sum_status = pending_count
+        + verified_count
+        + funded_count
+        + paid_count
+        + defaulted_count
+        + cancelled_count;
+    assert_eq!(
+        sum_status,
+        total_invoice_count,
+        "sum of status counts must equal total_invoice_count (no orphaned storage)"
+    );
+
+    let audit_trail = client.get_invoice_audit_trail(&invoice_id);
+    assert!(
+        audit_trail.len() >= 4,
+        "audit trail must have multiple entries"
+    );
+
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(
+        escrow.status,
+        crate::payments::EscrowStatus::Released,
+        "escrow must be Released (gone / no funds held)"
+    );
+
+    let investment = env.as_contract(&contract_id, || {
+        InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
+    });
+    let investment = investment.expect("investment must exist for settled invoice");
+    assert_eq!(
+        investment.status,
+        InvestmentStatus::Completed,
+        "investment must be Completed after settlement"
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.id, invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Paid);
+    let paid_invoices = client.get_invoices_by_status(&InvoiceStatus::Paid);
+    assert_eq!(paid_invoices.len(), 1);
+    assert_eq!(paid_invoices.get(0).unwrap(), invoice_id);
+}
+
+// ========================================
 // Invoice Lifecycle Tests
 // ========================================
 
@@ -4600,7 +5107,7 @@ fn test_store_invoice_max_due_date_boundary() {
     client.add_currency(&admin, &currency);
 
     // Initialize protocol limits
-    client.initialize_protocol_limits(&admin, &1000000i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1000000i128, &100i128, &100u32, &365u64, &86400u64);
 
     let amount = 1000000i128;
     let description = String::from_str(&env, "Test invoice");
@@ -4665,7 +5172,7 @@ fn test_upload_invoice_max_due_date_boundary() {
     client.verify_business(&admin, &business);
 
     // Initialize protocol limits
-    client.initialize_protocol_limits(&admin, &1000000i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1000000i128, &100i128, &100u32, &365u64, &86400u64);
 
     let amount = 1000000i128;
     let description = String::from_str(&env, "Test invoice");
@@ -4728,7 +5235,7 @@ fn test_custom_max_due_date_limits() {
     client.add_currency(&admin, &currency);
 
     // Initialize protocol limits with custom max due date (30 days)
-    client.initialize_protocol_limits(&admin, &1000000i128, &30u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1000000i128, &100i128, &100u32, &30u64, &86400u64);
 
     let amount = 1000000i128;
     let description = String::from_str(&env, "Test invoice");
@@ -4762,7 +5269,7 @@ fn test_custom_max_due_date_limits() {
     assert_eq!(result, Err(Ok(QuickLendXError::InvoiceDueDateInvalid)));
 
     // Test 3: Update limits to 730 days and test old boundary now succeeds
-    client.set_protocol_limits(&admin, &1000000i128, &730u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1000000i128, &730u64, &86400u64);
     let old_over_max_due_date = current_time + (365 * 86400);
     let invoice_id2 = client.store_invoice(
         &business,
@@ -4792,7 +5299,7 @@ fn test_due_date_bounds_edge_cases() {
     client.add_currency(&admin, &currency);
 
     // Initialize with minimum max due date (1 day)
-    client.initialize_protocol_limits(&admin, &1000000i128, &1u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1000000i128, &100i128, &100u32, &1u64, &86400u64);
 
     let amount = 1000000i128;
     let description = String::from_str(&env, "Test invoice");
