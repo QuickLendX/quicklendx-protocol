@@ -52,6 +52,8 @@ mod test_init;
 mod test_storage;
 #[cfg(test)]
 mod test_vesting;
+#[cfg(test)]
+mod test_invoice;
 mod verification;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
@@ -733,6 +735,9 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         new_status: InvoiceStatus,
     ) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -741,16 +746,16 @@ impl QuickLendXContract {
 
         // Update status
         match new_status {
-            InvoiceStatus::Verified => invoice.verify(&env, invoice.business.clone()),
+            InvoiceStatus::Verified => invoice.verify(&env, admin.clone()),
             InvoiceStatus::Paid => {
-                invoice.mark_as_paid(&env, invoice.business.clone(), env.ledger().timestamp())
+                invoice.mark_as_paid(&env, admin.clone(), env.ledger().timestamp())
             }
             InvoiceStatus::Defaulted => invoice.mark_as_defaulted(),
             InvoiceStatus::Funded => {
                 // For testing purposes - normally funding happens via accept_bid
                 invoice.mark_as_funded(
                     &env,
-                    invoice.business.clone(),
+                    admin.clone(),
                     invoice.amount,
                     env.ledger().timestamp(),
                 );
