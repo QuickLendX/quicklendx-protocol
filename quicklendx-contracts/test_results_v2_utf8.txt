@@ -1,0 +1,7774 @@
+﻿cargo : warning: 
+unused import: `ADM
+IN_INITIALIZED_KEY`
+At line:1 char:1
++ cargo test 
+test_bid_queries > 
+test_results_v2.txt
+ 2>&1
++ ~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
+    + CategoryInfo 
+             : No  
+  tSpecified: (w   
+ arning: unused    
+...NITIALIZED_    
+KEY`:String) [    
+], RemoteExcep    
+tion
+    + FullyQualifi 
+   edErrorId : Na  
+  tiveCommandErr   
+ or
+ 
+  --> 
+src\init.rs:28:34
+   |
+28 | ...e, ADMIN_IN
+ITIALIZED_KEY};
+   |       ^^^^^^^^
+^^^^^^^^^^^^^
+   |
+   = note: `#[warn(
+unused_imports)]` 
+(part of 
+`#[warn(unused)]`) 
+on by default
+
+warning: unused 
+import: `crate::cur
+rency::CurrencyWhit
+elist`
+  --> 
+src\init.rs:29:5
+   |
+29 | use 
+...yWhitelist;
+   |     
+...^^^^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\admin.rs:165:18
+    |
+165 | 
+...().publish(
+    |       ^^^^^^^
+    |
+    = note: `#[warn
+(deprecated)]` on 
+by default
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\admin.rs:173:18
+    |
+173 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> src\emergency
+.rs:65:22
+   |
+65 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\emergenc
+y.rs:107:22
+    |
+107 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\emergenc
+y.rs:142:22
+    |
+142 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+ --> 
+src\events.rs:9:18
+  |
+9 | ...().publish(
+  |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> 
+src\events.rs:23:18
+   |
+23 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> 
+src\events.rs:34:18
+   |
+34 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> 
+src\events.rs:50:18
+   |
+50 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> 
+src\events.rs:63:18
+   |
+63 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> 
+src\events.rs:70:18
+   |
+70 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> 
+src\events.rs:86:18
+   |
+86 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:110:18
+    |
+110 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:124:18
+    |
+124 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:135:18
+    |
+135 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:159:18
+    |
+159 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:179:18
+    |
+179 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:192:18
+    |
+192 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:204:18
+    |
+204 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:212:18
+    |
+212 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:232:18
+    |
+232 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:251:18
+    |
+251 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:263:18
+    |
+263 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:277:18
+    |
+277 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:293:18
+    |
+293 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:307:18
+    |
+307 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:323:18
+    |
+323 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:331:18
+    |
+331 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:339:18
+    |
+339 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:347:18
+    |
+347 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:360:18
+    |
+360 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:373:18
+    |
+373 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:382:18
+    |
+382 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:391:10
+    |
+391 | ...  
+.publish((s...
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:402:18
+    |
+402 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:420:18
+    |
+420 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:433:18
+    |
+433 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:446:18
+    |
+446 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:459:18
+    |
+459 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:476:18
+    |
+476 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:488:18
+    |
+488 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:509:18
+    |
+509 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:528:18
+    |
+528 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:547:18
+    |
+547 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:567:18
+    |
+567 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:588:18
+    |
+588 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:610:18
+    |
+610 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:630:18
+    |
+630 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:648:18
+    |
+648 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:666:18
+    |
+666 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:679:18
+    |
+679 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:696:18
+    |
+696 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:709:18
+    |
+709 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:726:18
+    |
+726 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:756:18
+    |
+756 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\fees.rs:220:22
+    |
+220 | 
+...().publish((s...
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\init.rs:458:18
+    |
+458 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\init.rs:480:18
+    |
+480 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\init.rs:494:18
+    |
+494 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\init.rs:502:18
+    |
+502 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\notifica
+tions.rs:264:22
+    |
+264 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\notifica
+tions.rs:311:22
+    |
+311 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\notifica
+tions.rs:348:14
+    |
+348 | ...  
+.publish((s...
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\settleme
+nt.rs:510:18
+    |
+510 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\settleme
+nt.rs:528:18
+    |
+528 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\verifica
+tion.rs:680:18
+    |
+680 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\verifica
+tion.rs:687:18
+    |
+687 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\verifica
+tion.rs:694:18
+    |
+694 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\lib.rs:338:22
+    |
+338 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\lib.rs:615:22
+    |
+615 | 
+...().publish(
+    |       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+    --> 
+src\lib.rs:1145:14
+     |
+1145 | ...  
+.publish((s...
+     |       
+^^^^^^^
+
+warning: unused 
+variable: `admin`
+   --> 
+src\fees.rs:204:9
+    |
+204 | ...   admin: 
+&...
+    |       ^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+    |
+    = note: `#[warn
+(unused_variables)]
+` (part of 
+`#[warn(unused)]`) 
+on by default
+
+warning: constant `
+MAX_PLATFORM_FEE_BP
+S` is never used
+  --> 
+src\fees.rs:10:7
+   |
+10 | const MAX_PLAT
+FORM_FEE_BPS: u...
+   |       ^^^^^^^^
+^^^^^^^^^^^^
+   |
+   = note: `#[warn(
+dead_code)]` (part 
+of 
+`#[warn(unused)]`) 
+on by default
+
+warning: constant 
+`TREASURY_KEY` is 
+never used
+  --> 
+src\init.rs:40:7
+   |
+40 | const 
+TREASURY_KEY: S...
+   |       
+^^^^^^^^^^^^
+
+warning: constant 
+`FEE_BPS_KEY` is 
+never used
+  --> 
+src\init.rs:43:7
+   |
+43 | const 
+FEE_BPS_KEY: S...
+   |       
+^^^^^^^^^^^
+
+warning: constant 
+`WHITELIST_KEY` is 
+never used
+  --> 
+src\init.rs:46:7
+   |
+46 | const 
+WHITELIST_KEY: S...
+   |       
+^^^^^^^^^^^^^
+
+warning: constant `
+DEFAULT_MIN_INVOICE
+_AMOUNT` is never 
+used
+  --> 
+src\init.rs:49:7
+   |
+49 | const DEFAULT_
+MIN_INVOICE_AMOUNT:
+ i...
+   |       ^^^^^^^^
+^^^^^^^^^^^^^^^^^^
+
+warning: constant `
+DEFAULT_MAX_DUE_DAT
+E_DAYS` is never 
+used
+  --> 
+src\init.rs:50:7
+   |
+50 | const DEFAULT_
+MAX_DUE_DATE_DAYS: 
+u...
+   |       ^^^^^^^^
+^^^^^^^^^^^^^^^^^
+
+warning: constant `
+DEFAULT_GRACE_PERIO
+D_SECONDS` is 
+never used
+  --> 
+src\init.rs:51:7
+   |
+51 | const DEFAULT_
+GRACE_PERIOD_SECOND
+S: u...
+   |       ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^
+
+warning: constant 
+`DEFAULT_FEE_BPS` 
+is never used
+  --> 
+src\init.rs:52:7
+   |
+52 | const 
+DEFAULT_FEE_BPS: 
+u...
+   |       
+^^^^^^^^^^^^^^^
+
+warning: multiple 
+associated 
+functions are 
+never used
+   --> 
+src\init.rs:245:12
+    |
+101 | impl Protocol
+Initializer {
+    | -------------
+----------- 
+associated 
+functions in this 
+implementation
+...
+245 |     pub fn se
+t_protocol_config(
+    |            
+^^^^^^^^^^^^^^^^^^^
+...
+307 |     pub fn 
+set_fee_config(
+    |            
+^^^^^^^^^^^^^^
+...
+344 |     pub fn 
+set_treasury(
+    |            
+^^^^^^^^^^^^
+...
+385 |     pub fn 
+get_fee_bps(env: 
+&Env) -> u...
+    |            
+^^^^^^^^^^^
+...
+400 |     pub fn 
+get_treasury(env: 
+&Env) -> ...
+    |            
+^^^^^^^^^^^^
+...
+411 |     pub fn ge
+t_min_invoice_amoun
+t(env:...
+    |            ^^
+^^^^^^^^^^^^^^^^^^^
+^
+...
+424 |     pub fn ge
+t_max_due_date_days
+(env: ...
+    |            ^^
+^^^^^^^^^^^^^^^^^^^
+...
+437 |     pub fn ge
+t_grace_period_seco
+nds(en...
+    |            ^^
+^^^^^^^^^^^^^^^^^^^
+^^^
+
+warning: function `
+emit_protocol_confi
+g_updated` is 
+never used
+   --> 
+src\init.rs:473:4
+    |
+473 | 
+fn...fig_updated(
+    |   
+...^^^^^^^^^^^
+
+warning: function `
+emit_fee_config_upd
+ated` is never used
+   --> 
+src\init.rs:493:4
+    |
+493 | fn emit_fee_c
+onfig_updated(en...
+    |    ^^^^^^^^^^
+^^^^^^^^^^^^^
+
+warning: function `
+emit_treasury_updat
+ed` is never used
+   --> 
+src\init.rs:501:4
+    |
+501 | fn emit_treas
+ury_updated(en...
+    |    ^^^^^^^^^^
+^^^^^^^^^^^
+
+warning: constant 
+`MAX_TAG_LENGTH` 
+is never used
+  --> src\protocol_
+limits.rs:35:11
+   |
+35 | ...st 
+MAX_TAG_LENGTH: 
+u...
+   |       
+^^^^^^^^^^^^^^
+
+warning: function `
+get_payment_count` 
+is never used
+   --> src\settleme
+nt.rs:293:8
+    |
+293 | ...fn get_pay
+ment_count(en...
+    |       
+^^^^^^^^^^^^^^^^^
+
+warning: function `
+get_payment_records
+` is never used
+   --> src\settleme
+nt.rs:312:8
+    |
+312 | ...fn get_pay
+ment_records(
+    |       
+^^^^^^^^^^^^^^^^^^^
+
+warning: `quicklend
+x-contracts` (lib) 
+generated 89 
+warnings (run 
+`cargo fix --lib 
+-p quicklendx-contr
+acts` to apply 3 
+suggestions)
+   Compiling quickl
+endx-contracts 
+v0.1.0 (C:\Users\AD
+MIN\Desktop\quickle
+ndx-protocol\quickl
+endx-contracts)
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `EscrowStatus`
+    --> src\test_bi
+d.rs:1464:31
+     |
+1464 |     assert_e
+q!(escrow.status, E
+scrowStatus::Held, 
+"Escrow should be 
+in Held status");
+     |             
+                  
+^^^^^^^^^^^^ use 
+of undeclared type 
+`EscrowStatus`
+     |
+help: consider 
+importing this enum
+     |
+   1 + use crate::p
+ayments::EscrowStat
+us;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1369:
+62
+     |
+1369 |         asse
+rt_eq!(client.get_b
+id(&bid_id1).unwrap
+().status, BidStatu
+s::Accepted, "Bid 
+1 should be 
+Accepted");
+     |             
+                   
+                   
+           
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1370:
+62
+     |
+1370 |         asse
+rt_eq!(client.get_b
+id(&bid_id2).unwrap
+().status, 
+BidStatus::Placed, 
+"Bid 2 should 
+remain Placed");
+     |             
+                   
+                   
+           
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1371:
+62
+     |
+1371 |         asse
+rt_eq!(client.get_b
+id(&bid_id3).unwrap
+().status, BidStatu
+s::Accepted, "Bid 
+3 should be 
+Accepted");
+     |             
+                   
+                   
+           
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1372:
+62
+     |
+1372 |         asse
+rt_eq!(client.get_b
+id(&bid_id4).unwrap
+().status, 
+BidStatus::Placed, 
+"Bid 4 should 
+remain Placed");
+     |             
+                   
+                   
+           
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type 
+`InvoiceStatus`
+    --> src\test_in
+vestor_kyc.rs:1375:
+61
+     |
+1375 |         asse
+rt_eq!(client.get_i
+nvoice(&invoice_id1
+).status, InvoiceSt
+atus::Funded, 
+"Invoice 1 should 
+be Funded");
+     |             
+                   
+                   
+          
+^^^^^^^^^^^^^ use 
+of undeclared type 
+`InvoiceStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use crat
+e::InvoiceStatus;
+     |
+  12 +     use crat
+e::dispute::Invoice
+Status;
+     |
+  12 +     use crat
+e::types::InvoiceSt
+atus;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type 
+`InvoiceStatus`
+    --> src\test_in
+vestor_kyc.rs:1376:
+61
+     |
+1376 |         asse
+rt_eq!(client.get_i
+nvoice(&invoice_id2
+).status, InvoiceSt
+atus::Verified, 
+"Invoice 2 should 
+remain Verified");
+     |             
+                   
+                   
+          
+^^^^^^^^^^^^^ use 
+of undeclared type 
+`InvoiceStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use crat
+e::InvoiceStatus;
+     |
+  12 +     use crat
+e::dispute::Invoice
+Status;
+     |
+  12 +     use crat
+e::types::InvoiceSt
+atus;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type 
+`InvoiceStatus`
+    --> src\test_in
+vestor_kyc.rs:1377:
+61
+     |
+1377 |         asse
+rt_eq!(client.get_i
+nvoice(&invoice_id3
+).status, InvoiceSt
+atus::Funded, 
+"Invoice 3 should 
+be Funded");
+     |             
+                   
+                   
+          
+^^^^^^^^^^^^^ use 
+of undeclared type 
+`InvoiceStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use crat
+e::InvoiceStatus;
+     |
+  12 +     use crat
+e::dispute::Invoice
+Status;
+     |
+  12 +     use crat
+e::types::InvoiceSt
+atus;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type 
+`InvoiceStatus`
+    --> src\test_in
+vestor_kyc.rs:1378:
+61
+     |
+1378 |         asse
+rt_eq!(client.get_i
+nvoice(&invoice_id4
+).status, InvoiceSt
+atus::Verified, 
+"Invoice 4 should 
+remain Verified");
+     |             
+                   
+                   
+          
+^^^^^^^^^^^^^ use 
+of undeclared type 
+`InvoiceStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use crat
+e::InvoiceStatus;
+     |
+  12 +     use crat
+e::dispute::Invoice
+Status;
+     |
+  12 +     use crat
+e::types::InvoiceSt
+atus;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1429:
+33
+     |
+1429 |         asse
+rt_eq!(bid1.status,
+ BidStatus::Accepte
+d, "Bid 1 should 
+be Accepted");
+     |             
+                   
+ ^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1430:
+33
+     |
+1430 |         asse
+rt_eq!(bid2.status,
+ 
+BidStatus::Placed, 
+"Bid 2 should be 
+Placed");
+     |             
+                   
+ ^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1431:
+33
+     |
+1431 |         asse
+rt_eq!(bid3.status,
+ BidStatus::Withdra
+wn, "Bid 3 should 
+be Withdrawn");
+     |             
+                   
+ ^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1471:
+62
+     |
+1471 |         asse
+rt_eq!(client.get_b
+id(&bid_id1).unwrap
+().status, BidStatu
+s::Accepted);
+     |             
+                   
+                   
+           
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1472:
+62
+     |
+1472 |         asse
+rt_eq!(client.get_b
+id(&bid_id2).unwrap
+().status, BidStatu
+s::Withdrawn);
+     |             
+                   
+                   
+           
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1473:
+62
+     |
+1473 |         asse
+rt_eq!(client.get_b
+id(&bid_id3).unwrap
+().status, BidStatu
+s::Withdrawn);
+     |             
+                   
+                   
+           
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1551:
+36
+     |
+1551 |             
+assert_eq!(bid.stat
+us, 
+BidStatus::Placed, 
+"All bids should 
+be Placed 
+initially");
+     |             
+                   
+    ^^^^^^^^^ use 
+of undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1566:
+62
+     |
+1566 |         asse
+rt_eq!(client.get_b
+id(&bid_id1).unwrap
+().status, BidStatu
+s::Accepted);
+     |             
+                   
+                   
+           
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1567:
+62
+     |
+1567 |         asse
+rt_eq!(client.get_b
+id(&bid_id2).unwrap
+().status, BidStatu
+s::Withdrawn);
+     |             
+                   
+                   
+           
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1568:
+62
+     |
+1568 |         asse
+rt_eq!(client.get_b
+id(&bid_id3).unwrap
+().status, BidStatu
+s::Accepted);
+     |             
+                   
+                   
+           
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1569:
+62
+     |
+1569 |         asse
+rt_eq!(client.get_b
+id(&bid_id4).unwrap
+().status, BidStatu
+s::Withdrawn);
+     |             
+                   
+                   
+           
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1570:
+62
+     |
+1570 |         asse
+rt_eq!(client.get_b
+id(&bid_id5).unwrap
+().status, BidStatu
+s::Accepted);
+     |             
+                   
+                   
+           
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1586:
+85
+     |
+1586 |         asse
+rt_eq!(final_bids.i
+ter().find(|b| 
+b.bid_id == bid_id1
+).unwrap().status, 
+BidStatus::Accepted
+);
+     |             
+                   
+                   
+                   
+               
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1587:
+85
+     |
+1587 |         asse
+rt_eq!(final_bids.i
+ter().find(|b| 
+b.bid_id == bid_id2
+).unwrap().status, 
+BidStatus::Withdraw
+n);
+     |             
+                   
+                   
+                   
+               
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1588:
+85
+     |
+1588 |         asse
+rt_eq!(final_bids.i
+ter().find(|b| 
+b.bid_id == bid_id3
+).unwrap().status, 
+BidStatus::Accepted
+);
+     |             
+                   
+                   
+                   
+               
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1589:
+85
+     |
+1589 |         asse
+rt_eq!(final_bids.i
+ter().find(|b| 
+b.bid_id == bid_id4
+).unwrap().status, 
+BidStatus::Withdraw
+n);
+     |             
+                   
+                   
+                   
+               
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+error[E0433]: 
+failed to resolve: 
+use of undeclared 
+type `BidStatus`
+    --> src\test_in
+vestor_kyc.rs:1590:
+85
+     |
+1590 |         asse
+rt_eq!(final_bids.i
+ter().find(|b| 
+b.bid_id == bid_id5
+).unwrap().status, 
+BidStatus::Accepted
+);
+     |             
+                   
+                   
+                   
+               
+^^^^^^^^^ use of 
+undeclared type 
+`BidStatus`
+     |
+help: consider 
+importing one of 
+these enums
+     |
+  12 +     use 
+crate::BidStatus;
+     |
+  12 +     use crat
+e::types::BidStatus
+;
+     |
+
+warning: unused 
+import: `ADMIN_INIT
+IALIZED_KEY`
+  --> 
+src\init.rs:28:34
+   |
+28 | use crate::adm
+in::{AdminStorage, 
+ADMIN_INITIALIZED_K
+EY};
+   |               
+                   
+^^^^^^^^^^^^^^^^^^^
+^^
+   |
+   = note: `#[warn(
+unused_imports)]` 
+(part of 
+`#[warn(unused)]`) 
+on by default
+
+warning: unused 
+import: `crate::cur
+rency::CurrencyWhit
+elist`
+  --> 
+src\init.rs:29:5
+   |
+29 | use crate::cur
+rency::CurrencyWhit
+elist;
+   |     ^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^^
+
+warning: unused 
+import: `BytesN`
+  --> src\test_stri
+ng_limits.rs:11:14
+   |
+11 |     Address, 
+BytesN, Env, 
+String, Vec,
+   |              
+^^^^^^
+
+warning: unused 
+import: `BytesN as 
+_`
+  --> src\test_disp
+ute.rs:15:31
+   |
+15 |     testutils:
+:{Address as _, 
+BytesN as _},
+   |               
+                
+^^^^^^^^^^^
+
+warning: unused 
+import: `IntoVal`
+ --> src\test_init.
+rs:6:38
+  |
+6 | use soroban_sdk
+::{Address, Env, 
+Vec, IntoVal};
+  |                
+                   
+   ^^^^^^^
+
+warning: unused 
+imports: `PlatformF
+eeConfig` and 
+`PlatformFee`
+  --> src\test_stor
+age.rs:18:22
+   |
+18 | use crate::pro
+fits::{PlatformFee,
+ 
+PlatformFeeConfig};
+   |               
+       ^^^^^^^^^^^ 
+ ^^^^^^^^^^^^^^^^^
+
+warning: unused 
+import: 
+`ConfigStorage`
+  --> src\test_stor
+age.rs:20:17
+   |
+20 |     
+BidStorage, 
+ConfigStorage, 
+Indexes, 
+InvestmentStorage, 
+InvoiceStorage, 
+StorageKeys,
+   |               
+  ^^^^^^^^^^^^^
+
+warning: unused 
+imports: `Analytics
+Storage`, `Financia
+lMetrics`, and 
+`PlatformMetrics`
+  --> src\test\test
+_analytics.rs:14:26
+   |
+14 |     AnalyticsC
+alculator, 
+AnalyticsStorage, 
+FinancialMetrics, 
+PlatformMetrics, 
+TimePeriod,
+   |               
+           
+^^^^^^^^^^^^^^^^  
+^^^^^^^^^^^^^^^^  
+^^^^^^^^^^^^^^^
+
+warning: unused 
+import: 
+`InvoiceStatus`
+ --> src\test\test_
+invoice_categories.
+rs:2:39
+  |
+2 | use crate::invo
+ice::{InvoiceCatego
+ry, InvoiceStatus};
+  |                
+                   
+    ^^^^^^^^^^^^^
+
+warning: unused 
+import: `Ledger`
+ --> src\test\test_
+invoice_metadata.rs
+:5:31
+  |
+5 |     testutils::
+{Address as _, 
+Ledger},
+  |                
+               
+^^^^^^
+
+warning: cannot 
+test inner items
+   --> src\test_bid
+.rs:258:1
+    |
+258 | #[test]
+    | ^^^^^^^
+    |
+    = note: `#[warn
+(unnameable_test_it
+ems)]` on by 
+default
+
+warning: cannot 
+test inner items
+   --> src\test_bid
+.rs:277:1
+    |
+277 | #[test]
+    | ^^^^^^^
+
+warning: cannot 
+test inner items
+   --> src\test_bid
+.rs:299:1
+    |
+299 | #[test]
+    | ^^^^^^^
+
+warning: unused 
+import: `crate::bid
+::BidStatus`
+  --> src\test_bid_
+ranking.rs:10:5
+   |
+10 | use crate::bid
+::BidStatus;
+   |     ^^^^^^^^^^
+^^^^^^^^^^^
+
+warning: unused 
+import: `Ledger`
+  --> src\test_inve
+stor_kyc.rs:17:35
+   |
+17 |         testut
+ils::{Address as 
+_, Ledger},
+   |               
+                   
+ ^^^^^^
+
+warning: unused 
+import: `crate::err
+ors::QuickLendXErro
+r`
+ --> src\test_limit
+.rs:3:5
+  |
+3 | use crate::erro
+rs::QuickLendXError
+;
+  |     ^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\admin.rs:165:18
+    |
+165 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+    |
+    = note: `#[warn
+(deprecated)]` on 
+by default
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\admin.rs:173:18
+    |
+173 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> src\emergency
+.rs:65:22
+   |
+65 |         env.ev
+ents().publish(
+   |               
+       ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\emergenc
+y.rs:107:22
+    |
+107 |         env.e
+vents().publish(
+    |              
+        ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\emergenc
+y.rs:142:22
+    |
+142 |         env.e
+vents().publish(
+    |              
+        ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+ --> 
+src\events.rs:9:18
+  |
+9 |     env.events(
+).publish(
+  |                
+  ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> 
+src\events.rs:23:18
+   |
+23 |     env.events
+().publish(
+   |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> 
+src\events.rs:34:18
+   |
+34 |     env.events
+().publish(
+   |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> 
+src\events.rs:50:18
+   |
+50 |     env.events
+().publish(
+   |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> 
+src\events.rs:63:18
+   |
+63 |     env.events
+().publish(
+   |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> 
+src\events.rs:70:18
+   |
+70 |     env.events
+().publish(
+   |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+  --> 
+src\events.rs:86:18
+   |
+86 |     env.events
+().publish(
+   |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:110:18
+    |
+110 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:124:18
+    |
+124 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:135:18
+    |
+135 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:159:18
+    |
+159 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:179:18
+    |
+179 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:192:18
+    |
+192 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:204:18
+    |
+204 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:212:18
+    |
+212 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:232:18
+    |
+232 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:251:18
+    |
+251 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:263:18
+    |
+263 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:277:18
+    |
+277 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:293:18
+    |
+293 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:307:18
+    |
+307 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:323:18
+    |
+323 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:331:18
+    |
+331 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:339:18
+    |
+339 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:347:18
+    |
+347 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:360:18
+    |
+360 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:373:18
+    |
+373 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:382:18
+    |
+382 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:391:10
+    |
+391 |         .publ
+ish((symbol_short!(
+"aud_qry"),), 
+(query_type, 
+result_count));
+    |          
+^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:402:18
+    |
+402 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:420:18
+    |
+420 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:433:18
+    |
+433 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:446:18
+    |
+446 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:459:18
+    |
+459 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:476:18
+    |
+476 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:488:18
+    |
+488 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:509:18
+    |
+509 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:528:18
+    |
+528 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:547:18
+    |
+547 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:567:18
+    |
+567 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:588:18
+    |
+588 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:610:18
+    |
+610 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:630:18
+    |
+630 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:648:18
+    |
+648 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:666:18
+    |
+666 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:679:18
+    |
+679 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:696:18
+    |
+696 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:709:18
+    |
+709 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:726:18
+    |
+726 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\events.r
+s:756:18
+    |
+756 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\fees.rs:220:22
+    |
+220 |         env.e
+vents().publish((sy
+mbol_short!("fee_up
+d"),), fee_bps);
+    |              
+        ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\init.rs:458:18
+    |
+458 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\init.rs:480:18
+    |
+480 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\init.rs:494:18
+    |
+494 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\init.rs:502:18
+    |
+502 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\notifica
+tions.rs:264:22
+    |
+264 |         env.e
+vents().publish(
+    |              
+        ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\notifica
+tions.rs:311:22
+    |
+311 |         env.e
+vents().publish(
+    |              
+        ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\notifica
+tions.rs:348:14
+    |
+348 |             .
+publish((symbol_sho
+rt!("pref_up"),), 
+(user.clone(),));
+    |              
+^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\settleme
+nt.rs:510:18
+    |
+510 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\settleme
+nt.rs:528:18
+    |
+528 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+error[E0599]: no 
+method named 
+`iter` found for 
+struct 
+`ContractEvents` 
+in the current 
+scope
+   --> src\test_adm
+in.rs:427:36
+    |
+427 |         let 
+has_admin_set = eve
+nts.iter().any(|evt
+| {
+    |              
+                   
+   ^^^^ method not 
+found in 
+`ContractEvents`
+
+error[E0599]: no 
+method named `len` 
+found for struct 
+`ContractEvents` 
+in the current 
+scope
+   --> src\test_can
+cel_refund.rs:132:3
+0
+    |
+132 |     let 
+event_count = 
+events.len();
+    |              
+                
+^^^ method not 
+found in 
+`ContractEvents`
+
+error[E0599]: no 
+method named `len` 
+found for struct 
+`ContractEvents` 
+in the current 
+scope
+   --> src\test_can
+cel_refund.rs:219:2
+0
+    |
+219 |     assert!(e
+vents.len() > 0, 
+"Expected events 
+to be emitted");
+    |              
+      ^^^ method 
+not found in 
+`ContractEvents`
+
+error[E0599]: no 
+method named `len` 
+found for struct 
+`ContractEvents` 
+in the current 
+scope
+   --> src\test_can
+cel_refund.rs:454:2
+0
+    |
+454 |     assert!(e
+vents.len() > 0, 
+"Expected refund 
+events to be 
+emitted");
+    |              
+      ^^^ method 
+not found in 
+`ContractEvents`
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\verifica
+tion.rs:680:18
+    |
+680 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\verifica
+tion.rs:687:18
+    |
+687 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> src\verifica
+tion.rs:694:18
+    |
+694 |     env.event
+s().publish(
+    |              
+    ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\lib.rs:338:22
+    |
+338 |         env.e
+vents().publish(
+    |              
+        ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+   --> 
+src\lib.rs:615:22
+    |
+615 |         env.e
+vents().publish(
+    |              
+        ^^^^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::events
+::Events::publish`:
+ use the 
+#[contractevent] 
+macro on a 
+contract event type
+    --> 
+src\lib.rs:1145:14
+     |
+1145 |             
+.publish((symbol_sh
+ort!("rated"),), 
+(invoice_id, 
+rating, rater));
+     |             
+ ^^^^^^^
+
+error[E0599]: no 
+method named `len` 
+found for struct 
+`ContractEvents` 
+in the current 
+scope
+  --> src\test\test
+_analytics_export_q
+uery.rs:57:20
+   |
+57 |     assert!(ev
+ents.len() > 0, 
+"Expected at least 
+one event");
+   |               
+     ^^^ method 
+not found in 
+`ContractEvents`
+
+warning: use of 
+deprecated method `
+soroban_sdk::Env::r
+egister_stellar_ass
+et_contract`: use [
+Env::register_stell
+ar_asset_contract_v
+2]
+   --> 
+src\test.rs:448:24
+    |
+448 |     let 
+currency = env.regi
+ster_stellar_asset_
+contract(token_admi
+n);
+    |              
+          ^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::Env::r
+egister_stellar_ass
+et_contract`: use [
+Env::register_stell
+ar_asset_contract_v
+2]
+    --> 
+src\test.rs:1034:24
+     |
+1034 |     let 
+currency = env.regi
+ster_stellar_asset_
+contract(token_admi
+n);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::Env::r
+egister_stellar_ass
+et_contract`: use [
+Env::register_stell
+ar_asset_contract_v
+2]
+    --> 
+src\test.rs:1090:24
+     |
+1090 |     let 
+currency = env.regi
+ster_stellar_asset_
+contract(token_admi
+n);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::Env::r
+egister_stellar_ass
+et_contract`: use [
+Env::register_stell
+ar_asset_contract_v
+2]
+    --> 
+src\test.rs:1142:24
+     |
+1142 |     let 
+currency = env.regi
+ster_stellar_asset_
+contract(token_admi
+n);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::Env::r
+egister_stellar_ass
+et_contract`: use [
+Env::register_stell
+ar_asset_contract_v
+2]
+    --> 
+src\test.rs:1199:24
+     |
+1199 |     let 
+currency = env.regi
+ster_stellar_asset_
+contract(token_admi
+n);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^
+
+warning: use of 
+deprecated method `
+soroban_sdk::Env::r
+egister_stellar_ass
+et_contract`: use [
+Env::register_stell
+ar_asset_contract_v
+2]
+    --> 
+src\test.rs:1281:24
+     |
+1281 |     let 
+currency = env.regi
+ster_stellar_asset_
+contract(token_admi
+n);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> 
+src\test.rs:2252:12
+     |
+2252 |     client.s
+et_backup_retention
+_policy(&3, &0, 
+&true);
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^ -- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2666:12
+     |
+2666 |     pub fn s
+et_backup_retention
+_policy(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^
+2667 |         
+env: Env,
+2668 |         
+admin: Address,
+     |         
+--------------
+help: provide the 
+argument
+     |
+2252 -     client.s
+et_backup_retention
+_policy(&3, &0, 
+&true);
+2252 +     client.s
+et_backup_retention
+_policy(/* &soroban
+_sdk::Address */, 
+&0, &3, &true);
+     |
+
+error[E0308]: 
+mismatched types
+    --> 
+src\test.rs:2264:30
+     |
+2264 |         clie
+nt.create_backup(&d
+esc);
+     |             
+   ------------- 
+^^^^^ expected 
+`&Address`, found 
+`&String`
+     |             
+   |
+     |             
+   arguments to 
+this method are 
+incorrect
+     |
+     = note: 
+expected reference 
+`&soroban_sdk::Addr
+ess`
+                
+found reference `&s
+oroban_sdk::String`
+note: method 
+defined here
+    --> 
+src\lib.rs:2559:12
+     |
+2559 |     pub fn 
+create_backup(env: 
+Env, admin: 
+Address) -> 
+Result<BytesN<32>, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^      
+     --------------
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> 
+src\test.rs:2288:12
+     |
+2288 |     client.s
+et_backup_retention
+_policy(&0, &100, 
+&false);
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^ -- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2666:12
+     |
+2666 |     pub fn s
+et_backup_retention
+_policy(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^
+2667 |         
+env: Env,
+2668 |         
+admin: Address,
+     |         
+--------------
+help: provide the 
+argument
+     |
+2288 -     client.s
+et_backup_retention
+_policy(&0, &100, 
+&false);
+2288 +     client.s
+et_backup_retention
+_policy(/* &soroban
+_sdk::Address */, 
+&100, &0, &false);
+     |
+
+error[E0308]: 
+mismatched types
+    --> 
+src\test.rs:2292:40
+     |
+2292 |     let 
+backup1 = client.cr
+eate_backup(&String
+::from_str(&env, 
+"Old backup 1"));
+     |             
+             
+------------- ^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^ 
+expected 
+`&Address`, found 
+`&String`
+     |             
+             |
+     |             
+             
+arguments to this 
+method are 
+incorrect
+     |
+     = note: 
+expected reference 
+`&soroban_sdk::Addr
+ess`
+                
+found reference `&s
+oroban_sdk::String`
+note: method 
+defined here
+    --> 
+src\lib.rs:2559:12
+     |
+2559 |     pub fn 
+create_backup(env: 
+Env, admin: 
+Address) -> 
+Result<BytesN<32>, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^      
+     --------------
+
+error[E0308]: 
+mismatched types
+    --> 
+src\test.rs:2295:40
+     |
+2295 |     let 
+backup2 = client.cr
+eate_backup(&String
+::from_str(&env, 
+"Old backup 2"));
+     |             
+             
+------------- ^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^ 
+expected 
+`&Address`, found 
+`&String`
+     |             
+             |
+     |             
+             
+arguments to this 
+method are 
+incorrect
+     |
+     = note: 
+expected reference 
+`&soroban_sdk::Addr
+ess`
+                
+found reference `&s
+oroban_sdk::String`
+note: method 
+defined here
+    --> 
+src\lib.rs:2559:12
+     |
+2559 |     pub fn 
+create_backup(env: 
+Env, admin: 
+Address) -> 
+Result<BytesN<32>, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^      
+     --------------
+
+error[E0308]: 
+mismatched types
+    --> 
+src\test.rs:2298:40
+     |
+2298 |     let 
+backup3 = client.cr
+eate_backup(&String
+::from_str(&env, 
+"Recent backup"));
+     |             
+             
+------------- ^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^ 
+expected 
+`&Address`, found 
+`&String`
+     |             
+             |
+     |             
+             
+arguments to this 
+method are 
+incorrect
+     |
+     = note: 
+expected reference 
+`&soroban_sdk::Addr
+ess`
+                
+found reference `&s
+oroban_sdk::String`
+note: method 
+defined here
+    --> 
+src\lib.rs:2559:12
+     |
+2559 |     pub fn 
+create_backup(env: 
+Env, admin: 
+Address) -> 
+Result<BytesN<32>, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^      
+     --------------
+
+error[E0061]: this 
+method takes 1 
+argument but 0 
+arguments were 
+supplied
+    --> 
+src\test.rs:2309:26
+     |
+2309 |     let 
+removed = client.cl
+eanup_backups();
+     |             
+             
+^^^^^^^^^^^^^^^-- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2697:12
+     |
+2697 |     pub fn c
+leanup_backups(env:
+ Env, admin: 
+Address) -> 
+Result<u32, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^^^    
+       
+--------------
+help: provide the 
+argument
+     |
+2309 |     let 
+removed = client.cl
+eanup_backups(/* &s
+oroban_sdk::Address
+ */);
+     |             
+                   
+          +++++++++
+++++++++++++++++++
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> 
+src\test.rs:2314:12
+     |
+2314 |     client.s
+et_backup_retention
+_policy(&0, &100, 
+&true);
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^ -- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2666:12
+     |
+2666 |     pub fn s
+et_backup_retention
+_policy(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^
+2667 |         
+env: Env,
+2668 |         
+admin: Address,
+     |         
+--------------
+help: provide the 
+argument
+     |
+2314 -     client.s
+et_backup_retention
+_policy(&0, &100, 
+&true);
+2314 +     client.s
+et_backup_retention
+_policy(/* &soroban
+_sdk::Address */, 
+&100, &0, &true);
+     |
+
+error[E0061]: this 
+method takes 1 
+argument but 0 
+arguments were 
+supplied
+    --> 
+src\test.rs:2318:26
+     |
+2318 |     let 
+removed = client.cl
+eanup_backups();
+     |             
+             
+^^^^^^^^^^^^^^^-- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2697:12
+     |
+2697 |     pub fn c
+leanup_backups(env:
+ Env, admin: 
+Address) -> 
+Result<u32, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^^^    
+       
+--------------
+help: provide the 
+argument
+     |
+2318 |     let 
+removed = client.cl
+eanup_backups(/* &s
+oroban_sdk::Address
+ */);
+     |             
+                   
+          +++++++++
+++++++++++++++++++
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> 
+src\test.rs:2342:12
+     |
+2342 |     client.s
+et_backup_retention
+_policy(&5, &200, 
+&true);
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^ -- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2666:12
+     |
+2666 |     pub fn s
+et_backup_retention
+_policy(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^
+2667 |         
+env: Env,
+2668 |         
+admin: Address,
+     |         
+--------------
+help: provide the 
+argument
+     |
+2342 -     client.s
+et_backup_retention
+_policy(&5, &200, 
+&true);
+2342 +     client.s
+et_backup_retention
+_policy(/* &soroban
+_sdk::Address */, 
+&200, &5, &true);
+     |
+
+error[E0308]: 
+mismatched types
+    --> 
+src\test.rs:2347:30
+     |
+2347 |         clie
+nt.create_backup(&S
+tring::from_str(&en
+v, "Backup"));
+     |             
+   ------------- ^^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^ 
+expected 
+`&Address`, found 
+`&String`
+     |             
+   |
+     |             
+   arguments to 
+this method are 
+incorrect
+     |
+     = note: 
+expected reference 
+`&soroban_sdk::Addr
+ess`
+                
+found reference `&s
+oroban_sdk::String`
+note: method 
+defined here
+    --> 
+src\lib.rs:2559:12
+     |
+2559 |     pub fn 
+create_backup(env: 
+Env, admin: 
+Address) -> 
+Result<BytesN<32>, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^      
+     --------------
+
+error[E0308]: 
+mismatched types
+    --> 
+src\test.rs:2360:26
+     |
+2360 |     client.c
+reate_backup(&Strin
+g::from_str(&env, 
+"New backup"));
+     |            
+------------- ^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^ 
+expected 
+`&Address`, found 
+`&String`
+     |            |
+     |            
+arguments to this 
+method are 
+incorrect
+     |
+     = note: 
+expected reference 
+`&soroban_sdk::Addr
+ess`
+                
+found reference `&s
+oroban_sdk::String`
+note: method 
+defined here
+    --> 
+src\lib.rs:2559:12
+     |
+2559 |     pub fn 
+create_backup(env: 
+Env, admin: 
+Address) -> 
+Result<BytesN<32>, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^      
+     --------------
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> 
+src\test.rs:2380:12
+     |
+2380 |     client.s
+et_backup_retention
+_policy(&2, &0, 
+&false);
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^ -- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2666:12
+     |
+2666 |     pub fn s
+et_backup_retention
+_policy(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^
+2667 |         
+env: Env,
+2668 |         
+admin: Address,
+     |         
+--------------
+help: provide the 
+argument
+     |
+2380 -     client.s
+et_backup_retention
+_policy(&2, &0, 
+&false);
+2380 +     client.s
+et_backup_retention
+_policy(/* &soroban
+_sdk::Address */, 
+&0, &2, &false);
+     |
+
+error[E0308]: 
+mismatched types
+    --> 
+src\test.rs:2385:30
+     |
+2385 |         clie
+nt.create_backup(&S
+tring::from_str(&en
+v, "Backup"));
+     |             
+   ------------- ^^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^ 
+expected 
+`&Address`, found 
+`&String`
+     |             
+   |
+     |             
+   arguments to 
+this method are 
+incorrect
+     |
+     = note: 
+expected reference 
+`&soroban_sdk::Addr
+ess`
+                
+found reference `&s
+oroban_sdk::String`
+note: method 
+defined here
+    --> 
+src\lib.rs:2559:12
+     |
+2559 |     pub fn 
+create_backup(env: 
+Env, admin: 
+Address) -> 
+Result<BytesN<32>, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^      
+     --------------
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> 
+src\test.rs:2406:12
+     |
+2406 |     client.s
+et_backup_retention
+_policy(&0, &0, 
+&true);
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^ -- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2666:12
+     |
+2666 |     pub fn s
+et_backup_retention
+_policy(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^
+2667 |         
+env: Env,
+2668 |         
+admin: Address,
+     |         
+--------------
+help: provide the 
+argument
+     |
+2406 |     client.s
+et_backup_retention
+_policy(/* &soroban
+_sdk::Address */, 
+&0, &0, &true);
+     |             
+                   
+        +++++++++++
++++++++++++++++++
+
+error[E0308]: 
+mismatched types
+    --> 
+src\test.rs:2411:30
+     |
+2411 |         clie
+nt.create_backup(&S
+tring::from_str(&en
+v, "Backup"));
+     |             
+   ------------- ^^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^ 
+expected 
+`&Address`, found 
+`&String`
+     |             
+   |
+     |             
+   arguments to 
+this method are 
+incorrect
+     |
+     = note: 
+expected reference 
+`&soroban_sdk::Addr
+ess`
+                
+found reference `&s
+oroban_sdk::String`
+note: method 
+defined here
+    --> 
+src\lib.rs:2559:12
+     |
+2559 |     pub fn 
+create_backup(env: 
+Env, admin: 
+Address) -> 
+Result<BytesN<32>, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^      
+     --------------
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> 
+src\test.rs:2432:12
+     |
+2432 |     client.s
+et_backup_retention
+_policy(&2, &0, 
+&true);
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^ -- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2666:12
+     |
+2666 |     pub fn s
+et_backup_retention
+_policy(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^
+2667 |         
+env: Env,
+2668 |         
+admin: Address,
+     |         
+--------------
+help: provide the 
+argument
+     |
+2432 -     client.s
+et_backup_retention
+_policy(&2, &0, 
+&true);
+2432 +     client.s
+et_backup_retention
+_policy(/* &soroban
+_sdk::Address */, 
+&0, &2, &true);
+     |
+
+error[E0308]: 
+mismatched types
+    --> 
+src\test.rs:2436:40
+     |
+2436 |     let 
+backup1 = client.cr
+eate_backup(&String
+::from_str(&env, 
+"Backup 1"));
+     |             
+             
+------------- ^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^ 
+expected 
+`&Address`, found 
+`&String`
+     |             
+             |
+     |             
+             
+arguments to this 
+method are 
+incorrect
+     |
+     = note: 
+expected reference 
+`&soroban_sdk::Addr
+ess`
+                
+found reference `&s
+oroban_sdk::String`
+note: method 
+defined here
+    --> 
+src\lib.rs:2559:12
+     |
+2559 |     pub fn 
+create_backup(env: 
+Env, admin: 
+Address) -> 
+Result<BytesN<32>, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^      
+     --------------
+
+error[E0308]: 
+mismatched types
+    --> 
+src\test.rs:2437:40
+     |
+2437 |     let 
+backup2 = client.cr
+eate_backup(&String
+::from_str(&env, 
+"Backup 2"));
+     |             
+             
+------------- ^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^ 
+expected 
+`&Address`, found 
+`&String`
+     |             
+             |
+     |             
+             
+arguments to this 
+method are 
+incorrect
+     |
+     = note: 
+expected reference 
+`&soroban_sdk::Addr
+ess`
+                
+found reference `&s
+oroban_sdk::String`
+note: method 
+defined here
+    --> 
+src\lib.rs:2559:12
+     |
+2559 |     pub fn 
+create_backup(env: 
+Env, admin: 
+Address) -> 
+Result<BytesN<32>, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^      
+     --------------
+
+error[E0061]: this 
+method takes 2 
+arguments but 1 
+argument was 
+supplied
+    --> 
+src\test.rs:2441:12
+     |
+2441 |     client.a
+rchive_backup(&back
+up1);
+     |            
+^^^^^^^^^^^^^^ 
+-------- argument 
+#1 of type `&soroba
+n_sdk::Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2644:12
+     |
+2644 |     pub fn 
+archive_backup(
+     |            
+^^^^^^^^^^^^^^
+2645 |         
+env: Env,
+2646 |         
+admin: Address,
+     |         
+--------------
+help: provide the 
+argument
+     |
+2441 |     client.a
+rchive_backup(/* &s
+oroban_sdk::Address
+ */, &backup1);
+     |             
+              +++++
++++++++++++++++++++
+++++
+
+error[E0308]: 
+mismatched types
+    --> 
+src\test.rs:2443:40
+     |
+2443 |     let 
+backup3 = client.cr
+eate_backup(&String
+::from_str(&env, 
+"Backup 3"));
+     |             
+             
+------------- ^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^ 
+expected 
+`&Address`, found 
+`&String`
+     |             
+             |
+     |             
+             
+arguments to this 
+method are 
+incorrect
+     |
+     = note: 
+expected reference 
+`&soroban_sdk::Addr
+ess`
+                
+found reference `&s
+oroban_sdk::String`
+note: method 
+defined here
+    --> 
+src\lib.rs:2559:12
+     |
+2559 |     pub fn 
+create_backup(env: 
+Env, admin: 
+Address) -> 
+Result<BytesN<32>, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^      
+     --------------
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> 
+src\test.rs:2470:12
+     |
+2470 |     client.s
+et_backup_retention
+_policy(&3, &0, 
+&true);
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^ -- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2666:12
+     |
+2666 |     pub fn s
+et_backup_retention
+_policy(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^
+2667 |         
+env: Env,
+2668 |         
+admin: Address,
+     |         
+--------------
+help: provide the 
+argument
+     |
+2470 -     client.s
+et_backup_retention
+_policy(&3, &0, 
+&true);
+2470 +     client.s
+et_backup_retention
+_policy(/* &soroban
+_sdk::Address */, 
+&0, &3, &true);
+     |
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> 
+src\test.rs:2474:12
+     |
+2474 |     client.s
+et_backup_retention
+_policy(&3, &0, 
+&false);
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^ -- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2666:12
+     |
+2666 |     pub fn s
+et_backup_retention
+_policy(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^
+2667 |         
+env: Env,
+2668 |         
+admin: Address,
+     |         
+--------------
+help: provide the 
+argument
+     |
+2474 -     client.s
+et_backup_retention
+_policy(&3, &0, 
+&false);
+2474 +     client.s
+et_backup_retention
+_policy(/* &soroban
+_sdk::Address */, 
+&0, &3, &false);
+     |
+
+error[E0308]: 
+mismatched types
+    --> 
+src\test.rs:2477:30
+     |
+2477 |         clie
+nt.create_backup(&S
+tring::from_str(&en
+v, "Backup"));
+     |             
+   ------------- ^^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^ 
+expected 
+`&Address`, found 
+`&String`
+     |             
+   |
+     |             
+   arguments to 
+this method are 
+incorrect
+     |
+     = note: 
+expected reference 
+`&soroban_sdk::Addr
+ess`
+                
+found reference `&s
+oroban_sdk::String`
+note: method 
+defined here
+    --> 
+src\lib.rs:2559:12
+     |
+2559 |     pub fn 
+create_backup(env: 
+Env, admin: 
+Address) -> 
+Result<BytesN<32>, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^      
+     --------------
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> 
+src\test.rs:2486:12
+     |
+2486 |     client.s
+et_backup_retention
+_policy(&3, &0, 
+&true);
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^ -- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2666:12
+     |
+2666 |     pub fn s
+et_backup_retention
+_policy(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^
+2667 |         
+env: Env,
+2668 |         
+admin: Address,
+     |         
+--------------
+help: provide the 
+argument
+     |
+2486 -     client.s
+et_backup_retention
+_policy(&3, &0, 
+&true);
+2486 +     client.s
+et_backup_retention
+_policy(/* &soroban
+_sdk::Address */, 
+&0, &3, &true);
+     |
+
+error[E0061]: this 
+method takes 1 
+argument but 0 
+arguments were 
+supplied
+    --> 
+src\test.rs:2490:26
+     |
+2490 |     let 
+removed = client.cl
+eanup_backups();
+     |             
+             
+^^^^^^^^^^^^^^^-- 
+argument #1 of 
+type `&soroban_sdk:
+:Address` is 
+missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2697:12
+     |
+2697 |     pub fn c
+leanup_backups(env:
+ Env, admin: 
+Address) -> 
+Result<u32, 
+QuickLendXError> {
+     |            
+^^^^^^^^^^^^^^^    
+       
+--------------
+help: provide the 
+argument
+     |
+2490 |     let 
+removed = client.cl
+eanup_backups(/* &s
+oroban_sdk::Address
+ */);
+     |             
+                   
+          +++++++++
+++++++++++++++++++
+
+error[E0308]: 
+mismatched types
+    --> src\test_bi
+d.rs:1346:47
+     |
+1346 |     assert!(
+all_bid_ids.iter().
+any(|id| id == 
+bid_id1), "bid_id1 
+should be in 
+list");
+     |             
+                   
+         --    
+^^^^^^^ expected 
+`Bid`, found 
+`BytesN<32>`
+     |             
+                   
+         |
+     |             
+                   
+         expected 
+because this is 
+`bid::Bid`
+     |
+     = note: 
+expected struct 
+`bid::Bid`
+                
+found struct `sorob
+an_sdk::BytesN<32>`
+
+error[E0308]: 
+mismatched types
+    --> src\test_bi
+d.rs:1347:47
+     |
+1347 |     assert!(
+all_bid_ids.iter().
+any(|id| id == 
+bid_id2), "bid_id2 
+should be in 
+list");
+     |             
+                   
+         --    
+^^^^^^^ expected 
+`Bid`, found 
+`BytesN<32>`
+     |             
+                   
+         |
+     |             
+                   
+         expected 
+because this is 
+`bid::Bid`
+     |
+     = note: 
+expected struct 
+`bid::Bid`
+                
+found struct `sorob
+an_sdk::BytesN<32>`
+
+error[E0308]: 
+mismatched types
+    --> src\test_bi
+d.rs:1348:47
+     |
+1348 |     assert!(
+all_bid_ids.iter().
+any(|id| id == 
+bid_id3), "bid_id3 
+should be in 
+list");
+     |             
+                   
+         --    
+^^^^^^^ expected 
+`Bid`, found 
+`BytesN<32>`
+     |             
+                   
+         |
+     |             
+                   
+         expected 
+because this is 
+`bid::Bid`
+     |
+     = note: 
+expected struct 
+`bid::Bid`
+                
+found struct `sorob
+an_sdk::BytesN<32>`
+
+error[E0308]: 
+mismatched types
+    --> src\test_bi
+d.rs:1349:47
+     |
+1349 |     assert!(
+all_bid_ids.iter().
+any(|id| id == 
+bid_id4), "bid_id4 
+should be in 
+list");
+     |             
+                   
+         --    
+^^^^^^^ expected 
+`Bid`, found 
+`BytesN<32>`
+     |             
+                   
+         |
+     |             
+                   
+         expected 
+because this is 
+`bid::Bid`
+     |
+     = note: 
+expected struct 
+`bid::Bid`
+                
+found struct `sorob
+an_sdk::BytesN<32>`
+
+error[E0308]: 
+mismatched types
+    --> src\test_bi
+d.rs:1350:47
+     |
+1350 |     assert!(
+all_bid_ids.iter().
+any(|id| id == 
+bid_id5), "bid_id5 
+should be in 
+list");
+     |             
+                   
+         --    
+^^^^^^^ expected 
+`Bid`, found 
+`BytesN<32>`
+     |             
+                   
+         |
+     |             
+                   
+         expected 
+because this is 
+`bid::Bid`
+     |
+     = note: 
+expected struct 
+`bid::Bid`
+                
+found struct `sorob
+an_sdk::BytesN<32>`
+
+error[E0599]: no 
+method named `get_i
+nvestment_ids_by_in
+vestor` found for 
+struct `QuickLendXC
+ontractClient<'a>` 
+in the current 
+scope
+   --> src\test_que
+ries.rs:637:33
+    |
+637 |     let 
+investment_ids = cl
+ient.get_investment
+_ids_by_investor(&i
+nvestor);
+    |              
+                   
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^
+    |
+   ::: 
+src\lib.rs:105:1
+    |
+105 | #[contract]
+    | ----------- 
+method `get_investm
+ent_ids_by_investor
+` not found for 
+this struct
+    |
+help: there is a 
+method `get_investm
+ents_by_investor` 
+with a similar name
+    |
+637 -     let 
+investment_ids = cl
+ient.get_investment
+_ids_by_investor(&i
+nvestor);
+637 +     let 
+investment_ids = cl
+ient.get_investment
+s_by_investor(&inve
+stor);
+    |
+
+error[E0609]: no 
+field `investor` 
+on type `soroban_sd
+k::BytesN<32>`
+   --> src\test_que
+ries.rs:670:31
+    |
+670 |         asser
+t_eq!(investment.in
+vestor, investor, 
+"All investments 
+should belong to 
+investor");
+    |              
+                 
+^^^^^^^^ unknown 
+field
+
+error[E0609]: no 
+field `amount` on 
+type `soroban_sdk::
+BytesN<32>`
+   --> src\test_que
+ries.rs:674:76
+    |
+674 |     let 
+amounts: soroban_sd
+k::Vec<i128> = inve
+stments.iter().map(
+|inv| inv.amount).c
+ollect();
+    |              
+                   
+                   
+                   
+     ^^^^^^ 
+unknown field
+
+error[E0609]: no 
+field `investor` 
+on type `soroban_sd
+k::BytesN<32>`
+   --> src\test_que
+ries.rs:706:45
+    |
+706 |     assert_eq
+!(investments1.get(
+0).unwrap().investo
+r, investor1);
+    |              
+                   
+            
+^^^^^^^^ unknown 
+field
+
+error[E0609]: no 
+field `amount` on 
+type `soroban_sdk::
+BytesN<32>`
+   --> src\test_que
+ries.rs:707:45
+    |
+707 |     assert_eq
+!(investments1.get(
+0).unwrap().amount,
+ 5_000);
+    |              
+                   
+            ^^^^^^ 
+unknown field
+
+error[E0609]: no 
+field `investor` 
+on type `soroban_sd
+k::BytesN<32>`
+   --> src\test_que
+ries.rs:712:45
+    |
+712 |     assert_eq
+!(investments2.get(
+0).unwrap().investo
+r, investor2);
+    |              
+                   
+            
+^^^^^^^^ unknown 
+field
+
+error[E0609]: no 
+field `amount` on 
+type `soroban_sdk::
+BytesN<32>`
+   --> src\test_que
+ries.rs:713:45
+    |
+713 |     assert_eq
+!(investments2.get(
+0).unwrap().amount,
+ 7_500);
+    |              
+                   
+            ^^^^^^ 
+unknown field
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> src\test_qu
+eries.rs:721:24
+     |
+ 721 |     let 
+paged = client.get_
+investor_investment
+s_paged(&investor, 
+&0u32, &10u32);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^            
+----- argument #2 
+of type `&core::opt
+ion::Option<investm
+ent::InvestmentStat
+us>` is missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2378:12
+     |
+2378 |     pub fn g
+et_investor_investm
+ents_paged(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^
+...
+2381 |         
+status_filter: Opti
+on<InvestmentStatus
+>,
+     |         ----
+-------------------
+----------------
+help: provide the 
+argument
+     |
+ 721 -     let 
+paged = client.get_
+investor_investment
+s_paged(&investor, 
+&0u32, &10u32);
+ 721 +     let 
+paged = client.get_
+investor_investment
+s_paged(&investor, 
+/* &core::option::O
+ption<investment::I
+nvestmentStatus> 
+*/, &10u32, &0u32);
+     |
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> src\test_qu
+eries.rs:751:24
+     |
+ 751 |     let 
+page1 = client.get_
+investor_investment
+s_paged(&investor, 
+&0u32, &2u32);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^            
+----- argument #2 
+of type `&core::opt
+ion::Option<investm
+ent::InvestmentStat
+us>` is missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2378:12
+     |
+2378 |     pub fn g
+et_investor_investm
+ents_paged(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^
+...
+2381 |         
+status_filter: Opti
+on<InvestmentStatus
+>,
+     |         ----
+-------------------
+----------------
+help: provide the 
+argument
+     |
+ 751 -     let 
+page1 = client.get_
+investor_investment
+s_paged(&investor, 
+&0u32, &2u32);
+ 751 +     let 
+page1 = client.get_
+investor_investment
+s_paged(&investor, 
+/* &core::option::O
+ption<investment::I
+nvestmentStatus> 
+*/, &2u32, &0u32);
+     |
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> src\test_qu
+eries.rs:755:24
+     |
+ 755 |     let 
+page2 = client.get_
+investor_investment
+s_paged(&investor, 
+&2u32, &2u32);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^            
+----- argument #2 
+of type `&core::opt
+ion::Option<investm
+ent::InvestmentStat
+us>` is missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2378:12
+     |
+2378 |     pub fn g
+et_investor_investm
+ents_paged(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^
+...
+2381 |         
+status_filter: Opti
+on<InvestmentStatus
+>,
+     |         ----
+-------------------
+----------------
+help: provide the 
+argument
+     |
+ 755 |     let 
+page2 = client.get_
+investor_investment
+s_paged(&investor, 
+/* &core::option::O
+ption<investment::I
+nvestmentStatus> 
+*/, &2u32, &2u32);
+     |             
+                   
+                   
+               ++++
++++++++++++++++++++
++++++++++++++++++++
+++++++++++++++++
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> src\test_qu
+eries.rs:759:24
+     |
+ 759 |     let 
+page3 = client.get_
+investor_investment
+s_paged(&investor, 
+&4u32, &2u32);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^            
+----- argument #2 
+of type `&core::opt
+ion::Option<investm
+ent::InvestmentStat
+us>` is missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2378:12
+     |
+2378 |     pub fn g
+et_investor_investm
+ents_paged(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^
+...
+2381 |         
+status_filter: Opti
+on<InvestmentStatus
+>,
+     |         ----
+-------------------
+----------------
+help: provide the 
+argument
+     |
+ 759 -     let 
+page3 = client.get_
+investor_investment
+s_paged(&investor, 
+&4u32, &2u32);
+ 759 +     let 
+page3 = client.get_
+investor_investment
+s_paged(&investor, 
+/* &core::option::O
+ption<investment::I
+nvestmentStatus> 
+*/, &2u32, &4u32);
+     |
+
+error[E0609]: no 
+field 
+`investment_id` on 
+type `soroban_sdk::
+BytesN<32>`
+   --> src\test_que
+ries.rs:763:37
+    |
+763 |     let id1 
+= page1.get(0).unwr
+ap().investment_id;
+    |              
+                   
+    ^^^^^^^^^^^^^ 
+unknown field
+
+error[E0609]: no 
+field 
+`investment_id` on 
+type `soroban_sdk::
+BytesN<32>`
+   --> src\test_que
+ries.rs:764:37
+    |
+764 |     let id2 
+= page2.get(0).unwr
+ap().investment_id;
+    |              
+                   
+    ^^^^^^^^^^^^^ 
+unknown field
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> src\test_qu
+eries.rs:786:24
+     |
+ 786 |     let 
+paged = client.get_
+investor_investment
+s_paged(&investor, 
+&10u32, &5u32);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^            
+------ argument #2 
+of type `&core::opt
+ion::Option<investm
+ent::InvestmentStat
+us>` is missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2378:12
+     |
+2378 |     pub fn g
+et_investor_investm
+ents_paged(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^
+...
+2381 |         
+status_filter: Opti
+on<InvestmentStatus
+>,
+     |         ----
+-------------------
+----------------
+help: provide the 
+argument
+     |
+ 786 -     let 
+paged = client.get_
+investor_investment
+s_paged(&investor, 
+&10u32, &5u32);
+ 786 +     let 
+paged = client.get_
+investor_investment
+s_paged(&investor, 
+/* &core::option::O
+ption<investment::I
+nvestmentStatus> 
+*/, &5u32, &10u32);
+     |
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> src\test_qu
+eries.rs:806:24
+     |
+ 806 |     let 
+paged = client.get_
+investor_investment
+s_paged(&investor, 
+&0u32, &0u32);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^            
+----- argument #2 
+of type `&core::opt
+ion::Option<investm
+ent::InvestmentStat
+us>` is missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2378:12
+     |
+2378 |     pub fn g
+et_investor_investm
+ents_paged(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^
+...
+2381 |         
+status_filter: Opti
+on<InvestmentStatus
+>,
+     |         ----
+-------------------
+----------------
+help: provide the 
+argument
+     |
+ 806 |     let 
+paged = client.get_
+investor_investment
+s_paged(&investor, 
+/* &core::option::O
+ption<investment::I
+nvestmentStatus> 
+*/, &0u32, &0u32);
+     |             
+                   
+                   
+               ++++
++++++++++++++++++++
++++++++++++++++++++
+++++++++++++++++
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> src\test_qu
+eries.rs:836:24
+     |
+ 836 |     let 
+paged = client.get_
+investor_investment
+s_paged(&investor, 
+&0u32, &500u32);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^            
+----- argument #2 
+of type `&core::opt
+ion::Option<investm
+ent::InvestmentStat
+us>` is missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2378:12
+     |
+2378 |     pub fn g
+et_investor_investm
+ents_paged(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^
+...
+2381 |         
+status_filter: Opti
+on<InvestmentStatus
+>,
+     |         ----
+-------------------
+----------------
+help: provide the 
+argument
+     |
+ 836 -     let 
+paged = client.get_
+investor_investment
+s_paged(&investor, 
+&0u32, &500u32);
+ 836 +     let 
+paged = client.get_
+investor_investment
+s_paged(&investor, 
+/* &core::option::O
+ption<investment::I
+nvestmentStatus> 
+*/, &500u32, 
+&0u32);
+     |
+
+error[E0609]: no 
+field `amount` on 
+type `soroban_sdk::
+BytesN<32>`
+   --> src\test_que
+ries.rs:879:76
+    |
+879 |     let 
+amounts: soroban_sd
+k::Vec<i128> = inve
+stments.iter().map(
+|inv| inv.amount).c
+ollect();
+    |              
+                   
+                   
+                   
+     ^^^^^^ 
+unknown field
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> src\test_qu
+eries.rs:928:24
+     |
+ 928 |     let 
+page1 = client.get_
+investor_investment
+s_paged(&investor, 
+&0u32, &2u32);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^            
+----- argument #2 
+of type `&core::opt
+ion::Option<investm
+ent::InvestmentStat
+us>` is missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2378:12
+     |
+2378 |     pub fn g
+et_investor_investm
+ents_paged(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^
+...
+2381 |         
+status_filter: Opti
+on<InvestmentStatus
+>,
+     |         ----
+-------------------
+----------------
+help: provide the 
+argument
+     |
+ 928 -     let 
+page1 = client.get_
+investor_investment
+s_paged(&investor, 
+&0u32, &2u32);
+ 928 +     let 
+page1 = client.get_
+investor_investment
+s_paged(&investor, 
+/* &core::option::O
+ption<investment::I
+nvestmentStatus> 
+*/, &2u32, &0u32);
+     |
+
+error[E0061]: this 
+method takes 4 
+arguments but 3 
+arguments were 
+supplied
+    --> src\test_qu
+eries.rs:931:24
+     |
+ 931 |     let 
+page2 = client.get_
+investor_investment
+s_paged(&investor, 
+&2u32, &2u32);
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+^^^            
+----- argument #2 
+of type `&core::opt
+ion::Option<investm
+ent::InvestmentStat
+us>` is missing
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:2378:12
+     |
+2378 |     pub fn g
+et_investor_investm
+ents_paged(
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^
+...
+2381 |         
+status_filter: Opti
+on<InvestmentStatus
+>,
+     |         ----
+-------------------
+----------------
+help: provide the 
+argument
+     |
+ 931 |     let 
+page2 = client.get_
+investor_investment
+s_paged(&investor, 
+/* &core::option::O
+ption<investment::I
+nvestmentStatus> 
+*/, &2u32, &2u32);
+     |             
+                   
+                   
+               ++++
++++++++++++++++++++
++++++++++++++++++++
+++++++++++++++++
+
+error[E0609]: no 
+field `amount` on 
+type `soroban_sdk::
+BytesN<32>`
+   --> src\test_que
+ries.rs:935:69
+    |
+935 |     let 
+total_invested: 
+i128 = all_investme
+nts.iter().map(|inv
+| inv.amount).fold(
+0i128, |acc, amt| 
+acc + amt);
+    |              
+                   
+                   
+                 
+^^^^^^ unknown 
+field
+
+error[E0609]: no 
+field `status` on 
+type `soroban_sdk::
+BytesN<32>`
+   --> src\test_que
+ries.rs:940:31
+    |
+940 |         asser
+t_eq!(investment.st
+atus, crate::invest
+ment::InvestmentSta
+tus::Active);
+    |              
+                 
+^^^^^^ unknown 
+field
+
+error[E0599]: no 
+method named 
+`iter` found for 
+struct 
+`ContractEvents` 
+in the current 
+scope
+   --> src\test_esc
+row_refund.rs:329:4
+4
+    |
+329 |     for 
+(contract, topics, 
+data) in 
+events.iter() {
+    |              
+                   
+           ^^^^ 
+method not found 
+in `ContractEvents`
+
+error[E0282]: type 
+annotations needed
+   --> src\test_esc
+row_refund.rs:330:3
+5
+    |
+330 |         if 
+let 
+Some(topic0_val) = 
+topics.get(0) {
+    |              
+                   
+  ^^^^^^ cannot 
+infer type
+
+error[E0282]: type 
+annotations needed
+   --> src\test_esc
+row_refund.rs:342:2
+5
+    |
+342 |              
+       ) = data.try
+_into_val(&env).unw
+rap();
+    |              
+           ^^^^ 
+cannot infer type
+
+error[E0599]: no 
+method named `get_i
+nvestment_by_invoic
+e` found for 
+struct `QuickLendXC
+ontractClient<'a>` 
+in the current 
+scope
+    --> src\test_in
+vestor_kyc.rs:1504:
+34
+     |
+1504 |         let 
+investment1 = clien
+t.get_investment_by
+_invoice(&invoice_i
+d1);
+     |             
+                   
+  ^^^^^^^^^^^^^^^^^
+^^^^^^^^
+     |
+    ::: 
+src\lib.rs:105:1
+     |
+ 105 | #[contract]
+     | ----------- 
+method `get_investm
+ent_by_invoice` 
+not found for this 
+struct
+     |
+help: there is a 
+method 
+`get_investment` 
+with a similar name
+     |
+1504 -         let 
+investment1 = clien
+t.get_investment_by
+_invoice(&invoice_i
+d1);
+1504 +         let 
+investment1 = clien
+t.get_investment(&i
+nvoice_id1);
+     |
+
+error[E0599]: no 
+method named `get_i
+nvestment_by_invoic
+e` found for 
+struct `QuickLendXC
+ontractClient<'a>` 
+in the current 
+scope
+    --> src\test_in
+vestor_kyc.rs:1509:
+34
+     |
+1509 |         let 
+investment2 = clien
+t.get_investment_by
+_invoice(&invoice_i
+d2);
+     |             
+                   
+  ^^^^^^^^^^^^^^^^^
+^^^^^^^^
+     |
+    ::: 
+src\lib.rs:105:1
+     |
+ 105 | #[contract]
+     | ----------- 
+method `get_investm
+ent_by_invoice` 
+not found for this 
+struct
+     |
+help: there is a 
+method 
+`get_investment` 
+with a similar name
+     |
+1509 -         let 
+investment2 = clien
+t.get_investment_by
+_invoice(&invoice_i
+d2);
+1509 +         let 
+investment2 = clien
+t.get_investment(&i
+nvoice_id2);
+     |
+
+error[E0599]: no 
+method named `get_i
+nvestment_by_invoic
+e` found for 
+struct `QuickLendXC
+ontractClient<'a>` 
+in the current 
+scope
+    --> src\test_in
+vestor_kyc.rs:1514:
+34
+     |
+1514 |         let 
+investment3 = clien
+t.get_investment_by
+_invoice(&invoice_i
+d3);
+     |             
+                   
+  ^^^^^^^^^^^^^^^^^
+^^^^^^^^
+     |
+    ::: 
+src\lib.rs:105:1
+     |
+ 105 | #[contract]
+     | ----------- 
+method `get_investm
+ent_by_invoice` 
+not found for this 
+struct
+     |
+help: there is a 
+method 
+`get_investment` 
+with a similar name
+     |
+1514 -         let 
+investment3 = clien
+t.get_investment_by
+_invoice(&invoice_i
+d3);
+1514 +         let 
+investment3 = clien
+t.get_investment(&i
+nvoice_id3);
+     |
+
+error[E0599]: no 
+method named `get_i
+nvestment_by_invoic
+e` found for 
+struct `QuickLendXC
+ontractClient<'a>` 
+in the current 
+scope
+    --> src\test_in
+vestor_kyc.rs:1573:
+24
+     |
+1573 |         asse
+rt!(client.get_inve
+stment_by_invoice(&
+invoice_id1).is_som
+e());
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^
+     |
+    ::: 
+src\lib.rs:105:1
+     |
+ 105 | #[contract]
+     | ----------- 
+method `get_investm
+ent_by_invoice` 
+not found for this 
+struct
+     |
+help: there is a 
+method 
+`get_investment` 
+with a similar name
+     |
+1573 -         asse
+rt!(client.get_inve
+stment_by_invoice(&
+invoice_id1).is_som
+e());
+1573 +         asse
+rt!(client.get_inve
+stment(&invoice_id1
+).is_some());
+     |
+
+error[E0599]: no 
+method named `get_i
+nvestment_by_invoic
+e` found for 
+struct `QuickLendXC
+ontractClient<'a>` 
+in the current 
+scope
+    --> src\test_in
+vestor_kyc.rs:1574:
+24
+     |
+1574 |         asse
+rt!(client.get_inve
+stment_by_invoice(&
+invoice_id3).is_som
+e());
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^
+     |
+    ::: 
+src\lib.rs:105:1
+     |
+ 105 | #[contract]
+     | ----------- 
+method `get_investm
+ent_by_invoice` 
+not found for this 
+struct
+     |
+help: there is a 
+method 
+`get_investment` 
+with a similar name
+     |
+1574 -         asse
+rt!(client.get_inve
+stment_by_invoice(&
+invoice_id3).is_som
+e());
+1574 +         asse
+rt!(client.get_inve
+stment(&invoice_id3
+).is_some());
+     |
+
+error[E0599]: no 
+method named `get_i
+nvestment_by_invoic
+e` found for 
+struct `QuickLendXC
+ontractClient<'a>` 
+in the current 
+scope
+    --> src\test_in
+vestor_kyc.rs:1575:
+24
+     |
+1575 |         asse
+rt!(client.get_inve
+stment_by_invoice(&
+invoice_id5).is_som
+e());
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^
+     |
+    ::: 
+src\lib.rs:105:1
+     |
+ 105 | #[contract]
+     | ----------- 
+method `get_investm
+ent_by_invoice` 
+not found for this 
+struct
+     |
+help: there is a 
+method 
+`get_investment` 
+with a similar name
+     |
+1575 -         asse
+rt!(client.get_inve
+stment_by_invoice(&
+invoice_id5).is_som
+e());
+1575 +         asse
+rt!(client.get_inve
+stment(&invoice_id5
+).is_some());
+     |
+
+error[E0599]: no 
+method named `get_i
+nvestment_by_invoic
+e` found for 
+struct `QuickLendXC
+ontractClient<'a>` 
+in the current 
+scope
+    --> src\test_in
+vestor_kyc.rs:1578:
+24
+     |
+1578 |         asse
+rt!(client.get_inve
+stment_by_invoice(&
+invoice_id2).is_non
+e());
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^
+     |
+    ::: 
+src\lib.rs:105:1
+     |
+ 105 | #[contract]
+     | ----------- 
+method `get_investm
+ent_by_invoice` 
+not found for this 
+struct
+     |
+help: there is a 
+method 
+`get_investment` 
+with a similar name
+     |
+1578 -         asse
+rt!(client.get_inve
+stment_by_invoice(&
+invoice_id2).is_non
+e());
+1578 +         asse
+rt!(client.get_inve
+stment(&invoice_id2
+).is_none());
+     |
+
+error[E0599]: no 
+method named `get_i
+nvestment_by_invoic
+e` found for 
+struct `QuickLendXC
+ontractClient<'a>` 
+in the current 
+scope
+    --> src\test_in
+vestor_kyc.rs:1579:
+24
+     |
+1579 |         asse
+rt!(client.get_inve
+stment_by_invoice(&
+invoice_id4).is_non
+e());
+     |             
+           ^^^^^^^^
+^^^^^^^^^^^^^^^^^
+     |
+    ::: 
+src\lib.rs:105:1
+     |
+ 105 | #[contract]
+     | ----------- 
+method `get_investm
+ent_by_invoice` 
+not found for this 
+struct
+     |
+help: there is a 
+method 
+`get_investment` 
+with a similar name
+     |
+1579 -         asse
+rt!(client.get_inve
+stment_by_invoice(&
+invoice_id4).is_non
+e());
+1579 +         asse
+rt!(client.get_inve
+stment(&invoice_id4
+).is_none());
+     |
+
+error[E0599]: no 
+method named 
+`into_val` found 
+for struct `soroban
+_sdk::Symbol` in 
+the current scope
+   --> src\test_lif
+ecycle.rs:97:27
+    |
+ 97 |     let 
+topic_val = topic.i
+nto_val(env);
+    |              
+             
+^^^^^^^^
+    |
+   ::: C:\Users\ADM
+IN\.cargo\registry\
+src\index.crates.io
+-1949cf8c6b5b557f\s
+oroban-sdk-25.1.1\s
+rc\env.rs:90:8
+    |
+ 90 |     fn 
+into_val(&self, e: 
+&E) -> T;
+    |        
+-------- the 
+method is 
+available for `soro
+ban_sdk::Symbol` 
+here
+    |
+    = help: items 
+from traits can 
+only be used if 
+the trait is in 
+scope
+help: there is a 
+method `to_val` 
+with a similar 
+name, but with 
+different arguments
+   --> C:\Users\ADM
+IN\.cargo\registry\
+src\index.crates.io
+-1949cf8c6b5b557f\s
+oroban-sdk-25.1.1\s
+rc\symbol.rs:276:5
+    |
+276 |     pub fn 
+to_val(&self) -> 
+Val {
+    |     ^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
+help: trait 
+`IntoVal` which 
+provides 
+`into_val` is 
+implemented but 
+not in scope; 
+perhaps you want 
+to import it
+    |
+ 39 + use soroban_s
+dk::IntoVal;
+    |
+
+error[E0599]: no 
+method named `all` 
+found for struct `s
+oroban_sdk::events:
+:Events` in the 
+current scope
+   --> src\test_lif
+ecycle.rs:98:18
+    |
+ 98 |     env.event
+s().all().iter().an
+y(|evt| {
+    |              
+    ^^^ method not 
+found in `soroban_s
+dk::events::Events`
+    |
+   ::: C:\Users\ADM
+IN\.cargo\registry\
+src\index.crates.io
+-1949cf8c6b5b557f\s
+oroban-sdk-25.1.1\s
+rc\testutils.rs:543
+:8
+    |
+543 |     fn 
+all(&self) -> 
+ContractEvents;
+    |        --- 
+the method is 
+available for `soro
+ban_sdk::events::Ev
+ents` here
+    |
+    = help: items 
+from traits can 
+only be used if 
+the trait is in 
+scope
+help: trait 
+`Events` which 
+provides `all` is 
+implemented but 
+not in scope; 
+perhaps you want 
+to import it
+    |
+ 39 + use soroban_s
+dk::testutils::Even
+ts;
+    |
+
+error[E0282]: type 
+annotations needed
+  --> src\test_life
+cycle.rs:98:36
+   |
+98 |     env.events
+().all().iter().any
+(|evt| {
+   |               
+                   
+  ^^^
+99 |         let 
+(_, topics, _): 
+(_, soroban_sdk::Ve
+c<soroban_sdk::Val>
+, _) = evt.clone();
+   |               
+                   
+                   
+                   
+  --- type must be 
+known at this point
+   |
+help: consider 
+giving this 
+closure parameter 
+an explicit type
+   |
+98 |     env.events
+().all().iter().any
+(|evt: /* Type */| 
+{
+   |               
+                   
+     ++++++++++++
+
+error[E0599]: no 
+method named `all` 
+found for struct `s
+oroban_sdk::events:
+:Events` in the 
+current scope
+   --> src\test_lif
+ecycle.rs:110:28
+    |
+110 |     let all 
+= 
+env.events().all();
+    |              
+              ^^^ 
+method not found 
+in `soroban_sdk::ev
+ents::Events`
+    |
+   ::: C:\Users\ADM
+IN\.cargo\registry\
+src\index.crates.io
+-1949cf8c6b5b557f\s
+oroban-sdk-25.1.1\s
+rc\testutils.rs:543
+:8
+    |
+543 |     fn 
+all(&self) -> 
+ContractEvents;
+    |        --- 
+the method is 
+available for `soro
+ban_sdk::events::Ev
+ents` here
+    |
+    = help: items 
+from traits can 
+only be used if 
+the trait is in 
+scope
+help: trait 
+`Events` which 
+provides `all` is 
+implemented but 
+not in scope; 
+perhaps you want 
+to import it
+    |
+ 39 + use soroban_s
+dk::testutils::Even
+ts;
+    |
+
+error[E0599]: no 
+method named `all` 
+found for struct `s
+oroban_sdk::events:
+:Events` in the 
+current scope
+   --> src\test_lif
+ecycle.rs:435:22
+    |
+435 |         env.e
+vents().all().len()
+ >= 5,
+    |              
+        ^^^ method 
+not found in `sorob
+an_sdk::events::Eve
+nts`
+    |
+   ::: C:\Users\ADM
+IN\.cargo\registry\
+src\index.crates.io
+-1949cf8c6b5b557f\s
+oroban-sdk-25.1.1\s
+rc\testutils.rs:543
+:8
+    |
+543 |     fn 
+all(&self) -> 
+ContractEvents;
+    |        --- 
+the method is 
+available for `soro
+ban_sdk::events::Ev
+ents` here
+    |
+    = help: items 
+from traits can 
+only be used if 
+the trait is in 
+scope
+help: trait 
+`Events` which 
+provides `all` is 
+implemented but 
+not in scope; 
+perhaps you want 
+to import it
+    |
+ 39 + use soroban_s
+dk::testutils::Even
+ts;
+    |
+
+error[E0308]: 
+mismatched types
+    --> src\test_li
+fecycle.rs:514:52
+     |
+ 514 |     let 
+inv_ver = client.ge
+t_investor_verifica
+tion(investor.clone
+()).unwrap();
+     |             
+             ------
+-------------------
+ ^^^^^^^^^^^^^^^^ 
+expected 
+`&Address`, found 
+`Address`
+     |             
+             |
+     |             
+             
+arguments to this 
+method are 
+incorrect
+     |
+note: method 
+defined here
+    --> 
+src\lib.rs:1230:12
+     |
+1230 |     pub fn g
+et_investor_verific
+ation(env: Env, 
+investor: Address) 
+-> Option<InvestorV
+erification> {
+     |            ^
+^^^^^^^^^^^^^^^^^^^
+^^^^^           
+-----------------
+help: consider 
+borrowing here
+     |
+ 514 |     let 
+inv_ver = client.ge
+t_investor_verifica
+tion(&investor.clon
+e()).unwrap();
+     |             
+                   
+                   
+ +
+
+error[E0599]: no 
+method named 
+`unwrap` found for 
+struct `investment:
+:Investment` in 
+the current scope
+   --> src\test_lif
+ecycle.rs:537:52
+    |
+537 |         clien
+t.get_invoice_inves
+tment(&invoice_id).
+unwrap().status,
+    |              
+                   
+                   
+^^^^^^ method not 
+found in `investmen
+t::Investment`
+    |
+   ::: src\investme
+nt.rs:29:1
+    |
+ 29 | pub struct 
+Investment {
+    | -------------
+-------- method 
+`unwrap` not found 
+for this struct
+
+error[E0599]: no 
+method named 
+`unwrap` found for 
+struct `investment:
+:Investment` in 
+the current scope
+   --> src\test_lif
+ecycle.rs:555:52
+    |
+555 |         clien
+t.get_invoice_inves
+tment(&invoice_id).
+unwrap().status,
+    |              
+                   
+                   
+^^^^^^ method not 
+found in `investmen
+t::Investment`
+    |
+   ::: src\investme
+nt.rs:29:1
+    |
+ 29 | pub struct 
+Investment {
+    | -------------
+-------- method 
+`unwrap` not found 
+for this struct
+
+warning: unused 
+import: `Ledger`
+ --> src\test_curre
+ncy.rs:9:31
+  |
+9 |     testutils::
+{Address as _, 
+Ledger},
+  |                
+               
+^^^^^^
+
+warning: unused 
+import: `Ledger`
+ --> src\test_queri
+es.rs:6:31
+  |
+6 |     testutils::
+{Address as _, 
+Ledger},
+  |                
+               
+^^^^^^
+
+warning: unused 
+variable: `admin`
+   --> 
+src\fees.rs:204:9
+    |
+204 |         
+admin: &Address,
+    |         
+^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+    |
+    = note: `#[warn
+(unused_variables)]
+` (part of 
+`#[warn(unused)]`) 
+on by default
+
+warning: variable 
+does not need to 
+be mutable
+   --> src\storage.
+rs:248:13
+    |
+248 |         let 
+mut ids: 
+Vec<BytesN<32>> = e
+nv.storage().persis
+tent().get(&key).un
+wrap_or(Vec::new(en
+v));
+    |             
+----^^^
+    |             |
+    |             
+help: remove this 
+`mut`
+    |
+    = note: `#[warn
+(unused_mut)]` 
+(part of 
+`#[warn(unused)]`) 
+on by default
+
+warning: variable 
+does not need to 
+be mutable
+   --> src\storage.
+rs:269:13
+    |
+269 |         let 
+mut ids: 
+Vec<BytesN<32>> = e
+nv.storage().persis
+tent().get(&key).un
+wrap_or(Vec::new(en
+v));
+    |             
+----^^^
+    |             |
+    |             
+help: remove this 
+`mut`
+
+warning: unused 
+variable: `env`
+   --> src\test_adm
+in.rs:730:14
+    |
+730 |         let 
+(env, client) = 
+setup();
+    |              
+^^^ help: if this 
+is intentional, 
+prefix it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+    --> src\test_bu
+siness_kyc.rs:1012:
+10
+     |
+1012 |     let 
+(env, client, 
+_admin) = setup();
+     |          
+^^^ help: if this 
+is intentional, 
+prefix it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+    --> src\test_bu
+siness_kyc.rs:1020:
+10
+     |
+1020 |     let 
+(env, client, 
+_admin) = setup();
+     |          
+^^^ help: if this 
+is intentional, 
+prefix it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+    --> src\test_bu
+siness_kyc.rs:1028:
+10
+     |
+1028 |     let 
+(env, client, 
+_admin) = setup();
+     |          
+^^^ help: if this 
+is intentional, 
+prefix it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `result`
+   --> src\test_can
+cel_refund.rs:548:9
+    |
+548 |     let 
+result = client.try
+_cancel_invoice(&in
+voice_id);
+    |         
+^^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_result`
+
+warning: unused 
+variable: `result`
+   --> src\test_can
+cel_refund.rs:571:9
+    |
+571 |     let 
+result = client.try
+_cancel_invoice(&in
+voice_id);
+    |         
+^^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_result`
+
+warning: unused 
+variable: 
+`invoice_id_3`
+   --> src\test_dis
+pute.rs:465:9
+    |
+465 |     let 
+invoice_id_3 = crea
+te_test_invoice(&en
+v, &client, 
+&business, 
+200_000);
+    |         
+^^^^^^^^^^^^ help: 
+if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_invoice_id_3`
+
+warning: unused 
+variable: `env`
+   --> src\test_ove
+rflow.rs:159:10
+    |
+159 |     let 
+(env, client, 
+_admin) = 
+setup_test();
+    |          ^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+   --> src\test_ove
+rflow.rs:293:9
+    |
+293 |     let env 
+= Env::default();
+    |         ^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+   --> src\test_ove
+rflow.rs:333:10
+    |
+333 |     let 
+(env, client, 
+_admin) = 
+setup_test();
+    |          ^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: `_env`
+
+warning: unused 
+variable: 
+`bid_id_placed`
+  --> src\test_bid_
+queries.rs:77:9
+   |
+77 |     let 
+bid_id_placed = cli
+ent.place_bid(&inve
+stor, &invoice_id, 
+&1_000, &1_200);
+   |         
+^^^^^^^^^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_bid_id_placed`
+
+warning: unused 
+variable: 
+`bid_id_expired`
+  --> src\test_bid_
+queries.rs:90:9
+   |
+90 |     let 
+bid_id_expired = cl
+ient.place_bid(&inv
+estor, 
+&invoice_id, 
+&4_000, &4_800);
+   |         
+^^^^^^^^^^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_bid_id_expired`
+
+warning: unused 
+variable: `env`
+   --> src\test\tes
+t_invoice_categorie
+s.rs:164:10
+    |
+164 |     let 
+(env, client, 
+_admin) = 
+setup_env();
+    |          ^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+   --> src\test\tes
+t_invoice_categorie
+s.rs:271:10
+    |
+271 |     let 
+(env, client, 
+_admin) = 
+setup_env();
+    |          ^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: `_env`
+
+warning: unused 
+variable: 
+`token_client`
+   --> 
+src\test.rs:449:9
+    |
+449 |     let 
+token_client = toke
+n::Client::new(&env
+, &currency);
+    |         
+^^^^^^^^^^^^ help: 
+if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_token_client`
+
+warning: unused 
+variable: `i`
+    --> 
+src\test.rs:2202:9
+     |
+2202 |     for i 
+in 0..10 {
+     |         ^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: `_i`
+
+warning: unused 
+variable: `bid1`
+   --> src\test_bid
+_ranking.rs:172:9
+    |
+172 |     let bid1 
+= client.place_bid(
+&investor1, 
+&invoice_id, 
+&5_000, &6_000);
+    |         ^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: `_bid1`
+
+warning: unused 
+variable: `bid3`
+   --> src\test_bid
+_ranking.rs:178:9
+    |
+178 |     let bid3 
+= client.place_bid(
+&investor3, 
+&invoice_id, 
+&5_000, &6_500);
+    |         ^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: `_bid3`
+
+warning: unused 
+variable: `admin`
+  --> src\test_fees
+.rs:24:65
+   |
+24 | fn setup_inves
+tor(env: &Env, 
+client: &QuickLendX
+ContractClient, 
+admin: &Address) 
+-> Address {
+   |               
+                   
+                   
+            ^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_fee
+s.rs:214:9
+    |
+214 |     let 
+admin = 
+setup_admin(&env, 
+&client);
+    |         
+^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+  --> src\test_audi
+t.rs:53:23
+   |
+53 |     let (env, 
+client, admin, 
+business) = 
+setup();
+   |               
+        ^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_cur
+rency.rs:221:23
+    |
+221 |     let 
+(env, client, 
+admin) = setup();
+    |              
+         ^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_err
+ors.rs:207:23
+    |
+207 |     let 
+(env, client, 
+admin) = setup();
+    |              
+         ^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: 
+`token_client`
+  --> src\test_even
+ts.rs:91:9
+   |
+91 |     let 
+token_client = toke
+n::Client::new(&env
+, &currency);
+   |         
+^^^^^^^^^^^^ help: 
+if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_token_client`
+
+warning: unused 
+variable: 
+`invoice2`
+   --> src\test_def
+ault.rs:509:9
+    |
+509 |     let 
+invoice2 = client.g
+et_invoice(&invoice
+2_id);
+    |         
+^^^^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_invoice2`
+
+warning: unused 
+variable: `admin`
+   --> src\test_par
+tial_payments.rs:54
+2:5
+    |
+542 |     admin: 
+&Address,
+    |     ^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `actor`
+   --> src\test_que
+ries.rs:403:9
+    |
+403 |     let 
+actor = Address::ge
+nerate(&env);
+    |         
+^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_actor`
+
+warning: unused 
+variable: 
+`filter_inv1`
+   --> src\test_que
+ries.rs:449:9
+    |
+449 |     let 
+filter_inv1 = 
+AuditQueryFilter {
+    |         
+^^^^^^^^^^^ help: 
+if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_filter_inv1`
+
+warning: unused 
+variable: 
+`filter_created`
+   --> src\test_que
+ries.rs:472:9
+    |
+472 |     let 
+filter_created = 
+AuditQueryFilter {
+    |         
+^^^^^^^^^^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_filter_created`
+
+warning: unused 
+variable: `env`
+   --> src\test_bac
+kup.rs:181:10
+    |
+181 |     let 
+(env, client, 
+admin) = setup();
+    |          ^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: `_env`
+
+warning: unused 
+variable: 
+`contract_id`
+   --> src\test_ins
+urance.rs:160:23
+    |
+160 |     let 
+(env, client, 
+contract_id) = 
+setup();
+    |              
+         
+^^^^^^^^^^^ help: 
+if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_contract_id`
+
+warning: unused 
+variable: `admin`
+   --> src\test_inv
+estor_kyc.rs:102:27
+    |
+102 |         let 
+(env, client, 
+admin) = setup();
+    |              
+             ^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: 
+`non_admin`
+   --> src\test_inv
+estor_kyc.rs:179:13
+    |
+179 |         let 
+non_admin = Address
+::generate(&env);
+    |             
+^^^^^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_non_admin`
+
+warning: unused 
+variable: `result`
+   --> src\test_inv
+estor_kyc.rs:192:13
+    |
+192 |         let 
+result = client.try
+_verify_investor(&i
+nvestor, 
+&investment_limit);
+    |             
+^^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_result`
+
+warning: unused 
+variable: `admin`
+   --> src\test_inv
+estor_kyc.rs:199:27
+    |
+199 |         let 
+(env, client, 
+admin) = setup();
+    |              
+             ^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: 
+`business`
+   --> src\test_inv
+estor_kyc.rs:482:13
+    |
+482 |         let 
+business = Address:
+:generate(&env);
+    |             
+^^^^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_business`
+
+warning: unused 
+variable: 
+`high_risk`
+   --> src\test_inv
+estor_kyc.rs:610:13
+    |
+610 |         let 
+high_risk = client.
+get_investors_by_ri
+sk_level(&InvestorR
+iskLevel::High);
+    |             
+^^^^^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_high_risk`
+
+warning: unused 
+variable: `admin`
+   --> src\test_inv
+estor_kyc.rs:752:27
+    |
+752 |         let 
+(env, client, 
+admin) = setup();
+    |              
+             ^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+  --> src\test_prof
+it_fee_formula.rs:4
+0:65
+   |
+40 | fn setup_inves
+tor(env: &Env, 
+client: &QuickLendX
+ContractClient, 
+admin: &Address) 
+-> Address {
+   |               
+                   
+                   
+            ^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+  --> src\test_prof
+it_fee_formula.rs:8
+0:9
+   |
+80 |     let admin 
+= 
+setup_admin(&env, 
+&client);
+   |         ^^^^^ 
+help: if this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_pro
+fit_fee_formula.rs:
+103:9
+    |
+103 |     let 
+admin = 
+setup_admin(&env, 
+&client);
+    |         
+^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_pro
+fit_fee_formula.rs:
+126:9
+    |
+126 |     let 
+admin = 
+setup_admin(&env, 
+&client);
+    |         
+^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_pro
+fit_fee_formula.rs:
+301:9
+    |
+301 |     let 
+admin = 
+setup_admin(&env, 
+&client);
+    |         
+^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_pro
+fit_fee_formula.rs:
+343:9
+    |
+343 |     let 
+admin = 
+setup_admin(&env, 
+&client);
+    |         
+^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_pro
+fit_fee_formula.rs:
+374:9
+    |
+374 |     let 
+admin = 
+setup_admin(&env, 
+&client);
+    |         
+^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_pro
+fit_fee_formula.rs:
+590:9
+    |
+590 |     let 
+admin = 
+setup_admin(&env, 
+&client);
+    |         
+^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_pro
+fit_fee_formula.rs:
+604:9
+    |
+604 |     let 
+admin = 
+setup_admin(&env, 
+&client);
+    |         
+^^^^^ help: if 
+this is 
+intentional, 
+prefix it with an 
+underscore: 
+`_admin`
+
+Some errors have 
+detailed 
+explanations: 
+E0061, E0282, 
+E0308, E0433, 
+E0599, E0609.
+For more 
+information about 
+an error, try 
+`rustc --explain 
+E0061`.
+warning: `quicklend
+x-contracts` (lib 
+test) generated 
+145 warnings
+error: could not 
+compile `quicklendx
+-contracts` (lib 
+test) due to 102 
+previous errors; 
+145 warnings 
+emitted

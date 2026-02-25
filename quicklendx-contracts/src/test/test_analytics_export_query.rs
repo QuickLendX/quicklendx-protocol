@@ -53,8 +53,8 @@ fn test_export_analytics_data_success() {
     assert_eq!(result, String::from_str(&env, "Analytics data exported"));
     
     // Check event emission
-    let events = env.events().all();
-    assert!(events.len() > 0, "Expected at least one event");
+    let event_count = env.events().all().events().len();
+    assert!(event_count > 0, "Expected at least one event");
 }
 
 #[test]

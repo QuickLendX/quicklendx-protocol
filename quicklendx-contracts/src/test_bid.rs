@@ -9,6 +9,7 @@
 use super::*;
 use crate::bid::BidStatus;
 use crate::invoice::InvoiceCategory;
+use crate::payments::EscrowStatus;
 use crate::protocol_limits::compute_min_bid_amount;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -1343,11 +1344,11 @@ fn test_multiple_investors_place_bids_on_same_invoice() {
     assert_eq!(all_bid_ids.len(), 5, "get_bids_for_invoice should return all 5 bid IDs");
     
     // Verify all specific bid IDs are present
-    assert!(all_bid_ids.iter().any(|id| id == bid_id1), "bid_id1 should be in list");
-    assert!(all_bid_ids.iter().any(|id| id == bid_id2), "bid_id2 should be in list");
-    assert!(all_bid_ids.iter().any(|id| id == bid_id3), "bid_id3 should be in list");
-    assert!(all_bid_ids.iter().any(|id| id == bid_id4), "bid_id4 should be in list");
-    assert!(all_bid_ids.iter().any(|id| id == bid_id5), "bid_id5 should be in list");
+    assert!(all_bid_ids.iter().any(|bid| bid.bid_id == bid_id1), "bid_id1 should be in list");
+    assert!(all_bid_ids.iter().any(|bid| bid.bid_id == bid_id2), "bid_id2 should be in list");
+    assert!(all_bid_ids.iter().any(|bid| bid.bid_id == bid_id3), "bid_id3 should be in list");
+    assert!(all_bid_ids.iter().any(|bid| bid.bid_id == bid_id4), "bid_id4 should be in list");
+    assert!(all_bid_ids.iter().any(|bid| bid.bid_id == bid_id5), "bid_id5 should be in list");
 }
 
 /// Test: Multiple investors bids are correctly ranked by profit

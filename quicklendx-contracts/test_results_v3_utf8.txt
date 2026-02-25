@@ -1,0 +1,949 @@
+﻿cargo :    
+Compiling quicklend
+x-contracts v0.1.0 
+(C:\Users\ADMIN\Des
+ktop\quicklendx-pro
+tocol\quicklendx-co
+ntracts)
+At line:1 char:1
++ cargo test 
+test_bid_queries > 
+test_results_v3.txt
+ 2>&1
++ ~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
+    + CategoryInfo 
+             : No  
+  tSpecified: (    
+   Compiling qu    
+...endx-contra    
+cts):String) [    
+], RemoteExcep    
+tion
+    + FullyQualifi 
+   edErrorId : Na  
+  tiveCommandErr   
+ or
+ 
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2777:2
+     |
+2777 | ΓÉìΓÉÇ
+     |  ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:1
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     | ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:3
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |   ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:5
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |     ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:7
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |       ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:9
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |         ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:11
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |           ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:13
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |             
+^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:15
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |             
+  ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:17
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |             
+    ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:19
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |             
+      ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:21
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |             
+        ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:23
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |             
+          ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:25
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |             
+            ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2778:27
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |             
+              ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:1
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     | ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:3
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |   ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:5
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |     ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:7
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |       ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:9
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |         ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:11
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |           ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:13
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:15
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+  ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:17
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+    ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:19
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+      ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:21
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+        ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:23
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+          ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:25
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+            ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:27
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+              ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:29
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+                ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:31
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+                  ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:33
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+                   
+ ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:35
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+                   
+   ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:37
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+                   
+     ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:39
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+                   
+       ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:41
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+                   
+         ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:43
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+                   
+           ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2779:45
+     |
+2779 | 
+ΓÉÇmΓÉÇoΓÉÇdΓÉÇ ΓÉÇ
+tΓÉÇeΓÉÇsΓÉÇtΓÉÇ_ΓÉ
+ÇbΓÉÇiΓÉÇdΓÉÇ_ΓÉÇqΓ
+ÉÇuΓÉÇeΓÉÇrΓÉÇiΓÉÇe
+ΓÉÇsΓÉÇ;ΓÉÇΓÉìΓÉÇ
+     |             
+                   
+             ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: unknown 
+start of token: 
+\u{0}
+    --> 
+src\lib.rs:2780:1
+     |
+2780 | ΓÉÇ
+     | ^
+     |
+     = help: 
+source files must 
+contain UTF-8 
+encoded text, 
+unexpected null 
+bytes might occur 
+when a different 
+encoding is used
+
+error: expected 
+one of `(`, `::`, 
+`=`, `[`, `]`, or 
+`{`, found `f`
+    --> 
+src\lib.rs:2778:8
+     |
+2778 | ΓÉÇ#ΓÉÇ[ΓÉÇc
+ΓÉÇfΓÉÇgΓÉÇ(ΓÉÇtΓÉÇ
+eΓÉÇsΓÉÇtΓÉÇ)ΓÉÇ]ΓÉ
+ÇΓÉìΓÉÇ
+     |        ^ 
+expected one of 
+`(`, `::`, `=`, 
+`[`, `]`, or `{`
+
+error: could not 
+compile `quicklendx
+-contracts` (lib 
+test) due to 40 
+previous errors
+warning: build 
+failed, waiting 
+for other jobs to 
+finish...
+error: could not 
+compile `quicklendx
+-contracts` (lib) 
+due to 40 previous 
+errors

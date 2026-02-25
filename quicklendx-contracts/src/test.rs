@@ -445,7 +445,7 @@ fn test_investor_verification_enforced() {
 
     // Setup token
     let token_admin = Address::generate(&env);
-    let currency = env.register_stellar_asset_contract(token_admin);
+    let currency = env.register_stellar_asset_contract_v2(token_admin).address();
     let token_client = token::Client::new(&env, &currency);
     let token_admin_client = token::StellarAssetClient::new(&env, &currency);
     token_admin_client.mint(&investor, &10000);
@@ -1031,7 +1031,7 @@ fn test_escrow_creation_on_bid_acceptance() {
 
     // Setup token
     let token_admin = Address::generate(&env);
-    let currency = env.register_stellar_asset_contract(token_admin);
+    let currency = env.register_stellar_asset_contract_v2(token_admin).address();
     let token_client = token::Client::new(&env, &currency);
     let token_admin_client = token::StellarAssetClient::new(&env, &currency);
     token_admin_client.mint(&investor, &10000);
@@ -1087,7 +1087,7 @@ fn test_escrow_release_on_verification() {
 
     // Setup token
     let token_admin = Address::generate(&env);
-    let currency = env.register_stellar_asset_contract(token_admin);
+    let currency = env.register_stellar_asset_contract_v2(token_admin).address();
     let token_client = token::Client::new(&env, &currency);
     let token_admin_client = token::StellarAssetClient::new(&env, &currency);
     token_admin_client.mint(&investor, &10000);
@@ -1139,7 +1139,7 @@ fn test_escrow_refund() {
 
     // Setup token
     let token_admin = Address::generate(&env);
-    let currency = env.register_stellar_asset_contract(token_admin);
+    let currency = env.register_stellar_asset_contract_v2(token_admin).address();
     let token_client = token::Client::new(&env, &currency);
     let token_admin_client = token::StellarAssetClient::new(&env, &currency);
     token_admin_client.mint(&investor, &10000);
@@ -1196,7 +1196,7 @@ fn test_escrow_status_tracking() {
 
     // Setup token
     let token_admin = Address::generate(&env);
-    let currency = env.register_stellar_asset_contract(token_admin);
+    let currency = env.register_stellar_asset_contract_v2(token_admin).address();
     let token_client = token::Client::new(&env, &currency);
     let token_admin_client = token::StellarAssetClient::new(&env, &currency);
     token_admin_client.mint(&investor, &10000);
@@ -1278,7 +1278,7 @@ fn test_escrow_double_operation_prevention() {
 
     // Setup token
     let token_admin = Address::generate(&env);
-    let currency = env.register_stellar_asset_contract(token_admin);
+    let currency = env.register_stellar_asset_contract_v2(token_admin).address();
     let token_client = token::Client::new(&env, &currency);
     let token_admin_client = token::StellarAssetClient::new(&env, &currency);
     token_admin_client.mint(&investor, &10000);
@@ -2249,7 +2249,7 @@ fn test_backup_retention_policy_by_count() {
 
     // Set retention policy to keep only 3 backups
     env.mock_all_auths();
-    client.set_backup_retention_policy(&3, &0, &true);
+    client.set_backup_retention_policy(&admin, &3, &0, &true);
 
     // Verify policy was set
     let policy = client.get_backup_retention_policy();
@@ -2261,7 +2261,7 @@ fn test_backup_retention_policy_by_count() {
     env.mock_all_auths();
     for i in 0..5 {
         let desc = String::from_str(&env, "Backup");
-        client.create_backup(&desc);
+        client.create_backup(&admin);
         // Advance time slightly between backups
         env.ledger().with_mut(|li| li.timestamp += 10);
     }
@@ -2285,17 +2285,17 @@ fn test_backup_retention_policy_by_age() {
     // Set retention policy to keep backups for 100 seconds, unlimited count
     // Disable auto cleanup initially to create all backups
     env.mock_all_auths();
-    client.set_backup_retention_policy(&0, &100, &false);
+    client.set_backup_retention_policy(&admin, &0, &100, &false);
 
     // Create 3 backups with time gaps
     env.mock_all_auths();
-    let backup1 = client.create_backup(&String::from_str(&env, "Old backup 1"));
+    let backup1 = client.create_backup(&admin);
     env.ledger().with_mut(|li| li.timestamp += 50);
     
-    let backup2 = client.create_backup(&String::from_str(&env, "Old backup 2"));
+    let backup2 = client.create_backup(&admin);
     env.ledger().with_mut(|li| li.timestamp += 60); // Total 110 seconds from backup1
     
-    let backup3 = client.create_backup(&String::from_str(&env, "Recent backup"));
+    let backup3 = client.create_backup(&admin);
 
     // All 3 should exist initially
     let backups = client.get_backups();
@@ -2306,16 +2306,16 @@ fn test_backup_retention_policy_by_age() {
 
     // Manually trigger cleanup
     env.mock_all_auths();
-    let removed = client.cleanup_backups();
+    let removed = client.cleanup_backups(&admin);
     assert_eq!(removed, 0); // No cleanup because auto_cleanup is disabled
 
     // Enable auto cleanup
     env.mock_all_auths();
-    client.set_backup_retention_policy(&0, &100, &true);
+    client.set_backup_retention_policy(&admin, &0, &100, &true);
 
     // Manually trigger cleanup
     env.mock_all_auths();
-    let removed = client.cleanup_backups();
+    let removed = client.cleanup_backups(&admin);
     assert_eq!(removed, 1); // backup1 should be removed
 
     // Should have 2 backups left
@@ -2339,12 +2339,12 @@ fn test_backup_retention_policy_combined() {
 
     // Set retention policy: max 5 backups AND max age 200 seconds
     env.mock_all_auths();
-    client.set_backup_retention_policy(&5, &200, &true);
+    client.set_backup_retention_policy(&admin, &5, &200, &true);
 
     // Create 7 backups with time gaps
     env.mock_all_auths();
     for i in 0..7 {
-        client.create_backup(&String::from_str(&env, "Backup"));
+        client.create_backup(&admin);
         env.ledger().with_mut(|li| li.timestamp += 30);
     }
 
@@ -2357,7 +2357,7 @@ fn test_backup_retention_policy_combined() {
 
     // Create one more backup (triggers cleanup)
     env.mock_all_auths();
-    client.create_backup(&String::from_str(&env, "New backup"));
+    client.create_backup(&admin);
 
     // All old backups should be removed by age, only the new one remains
     let backups = client.get_backups();
@@ -2377,12 +2377,12 @@ fn test_backup_retention_policy_disabled_cleanup() {
 
     // Set retention policy with cleanup disabled
     env.mock_all_auths();
-    client.set_backup_retention_policy(&2, &0, &false);
+    client.set_backup_retention_policy(&admin, &2, &0, &false);
 
     // Create 5 backups
     env.mock_all_auths();
     for i in 0..5 {
-        client.create_backup(&String::from_str(&env, "Backup"));
+        client.create_backup(&admin);
     }
 
     // All 5 should still exist (cleanup disabled)
@@ -2403,12 +2403,12 @@ fn test_backup_retention_policy_unlimited() {
 
     // Set retention policy with unlimited backups (0 = unlimited)
     env.mock_all_auths();
-    client.set_backup_retention_policy(&0, &0, &true);
+    client.set_backup_retention_policy(&admin, &0, &0, &true);
 
     // Create 10 backups
     env.mock_all_auths();
     for i in 0..10 {
-        client.create_backup(&String::from_str(&env, "Backup"));
+        client.create_backup(&admin);
     }
 
     // All 10 should exist (unlimited)
@@ -2429,18 +2429,18 @@ fn test_backup_retention_policy_archived_not_cleaned() {
 
     // Set retention policy to keep only 2 backups
     env.mock_all_auths();
-    client.set_backup_retention_policy(&2, &0, &true);
+    client.set_backup_retention_policy(&admin, &2, &0, &true);
 
     // Create 3 backups
     env.mock_all_auths();
-    let backup1 = client.create_backup(&String::from_str(&env, "Backup 1"));
-    let backup2 = client.create_backup(&String::from_str(&env, "Backup 2"));
+    let backup1 = client.create_backup(&admin);
+    let backup2 = client.create_backup(&admin);
     
     // Archive the first backup
     env.mock_all_auths();
-    client.archive_backup(&backup1);
+    client.archive_backup(&admin, &backup1);
     
-    let backup3 = client.create_backup(&String::from_str(&env, "Backup 3"));
+    let backup3 = client.create_backup(&admin);
 
     // Should have 2 active backups (backup2 and backup3)
     let backups = client.get_backups();
@@ -2467,14 +2467,14 @@ fn test_manual_cleanup_backups() {
 
     // Set retention policy
     env.mock_all_auths();
-    client.set_backup_retention_policy(&3, &0, &true);
+    client.set_backup_retention_policy(&admin, &3, &0, &true);
 
     // Create 6 backups with auto-cleanup disabled temporarily
     env.mock_all_auths();
-    client.set_backup_retention_policy(&3, &0, &false);
+    client.set_backup_retention_policy(&admin, &3, &0, &false);
     
     for i in 0..6 {
-        client.create_backup(&String::from_str(&env, "Backup"));
+        client.create_backup(&admin);
     }
 
     // Should have all 6 (cleanup was disabled)
@@ -2483,11 +2483,11 @@ fn test_manual_cleanup_backups() {
 
     // Re-enable cleanup
     env.mock_all_auths();
-    client.set_backup_retention_policy(&3, &0, &true);
+    client.set_backup_retention_policy(&admin, &3, &0, &true);
 
     // Manually trigger cleanup
     env.mock_all_auths();
-    let removed = client.cleanup_backups();
+    let removed = client.cleanup_backups(&admin);
     assert_eq!(removed, 3);
 
     // Should have 3 backups left

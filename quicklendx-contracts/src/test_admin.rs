@@ -424,12 +424,11 @@ mod test_admin {
         client.initialize_admin(&admin);
 
         let events = env.events().all();
-        let has_admin_set = events.iter().any(|evt| {
-            let (_, topics, _): (_, soroban_sdk::Vec<soroban_sdk::Val>, _) = evt;
-            // The first topic should be the "adm_set" symbol
-            !topics.is_empty()
-        });
-        assert!(has_admin_set, "initialize must emit at least one event");
+        // Check events were emitted - the initialize_admin call should emit at least 1 event
+        assert!(
+            events.events().len() > 0,
+            "initialize must emit at least one event"
+        );
     }
 
     #[test]

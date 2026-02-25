@@ -1,0 +1,1581 @@
+﻿
+running 120 tests
+test test::test_bid_validation_rules ... FAILED
+test test::test_bid_expiration_cleanup ... FAILED
+test test::test_bid_ranking_and_filters ... FAILED
+test test::test_simple_bid_storage ... FAILED
+test test::test_get_bids_for_invoice ... FAILED
+test test_audit::test_audit_stats_after_bid_withdrawal ... FAILED
+test test::test_notification_creation_on_bid_placement ... FAILED
+test test_audit::test_audit_stats_total_entries_after_bid ... FAILED
+test test::test_escrow_creation_on_bid_acceptance ... FAILED
+test test::test_withdraw_bid ... FAILED
+test test_bid::test_bid_default_ttl_seven_days ... FAILED
+test test_bid::test_bid_expiration_and_cleanup ... FAILED
+test test_bid::test_bid_at_exact_expiration_not_expired ... FAILED
+test test::test_unique_bid_id_generation ... FAILED
+test test_bid::test_bid_placement_non_verified_invoice_fails ... FAILED
+test test_bid::test_bid_placement_respects_investment_limit ... FAILED
+test test_bid::test_bid_minimum_amount_enforced ... FAILED
+test test_bid::test_bid_one_second_past_expiration_expired ... FAILED
+test test_bid::test_best_bid_excludes_withdrawn ... FAILED
+test test_bid::test_cancel_bid_nonexistent_returns_false ... ok
+test test_bid::test_bid_withdrawal_by_owner_succeeds ... FAILED
+test test_bid::test_bid_placement_verified_invoice_succeeds ... FAILED
+test test_bid::test_bid_withdrawal_only_placed_bids ... FAILED
+test test_bid::test_cancel_bid_on_cancelled_returns_false ... FAILED
+test test_bid::test_cancel_bid_on_withdrawn_returns_false ... FAILED
+test test_bid::test_bid_ranking_by_profit ... FAILED
+test test_bid::test_cleanup_on_invoice_with_no_bids ... FAILED
+test test_bid::test_cancelled_bids_not_affected_by_expiration ... FAILED
+test test_bid::test_cannot_accept_expired_bid ... FAILED
+test test_bid::test_cancel_bid_succeeds ... FAILED
+test test_bid::test_cancelled_bid_excluded_from_ranking ... FAILED
+test test_bid::test_cannot_accept_second_bid_after_first_accepted ... FAILED
+test test_bid::test_business_accepts_one_bid_others_remain_placed ... FAILED
+test test_bid::test_get_all_bids_by_investor_empty ... ok
+test test_bid::test_cleanup_triggered_on_query_after_expiration ... FAILED
+test test_bid::test_get_all_bids_by_investor_cross_invoice ... FAILED
+test test_bid::test_expiration_cleanup_isolated_per_invoice ... FAILED
+test test_bid::test_cleanup_with_no_expired_bids_returns_zero ... FAILED
+test test_bid::test_expired_bids_removed_from_invoice_list ... FAILED
+test test_bid::test_cleanup_expired_bids_returns_count ... FAILED
+test test_bid::test_get_best_bid_excludes_expired ... FAILED
+test test_bid::test_get_ranked_bids_excludes_expired ... FAILED
+test test_bid::test_multiple_bids_indexing_and_query ... FAILED
+test test_bid::test_get_bids_for_invoice_returns_all_bids ... FAILED
+test test_bid::test_non_accepted_investors_can_withdraw_after_acceptance ... FAILED
+test test_bid::test_multiple_investors_place_bids_on_same_invoice ... FAILED
+test test_bid::test_multiple_investors_bids_ranking_order ... FAILED
+test test_bid::test_mixed_status_bids_only_placed_expire ... FAILED
+test test_bid::test_partial_expiration_cleanup ... FAILED
+test test_bid::test_only_one_escrow_created_for_accepted_bid ... FAILED
+test test_bid::test_set_investment_limit_invalid_amount_fails ... ok
+test test_bid::test_place_bid_cleans_up_expired_before_placing ... FAILED
+test test_bid::test_set_investment_limit_non_admin_fails ... ok
+test test_bid::test_set_investment_limit_unverified_fails ... ok
+test test_bid::test_query_bids_by_investor ... FAILED
+test test_bid_queries::test_get_bids_by_investor_empty ... FAILED
+test test_bid::test_set_investment_limit_succeeds ... ok
+test test_bid_queries::test_get_bids_for_invoice_empty ... FAILED
+test test_bid::test_ranking_after_all_bids_expire ... FAILED
+test test_bid::test_updated_limit_enforced_in_bidding ... FAILED
+test test_bid_queries::test_get_all_bids_by_investor_empty_and_multiple ... FAILED
+test test_bid::test_withdrawn_bids_not_affected_by_expiration ... FAILED
+test test_bid_queries::test_get_bids_by_status_isolated ... FAILED
+test test_bid_queries::test_get_bids_for_invoice_multiple_all_statuses ... FAILED
+test test_bid_ranking::test_empty_bid_list ... ok
+test test_bid_ranking::test_empty_ranked_and_best_for_nonexistent_invoice ... ok
+test test_bid_ranking::test_best_bid_excludes_expired ... FAILED
+test test_bid_ranking::test_best_bid_after_withdrawal ... FAILED
+test test_bid_queries::test_get_bids_by_investor_multiple ... FAILED
+test test_currency::test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set ... FAILED
+test test_bid_ranking::test_best_bid_excludes_withdrawn ... FAILED
+test test_bid_ranking::test_best_bid_equals_first_ranked ... FAILED
+test test_bid_ranking::test_single_bid_ranking_and_best_selection ... FAILED
+test test_bid_ranking::test_equal_bids_tie_break_by_timestamp ... FAILED
+test test_bid_ranking::test_ranking_with_multiple_bids ... FAILED
+test test_bid_ranking::test_ranked_bids_profit_ordering ... FAILED
+test test_bid_ranking::test_ranked_excludes_withdrawn_and_expired ... FAILED
+test test_escrow::test_accept_bid_state_transitions ... FAILED
+test test_escrow::test_multiple_bids_only_one_accepted ... FAILED
+test test_escrow::test_cannot_accept_withdrawn_bid ... FAILED
+test test_escrow::test_single_escrow_per_invoice_with_multiple_bids ... FAILED
+test test_escrow::test_multiple_bids_only_accepted_creates_escrow ... FAILED
+test test_escrow::test_only_invoice_owner_can_accept_bid ... FAILED
+test test_escrow::test_multiple_bids_complete_workflow ... FAILED
+test test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails ... FAILED
+test test_events::test_bid_accepted_event ... FAILED
+test test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds ... FAILED
+test test_investor_kyc::test_investor_kyc::test_investor_bids_accepted_on_some_invoices ... FAILED
+test test_investor_kyc::test_investor_kyc::test_investor_can_withdraw_non_accepted_bids ... FAILED
+test test_investor_kyc::test_investor_kyc::test_investment_limit_applies_across_all_bids ... FAILED
+test test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid ... FAILED
+test test_events::test_bid_withdrawn_event ... FAILED
+test test_investor_kyc::test_investor_kyc::test_get_all_bids_by_investor_after_acceptances ... FAILED
+test test_investor_kyc::test_investor_kyc::test_multiple_accepted_bids_create_multiple_investments ... FAILED
+test test_events::test_bid_placed_event ... FAILED
+test test_limit::test_bid_amount_limits ... ok
+test test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only ... FAILED
+test test_investor_kyc::test_investor_kyc::test_single_investor_bids_on_multiple_invoices ... FAILED
+test test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid ... FAILED
+test test_overflow::test_compare_bids_equal_profit_ordering ... ok
+test test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid ... FAILED
+test test_overflow::test_compare_bids_safe_overflow ... ok
+test test_overflow::test_compare_bids_underflow_safe ... ok
+test test_overflow::test_timestamp_bid_default_expiration_saturates ... ok
+test test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit ... FAILED
+test test_storage::test_bid_storage ... FAILED
+test test_queries::test_bid_query_pagination_limit_is_capped_to_max_query_limit ... FAILED
+test test_types::test_bid_all_statuses_assignable ... ok
+test test_types::test_bid_clone_equality ... ok
+test test_types::test_bid_fields ... ok
+test test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding ... FAILED
+test test_types::test_bid_expiration_after_timestamp ... ok
+test test_types::test_bid_inequality ... ok
+test test_types::test_bid_status_clone ... ok
+test test_types::test_bid_status_discriminants ... ok
+test test_types::test_bid_serialization_roundtrip ... ok
+test test_types::test_bid_status_all_variants_distinct ... ok
+test test_types::test_bid_status_serialization_roundtrip ... ok
+test test_queries::test_get_investments_by_investor_after_mixed_bid_outcomes ... FAILED
+test test_reentrancy::test_accept_bid_and_fund_guard_blocks ... FAILED
+
+failures:
+
+---- test::test_bid_validation_rules stdout ----
+
+thread 'test::test_bid_validation_rules' (11460) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Validation invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Validation invoice", [Services], []]
+
+Writing test snapshot file for test "test::test_bid_validation_rules" to "test_snapshots\\test\\test_bid_validation_rules.1.json".
+
+---- test::test_bid_expiration_cleanup stdout ----
+
+thread 'test::test_bid_expiration_cleanup' (27140) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Expiration invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Expiration invoice", [Services], []]
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+Writing test snapshot file for test "test::test_bid_expiration_cleanup" to "test_snapshots\\test\\test_bid_expiration_cleanup.1.json".
+
+---- test::test_bid_ranking_and_filters stdout ----
+
+thread 'test::test_bid_ranking_and_filters' (16700) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 2000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Ranking invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 2000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Ranking invoice", [Services], []]
+
+Writing test snapshot file for test "test::test_bid_ranking_and_filters" to "test_snapshots\\test\\test_bid_ranking_and_filters.1.json".
+
+---- test::test_simple_bid_storage stdout ----
+
+thread 'test::test_simple_bid_storage' (27240) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Test invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Test invoice", [Services], []]
+
+Writing test snapshot file for test "test::test_simple_bid_storage" to "test_snapshots\\test\\test_simple_bid_storage.1.json".
+
+---- test::test_get_bids_for_invoice stdout ----
+
+thread 'test::test_get_bids_for_invoice' (27488) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 2000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Get bids test invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 2000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Get bids test invoice", [Services], []]
+
+Writing test snapshot file for test "test::test_get_bids_for_invoice" to "test_snapshots\\test\\test_get_bids_for_invoice.1.json".
+
+---- test_audit::test_audit_stats_after_bid_withdrawal stdout ----
+
+thread 'test_audit::test_audit_stats_after_bid_withdrawal' (11608) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_audit::test_audit_stats_after_bid_withdrawal" to "test_snapshots\\test_audit\\test_audit_stats_after_bid_withdrawal.1.json".
+
+---- test::test_notification_creation_on_bid_placement stdout ----
+
+thread 'test::test_notification_creation_on_bid_placement' (20492) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1002)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1002)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1002)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1002)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1002)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test invoice", [Services], []]
+
+Writing test snapshot file for test "test::test_notification_creation_on_bid_placement" to "test_snapshots\\test\\test_notification_creation_on_bid_placement.1.json".
+
+---- test_audit::test_audit_stats_total_entries_after_bid stdout ----
+
+thread 'test_audit::test_audit_stats_total_entries_after_bid' (23844) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_audit::test_audit_stats_total_entries_after_bid" to "test_snapshots\\test_audit\\test_audit_stats_total_entries_after_bid.1.json".
+
+---- test::test_escrow_creation_on_bid_acceptance stdout ----
+
+thread 'test::test_escrow_creation_on_bid_acceptance' (10432) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test invoice", [Services], []]
+
+Writing test snapshot file for test "test::test_escrow_creation_on_bid_acceptance" to "test_snapshots\\test\\test_escrow_creation_on_bid_acceptance.1.json".
+
+---- test::test_withdraw_bid stdout ----
+
+thread 'test::test_withdraw_bid' (25500) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Withdraw test invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Withdraw test invoice", [Services], []]
+
+Writing test snapshot file for test "test::test_withdraw_bid" to "test_snapshots\\test\\test_withdraw_bid.1.json".
+
+---- test_bid::test_bid_default_ttl_seven_days stdout ----
+
+thread 'test_bid::test_bid_default_ttl_seven_days' (8784) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_bid_default_ttl_seven_days" to "test_snapshots\\test_bid\\test_bid_default_ttl_seven_days.1.json".
+
+---- test_bid::test_bid_expiration_and_cleanup stdout ----
+
+thread 'test_bid::test_bid_expiration_and_cleanup' (13460) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_bid_expiration_and_cleanup" to "test_snapshots\\test_bid\\test_bid_expiration_and_cleanup.1.json".
+
+---- test_bid::test_bid_at_exact_expiration_not_expired stdout ----
+
+thread 'test_bid::test_bid_at_exact_expiration_not_expired' (15368) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_bid_at_exact_expiration_not_expired" to "test_snapshots\\test_bid\\test_bid_at_exact_expiration_not_expired.1.json".
+
+---- test::test_unique_bid_id_generation stdout ----
+
+thread 'test::test_unique_bid_id_generation' (26984) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Test invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Test invoice", [Services], []]
+
+Writing test snapshot file for test "test::test_unique_bid_id_generation" to "test_snapshots\\test\\test_unique_bid_id_generation.1.json".
+
+---- test_bid::test_bid_placement_non_verified_invoice_fails stdout ----
+
+thread 'test_bid::test_bid_placement_non_verified_invoice_fails' (24516) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Pending", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Pending", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_bid_placement_non_verified_invoice_fails" to "test_snapshots\\test_bid\\test_bid_placement_non_verified_invoice_fails.1.json".
+
+---- test_bid::test_bid_placement_respects_investment_limit stdout ----
+
+thread 'test_bid::test_bid_placement_respects_investment_limit' (14356) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_bid_placement_respects_investment_limit" to "test_snapshots\\test_bid\\test_bid_placement_respects_investment_limit.1.json".
+
+---- test_bid::test_bid_minimum_amount_enforced stdout ----
+
+thread 'test_bid::test_bid_minimum_amount_enforced' (5652) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 200000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 200000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_bid_minimum_amount_enforced" to "test_snapshots\\test_bid\\test_bid_minimum_amount_enforced.1.json".
+
+---- test_bid::test_bid_one_second_past_expiration_expired stdout ----
+
+thread 'test_bid::test_bid_one_second_past_expiration_expired' (24452) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_bid_one_second_past_expiration_expired" to "test_snapshots\\test_bid\\test_bid_one_second_past_expiration_expired.1.json".
+
+---- test_bid::test_best_bid_excludes_withdrawn stdout ----
+
+thread 'test_bid::test_best_bid_excludes_withdrawn' (19700) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_best_bid_excludes_withdrawn" to "test_snapshots\\test_bid\\test_best_bid_excludes_withdrawn.1.json".
+
+---- test_bid::test_bid_withdrawal_by_owner_succeeds stdout ----
+
+thread 'test_bid::test_bid_withdrawal_by_owner_succeeds' (10616) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_bid_withdrawal_by_owner_succeeds" to "test_snapshots\\test_bid\\test_bid_withdrawal_by_owner_succeeds.1.json".
+
+---- test_bid::test_bid_placement_verified_invoice_succeeds stdout ----
+
+thread 'test_bid::test_bid_placement_verified_invoice_succeeds' (26500) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_bid_placement_verified_invoice_succeeds" to "test_snapshots\\test_bid\\test_bid_placement_verified_invoice_succeeds.1.json".
+
+---- test_bid::test_bid_withdrawal_only_placed_bids stdout ----
+
+thread 'test_bid::test_bid_withdrawal_only_placed_bids' (24832) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_bid_withdrawal_only_placed_bids" to "test_snapshots\\test_bid\\test_bid_withdrawal_only_placed_bids.1.json".
+
+---- test_bid::test_cancel_bid_on_cancelled_returns_false stdout ----
+
+thread 'test_bid::test_cancel_bid_on_cancelled_returns_false' (600) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_cancel_bid_on_cancelled_returns_false" to "test_snapshots\\test_bid\\test_cancel_bid_on_cancelled_returns_false.1.json".
+
+---- test_bid::test_cancel_bid_on_withdrawn_returns_false stdout ----
+
+thread 'test_bid::test_cancel_bid_on_withdrawn_returns_false' (25544) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_cancel_bid_on_withdrawn_returns_false" to "test_snapshots\\test_bid\\test_cancel_bid_on_withdrawn_returns_false.1.json".
+
+---- test_bid::test_bid_ranking_by_profit stdout ----
+
+thread 'test_bid::test_bid_ranking_by_profit' (8728) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_bid_ranking_by_profit" to "test_snapshots\\test_bid\\test_bid_ranking_by_profit.1.json".
+
+---- test_bid::test_cleanup_on_invoice_with_no_bids stdout ----
+
+thread 'test_bid::test_cleanup_on_invoice_with_no_bids' (4284) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_cleanup_on_invoice_with_no_bids" to "test_snapshots\\test_bid\\test_cleanup_on_invoice_with_no_bids.1.json".
+
+---- test_bid::test_cancelled_bids_not_affected_by_expiration stdout ----
+
+thread 'test_bid::test_cancelled_bids_not_affected_by_expiration' (6160) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_cancelled_bids_not_affected_by_expiration" to "test_snapshots\\test_bid\\test_cancelled_bids_not_affected_by_expiration.1.json".
+
+---- test_bid::test_cannot_accept_expired_bid stdout ----
+
+thread 'test_bid::test_cannot_accept_expired_bid' (19328) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_cannot_accept_expired_bid" to "test_snapshots\\test_bid\\test_cannot_accept_expired_bid.1.json".
+
+---- test_bid::test_cancel_bid_succeeds stdout ----
+
+thread 'test_bid::test_cancel_bid_succeeds' (3592) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_cancel_bid_succeeds" to "test_snapshots\\test_bid\\test_cancel_bid_succeeds.1.json".
+
+---- test_bid::test_cancelled_bid_excluded_from_ranking stdout ----
+
+thread 'test_bid::test_cancelled_bid_excluded_from_ranking' (6892) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_cancelled_bid_excluded_from_ranking" to "test_snapshots\\test_bid\\test_cancelled_bid_excluded_from_ranking.1.json".
+
+---- test_bid::test_cannot_accept_second_bid_after_first_accepted stdout ----
+
+thread 'test_bid::test_cannot_accept_second_bid_after_first_accepted' (15520) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_cannot_accept_second_bid_after_first_accepted" to "test_snapshots\\test_bid\\test_cannot_accept_second_bid_after_first_accepted.1.json".
+
+---- test_bid::test_business_accepts_one_bid_others_remain_placed stdout ----
+
+thread 'test_bid::test_business_accepts_one_bid_others_remain_placed' (22164) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_business_accepts_one_bid_others_remain_placed" to "test_snapshots\\test_bid\\test_business_accepts_one_bid_others_remain_placed.1.json".
+
+---- test_bid::test_cleanup_triggered_on_query_after_expiration stdout ----
+
+thread 'test_bid::test_cleanup_triggered_on_query_after_expiration' (14804) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_cleanup_triggered_on_query_after_expiration" to "test_snapshots\\test_bid\\test_cleanup_triggered_on_query_after_expiration.1.json".
+
+---- test_bid::test_get_all_bids_by_investor_cross_invoice stdout ----
+
+thread 'test_bid::test_get_all_bids_by_investor_cross_invoice' (24472) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_get_all_bids_by_investor_cross_invoice" to "test_snapshots\\test_bid\\test_get_all_bids_by_investor_cross_invoice.1.json".
+
+---- test_bid::test_expiration_cleanup_isolated_per_invoice stdout ----
+
+thread 'test_bid::test_expiration_cleanup_isolated_per_invoice' (11452) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_expiration_cleanup_isolated_per_invoice" to "test_snapshots\\test_bid\\test_expiration_cleanup_isolated_per_invoice.1.json".
+
+---- test_bid::test_cleanup_with_no_expired_bids_returns_zero stdout ----
+
+thread 'test_bid::test_cleanup_with_no_expired_bids_returns_zero' (10172) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_cleanup_with_no_expired_bids_returns_zero" to "test_snapshots\\test_bid\\test_cleanup_with_no_expired_bids_returns_zero.1.json".
+
+---- test_bid::test_expired_bids_removed_from_invoice_list stdout ----
+
+thread 'test_bid::test_expired_bids_removed_from_invoice_list' (23060) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_expired_bids_removed_from_invoice_list" to "test_snapshots\\test_bid\\test_expired_bids_removed_from_invoice_list.1.json".
+
+---- test_bid::test_cleanup_expired_bids_returns_count stdout ----
+
+thread 'test_bid::test_cleanup_expired_bids_returns_count' (10368) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_cleanup_expired_bids_returns_count" to "test_snapshots\\test_bid\\test_cleanup_expired_bids_returns_count.1.json".
+
+---- test_bid::test_get_best_bid_excludes_expired stdout ----
+
+thread 'test_bid::test_get_best_bid_excludes_expired' (16872) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_get_best_bid_excludes_expired" to "test_snapshots\\test_bid\\test_get_best_bid_excludes_expired.1.json".
+
+---- test_bid::test_get_ranked_bids_excludes_expired stdout ----
+
+thread 'test_bid::test_get_ranked_bids_excludes_expired' (22328) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_get_ranked_bids_excludes_expired" to "test_snapshots\\test_bid\\test_get_ranked_bids_excludes_expired.1.json".
+
+---- test_bid::test_multiple_bids_indexing_and_query stdout ----
+
+thread 'test_bid::test_multiple_bids_indexing_and_query' (28376) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_multiple_bids_indexing_and_query" to "test_snapshots\\test_bid\\test_multiple_bids_indexing_and_query.1.json".
+
+---- test_bid::test_get_bids_for_invoice_returns_all_bids stdout ----
+
+thread 'test_bid::test_get_bids_for_invoice_returns_all_bids' (5484) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_get_bids_for_invoice_returns_all_bids" to "test_snapshots\\test_bid\\test_get_bids_for_invoice_returns_all_bids.1.json".
+
+---- test_bid::test_non_accepted_investors_can_withdraw_after_acceptance stdout ----
+
+thread 'test_bid::test_non_accepted_investors_can_withdraw_after_acceptance' (17976) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_non_accepted_investors_can_withdraw_after_acceptance" to "test_snapshots\\test_bid\\test_non_accepted_investors_can_withdraw_after_acceptance.1.json".
+
+---- test_bid::test_multiple_investors_place_bids_on_same_invoice stdout ----
+
+thread 'test_bid::test_multiple_investors_place_bids_on_same_invoice' (19404) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_multiple_investors_place_bids_on_same_invoice" to "test_snapshots\\test_bid\\test_multiple_investors_place_bids_on_same_invoice.1.json".
+
+---- test_bid::test_multiple_investors_bids_ranking_order stdout ----
+
+thread 'test_bid::test_multiple_investors_bids_ranking_order' (12700) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_multiple_investors_bids_ranking_order" to "test_snapshots\\test_bid\\test_multiple_investors_bids_ranking_order.1.json".
+
+---- test_bid::test_mixed_status_bids_only_placed_expire stdout ----
+
+thread 'test_bid::test_mixed_status_bids_only_placed_expire' (9120) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_mixed_status_bids_only_placed_expire" to "test_snapshots\\test_bid\\test_mixed_status_bids_only_placed_expire.1.json".
+
+---- test_bid::test_partial_expiration_cleanup stdout ----
+
+thread 'test_bid::test_partial_expiration_cleanup' (20160) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_partial_expiration_cleanup" to "test_snapshots\\test_bid\\test_partial_expiration_cleanup.1.json".
+
+---- test_bid::test_only_one_escrow_created_for_accepted_bid stdout ----
+
+thread 'test_bid::test_only_one_escrow_created_for_accepted_bid' (18612) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_only_one_escrow_created_for_accepted_bid" to "test_snapshots\\test_bid\\test_only_one_escrow_created_for_accepted_bid.1.json".
+
+---- test_bid::test_place_bid_cleans_up_expired_before_placing stdout ----
+
+thread 'test_bid::test_place_bid_cleans_up_expired_before_placing' (5048) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_place_bid_cleans_up_expired_before_placing" to "test_snapshots\\test_bid\\test_place_bid_cleans_up_expired_before_placing.1.json".
+
+---- test_bid::test_query_bids_by_investor stdout ----
+
+thread 'test_bid::test_query_bids_by_investor' (2036) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_query_bids_by_investor" to "test_snapshots\\test_bid\\test_query_bids_by_investor.1.json".
+
+---- test_bid_queries::test_get_bids_by_investor_empty stdout ----
+
+thread 'test_bid_queries::test_get_bids_by_investor_empty' (14312) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_queries::test_get_bids_by_investor_empty" to "test_snapshots\\test_bid_queries\\test_get_bids_by_investor_empty.1.json".
+
+---- test_bid_queries::test_get_bids_for_invoice_empty stdout ----
+
+thread 'test_bid_queries::test_get_bids_for_invoice_empty' (28268) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_queries::test_get_bids_for_invoice_empty" to "test_snapshots\\test_bid_queries\\test_get_bids_for_invoice_empty.1.json".
+
+---- test_bid::test_ranking_after_all_bids_expire stdout ----
+
+thread 'test_bid::test_ranking_after_all_bids_expire' (10728) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_ranking_after_all_bids_expire" to "test_snapshots\\test_bid\\test_ranking_after_all_bids_expire.1.json".
+
+---- test_bid::test_updated_limit_enforced_in_bidding stdout ----
+
+thread 'test_bid::test_updated_limit_enforced_in_bidding' (19724) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_updated_limit_enforced_in_bidding" to "test_snapshots\\test_bid\\test_updated_limit_enforced_in_bidding.1.json".
+
+---- test_bid_queries::test_get_all_bids_by_investor_empty_and_multiple stdout ----
+
+thread 'test_bid_queries::test_get_all_bids_by_investor_empty_and_multiple' (19744) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_queries::test_get_all_bids_by_investor_empty_and_multiple" to "test_snapshots\\test_bid_queries\\test_get_all_bids_by_investor_empty_and_multiple.1.json".
+
+---- test_bid::test_withdrawn_bids_not_affected_by_expiration stdout ----
+
+thread 'test_bid::test_withdrawn_bids_not_affected_by_expiration' (20312) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid::test_withdrawn_bids_not_affected_by_expiration" to "test_snapshots\\test_bid\\test_withdrawn_bids_not_affected_by_expiration.1.json".
+
+---- test_bid_queries::test_get_bids_by_status_isolated stdout ----
+
+thread 'test_bid_queries::test_get_bids_by_status_isolated' (25316) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_queries::test_get_bids_by_status_isolated" to "test_snapshots\\test_bid_queries\\test_get_bids_by_status_isolated.1.json".
+
+---- test_bid_queries::test_get_bids_for_invoice_multiple_all_statuses stdout ----
+
+thread 'test_bid_queries::test_get_bids_for_invoice_multiple_all_statuses' (4532) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_queries::test_get_bids_for_invoice_multiple_all_statuses" to "test_snapshots\\test_bid_queries\\test_get_bids_for_invoice_multiple_all_statuses.1.json".
+
+---- test_bid_ranking::test_best_bid_excludes_expired stdout ----
+
+thread 'test_bid_ranking::test_best_bid_excludes_expired' (276) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_ranking::test_best_bid_excludes_expired" to "test_snapshots\\test_bid_ranking\\test_best_bid_excludes_expired.1.json".
+
+---- test_bid_ranking::test_best_bid_after_withdrawal stdout ----
+
+thread 'test_bid_ranking::test_best_bid_after_withdrawal' (8832) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_ranking::test_best_bid_after_withdrawal" to "test_snapshots\\test_bid_ranking\\test_best_bid_after_withdrawal.1.json".
+
+---- test_bid_queries::test_get_bids_by_investor_multiple stdout ----
+
+thread 'test_bid_queries::test_get_bids_by_investor_multiple' (24596) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_queries::test_get_bids_by_investor_multiple" to "test_snapshots\\test_bid_queries\\test_get_bids_by_investor_multiple.1.json".
+
+---- test_currency::test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set stdout ----
+
+thread 'test_currency::test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set' (8660) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 86400, "Desc", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 1000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 86400, "Desc", [Services], []]
+
+Writing test snapshot file for test "test_currency::test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set" to "test_snapshots\\test_currency\\test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set.1.json".
+
+---- test_bid_ranking::test_best_bid_excludes_withdrawn stdout ----
+
+thread 'test_bid_ranking::test_best_bid_excludes_withdrawn' (10960) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_ranking::test_best_bid_excludes_withdrawn" to "test_snapshots\\test_bid_ranking\\test_best_bid_excludes_withdrawn.1.json".
+
+---- test_bid_ranking::test_best_bid_equals_first_ranked stdout ----
+
+thread 'test_bid_ranking::test_best_bid_equals_first_ranked' (19168) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_ranking::test_best_bid_equals_first_ranked" to "test_snapshots\\test_bid_ranking\\test_best_bid_equals_first_ranked.1.json".
+
+---- test_bid_ranking::test_single_bid_ranking_and_best_selection stdout ----
+
+thread 'test_bid_ranking::test_single_bid_ranking_and_best_selection' (13984) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_ranking::test_single_bid_ranking_and_best_selection" to "test_snapshots\\test_bid_ranking\\test_single_bid_ranking_and_best_selection.1.json".
+
+---- test_bid_ranking::test_equal_bids_tie_break_by_timestamp stdout ----
+
+thread 'test_bid_ranking::test_equal_bids_tie_break_by_timestamp' (17108) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_ranking::test_equal_bids_tie_break_by_timestamp" to "test_snapshots\\test_bid_ranking\\test_equal_bids_tie_break_by_timestamp.1.json".
+
+---- test_bid_ranking::test_ranking_with_multiple_bids stdout ----
+
+thread 'test_bid_ranking::test_ranking_with_multiple_bids' (9472) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_ranking::test_ranking_with_multiple_bids" to "test_snapshots\\test_bid_ranking\\test_ranking_with_multiple_bids.1.json".
+
+---- test_bid_ranking::test_ranked_bids_profit_ordering stdout ----
+
+thread 'test_bid_ranking::test_ranked_bids_profit_ordering' (17664) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_ranking::test_ranked_bids_profit_ordering" to "test_snapshots\\test_bid_ranking\\test_ranked_bids_profit_ordering.1.json".
+
+---- test_bid_ranking::test_ranked_excludes_withdrawn_and_expired stdout ----
+
+thread 'test_bid_ranking::test_ranked_excludes_withdrawn_and_expired' (21136) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_bid_ranking::test_ranked_excludes_withdrawn_and_expired" to "test_snapshots\\test_bid_ranking\\test_ranked_excludes_withdrawn_and_expired.1.json".
+
+---- test_escrow::test_accept_bid_state_transitions stdout ----
+
+thread 'test_escrow::test_accept_bid_state_transitions' (26072) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_escrow::test_accept_bid_state_transitions" to "test_snapshots\\test_escrow\\test_accept_bid_state_transitions.1.json".
+
+---- test_escrow::test_multiple_bids_only_one_accepted stdout ----
+
+thread 'test_escrow::test_multiple_bids_only_one_accepted' (3300) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CDS3FDGQ4JA2V3F26Y4BMWWJEC5TT26RJBN7KIQKUMVO2MAOCMDTSZ7A, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CDS3FDGQ4JA2V3F26Y4BMWWJEC5TT26RJBN7KIQKUMVO2MAOCMDTSZ7A, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_escrow::test_multiple_bids_only_one_accepted" to "test_snapshots\\test_escrow\\test_multiple_bids_only_one_accepted.1.json".
+
+---- test_escrow::test_cannot_accept_withdrawn_bid stdout ----
+
+thread 'test_escrow::test_cannot_accept_withdrawn_bid' (23036) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_escrow::test_cannot_accept_withdrawn_bid" to "test_snapshots\\test_escrow\\test_cannot_accept_withdrawn_bid.1.json".
+
+---- test_escrow::test_single_escrow_per_invoice_with_multiple_bids stdout ----
+
+thread 'test_escrow::test_single_escrow_per_invoice_with_multiple_bids' (9636) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CDS3FDGQ4JA2V3F26Y4BMWWJEC5TT26RJBN7KIQKUMVO2MAOCMDTSZ7A, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CDS3FDGQ4JA2V3F26Y4BMWWJEC5TT26RJBN7KIQKUMVO2MAOCMDTSZ7A, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_escrow::test_single_escrow_per_invoice_with_multiple_bids" to "test_snapshots\\test_escrow\\test_single_escrow_per_invoice_with_multiple_bids.1.json".
+
+---- test_escrow::test_multiple_bids_only_accepted_creates_escrow stdout ----
+
+thread 'test_escrow::test_multiple_bids_only_accepted_creates_escrow' (16540) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CD3FXVGYSLQFFTW3UH6WFF2OKZH7VERGZJZAMJHTGHBWO4F6URWEJL23, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CD3FXVGYSLQFFTW3UH6WFF2OKZH7VERGZJZAMJHTGHBWO4F6URWEJL23, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_escrow::test_multiple_bids_only_accepted_creates_escrow" to "test_snapshots\\test_escrow\\test_multiple_bids_only_accepted_creates_escrow.1.json".
+
+---- test_escrow::test_only_invoice_owner_can_accept_bid stdout ----
+
+thread 'test_escrow::test_only_invoice_owner_can_accept_bid' (24224) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 10000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_escrow::test_only_invoice_owner_can_accept_bid" to "test_snapshots\\test_escrow\\test_only_invoice_owner_can_accept_bid.1.json".
+
+---- test_escrow::test_multiple_bids_complete_workflow stdout ----
+
+thread 'test_escrow::test_multiple_bids_complete_workflow' (14656) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 50000, CCFPZOCU33AWX2NKX47XD6W5JNYFP7MU57DTQFB5XOOQSJLSSC4PMX25, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 50000, CCFPZOCU33AWX2NKX47XD6W5JNYFP7MU57DTQFB5XOOQSJLSSC4PMX25, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_escrow::test_multiple_bids_complete_workflow" to "test_snapshots\\test_escrow\\test_multiple_bids_complete_workflow.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails' (12664) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_bid_exceeding_investment_limit_fails.1.json".
+
+---- test_events::test_bid_accepted_event stdout ----
+
+thread 'test_events::test_bid_accepted_event' (15596) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1002)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1002)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1002)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 1000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86401, "Test invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1002)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1002)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 1000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86401, "Test invoice", [Services], []]
+
+Writing test snapshot file for test "test_events::test_bid_accepted_event" to "test_snapshots\\test_events\\test_bid_accepted_event.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds' (10652) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_bid_within_investment_limit_succeeds.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_investor_bids_accepted_on_some_invoices stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_investor_bids_accepted_on_some_invoices' (18732) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investor_bids_accepted_on_some_invoices" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_investor_bids_accepted_on_some_invoices.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_investor_can_withdraw_non_accepted_bids stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_investor_can_withdraw_non_accepted_bids' (11756) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investor_can_withdraw_non_accepted_bids" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_investor_can_withdraw_non_accepted_bids.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_investment_limit_applies_across_all_bids stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_investment_limit_applies_across_all_bids' (16244) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 30000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 30000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investment_limit_applies_across_all_bids" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_investment_limit_applies_across_all_bids.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid' (25220) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_investor_without_kyc_cannot_bid.1.json".
+
+---- test_events::test_bid_withdrawn_event stdout ----
+
+thread 'test_events::test_bid_withdrawn_event' (10764) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1002)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1002)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1002)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 1000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86401, "Test invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1002)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1002)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 1000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86401, "Test invoice", [Services], []]
+
+Writing test snapshot file for test "test_events::test_bid_withdrawn_event" to "test_snapshots\\test_events\\test_bid_withdrawn_event.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_get_all_bids_by_investor_after_acceptances stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_get_all_bids_by_investor_after_acceptances' (22380) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_get_all_bids_by_investor_after_acceptances" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_get_all_bids_by_investor_after_acceptances.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_multiple_accepted_bids_create_multiple_investments stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_multiple_accepted_bids_create_multiple_investments' (10704) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_multiple_accepted_bids_create_multiple_investments" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_multiple_accepted_bids_create_multiple_investments.1.json".
+
+---- test_events::test_bid_placed_event stdout ----
+
+thread 'test_events::test_bid_placed_event' (22280) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1002)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1002)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1002)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 1000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86401, "Test invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1002)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1002)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 1000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86401, "Test invoice", [Services], []]
+
+Writing test snapshot file for test "test_events::test_bid_placed_event" to "test_snapshots\\test_events\\test_bid_placed_event.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only' (21344) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_limit_update_applies_to_new_bids_only.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_single_investor_bids_on_multiple_invoices stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_single_investor_bids_on_multiple_invoices' (20092) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_single_investor_bids_on_multiple_invoices" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_single_investor_bids_on_multiple_invoices.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid' (10224) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_unverified_investor_cannot_bid.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid' (10824) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_rejected_investor_cannot_bid.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit' (22652) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_zero_amount_bid_fails_regardless_of_limit.1.json".
+
+---- test_storage::test_bid_storage stdout ----
+
+thread 'test_storage::test_bid_storage' (22428) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-sdk-25.1.1\src\env.rs:1593:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_queries::test_bid_query_pagination_limit_is_capped_to_max_query_limit stdout ----
+
+thread 'test_queries::test_bid_query_pagination_limit_is_capped_to_max_query_limit' (19308) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 5000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 5000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_queries::test_bid_query_pagination_limit_is_capped_to_max_query_limit" to "test_snapshots\\test_queries\\test_bid_query_pagination_limit_is_capped_to_max_query_limit.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding' (10100) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding" to "test_snapshots\\test_investor_kyc\\test_investor_kyc\\test_multiple_investors_competitive_bidding.1.json".
+
+---- test_queries::test_get_investments_by_investor_after_mixed_bid_outcomes stdout ----
+
+thread 'test_queries::test_get_investments_by_investor_after_mixed_bid_outcomes' (9304) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 10000, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_queries::test_get_investments_by_investor_after_mixed_bid_outcomes" to "test_snapshots\\test_queries\\test_get_investments_by_investor_after_mixed_bid_outcomes.1.json".
+
+---- test_reentrancy::test_accept_bid_and_fund_guard_blocks stdout ----
+
+thread 'test_reentrancy::test_accept_bid_and_fund_guard_blocks' (27904) panicked at C:\Users\ADMIN\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\soroban-env-host-25.0.1\src\host.rs:907:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 1000, CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN, 86400, "Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 1000, CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN, 86400, "Invoice", [Services], []]
+
+Writing test snapshot file for test "test_reentrancy::test_accept_bid_and_fund_guard_blocks" to "test_snapshots\\test_reentrancy\\test_accept_bid_and_fund_guard_blocks.1.json".
+
+
+failures:
+    test::test_bid_expiration_cleanup
+    test::test_bid_ranking_and_filters
+    test::test_bid_validation_rules
+    test::test_escrow_creation_on_bid_acceptance
+    test::test_get_bids_for_invoice
+    test::test_notification_creation_on_bid_placement
+    test::test_simple_bid_storage
+    test::test_unique_bid_id_generation
+    test::test_withdraw_bid
+    test_audit::test_audit_stats_after_bid_withdrawal
+    test_audit::test_audit_stats_total_entries_after_bid
+    test_bid::test_best_bid_excludes_withdrawn
+    test_bid::test_bid_at_exact_expiration_not_expired
+    test_bid::test_bid_default_ttl_seven_days
+    test_bid::test_bid_expiration_and_cleanup
+    test_bid::test_bid_minimum_amount_enforced
+    test_bid::test_bid_one_second_past_expiration_expired
+    test_bid::test_bid_placement_non_verified_invoice_fails
+    test_bid::test_bid_placement_respects_investment_limit
+    test_bid::test_bid_placement_verified_invoice_succeeds
+    test_bid::test_bid_ranking_by_profit
+    test_bid::test_bid_withdrawal_by_owner_succeeds
+    test_bid::test_bid_withdrawal_only_placed_bids
+    test_bid::test_business_accepts_one_bid_others_remain_placed
+    test_bid::test_cancel_bid_on_cancelled_returns_false
+    test_bid::test_cancel_bid_on_withdrawn_returns_false
+    test_bid::test_cancel_bid_succeeds
+    test_bid::test_cancelled_bid_excluded_from_ranking
+    test_bid::test_cancelled_bids_not_affected_by_expiration
+    test_bid::test_cannot_accept_expired_bid
+    test_bid::test_cannot_accept_second_bid_after_first_accepted
+    test_bid::test_cleanup_expired_bids_returns_count
+    test_bid::test_cleanup_on_invoice_with_no_bids
+    test_bid::test_cleanup_triggered_on_query_after_expiration
+    test_bid::test_cleanup_with_no_expired_bids_returns_zero
+    test_bid::test_expiration_cleanup_isolated_per_invoice
+    test_bid::test_expired_bids_removed_from_invoice_list
+    test_bid::test_get_all_bids_by_investor_cross_invoice
+    test_bid::test_get_best_bid_excludes_expired
+    test_bid::test_get_bids_for_invoice_returns_all_bids
+    test_bid::test_get_ranked_bids_excludes_expired
+    test_bid::test_mixed_status_bids_only_placed_expire
+    test_bid::test_multiple_bids_indexing_and_query
+    test_bid::test_multiple_investors_bids_ranking_order
+    test_bid::test_multiple_investors_place_bids_on_same_invoice
+    test_bid::test_non_accepted_investors_can_withdraw_after_acceptance
+    test_bid::test_only_one_escrow_created_for_accepted_bid
+    test_bid::test_partial_expiration_cleanup
+    test_bid::test_place_bid_cleans_up_expired_before_placing
+    test_bid::test_query_bids_by_investor
+    test_bid::test_ranking_after_all_bids_expire
+    test_bid::test_updated_limit_enforced_in_bidding
+    test_bid::test_withdrawn_bids_not_affected_by_expiration
+    test_bid_queries::test_get_all_bids_by_investor_empty_and_multiple
+    test_bid_queries::test_get_bids_by_investor_empty
+    test_bid_queries::test_get_bids_by_investor_multiple
+    test_bid_queries::test_get_bids_by_status_isolated
+    test_bid_queries::test_get_bids_for_invoice_empty
+    test_bid_queries::test_get_bids_for_invoice_multiple_all_statuses
+    test_bid_ranking::test_best_bid_after_withdrawal
+    test_bid_ranking::test_best_bid_equals_first_ranked
+    test_bid_ranking::test_best_bid_excludes_expired
+    test_bid_ranking::test_best_bid_excludes_withdrawn
+    test_bid_ranking::test_equal_bids_tie_break_by_timestamp
+    test_bid_ranking::test_ranked_bids_profit_ordering
+    test_bid_ranking::test_ranked_excludes_withdrawn_and_expired
+    test_bid_ranking::test_ranking_with_multiple_bids
+    test_bid_ranking::test_single_bid_ranking_and_best_selection
+    test_currency::test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set
+    test_escrow::test_accept_bid_state_transitions
+    test_escrow::test_cannot_accept_withdrawn_bid
+    test_escrow::test_multiple_bids_complete_workflow
+    test_escrow::test_multiple_bids_only_accepted_creates_escrow
+    test_escrow::test_multiple_bids_only_one_accepted
+    test_escrow::test_only_invoice_owner_can_accept_bid
+    test_escrow::test_single_escrow_per_invoice_with_multiple_bids
+    test_events::test_bid_accepted_event
+    test_events::test_bid_placed_event
+    test_events::test_bid_withdrawn_event
+    test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails
+    test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds
+    test_investor_kyc::test_investor_kyc::test_get_all_bids_by_investor_after_acceptances
+    test_investor_kyc::test_investor_kyc::test_investment_limit_applies_across_all_bids
+    test_investor_kyc::test_investor_kyc::test_investor_bids_accepted_on_some_invoices
+    test_investor_kyc::test_investor_kyc::test_investor_can_withdraw_non_accepted_bids
+    test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid
+    test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only
+    test_investor_kyc::test_investor_kyc::test_multiple_accepted_bids_create_multiple_investments
+    test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding
+    test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid
+    test_investor_kyc::test_investor_kyc::test_single_investor_bids_on_multiple_invoices
+    test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid
+    test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit
+    test_queries::test_bid_query_pagination_limit_is_capped_to_max_query_limit
+    test_queries::test_get_investments_by_investor_after_mixed_bid_outcomes
+    test_reentrancy::test_accept_bid_and_fund_guard_blocks
+    test_storage::test_bid_storage
+
+test result: FAILED. 23 passed; 97 failed; 0 ignored; 0 measured; 879 filtered out; finished in 2.97s
+

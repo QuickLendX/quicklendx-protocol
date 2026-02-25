@@ -2774,3 +2774,9 @@ mod test_revenue_split;
 mod test_types;
 #[cfg(test)]
 mod test_lifecycle;
+
+#[cfg(test)]
+mod test_bid_queries;
+
+#[cfg(test)]
+mod test_events_debug;

@@ -1,0 +1,207 @@
+﻿
+> error[E0277]: 
+`&ContractEvents` 
+is not an iterator
+     --> src\test_ad
+min.rs:428:20
+      |
+  428 |         for 
+evt in &events {
+      |             
+       ^^^^^^^ 
+`&ContractEvents` 
+is not an iterator
+      |
+> error[E0599]: no 
+method named `len` 
+found for struct 
+`ContractEvents` in 
+the current scope
+     --> src\test_ca
+ncel_refund.rs:132:3
+0
+      |
+  132 |     let 
+event_count = 
+events.len();
+      |             
+                 
+^^^ method not 
+found in 
+`ContractEvents`
+  System.Management.
+Automation.RemoteExc
+eption
+> error[E0599]: no 
+method named `len` 
+found for struct 
+`ContractEvents` in 
+the current scope
+     --> src\test_ca
+ncel_refund.rs:219:2
+0
+      |
+  219 |     assert!(
+events.len() > 0, 
+"Expected events to 
+be emitted");
+      |             
+       ^^^ method 
+not found in 
+`ContractEvents`
+  System.Management.
+Automation.RemoteExc
+eption
+> error[E0599]: no 
+method named `len` 
+found for struct 
+`ContractEvents` in 
+the current scope
+     --> src\test_ca
+ncel_refund.rs:454:2
+0
+      |
+  454 |     assert!(
+events.len() > 0, 
+"Expected refund 
+events to be 
+emitted");
+      |             
+       ^^^ method 
+not found in 
+`ContractEvents`
+  System.Management.
+Automation.RemoteExc
+eption
+> error[E0599]: the 
+method `into_iter` 
+exists for 
+reference 
+`&ContractEvents`, 
+but its trait 
+bounds were not 
+satisfied
+     --> src\test\te
+st_analytics_export_
+query.rs:56:45
+      |
+   56 |     let 
+event_count = (&env.
+events().all()).into
+_iter().count();
+      |             
+                    
+            
+^^^^^^^^^
+      |
+> error[E0277]: 
+`&ContractEvents` 
+is not an iterator
+     --> src\test_es
+crow_refund.rs:330:2
+0
+      |
+  330 |         for 
+evt in &events {
+      |             
+       ^^^^^^^ 
+`&ContractEvents` 
+is not an iterator
+      |
+> error[E0282]: 
+type annotations 
+needed
+     --> src\test_es
+crow_refund.rs:344:2
+9
+      |
+  344 |             
+            ) = data
+.try_into_val(&env).
+expect("Failed to 
+convert event 
+data");
+      |             
+                
+^^^^ cannot infer 
+type
+  System.Management.
+Automation.RemoteExc
+eption
+> error[E0277]: 
+`&ContractEvents` 
+is not an iterator
+    --> src\test_lif
+ecycle.rs:58:20
+     |
+  58 |         for 
+evt in &events {
+     |              
+      ^^^^^^^ 
+`&ContractEvents` 
+is not an iterator
+     |
+> error[E0599]: no 
+function or 
+associated item 
+named 
+`try_from_val` 
+found for struct `so
+roban_sdk::Symbol` 
+in the current scope
+     --> src\test_li
+fecycle.rs:61:42
+      |
+   61 |             
+    if let Ok(sym) 
+= Symbol::try_from_v
+al(env, &first_val) 
+{
+      |             
+                    
+         
+^^^^^^^^^^^^ 
+function or 
+associated item not 
+found in `soroban_sd
+k::Symbol`
+      |
+> error[E0599]: the 
+method `into_iter` 
+exists for 
+reference 
+`&ContractEvents`, 
+but its trait 
+bounds were not 
+satisfied
+     --> src\test_li
+fecycle.rs:73:29
+      |
+   73 |         let 
+_count = (&all).into
+_iter().count();
+      |             
+                
+^^^^^^^^^
+      |
+> error[E0599]: the 
+method `into_iter` 
+exists for 
+reference 
+`&ContractEvents`, 
+but its trait 
+bounds were not 
+satisfied
+     --> src\test_li
+fecycle.rs:224:39
+      |
+  224 |         asse
+rt!((&env.events().a
+ll()).into_iter().co
+unt() >= 5);
+      |             
+                    
+      ^^^^^^^^^
+      |
+
+

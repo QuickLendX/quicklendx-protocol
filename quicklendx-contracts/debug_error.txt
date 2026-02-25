@@ -1,0 +1,2867 @@
+﻿cargo :    
+Compiling quicklendx
+-contracts v0.1.0 (C
+:\Users\ADMIN\Deskto
+p\dripsWave\quicklen
+dx-protocol\quicklen
+dx-contracts)
+At line:1 char:1
++ cargo test 
+--no-run --lib 
+test_events_debug 
+2>&1 | Out-File 
+-FilePath ...
++ ~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~
+    + CategoryInfo  
+            : NotS  
+  pecified: (   C   
+ ompiling qu...e    
+ndx-contracts):    
+String) [], Rem    
+oteException
+    + FullyQualifie 
+   dErrorId : Nati  
+  veCommandError
+ 
+warning: unused 
+import: `ADMIN_INITI
+ALIZED_KEY`
+  --> 
+src\init.rs:28:34
+   |
+28 | use crate::admi
+n::{AdminStorage, AD
+MIN_INITIALIZED_KEY}
+;
+   |                
+                  ^^
+^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(u
+nused_imports)]` 
+(part of 
+`#[warn(unused)]`) 
+on by default
+
+warning: unused 
+import: `crate::curr
+ency::CurrencyWhitel
+ist`
+  --> 
+src\init.rs:29:5
+   |
+29 | use crate::curr
+ency::CurrencyWhitel
+ist;
+   |     ^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^
+^^^
+
+warning: unused 
+import: `BytesN`
+  --> src\test_strin
+g_limits.rs:11:14
+   |
+11 |     Address, 
+BytesN, Env, 
+String, Vec,
+   |              
+^^^^^^
+
+warning: unused 
+import: `BytesN as 
+_`
+  --> src\test_dispu
+te.rs:15:31
+   |
+15 |     
+testutils::{Address 
+as _, BytesN as _},
+   |                
+               
+^^^^^^^^^^^
+
+warning: unused 
+import: `IntoVal`
+ --> src\test_init.r
+s:6:38
+  |
+6 | use soroban_sdk:
+:{Address, Env, 
+Vec, IntoVal};
+  |                 
+                    
+ ^^^^^^^
+
+warning: unused 
+imports: 
+`PlatformFeeConfig` 
+and `PlatformFee`
+  --> src\test_stora
+ge.rs:18:22
+   |
+18 | use crate::prof
+its::{PlatformFee, 
+PlatformFeeConfig};
+   |                
+      ^^^^^^^^^^^  
+^^^^^^^^^^^^^^^^^
+
+warning: unused 
+import: 
+`ConfigStorage`
+  --> src\test_stora
+ge.rs:20:17
+   |
+20 |     
+BidStorage, 
+ConfigStorage, 
+Indexes, 
+InvestmentStorage, 
+InvoiceStorage, 
+StorageKeys,
+   |                
+ ^^^^^^^^^^^^^
+
+warning: unused 
+imports: 
+`AnalyticsStorage`, 
+`FinancialMetrics`, 
+and 
+`PlatformMetrics`
+  --> src\test\test_
+analytics.rs:14:26
+   |
+14 |     AnalyticsCa
+lculator, 
+AnalyticsStorage, 
+FinancialMetrics, 
+PlatformMetrics, 
+TimePeriod,
+   |                
+          
+^^^^^^^^^^^^^^^^  
+^^^^^^^^^^^^^^^^  
+^^^^^^^^^^^^^^^
+
+warning: unused 
+import: 
+`InvoiceStatus`
+ --> src\test\test_i
+nvoice_categories.rs
+:2:39
+  |
+2 | use crate::invoi
+ce::{InvoiceCategory
+, InvoiceStatus};
+  |                 
+                    
+  ^^^^^^^^^^^^^
+
+warning: unused 
+import: `Ledger`
+ --> src\test\test_i
+nvoice_metadata.rs:5
+:31
+  |
+5 |     
+testutils::{Address 
+as _, Ledger},
+  |                 
+              ^^^^^^
+
+warning: cannot 
+test inner items
+   --> src\test_bid.
+rs:259:1
+    |
+259 | #[test]
+    | ^^^^^^^
+    |
+    = note: `#[warn(
+unnameable_test_item
+s)]` on by default
+
+warning: cannot 
+test inner items
+   --> src\test_bid.
+rs:278:1
+    |
+278 | #[test]
+    | ^^^^^^^
+
+warning: cannot 
+test inner items
+   --> src\test_bid.
+rs:300:1
+    |
+300 | #[test]
+    | ^^^^^^^
+
+warning: unused 
+import: `crate::bid:
+:BidStatus`
+  --> src\test_bid_r
+anking.rs:10:5
+   |
+10 | use crate::bid:
+:BidStatus;
+   |     ^^^^^^^^^^^
+^^^^^^^^^^
+
+warning: unused 
+import: `Events`
+ --> src\test_querie
+s.rs:6:31
+  |
+6 |     
+testutils::{Address 
+as _, Events, 
+Ledger},
+  |                 
+              ^^^^^^
+
+warning: unused 
+import: `super::*`
+ --> src\test_escrow
+_refund.rs:7:9
+  |
+7 |     use 
+super::*;
+  |         ^^^^^^^^
+
+warning: unused 
+imports: `IntoVal`, 
+`Symbol`, and `Val`
+  --> src\test_escro
+w_refund.rs:11:79
+   |
+11 |     use soroban
+_sdk::{testutils::{A
+ddress as _, 
+Events}, token, 
+Address, Env, 
+IntoVal, Symbol, 
+Vec, Val, String};
+   |                
+                    
+                    
+                    
+   ^^^^^^^  ^^^^^^  
+     ^^^
+
+warning: unused 
+import: `Ledger`
+  --> src\test_inves
+tor_kyc.rs:19:35
+   |
+19 |         
+testutils::{Address 
+as _, Ledger},
+   |                
+                   
+^^^^^^
+
+warning: unused 
+import: `crate::erro
+rs::QuickLendXError`
+ --> src\test_limit.
+rs:3:5
+  |
+3 | use crate::error
+s::QuickLendXError;
+  |     ^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
+
+warning: unused 
+import: `crate::veri
+fication::BusinessVe
+rificationStatus`
+ --> src\test_lifecy
+cle.rs:9:9
+  |
+9 |     use crate::v
+erification::Busines
+sVerificationStatus;
+  |         ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+
+warning: unused 
+imports: `IntoVal` 
+and `Val`
+  --> src\test_lifec
+ycle.rs:14:30
+   |
+14 |         token, 
+Address, Env, 
+IntoVal, String, 
+Vec, Symbol, Val
+   |                
+              
+^^^^^^^             
+          ^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\admin.rs:165:18
+    |
+165 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+    |
+    = note: `#[warn(
+deprecated)]` on by 
+default
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\admin.rs:173:18
+    |
+173 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+  --> src\emergency.
+rs:65:22
+   |
+65 |         env.eve
+nts().publish(
+   |                
+      ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> src\emergency
+.rs:107:22
+    |
+107 |         env.ev
+ents().publish(
+    |               
+       ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> src\emergency
+.rs:142:22
+    |
+142 |         env.ev
+ents().publish(
+    |               
+       ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+ --> 
+src\events.rs:9:18
+  |
+9 |     env.events()
+.publish(
+  |                 
+ ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+  --> 
+src\events.rs:23:18
+   |
+23 |     env.events(
+).publish(
+   |                
+  ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+  --> 
+src\events.rs:34:18
+   |
+34 |     env.events(
+).publish(
+   |                
+  ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+  --> 
+src\events.rs:50:18
+   |
+50 |     env.events(
+).publish(
+   |                
+  ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+  --> 
+src\events.rs:63:18
+   |
+63 |     env.events(
+).publish(
+   |                
+  ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+  --> 
+src\events.rs:70:18
+   |
+70 |     env.events(
+).publish(
+   |                
+  ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+  --> 
+src\events.rs:86:18
+   |
+86 |     env.events(
+).publish(
+   |                
+  ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:110:18
+    |
+110 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:124:18
+    |
+124 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:135:18
+    |
+135 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:159:18
+    |
+159 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:179:18
+    |
+179 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:192:18
+    |
+192 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:204:18
+    |
+204 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:212:18
+    |
+212 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:232:18
+    |
+232 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:251:18
+    |
+251 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:263:18
+    |
+263 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:277:18
+    |
+277 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:293:18
+    |
+293 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:307:18
+    |
+307 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:323:18
+    |
+323 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:331:18
+    |
+331 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:339:18
+    |
+339 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:347:18
+    |
+347 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:360:18
+    |
+360 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:373:18
+    |
+373 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:382:18
+    |
+382 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:391:10
+    |
+391 |         .publi
+sh((symbol_short!("a
+ud_qry"),), 
+(query_type, 
+result_count));
+    |          
+^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:402:18
+    |
+402 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:420:18
+    |
+420 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:433:18
+    |
+433 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:446:18
+    |
+446 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:459:18
+    |
+459 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:476:18
+    |
+476 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:488:18
+    |
+488 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:509:18
+    |
+509 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:528:18
+    |
+528 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:547:18
+    |
+547 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:567:18
+    |
+567 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:588:18
+    |
+588 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:610:18
+    |
+610 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:630:18
+    |
+630 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:648:18
+    |
+648 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:666:18
+    |
+666 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:679:18
+    |
+679 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:696:18
+    |
+696 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:709:18
+    |
+709 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:726:18
+    |
+726 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\events.rs:756:18
+    |
+756 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\fees.rs:220:22
+    |
+220 |         env.ev
+ents().publish((symb
+ol_short!("fee_upd")
+,), fee_bps);
+    |               
+       ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\init.rs:458:18
+    |
+458 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\init.rs:480:18
+    |
+480 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\init.rs:494:18
+    |
+494 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\init.rs:502:18
+    |
+502 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> src\notificat
+ions.rs:264:22
+    |
+264 |         env.ev
+ents().publish(
+    |               
+       ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> src\notificat
+ions.rs:311:22
+    |
+311 |         env.ev
+ents().publish(
+    |               
+       ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> src\notificat
+ions.rs:348:14
+    |
+348 |             .p
+ublish((symbol_short
+!("pref_up"),), 
+(user.clone(),));
+    |              
+^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> src\settlemen
+t.rs:510:18
+    |
+510 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> src\settlemen
+t.rs:528:18
+    |
+528 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+error[E0277]: 
+`&ContractEvents` 
+is not an iterator
+   --> src\test_admi
+n.rs:428:20
+    |
+428 |         for 
+evt in &events {
+    |               
+     ^^^^^^^ 
+`&ContractEvents` 
+is not an iterator
+    |
+    = help: the 
+trait `Iterator` is 
+not implemented for 
+`&ContractEvents`
+    = note: 
+required for 
+`&ContractEvents` 
+to implement 
+`IntoIterator`
+
+error[E0599]: no 
+method named `len` 
+found for struct 
+`ContractEvents` in 
+the current scope
+   --> src\test_canc
+el_refund.rs:132:30
+    |
+132 |     let 
+event_count = 
+events.len();
+    |               
+               ^^^ 
+method not found in 
+`ContractEvents`
+
+error[E0599]: no 
+method named `len` 
+found for struct 
+`ContractEvents` in 
+the current scope
+   --> src\test_canc
+el_refund.rs:219:20
+    |
+219 |     assert!(ev
+ents.len() > 0, 
+"Expected events to 
+be emitted");
+    |               
+     ^^^ method not 
+found in 
+`ContractEvents`
+
+error[E0599]: no 
+method named `len` 
+found for struct 
+`ContractEvents` in 
+the current scope
+   --> src\test_canc
+el_refund.rs:454:20
+    |
+454 |     assert!(ev
+ents.len() > 0, 
+"Expected refund 
+events to be 
+emitted");
+    |               
+     ^^^ method not 
+found in 
+`ContractEvents`
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> src\verificat
+ion.rs:680:18
+    |
+680 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> src\verificat
+ion.rs:687:18
+    |
+687 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> src\verificat
+ion.rs:694:18
+    |
+694 |     env.events
+().publish(
+    |               
+   ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\lib.rs:336:22
+    |
+336 |         env.ev
+ents().publish(
+    |               
+       ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+   --> 
+src\lib.rs:613:22
+    |
+613 |         env.ev
+ents().publish(
+    |               
+       ^^^^^^^
+
+warning: use of 
+deprecated method `s
+oroban_sdk::events::
+Events::publish`: 
+use the 
+#[contractevent] 
+macro on a contract 
+event type
+    --> 
+src\lib.rs:1143:14
+     |
+1143 |             .
+publish((symbol_shor
+t!("rated"),), 
+(invoice_id, 
+rating, rater));
+     |              
+^^^^^^^
+
+error[E0599]: the 
+method `into_iter` 
+exists for 
+reference 
+`&ContractEvents`, 
+but its trait 
+bounds were not 
+satisfied
+   --> src\test\test
+_analytics_export_qu
+ery.rs:56:45
+    |
+ 56 |     let 
+event_count = (&env.
+events().all()).into
+_iter().count();
+    |               
+                    
+          ^^^^^^^^^
+    |
+   ::: C:\Users\ADMI
+N\.cargo\registry\sr
+c\index.crates.io-19
+49cf8c6b5b557f\sorob
+an-sdk-25.1.1\src\te
+stutils.rs:436:1
+    |
+436 | pub struct 
+ContractEvents {
+    | --------------
+----------- doesn't 
+satisfy 
+`ContractEvents: 
+IntoIterator` or 
+`ContractEvents: 
+Iterator`
+    |
+    = note: the 
+following trait 
+bounds were not 
+satisfied:
+            
+`&ContractEvents: 
+Iterator`
+            which 
+is required by 
+`&ContractEvents: 
+IntoIterator`
+            
+`&&ContractEvents: 
+Iterator`
+            which 
+is required by 
+`&&ContractEvents: 
+IntoIterator`
+            `&mut 
+&ContractEvents: 
+Iterator`
+            which 
+is required by 
+`&mut 
+&ContractEvents: 
+IntoIterator`
+            
+`ContractEvents: 
+Iterator`
+            which 
+is required by 
+`ContractEvents: 
+IntoIterator`
+            `&mut 
+ContractEvents: 
+Iterator`
+            which 
+is required by 
+`&mut 
+ContractEvents: 
+IntoIterator`
+
+error[E0277]: 
+`&ContractEvents` 
+is not an iterator
+   --> src\test_escr
+ow_refund.rs:330:20
+    |
+330 |         for 
+evt in &events {
+    |               
+     ^^^^^^^ 
+`&ContractEvents` 
+is not an iterator
+    |
+    = help: the 
+trait `Iterator` is 
+not implemented for 
+`&ContractEvents`
+    = note: 
+required for 
+`&ContractEvents` 
+to implement 
+`IntoIterator`
+
+error[E0282]: type 
+annotations needed
+   --> src\test_escr
+ow_refund.rs:344:29
+    |
+344 |               
+          ) = data.t
+ry_into_val(&env).ex
+pect("Failed to 
+convert event 
+data");
+    |               
+              ^^^^ 
+cannot infer type
+
+error[E0277]: 
+`&ContractEvents` 
+is not an iterator
+  --> src\test_lifec
+ycle.rs:58:20
+   |
+58 |         for 
+evt in &events {
+   |                
+    ^^^^^^^ 
+`&ContractEvents` 
+is not an iterator
+   |
+   = help: the 
+trait `Iterator` is 
+not implemented for 
+`&ContractEvents`
+   = note: required 
+for 
+`&ContractEvents` 
+to implement 
+`IntoIterator`
+
+error[E0599]: no 
+function or 
+associated item 
+named 
+`try_from_val` 
+found for struct `so
+roban_sdk::Symbol` 
+in the current scope
+   --> src\test_life
+cycle.rs:61:42
+    |
+ 61 |               
+  if let Ok(sym) = S
+ymbol::try_from_val(
+env, &first_val) {
+    |               
+                    
+       ^^^^^^^^^^^^ 
+function or 
+associated item not 
+found in `soroban_sd
+k::Symbol`
+    |
+note: if you're 
+trying to build a 
+new `soroban_sdk::Sy
+mbol` consider 
+using one of the 
+following 
+associated 
+functions:
+      soroban_sdk::S
+ymbol::new
+      soroban_sdk::S
+ymbol::short
+   --> C:\Users\ADMI
+N\.cargo\registry\sr
+c\index.crates.io-19
+49cf8c6b5b557f\sorob
+an-sdk-25.1.1\src\sy
+mbol.rs:212:5
+    |
+212 |     pub fn 
+new(env: &Env, s: 
+&str) -> Self {
+    |     ^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^
+...
+253 |     pub const 
+fn short(s: &str) 
+-> Self {
+    |     ^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^
+^^^^^
+    = help: items 
+from traits can 
+only be used if the 
+trait is in scope
+help: trait 
+`TryFromVal` which 
+provides 
+`try_from_val` is 
+implemented but not 
+in scope; perhaps 
+you want to import 
+it
+    |
+  5 +     use soroba
+n_sdk::TryFromVal;
+    |
+help: there is an 
+associated function 
+`from_val` with a 
+similar name
+    |
+ 61 -               
+  if let Ok(sym) = S
+ymbol::try_from_val(
+env, &first_val) {
+ 61 +               
+  if let Ok(sym) = S
+ymbol::from_val(env,
+ &first_val) {
+    |
+
+error[E0599]: the 
+method `into_iter` 
+exists for 
+reference 
+`&ContractEvents`, 
+but its trait 
+bounds were not 
+satisfied
+   --> src\test_life
+cycle.rs:73:29
+    |
+ 73 |         let 
+_count = (&all).into
+_iter().count();
+    |               
+              
+^^^^^^^^^
+    |
+   ::: C:\Users\ADMI
+N\.cargo\registry\sr
+c\index.crates.io-19
+49cf8c6b5b557f\sorob
+an-sdk-25.1.1\src\te
+stutils.rs:436:1
+    |
+436 | pub struct 
+ContractEvents {
+    | --------------
+----------- doesn't 
+satisfy 
+`ContractEvents: 
+IntoIterator` or 
+`ContractEvents: 
+Iterator`
+    |
+    = note: the 
+following trait 
+bounds were not 
+satisfied:
+            
+`&ContractEvents: 
+Iterator`
+            which 
+is required by 
+`&ContractEvents: 
+IntoIterator`
+            
+`&&ContractEvents: 
+Iterator`
+            which 
+is required by 
+`&&ContractEvents: 
+IntoIterator`
+            `&mut 
+&ContractEvents: 
+Iterator`
+            which 
+is required by 
+`&mut 
+&ContractEvents: 
+IntoIterator`
+            
+`ContractEvents: 
+Iterator`
+            which 
+is required by 
+`ContractEvents: 
+IntoIterator`
+            `&mut 
+ContractEvents: 
+Iterator`
+            which 
+is required by 
+`&mut 
+ContractEvents: 
+IntoIterator`
+
+error[E0599]: the 
+method `into_iter` 
+exists for 
+reference 
+`&ContractEvents`, 
+but its trait 
+bounds were not 
+satisfied
+   --> src\test_life
+cycle.rs:224:39
+    |
+224 |         assert
+!((&env.events().all
+()).into_iter().coun
+t() >= 5);
+    |               
+                    
+    ^^^^^^^^^
+    |
+   ::: C:\Users\ADMI
+N\.cargo\registry\sr
+c\index.crates.io-19
+49cf8c6b5b557f\sorob
+an-sdk-25.1.1\src\te
+stutils.rs:436:1
+    |
+436 | pub struct 
+ContractEvents {
+    | --------------
+----------- doesn't 
+satisfy 
+`ContractEvents: 
+IntoIterator` or 
+`ContractEvents: 
+Iterator`
+    |
+    = note: the 
+following trait 
+bounds were not 
+satisfied:
+            
+`&ContractEvents: 
+Iterator`
+            which 
+is required by 
+`&ContractEvents: 
+IntoIterator`
+            
+`&&ContractEvents: 
+Iterator`
+            which 
+is required by 
+`&&ContractEvents: 
+IntoIterator`
+            `&mut 
+&ContractEvents: 
+Iterator`
+            which 
+is required by 
+`&mut 
+&ContractEvents: 
+IntoIterator`
+            
+`ContractEvents: 
+Iterator`
+            which 
+is required by 
+`ContractEvents: 
+IntoIterator`
+            `&mut 
+ContractEvents: 
+Iterator`
+            which 
+is required by 
+`&mut 
+ContractEvents: 
+IntoIterator`
+
+warning: unused 
+import: `Ledger`
+ --> src\test_curren
+cy.rs:9:31
+  |
+9 |     
+testutils::{Address 
+as _, Ledger},
+  |                 
+              ^^^^^^
+
+warning: unused 
+import: `Ledger`
+ --> src\test_querie
+s.rs:6:39
+  |
+6 |     
+testutils::{Address 
+as _, Events, 
+Ledger},
+  |                 
+                    
+  ^^^^^^
+
+warning: unused 
+variable: `admin`
+   --> 
+src\fees.rs:204:9
+    |
+204 |         
+admin: &Address,
+    |         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+    |
+    = note: `#[warn(
+unused_variables)]` 
+(part of 
+`#[warn(unused)]`) 
+on by default
+
+warning: variable 
+does not need to be 
+mutable
+   --> src\storage.r
+s:248:13
+    |
+248 |         let 
+mut ids: 
+Vec<BytesN<32>> = en
+v.storage().persiste
+nt().get(&key).unwra
+p_or(Vec::new(env));
+    |             
+----^^^
+    |             |
+    |             
+help: remove this 
+`mut`
+    |
+    = note: `#[warn(
+unused_mut)]` (part 
+of 
+`#[warn(unused)]`) 
+on by default
+
+warning: variable 
+does not need to be 
+mutable
+   --> src\storage.r
+s:269:13
+    |
+269 |         let 
+mut ids: 
+Vec<BytesN<32>> = en
+v.storage().persiste
+nt().get(&key).unwra
+p_or(Vec::new(env));
+    |             
+----^^^
+    |             |
+    |             
+help: remove this 
+`mut`
+
+warning: unused 
+variable: `env`
+   --> src\test_admi
+n.rs:734:14
+    |
+734 |         let 
+(env, client) = 
+setup();
+    |              
+^^^ help: if this 
+is intentional, 
+prefix it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+    --> src\test_bus
+iness_kyc.rs:1012:10
+     |
+1012 |     let 
+(env, client, 
+_admin) = setup();
+     |          ^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+    --> src\test_bus
+iness_kyc.rs:1020:10
+     |
+1020 |     let 
+(env, client, 
+_admin) = setup();
+     |          ^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+    --> src\test_bus
+iness_kyc.rs:1028:10
+     |
+1028 |     let 
+(env, client, 
+_admin) = setup();
+     |          ^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `result`
+   --> src\test_canc
+el_refund.rs:548:9
+    |
+548 |     let 
+result = client.try_
+cancel_invoice(&invo
+ice_id);
+    |         
+^^^^^^ help: if 
+this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_result`
+
+warning: unused 
+variable: `result`
+   --> src\test_canc
+el_refund.rs:571:9
+    |
+571 |     let 
+result = client.try_
+cancel_invoice(&invo
+ice_id);
+    |         
+^^^^^^ help: if 
+this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_result`
+
+warning: unused 
+variable: 
+`invoice_id_3`
+   --> src\test_disp
+ute.rs:465:9
+    |
+465 |     let 
+invoice_id_3 = creat
+e_test_invoice(&env,
+ &client, 
+&business, 200_000);
+    |         
+^^^^^^^^^^^^ help: 
+if this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_invoice_id_3`
+
+warning: unused 
+variable: `env`
+   --> src\test_over
+flow.rs:159:10
+    |
+159 |     let (env, 
+client, _admin) = 
+setup_test();
+    |          ^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+   --> src\test_over
+flow.rs:293:9
+    |
+293 |     let env = 
+Env::default();
+    |         ^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+   --> src\test_over
+flow.rs:333:10
+    |
+333 |     let (env, 
+client, _admin) = 
+setup_test();
+    |          ^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+   --> src\test\test
+_invoice_categories.
+rs:164:10
+    |
+164 |     let (env, 
+client, _admin) = 
+setup_env();
+    |          ^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_env`
+
+warning: unused 
+variable: `env`
+   --> src\test\test
+_invoice_categories.
+rs:271:10
+    |
+271 |     let (env, 
+client, _admin) = 
+setup_env();
+    |          ^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_env`
+
+warning: unused 
+variable: 
+`token_client`
+   --> 
+src\test.rs:449:9
+    |
+449 |     let 
+token_client = token
+::Client::new(&env, 
+&currency);
+    |         
+^^^^^^^^^^^^ help: 
+if this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_token_client`
+
+warning: unused 
+variable: `i`
+    --> 
+src\test.rs:2202:9
+     |
+2202 |     for i in 
+0..10 {
+     |         ^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_i`
+
+warning: unused 
+variable: `i`
+    --> 
+src\test.rs:2262:9
+     |
+2262 |     for i in 
+0..5 {
+     |         ^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_i`
+
+warning: unused 
+variable: `desc`
+    --> 
+src\test.rs:2263:13
+     |
+2263 |         let 
+desc = String::from_
+str(&env, "Backup");
+     |             
+^^^^ help: if this 
+is intentional, 
+prefix it with an 
+underscore: `_desc`
+
+warning: unused 
+variable: `i`
+    --> 
+src\test.rs:2346:9
+     |
+2346 |     for i in 
+0..7 {
+     |         ^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_i`
+
+warning: unused 
+variable: `i`
+    --> 
+src\test.rs:2384:9
+     |
+2384 |     for i in 
+0..5 {
+     |         ^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_i`
+
+warning: unused 
+variable: `i`
+    --> 
+src\test.rs:2410:9
+     |
+2410 |     for i in 
+0..10 {
+     |         ^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_i`
+
+warning: unused 
+variable: `i`
+    --> 
+src\test.rs:2476:9
+     |
+2476 |     for i in 
+0..6 {
+     |         ^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_i`
+
+warning: unused 
+variable: `bid1`
+   --> src\test_bid_
+ranking.rs:172:9
+    |
+172 |     let bid1 
+= client.place_bid(&
+investor1, 
+&invoice_id, 
+&5_000, &6_000);
+    |         ^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_bid1`
+
+warning: unused 
+variable: `bid3`
+   --> src\test_bid_
+ranking.rs:178:9
+    |
+178 |     let bid3 
+= client.place_bid(&
+investor3, 
+&invoice_id, 
+&5_000, &6_500);
+    |         ^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_bid3`
+
+warning: unused 
+variable: `admin`
+  --> src\test_fees.
+rs:24:65
+   |
+24 | fn 
+setup_investor(env: 
+&Env, client: &Quick
+LendXContractClient,
+ admin: &Address) 
+-> Address {
+   |                
+                    
+                    
+         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_fees
+.rs:214:9
+    |
+214 |     let admin 
+= setup_admin(&env, 
+&client);
+    |         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+  --> src\test_audit
+.rs:53:23
+   |
+53 |     let (env, 
+client, admin, 
+business) = setup();
+   |                
+       ^^^^^ help: 
+if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_curr
+ency.rs:221:23
+    |
+221 |     let (env, 
+client, admin) = 
+setup();
+    |               
+        ^^^^^ help: 
+if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_erro
+rs.rs:207:23
+    |
+207 |     let (env, 
+client, admin) = 
+setup();
+    |               
+        ^^^^^ help: 
+if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: 
+`token_client`
+  --> src\test_event
+s.rs:91:9
+   |
+91 |     let 
+token_client = token
+::Client::new(&env, 
+&currency);
+   |         
+^^^^^^^^^^^^ help: 
+if this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_token_client`
+
+warning: unused 
+variable: `invoice2`
+   --> src\test_defa
+ult.rs:509:9
+    |
+509 |     let 
+invoice2 = client.ge
+t_invoice(&invoice2_
+id);
+    |         
+^^^^^^^^ help: if 
+this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_invoice2`
+
+warning: unused 
+variable: `admin`
+   --> src\test_part
+ial_payments.rs:542:
+5
+    |
+542 |     admin: 
+&Address,
+    |     ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `actor`
+   --> src\test_quer
+ies.rs:403:9
+    |
+403 |     let actor 
+= Address::generate(
+&env);
+    |         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_actor`
+
+warning: unused 
+variable: 
+`filter_inv1`
+   --> src\test_quer
+ies.rs:449:9
+    |
+449 |     let 
+filter_inv1 = 
+AuditQueryFilter {
+    |         
+^^^^^^^^^^^ help: 
+if this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_filter_inv1`
+
+warning: unused 
+variable: 
+`filter_created`
+   --> src\test_quer
+ies.rs:472:9
+    |
+472 |     let 
+filter_created = 
+AuditQueryFilter {
+    |         
+^^^^^^^^^^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_filter_created`
+
+warning: unused 
+variable: `env`
+   --> src\test_back
+up.rs:181:10
+    |
+181 |     let (env, 
+client, admin) = 
+setup();
+    |          ^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_env`
+
+warning: unused 
+variable: 
+`contract_id`
+   --> src\test_insu
+rance.rs:160:23
+    |
+160 |     let (env, 
+client, 
+contract_id) = 
+setup();
+    |               
+        ^^^^^^^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_contract_id`
+
+warning: unused 
+variable: `admin`
+   --> src\test_inve
+stor_kyc.rs:104:27
+    |
+104 |         let 
+(env, client, 
+admin) = setup();
+    |               
+            ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: 
+`non_admin`
+   --> src\test_inve
+stor_kyc.rs:181:13
+    |
+181 |         let 
+non_admin = Address:
+:generate(&env);
+    |             
+^^^^^^^^^ help: if 
+this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_non_admin`
+
+warning: unused 
+variable: `result`
+   --> src\test_inve
+stor_kyc.rs:194:13
+    |
+194 |         let 
+result = client.try_
+verify_investor(&inv
+estor, 
+&investment_limit);
+    |             
+^^^^^^ help: if 
+this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_result`
+
+warning: unused 
+variable: `admin`
+   --> src\test_inve
+stor_kyc.rs:201:27
+    |
+201 |         let 
+(env, client, 
+admin) = setup();
+    |               
+            ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `business`
+   --> src\test_inve
+stor_kyc.rs:484:13
+    |
+484 |         let 
+business = Address::
+generate(&env);
+    |             
+^^^^^^^^ help: if 
+this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_business`
+
+warning: unused 
+variable: 
+`high_risk`
+   --> src\test_inve
+stor_kyc.rs:612:13
+    |
+612 |         let 
+high_risk = client.g
+et_investors_by_risk
+_level(&InvestorRisk
+Level::High);
+    |             
+^^^^^^^^^ help: if 
+this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_high_risk`
+
+warning: unused 
+variable: `admin`
+   --> src\test_inve
+stor_kyc.rs:754:27
+    |
+754 |         let 
+(env, client, 
+admin) = setup();
+    |               
+            ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+  --> src\test_profi
+t_fee_formula.rs:40:
+65
+   |
+40 | fn 
+setup_investor(env: 
+&Env, client: &Quick
+LendXContractClient,
+ admin: &Address) 
+-> Address {
+   |                
+                    
+                    
+         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+  --> src\test_profi
+t_fee_formula.rs:80:
+9
+   |
+80 |     let admin 
+= setup_admin(&env, 
+&client);
+   |         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_prof
+it_fee_formula.rs:10
+3:9
+    |
+103 |     let admin 
+= setup_admin(&env, 
+&client);
+    |         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_prof
+it_fee_formula.rs:12
+6:9
+    |
+126 |     let admin 
+= setup_admin(&env, 
+&client);
+    |         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_prof
+it_fee_formula.rs:30
+1:9
+    |
+301 |     let admin 
+= setup_admin(&env, 
+&client);
+    |         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_prof
+it_fee_formula.rs:34
+3:9
+    |
+343 |     let admin 
+= setup_admin(&env, 
+&client);
+    |         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_prof
+it_fee_formula.rs:37
+4:9
+    |
+374 |     let admin 
+= setup_admin(&env, 
+&client);
+    |         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_prof
+it_fee_formula.rs:59
+0:9
+    |
+590 |     let admin 
+= setup_admin(&env, 
+&client);
+    |         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: `admin`
+   --> src\test_prof
+it_fee_formula.rs:60
+4:9
+    |
+604 |     let admin 
+= setup_admin(&env, 
+&client);
+    |         ^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: `_admin`
+
+warning: unused 
+variable: 
+`bid_id_placed`
+  --> src\test_bid_q
+ueries.rs:77:9
+   |
+77 |     let 
+bid_id_placed = clie
+nt.place_bid(&invest
+or, &invoice_id, 
+&1_000, &1_200);
+   |         
+^^^^^^^^^^^^^ help: 
+if this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_bid_id_placed`
+
+warning: unused 
+variable: 
+`bid_id_expired`
+  --> src\test_bid_q
+ueries.rs:90:9
+   |
+90 |     let 
+bid_id_expired = cli
+ent.place_bid(&inves
+tor, &invoice_id, 
+&4_000, &4_800);
+   |         
+^^^^^^^^^^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_bid_id_expired`
+
+warning: 
+irrefutable `if 
+let` pattern
+  --> src\test_event
+s_debug.rs:16:20
+   |
+16 |                
+ if let xdr::Contrac
+tEventBody::V0(v0) 
+= body {
+   |                
+    ^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^
+^^^^^
+   |
+   = note: this 
+pattern will always 
+match, so the `if 
+let` is useless
+   = help: consider 
+replacing the `if 
+let` with a `let`
+   = note: `#[warn(i
+rrefutable_let_patte
+rns)]` on by default
+
+Some errors have 
+detailed 
+explanations: 
+E0277, E0282, E0599.
+For more 
+information about 
+an error, try 
+`rustc --explain 
+E0277`.
+warning: `quicklendx
+-contracts` (lib 
+test) generated 151 
+warnings
+error: could not 
+compile `quicklendx-
+contracts` (lib 
+test) due to 11 
+previous errors; 
+151 warnings emitted

@@ -3,7 +3,7 @@ use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
 use crate::bid::{Bid, BidStatus, BidStorage};
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::{Address as _, Events, Ledger},
     Address, BytesN, Env, String, Vec,
 };
 
@@ -631,11 +631,8 @@ fn test_get_investments_by_investor_after_single_investment() {
     client.accept_bid(&invoice_id, &bid_id);
     
     // Query investments
-    let investments = client.get_investments_by_investor(&investor);
-    assert_eq!(investments.len(), 1, "Should have 1 investment");
-    
-    let investment_ids = client.get_investment_ids_by_investor(&investor);
-    assert_eq!(investment_ids.len(), 1, "Should have 1 investment ID");
+    let investment_ids = client.get_investments_by_investor(&investor);
+    assert_eq!(investment_ids.len(), 1, "Should have 1 investment");
 }
 
 #[test]
@@ -662,16 +659,20 @@ fn test_get_investments_by_investor_multiple_investments() {
     client.accept_bid(&invoice_id3, &bid_id3);
     
     // Query investments
-    let investments = client.get_investments_by_investor(&investor);
-    assert_eq!(investments.len(), 3, "Should have 3 investments");
+    let investment_ids = client.get_investments_by_investor(&investor);
+    assert_eq!(investment_ids.len(), 3, "Should have 3 investments");
     
     // Verify all investments belong to the investor
-    for investment in investments.iter() {
+    for id in investment_ids.iter() {
+        let investment = client.get_investment(&id);
         assert_eq!(investment.investor, investor, "All investments should belong to investor");
     }
     
     // Verify investment amounts
-    let amounts: soroban_sdk::Vec<i128> = investments.iter().map(|inv| inv.amount).collect();
+    let mut amounts = soroban_sdk::Vec::new(&env);
+    for id in investment_ids.iter() {
+        amounts.push_back(client.get_investment(&id).amount);
+    }
     assert!(amounts.contains(&5_000), "Should contain investment of 5,000");
     assert!(amounts.contains(&7_500), "Should contain investment of 7,500");
     assert!(amounts.contains(&10_000), "Should contain investment of 10,000");
@@ -703,14 +704,16 @@ fn test_get_investments_by_investor_only_returns_investor_investments() {
     // Query investor1's investments
     let investments1 = client.get_investments_by_investor(&investor1);
     assert_eq!(investments1.len(), 1, "Investor1 should have 1 investment");
-    assert_eq!(investments1.get(0).unwrap().investor, investor1);
-    assert_eq!(investments1.get(0).unwrap().amount, 5_000);
+    let inv1 = client.get_investment(&investments1.get(0).unwrap());
+    assert_eq!(inv1.investor, investor1);
+    assert_eq!(inv1.amount, 5_000);
     
     // Query investor2's investments
     let investments2 = client.get_investments_by_investor(&investor2);
     assert_eq!(investments2.len(), 1, "Investor2 should have 1 investment");
-    assert_eq!(investments2.get(0).unwrap().investor, investor2);
-    assert_eq!(investments2.get(0).unwrap().amount, 7_500);
+    let inv2 = client.get_investment(&investments2.get(0).unwrap());
+    assert_eq!(inv2.investor, investor2);
+    assert_eq!(inv2.amount, 7_500);
 }
 
 #[test]
@@ -718,7 +721,7 @@ fn test_get_investor_investments_paged_empty() {
     let (env, client) = setup();
     let investor = Address::generate(&env);
     
-    let paged = client.get_investor_investments_paged(&investor, &0u32, &10u32);
+    let paged = client.get_investor_investments_paged(&investor, &None, &0u32, &10u32);
     assert_eq!(paged.len(), 0, "Should have no investments");
 }
 
@@ -748,20 +751,20 @@ fn test_get_investor_investments_paged_pagination() {
     }
     
     // Page 1: offset 0, limit 2
-    let page1 = client.get_investor_investments_paged(&investor, &0u32, &2u32);
+    let page1 = client.get_investor_investments_paged(&investor, &None, &0u32, &2u32);
     assert_eq!(page1.len(), 2, "Page 1 should have 2 investments");
     
     // Page 2: offset 2, limit 2
-    let page2 = client.get_investor_investments_paged(&investor, &2u32, &2u32);
+    let page2 = client.get_investor_investments_paged(&investor, &None, &2u32, &2u32);
     assert_eq!(page2.len(), 2, "Page 2 should have 2 investments");
     
     // Page 3: offset 4, limit 2 (only 1 left)
-    let page3 = client.get_investor_investments_paged(&investor, &4u32, &2u32);
+    let page3 = client.get_investor_investments_paged(&investor, &None, &4u32, &2u32);
     assert_eq!(page3.len(), 1, "Page 3 should have 1 investment");
     
     // Verify no overlap between pages
-    let id1 = page1.get(0).unwrap().investment_id;
-    let id2 = page2.get(0).unwrap().investment_id;
+    let id1 = page1.get(0).unwrap();
+    let id2 = page2.get(0).unwrap();
     assert_ne!(id1, id2, "Pages should not overlap");
 }
 
@@ -783,7 +786,7 @@ fn test_get_investor_investments_paged_offset_beyond_length() {
     }
     
     // Query with offset beyond length
-    let paged = client.get_investor_investments_paged(&investor, &10u32, &5u32);
+    let paged = client.get_investor_investments_paged(&investor, &None, &10u32, &5u32);
     assert_eq!(paged.len(), 0, "Should return empty when offset beyond length");
 }
 
@@ -803,7 +806,7 @@ fn test_get_investor_investments_paged_limit_zero() {
     client.accept_bid(&invoice_id, &bid_id);
     
     // Query with limit 0
-    let paged = client.get_investor_investments_paged(&investor, &0u32, &0u32);
+    let paged = client.get_investor_investments_paged(&investor, &None, &0u32, &0u32);
     assert_eq!(paged.len(), 0, "Should return empty when limit is 0");
 }
 
@@ -833,7 +836,7 @@ fn test_get_investor_investments_paged_respects_max_query_limit() {
     }
     
     // Query with very large limit
-    let paged = client.get_investor_investments_paged(&investor, &0u32, &500u32);
+    let paged = client.get_investor_investments_paged(&investor, &None, &0u32, &500u32);
     assert_eq!(
         paged.len(),
         crate::MAX_QUERY_LIMIT,
@@ -872,11 +875,14 @@ fn test_get_investments_by_investor_after_mixed_bid_outcomes() {
     client.withdraw_bid(&bid_id4);
     
     // Query investments - should only return accepted bids
-    let investments = client.get_investments_by_investor(&investor);
-    assert_eq!(investments.len(), 2, "Should have 2 investments (only accepted bids)");
+    let investment_ids = client.get_investments_by_investor(&investor);
+    assert_eq!(investment_ids.len(), 2, "Should have 2 investments (only accepted bids)");
     
     // Verify investment amounts match accepted bids
-    let amounts: soroban_sdk::Vec<i128> = investments.iter().map(|inv| inv.amount).collect();
+    let mut amounts = soroban_sdk::Vec::new(&env);
+    for id in investment_ids.iter() {
+        amounts.push_back(client.get_investment(&id).amount);
+    }
     assert!(amounts.contains(&5_000), "Should contain investment from bid 1");
     assert!(amounts.contains(&10_000), "Should contain investment from bid 3");
     assert!(!amounts.contains(&7_500), "Should not contain withdrawn bid 2");
@@ -921,22 +927,26 @@ fn test_investment_queries_comprehensive_workflow() {
     client.withdraw_bid(&bid_id6);
     
     // Test get_investments_by_investor
-    let all_investments = client.get_investments_by_investor(&investor);
-    assert_eq!(all_investments.len(), 3, "Should have 3 investments");
+    let all_investment_ids = client.get_investments_by_investor(&investor);
+    assert_eq!(all_investment_ids.len(), 3, "Should have 3 investments");
     
     // Test get_investor_investments_paged with pagination
-    let page1 = client.get_investor_investments_paged(&investor, &0u32, &2u32);
+    let page1 = client.get_investor_investments_paged(&investor, &None, &0u32, &2u32);
     assert_eq!(page1.len(), 2, "Page 1 should have 2 investments");
     
-    let page2 = client.get_investor_investments_paged(&investor, &2u32, &2u32);
+    let page2 = client.get_investor_investments_paged(&investor, &None, &2u32, &2u32);
     assert_eq!(page2.len(), 1, "Page 2 should have 1 investment");
     
     // Verify total investment amount
-    let total_invested: i128 = all_investments.iter().map(|inv| inv.amount).fold(0i128, |acc, amt| acc + amt);
+    let mut total_invested = 0i128;
+    for id in all_investment_ids.iter() {
+        total_invested += client.get_investment(&id).amount;
+    }
     assert_eq!(total_invested, 30_000, "Total invested should be 30,000 (5k + 10k + 15k)");
     
     // Verify all investments are Active
-    for investment in all_investments.iter() {
+    for id in all_investment_ids.iter() {
+        let investment = client.get_investment(&id);
         assert_eq!(investment.status, crate::investment::InvestmentStatus::Active);
     }
 }
