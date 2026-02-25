@@ -1976,7 +1976,7 @@ fn test_create_and_restore_backup() {
     let admin = Address::generate(&env);
     env.mock_all_auths();
     client.set_admin(&admin);
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
 
     // Create test invoices
     let business = Address::generate(&env);
@@ -2048,7 +2048,7 @@ fn test_backup_validation() {
     let admin = Address::generate(&env);
     env.mock_all_auths();
     client.set_admin(&admin);
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
 
     // Create test invoice
     let business = Address::generate(&env);
@@ -4875,7 +4875,7 @@ fn test_store_invoice_max_due_date_boundary() {
     client.add_currency(&admin, &currency);
 
     // Initialize protocol limits
-    client.initialize_protocol_limits(&admin, &1000000i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1000000i128, &100i128, &100u32, &365u64, &86400u64);
 
     let amount = 1000000i128;
     let description = String::from_str(&env, "Test invoice");
@@ -4940,7 +4940,7 @@ fn test_upload_invoice_max_due_date_boundary() {
     client.verify_business(&admin, &business);
 
     // Initialize protocol limits
-    client.initialize_protocol_limits(&admin, &1000000i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1000000i128, &100i128, &100u32, &365u64, &86400u64);
 
     let amount = 1000000i128;
     let description = String::from_str(&env, "Test invoice");
@@ -5003,7 +5003,7 @@ fn test_custom_max_due_date_limits() {
     client.add_currency(&admin, &currency);
 
     // Initialize protocol limits with custom max due date (30 days)
-    client.initialize_protocol_limits(&admin, &1000000i128, &30u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1000000i128, &100i128, &100u32, &30u64, &86400u64);
 
     let amount = 1000000i128;
     let description = String::from_str(&env, "Test invoice");
@@ -5037,7 +5037,7 @@ fn test_custom_max_due_date_limits() {
     assert_eq!(result, Err(Ok(QuickLendXError::InvoiceDueDateInvalid)));
 
     // Test 3: Update limits to 730 days and test old boundary now succeeds
-    client.set_protocol_limits(&admin, &1000000i128, &730u64, &86400u64);
+    client.set_protocol_limits(&admin, &1000000i128, &100i128, &100u32, &730u64, &86400u64);
     let old_over_max_due_date = current_time + (365 * 86400);
     let invoice_id2 = client.store_invoice(
         &business,
@@ -5067,7 +5067,7 @@ fn test_due_date_bounds_edge_cases() {
     client.add_currency(&admin, &currency);
 
     // Initialize with minimum max due date (1 day)
-    client.initialize_protocol_limits(&admin, &1000000i128, &1u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1000000i128, &100i128, &100u32, &1u64, &86400u64);
 
     let amount = 1000000i128;
     let description = String::from_str(&env, "Test invoice");

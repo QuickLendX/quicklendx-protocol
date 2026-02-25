@@ -1273,6 +1273,8 @@ impl QuickLendXContract {
         env: Env,
         admin: Address,
         min_invoice_amount: i128,
+        min_bid_amount: i128,
+        min_bid_bps: u32,
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
@@ -1281,6 +1283,29 @@ impl QuickLendXContract {
             env,
             admin,
             min_invoice_amount,
+            min_bid_amount,
+            min_bid_bps,
+            max_due_date_days,
+            grace_period_seconds,
+        )
+    }
+
+    /// Update protocol limits (admin only).
+    pub fn set_protocol_limits(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        min_bid_amount: i128,
+        min_bid_bps: u32,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+    ) -> Result<(), QuickLendXError> {
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+            env,
+            admin,
+            min_invoice_amount,
+            min_bid_amount,
+            min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
         )
