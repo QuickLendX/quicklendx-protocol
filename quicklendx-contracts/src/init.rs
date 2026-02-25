@@ -25,7 +25,7 @@
 //! - `set_fee_config()` - Update fee configuration
 //! - `add_currency()` - Add whitelisted currencies
 
-use crate::admin::ADMIN_INITIALIZED_KEY;
+use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 

@@ -279,7 +279,10 @@ impl QuickLendXContract {
     /// - Can only be called once
     /// - No authorization required for initial setup
     /// - Admin address is permanently stored
-    pub fn initialize_protocol_limits(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+    pub fn init_protocol_limits_defaults(
+        env: Env,
+        admin: Address,
+    ) -> Result<(), QuickLendXError> {
         protocol_limits::ProtocolLimitsContract::initialize(env, admin)
     }
 
@@ -309,17 +312,20 @@ impl QuickLendXContract {
     ///
     /// - Requires admin authorization
     /// - All parameters validated before storage
-    pub fn set_protocol_limits(
+    pub fn set_protocol_limits_basic(
         env: Env,
         admin: Address,
         min_invoice_amount: i128,
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
+        let current_limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
             min_invoice_amount,
+            current_limits.min_bid_amount,
+            current_limits.min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
         )
