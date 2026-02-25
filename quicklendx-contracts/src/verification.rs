@@ -119,7 +119,6 @@ impl BusinessVerificationStorage {
         Self::store_verification(env, verification);
     }
 
-    #[cfg(test)]
     pub fn is_business_verified(env: &Env, business: &Address) -> bool {
         if let Some(verification) = Self::get_verification(env, business) {
             matches!(verification.status, BusinessVerificationStatus::Verified)
@@ -631,7 +630,6 @@ pub fn get_business_verification_status(
     BusinessVerificationStorage::get_verification(env, business)
 }
 
-#[cfg(test)]
 pub fn require_business_verification(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
     if !BusinessVerificationStorage::is_business_verified(env, business) {
         return Err(QuickLendXError::BusinessNotVerified);
