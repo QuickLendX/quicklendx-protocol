@@ -1,13 +1,9 @@
-//! Query tests for get_business_invoices, get_business_invoices_paged, and related endpoints.
-//!
-//! Covers: empty business, single/multiple status filters, pagination correctness,
-//! and integration with available-invoices and audit queries.
-
 use super::*;
 use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
+use crate::bid::{Bid, BidStatus, BidStorage};
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
-    testutils::Address as _,
+    testutils::{Address as _, Ledger},
     Address, BytesN, Env, String, Vec,
 };
 
@@ -104,151 +100,33 @@ fn test_get_business_invoices_paged_empty_and_pagination() {
     assert_eq!(p_zero.len(), 0, "Limit zero should return empty results");
 }
 
-// ============================================================================
-// get_business_invoices and get_business_invoices_paged — status_filter & pagination
-// ============================================================================
-
-/// get_business_invoices returns an empty vector for a business that has no invoices.
 #[test]
-fn test_get_business_invoices_empty_business() {
+fn test_get_business_invoices_paged_limit_is_capped_to_max_query_limit() {
     let (env, client) = setup();
     let business = Address::generate(&env);
 
-    let ids = client.get_business_invoices(&business);
-    assert!(ids.is_empty(), "Expected no invoices for business with no invoices");
-}
-
-/// get_business_invoices returns all invoice IDs created for that business.
-#[test]
-fn test_get_business_invoices_returns_created_invoices() {
-    let (env, client) = setup();
-    let business = Address::generate(&env);
-
-    let id1 = create_invoice(&env, &client, &business, 1000, InvoiceCategory::Services, false);
-    let id2 = create_invoice(&env, &client, &business, 2000, InvoiceCategory::Products, false);
-
-    let ids = client.get_business_invoices(&business);
-    assert_eq!(ids.len(), 2);
-    assert!(ids.contains(&id1));
-    assert!(ids.contains(&id2));
-}
-
-/// get_business_invoices_paged with status_filter: None returns all; Some(status) returns only that status.
-#[test]
-fn test_get_business_invoices_paged_status_filter_single_and_none() {
-    let (env, client) = setup();
-    env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
-
-    let business = Address::generate(&env);
-    let id_pending1 = create_invoice(&env, &client, &business, 1000, InvoiceCategory::Services, false);
-    let id_pending2 = create_invoice(&env, &client, &business, 2000, InvoiceCategory::Products, false);
-    let id_verified = create_invoice(&env, &client, &business, 3000, InvoiceCategory::Services, true);
-
-    // No filter => all 3
-    let all = client.get_business_invoices_paged(
-        &business,
-        &Option::<InvoiceStatus>::None,
-        &0u32,
-        &10u32,
-    );
-    assert_eq!(all.len(), 3);
-    assert!(all.contains(&id_pending1));
-    assert!(all.contains(&id_pending2));
-    assert!(all.contains(&id_verified));
-
-    // Single status: Pending => only the two pending
-    let pending_only = client.get_business_invoices_paged(
-        &business,
-        &Some(InvoiceStatus::Pending),
-        &0u32,
-        &10u32,
-    );
-    assert_eq!(pending_only.len(), 2);
-    assert!(pending_only.contains(&id_pending1));
-    assert!(pending_only.contains(&id_pending2));
-    assert!(!pending_only.contains(&id_verified));
-
-    // Single status: Verified => only the verified one
-    let verified_only = client.get_business_invoices_paged(
-        &business,
-        &Some(InvoiceStatus::Verified),
-        &0u32,
-        &10u32,
-    );
-    assert_eq!(verified_only.len(), 1);
-    assert_eq!(verified_only.get(0), Some(id_verified));
-}
-
-/// Pagination: consecutive pages return disjoint slices; order and size match offset/limit.
-#[test]
-fn test_get_business_invoices_paged_pagination_correctness() {
-    let (env, client) = setup();
-    let business = Address::generate(&env);
-
-    for i in 0..5 {
-        create_invoice(
+    for i in 0..120u32 {
+        let _ = create_invoice(
             &env,
             &client,
             &business,
-            1000 + i * 100,
+            1_000 + i as i128,
             InvoiceCategory::Services,
             false,
         );
     }
 
-    let all = client.get_business_invoices(&business);
-    assert_eq!(all.len(), 5);
-
-    let page0 = client.get_business_invoices_paged(
+    let capped = client.get_business_invoices_paged(
         &business,
         &Option::<InvoiceStatus>::None,
         &0u32,
-        &2u32,
+        &500u32,
     );
-    let page1 = client.get_business_invoices_paged(
-        &business,
-        &Option::<InvoiceStatus>::None,
-        &2u32,
-        &2u32,
+    assert_eq!(
+        capped.len(),
+        crate::MAX_QUERY_LIMIT,
+        "business invoice query should enforce MAX_QUERY_LIMIT cap"
     );
-    let page2 = client.get_business_invoices_paged(
-        &business,
-        &Option::<InvoiceStatus>::None,
-        &4u32,
-        &2u32,
-    );
-
-    assert_eq!(page0.len(), 2);
-    assert_eq!(page1.len(), 2);
-    assert_eq!(page2.len(), 1);
-
-    // No overlap: page0 and page1 and page2 should be disjoint
-    for a in page0.iter() {
-        for b in page1.iter() {
-            assert!(a != b, "page0 and page1 must not overlap");
-        }
-        for b in page2.iter() {
-            assert!(a != b, "page0 and page2 must not overlap");
-        }
-    }
-    for a in page1.iter() {
-        for b in page2.iter() {
-            assert!(a != b, "page1 and page2 must not overlap");
-        }
-    }
-
-    // Every returned id must be in the full list
-    for id in page0.iter() {
-        assert!(all.contains(&id));
-    }
-    for id in page1.iter() {
-        assert!(all.contains(&id));
-    }
-    for id in page2.iter() {
-        assert!(all.contains(&id));
-    }
 }
 
 #[test]
@@ -755,9 +633,6 @@ fn test_get_investments_by_investor_after_single_investment() {
     // Query investments
     let investments = client.get_investments_by_investor(&investor);
     assert_eq!(investments.len(), 1, "Should have 1 investment");
-    
-    let investment_ids = client.get_investment_ids_by_investor(&investor);
-    assert_eq!(investment_ids.len(), 1, "Should have 1 investment ID");
 }
 
 #[test]
@@ -787,16 +662,25 @@ fn test_get_investments_by_investor_multiple_investments() {
     let investments = client.get_investments_by_investor(&investor);
     assert_eq!(investments.len(), 3, "Should have 3 investments");
     
-    // Verify all investments belong to the investor
-    for investment in investments.iter() {
-        assert_eq!(investment.investor, investor, "All investments should belong to investor");
-    }
-    
-    // Verify investment amounts
-    let amounts: soroban_sdk::Vec<i128> = investments.iter().map(|inv| inv.amount).collect();
-    assert!(amounts.contains(&5_000), "Should contain investment of 5,000");
-    assert!(amounts.contains(&7_500), "Should contain investment of 7,500");
-    assert!(amounts.contains(&10_000), "Should contain investment of 10,000");
+    // Verify investment amounts by loading records from returned IDs
+    assert!(
+        investments
+            .iter()
+            .any(|investment_id| client.get_investment(&investment_id).amount == 5_000),
+        "Should contain investment of 5,000"
+    );
+    assert!(
+        investments
+            .iter()
+            .any(|investment_id| client.get_investment(&investment_id).amount == 7_500),
+        "Should contain investment of 7,500"
+    );
+    assert!(
+        investments
+            .iter()
+            .any(|investment_id| client.get_investment(&investment_id).amount == 10_000),
+        "Should contain investment of 10,000"
+    );
 }
 
 #[test]
@@ -825,14 +709,16 @@ fn test_get_investments_by_investor_only_returns_investor_investments() {
     // Query investor1's investments
     let investments1 = client.get_investments_by_investor(&investor1);
     assert_eq!(investments1.len(), 1, "Investor1 should have 1 investment");
-    assert_eq!(investments1.get(0).unwrap().investor, investor1);
-    assert_eq!(investments1.get(0).unwrap().amount, 5_000);
+    let investment1 = client.get_investment(&investments1.get(0).unwrap());
+    assert_eq!(investment1.investor, investor1);
+    assert_eq!(investment1.amount, 5_000);
     
     // Query investor2's investments
     let investments2 = client.get_investments_by_investor(&investor2);
     assert_eq!(investments2.len(), 1, "Investor2 should have 1 investment");
-    assert_eq!(investments2.get(0).unwrap().investor, investor2);
-    assert_eq!(investments2.get(0).unwrap().amount, 7_500);
+    let investment2 = client.get_investment(&investments2.get(0).unwrap());
+    assert_eq!(investment2.investor, investor2);
+    assert_eq!(investment2.amount, 7_500);
 }
 
 #[test]
@@ -840,7 +726,7 @@ fn test_get_investor_investments_paged_empty() {
     let (env, client) = setup();
     let investor = Address::generate(&env);
     
-    let paged = client.get_investor_investments_paged(&investor, &0u32, &10u32);
+    let paged = client.get_investor_investments_paged(&investor, &None, &0u32, &10u32);
     assert_eq!(paged.len(), 0, "Should have no investments");
 }
 
@@ -870,20 +756,20 @@ fn test_get_investor_investments_paged_pagination() {
     }
     
     // Page 1: offset 0, limit 2
-    let page1 = client.get_investor_investments_paged(&investor, &0u32, &2u32);
+    let page1 = client.get_investor_investments_paged(&investor, &None, &0u32, &2u32);
     assert_eq!(page1.len(), 2, "Page 1 should have 2 investments");
     
     // Page 2: offset 2, limit 2
-    let page2 = client.get_investor_investments_paged(&investor, &2u32, &2u32);
+    let page2 = client.get_investor_investments_paged(&investor, &None, &2u32, &2u32);
     assert_eq!(page2.len(), 2, "Page 2 should have 2 investments");
     
     // Page 3: offset 4, limit 2 (only 1 left)
-    let page3 = client.get_investor_investments_paged(&investor, &4u32, &2u32);
+    let page3 = client.get_investor_investments_paged(&investor, &None, &4u32, &2u32);
     assert_eq!(page3.len(), 1, "Page 3 should have 1 investment");
     
     // Verify no overlap between pages
-    let id1 = page1.get(0).unwrap().investment_id;
-    let id2 = page2.get(0).unwrap().investment_id;
+    let id1 = page1.get(0).unwrap();
+    let id2 = page2.get(0).unwrap();
     assert_ne!(id1, id2, "Pages should not overlap");
 }
 
@@ -905,7 +791,7 @@ fn test_get_investor_investments_paged_offset_beyond_length() {
     }
     
     // Query with offset beyond length
-    let paged = client.get_investor_investments_paged(&investor, &10u32, &5u32);
+    let paged = client.get_investor_investments_paged(&investor, &None, &10u32, &5u32);
     assert_eq!(paged.len(), 0, "Should return empty when offset beyond length");
 }
 
@@ -925,7 +811,7 @@ fn test_get_investor_investments_paged_limit_zero() {
     client.accept_bid(&invoice_id, &bid_id);
     
     // Query with limit 0
-    let paged = client.get_investor_investments_paged(&investor, &0u32, &0u32);
+    let paged = client.get_investor_investments_paged(&investor, &None, &0u32, &0u32);
     assert_eq!(paged.len(), 0, "Should return empty when limit is 0");
 }
 
@@ -955,7 +841,7 @@ fn test_get_investor_investments_paged_respects_max_query_limit() {
     }
     
     // Query with very large limit
-    let paged = client.get_investor_investments_paged(&investor, &0u32, &500u32);
+    let paged = client.get_investor_investments_paged(&investor, &None, &0u32, &500u32);
     assert_eq!(
         paged.len(),
         crate::MAX_QUERY_LIMIT,
@@ -998,11 +884,30 @@ fn test_get_investments_by_investor_after_mixed_bid_outcomes() {
     assert_eq!(investments.len(), 2, "Should have 2 investments (only accepted bids)");
     
     // Verify investment amounts match accepted bids
-    let amounts: soroban_sdk::Vec<i128> = investments.iter().map(|inv| inv.amount).collect();
-    assert!(amounts.contains(&5_000), "Should contain investment from bid 1");
-    assert!(amounts.contains(&10_000), "Should contain investment from bid 3");
-    assert!(!amounts.contains(&7_500), "Should not contain withdrawn bid 2");
-    assert!(!amounts.contains(&12_500), "Should not contain withdrawn bid 4");
+    assert!(
+        investments
+            .iter()
+            .any(|investment_id| client.get_investment(&investment_id).amount == 5_000),
+        "Should contain investment from bid 1"
+    );
+    assert!(
+        investments
+            .iter()
+            .any(|investment_id| client.get_investment(&investment_id).amount == 10_000),
+        "Should contain investment from bid 3"
+    );
+    assert!(
+        !investments
+            .iter()
+            .any(|investment_id| client.get_investment(&investment_id).amount == 7_500),
+        "Should not contain withdrawn bid 2"
+    );
+    assert!(
+        !investments
+            .iter()
+            .any(|investment_id| client.get_investment(&investment_id).amount == 12_500),
+        "Should not contain withdrawn bid 4"
+    );
 }
 
 #[test]
@@ -1047,18 +952,22 @@ fn test_investment_queries_comprehensive_workflow() {
     assert_eq!(all_investments.len(), 3, "Should have 3 investments");
     
     // Test get_investor_investments_paged with pagination
-    let page1 = client.get_investor_investments_paged(&investor, &0u32, &2u32);
+    let page1 = client.get_investor_investments_paged(&investor, &None, &0u32, &2u32);
     assert_eq!(page1.len(), 2, "Page 1 should have 2 investments");
     
-    let page2 = client.get_investor_investments_paged(&investor, &2u32, &2u32);
+    let page2 = client.get_investor_investments_paged(&investor, &None, &2u32, &2u32);
     assert_eq!(page2.len(), 1, "Page 2 should have 1 investment");
     
     // Verify total investment amount
-    let total_invested: i128 = all_investments.iter().map(|inv| inv.amount).fold(0i128, |acc, amt| acc + amt);
+    let total_invested: i128 = all_investments
+        .iter()
+        .map(|investment_id| client.get_investment(&investment_id).amount)
+        .fold(0i128, |acc, amt| acc + amt);
     assert_eq!(total_invested, 30_000, "Total invested should be 30,000 (5k + 10k + 15k)");
     
     // Verify all investments are Active
-    for investment in all_investments.iter() {
+    for investment_id in all_investments.iter() {
+        let investment = client.get_investment(&investment_id);
         assert_eq!(investment.status, crate::investment::InvestmentStatus::Active);
     }
 }

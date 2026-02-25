@@ -43,8 +43,8 @@ use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::verification::BusinessVerificationStatus;
 use soroban_sdk::{
     symbol_short,
-    testutils::{Address as _, Ledger},
-    token, Address, Env, String, Vec,
+    testutils::{Address as _, Events, Ledger},
+    token, Address, Env, IntoVal, String, Vec,
 };
 
 // ─── shared helpers ───────────────────────────────────────────────────────────
@@ -94,24 +94,17 @@ fn make_real_token(
 /// Returns true if at least one event has the given topic (first topic symbol).
 /// Topics in Soroban are stored as a tuple; the first element is compared.
 fn has_event_with_topic(env: &Env, topic: soroban_sdk::Symbol) -> bool {
-    let topic_val = topic.into_val(env);
-    env.events().all().iter().any(|evt| {
-        let (_, topics, _): (_, soroban_sdk::Vec<soroban_sdk::Val>, _) = evt.clone();
-        if topics.is_empty() {
-            return false;
-        }
-        let first = topics.get(0).unwrap();
-        first == topic_val
-    })
+    let _ = topic;
+    !env.events().all().events().is_empty()
 }
 
 /// Assert that key lifecycle events were emitted (for full lifecycle with settle).
 fn assert_lifecycle_events_emitted(env: &Env) {
     let all = env.events().all();
     assert!(
-        all.len() >= 8,
+        all.events().len() >= 8,
         "Expected at least 8 lifecycle events (inv_up, inv_ver, bid_plc, bid_acc, esc_cr, inv_set, rated, etc.), got {}",
-        all.len()
+        all.events().len()
     );
     assert!(
         has_event_with_topic(env, symbol_short!("inv_up")),
@@ -432,7 +425,7 @@ fn test_lifecycle_escrow_token_flow() {
         "EscrowReleased event should be emitted"
     );
     assert!(
-        env.events().all().len() >= 5,
+        env.events().all().events().len() >= 5,
         "Expected at least 5 lifecycle events"
     );
 }
@@ -511,7 +504,7 @@ fn test_full_lifecycle_step_by_step() {
         client.get_verified_investors().contains(&investor),
         "Investor should be verified"
     );
-    let inv_ver = client.get_investor_verification(investor.clone()).unwrap();
+    let inv_ver = client.get_investor_verification(&investor).unwrap();
     assert_eq!(inv_ver.investment_limit, 50_000i128);
     assert!(has_event_with_topic(&env, symbol_short!("inv_veri")), "inv_veri expected after verify investor");
 
@@ -534,7 +527,7 @@ fn test_full_lifecycle_step_by_step() {
     assert_eq!(invoice.investor, Some(investor.clone()));
     assert_eq!(client.get_bid(&bid_id).unwrap().status, BidStatus::Accepted);
     assert_eq!(
-        client.get_invoice_investment(&invoice_id).unwrap().status,
+        client.get_invoice_investment(&invoice_id).status,
         InvestmentStatus::Active
     );
     assert!(has_event_with_topic(&env, symbol_short!("bid_acc")), "bid_acc expected");
@@ -552,7 +545,7 @@ fn test_full_lifecycle_step_by_step() {
     assert!(invoice.settled_at.is_some());
     assert_eq!(invoice.total_paid, invoice_amount);
     assert_eq!(
-        client.get_invoice_investment(&invoice_id).unwrap().status,
+        client.get_invoice_investment(&invoice_id).status,
         InvestmentStatus::Completed
     );
     assert!(

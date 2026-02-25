@@ -54,7 +54,7 @@ fn test_export_analytics_data_success() {
     
     // Check event emission
     let events = env.events().all();
-    assert!(events.len() > 0, "Expected at least one event");
+    assert!(events.events().len() > 0, "Expected at least one event");
 }
 
 #[test]
