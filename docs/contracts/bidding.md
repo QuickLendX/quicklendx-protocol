@@ -36,7 +36,10 @@ pub fn place_bid(
 1. Invoice must exist and be in `Verified` status
 2. Investor must be authenticated (require_auth)
 3. Investor must be verified with valid KYC status
-4. Bid amount must be positive and meet minimum threshold (100)
+4. Bid amount must be positive and meet the minimum threshold:
+   - `min_bid = max(min_bid_amount, invoice.amount * min_bid_bps / 10_000)`
+   - Defaults: `min_bid_amount = 100`, `min_bid_bps = 100` (1% of invoice amount)
+   - Limits can be updated via `ProtocolLimitsContract::set_protocol_limits`
 5. Bid amount cannot exceed invoice amount
 6. Expected return must be greater than bid amount
 7. Bid amount cannot exceed investor's investment limit
