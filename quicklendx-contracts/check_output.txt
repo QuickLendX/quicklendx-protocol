@@ -1,0 +1,150 @@
+warning: unused import: `ADMIN_INITIALIZED_KEY`
+  --> src/init.rs:28:34
+   |
+28 | use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY};
+   |                                  ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `crate::currency::CurrencyWhitelist`
+  --> src/init.rs:29:5
+   |
+29 | use crate::currency::CurrencyWhitelist;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `env`
+   --> src/init.rs:203:9
+    |
+203 |         env: &Env,
+    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `env`
+   --> src/invoice.rs:164:13
+    |
+164 |             env: &Env,
+    |             ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: constant `TREASURY_KEY` is never used
+  --> src/init.rs:40:7
+   |
+40 | const TREASURY_KEY: Symbol = symbol_short!("treasury");
+   |       ^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: constant `FEE_BPS_KEY` is never used
+  --> src/init.rs:43:7
+   |
+43 | const FEE_BPS_KEY: Symbol = symbol_short!("fee_bps");
+   |       ^^^^^^^^^^^
+
+warning: constant `WHITELIST_KEY` is never used
+  --> src/init.rs:46:7
+   |
+46 | const WHITELIST_KEY: Symbol = symbol_short!("curr_wl");
+   |       ^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MIN_INVOICE_AMOUNT` is never used
+  --> src/init.rs:49:7
+   |
+49 | const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MAX_DUE_DATE_DAYS` is never used
+  --> src/init.rs:50:7
+   |
+50 | const DEFAULT_MAX_DUE_DATE_DAYS: u64 = 365;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_GRACE_PERIOD_SECONDS` is never used
+  --> src/init.rs:51:7
+   |
+51 | const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 7 * 24 * 60 * 60; // 7 days
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_FEE_BPS` is never used
+  --> src/init.rs:52:7
+   |
+52 | const DEFAULT_FEE_BPS: u32 = 200; // 2%
+   |       ^^^^^^^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src/init.rs:246:12
+    |
+101 | impl ProtocolInitializer {
+    | ------------------------ associated functions in this implementation
+...
+246 |     pub fn set_protocol_config(
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+308 |     pub fn set_fee_config(
+    |            ^^^^^^^^^^^^^^
+...
+345 |     pub fn set_treasury(
+    |            ^^^^^^^^^^^^
+...
+386 |     pub fn get_fee_bps(env: &Env) -> u32 {
+    |            ^^^^^^^^^^^
+...
+401 |     pub fn get_treasury(env: &Env) -> Option<Address> {
+    |            ^^^^^^^^^^^^
+...
+412 |     pub fn get_min_invoice_amount(env: &Env) -> i128 {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+425 |     pub fn get_max_due_date_days(env: &Env) -> u64 {
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+438 |     pub fn get_grace_period_seconds(env: &Env) -> u64 {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_protocol_config_updated` is never used
+   --> src/init.rs:474:4
+    |
+474 | fn emit_protocol_config_updated(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_fee_config_updated` is never used
+   --> src/init.rs:494:4
+    |
+494 | fn emit_fee_config_updated(env: &Env, admin: &Address, fee_bps: u32) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_treasury_updated` is never used
+   --> src/init.rs:502:4
+    |
+502 | fn emit_treasury_updated(env: &Env, admin: &Address, treasury: &Address) {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_TAG_LENGTH` is never used
+  --> src/protocol_limits.rs:29:11
+   |
+29 | pub const MAX_TAG_LENGTH: u32 = 50;
+   |           ^^^^^^^^^^^^^^
+
+warning: function `get_payment_count` is never used
+   --> src/settlement.rs:293:8
+    |
+293 | pub fn get_payment_count(env: &Env, invoice_id: &BytesN<32>) -> Result<u32, QuickLendXE...
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: function `get_payment_records` is never used
+   --> src/settlement.rs:312:8
+    |
+312 | pub fn get_payment_records(
+    |        ^^^^^^^^^^^^^^^^^^^
+
+warning: `quicklendx-contracts` (lib) generated 18 warnings (run `cargo fix --lib -p quicklendx-contracts` to apply 2 suggestions)
+    Checking quicklendx-contracts v0.1.0 (/home/dimka/Desktop/Ecosystem/stellar/quicklendx-protocol/quicklendx-contracts)
+error: this file contains an unclosed delimiter
+   --> src/test_partial_payments.rs:997:29
+    |
+2   | mod tests {
+    |           - unclosed delimiter
+...
+997 | // ESTIMATED COVERAGE: 95%+
+    |                            ^
+
+error: could not compile `quicklendx-contracts` (lib test) due to 1 previous error
