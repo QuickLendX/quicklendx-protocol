@@ -1,6 +1,6 @@
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address, Env, String};
 
-use crate::QuickLendXError;
+use crate::errors::QuickLendXError;
 
 /// Protocol limits configuration for invoice validation and default handling.
 ///
@@ -11,7 +11,8 @@ use crate::QuickLendXError;
 pub struct ProtocolLimits {
     /// Minimum acceptable invoice value in smallest currency unit (e.g., stroops)
     pub min_invoice_amount: i128,
-    /// Maximum days from current time for invoice due dates (1-730 days)
+    pub min_bid_amount: i128,
+    pub min_bid_bps: u32,
     pub max_due_date_days: u64,
     /// Grace period after due date before default can be triggered (0-2,592,000 seconds)
     pub grace_period_seconds: u64,
@@ -19,20 +20,46 @@ pub struct ProtocolLimits {
 
 /// Storage key for protocol limits
 const LIMITS_KEY: &str = "protocol_limits";
-/// Storage key for admin address
-const ADMIN_KEY: &str = "admin";
-/// Default minimum invoice amount: 1 token with 6 decimals
-const DEFAULT_MIN_AMOUNT: i128 = 1_000_000;
-/// Default maximum due date: 365 days (1 year)
+#[allow(dead_code)]
+const DEFAULT_MIN_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
+#[allow(dead_code)]
+const DEFAULT_MIN_BID_AMOUNT: i128 = 100; // Absolute bid floor (dust protection)
+#[allow(dead_code)]
+const DEFAULT_MIN_BID_BPS: u32 = 100; // 1% of invoice amount
+#[allow(dead_code)]
 const DEFAULT_MAX_DUE_DAYS: u64 = 365;
-/// Default grace period: 86400 seconds (24 hours)
-const DEFAULT_GRACE_PERIOD: u64 = 86400;
+#[allow(dead_code)]
+const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days
 
-/// Protocol limits contract for managing system-wide constraints
-#[contract]
+// String length limits
+pub const MAX_DESCRIPTION_LENGTH: u32 = 1024;
+pub const MAX_NAME_LENGTH: u32 = 150;
+pub const MAX_ADDRESS_LENGTH: u32 = 300;
+pub const MAX_TAX_ID_LENGTH: u32 = 50;
+pub const MAX_NOTES_LENGTH: u32 = 2000;
+pub const MAX_TAG_LENGTH: u32 = 50;
+pub const MAX_TRANSACTION_ID_LENGTH: u32 = 124;
+pub const MAX_DISPUTE_REASON_LENGTH: u32 = 1000;
+pub const MAX_DISPUTE_EVIDENCE_LENGTH: u32 = 2000;
+pub const MAX_DISPUTE_RESOLUTION_LENGTH: u32 = 2000;
+pub const MAX_NOTIFICATION_TITLE_LENGTH: u32 = 150;
+pub const MAX_NOTIFICATION_MESSAGE_LENGTH: u32 = 1000;
+pub const MAX_KYC_DATA_LENGTH: u32 = 5000;
+pub const MAX_REJECTION_REASON_LENGTH: u32 = 500;
+pub const MAX_FEEDBACK_LENGTH: u32 = 1000;
+
+pub fn check_string_length(s: &String, max_len: u32) -> Result<(), QuickLendXError> {
+    if s.len() > max_len {
+        return Err(QuickLendXError::InvalidDescription);
+    }
+    Ok(())
+}
+
+// Separate struct for protocol limits (not a contract, just a helper)
+#[allow(dead_code)]
 pub struct ProtocolLimitsContract;
 
-#[contractimpl]
+#[allow(dead_code)]
 impl ProtocolLimitsContract {
     /// Initialize protocol limits with default values.
     ///
@@ -70,6 +97,8 @@ impl ProtocolLimitsContract {
         // Set default limits
         let limits = ProtocolLimits {
             min_invoice_amount: DEFAULT_MIN_AMOUNT,
+            min_bid_amount: DEFAULT_MIN_BID_AMOUNT,
+            min_bid_bps: DEFAULT_MIN_BID_BPS,
             max_due_date_days: DEFAULT_MAX_DUE_DAYS,
             grace_period_seconds: DEFAULT_GRACE_PERIOD,
         };
@@ -111,6 +140,8 @@ impl ProtocolLimitsContract {
         env: Env,
         admin: Address,
         min_invoice_amount: i128,
+        min_bid_amount: i128,
+        min_bid_bps: u32,
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
@@ -133,7 +164,14 @@ impl ProtocolLimitsContract {
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        // Validate max_due_date_days (must be 1-730)
+        if min_bid_amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        if min_bid_bps > 10_000 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
         if max_due_date_days == 0 || max_due_date_days > 730 {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
         }
@@ -146,6 +184,8 @@ impl ProtocolLimitsContract {
         // Create and store updated limits
         let limits = ProtocolLimits {
             min_invoice_amount,
+            min_bid_amount,
+            min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
         };
@@ -179,6 +219,8 @@ impl ProtocolLimitsContract {
             .get(&LIMITS_KEY)
             .unwrap_or(ProtocolLimits {
                 min_invoice_amount: DEFAULT_MIN_AMOUNT,
+                min_bid_amount: DEFAULT_MIN_BID_AMOUNT,
+                min_bid_bps: DEFAULT_MIN_BID_BPS,
                 max_due_date_days: DEFAULT_MAX_DUE_DAYS,
                 grace_period_seconds: DEFAULT_GRACE_PERIOD,
             })
@@ -247,5 +289,16 @@ impl ProtocolLimitsContract {
     pub fn get_default_date(env: Env, due_date: u64) -> u64 {
         let limits = Self::get_protocol_limits(env.clone());
         due_date.saturating_add(limits.grace_period_seconds)
+    }
+}
+
+pub fn compute_min_bid_amount(invoice_amount: i128, limits: &ProtocolLimits) -> i128 {
+    let percent_min = invoice_amount
+        .saturating_mul(limits.min_bid_bps as i128)
+        .saturating_div(10_000);
+    if percent_min > limits.min_bid_amount {
+        percent_min
+    } else {
+        limits.min_bid_amount
     }
 }
