@@ -187,14 +187,6 @@ impl Invoice {
             self.metadata_line_items = metadata.line_items.clone();
             Ok(())
         }
-        business.require_auth();
-        metadata.validate()?;
-        self.metadata_customer_name = Some(metadata.customer_name.clone());
-        self.metadata_customer_address = Some(metadata.customer_address.clone());
-        self.metadata_tax_id = Some(metadata.tax_id.clone());
-        self.metadata_notes = Some(metadata.notes.clone());
-        self.metadata_line_items = metadata.line_items.clone();
-        Ok(())
     }
 
     /// Clear invoice metadata (business only)
@@ -677,7 +669,7 @@ impl Invoice {
     pub fn get_tags(&self) -> Vec<String> {
         self.tags.clone()
     }
-}
+
 
 /// Storage keys for invoice data
 pub struct InvoiceStorage;
