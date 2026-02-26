@@ -158,6 +158,21 @@ impl QuickLendXContract {
         init::ProtocolInitializer::is_initialized(&env)
     }
 
+    /// Get the protocol/contract version
+    ///
+    /// Returns the version written during initialization, or the current
+    /// PROTOCOL_VERSION constant if the contract has not been initialized yet.
+    ///
+    /// # Returns
+    /// * `u32` - The protocol version number
+    ///
+    /// # Version Format
+    /// Version is a simple integer increment (e.g., 1, 2, 3...)
+    /// Major versions indicate breaking changes that require migration.
+    pub fn get_version(env: Env) -> u32 {
+        init::ProtocolInitializer::get_protocol_version(&env)
+    }
+
     /// Initialize the admin address (deprecated: use initialize)
     pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         admin.require_auth();
