@@ -830,6 +830,30 @@ fn test_audit_invoice_cancelled_produces_entry() {
         &1000i128,
         &currency,
         &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &invoice::InvoiceCategory::Services,
+        &Vec::from_array(&env, [String::from_str(&env, "test")]),
+    ).unwrap();
+
+    client.cancel_invoice(&invoice_id);
+
+    let logs = client.query_audit_logs(
+        &None,
+        &None,
+        &None,
+        &None,
+        &None,
+        &10
+    );
+    
+    assert!(logs.len() >= 1);
+    
+    // Find the cancellation entry
+    let cancel_entry = logs.iter().find(|log| {
+        log.operation == audit::AuditOperation::InvoiceCancelled
+    }).unwrap();
+    
+    assert_eq!(cancel_entry.actor, business);
         &String::from_str(&env, "Cancel Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
