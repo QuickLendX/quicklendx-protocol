@@ -221,9 +221,13 @@ fn test_calculate_profit_large_amount_no_overflow() {
     let _ = client.initialize_admin(&admin);
     let investment_amount: i128 = 1_000_000_000_000_000_000_000_000_000_000_000_000;
     let payment_amount: i128 = 1_100_000_000_000_000_000_000_000_000_000_000_000;
-    let (investor_return, platform_fee) = client.calculate_profit(&investment_amount, &payment_amount);
+    let (investor_return, platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
 
     assert_eq!(platform_fee, 2_000_000_000_000_000_000_000_000_000_000_000);
-    assert_eq!(investor_return, 1_098_000_000_000_000_000_000_000_000_000_000_000);
+    assert_eq!(
+        investor_return,
+        1_098_000_000_000_000_000_000_000_000_000_000_000
+    );
     assert_eq!(investor_return + platform_fee, payment_amount);
 }

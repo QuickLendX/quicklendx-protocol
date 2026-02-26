@@ -658,7 +658,11 @@ pub fn verify_invoice_data(
     }
 
     // Validate due date is not too far in the future using protocol limits
-    crate::protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
+    crate::protocol_limits::ProtocolLimitsContract::validate_invoice(
+        env.clone(),
+        amount,
+        due_date,
+    )?;
     if description.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }

@@ -228,13 +228,13 @@ fn test_invalid_shares_not_summing_to_10000() {
     let treasury = Address::generate(&env);
 
     // Sum = 8000 (not 10000)
-    let result =
-        client.try_configure_revenue_distribution(&admin, &treasury, &3000, &3000, &2000, &false, &100);
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &3000, &3000, &2000, &false, &100);
     assert!(result.is_err(), "Shares not summing to 10000 should fail");
 
     // Sum = 12000
-    let result =
-        client.try_configure_revenue_distribution(&admin, &treasury, &5000, &4000, &3000, &false, &100);
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &5000, &4000, &3000, &false, &100);
     assert!(result.is_err(), "Shares exceeding 10000 should fail");
 }
 
@@ -366,9 +366,9 @@ fn test_accumulated_fees_distribution() {
         client.distribute_revenue(&admin, &current_period);
 
     // Total collected = 5 * 200 = 1000
-    assert_eq!(treasury_amount, 500);  // 50%
+    assert_eq!(treasury_amount, 500); // 50%
     assert_eq!(developer_amount, 300); // 30%
-    assert_eq!(platform_amount, 200);  // 20%
+    assert_eq!(platform_amount, 200); // 20%
     assert_eq!(treasury_amount + developer_amount + platform_amount, 1000);
 }
 
@@ -387,7 +387,10 @@ fn test_distribute_revenue_no_revenue_data_fails() {
 
     // No fees collected — period has no data
     let result = client.try_distribute_revenue(&admin, &9999);
-    assert!(result.is_err(), "Should fail when no revenue data exists for period");
+    assert!(
+        result.is_err(),
+        "Should fail when no revenue data exists for period"
+    );
 }
 
 #[test]

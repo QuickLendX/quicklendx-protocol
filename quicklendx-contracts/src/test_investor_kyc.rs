@@ -903,9 +903,15 @@ mod test_investor_kyc {
         let _ = client.try_reject_investor(&investor, &String::from_str(&env, "Insufficient docs"));
 
         // Resubmit with updated KYC
-        let updated_kyc = String::from_str(&env, "Comprehensive updated KYC data with all required documentation");
+        let updated_kyc = String::from_str(
+            &env,
+            "Comprehensive updated KYC data with all required documentation",
+        );
         let result = client.try_submit_investor_kyc(&investor, &updated_kyc);
-        assert!(result.is_ok(), "Rejected investor should be able to resubmit");
+        assert!(
+            result.is_ok(),
+            "Rejected investor should be able to resubmit"
+        );
 
         // Verify status is back to Pending
         let verification = client.get_investor_verification(&investor);
@@ -963,8 +969,7 @@ mod test_investor_kyc {
 
         // Verify limits are different based on risk assessment
         assert_ne!(
-            verification1.investment_limit,
-            verification2.investment_limit,
+            verification1.investment_limit, verification2.investment_limit,
             "Investment limits should differ based on KYC quality"
         );
 
@@ -1063,8 +1068,14 @@ mod test_investor_kyc {
         let verification2 = client.get_investor_verification(&investor2).unwrap();
 
         // Verify risk scores are calculated
-        assert!(verification1.risk_score > 0, "Risk score should be calculated");
-        assert!(verification2.risk_score > 0, "Risk score should be calculated");
+        assert!(
+            verification1.risk_score > 0,
+            "Risk score should be calculated"
+        );
+        assert!(
+            verification2.risk_score > 0,
+            "Risk score should be calculated"
+        );
 
         // Comprehensive KYC should have lower risk score
         assert!(
@@ -1132,7 +1143,8 @@ mod test_investor_kyc {
             "Verified_at should be set after verification"
         );
         assert!(
-            verification_after_verify.verified_at.unwrap() >= verification_after_submit.last_activity,
+            verification_after_verify.verified_at.unwrap()
+                >= verification_after_submit.last_activity,
             "Verified_at should be after or equal to submission time"
         );
 
@@ -1266,11 +1278,15 @@ mod test_investor_kyc {
 
         // Try to place bid within calculated limit
         let bid_amount = verification.investment_limit / 2;
-        let result = client.try_place_bid(&investor, &invoice_id, &bid_amount, &(bid_amount + 1000));
+        let result =
+            client.try_place_bid(&investor, &invoice_id, &bid_amount, &(bid_amount + 1000));
 
         // Should succeed if within limit
         if bid_amount > 0 && bid_amount <= verification.investment_limit {
-            assert!(result.is_ok() || result.is_err(), "Bid result should be deterministic");
+            assert!(
+                result.is_ok() || result.is_err(),
+                "Bid result should be deterministic"
+            );
         }
     }
 
@@ -1282,12 +1298,15 @@ mod test_investor_kyc {
 
         // Try to submit empty KYC
         let result = client.try_submit_investor_kyc(&investor, &empty_kyc);
-        
+
         // Should either fail or succeed based on validation rules
         // If it succeeds, verification should reflect the empty data
         if result.is_ok() {
             let verification = client.get_investor_verification(&investor);
-            assert!(verification.is_some(), "Verification should exist if submission succeeded");
+            assert!(
+                verification.is_some(),
+                "Verification should exist if submission succeeded"
+            );
         }
     }
 
@@ -1312,6 +1331,9 @@ mod test_investor_kyc {
                 "Investment limit should be positive"
             );
         }
+    }
+
+    // ============================================================================
     // Category 9: Investor List Query Tests (Issue #343)
     // ============================================================================
 
@@ -1417,8 +1439,12 @@ mod test_investor_kyc {
         // Test: Bid from unverified investor should fail validation
         let bid_amount = 50_000i128;
         let expected_return = 51_000i128;
-        let result =
-            client.try_place_bid(&unverified_investor, &invoice_id, &bid_amount, &expected_return);
+        let result = client.try_place_bid(
+            &unverified_investor,
+            &invoice_id,
+            &bid_amount,
+            &expected_return,
+        );
         assert!(
             result.is_err(),
             "Unverified investor must fail investment validation"
@@ -1449,7 +1475,12 @@ mod test_investor_kyc {
         // Test: Bid from pending investor should fail (not fully verified)
         let bid_amount = 50_000i128;
         let expected_return = 51_000i128;
-        let result = client.try_place_bid(&pending_investor, &invoice_id, &bid_amount, &expected_return);
+        let result = client.try_place_bid(
+            &pending_investor,
+            &invoice_id,
+            &bid_amount,
+            &expected_return,
+        );
         assert!(
             result.is_err(),
             "Pending investor must fail investment validation"
@@ -1484,8 +1515,12 @@ mod test_investor_kyc {
         // Test: Bid from rejected investor should fail
         let bid_amount = 50_000i128;
         let expected_return = 51_000i128;
-        let result =
-            client.try_place_bid(&rejected_investor, &invoice_id, &bid_amount, &expected_return);
+        let result = client.try_place_bid(
+            &rejected_investor,
+            &invoice_id,
+            &bid_amount,
+            &expected_return,
+        );
         assert!(
             result.is_err(),
             "Rejected investor must fail investment validation"
@@ -1514,11 +1549,9 @@ mod test_investor_kyc {
         // Place first bid: at the limit
         let bid_amount1 = actual_limit;
         let expected_return1 = bid_amount1 + 1_000i128;
-        let result1 = client.try_place_bid(&investor, &invoice_id1, &bid_amount1, &expected_return1);
-        assert!(
-            result1.is_ok(),
-            "First bid at limit must succeed"
-        );
+        let result1 =
+            client.try_place_bid(&investor, &invoice_id1, &bid_amount1, &expected_return1);
+        assert!(result1.is_ok(), "First bid at limit must succeed");
 
         // Create second invoice
         let invoice_id2 = create_verified_invoice(&env, &client, &business, 100_000);
@@ -1527,7 +1560,8 @@ mod test_investor_kyc {
         // Validation is per-invoice/bid, not cumulative across all bids
         let bid_amount2 = actual_limit;
         let expected_return2 = bid_amount2 + 1_000i128;
-        let result2 = client.try_place_bid(&investor, &invoice_id2, &bid_amount2, &expected_return2);
+        let result2 =
+            client.try_place_bid(&investor, &invoice_id2, &bid_amount2, &expected_return2);
         assert!(
             result2.is_ok(),
             "Second bid at limit (on different invoice) must succeed - validation is per-bid, not cumulative"
@@ -1539,11 +1573,9 @@ mod test_investor_kyc {
         // Place third bid: exceeding limit on this specific bid
         let bid_amount3 = actual_limit + 1i128; // Exceeds limit
         let expected_return3 = bid_amount3 + 1_000i128;
-        let result3 = client.try_place_bid(&investor, &invoice_id3, &bid_amount3, &expected_return3);
-        assert!(
-            result3.is_err(),
-            "Bid exceeding individual limit must fail"
-        );
+        let result3 =
+            client.try_place_bid(&investor, &invoice_id3, &bid_amount3, &expected_return3);
+        assert!(result3.is_err(), "Bid exceeding individual limit must fail");
     }
 
     /// Test suite for is_investor_verified helper function
@@ -1560,7 +1592,10 @@ mod test_investor_kyc {
 
         // Test: is_investor_verified should return true
         let verification = client.get_investor_verification(&investor);
-        assert!(verification.is_some(), "Verified investor record must exist");
+        assert!(
+            verification.is_some(),
+            "Verified investor record must exist"
+        );
 
         let verification = verification.unwrap();
         assert_eq!(
@@ -1624,7 +1659,10 @@ mod test_investor_kyc {
 
         // Test: is_investor_verified should return false for rejected
         let verification = client.get_investor_verification(&investor);
-        assert!(verification.is_some(), "Rejected investor record must exist");
+        assert!(
+            verification.is_some(),
+            "Rejected investor record must exist"
+        );
 
         let verification = verification.unwrap();
         assert_eq!(
@@ -1679,27 +1717,36 @@ mod test_investor_kyc {
         let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
         let verification = client.get_investor_verification(&investor);
         assert!(verification.is_some());
-        assert_eq!(verification.unwrap().status, BusinessVerificationStatus::Pending);
+        assert_eq!(
+            verification.unwrap().status,
+            BusinessVerificationStatus::Pending
+        );
 
         // State 3: Verified (after admin verification)
         let _ = client.try_verify_investor(&investor, &50_000i128);
         let verification = client.get_investor_verification(&investor);
         assert!(verification.is_some());
-        assert_eq!(verification.unwrap().status, BusinessVerificationStatus::Verified);
+        assert_eq!(
+            verification.unwrap().status,
+            BusinessVerificationStatus::Verified
+        );
 
         // State 4: Can transition back to Pending via rejection and resubmission
-        let _ = client.try_reject_investor(
-            &investor,
-            &String::from_str(&env, "Compliance issue"),
-        );
+        let _ = client.try_reject_investor(&investor, &String::from_str(&env, "Compliance issue"));
         let verification = client.get_investor_verification(&investor);
-        assert_eq!(verification.unwrap().status, BusinessVerificationStatus::Rejected);
+        assert_eq!(
+            verification.unwrap().status,
+            BusinessVerificationStatus::Rejected
+        );
 
         // Resubmit after rejection
         let new_kyc = String::from_str(&env, "Updated KYC data");
         let _ = client.try_submit_investor_kyc(&investor, &new_kyc);
         let verification = client.get_investor_verification(&investor);
-        assert_eq!(verification.unwrap().status, BusinessVerificationStatus::Pending);
+        assert_eq!(
+            verification.unwrap().status,
+            BusinessVerificationStatus::Pending
+        );
     }
 
     #[test]
@@ -1708,7 +1755,7 @@ mod test_investor_kyc {
         let investor_high_risk = Address::generate(&env);
         let investor_low_risk = Address::generate(&env);
         let minimal_kyc = String::from_str(&env, "Basic info");
-        let comprehensive_kyc = String::from_str(&env, 
+        let comprehensive_kyc = String::from_str(&env,
             "Comprehensive KYC with detailed financial history, employment verification, \
              credit checks, identity verification, address confirmation, and extensive documentation");
 
@@ -1751,7 +1798,6 @@ mod test_investor_kyc {
             "Verification status check passed for low-risk"
         );
     }
-
 
     // ============================================================================
     // Category 10: Single Investor Multiple Invoices Tests
@@ -1828,13 +1874,16 @@ mod test_investor_kyc {
         // Place bids within individual limits but respecting total limit
         let bid_amount = actual_limit / 4; // Use 25% of limit per bid
 
-        let result1 = client.try_place_bid(&investor, &invoice_id1, &bid_amount, &(bid_amount + 1000));
+        let result1 =
+            client.try_place_bid(&investor, &invoice_id1, &bid_amount, &(bid_amount + 1000));
         assert!(result1.is_ok(), "First bid within limit should succeed");
 
-        let result2 = client.try_place_bid(&investor, &invoice_id2, &bid_amount, &(bid_amount + 1000));
+        let result2 =
+            client.try_place_bid(&investor, &invoice_id2, &bid_amount, &(bid_amount + 1000));
         assert!(result2.is_ok(), "Second bid within limit should succeed");
 
-        let result3 = client.try_place_bid(&investor, &invoice_id3, &bid_amount, &(bid_amount + 1000));
+        let result3 =
+            client.try_place_bid(&investor, &invoice_id3, &bid_amount, &(bid_amount + 1000));
         assert!(result3.is_ok(), "Third bid within limit should succeed");
 
         // Verify all bids were placed
@@ -1844,7 +1893,8 @@ mod test_investor_kyc {
         // Try to place a bid that would exceed the limit
         let invoice_id4 = create_verified_invoice(&env, &client, &business, 30_000);
         let large_bid = actual_limit; // This would exceed limit
-        let result4 = client.try_place_bid(&investor, &invoice_id4, &large_bid, &(large_bid + 1000));
+        let result4 =
+            client.try_place_bid(&investor, &invoice_id4, &large_bid, &(large_bid + 1000));
         assert!(result4.is_err(), "Bid exceeding total limit should fail");
     }
 
@@ -1880,23 +1930,61 @@ mod test_investor_kyc {
         assert!(result3.is_ok(), "Accept bid 3 should succeed");
 
         // Verify bid statuses
-        assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Accepted, "Bid 1 should be Accepted");
-        assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Placed, "Bid 2 should remain Placed");
-        assert_eq!(client.get_bid(&bid_id3).unwrap().status, BidStatus::Accepted, "Bid 3 should be Accepted");
-        assert_eq!(client.get_bid(&bid_id4).unwrap().status, BidStatus::Placed, "Bid 4 should remain Placed");
+        assert_eq!(
+            client.get_bid(&bid_id1).unwrap().status,
+            BidStatus::Accepted,
+            "Bid 1 should be Accepted"
+        );
+        assert_eq!(
+            client.get_bid(&bid_id2).unwrap().status,
+            BidStatus::Placed,
+            "Bid 2 should remain Placed"
+        );
+        assert_eq!(
+            client.get_bid(&bid_id3).unwrap().status,
+            BidStatus::Accepted,
+            "Bid 3 should be Accepted"
+        );
+        assert_eq!(
+            client.get_bid(&bid_id4).unwrap().status,
+            BidStatus::Placed,
+            "Bid 4 should remain Placed"
+        );
 
         // Verify invoice statuses
-        assert_eq!(client.get_invoice(&invoice_id1).status, InvoiceStatus::Funded, "Invoice 1 should be Funded");
-        assert_eq!(client.get_invoice(&invoice_id2).status, InvoiceStatus::Verified, "Invoice 2 should remain Verified");
-        assert_eq!(client.get_invoice(&invoice_id3).status, InvoiceStatus::Funded, "Invoice 3 should be Funded");
-        assert_eq!(client.get_invoice(&invoice_id4).status, InvoiceStatus::Verified, "Invoice 4 should remain Verified");
+        assert_eq!(
+            client.get_invoice(&invoice_id1).status,
+            InvoiceStatus::Funded,
+            "Invoice 1 should be Funded"
+        );
+        assert_eq!(
+            client.get_invoice(&invoice_id2).status,
+            InvoiceStatus::Verified,
+            "Invoice 2 should remain Verified"
+        );
+        assert_eq!(
+            client.get_invoice(&invoice_id3).status,
+            InvoiceStatus::Funded,
+            "Invoice 3 should be Funded"
+        );
+        assert_eq!(
+            client.get_invoice(&invoice_id4).status,
+            InvoiceStatus::Verified,
+            "Invoice 4 should remain Verified"
+        );
 
         // Verify investor can still withdraw non-accepted bids
         let result2 = client.try_withdraw_bid(&bid_id2);
-        assert!(result2.is_ok(), "Should be able to withdraw non-accepted bid");
+        assert!(
+            result2.is_ok(),
+            "Should be able to withdraw non-accepted bid"
+        );
 
         let result4 = client.try_withdraw_bid(&bid_id4);
-        assert!(result4.is_ok(), "Should be able to withdraw non-accepted bid");
+        assert!(
+            result4.is_ok(),
+            "Should be able to withdraw non-accepted bid"
+        );
     }
 
     /// Test: get_all_bids_by_investor returns correct subset after acceptances
@@ -1942,7 +2030,11 @@ mod test_investor_kyc {
 
         assert_eq!(bid1.status, BidStatus::Accepted, "Bid 1 should be Accepted");
         assert_eq!(bid2.status, BidStatus::Placed, "Bid 2 should be Placed");
-        assert_eq!(bid3.status, BidStatus::Withdrawn, "Bid 3 should be Withdrawn");
+        assert_eq!(
+            bid3.status,
+            BidStatus::Withdrawn,
+            "Bid 3 should be Withdrawn"
+        );
     }
 
     /// Test: Investor can withdraw bids on non-accepted invoices
@@ -1976,15 +2068,30 @@ mod test_investor_kyc {
 
         // Investor can withdraw non-accepted bids
         let result2 = client.try_withdraw_bid(&bid_id2);
-        assert!(result2.is_ok(), "Should be able to withdraw non-accepted bid 2");
+        assert!(
+            result2.is_ok(),
+            "Should be able to withdraw non-accepted bid 2"
+        );
 
         let result3 = client.try_withdraw_bid(&bid_id3);
-        assert!(result3.is_ok(), "Should be able to withdraw non-accepted bid 3");
+        assert!(
+            result3.is_ok(),
+            "Should be able to withdraw non-accepted bid 3"
+        );
 
         // Verify statuses
-        assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Accepted);
-        assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Withdrawn);
-        assert_eq!(client.get_bid(&bid_id3).unwrap().status, BidStatus::Withdrawn);
+        assert_eq!(
+            client.get_bid(&bid_id1).unwrap().status,
+            BidStatus::Accepted
+        );
+        assert_eq!(
+            client.get_bid(&bid_id2).unwrap().status,
+            BidStatus::Withdrawn
+        );
+        assert_eq!(
+            client.get_bid(&bid_id3).unwrap().status,
+            BidStatus::Withdrawn
+        );
     }
 
     /// Test: Multiple accepted bids create multiple investments
@@ -2062,7 +2169,11 @@ mod test_investor_kyc {
         let all_bids = client.get_all_bids_by_investor(&investor);
         assert_eq!(all_bids.len(), 5, "Should have 5 bids");
         for bid in all_bids.iter() {
-            assert_eq!(bid.status, BidStatus::Placed, "All bids should be Placed initially");
+            assert_eq!(
+                bid.status,
+                BidStatus::Placed,
+                "All bids should be Placed initially"
+            );
         }
 
         // Business 1 accepts bids on invoices 1 and 5
@@ -2077,11 +2188,26 @@ mod test_investor_kyc {
         let _ = client.try_withdraw_bid(&bid_id4);
 
         // Verify final bid statuses
-        assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Accepted);
-        assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Withdrawn);
-        assert_eq!(client.get_bid(&bid_id3).unwrap().status, BidStatus::Accepted);
-        assert_eq!(client.get_bid(&bid_id4).unwrap().status, BidStatus::Withdrawn);
-        assert_eq!(client.get_bid(&bid_id5).unwrap().status, BidStatus::Accepted);
+        assert_eq!(
+            client.get_bid(&bid_id1).unwrap().status,
+            BidStatus::Accepted
+        );
+        assert_eq!(
+            client.get_bid(&bid_id2).unwrap().status,
+            BidStatus::Withdrawn
+        );
+        assert_eq!(
+            client.get_bid(&bid_id3).unwrap().status,
+            BidStatus::Accepted
+        );
+        assert_eq!(
+            client.get_bid(&bid_id4).unwrap().status,
+            BidStatus::Withdrawn
+        );
+        assert_eq!(
+            client.get_bid(&bid_id5).unwrap().status,
+            BidStatus::Accepted
+        );
 
         // Verify investments were created for accepted bids
         assert!(client.get_investment_by_invoice(&invoice_id1).is_some());

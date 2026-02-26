@@ -1,15 +1,12 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::{QuickLendXContract, QuickLendXContractClient};
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceMetadata};
-use crate::notifications::{NotificationType, NotificationPriority, NotificationSystem};
+use crate::notifications::{NotificationPriority, NotificationSystem, NotificationType};
 use crate::protocol_limits::*;
-use soroban_sdk::{
-    testutils::Address as _,
-    Address, BytesN, Env, String, Vec,
-};
+use crate::{QuickLendXContract, QuickLendXContractClient};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
@@ -61,7 +58,10 @@ fn test_invoice_description_limits() {
         &Vec::new(&env),
     );
     assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        res.err().unwrap().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
 }
 
 #[test]
@@ -93,28 +93,40 @@ fn test_invoice_metadata_limits() {
     metadata.customer_name = create_long_string(&env, MAX_NAME_LENGTH + 1);
     let res = client.try_update_invoice_metadata(&invoice_id, &metadata);
     assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        res.err().unwrap().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
     metadata.customer_name = String::from_str(&env, "Valid Name");
 
     // Test Address
     metadata.customer_address = create_long_string(&env, MAX_ADDRESS_LENGTH + 1);
     let res = client.try_update_invoice_metadata(&invoice_id, &metadata);
     assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        res.err().unwrap().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
     metadata.customer_address = String::from_str(&env, "Valid Address");
 
     // Test Tax ID
     metadata.tax_id = create_long_string(&env, MAX_TAX_ID_LENGTH + 1);
     let res = client.try_update_invoice_metadata(&invoice_id, &metadata);
     assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        res.err().unwrap().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
     metadata.tax_id = String::from_str(&env, "Valid Tax ID");
 
     // Test Notes
     metadata.notes = create_long_string(&env, MAX_NOTES_LENGTH + 1);
     let res = client.try_update_invoice_metadata(&invoice_id, &metadata);
     assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        res.err().unwrap().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
     metadata.notes = String::from_str(&env, "Valid Notes");
 }
 
@@ -139,22 +151,46 @@ fn test_dispute_limits() {
     let reason_over = create_long_string(&env, MAX_DISPUTE_REASON_LENGTH + 1);
     let evidence_over = create_long_string(&env, MAX_DISPUTE_EVIDENCE_LENGTH + 1);
 
-    let res = client.try_create_dispute(&invoice_id, &business, &reason_over, &String::from_str(&env, "valid"));
+    let res = client.try_create_dispute(
+        &invoice_id,
+        &business,
+        &reason_over,
+        &String::from_str(&env, "valid"),
+    );
     assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        res.err().unwrap().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
 
-    let res = client.try_create_dispute(&invoice_id, &business, &String::from_str(&env, "valid"), &evidence_over);
+    let res = client.try_create_dispute(
+        &invoice_id,
+        &business,
+        &String::from_str(&env, "valid"),
+        &evidence_over,
+    );
     assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        res.err().unwrap().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
 
     // Resolution limits
-    client.create_dispute(&invoice_id, &business, &String::from_str(&env, "valid"), &String::from_str(&env, "valid"));
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &String::from_str(&env, "valid"),
+        &String::from_str(&env, "valid"),
+    );
     client.put_dispute_under_review(&invoice_id, &admin);
 
     let res_over = create_long_string(&env, MAX_DISPUTE_RESOLUTION_LENGTH + 1);
     let res = client.try_resolve_dispute(&invoice_id, &admin, &res_over);
     assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        res.err().unwrap().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
 }
 
 #[test]
@@ -200,12 +236,18 @@ fn test_kyc_limits() {
     let kyc_over = create_long_string(&env, MAX_KYC_DATA_LENGTH + 1);
     let res = client.try_submit_kyc_application(&business, &kyc_over);
     assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        res.err().unwrap().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
 
     // Rejection reason
     client.submit_kyc_application(&business, &String::from_str(&env, "valid"));
     let reason_over = create_long_string(&env, MAX_REJECTION_REASON_LENGTH + 1);
     let res = client.try_reject_business(&admin, &business, &reason_over);
     assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        res.err().unwrap().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
 }

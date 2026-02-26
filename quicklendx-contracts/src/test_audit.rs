@@ -4,7 +4,9 @@
 //! returns correct subset; integrity check passes (and fails when expected).
 
 use super::*;
-use crate::audit::{AuditLogEntry, AuditOperation, AuditOperationFilter, AuditQueryFilter, AuditStorage};
+use crate::audit::{
+    AuditLogEntry, AuditOperation, AuditOperationFilter, AuditQueryFilter, AuditStorage,
+};
 use crate::invoice::InvoiceCategory;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -19,7 +21,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let admin = Address::generate(&env);
     let _ = client.initialize_admin(&admin);
     let business = Address::generate(&env);
-    
+
     (env, client, admin, business)
 }
 
@@ -273,12 +275,13 @@ fn test_audit_stats_empty_state() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     let _ = client.initialize_admin(&admin);
-    
+
     let stats = client.get_audit_stats();
     assert_eq!(stats.total_entries, 0, "empty state should have 0 entries");
     assert_eq!(stats.unique_actors, 0, "empty state should have 0 actors");
     assert_eq!(
-        stats.date_range.0, u64::MAX,
+        stats.date_range.0,
+        u64::MAX,
         "empty state min timestamp should be MAX"
     );
     assert_eq!(
@@ -704,7 +707,7 @@ fn test_audit_stats_incremental_updates() {
     let admin = Address::generate(&env);
     let _ = client.initialize_admin(&admin);
     let business = Address::generate(&env);
-    
+
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
 
@@ -1061,21 +1064,17 @@ fn test_get_audit_entries_by_actor_business_investor_admin_empty_and_multiple() 
     let investor = Address::generate(&env);
     let contract_id = client.address.clone();
 
-    let add_entry = |env: &Env, contract_id: &Address, invoice_seed: u8, operation: AuditOperation, actor: Address| {
+    let add_entry = |env: &Env,
+                     contract_id: &Address,
+                     invoice_seed: u8,
+                     operation: AuditOperation,
+                     actor: Address| {
         let mut id_bytes = [0u8; 32];
         id_bytes[0] = invoice_seed;
         let invoice_id = BytesN::from_array(env, &id_bytes);
         env.as_contract(contract_id, || {
-            let entry = AuditLogEntry::new(
-                env,
-                invoice_id,
-                operation,
-                actor,
-                None,
-                None,
-                None,
-                None,
-            );
+            let entry =
+                AuditLogEntry::new(env, invoice_id, operation, actor, None, None, None, None);
             AuditStorage::store_audit_entry(env, &entry);
         });
     };

@@ -188,11 +188,7 @@ impl Invoice {
     }
 
     /// Clear invoice metadata (business only)
-    pub fn clear_metadata(
-        &mut self,
-        env: &Env,
-        business: &Address,
-    ) -> Result<(), QuickLendXError> {
+    pub fn clear_metadata(&mut self, env: &Env, business: &Address) -> Result<(), QuickLendXError> {
         if self.business != *business {
             return Err(QuickLendXError::Unauthorized);
         }
@@ -948,7 +944,10 @@ impl InvoiceStorage {
     }
 
     /// Get rating statistics for a specific invoice from storage
-    pub fn get_invoice_rating_stats(env: &Env, invoice_id: &BytesN<32>) -> Option<InvoiceRatingStats> {
+    pub fn get_invoice_rating_stats(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Option<InvoiceRatingStats> {
         Self::get_invoice(env, invoice_id).map(|inv| inv.get_invoice_rating_stats())
     }
 

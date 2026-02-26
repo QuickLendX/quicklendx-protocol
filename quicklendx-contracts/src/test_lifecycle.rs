@@ -219,13 +219,23 @@ fn test_full_invoice_lifecycle() {
 
     // ── steps 1–7: KYC, upload, verify, bid ───────────────────────────────────
     let (invoice_id, bid_id) = run_kyc_and_bid(
-        &env, &client, &admin, &business, &investor, &currency,
-        invoice_amount, bid_amount,
+        &env,
+        &client,
+        &admin,
+        &business,
+        &investor,
+        &currency,
+        invoice_amount,
+        bid_amount,
     );
 
     // State after upload (verified).
     let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Verified, "Invoice should be Verified before funding");
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Verified,
+        "Invoice should be Verified before funding"
+    );
     assert_eq!(invoice.amount, invoice_amount);
     assert_eq!(invoice.business, business);
     assert_eq!(invoice.funded_amount, 0);
@@ -260,7 +270,11 @@ fn test_full_invoice_lifecycle() {
 
     // Invoice state.
     let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Funded, "Invoice must be Funded after accept_bid");
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Invoice must be Funded after accept_bid"
+    );
     assert_eq!(invoice.funded_amount, bid_amount);
     assert_eq!(invoice.investor, Some(investor.clone()));
 
@@ -298,7 +312,11 @@ fn test_full_invoice_lifecycle() {
 
     // Invoice is Paid.
     let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Paid, "Invoice must be Paid after settlement");
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Paid,
+        "Invoice must be Paid after settlement"
+    );
     assert!(invoice.settled_at.is_some(), "settled_at must be set");
     assert_eq!(invoice.total_paid, invoice_amount);
 
@@ -311,11 +329,15 @@ fn test_full_invoice_lifecycle() {
 
     // Status query lists are updated.
     assert!(
-        !client.get_invoices_by_status(&InvoiceStatus::Funded).contains(&invoice_id),
+        !client
+            .get_invoices_by_status(&InvoiceStatus::Funded)
+            .contains(&invoice_id),
         "Invoice should not be in Funded list"
     );
     assert!(
-        client.get_invoices_by_status(&InvoiceStatus::Paid).contains(&invoice_id),
+        client
+            .get_invoices_by_status(&InvoiceStatus::Paid)
+            .contains(&invoice_id),
         "Invoice should be in Paid list"
     );
 
@@ -362,8 +384,14 @@ fn test_lifecycle_escrow_token_flow() {
 
     // ── steps 1–7: KYC, upload, verify, bid ───────────────────────────────────
     let (invoice_id, bid_id) = run_kyc_and_bid(
-        &env, &client, &admin, &business, &investor, &currency,
-        invoice_amount, bid_amount,
+        &env,
+        &client,
+        &admin,
+        &business,
+        &investor,
+        &currency,
+        invoice_amount,
+        bid_amount,
     );
 
     // ── step 8: accept bid ─────────────────────────────────────────────────────
@@ -462,7 +490,10 @@ fn test_full_lifecycle_step_by_step() {
         client.get_pending_businesses().contains(&business),
         "Business should be in pending list"
     );
-    assert!(has_event_with_topic(&env, symbol_short!("kyc_sub")), "kyc_sub expected after business KYC");
+    assert!(
+        has_event_with_topic(&env, symbol_short!("kyc_sub")),
+        "kyc_sub expected after business KYC"
+    );
 
     // ── Step 2: Admin verifies the business ─────────────────────────────────────
     client.verify_business(&admin, &business);
@@ -472,7 +503,10 @@ fn test_full_lifecycle_step_by_step() {
         client.get_verified_businesses().contains(&business),
         "Business should be in verified list"
     );
-    assert!(has_event_with_topic(&env, symbol_short!("bus_ver")), "bus_ver expected after verify business");
+    assert!(
+        has_event_with_topic(&env, symbol_short!("bus_ver")),
+        "bus_ver expected after verify business"
+    );
 
     // ── Step 3: Business uploads invoice (status → Pending) ──────────────────────
     let due_date = env.ledger().timestamp() + 86_400;
@@ -489,13 +523,19 @@ fn test_full_lifecycle_step_by_step() {
     assert_eq!(invoice.status, InvoiceStatus::Pending);
     assert_eq!(invoice.amount, invoice_amount);
     assert_eq!(invoice.business, business);
-    assert!(has_event_with_topic(&env, symbol_short!("inv_up")), "inv_up expected");
+    assert!(
+        has_event_with_topic(&env, symbol_short!("inv_up")),
+        "inv_up expected"
+    );
 
     // ── Step 4: Admin verifies the invoice (status → Verified) ──────────────────
     client.verify_invoice(&invoice_id);
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Verified);
-    assert!(has_event_with_topic(&env, symbol_short!("inv_ver")), "inv_ver expected");
+    assert!(
+        has_event_with_topic(&env, symbol_short!("inv_ver")),
+        "inv_ver expected"
+    );
 
     // ── Step 5: Investor submits KYC ───────────────────────────────────────────
     client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor KYC"));
@@ -513,7 +553,10 @@ fn test_full_lifecycle_step_by_step() {
     );
     let inv_ver = client.get_investor_verification(investor.clone()).unwrap();
     assert_eq!(inv_ver.investment_limit, 50_000i128);
-    assert!(has_event_with_topic(&env, symbol_short!("inv_veri")), "inv_veri expected after verify investor");
+    assert!(
+        has_event_with_topic(&env, symbol_short!("inv_veri")),
+        "inv_veri expected after verify investor"
+    );
 
     // ── Step 7: Investor places bid (status → Placed) ──────────────────────────
     let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount);
@@ -521,7 +564,10 @@ fn test_full_lifecycle_step_by_step() {
     assert_eq!(bid.status, BidStatus::Placed);
     assert_eq!(bid.bid_amount, bid_amount);
     assert_eq!(bid.investor, investor);
-    assert!(has_event_with_topic(&env, symbol_short!("bid_plc")), "bid_plc expected");
+    assert!(
+        has_event_with_topic(&env, symbol_short!("bid_plc")),
+        "bid_plc expected"
+    );
 
     // ── Step 8: Business accepts bid (status → Funded, escrow created) ───────────
     let investor_bal_before = tok.balance(&investor);
@@ -537,8 +583,14 @@ fn test_full_lifecycle_step_by_step() {
         client.get_invoice_investment(&invoice_id).unwrap().status,
         InvestmentStatus::Active
     );
-    assert!(has_event_with_topic(&env, symbol_short!("bid_acc")), "bid_acc expected");
-    assert!(has_event_with_topic(&env, symbol_short!("esc_cr")), "esc_cr expected");
+    assert!(
+        has_event_with_topic(&env, symbol_short!("bid_acc")),
+        "bid_acc expected"
+    );
+    assert!(
+        has_event_with_topic(&env, symbol_short!("esc_cr")),
+        "esc_cr expected"
+    );
 
     // ── Step 9: Business settles the invoice (status → Paid) ─────────────────────
     let sac = token::StellarAssetClient::new(&env, &currency);
@@ -555,10 +607,13 @@ fn test_full_lifecycle_step_by_step() {
         client.get_invoice_investment(&invoice_id).unwrap().status,
         InvestmentStatus::Completed
     );
+    assert!(client
+        .get_invoices_by_status(&InvoiceStatus::Paid)
+        .contains(&invoice_id));
     assert!(
-        client.get_invoices_by_status(&InvoiceStatus::Paid).contains(&invoice_id)
+        has_event_with_topic(&env, symbol_short!("inv_set")),
+        "inv_set expected after settle"
     );
-    assert!(has_event_with_topic(&env, symbol_short!("inv_set")), "inv_set expected after settle");
 
     // ── Step 10: Investor rates the invoice ────────────────────────────────────
     let rating: u32 = 5;
@@ -573,7 +628,10 @@ fn test_full_lifecycle_step_by_step() {
     assert_eq!(avg, Some(rating));
     assert_eq!(high, Some(rating));
     assert_eq!(low, Some(rating));
-    assert!(has_event_with_topic(&env, symbol_short!("rated")), "rated event expected after rating");
+    assert!(
+        has_event_with_topic(&env, symbol_short!("rated")),
+        "rated event expected after rating"
+    );
 
     assert_lifecycle_events_emitted(&env);
 }
