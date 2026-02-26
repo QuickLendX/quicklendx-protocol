@@ -1550,6 +1550,82 @@ fn test_invoice_invalid_payment_amount_negative() {
 // RATING SYSTEM TESTS
 // ============================================================================
 
+/// Tests for rating query/statistics functions (coverage: no ratings and with ratings)
+#[test]
+fn test_rating_queries_no_ratings() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = setup_verified_business(&env, &client);
+    let investor = setup_verified_investor(&env, &client);
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    // Move to Funded
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    // No ratings yet
+    let above_0 = client.get_invoices_with_rating_above(&0);
+    let above_3 = client.get_invoices_with_rating_above(&3);
+    let business_above_0 = client.get_business_rated_invoices(&business, &0);
+    let ratings_count = client.get_invoices_with_ratings_count();
+    let stats = client.get_invoice_rating_stats(&invoice_id);
+
+    assert!(above_0.is_empty());
+    assert!(above_3.is_empty());
+    assert!(business_above_0.is_empty());
+    assert_eq!(ratings_count, 0);
+    assert_eq!(stats, (None, 0, None, None));
+}
+
+#[test]
+fn test_rating_queries_with_ratings() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = setup_verified_business(&env, &client);
+    let investor1 = setup_verified_investor(&env, &client);
+    let investor2 = setup_verified_investor(&env, &client);
+    let investor3 = setup_verified_investor(&env, &client);
+    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
+
+    // Move to Funded
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.mark_as_funded(&env, investor1.clone(), 1000, env.ledger().timestamp());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    // Add ratings: 2, 4, 5 from different investors
+    client.add_invoice_rating(&invoice_id, &2, &String::from_str(&env, "ok"), &investor1);
+    client.add_invoice_rating(&invoice_id, &4, &String::from_str(&env, "good"), &investor2);
+    client.add_invoice_rating(&invoice_id, &5, &String::from_str(&env, "great"), &investor3);
+
+    // Query: above 0, 3, 4, 5
+    let above_0 = client.get_invoices_with_rating_above(&0);
+    let above_3 = client.get_invoices_with_rating_above(&3);
+    let above_4 = client.get_invoices_with_rating_above(&4);
+    let above_5 = client.get_invoices_with_rating_above(&5);
+    let business_above_3 = client.get_business_rated_invoices(&business, &3);
+    let ratings_count = client.get_invoices_with_ratings_count();
+    let stats = client.get_invoice_rating_stats(&invoice_id);
+
+    // Only one invoice, so all queries should return it if threshold <= avg (avg = 3.666...)
+    assert_eq!(above_0.len(), 1);
+    assert_eq!(above_3.len(), 1);
+    assert_eq!(above_4.len(), 0); // avg < 4
+    assert_eq!(above_5.len(), 0);
+    assert_eq!(business_above_3.len(), 1);
+    assert_eq!(ratings_count, 1);
+    // Stats: avg = 3, total = 3, max = 5, min = 2 (integer division)
+    assert_eq!(stats, (Some(3), 3, Some(5), Some(2)));
+}
+
 #[test]
 fn test_add_rating_success() {
     let env = Env::default();
