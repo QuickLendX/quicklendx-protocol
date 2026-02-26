@@ -741,6 +741,9 @@ pub fn verify_investor(
     investment_limit: i128,
 ) -> Result<InvestorVerification, QuickLendXError> {
     admin.require_auth();
+    if !crate::admin::AdminStorage::is_admin(env, admin) {
+        return Err(QuickLendXError::NotAdmin);
+    }
 
     if investment_limit <= 0 {
         return Err(QuickLendXError::InvalidAmount);
@@ -783,6 +786,9 @@ pub fn reject_investor(
 ) -> Result<(), QuickLendXError> {
     check_string_length(&reason, MAX_REJECTION_REASON_LENGTH)?;
     admin.require_auth();
+    if !crate::admin::AdminStorage::is_admin(env, admin) {
+        return Err(QuickLendXError::NotAdmin);
+    }
     let mut verification =
         InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
 
