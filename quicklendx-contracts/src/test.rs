@@ -4616,6 +4616,40 @@ fn test_upload_invoice_invalid_amount() {
 
 #[test]
 #[should_panic]
+fn test_upload_invoice_below_minimum_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Set admin and verify business
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    // Try to upload invoice below minimum (default is 1000 in test mode)
+    let amount = 999i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+    let tags = Vec::new(&env);
+
+    client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &tags,
+    );
+}
+
+#[test]
+#[should_panic]
 fn test_upload_invoice_past_due_date() {
     let env = Env::default();
     env.mock_all_auths();

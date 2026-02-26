@@ -204,6 +204,9 @@ fn test_remove_currency_when_missing_is_noop() {
         "removing an already absent currency should be a no-op"
     );
     assert_eq!(client.get_whitelisted_currencies().len(), 0);
+}
+
+#[test]
 fn test_set_currencies_replaces_whitelist() {
     let (env, client, admin) = setup();
     let currency_a = Address::generate(&env);

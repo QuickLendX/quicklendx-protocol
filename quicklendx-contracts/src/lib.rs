@@ -469,7 +469,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
         }
 
-        // Validate due date is not too far in the future using protocol limits
+        // Validate amount and due date using protocol limits
         protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
 
         if description.len() == 0 {
@@ -2947,3 +2947,5 @@ mod test_revenue_split;
 mod test_risk_tier;
 #[cfg(test)]
 mod test_types;
+#[cfg(test)]
+mod test_min_invoice_amount;
