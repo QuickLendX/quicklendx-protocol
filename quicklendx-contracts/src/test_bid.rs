@@ -8,6 +8,7 @@
 /// 4. Ranking - profit-based bid comparison works correctly
 use super::*;
 use crate::bid::BidStatus;
+use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::protocol_limits::compute_min_bid_amount;
 use soroban_sdk::{
@@ -35,12 +36,13 @@ fn add_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i1
 fn create_verified_invoice(
     env: &Env,
     client: &QuickLendXContractClient,
-    _admin: &Address,
+    admin: &Address,
     business: &Address,
     amount: i128,
 ) -> BytesN<32> {
     let currency = Address::generate(env);
     let due_date = env.ledger().timestamp() + 86400;
+    let _ = client.add_currency(admin, &currency);
 
     let invoice_id = client.store_invoice(
         business,
@@ -70,6 +72,7 @@ fn test_bid_placement_non_verified_invoice_fails() {
     let investor = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
+    let _ = client.add_currency(&admin, &currency);
 
     // Create pending invoice (not verified)
     let invoice_id = client.store_invoice(
@@ -1430,6 +1433,122 @@ fn test_get_all_bids_by_investor_empty() {
     assert_eq!(all_bids.len(), 0, "Must return empty for unknown investor");
 }
 
+/// Rate-limit: investor can only have a bounded number of active (Placed) bids.
+#[test]
+fn test_rate_limit_place_bid_per_investor() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    // Set up verified business and invoice currency
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    client.submit_kyc_application(
+        &business,
+        &String::from_str(&env, "Business KYC for rate-limit test"),
+    );
+    client.verify_business(&admin, &business);
+
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &50_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Rate-limit invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    // Set up verified investor with sufficient investment limit
+    let investor = add_verified_investor(&env, &client, 1_000_000);
+
+    // Place bids up to the configured per-investor active bid limit.
+    let mut placed_ids: Vec<BytesN<32>> = Vec::new(&env);
+    let max_active = crate::MAX_ACTIVE_BIDS_PER_INVESTOR;
+    let bid_amount: i128 = 5_000;
+    let expected_return: i128 = 6_000;
+
+    let mut i: u32 = 0;
+    while i < max_active {
+        let bid_id = client
+            .place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+        placed_ids.push_back(bid_id);
+        i = i.saturating_add(1);
+    }
+
+    // Next bid should fail with OperationNotAllowed due to rate limit.
+    let result = client.try_place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+    assert!(result.is_err(), "Bid beyond active limit must fail");
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::OperationNotAllowed);
+
+    // After cancelling one bid, investor should be able to place a new bid again.
+    let first_bid = placed_ids.get(0).unwrap();
+    let cancelled = client.cancel_bid(&first_bid);
+    assert!(cancelled, "Cancelling an active bid should succeed");
+
+    let result_after_cancel =
+        client.try_place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+    assert!(
+        result_after_cancel.is_ok(),
+        "Bid after freeing one active slot must succeed"
+    );
+}
+
+/// Rate-limit isolation: different investors have independent active bid limits.
+#[test]
+fn test_rate_limit_place_bid_per_investor_isolated() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC multi"));
+    client.verify_business(&admin, &business);
+
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &80_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Isolated rate-limit invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let investor_a = add_verified_investor(&env, &client, 1_000_000);
+    let investor_b = add_verified_investor(&env, &client, 1_000_000);
+
+    let max_active = crate::MAX_ACTIVE_BIDS_PER_INVESTOR;
+    let bid_amount: i128 = 10_000;
+    let expected_return: i128 = 11_000;
+
+    // Saturate investor A's active bid limit.
+    let mut i: u32 = 0;
+    while i < max_active {
+        let _ = client.place_bid(&investor_a, &invoice_id, &bid_amount, &expected_return);
+        i = i.saturating_add(1);
+    }
+    let result_a = client.try_place_bid(&investor_a, &invoice_id, &bid_amount, &expected_return);
+    assert!(result_a.is_err());
+
+    // Investor B should still be able to place bids up to the limit independently.
+    let result_b1 = client.try_place_bid(&investor_b, &invoice_id, &bid_amount, &expected_return);
+    assert!(
+        result_b1.is_ok(),
+        "Second investor must not be affected by first investor's rate limit"
+    );
+}
+
 // ============================================================================
 // Multiple Investors - Same Invoice Tests (Issue #343)
 // ============================================================================
@@ -1839,4 +1958,82 @@ fn test_cannot_accept_second_bid_after_first_accepted() {
     assert_eq!(invoice.status, InvoiceStatus::Funded);
     assert_eq!(invoice.funded_amount, 10_000);
     assert_eq!(invoice.investor, Some(investor1));
+}
+
+#[test]
+fn test_default_max_active_bids_per_investor_is_20() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    assert_eq!(client.get_max_active_bids_per_investor(), 20);
+}
+
+#[test]
+fn test_active_bid_limit_enforced_and_withdrawn_not_counted() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let _ = client.set_max_active_bids_per_investor(&2u32);
+
+    let investor = add_verified_investor(&env, &client, 1_000_000);
+    let business = Address::generate(&env);
+
+    let invoice_id_1 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    let invoice_id_2 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    let invoice_id_3 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    let bid_id_1 = client.place_bid(&investor, &invoice_id_1, &10_000, &12_000);
+    let _bid_id_2 = client.place_bid(&investor, &invoice_id_2, &11_000, &13_000);
+
+    let blocked = client.try_place_bid(&investor, &invoice_id_3, &12_000, &14_000);
+    assert_eq!(
+        blocked.err().unwrap().unwrap(),
+        QuickLendXError::OperationNotAllowed
+    );
+
+    let _ = client.withdraw_bid(&bid_id_1);
+
+    let retry = client.try_place_bid(&investor, &invoice_id_3, &12_000, &14_000);
+    assert!(retry.is_ok(), "Withdrawn bids must not count toward limit");
+}
+
+#[test]
+fn test_active_bid_limit_ignores_accepted_and_expired_bids() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let _ = client.set_max_active_bids_per_investor(&1u32);
+    let _ = client.set_bid_ttl_days(&1u64);
+
+    let investor = add_verified_investor(&env, &client, 1_000_000);
+    let business = Address::generate(&env);
+
+    let invoice_id_1 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    let invoice_id_2 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    let invoice_id_3 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    let bid_id_1 = client.place_bid(&investor, &invoice_id_1, &10_000, &12_000);
+    let blocked = client.try_place_bid(&investor, &invoice_id_2, &11_000, &13_000);
+    assert_eq!(
+        blocked.err().unwrap().unwrap(),
+        QuickLendXError::OperationNotAllowed
+    );
+
+    let _ = client.accept_bid(&invoice_id_1, &bid_id_1);
+
+    let bid_id_2 = client.place_bid(&investor, &invoice_id_2, &11_000, &13_000);
+    env.ledger().set_timestamp(env.ledger().timestamp() + 86401);
+
+    let bid_id_3 = client.place_bid(&investor, &invoice_id_3, &12_000, &14_000);
+    assert!(
+        client.get_bid(&bid_id_3).is_some(),
+        "Expired bids must not count toward limit"
+    );
+
+    let refreshed_bid_2 = client.get_bid(&bid_id_2).unwrap();
+    assert_eq!(refreshed_bid_2.status, BidStatus::Expired);
 }

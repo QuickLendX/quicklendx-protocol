@@ -1,0 +1,623 @@
+warning: unused import: `BytesN as _`
+  --> src/test_dispute.rs:15:31
+   |
+15 |     testutils::{Address as _, BytesN as _},
+   |                               ^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `PlatformFeeConfig` and `PlatformFee`
+  --> src/test_storage.rs:18:22
+   |
+18 | use crate::profits::{PlatformFee, PlatformFeeConfig};
+   |                      ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ConfigStorage`
+  --> src/test_storage.rs:20:17
+   |
+20 |     BidStorage, ConfigStorage, Indexes, InvestmentStorage, InvoiceStorage, StorageKeys,
+   |                 ^^^^^^^^^^^^^
+
+warning: unused import: `crate::verification::BusinessVerificationStatus`
+  --> src/test/test_invoice.rs:11:5
+   |
+11 | use crate::verification::BusinessVerificationStatus;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test/test_invoice.rs:13:31
+   |
+13 |     testutils::{Address as _, Ledger},
+   |                               ^^^^^^
+
+warning: unused import: `InvoiceStatus`
+ --> src/test/test_invoice_categories.rs:2:39
+  |
+2 | use crate::invoice::{InvoiceCategory, InvoiceStatus};
+  |                                       ^^^^^^^^^^^^^
+
+warning: unused imports: `AnalyticsStorage`, `FinancialMetrics`, and `PlatformMetrics`
+  --> src/test/test_analytics.rs:14:26
+   |
+14 |     AnalyticsCalculator, AnalyticsStorage, FinancialMetrics, PlatformMetrics, TimePeriod,
+   |                          ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test_partial_payments.rs:13:31
+   |
+13 |     testutils::{Address as _, Ledger},
+   |                               ^^^^^^
+
+warning: unused import: `crate::bid::BidStatus`
+ --> src/test_queries.rs:3:5
+  |
+3 | use crate::bid::BidStatus;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+ --> src/test_queries.rs:6:31
+  |
+6 |     testutils::{Address as _, Ledger},
+  |                               ^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test_investor_kyc.rs:17:35
+   |
+17 |         testutils::{Address as _, Ledger},
+   |                                   ^^^^^^
+
+warning: unused import: `crate::errors::QuickLendXError`
+ --> src/test_limit.rs:3:5
+  |
+3 | use crate::errors::QuickLendXError;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:361:24
+    |
+361 |     let currency = env.register_stellar_asset_contract(token_admin);
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:932:24
+    |
+932 |     let currency = env.register_stellar_asset_contract(token_admin);
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:988:24
+    |
+988 |     let currency = env.register_stellar_asset_contract(token_admin);
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1040:24
+     |
+1040 |     let currency = env.register_stellar_asset_contract(token_admin);
+     |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1097:24
+     |
+1097 |     let currency = env.register_stellar_asset_contract(token_admin);
+     |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1179:24
+     |
+1179 |     let currency = env.register_stellar_asset_contract(token_admin);
+     |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+ --> src/test_currency.rs:9:31
+  |
+9 |     testutils::{Address as _, Ledger},
+  |                               ^^^^^^
+
+warning: unused variable: `result`
+   --> src/test_cancel_refund.rs:552:9
+    |
+552 |     let result = client.try_cancel_invoice(&invoice_id);
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `result`
+   --> src/test_cancel_refund.rs:575:9
+    |
+575 |     let result = client.try_cancel_invoice(&invoice_id);
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `invoice_id_3`
+   --> src/test_dispute.rs:465:9
+    |
+465 |     let invoice_id_3 = create_test_invoice(&env, &client, &business, 200_000);
+    |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_invoice_id_3`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:159:10
+    |
+159 |     let (env, client, _admin) = setup_test();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:290:9
+    |
+290 |     let env = Env::default();
+    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:335:10
+    |
+335 |     let (env, client, _admin) = setup_test();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `business`
+   --> src/test/test_invoice.rs:451:9
+    |
+451 |     let business = setup_verified_business(&env, &client);
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `other_user`
+   --> src/test/test_invoice.rs:956:9
+    |
+956 |     let other_user = Address::generate(&env);
+    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_other_user`
+
+warning: unused variable: `non_admin`
+   --> src/test/test_invoice.rs:988:9
+    |
+988 |     let non_admin = Address::generate(&env);
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `env`
+   --> src/test/test_invoice_categories.rs:148:10
+    |
+148 |     let (env, client, _admin) = setup_env();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `token_client`
+   --> src/test.rs:362:9
+    |
+362 |     let token_client = token::Client::new(&env, &currency);
+    |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_token_client`
+
+warning: unused variable: `admin`
+  --> src/test_fees.rs:21:65
+   |
+21 | fn setup_investor(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
+   |                                                                 ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_fees.rs:73:9
+   |
+73 |     let admin = setup_admin(&env, &client);
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_fees.rs:103:9
+    |
+103 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_fees.rs:195:9
+    |
+195 |     let non_admin = Address::generate(&env);
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `admin`
+  --> src/test_audit.rs:37:5
+   |
+37 |     admin: &Address,
+   |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_audit.rs:111:23
+    |
+111 |     let (env, client, admin, business) = setup();
+    |                       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_currency.rs:166:23
+    |
+166 |     let (env, client, admin) = setup();
+    |                       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `token_client`
+  --> src/test_events.rs:91:9
+   |
+91 |     let token_client = token::Client::new(&env, &currency);
+   |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_token_client`
+
+warning: unused variable: `invoice2`
+   --> src/test_default.rs:418:9
+    |
+418 |     let invoice2 = client.get_invoice(&invoice2_id);
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_invoice2`
+
+warning: unused variable: `admin`
+  --> src/test_partial_payments.rs:81:5
+   |
+81 |     admin: &Address,
+   |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `actor`
+   --> src/test_queries.rs:242:9
+    |
+242 |     let actor = Address::generate(&env);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `filter_inv1`
+   --> src/test_queries.rs:288:9
+    |
+288 |     let filter_inv1 = AuditQueryFilter {
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_filter_inv1`
+
+warning: unused variable: `filter_created`
+   --> src/test_queries.rs:311:9
+    |
+311 |     let filter_created = AuditQueryFilter {
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_filter_created`
+
+warning: unused variable: `contract_id`
+   --> src/test_insurance.rs:147:23
+    |
+147 |     let (env, client, contract_id) = setup();
+    |                       ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_contract_id`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:102:27
+    |
+102 |         let (env, client, admin) = setup();
+    |                           ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_investor_kyc.rs:179:13
+    |
+179 |         let non_admin = Address::generate(&env);
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `result`
+   --> src/test_investor_kyc.rs:192:13
+    |
+192 |         let result = client.try_verify_investor(&investor, &investment_limit);
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:199:27
+    |
+199 |         let (env, client, admin) = setup();
+    |                           ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `business`
+   --> src/test_investor_kyc.rs:482:13
+    |
+482 |         let business = Address::generate(&env);
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `high_risk`
+   --> src/test_investor_kyc.rs:610:13
+    |
+610 |         let high_risk = client.get_investors_by_risk_level(&InvestorRiskLevel::High);
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_high_risk`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:752:27
+    |
+752 |         let (env, client, admin) = setup();
+    |                           ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:40:65
+   |
+40 | fn setup_investor(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
+   |                                                                 ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:80:9
+   |
+80 |     let admin = setup_admin(&env, &client);
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:103:9
+    |
+103 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:126:9
+    |
+126 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:301:9
+    |
+301 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:343:9
+    |
+343 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:374:9
+    |
+374 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:590:9
+    |
+590 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:604:9
+    |
+604 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: function `make_breakdown` is never used
+   --> src/profits.rs:491:8
+    |
+491 |     fn make_breakdown(
+    |        ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `get_payment_count` is never used
+   --> src/settlement.rs:276:8
+    |
+276 | pub fn get_payment_count(env: &Env, invoice_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: function `get_payment_records` is never used
+   --> src/settlement.rs:295:8
+    |
+295 | pub fn get_payment_records(
+    |        ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `ConfigStorage` is never constructed
+   --> src/storage.rs:472:12
+    |
+472 | pub struct ConfigStorage;
+    |            ^^^^^^^^^^^^^
+
+warning: associated functions `set_platform_fees` and `get_platform_fees` are never used
+   --> src/storage.rs:476:12
+    |
+474 | impl ConfigStorage {
+    | ------------------ associated functions in this implementation
+475 |     /// Store platform fee configuration
+476 |     pub fn set_platform_fees(env: &Env, config: &PlatformFeeConfig) {
+    |            ^^^^^^^^^^^^^^^^^
+...
+483 |     pub fn get_platform_fees(env: &Env) -> Option<PlatformFeeConfig> {
+    |            ^^^^^^^^^^^^^^^^^
+
+warning: associated function `is_business_verified` is never used
+   --> src/verification.rs:121:12
+    |
+ 69 | impl BusinessVerificationStorage {
+    | -------------------------------- associated function in this implementation
+...
+121 |     pub fn is_business_verified(env: &Env, business: &Address) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: associated constants `INVESTOR_HISTORY_KEY` and `INVESTOR_ANALYTICS_KEY` are never used
+   --> src/verification.rs:252:11
+    |
+247 | impl InvestorVerificationStorage {
+    | -------------------------------- associated constants in this implementation
+...
+252 |     const INVESTOR_HISTORY_KEY: &'static str = "investor_history";
+    |           ^^^^^^^^^^^^^^^^^^^^
+253 |     #[cfg(test)]
+254 |     const INVESTOR_ANALYTICS_KEY: &'static str = "investor_analytics";
+    |           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `require_business_verification` is never used
+   --> src/verification.rs:623:8
+    |
+623 | pub fn require_business_verification(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_trail_creation` is never used
+    --> src/test.rs:2142:4
+     |
+2142 | fn test_audit_trail_creation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_integrity_validation` is never used
+    --> src/test.rs:2186:4
+     |
+2186 | fn test_audit_integrity_validation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_query_functionality` is never used
+    --> src/test.rs:2225:4
+     |
+2225 | fn test_audit_query_functionality() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_statistics` is never used
+    --> src/test.rs:2294:4
+     |
+2294 | fn test_audit_statistics() {
+     |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_create_dispute` is never used
+    --> src/test.rs:2818:4
+     |
+2818 | fn test_create_dispute() {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_create_dispute_as_investor` is never used
+    --> src/test.rs:2863:4
+     |
+2863 | fn test_create_dispute_as_investor() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_unauthorized_dispute_creation` is never used
+    --> src/test.rs:2912:4
+     |
+2912 | fn test_unauthorized_dispute_creation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_duplicate_dispute_prevention` is never used
+    --> src/test.rs:2947:4
+     |
+2947 | fn test_duplicate_dispute_prevention() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_dispute_under_review` is never used
+    --> src/test.rs:2987:4
+     |
+2987 | fn test_dispute_under_review() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_resolve_dispute` is never used
+    --> src/test.rs:3030:4
+     |
+3030 | fn test_resolve_dispute() {
+     |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_get_invoices_with_disputes` is never used
+    --> src/test.rs:3088:4
+     |
+3088 | fn test_get_invoices_with_disputes() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_get_invoices_by_dispute_status` is never used
+    --> src/test.rs:3141:4
+     |
+3141 | fn test_get_invoices_by_dispute_status() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_dispute_validation` is never used
+    --> src/test.rs:3200:4
+     |
+3200 | fn test_dispute_validation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `setup_business` is never used
+  --> src/test_fees.rs:13:4
+   |
+13 | fn setup_business(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
+   |    ^^^^^^^^^^^^^^
+
+warning: function `setup_business` is never used
+  --> src/test_profit_fee_formula.rs:32:4
+   |
+32 | fn setup_business(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
+   |    ^^^^^^^^^^^^^^
+
+warning: function `setup_investor` is never used
+  --> src/test_profit_fee_formula.rs:40:4
+   |
+40 | fn setup_investor(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
+   |    ^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2583:13
+     |
+2583 |     assert!(stats.total_sent >= 0);
+     |             ^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_comparisons)]` on by default
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2584:13
+     |
+2584 |     assert!(stats.total_delivered >= 0);
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2585:13
+     |
+2585 |     assert!(stats.total_read >= 0);
+     |             ^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2586:13
+     |
+2586 |     assert!(stats.total_failed >= 0);
+     |             ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2681:13
+     |
+2681 |     assert!(overdue_count >= 0);
+     |             ^^^^^^^^^^^^^^^^^^
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/test/test_analytics.rs:26:24
+   |
+26 | fn setup_contract(env: &Env) -> (QuickLendXContractClient, Address, Address) {
+   |                        ^^^^      ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                        |
+   |                        the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+   = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+   |
+26 | fn setup_contract(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address) {
+   |                                                          ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/test_events.rs:25:24
+   |
+25 | fn setup_contract(env: &Env) -> (QuickLendXContractClient, Address, Address) {
+   |                        ^^^^      ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                        |
+   |                        the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+25 | fn setup_contract(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address) {
+   |                                                          ++++
+
+warning: `quicklendx-contracts` (lib test) generated 91 warnings (run `cargo fix --lib -p quicklendx-contracts --tests` to apply 55 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.40s
+     Running unittests src/lib.rs (target/debug/deps/quicklendx_contracts-bbe347640a360925)
+
+running 27 tests
+test test_audit::test_audit_integrity_no_invoice ... ok
+test test_audit::test_audit_get_entry_not_found - should panic ... ok
+test test_audit::test_audit_integrity_valid ... ok
+test test_audit::test_audit_invoice_created_and_trail ... ok
+test test_audit::test_audit_entry_contains_block_height ... ok
+test test_audit::test_audit_invoice_cancelled_produces_entry ... ok
+test test_audit::test_audit_multiple_invoices_separate_trails ... ok
+test test_audit::test_audit_query_empty_results ... ok
+test test_audit::test_audit_operation_filter_specific ... ok
+test test_audit::test_audit_bid_accepted_produces_entry ... ok
+test test_audit::test_audit_query_by_operation ... ok
+test test_audit::test_audit_bid_placed_produces_entry ... ok
+test test_audit::test_audit_query_by_actor ... ok
+test test_audit::test_audit_escrow_created_produces_entry ... ok
+test test_audit::test_audit_integrity_multiple_entries ... ok
+test test_audit::test_audit_query_by_invoice ... ok
+test test_audit::test_audit_entry_amount_tracking ... ok
+test test_audit::test_audit_query_time_range ... ok
+test test_audit::test_audit_stats ... ok
+test test_audit::test_audit_query_time_range_boundaries ... ok
+test test_audit::test_audit_stats_operations_count ... ok
+test test_audit::test_audit_stats_date_range ... ok
+test test_audit::test_audit_query_with_actor_filter ... ok
+test test_audit::test_audit_stats_unique_actors ... ok
+test test_audit::test_audit_trail_chronological_order ... ok
+test test_audit::test_audit_verify_produces_entry ... ok
+test test_audit::test_audit_query_limit_enforcement ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 1.07s
+

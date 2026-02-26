@@ -1055,6 +1055,9 @@ impl AnalyticsCalculator {
         // Get investor verification data
         let verification = crate::verification::InvestorVerificationStorage::get(env, investor)
             .ok_or(QuickLendXError::KYCNotFound)?;
+        if verification.status != crate::verification::BusinessVerificationStatus::Verified {
+            return Err(QuickLendXError::BusinessNotVerified);
+        }
 
         // Calculate success rate
         let total_investments =

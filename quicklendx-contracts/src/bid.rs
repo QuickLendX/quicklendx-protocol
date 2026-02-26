@@ -10,6 +10,8 @@ const DEFAULT_BID_TTL_DAYS: u64 = 7;
 const MIN_BID_TTL_DAYS: u64 = 1;
 const MAX_BID_TTL_DAYS: u64 = 30;
 const BID_TTL_KEY: Symbol = symbol_short!("bid_ttl");
+const MAX_ACTIVE_BIDS_PER_INVESTOR_KEY: Symbol = symbol_short!("mx_actbd");
+const DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 20;
 const SECONDS_PER_DAY: u64 = 86400;
 
 #[contracttype]
@@ -124,6 +126,55 @@ impl BidStorage {
 
         env.storage().instance().set(&BID_TTL_KEY, &days);
         Ok(days)
+    }
+
+    /// Get configured max number of active (Placed) bids per investor across all invoices.
+    /// A value of 0 disables this limit.
+    pub fn get_max_active_bids_per_investor(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&MAX_ACTIVE_BIDS_PER_INVESTOR_KEY)
+            .unwrap_or(DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR)
+    }
+
+    /// Admin-only: set max number of active (Placed) bids per investor across all invoices.
+    /// A value of 0 disables this limit.
+    pub fn set_max_active_bids_per_investor(
+        env: &Env,
+        admin: &Address,
+        limit: u32,
+    ) -> Result<u32, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(env, admin)?;
+        env.storage()
+            .instance()
+            .set(&MAX_ACTIVE_BIDS_PER_INVESTOR_KEY, &limit);
+        Ok(limit)
+    }
+
+    /// Count currently active (Placed) bids for an investor across all invoices.
+    /// Expired bids are transitioned to `Expired` during this scan and do not count.
+    pub fn count_active_placed_bids_for_investor(env: &Env, investor: &Address) -> u32 {
+        let current_timestamp = env.ledger().timestamp();
+        let bid_ids = Self::get_bids_by_investor_all(env, investor);
+        let mut count = 0u32;
+
+        for bid_id in bid_ids.iter() {
+            if let Some(mut bid) = Self::get_bid(env, &bid_id) {
+                if bid.status != BidStatus::Placed {
+                    continue;
+                }
+                if bid.is_expired(current_timestamp) {
+                    bid.status = BidStatus::Expired;
+                    Self::update_bid(env, &bid);
+                    emit_bid_expired(env, &bid);
+                } else {
+                    count = count.saturating_add(1);
+                }
+            }
+        }
+
+        count
     }
     pub fn add_bid_to_invoice(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
         let mut bids = Self::get_bids_for_invoice(env, invoice_id);
@@ -321,6 +372,24 @@ impl BidStorage {
             }
         }
         result
+    }
+
+    /// Count the number of currently active (Placed) bids for a given investor.
+    ///
+    /// This is used by rate-limiting logic in the main contract to enforce a
+    /// maximum number of open bids per investor across all invoices.
+    pub fn count_active_bids_by_investor(env: &Env, investor: &Address) -> u32 {
+        let all_bids = Self::get_all_bids_by_investor(env, investor);
+        let mut count: u32 = 0;
+        let mut idx: u32 = 0;
+        while idx < all_bids.len() {
+            let bid = all_bids.get(idx).unwrap();
+            if bid.status == BidStatus::Placed {
+                count = count.saturating_add(1);
+            }
+            idx = idx.saturating_add(1);
+        }
+        count
     }
     /// Generates a unique 32-byte bid ID using timestamp and a simple counter.
     /// This approach avoids potential serialization issues with large counters.

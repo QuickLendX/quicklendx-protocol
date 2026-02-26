@@ -34,7 +34,11 @@
               "function_name": "create_backup",
               "args": [
                 {
+<<<<<<< HEAD
+                  "string": "Test backup"
+=======
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                 }
               ]
             }
@@ -53,10 +57,14 @@
               "function_name": "archive_backup",
               "args": [
                 {
+<<<<<<< HEAD
+                  "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+=======
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
                   "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
+>>>>>>> main
                 }
               ]
             }
@@ -103,7 +111,11 @@
                     "storage": [
                       {
                         "key": {
+<<<<<<< HEAD
+                          "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+=======
                           "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
+>>>>>>> main
                         },
                         "val": {
                           "map": [
@@ -112,7 +124,11 @@
                                 "symbol": "backup_id"
                               },
                               "val": {
+<<<<<<< HEAD
+                                "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+=======
                                 "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
+>>>>>>> main
                               }
                             },
                             {
@@ -120,7 +136,11 @@
                                 "symbol": "description"
                               },
                               "val": {
+<<<<<<< HEAD
+                                "string": "Test backup"
+=======
                                 "string": "Admin created backup"
+>>>>>>> main
                               }
                             },
                             {
@@ -164,6 +184,8 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
+=======
                           "symbol": "adm_init"
                         },
                         "val": {
@@ -180,6 +202,7 @@
                       },
                       {
                         "key": {
+>>>>>>> main
                           "symbol": "backups"
                         },
                         "val": {
@@ -201,7 +224,11 @@
                               "symbol": "bkup_data"
                             },
                             {
+<<<<<<< HEAD
+                              "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+=======
                               "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
+>>>>>>> main
                             }
                           ]
                         },

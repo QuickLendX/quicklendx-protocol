@@ -70,6 +70,51 @@ fn setup_funded_invoice(
     invoice_id
 }
 
+/// Settlement deadline helper should align with protocol limits (due_date + grace).
+#[test]
+fn test_get_invoice_settlement_deadline_matches_protocol_limits() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let _ = client.try_initialize_admin(&admin);
+
+    // Configure protocol limits with a small, known grace period.
+    let min_amount: i128 = 1;
+    let max_due_days: u64 = 365;
+    let grace_period: u64 = 3600; // 1 hour
+    let _ = client.try_initialize_protocol_limits(&admin, &min_amount, &max_due_days, &grace_period);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
+
+    let now = env.ledger().timestamp();
+    let due_date = now + 10_000;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Deadline invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let deadline = client
+        .get_invoice_settlement_deadline(&invoice_id)
+        .expect("deadline query should succeed");
+    assert_eq!(
+        deadline,
+        due_date.saturating_add(grace_period),
+        "Settlement/default deadline must equal due_date + grace_period"
+    );
+}
+
 /// Test that unfunded invoices cannot be settled
 #[test]
 fn test_cannot_settle_unfunded_invoice() {

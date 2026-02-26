@@ -5,6 +5,8 @@
 
 use super::*;
 use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
+use crate::bid::{Bid, BidStatus, BidStorage};
+use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
@@ -268,6 +270,35 @@ fn test_get_business_invoices_paged_pagination_correctness() {
     for id in page2.iter() {
         assert!(all.contains(&id));
     }
+}
+
+#[test]
+fn test_get_business_invoices_paged_limit_is_capped_to_max_query_limit() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+
+    for i in 0..120u32 {
+        let _ = create_invoice(
+            &env,
+            &client,
+            &business,
+            1_000 + i as i128,
+            InvoiceCategory::Services,
+            false,
+        );
+    }
+
+    let capped = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &500u32,
+    );
+    assert_eq!(
+        capped.len(),
+        crate::MAX_QUERY_LIMIT,
+        "business invoice query should enforce MAX_QUERY_LIMIT cap"
+    );
 }
 
 #[test]
@@ -904,6 +935,50 @@ fn test_get_investments_by_investor_only_returns_investor_investments() {
         &client,
         &business,
         15_000,
+#[test]
+fn test_get_business_invoices_paged_edge_cases_filters_and_no_overflow() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+
+    // Empty list
+    let empty = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(empty.len(), 0);
+
+    // Build mixed statuses for filter checks
+    let pending_1 = create_invoice(
+        &env,
+        &client,
+        &business,
+        1_000_000,
+        InvoiceCategory::Services,
+        false,
+    );
+    let pending_2 = create_invoice(
+        &env,
+        &client,
+        &business,
+        1_100_000,
+        InvoiceCategory::Products,
+        false,
+    );
+    let verified_1 = create_invoice(
+        &env,
+        &client,
+        &business,
+        1_200_000,
+        InvoiceCategory::Services,
+        true,
+    );
+    let verified_2 = create_invoice(
+        &env,
+        &client,
+        &business,
+        1_300_000,
         InvoiceCategory::Products,
         true,
     );
@@ -1115,6 +1190,228 @@ fn test_get_investments_by_investor_after_mixed_bid_outcomes() {
         &client,
         &business,
         25_000,
+    let pending = client.get_business_invoices_paged(
+        &business,
+        &Some(InvoiceStatus::Pending),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(pending.len(), 2);
+    assert!(pending.contains(&pending_1));
+    assert!(pending.contains(&pending_2));
+    assert!(!pending.contains(&verified_1));
+
+    let verified = client.get_business_invoices_paged(
+        &business,
+        &Some(InvoiceStatus::Verified),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(verified.len(), 2);
+    assert!(verified.contains(&verified_1));
+    assert!(verified.contains(&verified_2));
+    assert!(!verified.contains(&pending_1));
+
+    // Filter + pagination combination
+    let verified_page = client.get_business_invoices_paged(
+        &business,
+        &Some(InvoiceStatus::Verified),
+        &1u32,
+        &1u32,
+    );
+    assert_eq!(verified_page.len(), 1);
+    assert!(verified_page.contains(&verified_2));
+
+    // Offset >= len
+    let offset_beyond = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &4u32,
+        &2u32,
+    );
+    assert_eq!(offset_beyond.len(), 0);
+
+    // limit = 0
+    let zero = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &0u32,
+    );
+    assert_eq!(zero.len(), 0);
+
+    // No overflow on very large offset
+    let no_overflow = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &(u32::MAX - 1),
+        &10u32,
+    );
+    assert_eq!(no_overflow.len(), 0);
+}
+
+#[test]
+fn test_get_investor_investments_paged_edge_cases_filters_and_no_overflow() {
+    let (env, client) = setup();
+    let contract_id = client.address.clone();
+    let investor = Address::generate(&env);
+
+    // Empty list
+    let empty = client.get_investor_investments_paged(
+        &investor,
+        &Option::<InvestmentStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(empty.len(), 0);
+
+    let mut active_id: Option<BytesN<32>> = None;
+    let mut completed_id: Option<BytesN<32>> = None;
+    let mut refunded_id: Option<BytesN<32>> = None;
+
+    env.as_contract(&contract_id, || {
+        for i in 0..3u8 {
+            let invoice_id = BytesN::from_array(&env, &[i + 10; 32]);
+            let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
+            let status = match i {
+                0 => InvestmentStatus::Active,
+                1 => InvestmentStatus::Completed,
+                _ => InvestmentStatus::Refunded,
+            };
+
+            let investment = Investment {
+                investment_id: investment_id.clone(),
+                invoice_id,
+                investor: investor.clone(),
+                amount: 1_000 + i as i128 * 100,
+                funded_at: env.ledger().timestamp(),
+                status: status.clone(),
+                insurance: Vec::new(&env),
+            };
+            InvestmentStorage::store_investment(&env, &investment);
+
+            match status {
+                InvestmentStatus::Active => active_id = Some(investment_id),
+                InvestmentStatus::Completed => completed_id = Some(investment_id),
+                InvestmentStatus::Refunded => refunded_id = Some(investment_id),
+                _ => {}
+            }
+        }
+    });
+
+    // Filter combinations
+    let active = client.get_investor_investments_paged(
+        &investor,
+        &Some(InvestmentStatus::Active),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(active.len(), 1);
+    assert!(active.contains(&active_id.unwrap()));
+
+    let completed = client.get_investor_investments_paged(
+        &investor,
+        &Some(InvestmentStatus::Completed),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(completed.len(), 1);
+    assert!(completed.contains(&completed_id.unwrap()));
+
+    let refunded = client.get_investor_investments_paged(
+        &investor,
+        &Some(InvestmentStatus::Refunded),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(refunded.len(), 1);
+    assert!(refunded.contains(&refunded_id.unwrap()));
+
+    // Filter + pagination combination
+    let active_page = client.get_investor_investments_paged(
+        &investor,
+        &Some(InvestmentStatus::Active),
+        &1u32,
+        &1u32,
+    );
+    assert_eq!(active_page.len(), 0);
+
+    // Offset >= len
+    let offset_beyond = client.get_investor_investments_paged(
+        &investor,
+        &Option::<InvestmentStatus>::None,
+        &3u32,
+        &1u32,
+    );
+    assert_eq!(offset_beyond.len(), 0);
+
+    // limit = 0
+    let zero = client.get_investor_investments_paged(
+        &investor,
+        &Option::<InvestmentStatus>::None,
+        &0u32,
+        &0u32,
+    );
+    assert_eq!(zero.len(), 0);
+
+    // No overflow on very large offset
+    let no_overflow = client.get_investor_investments_paged(
+        &investor,
+        &Option::<InvestmentStatus>::None,
+        &(u32::MAX - 1),
+        &10u32,
+    );
+    assert_eq!(no_overflow.len(), 0);
+}
+
+#[test]
+fn test_get_available_invoices_paged_filter_combinations_and_no_overflow() {
+    let (env, client) = setup();
+
+    // Empty list
+    let empty = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(empty.len(), 0);
+
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let business = Address::generate(&env);
+
+    let id1 = create_invoice(
+        &env,
+        &client,
+        &business,
+        1_100_000,
+        InvoiceCategory::Products,
+        true,
+    );
+    let id2 = create_invoice(
+        &env,
+        &client,
+        &business,
+        1_500_000,
+        InvoiceCategory::Services,
+        true,
+    );
+    let id3 = create_invoice(
+        &env,
+        &client,
+        &business,
+        2_500_000,
+        InvoiceCategory::Services,
+        true,
+    );
+    let id4 = create_invoice(
+        &env,
+        &client,
+        &business,
+        3_500_000,
         InvoiceCategory::Products,
         true,
     );
@@ -1268,4 +1565,263 @@ fn test_investment_queries_comprehensive_workflow() {
             crate::investment::InvestmentStatus::Active
         );
     }
+    // Filter combinations: min + max + category
+    let combined = client.get_available_invoices_paged(
+        &Some(1_000_000i128),
+        &Some(3_000_000i128),
+        &Some(InvoiceCategory::Services),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(combined.len(), 2);
+    assert!(combined.contains(&id2));
+    assert!(combined.contains(&id3));
+    assert!(!combined.contains(&id1));
+    assert!(!combined.contains(&id4));
+
+    // Offset >= len
+    let offset_beyond = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &4u32,
+        &2u32,
+    );
+    assert_eq!(offset_beyond.len(), 0);
+
+    // limit = 0
+    let zero = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &0u32,
+        &0u32,
+    );
+    assert_eq!(zero.len(), 0);
+
+    // No overflow on very large offset
+    let no_overflow = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &(u32::MAX - 1),
+        &10u32,
+    );
+    assert_eq!(no_overflow.len(), 0);
+}
+
+#[test]
+fn test_get_bid_history_paged_edge_cases_filters_and_no_overflow() {
+    let (env, client) = setup();
+    let contract_id = client.address.clone();
+    let business = Address::generate(&env);
+    let investor_a = Address::generate(&env);
+
+    let invoice_id = create_invoice(
+        &env,
+        &client,
+        &business,
+        5_000_000,
+        InvoiceCategory::Services,
+        false,
+    );
+
+    // Empty list
+    let empty = client.get_bid_history_paged(
+        &invoice_id,
+        &Option::<BidStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(empty.len(), 0);
+
+    env.as_contract(&contract_id, || {
+        let statuses = [
+            BidStatus::Placed,
+            BidStatus::Accepted,
+            BidStatus::Cancelled,
+        ];
+        for (i, status) in statuses.iter().enumerate() {
+            let bid_id = BidStorage::generate_unique_bid_id(&env);
+            let bid = Bid {
+                bid_id: bid_id.clone(),
+                invoice_id: invoice_id.clone(),
+                investor: investor_a.clone(),
+                bid_amount: 1_000 + i as i128 * 100,
+                expected_return: 1_100 + i as i128 * 100,
+                timestamp: env.ledger().timestamp(),
+                status: status.clone(),
+                expiration_timestamp: env.ledger().timestamp().saturating_add(86_400),
+            };
+            BidStorage::store_bid(&env, &bid);
+            BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
+        }
+    });
+
+    // Filter combinations
+    let accepted = client.get_bid_history_paged(
+        &invoice_id,
+        &Some(BidStatus::Accepted),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(accepted.len(), 1);
+    assert_eq!(accepted.get(0).unwrap().status, BidStatus::Accepted);
+
+    // Filter + pagination combination
+    let accepted_page = client.get_bid_history_paged(
+        &invoice_id,
+        &Some(BidStatus::Accepted),
+        &1u32,
+        &1u32,
+    );
+    assert_eq!(accepted_page.len(), 0);
+
+    // Offset >= len
+    let offset_beyond = client.get_bid_history_paged(
+        &invoice_id,
+        &Option::<BidStatus>::None,
+        &3u32,
+        &2u32,
+    );
+    assert_eq!(offset_beyond.len(), 0);
+
+    // limit = 0
+    let zero = client.get_bid_history_paged(
+        &invoice_id,
+        &Option::<BidStatus>::None,
+        &0u32,
+        &0u32,
+    );
+    assert_eq!(zero.len(), 0);
+
+    // No overflow on very large offset
+    let no_overflow = client.get_bid_history_paged(
+        &invoice_id,
+        &Option::<BidStatus>::None,
+        &(u32::MAX - 1),
+        &10u32,
+    );
+    assert_eq!(no_overflow.len(), 0);
+}
+
+#[test]
+fn test_get_investor_bids_paged_edge_cases_filters_and_no_overflow() {
+    let (env, client) = setup();
+    let contract_id = client.address.clone();
+    let business = Address::generate(&env);
+    let investor_a = Address::generate(&env);
+    let investor_b = Address::generate(&env);
+
+    let invoice_id = create_invoice(
+        &env,
+        &client,
+        &business,
+        6_000_000,
+        InvoiceCategory::Products,
+        false,
+    );
+
+    // Empty list
+    let empty = client.get_investor_bids_paged(
+        &investor_a,
+        &Option::<BidStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(empty.len(), 0);
+
+    env.as_contract(&contract_id, || {
+        let statuses = [
+            BidStatus::Placed,
+            BidStatus::Accepted,
+            BidStatus::Cancelled,
+        ];
+        for (i, status) in statuses.iter().enumerate() {
+            let bid_id = BidStorage::generate_unique_bid_id(&env);
+            let bid = Bid {
+                bid_id: bid_id.clone(),
+                invoice_id: invoice_id.clone(),
+                investor: investor_a.clone(),
+                bid_amount: 1_500 + i as i128 * 100,
+                expected_return: 1_650 + i as i128 * 100,
+                timestamp: env.ledger().timestamp(),
+                status: status.clone(),
+                expiration_timestamp: env.ledger().timestamp().saturating_add(86_400),
+            };
+            BidStorage::store_bid(&env, &bid);
+            BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
+        }
+
+        // Additional bid for another investor to validate investor isolation
+        let other_bid_id = BidStorage::generate_unique_bid_id(&env);
+        let other_bid = Bid {
+            bid_id: other_bid_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor_b.clone(),
+            bid_amount: 2_000,
+            expected_return: 2_200,
+            timestamp: env.ledger().timestamp(),
+            status: BidStatus::Placed,
+            expiration_timestamp: env.ledger().timestamp().saturating_add(86_400),
+        };
+        BidStorage::store_bid(&env, &other_bid);
+        BidStorage::add_bid_to_invoice(&env, &invoice_id, &other_bid_id);
+    });
+
+    // Filter combinations + investor isolation
+    let accepted = client.get_investor_bids_paged(
+        &investor_a,
+        &Some(BidStatus::Accepted),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(accepted.len(), 1);
+    assert_eq!(accepted.get(0).unwrap().status, BidStatus::Accepted);
+    assert_eq!(accepted.get(0).unwrap().investor, investor_a);
+
+    let investor_b_bids = client.get_investor_bids_paged(
+        &investor_b,
+        &Option::<BidStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(investor_b_bids.len(), 1);
+    assert_eq!(investor_b_bids.get(0).unwrap().investor, investor_b);
+
+    // Filter + pagination combination
+    let accepted_page = client.get_investor_bids_paged(
+        &investor_a,
+        &Some(BidStatus::Accepted),
+        &1u32,
+        &1u32,
+    );
+    assert_eq!(accepted_page.len(), 0);
+
+    // Offset >= len
+    let offset_beyond = client.get_investor_bids_paged(
+        &investor_a,
+        &Option::<BidStatus>::None,
+        &3u32,
+        &2u32,
+    );
+    assert_eq!(offset_beyond.len(), 0);
+
+    // limit = 0
+    let zero = client.get_investor_bids_paged(
+        &investor_a,
+        &Option::<BidStatus>::None,
+        &0u32,
+        &0u32,
+    );
+    assert_eq!(zero.len(), 0);
+
+    // No overflow on very large offset
+    let no_overflow = client.get_investor_bids_paged(
+        &investor_a,
+        &Option::<BidStatus>::None,
+        &(u32::MAX - 1),
+        &10u32,
+    );
+    assert_eq!(no_overflow.len(), 0);
 }

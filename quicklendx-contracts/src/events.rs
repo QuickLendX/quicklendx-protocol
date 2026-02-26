@@ -3,11 +3,31 @@ use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::payments::Escrow;
 use crate::profits::PlatformFeeConfig;
 use crate::verification::InvestorVerification;
-use soroban_sdk::{symbol_short, Address, BytesN, Env, String};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Symbol};
+
+// Standardized event topics for off-chain indexers. These constants mirror the
+// short-symbol topics used in `env.events().publish` so subscribers can
+// reference them without hardcoding string literals.
+pub const TOPIC_INVOICE_UPLOADED: Symbol = symbol_short!("inv_up");
+pub const TOPIC_INVOICE_VERIFIED: Symbol = symbol_short!("inv_ver");
+pub const TOPIC_INVOICE_CANCELLED: Symbol = symbol_short!("inv_canc");
+pub const TOPIC_INVOICE_SETTLED: Symbol = symbol_short!("inv_set");
+pub const TOPIC_INVOICE_DEFAULTED: Symbol = symbol_short!("inv_def");
+pub const TOPIC_INVOICE_EXPIRED: Symbol = symbol_short!("inv_exp");
+pub const TOPIC_PARTIAL_PAYMENT: Symbol = symbol_short!("inv_pp");
+pub const TOPIC_PAYMENT_RECORDED: Symbol = symbol_short!("pay_rec");
+pub const TOPIC_INVOICE_SETTLED_FINAL: Symbol = symbol_short!("inv_stlf");
+pub const TOPIC_BID_PLACED: Symbol = symbol_short!("bid_plc");
+pub const TOPIC_BID_ACCEPTED: Symbol = symbol_short!("bid_acc");
+pub const TOPIC_BID_WITHDRAWN: Symbol = symbol_short!("bid_wdr");
+pub const TOPIC_BID_EXPIRED: Symbol = symbol_short!("bid_exp");
+pub const TOPIC_ESCROW_CREATED: Symbol = symbol_short!("esc_cr");
+pub const TOPIC_ESCROW_RELEASED: Symbol = symbol_short!("esc_rel");
+pub const TOPIC_ESCROW_REFUNDED: Symbol = symbol_short!("esc_ref");
 
 pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
     env.events().publish(
-        (symbol_short!("inv_up"),),
+        (TOPIC_INVOICE_UPLOADED,),
         (
             invoice.id.clone(),
             invoice.business.clone(),
@@ -21,7 +41,7 @@ pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
 
 pub fn emit_invoice_verified(env: &Env, invoice: &Invoice) {
     env.events().publish(
-        (symbol_short!("inv_ver"),),
+        (TOPIC_INVOICE_VERIFIED,),
         (
             invoice.id.clone(),
             invoice.business.clone(),
@@ -32,7 +52,7 @@ pub fn emit_invoice_verified(env: &Env, invoice: &Invoice) {
 
 pub fn emit_invoice_cancelled(env: &Env, invoice: &Invoice) {
     env.events().publish(
-        (symbol_short!("inv_canc"),),
+        (TOPIC_INVOICE_CANCELLED,),
         (
             invoice.id.clone(),
             invoice.business.clone(),
@@ -84,7 +104,7 @@ pub fn emit_invoice_settled(
     platform_fee: i128,
 ) {
     env.events().publish(
-        (symbol_short!("inv_set"),),
+        (TOPIC_INVOICE_SETTLED,),
         (
             invoice.id.clone(),
             invoice.business.clone(),
@@ -108,7 +128,7 @@ pub fn emit_partial_payment(
     transaction_id: String,
 ) {
     env.events().publish(
-        (symbol_short!("inv_pp"),),
+        (TOPIC_PARTIAL_PAYMENT,),
         (
             invoice.id.clone(),
             invoice.business.clone(),
@@ -122,7 +142,7 @@ pub fn emit_partial_payment(
 
 pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
     env.events().publish(
-        (symbol_short!("inv_exp"),),
+        (TOPIC_INVOICE_EXPIRED,),
         (
             invoice.id.clone(),
             invoice.business.clone(),
@@ -133,7 +153,7 @@ pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
 
 pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::invoice::Invoice) {
     env.events().publish(
-        (symbol_short!("inv_def"),),
+        (TOPIC_INVOICE_DEFAULTED,),
         (
             invoice.id.clone(),
             invoice.business.clone(),
