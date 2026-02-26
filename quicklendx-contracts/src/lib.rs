@@ -52,6 +52,8 @@ mod test_init;
 mod test_storage;
 #[cfg(test)]
 mod test_vesting;
+#[cfg(test)]
+mod test_invoice;
 mod verification;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
@@ -474,9 +476,7 @@ impl QuickLendXContract {
         }
 
         // Validate due date is not too far in the future using protocol limits
-        if !protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date) {
-            return Err(QuickLendXError::InvoiceDueDateInvalid);
-        }
+        protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
 
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
@@ -532,12 +532,12 @@ impl QuickLendXContract {
         business.require_auth();
 
         // Check if business is verified
-        let verification = get_business_verification_status(&env, &business);
-        if verification.is_none()
-            || !matches!(
-                verification.unwrap().status,
-                verification::BusinessVerificationStatus::Verified
-            )
+        let verification = get_business_verification_status(&env, &business)
+            .ok_or(QuickLendXError::BusinessNotVerified)?;
+        if !matches!(
+            verification.status,
+            verification::BusinessVerificationStatus::Verified
+        )
         {
             return Err(QuickLendXError::BusinessNotVerified);
         }
@@ -753,7 +753,8 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         new_status: InvoiceStatus,
     ) -> Result<(), QuickLendXError> {
-        let admin = require_current_admin(&env)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
 
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -765,14 +766,14 @@ impl QuickLendXContract {
         match new_status {
             InvoiceStatus::Verified => invoice.verify(&env, admin.clone()),
             InvoiceStatus::Paid => {
-                invoice.mark_as_paid(&env, invoice.business.clone(), env.ledger().timestamp())
+                invoice.mark_as_paid(&env, admin.clone(), env.ledger().timestamp())
             }
             InvoiceStatus::Defaulted => invoice.mark_as_defaulted(),
             InvoiceStatus::Funded => {
                 // For testing purposes - normally funding happens via accept_bid
                 invoice.mark_as_funded(
                     &env,
-                    invoice.business.clone(),
+                    admin.clone(),
                     invoice.amount,
                     env.ledger().timestamp(),
                 );
@@ -1014,7 +1015,8 @@ impl QuickLendXContract {
         );
         InvoiceStorage::update_invoice(&env, &invoice);
 
-        // Add to new status list after status change
+        // Update status index so get_invoices_by_status(Funded) and check_overdue_invoices see this invoice
+        InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
         InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Funded, &invoice_id);
         let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         let investment = Investment {
@@ -1029,7 +1031,7 @@ impl QuickLendXContract {
         InvestmentStorage::store_investment(&env, &investment);
 
         let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
-            .expect("Escrow should exist after creation");
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
         audit::log_bid_accepted(
@@ -2172,11 +2174,17 @@ impl QuickLendXContract {
     pub fn get_analytics_summary(
         env: Env,
     ) -> Result<(PlatformMetrics, PerformanceMetrics), QuickLendXError> {
-        let platform_metrics = AnalyticsStorage::get_platform_metrics(&env)
-            .unwrap_or_else(|| AnalyticsCalculator::calculate_platform_metrics(&env).unwrap());
+        let platform_metrics = match AnalyticsStorage::get_platform_metrics(&env) {
+            Some(metrics) => metrics,
+            None => AnalyticsCalculator::calculate_platform_metrics(&env)
+                .map_err(|_| QuickLendXError::StorageError)?,
+        };
 
-        let performance_metrics = AnalyticsStorage::get_performance_metrics(&env)
-            .unwrap_or_else(|| AnalyticsCalculator::calculate_performance_metrics(&env).unwrap());
+        let performance_metrics = match AnalyticsStorage::get_performance_metrics(&env) {
+            Some(metrics) => metrics,
+            None => AnalyticsCalculator::calculate_performance_metrics(&env)
+                .map_err(|_| QuickLendXError::StorageError)?,
+        };
 
         Ok((platform_metrics, performance_metrics))
     }
@@ -2934,6 +2942,8 @@ mod test_investor_kyc;
 mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
+#[cfg(test)]
+mod test_overdue_expiration;
 #[cfg(test)]
 mod test_revenue_split;
 #[cfg(test)]
