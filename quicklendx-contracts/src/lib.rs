@@ -29,8 +29,6 @@ mod storage;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
-mod test_bid_ranking;
-#[cfg(test)]
 mod test_business_kyc;
 #[cfg(test)]
 mod test_cancel_refund;

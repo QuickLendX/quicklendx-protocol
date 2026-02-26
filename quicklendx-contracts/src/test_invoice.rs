@@ -2409,10 +2409,14 @@ fn test_update_invoice_status_auth_check() {
 /// Verifies that update_invoice_status emits events and triggers notifications.
 #[test]
 fn test_update_invoice_status_notifications() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     env.mock_all_auths();
+
+
 
     let business = setup_verified_business(&env, &client, &admin);
     let investor = setup_verified_investor(&env, &client, &admin);
@@ -2757,7 +2761,7 @@ fn test_invoice_counts_with_multiple_status_updates() {
 
 /// Verifies that update_invoice_status returns NotAdmin if admin not initialized.
 #[test]
-fn test_invoice_counts_with_multiple_status_updates() {
+fn test_update_invoice_status_not_admin() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
