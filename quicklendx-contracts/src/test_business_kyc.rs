@@ -618,7 +618,7 @@ fn test_double_rejection_fails() {
     client.reject_business(&admin, &business, &rejection_reason);
 
     // Try to reject again - should fail with InvalidKYCStatus
-    let result = client.try_reject_business(&admin, &business, &rejection_reason);
+    let result = client.try_reject_business(&admin, &business, &reason);
     assert!(result.is_err());
 }
 
@@ -747,6 +747,15 @@ fn test_multiple_businesses_concurrent_kyc() {
     assert_eq!(client.get_verified_businesses().len(), 3);
     assert_eq!(client.get_rejected_businesses().len(), 2);
     assert_eq!(client.get_pending_businesses().len(), 0);
+
+    // Verify expected businesses are in each status list
+    let verified = client.get_verified_businesses();
+    assert!(verified.contains(&businesses[0]));
+    assert!(verified.contains(&businesses[1]));
+    assert!(verified.contains(&businesses[2]));
+    let rejected = client.get_rejected_businesses();
+    assert!(rejected.contains(&businesses[3]));
+    assert!(rejected.contains(&businesses[4]));
 }
 
 #[test]
@@ -977,7 +986,7 @@ fn test_kyc_with_special_characters() {
 fn test_kyc_with_long_data() {
     let (env, client, _admin) = setup();
     let business = Address::generate(&env);
-    
+
     // Create a long KYC data string
     let long_data = String::from_str(
         &env,
@@ -1061,13 +1070,19 @@ fn test_status_transitions_pending_to_verified() {
 
     // Check initial status is Pending
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Pending));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Pending
+    ));
 
     client.verify_business(&admin, &business);
 
     // Check status changed to Verified
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Verified));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Verified
+    ));
 }
 
 #[test]
@@ -1081,13 +1096,19 @@ fn test_status_transitions_pending_to_rejected() {
 
     // Check initial status is Pending
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Pending));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Pending
+    ));
 
     client.reject_business(&admin, &business, &rejection_reason);
 
     // Check status changed to Rejected
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Rejected));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Rejected
+    ));
 }
 
 #[test]
@@ -1103,7 +1124,10 @@ fn test_status_transitions_rejected_to_pending_on_resubmit() {
 
     // Verify Rejected status
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Rejected));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Rejected
+    ));
 
     // Resubmit
     let new_kyc_data = create_test_kyc_data(&env, "UpdatedBusiness");
@@ -1111,7 +1135,10 @@ fn test_status_transitions_rejected_to_pending_on_resubmit() {
 
     // Check status changed back to Pending
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Pending));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Pending
+    ));
 }
 
 // ============================================================================

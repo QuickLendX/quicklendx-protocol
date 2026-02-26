@@ -162,7 +162,8 @@ fn test_early_payment_fee_reduction() {
     client.initialize_fee_system(&admin);
 
     let transaction_amount = 50_000i128;
-    let regular_fees = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+    let regular_fees =
+        client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
     let early_fees = client.calculate_transaction_fees(&user, &transaction_amount, &true, &false);
 
     assert!(early_fees < regular_fees);
@@ -184,7 +185,8 @@ fn test_late_payment_fee_increase() {
     let transaction_amount = 50_000i128;
 
     // Late payment flag doesn't increase fees unless LatePayment fee structure exists
-    let regular_fees = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+    let regular_fees =
+        client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
     let late_fees = client.calculate_transaction_fees(&user, &transaction_amount, &false, &true);
 
     // With default structures, late_fees and regular_fees should be equal
@@ -209,7 +211,8 @@ fn test_early_and_late_payment_combined() {
 
     // With default structures (no LatePayment fee), both should be equal
     let combined_fees = client.calculate_transaction_fees(&user, &transaction_amount, &true, &true);
-    let regular_fees = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+    let regular_fees =
+        client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
 
     // Early payment should reduce fees even with late flag set
     assert!(combined_fees < regular_fees);
@@ -327,7 +330,10 @@ fn test_revenue_distribution_sum_equals_collected() {
     let (treasury_amount, developer_amount, platform_amount) =
         client.distribute_revenue(&admin, &current_period);
 
-    assert_eq!(treasury_amount + developer_amount + platform_amount, total_collected);
+    assert_eq!(
+        treasury_amount + developer_amount + platform_amount,
+        total_collected
+    );
 }
 
 // ============================================================================

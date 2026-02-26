@@ -73,7 +73,7 @@ fn test_execute_after_timelock_succeeds() {
     sac.mint(&contract_id, &amount);
 
     client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
-    
+
     // Advance time past the timelock period
     env.ledger()
         .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
@@ -256,9 +256,9 @@ fn test_execute_at_exact_timelock_boundary_succeeds() {
     sac.mint(&contract_id, &amount);
 
     client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
-    
+
     let pending = client.get_pending_emergency_withdraw().unwrap();
-    
+
     // Set time to exactly unlock_at (boundary condition)
     env.ledger().set_timestamp(pending.unlock_at);
 
@@ -287,9 +287,9 @@ fn test_execute_one_second_before_timelock_fails() {
     sac.mint(&contract_id, &amount);
 
     client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
-    
+
     let pending = client.get_pending_emergency_withdraw().unwrap();
-    
+
     // Set time to one second before unlock_at
     env.ledger().set_timestamp(pending.unlock_at - 1);
 
@@ -305,19 +305,22 @@ fn test_pending_withdrawal_contains_correct_fields() {
     let token = Address::generate(&env);
     let target = Address::generate(&env);
     let amount = 750i128;
-    
+
     let init_time = env.ledger().timestamp();
     client.initiate_emergency_withdraw(&admin, &token, &amount, &target);
 
     let pending = client.get_pending_emergency_withdraw().unwrap();
-    
+
     // Verify all fields are correctly set
     assert_eq!(pending.token, token);
     assert_eq!(pending.amount, amount);
     assert_eq!(pending.target, target);
     assert_eq!(pending.initiated_by, admin);
     assert_eq!(pending.initiated_at, init_time);
-    assert_eq!(pending.unlock_at, init_time + DEFAULT_EMERGENCY_TIMELOCK_SECS);
+    assert_eq!(
+        pending.unlock_at,
+        init_time + DEFAULT_EMERGENCY_TIMELOCK_SECS
+    );
 }
 
 #[test]

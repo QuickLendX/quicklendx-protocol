@@ -969,4 +969,93 @@ mod test_admin {
             "Admin must still be functional after self-transfer"
         );
     }
+
+    #[test]
+    fn test_initialize_admin_requires_auth() {
+        let (env, client) = setup();
+        let admin = Address::generate(&env);
+
+        let result = client.try_initialize_admin(&admin);
+        assert!(
+            result.is_err(),
+            "initialize_admin must require authorization from the admin address"
+        );
+    }
+
+    #[test]
+    fn test_non_admin_cannot_put_dispute_under_review() {
+        let (env, client) = setup();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let impostor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let currency = Address::generate(&env);
+
+        client.initialize_admin(&admin);
+
+        let invoice_id = client.store_invoice(
+            &business,
+            &10_000,
+            &currency,
+            &(env.ledger().timestamp() + 86_400),
+            &String::from_str(&env, "Dispute authorization"),
+            &crate::invoice::InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
+
+        let _ = client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "Incorrect amount"),
+            &String::from_str(&env, "Supporting evidence"),
+        );
+
+        let result = client.try_put_dispute_under_review(&invoice_id, &impostor);
+        assert!(
+            result.is_err(),
+            "Only the configured admin must be able to move disputes to UnderReview"
+        );
+    }
+
+    #[test]
+    fn test_non_admin_cannot_resolve_dispute() {
+        let (env, client) = setup();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let impostor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let currency = Address::generate(&env);
+
+        client.initialize_admin(&admin);
+
+        let invoice_id = client.store_invoice(
+            &business,
+            &10_000,
+            &currency,
+            &(env.ledger().timestamp() + 86_400),
+            &String::from_str(&env, "Dispute resolution gate"),
+            &crate::invoice::InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
+
+        let _ = client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "Incorrect due date"),
+            &String::from_str(&env, "Evidence payload"),
+        );
+        client.put_dispute_under_review(&invoice_id, &admin);
+
+        let result = client.try_resolve_dispute(
+            &invoice_id,
+            &impostor,
+            &String::from_str(&env, "Resolved in favor of business"),
+        );
+        assert!(
+            result.is_err(),
+            "Only the configured admin must be able to resolve disputes"
+        );
+    }
 }

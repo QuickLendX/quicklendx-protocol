@@ -658,7 +658,11 @@ pub fn verify_invoice_data(
     }
 
     // Validate due date is not too far in the future using protocol limits
-    crate::protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
+    crate::protocol_limits::ProtocolLimitsContract::validate_invoice(
+        env.clone(),
+        amount,
+        due_date,
+    )?;
     if description.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }
@@ -741,6 +745,9 @@ pub fn verify_investor(
     investment_limit: i128,
 ) -> Result<InvestorVerification, QuickLendXError> {
     admin.require_auth();
+    if !crate::admin::AdminStorage::is_admin(env, admin) {
+        return Err(QuickLendXError::NotAdmin);
+    }
 
     if investment_limit <= 0 {
         return Err(QuickLendXError::InvalidAmount);
@@ -783,6 +790,9 @@ pub fn reject_investor(
 ) -> Result<(), QuickLendXError> {
     check_string_length(&reason, MAX_REJECTION_REASON_LENGTH)?;
     admin.require_auth();
+    if !crate::admin::AdminStorage::is_admin(env, admin) {
+        return Err(QuickLendXError::NotAdmin);
+    }
     let mut verification =
         InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
 
@@ -898,25 +908,52 @@ pub fn calculate_investment_limit(
     risk_level: &InvestorRiskLevel,
     base_limit: i128,
 ) -> i128 {
-    let tier_multiplier = match tier {
+    let tier_multiplier = get_tier_multiplier(tier);
+    let risk_multiplier = get_risk_multiplier(risk_level);
+
+    let calculated_limit = base_limit.max(0).saturating_mul(tier_multiplier);
+    calculated_limit
+        .saturating_mul(risk_multiplier)
+        .saturating_div(100)
+}
+
+fn get_tier_multiplier(tier: &InvestorTier) -> i128 {
+    match tier {
         InvestorTier::VIP => 10,
         InvestorTier::Platinum => 5,
         InvestorTier::Gold => 3,
         InvestorTier::Silver => 2,
         InvestorTier::Basic => 1,
-    };
+    }
+}
 
-    let risk_multiplier = match risk_level {
+fn get_risk_multiplier(risk_level: &InvestorRiskLevel) -> i128 {
+    match risk_level {
         InvestorRiskLevel::Low => 100,     // 100% of calculated limit
         InvestorRiskLevel::Medium => 75,   // 75% of calculated limit
         InvestorRiskLevel::High => 50,     // 50% of calculated limit
         InvestorRiskLevel::VeryHigh => 25, // 25% of calculated limit
-    };
+    }
+}
 
-    let calculated_limit = base_limit.saturating_mul(tier_multiplier);
-    calculated_limit
-        .saturating_mul(risk_multiplier)
-        .saturating_div(100)
+fn recover_base_limit_from_current_limit(
+    current_limit: i128,
+    tier: &InvestorTier,
+    risk_level: &InvestorRiskLevel,
+) -> i128 {
+    let tier_multiplier = get_tier_multiplier(tier);
+    let risk_multiplier = get_risk_multiplier(risk_level);
+    let combined_multiplier = tier_multiplier.saturating_mul(risk_multiplier);
+    if combined_multiplier <= 0 {
+        return current_limit.max(0);
+    }
+
+    // Ceiling division avoids gradually shrinking the recovered base from integer truncation.
+    current_limit
+        .max(0)
+        .saturating_mul(100)
+        .saturating_add(combined_multiplier - 1)
+        .saturating_div(combined_multiplier)
 }
 
 /// Update investor analytics after an investment
@@ -926,7 +963,17 @@ pub fn update_investor_analytics(
     investment_amount: i128,
     is_successful: bool,
 ) -> Result<(), QuickLendXError> {
+    if investment_amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
     if let Some(mut verification) = InvestorVerificationStorage::get(env, investor) {
+        let prior_base_limit = recover_base_limit_from_current_limit(
+            verification.investment_limit,
+            &verification.tier,
+            &verification.risk_level,
+        );
+
         verification.total_invested = verification
             .total_invested
             .saturating_add(investment_amount);
@@ -950,8 +997,9 @@ pub fn update_investor_analytics(
         verification.risk_level = determine_risk_level(verification.risk_score);
         verification.tier = determine_investor_tier(env, investor, verification.risk_score)?;
 
-        // Update investment limit based on new tier and risk
-        let base_limit = 100000; // Base limit of 100K
+        // Preserve the investor's approved baseline and only re-derive the
+        // dynamic limit using the updated tier/risk profile.
+        let base_limit = prior_base_limit.max(1);
         verification.investment_limit =
             calculate_investment_limit(&verification.tier, &verification.risk_level, base_limit);
 

@@ -178,7 +178,8 @@ fn test_check_overdue_invoices_defaults_past_grace() {
         create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
 
     // Move past due_date + default grace period
-    env.ledger().set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
+    env.ledger()
+        .set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
 
     let count = client.check_overdue_invoices();
     assert_eq!(count, 1);
@@ -242,7 +243,8 @@ fn test_check_overdue_invoices_skips_non_funded() {
         &Vec::new(&env),
     );
 
-    env.ledger().set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
+    env.ledger()
+        .set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
 
     let count = client.check_overdue_invoices();
     assert_eq!(count, 0);
@@ -344,7 +346,8 @@ fn test_check_invoice_expiration_returns_false_for_non_funded() {
     );
     client.verify_invoice(&invoice_id);
 
-    env.ledger().set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
+    env.ledger()
+        .set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
 
     // Verified but not funded — check_and_handle_expiration returns false
     let result = client.check_invoice_expiration(&invoice_id, &None);

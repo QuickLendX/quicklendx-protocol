@@ -1,9 +1,6 @@
 use super::*;
 use crate::{errors::QuickLendXError, fees::FeeType};
-use soroban_sdk::{
-    testutils::{Address as _, MockAuth, MockAuthInvoke},
-    Address, Env, IntoVal, Map, String,
-};
+use soroban_sdk::{testutils::Address as _, Address, Env, Map, String};
 
 /// Helper function to set up admin for testing
 fn setup_admin(env: &Env, client: &QuickLendXContractClient) -> Address {
@@ -83,7 +80,7 @@ fn test_get_platform_fee_config_after_init_has_defaults() {
     assert_eq!(fee_config.updated_at, env.ledger().timestamp());
 }
 
-/// FeeManager getter reflects updates from set_platform_fee
+/// FeeManager getter reflects updates from update_platform_fee_bps
 #[test]
 fn test_get_platform_fee_config_after_update_platform_fee_bps() {
     let env = Env::default();
@@ -93,11 +90,11 @@ fn test_get_platform_fee_config_after_update_platform_fee_bps() {
     let admin = setup_admin(&env, &client);
 
     client.initialize_fee_system(&admin);
-    client.set_platform_fee(&450);
+    client.update_platform_fee_bps(&450);
 
-    // Use get_platform_fee() which reads from PlatformFee::get_config (same storage as set_platform_fee)
-    let fee_config = client.get_platform_fee();
+    let fee_config = client.get_platform_fee_config();
     assert_eq!(fee_config.fee_bps, 450);
+    assert_eq!(fee_config.treasury_address, None);
     assert_eq!(fee_config.updated_by, admin);
     assert_eq!(fee_config.updated_at, env.ledger().timestamp());
 }
@@ -315,7 +312,9 @@ fn test_only_admin_can_update_fee_structure() {
             sub_invokes: &[],
         },
     };
-    client.mock_auths(&[init_auth]).initialize_fee_system(&admin);
+    client
+        .mock_auths(&[init_auth])
+        .initialize_fee_system(&admin);
 
     // Non-admin cannot authorize fee structure update for admin identity.
     let unauthorized_auth = MockAuth {
@@ -335,14 +334,9 @@ fn test_only_admin_can_update_fee_structure() {
             sub_invokes: &[],
         },
     };
-    let unauthorized_result = client.mock_auths(&[unauthorized_auth]).try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &400,
-        &50,
-        &5_000,
-        &true,
-    );
+    let unauthorized_result = client
+        .mock_auths(&[unauthorized_auth])
+        .try_update_fee_structure(&admin, &FeeType::Platform, &400, &50, &5_000, &true);
     let unauthorized_err = unauthorized_result
         .err()
         .expect("non-admin fee structure update must fail");
@@ -665,53 +659,35 @@ fn test_update_fee_structure_rejects_invalid_values() {
 
     client.initialize_fee_system(&admin);
 
-    let invalid_bps = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &1001,
-        &50,
-        &5_000,
-        &true,
-    );
+    let invalid_bps =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &1001, &50, &5_000, &true);
     let invalid_bps_err = invalid_bps
         .err()
         .expect("base_fee_bps > 1000 must be rejected");
     let invalid_bps_contract_error = invalid_bps_err.expect("expected contract invoke error");
     assert_eq!(invalid_bps_contract_error, QuickLendXError::InvalidAmount);
 
-    let min_gt_max = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &400,
-        &5_001,
-        &5_000,
-        &true,
-    );
-    let min_gt_max_err = min_gt_max.err().expect("min_fee > max_fee must be rejected");
+    let min_gt_max =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &400, &5_001, &5_000, &true);
+    let min_gt_max_err = min_gt_max
+        .err()
+        .expect("min_fee > max_fee must be rejected");
     let min_gt_max_contract_error = min_gt_max_err.expect("expected contract invoke error");
     assert_eq!(min_gt_max_contract_error, QuickLendXError::InvalidAmount);
 
-    let negative_min = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &400,
-        &-1,
-        &5_000,
-        &true,
-    );
-    let negative_min_err = negative_min.err().expect("negative min_fee must be rejected");
+    let negative_min =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &400, &-1, &5_000, &true);
+    let negative_min_err = negative_min
+        .err()
+        .expect("negative min_fee must be rejected");
     let negative_min_contract_error = negative_min_err.expect("expected contract invoke error");
     assert_eq!(negative_min_contract_error, QuickLendXError::InvalidAmount);
 
-    let negative_max = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &400,
-        &0,
-        &-1,
-        &true,
-    );
-    let negative_max_err = negative_max.err().expect("negative max_fee must be rejected");
+    let negative_max =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &400, &0, &-1, &true);
+    let negative_max_err = negative_max
+        .err()
+        .expect("negative max_fee must be rejected");
     let negative_max_contract_error = negative_max_err.expect("expected contract invoke error");
     assert_eq!(negative_max_contract_error, QuickLendXError::InvalidAmount);
 }
@@ -860,7 +836,10 @@ fn test_calculate_transaction_fees_early_payment_flag() {
     // Early payment applies 10% discount on Platform fee (200 → 180)
     // Total: 180 + 50 + 100 = 330
     assert_eq!(early_fees, 330);
-    assert!(early_fees < base_fees, "Early payment must reduce total fees");
+    assert!(
+        early_fees < base_fees,
+        "Early payment must reduce total fees"
+    );
 }
 
 /// Test get_treasury_address returns None before configuration
@@ -895,8 +874,8 @@ fn test_calculate_transaction_fees_late_payment_flag() {
     client.update_fee_structure(
         &admin,
         &FeeType::LatePayment,
-        &100,   // 1%
-        &50,    // min fee
+        &100,    // 1%
+        &50,     // min fee
         &10_000, // max fee
         &true,
     );
@@ -908,7 +887,10 @@ fn test_calculate_transaction_fees_late_payment_flag() {
     // LatePayment: 1% of 10k = 100, +20% surcharge = 120
     // Total: 350 + 120 = 470
     assert_eq!(late_fees, 470);
-    assert!(late_fees > base_fees, "Late payment must increase total fees");
+    assert!(
+        late_fees > base_fees,
+        "Late payment must increase total fees"
+    );
 }
 
 /// Test treasury address is reflected in platform fee config
@@ -949,21 +931,17 @@ fn test_calculate_transaction_fees_both_flags() {
 
     client.initialize_fee_system(&admin);
 
-    client.update_fee_structure(
-        &admin,
-        &FeeType::LatePayment,
-        &100,
-        &50,
-        &10_000,
-        &true,
-    );
+    client.update_fee_structure(&admin, &FeeType::LatePayment, &100, &50, &10_000, &true);
 
     let amount = 10_000_i128;
     let both_flags_fees = client.calculate_transaction_fees(&user, &amount, &true, &true);
     let base_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
 
     // Both flags: early discount reduces platform fee AND late fee adds surcharge
-    assert!(both_flags_fees != base_fees, "Both flags must change total fees");
+    assert!(
+        both_flags_fees != base_fees,
+        "Both flags must change total fees"
+    );
 }
 
 /// Test treasury address can be updated
@@ -1025,9 +1003,8 @@ fn test_revenue_config_invalid_shares_sum() {
     let treasury = Address::generate(&env);
 
     // Shares sum to 9000 (not 10000) — should fail
-    let result = client.try_configure_revenue_distribution(
-        &admin, &treasury, &4000, &3000, &2000, &false, &100,
-    );
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &4000, &3000, &2000, &false, &100);
     assert!(result.is_err());
 }
 
@@ -1042,9 +1019,8 @@ fn test_revenue_config_shares_exceed_10000() {
     let treasury = Address::generate(&env);
 
     // Shares sum to 11000 — should fail
-    let result = client.try_configure_revenue_distribution(
-        &admin, &treasury, &5000, &3000, &3000, &false, &100,
-    );
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &5000, &3000, &3000, &false, &100);
     assert!(result.is_err());
 }
 
@@ -1072,16 +1048,12 @@ fn test_revenue_config_reconfiguration() {
     let treasury = Address::generate(&env);
 
     // First configuration
-    client.configure_revenue_distribution(
-        &admin, &treasury, &5000, &3000, &2000, &false, &100,
-    );
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &100);
     let config1 = client.get_revenue_split_config();
     assert_eq!(config1.treasury_share_bps, 5000);
 
     // Reconfigure with different shares
-    client.configure_revenue_distribution(
-        &admin, &treasury, &7000, &2000, &1000, &true, &500,
-    );
+    client.configure_revenue_distribution(&admin, &treasury, &7000, &2000, &1000, &true, &500);
     let config2 = client.get_revenue_split_config();
     assert_eq!(config2.treasury_share_bps, 7000);
     assert_eq!(config2.developer_share_bps, 2000);
@@ -1108,9 +1080,7 @@ fn test_distribute_revenue_below_minimum() {
     client.initialize_fee_system(&admin);
 
     // Configure with high minimum distribution amount
-    client.configure_revenue_distribution(
-        &admin, &treasury, &5000, &3000, &2000, &false, &10000,
-    );
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &10000);
 
     // Collect small amount of fees (below minimum)
     let mut fees_by_type = Map::new(&env);
@@ -1161,9 +1131,7 @@ fn test_distribute_revenue_clears_pending() {
 
     client.initialize_fee_system(&admin);
 
-    client.configure_revenue_distribution(
-        &admin, &treasury, &5000, &3000, &2000, &false, &100,
-    );
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &100);
 
     let mut fees_by_type = Map::new(&env);
     fees_by_type.set(FeeType::Platform, 1000);
@@ -1192,9 +1160,7 @@ fn test_distribute_revenue_nonexistent_period() {
 
     client.initialize_fee_system(&admin);
 
-    client.configure_revenue_distribution(
-        &admin, &treasury, &5000, &3000, &2000, &false, &100,
-    );
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &100);
 
     // Try to distribute for a period with no revenue data
     let result = client.try_distribute_revenue(&admin, &9999);
@@ -1214,9 +1180,7 @@ fn test_distribute_revenue_large_amounts() {
 
     client.initialize_fee_system(&admin);
 
-    client.configure_revenue_distribution(
-        &admin, &treasury, &5000, &3000, &2000, &false, &1,
-    );
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &1);
 
     // Collect large fee amount
     let mut fees_by_type = Map::new(&env);
@@ -1235,7 +1199,10 @@ fn test_distribute_revenue_large_amounts() {
     // Remainder = 200K
     assert_eq!(platform_amount, 200_000);
     // Total must equal original amount
-    assert_eq!(treasury_amount + developer_amount + platform_amount, 1_000_000);
+    assert_eq!(
+        treasury_amount + developer_amount + platform_amount,
+        1_000_000
+    );
 }
 
 // ============================================================================
@@ -1283,58 +1250,28 @@ fn test_update_fee_structure_all_fee_types() {
     client.initialize_fee_system(&admin);
 
     // Test Platform fee type
-    let platform_fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &250,
-        &50,
-        &5000,
-        &true,
-    );
+    let platform_fee =
+        client.update_fee_structure(&admin, &FeeType::Platform, &250, &50, &5000, &true);
     assert_eq!(platform_fee.fee_type, FeeType::Platform);
 
     // Test Processing fee type
-    let processing_fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Processing,
-        &75,
-        &25,
-        &2500,
-        &true,
-    );
+    let processing_fee =
+        client.update_fee_structure(&admin, &FeeType::Processing, &75, &25, &2500, &true);
     assert_eq!(processing_fee.fee_type, FeeType::Processing);
 
     // Test Verification fee type
-    let verification_fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Verification,
-        &150,
-        &100,
-        &3000,
-        &true,
-    );
+    let verification_fee =
+        client.update_fee_structure(&admin, &FeeType::Verification, &150, &100, &3000, &true);
     assert_eq!(verification_fee.fee_type, FeeType::Verification);
 
     // Test EarlyPayment fee type
-    let early_payment_fee = client.update_fee_structure(
-        &admin,
-        &FeeType::EarlyPayment,
-        &50,
-        &10,
-        &1000,
-        &true,
-    );
+    let early_payment_fee =
+        client.update_fee_structure(&admin, &FeeType::EarlyPayment, &50, &10, &1000, &true);
     assert_eq!(early_payment_fee.fee_type, FeeType::EarlyPayment);
 
     // Test LatePayment fee type
-    let late_payment_fee = client.update_fee_structure(
-        &admin,
-        &FeeType::LatePayment,
-        &200,
-        &100,
-        &5000,
-        &true,
-    );
+    let late_payment_fee =
+        client.update_fee_structure(&admin, &FeeType::LatePayment, &200, &100, &5000, &true);
     assert_eq!(late_payment_fee.fee_type, FeeType::LatePayment);
 }
 
@@ -1350,36 +1287,15 @@ fn test_update_fee_structure_base_fee_bps_variations() {
     client.initialize_fee_system(&admin);
 
     // Test minimum valid base_fee_bps (0)
-    let fee_zero = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &0,
-        &10,
-        &1000,
-        &true,
-    );
+    let fee_zero = client.update_fee_structure(&admin, &FeeType::Platform, &0, &10, &1000, &true);
     assert_eq!(fee_zero.base_fee_bps, 0);
 
     // Test mid-range base_fee_bps
-    let fee_mid = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &500,
-        &10,
-        &1000,
-        &true,
-    );
+    let fee_mid = client.update_fee_structure(&admin, &FeeType::Platform, &500, &10, &1000, &true);
     assert_eq!(fee_mid.base_fee_bps, 500);
 
     // Test maximum valid base_fee_bps (1000 = 10%)
-    let fee_max = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &1000,
-        &10,
-        &1000,
-        &true,
-    );
+    let fee_max = client.update_fee_structure(&admin, &FeeType::Platform, &1000, &10, &1000, &true);
     assert_eq!(fee_max.base_fee_bps, 1000);
 }
 
@@ -1395,14 +1311,7 @@ fn test_update_fee_structure_base_fee_bps_exceeds_max() {
 
     client.initialize_fee_system(&admin);
 
-    client.update_fee_structure(
-        &admin,
-        &FeeType::LatePayment,
-        &100,
-        &50,
-        &10_000,
-        &true,
-    );
+    client.update_fee_structure(&admin, &FeeType::LatePayment, &100, &50, &10_000, &true);
 
     let amount = 10_000_i128;
     let early_fees = client.calculate_transaction_fees(&user, &amount, &true, &false);
@@ -1427,14 +1336,8 @@ fn test_calculate_transaction_fees_volume_tier_discounts() {
     client.initialize_fee_system(&admin);
 
     // Test base_fee_bps > 1000 (MAX_FEE_BPS)
-    let result = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &1001,
-        &10,
-        &1000,
-        &true,
-    );
+    let result =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &1001, &10, &1000, &true);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_error = err.unwrap();
@@ -1453,36 +1356,16 @@ fn test_update_fee_structure_min_fee_variations() {
     client.initialize_fee_system(&admin);
 
     // Test min_fee = 0
-    let fee_zero = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &0,
-        &1000,
-        &true,
-    );
+    let fee_zero = client.update_fee_structure(&admin, &FeeType::Platform, &200, &0, &1000, &true);
     assert_eq!(fee_zero.min_fee, 0);
 
     // Test min_fee = 1
-    let fee_one = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &1,
-        &1000,
-        &true,
-    );
+    let fee_one = client.update_fee_structure(&admin, &FeeType::Platform, &200, &1, &1000, &true);
     assert_eq!(fee_one.min_fee, 1);
 
     // Test large min_fee
-    let fee_large = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50000,
-        &100000,
-        &true,
-    );
+    let fee_large =
+        client.update_fee_structure(&admin, &FeeType::Platform, &200, &50000, &100000, &true);
     assert_eq!(fee_large.min_fee, 50000);
 }
 
@@ -1498,14 +1381,8 @@ fn test_update_fee_structure_negative_min_fee() {
     client.initialize_fee_system(&admin);
 
     // Test negative min_fee
-    let result = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &-1,
-        &1000,
-        &true,
-    );
+    let result =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &200, &-1, &1000, &true);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_error = err.unwrap();
@@ -1524,37 +1401,19 @@ fn test_update_fee_structure_max_fee_variations() {
     client.initialize_fee_system(&admin);
 
     // Test max_fee equal to min_fee
-    let fee_equal = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &100,
-        &100,
-        &true,
-    );
+    let fee_equal =
+        client.update_fee_structure(&admin, &FeeType::Platform, &200, &100, &100, &true);
     assert_eq!(fee_equal.max_fee, 100);
     assert_eq!(fee_equal.min_fee, 100);
 
     // Test max_fee > min_fee
-    let fee_greater = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &100,
-        &5000,
-        &true,
-    );
+    let fee_greater =
+        client.update_fee_structure(&admin, &FeeType::Platform, &200, &100, &5000, &true);
     assert_eq!(fee_greater.max_fee, 5000);
 
     // Test very large max_fee
-    let fee_large = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &100,
-        &10_000_000,
-        &true,
-    );
+    let fee_large =
+        client.update_fee_structure(&admin, &FeeType::Platform, &200, &100, &10_000_000, &true);
     assert_eq!(fee_large.max_fee, 10_000_000);
 }
 
@@ -1570,14 +1429,8 @@ fn test_update_fee_structure_max_fee_less_than_min_fee() {
     client.initialize_fee_system(&admin);
 
     // Test max_fee < min_fee
-    let result = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &1000,
-        &500,
-        &true,
-    );
+    let result =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &200, &1000, &500, &true);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_error = err.unwrap();
@@ -1595,14 +1448,7 @@ fn test_update_fee_structure_is_active_true() {
 
     client.initialize_fee_system(&admin);
 
-    let fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50,
-        &1000,
-        &true,
-    );
+    let fee = client.update_fee_structure(&admin, &FeeType::Platform, &200, &50, &1000, &true);
     assert!(fee.is_active);
 }
 
@@ -1618,14 +1464,7 @@ fn test_update_fee_structure_is_active_false() {
     client.initialize_fee_system(&admin);
 
     // Deactivate Platform fee
-    let fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50,
-        &1000,
-        &false,
-    );
+    let fee = client.update_fee_structure(&admin, &FeeType::Platform, &200, &50, &1000, &false);
     assert!(!fee.is_active);
 }
 
@@ -1677,25 +1516,13 @@ fn test_calculate_transaction_fees_zero_amount() {
     client.initialize_fee_system(&admin);
 
     // Activate
-    let fee_active = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50,
-        &1000,
-        &true,
-    );
+    let fee_active =
+        client.update_fee_structure(&admin, &FeeType::Platform, &200, &50, &1000, &true);
     assert!(fee_active.is_active);
 
     // Deactivate
-    let fee_inactive = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50,
-        &1000,
-        &false,
-    );
+    let fee_inactive =
+        client.update_fee_structure(&admin, &FeeType::Platform, &200, &50, &1000, &false);
     assert!(!fee_inactive.is_active);
 }
 
@@ -1715,14 +1542,8 @@ fn test_update_fee_structure_creates_new_fee_type() {
     assert!(result.is_err());
 
     // Create it via update_fee_structure
-    let early_payment_fee = client.update_fee_structure(
-        &admin,
-        &FeeType::EarlyPayment,
-        &50,
-        &10,
-        &500,
-        &true,
-    );
+    let early_payment_fee =
+        client.update_fee_structure(&admin, &FeeType::EarlyPayment, &50, &10, &500, &true);
     assert_eq!(early_payment_fee.fee_type, FeeType::EarlyPayment);
 
     // Now it should exist
@@ -1746,14 +1567,7 @@ fn test_update_fee_structure_updates_existing() {
     assert_eq!(initial.base_fee_bps, 200);
 
     // Update it
-    client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &350,
-        &75,
-        &7500,
-        &true,
-    );
+    client.update_fee_structure(&admin, &FeeType::Platform, &350, &75, &7500, &true);
 
     // Verify update
     let updated = client.get_fee_structure(&FeeType::Platform);
@@ -1773,14 +1587,7 @@ fn test_update_fee_structure_sets_updated_at() {
 
     client.initialize_fee_system(&admin);
 
-    let fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50,
-        &1000,
-        &true,
-    );
+    let fee = client.update_fee_structure(&admin, &FeeType::Platform, &200, &50, &1000, &true);
 
     // updated_at should be set to current ledger timestamp
     assert_eq!(fee.updated_at, env.ledger().timestamp());
@@ -1797,14 +1604,7 @@ fn test_update_fee_structure_sets_updated_by() {
 
     client.initialize_fee_system(&admin);
 
-    let fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50,
-        &1000,
-        &true,
-    );
+    let fee = client.update_fee_structure(&admin, &FeeType::Platform, &200, &50, &1000, &true);
 
     assert_eq!(fee.updated_by, admin);
 }
@@ -2047,6 +1847,6 @@ fn test_validate_fee_parameters_realistic_values() {
 
     // Realistic production values
     client.validate_fee_parameters(&250, &100, &50000); // 2.5%, min 100, max 50000
-    client.validate_fee_parameters(&50, &25, &10000);   // 0.5%, min 25, max 10000
-    client.validate_fee_parameters(&100, &50, &25000);  // 1%, min 50, max 25000
+    client.validate_fee_parameters(&50, &25, &10000); // 0.5%, min 25, max 10000
+    client.validate_fee_parameters(&100, &50, &25000); // 1%, min 50, max 25000
 }
