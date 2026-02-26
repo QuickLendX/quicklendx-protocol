@@ -67,7 +67,12 @@
           "sub_invocations": []
         }
       ]
+<<<<<<< HEAD
+    ],
+    []
+=======
     ]
+>>>>>>> main
   ],
   "ledger": {
     "protocol_version": 22,
@@ -132,6 +137,8 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
+=======
                           "symbol": "adm_init"
                         },
                         "val": {
@@ -148,6 +155,7 @@
                       },
                       {
                         "key": {
+>>>>>>> main
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                         },
                         "val": {
@@ -345,6 +353,9 @@
       ]
     ]
   },
+<<<<<<< HEAD
+  "events": []
+=======
   "events": [
     {
       "event": {
@@ -377,4 +388,5 @@
       "failed_call": false
     }
   ]
+>>>>>>> main
 }
