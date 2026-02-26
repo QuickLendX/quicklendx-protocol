@@ -1,168 +1,201 @@
-# Error Handling Documentation
+# Error Handling — `QuickLendXError`
 
 ## Overview
 
-The QuickLendX contract uses a comprehensive error enum (`QuickLendXError`) to provide clear, typed error responses for all contract operations. All errors are properly typed and never result in panics, ensuring secure and predictable behavior.
+Every public contract function returns `Result<T, QuickLendXError>`.
+The contract **never panics on invalid input**; all failure paths produce a typed error that callers can match on.
 
-## Error Code Mapping
+Error codes are grouped into ranges so integrators can quickly identify the category of failure without inspecting the variant name.
 
-### Invoice Errors (1000-1099)
+> **XDR limit:** The Soroban contract spec allows a maximum of **50 error variants** per contract.
+> All 50 slots are currently occupied. Adding new variants requires replacing an existing one.
 
-| Error Code | Enum Variant | Symbol | Description |
-|------------|--------------|--------|-------------|
-| 1000 | `InvoiceNotFound` | `INV_NF` | The specified invoice ID does not exist |
-| 1001 | `InvoiceAlreadyExists` | `INV_EX` | An invoice with this ID already exists |
-| 1002 | `InvoiceNotAvailableForFunding` | `INV_NA` | Invoice is not available for funding (wrong status) |
-| 1003 | `InvoiceAlreadyFunded` | `INV_FD` | Invoice has already been funded |
-| 1004 | `InvoiceAmountInvalid` | `INV_AI` | Invoice amount is invalid (zero or negative) |
-| 1005 | `InvoiceDueDateInvalid` | `INV_DI` | Invoice due date is in the past or invalid |
-| 1006 | `InvoiceNotVerified` | `INV_NV` | Invoice has not been verified yet |
-| 1007 | `InvoiceNotFunded` | `INV_NF` | Invoice has not been funded |
-| 1008 | `InvoiceAlreadyPaid` | `INV_PD` | Invoice has already been paid |
-| 1009 | `InvoiceAlreadyDefaulted` | `INV_DF` | Invoice has already been marked as defaulted |
+## Error Code Ranges
 
-### Authorization Errors (1100-1199)
+| Range | Category |
+|-------|----------|
+| 1000 – 1006 | Invoice lifecycle |
+| 1100 – 1103 | Authorization |
+| 1200 – 1204 | Input validation |
+| 1300 – 1301 | Storage |
+| 1400 – 1405 | Business logic |
+| 1500 – 1503 | Rating |
+| 1600 – 1604 | KYC / verification |
+| 1700 – 1702 | Audit |
+| 1800 – 1801 | Category / tag |
+| 1850 – 1852 | Fee configuration |
+| 1900 – 1906 | Dispute |
+| 2000 – 2001 | Notification |
 
-| Error Code | Enum Variant | Symbol | Description |
-|------------|--------------|--------|-------------|
-| 1100 | `Unauthorized` | `UNAUTH` | Caller is not authorized for this operation |
-| 1101 | `NotBusinessOwner` | `NOT_OWN` | Caller is not the business owner |
-| 1102 | `NotInvestor` | `NOT_INV` | Caller is not an investor |
-| 1103 | `NotAdmin` | `NOT_ADM` | Caller is not an admin |
+---
 
-### Validation Errors (1200-1299)
+## Invoice Lifecycle Errors (1000 – 1006)
 
-| Error Code | Enum Variant | Symbol | Description |
-|------------|--------------|--------|-------------|
-| 1200 | `InvalidAmount` | `INV_AMT` | Amount is invalid (zero, negative, or exceeds limit) |
-| 1201 | `InvalidAddress` | `INV_ADR` | Address is invalid |
-| 1202 | `InvalidCurrency` | `INV_CR` | Currency is invalid |
-| 1203 | `InvalidTimestamp` | `INV_TM` | Timestamp is invalid |
-| 1204 | `InvalidDescription` | `INV_DS` | Description is empty or invalid |
+| Code | Variant | Symbol | Description |
+|------|---------|--------|-------------|
+| 1000 | `InvoiceNotFound` | `INV_NF` | The specified invoice ID does not exist in storage. |
+| 1001 | `InvoiceNotAvailableForFunding` | `INV_NAF` | Invoice is not in a state that allows funding (wrong status). |
+| 1002 | `InvoiceAlreadyFunded` | `INV_AF` | Invoice has already been funded by an investor. |
+| 1003 | `InvoiceAmountInvalid` | `INV_AI` | Invoice amount is invalid (zero or negative). |
+| 1004 | `InvoiceDueDateInvalid` | `INV_DI` | Invoice due date is in the past or otherwise invalid. |
+| 1005 | `InvoiceNotFunded` | `INV_NFD` | Invoice has not been funded; operation requires a funded invoice. |
+| 1006 | `InvoiceAlreadyDefaulted` | `INV_AD` | Invoice has already been marked as defaulted. |
 
-### Storage Errors (1300-1399)
+---
 
-| Error Code | Enum Variant | Symbol | Description |
-|------------|--------------|--------|-------------|
-| 1300 | `StorageError` | `STORE` | General storage error |
-| 1301 | `StorageKeyNotFound` | `KEY_NF` | Storage key not found |
+## Authorization Errors (1100 – 1103)
 
-### Business Logic Errors (1400-1499)
+| Code | Variant | Symbol | Description |
+|------|---------|--------|-------------|
+| 1100 | `Unauthorized` | `UNAUTH` | Caller is not authorized for this operation. |
+| 1101 | `NotBusinessOwner` | `NOT_OWN` | Caller is not the business owner of this invoice. |
+| 1102 | `NotInvestor` | `NOT_INV` | Caller is not a registered investor. |
+| 1103 | `NotAdmin` | `NOT_ADM` | Caller is not the contract admin. |
 
-| Error Code | Enum Variant | Symbol | Description |
-|------------|--------------|--------|-------------|
-| 1400 | `InsufficientFunds` | `INSUF` | Insufficient funds for operation |
-| 1401 | `InvalidStatus` | `INV_ST` | Invalid invoice or operation status |
-| 1402 | `OperationNotAllowed` | `OP_NA` | Operation is not allowed in current state |
-| 1403 | `PaymentTooLow` | `PAY_LOW` | Payment amount is too low |
-| 1404 | `PlatformAccountNotConfigured` | `PLT_NC` | Platform account is not configured |
-| 1405 | `InvalidCoveragePercentage` | `INS_CV` | Insurance coverage percentage is invalid |
+---
 
-### Rating Errors (1500-1599)
+## Input Validation Errors (1200 – 1204)
 
-| Error Code | Enum Variant | Symbol | Description |
-|------------|--------------|--------|-------------|
-| 1500 | `InvalidRating` | `INV_RT` | Rating value is invalid (must be 1-5) |
-| 1501 | `NotFunded` | `NOT_FD` | Invoice must be funded before rating |
-| 1502 | `AlreadyRated` | `ALR_RT` | Invoice has already been rated by this user |
-| 1503 | `NotRater` | `NOT_RT` | Caller is not authorized to rate this invoice |
+| Code | Variant | Symbol | Description |
+|------|---------|--------|-------------|
+| 1200 | `InvalidAmount` | `INV_AMT` | Amount is invalid (zero, negative, or exceeds the permitted limit). |
+| 1201 | `InvalidAddress` | `INV_ADR` | Address is invalid or does not meet format requirements. |
+| 1202 | `InvalidCurrency` | `INV_CR` | Currency token address is not on the whitelist. |
+| 1203 | `InvalidTimestamp` | `INV_TM` | Timestamp is invalid (e.g., in the past where a future value is required). |
+| 1204 | `InvalidDescription` | `INV_DS` | Description is empty, too short, or exceeds the maximum length. |
 
-### KYC/Verification Errors (1600-1699)
+---
 
-| Error Code | Enum Variant | Symbol | Description |
-|------------|--------------|--------|-------------|
-| 1600 | `BusinessNotVerified` | `BUS_NV` | Business is not verified |
-| 1601 | `KYCAlreadyPending` | `KYC_PD` | KYC application is already pending |
-| 1602 | `KYCAlreadyVerified` | `KYC_VF` | KYC application is already verified |
-| 1603 | `KYCNotFound` | `KYC_NF` | KYC application not found |
-| 1604 | `InvalidKYCStatus` | `KYC_IS` | Invalid KYC status |
+## Storage Errors (1300 – 1301)
 
-### Audit Errors (1700-1799)
+| Code | Variant | Symbol | Description |
+|------|---------|--------|-------------|
+| 1300 | `StorageError` | `STORE` | A general storage read/write error occurred. |
+| 1301 | `StorageKeyNotFound` | `KEY_NF` | The requested storage key does not exist. |
 
-| Error Code | Enum Variant | Symbol | Description |
-|------------|--------------|--------|-------------|
-| 1700 | `AuditLogNotFound` | `AUD_NF` | Audit log entry not found |
-| 1701 | `AuditIntegrityError` | `AUD_IE` | Audit log integrity check failed |
-| 1702 | `AuditQueryError` | `AUD_QE` | Audit query error |
+---
 
-### Category and Tag Errors (1800-1899)
+## Business Logic Errors (1400 – 1405)
 
-| Error Code | Enum Variant | Symbol | Description |
-|------------|--------------|--------|-------------|
-| 1802 | `InvalidTag` | `INV_TAG` | Tag is invalid (empty, too long, or not found) |
-| 1803 | `TagLimitExceeded` | `TAG_LIM` | Maximum number of tags (10) exceeded |
+| Code | Variant | Symbol | Description |
+|------|---------|--------|-------------|
+| 1400 | `InsufficientFunds` | `INSUF` | Caller or escrow account has insufficient funds. |
+| 1401 | `InvalidStatus` | `INV_ST` | Invoice or operation is in an invalid status for the requested action. |
+| 1402 | `OperationNotAllowed` | `OP_NA` | The operation is not permitted in the current contract state. |
+| 1403 | `PaymentTooLow` | `PAY_LOW` | Payment amount is below the required minimum. |
+| 1404 | `PlatformAccountNotConfigured` | `PLT_NC` | Platform fee recipient account has not been configured. |
+| 1405 | `InvalidCoveragePercentage` | `INS_CV` | Insurance coverage percentage is out of the allowed range (0–100). |
 
-### Dispute Errors (1900-1999)
+---
 
-| Error Code | Enum Variant | Symbol | Description |
-|------------|--------------|--------|-------------|
-| 1900 | `DisputeNotFound` | `DSP_NF` | Dispute not found |
-| 1901 | `DisputeAlreadyExists` | `DSP_EX` | Dispute already exists for this invoice |
-| 1902 | `DisputeNotAuthorized` | `DSP_NA` | Caller is not authorized to create dispute |
-| 1903 | `DisputeAlreadyResolved` | `DSP_RS` | Dispute has already been resolved |
-| 1904 | `DisputeNotUnderReview` | `DSP_UR` | Dispute is not under review |
-| 1905 | `InvalidDisputeReason` | `DSP_RN` | Dispute reason is invalid (empty or too long) |
-| 1906 | `InvalidDisputeEvidence` | `DSP_EV` | Dispute evidence is invalid (empty or too long) |
+## Rating Errors (1500 – 1503)
 
-### Notification Errors (2000-2099)
+| Code | Variant | Symbol | Description |
+|------|---------|--------|-------------|
+| 1500 | `InvalidRating` | `INV_RT` | Rating value is outside the accepted range (1–5). |
+| 1501 | `NotFunded` | `NOT_FD` | Invoice must be funded before it can be rated. |
+| 1502 | `AlreadyRated` | `ALR_RT` | This investor has already submitted a rating for this invoice. |
+| 1503 | `NotRater` | `NOT_RT` | Caller is not eligible to rate this invoice. |
 
-| Error Code | Enum Variant | Symbol | Description |
-|------------|--------------|--------|-------------|
-| 2000 | `NotificationNotFound` | `NOT_NF` | Notification not found |
-| 2001 | `NotificationBlocked` | `NOT_BL` | Notification is blocked by user preferences |
+---
+
+## KYC / Verification Errors (1600 – 1604)
+
+| Code | Variant | Symbol | Description |
+|------|---------|--------|-------------|
+| 1600 | `BusinessNotVerified` | `BUS_NV` | Business has not been verified; operation requires verification. |
+| 1601 | `KYCAlreadyPending` | `KYC_PD` | A KYC application for this address is already pending review. |
+| 1602 | `KYCAlreadyVerified` | `KYC_VF` | This address has already been KYC-verified. |
+| 1603 | `KYCNotFound` | `KYC_NF` | No KYC application was found for this address. |
+| 1604 | `InvalidKYCStatus` | `KYC_IS` | The supplied KYC status is not a valid transition from the current state. |
+
+---
+
+## Audit Errors (1700 – 1702)
+
+| Code | Variant | Symbol | Description |
+|------|---------|--------|-------------|
+| 1700 | `AuditLogNotFound` | `AUD_NF` | The requested audit log entry does not exist. |
+| 1701 | `AuditIntegrityError` | `AUD_IE` | Audit log integrity check failed; log may have been tampered with. |
+| 1702 | `AuditQueryError` | `AUD_QE` | Audit log query failed due to invalid filter parameters. |
+
+---
+
+## Category / Tag Errors (1800 – 1801)
+
+| Code | Variant | Symbol | Description |
+|------|---------|--------|-------------|
+| 1800 | `InvalidTag` | `INV_TAG` | Tag is empty, exceeds the maximum length, or was not found when removing. |
+| 1801 | `TagLimitExceeded` | `TAG_LIM` | Adding this tag would exceed the maximum number of tags per invoice (10). |
+
+---
+
+## Fee Configuration Errors (1850 – 1852)
+
+| Code | Variant | Symbol | Description |
+|------|---------|--------|-------------|
+| 1850 | `InvalidFeeConfiguration` | `FEE_CFG` | Fee configuration is missing required fields or contains invalid values. |
+| 1851 | `TreasuryNotConfigured` | `TRS_NC` | Treasury account has not been configured for fee collection. |
+| 1852 | `InvalidFeeBasisPoints` | `FEE_BPS` | Fee basis-points value is outside the allowed range (0–10 000). |
+
+---
+
+## Dispute Errors (1900 – 1906)
+
+| Code | Variant | Symbol | Description |
+|------|---------|--------|-------------|
+| 1900 | `DisputeNotFound` | `DSP_NF` | No dispute exists for this invoice. |
+| 1901 | `DisputeAlreadyExists` | `DSP_EX` | A dispute already exists for this invoice. |
+| 1902 | `DisputeNotAuthorized` | `DSP_NA` | Caller is not authorized to raise or interact with this dispute. |
+| 1903 | `DisputeAlreadyResolved` | `DSP_RS` | Dispute has already been resolved; no further changes are permitted. |
+| 1904 | `DisputeNotUnderReview` | `DSP_UR` | Dispute must be in the `UnderReview` state to perform this action. |
+| 1905 | `InvalidDisputeReason` | `DSP_RN` | Dispute reason is empty or exceeds the maximum allowed length. |
+| 1906 | `InvalidDisputeEvidence` | `DSP_EV` | Dispute evidence is empty or exceeds the maximum allowed length. |
+
+---
+
+## Notification Errors (2000 – 2001)
+
+| Code | Variant | Symbol | Description |
+|------|---------|--------|-------------|
+| 2000 | `NotificationNotFound` | `NOT_NF` | The requested notification record does not exist. |
+| 2001 | `NotificationBlocked` | `NOT_BL` | Notification delivery is blocked by the recipient's preferences. |
+
+---
 
 ## Frontend Integration
 
-### Error Handling Pattern
-
-When calling contract functions, always check for errors:
-
 ```typescript
 try {
-  const result = await contract.mark_invoice_defaulted(invoiceId, gracePeriod);
-  // Handle success
+  await contract.mark_invoice_defaulted(invoiceId, gracePeriod);
 } catch (error) {
-  if (error.code === 1009) {
-    // InvoiceAlreadyDefaulted
-    console.error("Invoice is already defaulted");
-  } else if (error.code === 1007) {
-    // InvoiceNotFunded
-    console.error("Invoice must be funded before defaulting");
-  } else if (error.code === 1402) {
-    // OperationNotAllowed
-    console.error("Grace period has not expired yet");
+  switch (error.code) {
+    case 1006: /* InvoiceAlreadyDefaulted    */ break;
+    case 1005: /* InvoiceNotFunded           */ break;
+    case 1001: /* InvoiceNotAvailableForFunding */ break;
+    case 1402: /* OperationNotAllowed        */ break;
+    case 1401: /* InvalidStatus             */ break;
+    default:   /* unexpected error           */
   }
-  // Handle other errors...
 }
 ```
 
-### Error Code Ranges
-
-- **1000-1099**: Invoice-related errors
-- **1100-1199**: Authorization errors
-- **1200-1299**: Validation errors
-- **1300-1399**: Storage errors
-- **1400-1499**: Business logic errors
-- **1500-1599**: Rating errors
-- **1600-1699**: KYC/Verification errors
-- **1700-1799**: Audit errors
-- **1800-1899**: Category/Tag errors
-- **1900-1999**: Dispute errors
-- **2000-2099**: Notification errors
+---
 
 ## Best Practices
 
-1. **Always check return values**: All contract functions return `Result<T, QuickLendXError>`
-2. **Handle errors gracefully**: Never ignore errors; provide user-friendly messages
-3. **Use error codes for logic**: Error codes can be used for conditional logic in frontend
-4. **Log errors**: Log all errors for debugging and monitoring
-5. **No panics**: The contract never panics; all errors are typed and returned
+1. **Always check return values** — every contract function returns `Result<T, QuickLendXError>`.
+2. **Match on the variant** (not just the numeric code) in Rust clients for forward-compatibility.
+3. **Use error codes for logic** in frontend / TypeScript clients (numeric codes are stable).
+4. **Log all errors** for debugging and monitoring.
+5. **No panics** — the contract never panics; all errors are typed and returned.
+
+---
 
 ## Security Notes
 
-- All errors are typed and cannot be exploited
-- Error messages do not leak sensitive information
-- Authorization errors prevent unauthorized access
-- Validation errors prevent invalid state transitions
-- All error conditions are tested (see `test_errors.rs`)
-
+- Error messages do not leak internal contract state or sensitive information.
+- Authorization errors (1100–1103) prevent unauthorized state transitions.
+- Validation errors (1200–1204) prevent invalid data from reaching storage.
+- All 50 error variants are covered by the test suite in `src/test_errors.rs`.
+- The Soroban XDR spec hard-limits error enums to 50 cases; all slots are occupied.

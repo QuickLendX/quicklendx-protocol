@@ -24,8 +24,12 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
+mod vesting;
+pub mod types;
 #[cfg(test)]
 mod storage;
+#[cfg(test)]
+mod test_string_limits;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
@@ -37,22 +41,20 @@ mod test_dispute;
 #[cfg(test)]
 mod test_emergency_withdraw;
 #[cfg(test)]
-mod test_init;
-#[cfg(test)]
 mod test_overflow;
 #[cfg(test)]
 mod test_profit_fee;
 #[cfg(test)]
 mod test_refund;
 #[cfg(test)]
+mod test_init;
+#[cfg(test)]
 mod test_storage;
 #[cfg(test)]
-mod test_string_limits;
-#[cfg(test)]
 mod test_vesting;
-pub mod types;
+#[cfg(test)]
+mod test_invoice;
 mod verification;
-mod vesting;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::{
@@ -122,7 +124,10 @@ impl QuickLendXContract {
     // ============================================================================
 
     /// Initialize the protocol with all required configuration (one-time setup)
-    pub fn initialize(env: Env, params: init::InitializationParams) -> Result<(), QuickLendXError> {
+    pub fn initialize(
+        env: Env,
+        params: init::InitializationParams,
+    ) -> Result<(), QuickLendXError> {
         params.admin.require_auth();
         init::ProtocolInitializer::initialize(&env, &params)
     }
@@ -258,15 +263,15 @@ impl QuickLendXContract {
 
     /// Return the vested amount at current ledger time.
     pub fn get_vested_amount(env: Env, id: u64) -> Result<i128, QuickLendXError> {
-        let schedule =
-            Vesting::get_schedule(&env, id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let schedule = Vesting::get_schedule(&env, id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         Vesting::vested_amount(&env, &schedule)
     }
 
     /// Return releasable amount (vested minus already released).
     pub fn get_vesting_releasable(env: Env, id: u64) -> Result<i128, QuickLendXError> {
-        let schedule =
-            Vesting::get_schedule(&env, id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let schedule = Vesting::get_schedule(&env, id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         Vesting::releasable_amount(&env, &schedule)
     }
 
@@ -341,7 +346,10 @@ impl QuickLendXContract {
     /// - Can only be called once
     /// - No authorization required for initial setup
     /// - Admin address is permanently stored
-    pub fn init_protocol_limits_defaults(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+    pub fn init_protocol_limits_defaults(
+        env: Env,
+        admin: Address,
+    ) -> Result<(), QuickLendXError> {
         protocol_limits::ProtocolLimitsContract::initialize(env, admin)
     }
 
@@ -378,8 +386,7 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
-        let current_limits =
-            protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+        let current_limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
@@ -450,10 +457,7 @@ impl QuickLendXContract {
         }
 
         // Validate due date is not too far in the future using protocol limits
-        if !protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)
-        {
-            return Err(QuickLendXError::InvoiceDueDateInvalid);
-        }
+        protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
 
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
@@ -509,12 +513,12 @@ impl QuickLendXContract {
         business.require_auth();
 
         // Check if business is verified
-        let verification = get_business_verification_status(&env, &business);
-        if verification.is_none()
-            || !matches!(
-                verification.unwrap().status,
-                verification::BusinessVerificationStatus::Verified
-            )
+        let verification = get_business_verification_status(&env, &business)
+            .ok_or(QuickLendXError::BusinessNotVerified)?;
+        if !matches!(
+            verification.status,
+            verification::BusinessVerificationStatus::Verified
+        )
         {
             return Err(QuickLendXError::BusinessNotVerified);
         }
@@ -731,6 +735,9 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         new_status: InvoiceStatus,
     ) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -739,16 +746,16 @@ impl QuickLendXContract {
 
         // Update status
         match new_status {
-            InvoiceStatus::Verified => invoice.verify(&env, invoice.business.clone()),
+            InvoiceStatus::Verified => invoice.verify(&env, admin.clone()),
             InvoiceStatus::Paid => {
-                invoice.mark_as_paid(&env, invoice.business.clone(), env.ledger().timestamp())
+                invoice.mark_as_paid(&env, admin.clone(), env.ledger().timestamp())
             }
             InvoiceStatus::Defaulted => invoice.mark_as_defaulted(),
             InvoiceStatus::Funded => {
                 // For testing purposes - normally funding happens via accept_bid
                 invoice.mark_as_funded(
                     &env,
-                    invoice.business.clone(),
+                    admin.clone(),
                     invoice.amount,
                     env.ledger().timestamp(),
                 );
@@ -809,6 +816,8 @@ impl QuickLendXContract {
             .saturating_add(cancelled)
             .saturating_add(refunded)
     }
+
+
 
     /// Clear all invoices from storage (admin only, used for restore operations)
     pub fn clear_all_invoices(env: &Env) -> Result<(), QuickLendXError> {
@@ -987,7 +996,8 @@ impl QuickLendXContract {
         );
         InvoiceStorage::update_invoice(&env, &invoice);
 
-        // Add to new status list after status change
+        // Update status index so get_invoices_by_status(Funded) and check_overdue_invoices see this invoice
+        InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
         InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Funded, &invoice_id);
         let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         let investment = Investment {
@@ -1002,7 +1012,7 @@ impl QuickLendXContract {
         InvestmentStorage::store_investment(&env, &investment);
 
         let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
-            .expect("Escrow should exist after creation");
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
         audit::log_bid_accepted(
@@ -2150,11 +2160,17 @@ impl QuickLendXContract {
     pub fn get_analytics_summary(
         env: Env,
     ) -> Result<(PlatformMetrics, PerformanceMetrics), QuickLendXError> {
-        let platform_metrics = AnalyticsStorage::get_platform_metrics(&env)
-            .unwrap_or_else(|| AnalyticsCalculator::calculate_platform_metrics(&env).unwrap());
+        let platform_metrics = match AnalyticsStorage::get_platform_metrics(&env) {
+            Some(metrics) => metrics,
+            None => AnalyticsCalculator::calculate_platform_metrics(&env)
+                .map_err(|_| QuickLendXError::StorageError)?,
+        };
 
-        let performance_metrics = AnalyticsStorage::get_performance_metrics(&env)
-            .unwrap_or_else(|| AnalyticsCalculator::calculate_performance_metrics(&env).unwrap());
+        let performance_metrics = match AnalyticsStorage::get_performance_metrics(&env) {
+            Some(metrics) => metrics,
+            None => AnalyticsCalculator::calculate_performance_metrics(&env)
+                .map_err(|_| QuickLendXError::StorageError)?,
+        };
 
         Ok((platform_metrics, performance_metrics))
     }
@@ -2837,12 +2853,7 @@ impl QuickLendXContract {
         };
 
         BackupStorage::set_retention_policy(&env, &policy);
-        events::emit_retention_policy_updated(
-            &env,
-            max_backups,
-            max_age_seconds,
-            auto_cleanup_enabled,
-        );
+        events::emit_retention_policy_updated(&env, max_backups, max_age_seconds, auto_cleanup_enabled);
 
         Ok(())
     }
@@ -2926,14 +2937,16 @@ mod test_insurance;
 #[cfg(test)]
 mod test_investor_kyc;
 #[cfg(test)]
-mod test_lifecycle;
-#[cfg(test)]
 mod test_limit;
 #[cfg(test)]
 mod test_profit_fee_formula;
+#[cfg(test)]
+mod test_overdue_expiration;
 #[cfg(test)]
 mod test_revenue_split;
 #[cfg(test)]
 mod test_risk_tier;
 #[cfg(test)]
 mod test_types;
+#[cfg(test)]
+mod test_lifecycle;

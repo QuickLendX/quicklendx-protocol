@@ -1,103 +1,143 @@
 use soroban_sdk::{contracterror, symbol_short, Symbol};
 
-/// Custom error types for the QuickLendX contract
+/// Typed error enum for the QuickLendX contract. See docs/contracts/errors.md.
+///
+/// The Soroban XDR spec allows a maximum of 50 error variants per contract.
+/// All 50 slots are used; new variants require replacing an existing one.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum QuickLendXError {
-    // Core errors
+    // Invoice lifecycle (1000–1006)
     InvoiceNotFound = 1000,
-    InvoiceAmountInvalid = 1001,
-    InvalidAmount = 1002,
-    InvalidStatus = 1003,
-    Unauthorized = 1004,
-    NotAdmin = 1005,
-    StorageKeyNotFound = 1006,
-    BusinessNotVerified = 1007,
-    PaymentTooLow = 1008,
-    OperationNotAllowed = 1009,
-    InsufficientFunds = 1010,
-    InvalidAddress = 1011,
-    InvalidDescription = 1012,
-    InvoiceDueDateInvalid = 1013,
-    NotInvestor = 1014,
-    NotBusinessOwner = 1015,
-    InvalidCurrency = 1016,
-    InvalidTimestamp = 1017,
-    StorageError = 1018,
-    PlatformAccountNotConfigured = 1019,
-    InvalidCoveragePercentage = 1020,
-    InvalidRating = 1021,
-    NotFunded = 1022,
-    AlreadyRated = 1023,
-    NotRater = 1024,
-    KYCAlreadyPending = 1025,
-    KYCAlreadyVerified = 1026,
-    KYCNotFound = 1027,
-    InvalidKYCStatus = 1028,
-    AuditLogNotFound = 1029,
-    AuditIntegrityError = 1030,
-    InvalidExpectedReturn = 1031,
-    InvalidFeeConfiguration = 1032,
-    TreasuryNotConfigured = 1033,
-    InvalidFeeBasisPoints = 1034,
-    InvalidTag = 1035,
-    TagLimitExceeded = 1036,
-    DisputeNotFound = 1037,
-    DisputeAlreadyExists = 1038,
-    DisputeNotAuthorized = 1039,
-    DisputeAlreadyResolved = 1040,
-    DisputeNotUnderReview = 1041,
-    InvalidDisputeReason = 1042,
-    InvalidDisputeEvidence = 1043,
-    NotificationNotFound = 1044,
-    NotificationBlocked = 1045,
-    InvoiceAlreadyFunded = 1046,
-    InvoiceNotAvailableForFunding = 1047,
-    InvoiceNotFunded = 1048,
-    InvoiceAlreadyDefaulted = 1049,
+    InvoiceNotAvailableForFunding = 1001,
+    InvoiceAlreadyFunded = 1002,
+    InvoiceAmountInvalid = 1003,
+    InvoiceDueDateInvalid = 1004,
+    InvoiceNotFunded = 1005,
+    InvoiceAlreadyDefaulted = 1006,
+
+    // Authorization (1100–1103)
+    Unauthorized = 1100,
+    NotBusinessOwner = 1101,
+    NotInvestor = 1102,
+    NotAdmin = 1103,
+
+    // Input validation (1200–1204)
+    InvalidAmount = 1200,
+    InvalidAddress = 1201,
+    InvalidCurrency = 1202,
+    InvalidTimestamp = 1203,
+    InvalidDescription = 1204,
+
+    // Storage (1300–1301)
+    StorageError = 1300,
+    StorageKeyNotFound = 1301,
+
+    // Business logic (1400–1405)
+    InsufficientFunds = 1400,
+    InvalidStatus = 1401,
+    OperationNotAllowed = 1402,
+    PaymentTooLow = 1403,
+    PlatformAccountNotConfigured = 1404,
+    InvalidCoveragePercentage = 1405,
+
+    // Rating (1500–1503)
+    InvalidRating = 1500,
+    NotFunded = 1501,
+    AlreadyRated = 1502,
+    NotRater = 1503,
+
+    // KYC / verification (1600–1604)
+    BusinessNotVerified = 1600,
+    KYCAlreadyPending = 1601,
+    KYCAlreadyVerified = 1602,
+    KYCNotFound = 1603,
+    InvalidKYCStatus = 1604,
+
+    // Audit (1700–1702)
+    AuditLogNotFound = 1700,
+    AuditIntegrityError = 1701,
+    AuditQueryError = 1702,
+
+    // Category / tag (1800–1801)
+    InvalidTag = 1800,
+    TagLimitExceeded = 1801,
+
+    // Fee configuration (1850–1852)
+    InvalidFeeConfiguration = 1850,
+    TreasuryNotConfigured = 1851,
+    InvalidFeeBasisPoints = 1852,
+
+    // Dispute (1900–1906)
+    DisputeNotFound = 1900,
+    DisputeAlreadyExists = 1901,
+    DisputeNotAuthorized = 1902,
+    DisputeAlreadyResolved = 1903,
+    DisputeNotUnderReview = 1904,
+    InvalidDisputeReason = 1905,
+    InvalidDisputeEvidence = 1906,
+
+    // Notification (2000–2001)
+    NotificationNotFound = 2000,
+    NotificationBlocked = 2001,
 }
 
 impl From<QuickLendXError> for Symbol {
     fn from(error: QuickLendXError) -> Self {
         match error {
+            // Invoice lifecycle
             QuickLendXError::InvoiceNotFound => symbol_short!("INV_NF"),
+            QuickLendXError::InvoiceNotAvailableForFunding => symbol_short!("INV_NAF"),
+            QuickLendXError::InvoiceAlreadyFunded => symbol_short!("INV_AF"),
             QuickLendXError::InvoiceAmountInvalid => symbol_short!("INV_AI"),
-            QuickLendXError::InvalidAmount => symbol_short!("INV_AMT"),
-            QuickLendXError::InvalidStatus => symbol_short!("INV_ST"),
-            QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
-            QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
-            QuickLendXError::StorageKeyNotFound => symbol_short!("KEY_NF"),
-            QuickLendXError::BusinessNotVerified => symbol_short!("BUS_NV"),
-            QuickLendXError::PaymentTooLow => symbol_short!("PAY_LOW"),
-            QuickLendXError::OperationNotAllowed => symbol_short!("OP_NA"),
-            QuickLendXError::InsufficientFunds => symbol_short!("INSUF"),
-            QuickLendXError::InvalidAddress => symbol_short!("INV_ADR"),
-            QuickLendXError::InvalidDescription => symbol_short!("INV_DS"),
             QuickLendXError::InvoiceDueDateInvalid => symbol_short!("INV_DI"),
-            QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
+            QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NFD"),
+            QuickLendXError::InvoiceAlreadyDefaulted => symbol_short!("INV_AD"),
+            // Authorization
+            QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
+            QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
+            QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
+            // Input validation
+            QuickLendXError::InvalidAmount => symbol_short!("INV_AMT"),
+            QuickLendXError::InvalidAddress => symbol_short!("INV_ADR"),
             QuickLendXError::InvalidCurrency => symbol_short!("INV_CR"),
             QuickLendXError::InvalidTimestamp => symbol_short!("INV_TM"),
+            QuickLendXError::InvalidDescription => symbol_short!("INV_DS"),
+            // Storage
             QuickLendXError::StorageError => symbol_short!("STORE"),
+            QuickLendXError::StorageKeyNotFound => symbol_short!("KEY_NF"),
+            // Business logic
+            QuickLendXError::InsufficientFunds => symbol_short!("INSUF"),
+            QuickLendXError::InvalidStatus => symbol_short!("INV_ST"),
+            QuickLendXError::OperationNotAllowed => symbol_short!("OP_NA"),
+            QuickLendXError::PaymentTooLow => symbol_short!("PAY_LOW"),
             QuickLendXError::PlatformAccountNotConfigured => symbol_short!("PLT_NC"),
             QuickLendXError::InvalidCoveragePercentage => symbol_short!("INS_CV"),
+            // Rating
             QuickLendXError::InvalidRating => symbol_short!("INV_RT"),
             QuickLendXError::NotFunded => symbol_short!("NOT_FD"),
             QuickLendXError::AlreadyRated => symbol_short!("ALR_RT"),
             QuickLendXError::NotRater => symbol_short!("NOT_RT"),
+            // KYC / verification
+            QuickLendXError::BusinessNotVerified => symbol_short!("BUS_NV"),
             QuickLendXError::KYCAlreadyPending => symbol_short!("KYC_PD"),
             QuickLendXError::KYCAlreadyVerified => symbol_short!("KYC_VF"),
             QuickLendXError::KYCNotFound => symbol_short!("KYC_NF"),
             QuickLendXError::InvalidKYCStatus => symbol_short!("KYC_IS"),
+            // Audit
             QuickLendXError::AuditLogNotFound => symbol_short!("AUD_NF"),
             QuickLendXError::AuditIntegrityError => symbol_short!("AUD_IE"),
-            QuickLendXError::InvalidExpectedReturn => symbol_short!("INV_ER"),
+            QuickLendXError::AuditQueryError => symbol_short!("AUD_QE"),
+            // Category / tag
+            QuickLendXError::InvalidTag => symbol_short!("INV_TAG"),
+            QuickLendXError::TagLimitExceeded => symbol_short!("TAG_LIM"),
+            // Fee configuration
             QuickLendXError::InvalidFeeConfiguration => symbol_short!("FEE_CFG"),
             QuickLendXError::TreasuryNotConfigured => symbol_short!("TRS_NC"),
             QuickLendXError::InvalidFeeBasisPoints => symbol_short!("FEE_BPS"),
-            QuickLendXError::InvalidTag => symbol_short!("INV_TAG"),
-            QuickLendXError::TagLimitExceeded => symbol_short!("TAG_LIM"),
+            // Dispute
             QuickLendXError::DisputeNotFound => symbol_short!("DSP_NF"),
             QuickLendXError::DisputeAlreadyExists => symbol_short!("DSP_EX"),
             QuickLendXError::DisputeNotAuthorized => symbol_short!("DSP_NA"),
@@ -105,12 +145,9 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::DisputeNotUnderReview => symbol_short!("DSP_UR"),
             QuickLendXError::InvalidDisputeReason => symbol_short!("DSP_RN"),
             QuickLendXError::InvalidDisputeEvidence => symbol_short!("DSP_EV"),
+            // Notification
             QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
-            QuickLendXError::InvoiceAlreadyFunded => symbol_short!("INV_AF"),
-            QuickLendXError::InvoiceNotAvailableForFunding => symbol_short!("INV_NAF"),
-            QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NDF"),
-            QuickLendXError::InvoiceAlreadyDefaulted => symbol_short!("INV_AD"),
         }
     }
 }

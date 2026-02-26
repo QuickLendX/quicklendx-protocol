@@ -120,10 +120,7 @@ impl ProtocolInitializer {
     /// - Can only be called once (atomic check-and-set)
     /// - Validates all parameters before any state changes
     /// - Emits initialization event for audit trail
-    pub fn initialize(
-        env: &Env,
-        params: &InitializationParams,
-    ) -> Result<(), QuickLendXError> {
+    pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
         // Auth is checked by the outermost contract entry point
 
         // Check if already initialized (re-initialization protection)
@@ -139,14 +136,18 @@ impl ProtocolInitializer {
 
         // Initialize fee manager with default structures
         crate::fees::FeeManager::initialize(env, &params.admin)?;
-        
+
         // Override default platform fee with params and set treasury
         crate::fees::FeeManager::update_platform_fee(env, &params.admin, params.fee_bps)?;
         crate::fees::FeeManager::configure_treasury(env, &params.admin, params.treasury.clone())?;
 
         // Initialize currency whitelist
         if !params.initial_currencies.is_empty() {
-            crate::currency::CurrencyWhitelist::set_currencies(env, &params.admin, &params.initial_currencies)?;
+            crate::currency::CurrencyWhitelist::set_currencies(
+                env,
+                &params.admin,
+                &params.initial_currencies,
+            )?;
         }
 
         // Store protocol configuration
@@ -202,7 +203,7 @@ impl ProtocolInitializer {
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // Validate fee basis points (0% to 10%)
-        if params.fee_bps < MIN_FEE_BPS || params.fee_bps > MAX_FEE_BPS {
+        if params.fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
@@ -303,11 +304,7 @@ impl ProtocolInitializer {
     /// * `Ok(())` if update succeeds
     /// * `Err(QuickLendXError::NotAdmin)` if caller is not admin
     /// * `Err(QuickLendXError::InvalidFeeBasisPoints)` if fee is out of range
-    pub fn set_fee_config(
-        env: &Env,
-        admin: &Address,
-        fee_bps: u32,
-    ) -> Result<(), QuickLendXError> {
+    pub fn set_fee_config(env: &Env, admin: &Address, fee_bps: u32) -> Result<(), QuickLendXError> {
         // Require admin authorization
         admin.require_auth();
 
@@ -317,7 +314,7 @@ impl ProtocolInitializer {
         }
 
         // Validate fee basis points
-        if fee_bps < MIN_FEE_BPS || fee_bps > MAX_FEE_BPS {
+        if fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
