@@ -1430,6 +1430,122 @@ fn test_get_all_bids_by_investor_empty() {
     assert_eq!(all_bids.len(), 0, "Must return empty for unknown investor");
 }
 
+/// Rate-limit: investor can only have a bounded number of active (Placed) bids.
+#[test]
+fn test_rate_limit_place_bid_per_investor() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    // Set up verified business and invoice currency
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    client.submit_kyc_application(
+        &business,
+        &String::from_str(&env, "Business KYC for rate-limit test"),
+    );
+    client.verify_business(&admin, &business);
+
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &50_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Rate-limit invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    // Set up verified investor with sufficient investment limit
+    let investor = add_verified_investor(&env, &client, 1_000_000);
+
+    // Place bids up to the configured per-investor active bid limit.
+    let mut placed_ids: Vec<BytesN<32>> = Vec::new(&env);
+    let max_active = crate::MAX_ACTIVE_BIDS_PER_INVESTOR;
+    let bid_amount: i128 = 5_000;
+    let expected_return: i128 = 6_000;
+
+    let mut i: u32 = 0;
+    while i < max_active {
+        let bid_id = client
+            .place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+        placed_ids.push_back(bid_id);
+        i = i.saturating_add(1);
+    }
+
+    // Next bid should fail with OperationNotAllowed due to rate limit.
+    let result = client.try_place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+    assert!(result.is_err(), "Bid beyond active limit must fail");
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::OperationNotAllowed);
+
+    // After cancelling one bid, investor should be able to place a new bid again.
+    let first_bid = placed_ids.get(0).unwrap();
+    let cancelled = client.cancel_bid(&first_bid);
+    assert!(cancelled, "Cancelling an active bid should succeed");
+
+    let result_after_cancel =
+        client.try_place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+    assert!(
+        result_after_cancel.is_ok(),
+        "Bid after freeing one active slot must succeed"
+    );
+}
+
+/// Rate-limit isolation: different investors have independent active bid limits.
+#[test]
+fn test_rate_limit_place_bid_per_investor_isolated() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC multi"));
+    client.verify_business(&admin, &business);
+
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &80_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Isolated rate-limit invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let investor_a = add_verified_investor(&env, &client, 1_000_000);
+    let investor_b = add_verified_investor(&env, &client, 1_000_000);
+
+    let max_active = crate::MAX_ACTIVE_BIDS_PER_INVESTOR;
+    let bid_amount: i128 = 10_000;
+    let expected_return: i128 = 11_000;
+
+    // Saturate investor A's active bid limit.
+    let mut i: u32 = 0;
+    while i < max_active {
+        let _ = client.place_bid(&investor_a, &invoice_id, &bid_amount, &expected_return);
+        i = i.saturating_add(1);
+    }
+    let result_a = client.try_place_bid(&investor_a, &invoice_id, &bid_amount, &expected_return);
+    assert!(result_a.is_err());
+
+    // Investor B should still be able to place bids up to the limit independently.
+    let result_b1 = client.try_place_bid(&investor_b, &invoice_id, &bid_amount, &expected_return);
+    assert!(
+        result_b1.is_ok(),
+        "Second investor must not be affected by first investor's rate limit"
+    );
+}
+
 // ============================================================================
 // Multiple Investors - Same Invoice Tests (Issue #343)
 // ============================================================================

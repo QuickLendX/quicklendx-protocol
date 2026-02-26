@@ -269,6 +269,76 @@ fn test_get_invoices_by_status() {
     assert_eq!(verified_invoices.len(), 0);
 }
 
+/// Batch status query: mix of existing and nonexistent IDs, cap, and order preservation.
+#[test]
+fn test_get_invoices_by_status_batch() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Create two invoices
+    let invoice1_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Batch Invoice 1"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let invoice2_id = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Batch Invoice 2"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    // Nonexistent id
+    let missing_id = BytesN::from_array(&env, &[42u8; 32]);
+
+    // Input order: existing, missing, existing
+    let mut ids = Vec::new(&env);
+    ids.push_back(invoice1_id.clone());
+    ids.push_back(missing_id.clone());
+    ids.push_back(invoice2_id.clone());
+
+    let statuses = client.get_invoices_by_status_batch(&ids);
+    assert_eq!(statuses.len(), 3);
+
+    // All newly stored invoices are Pending by default.
+    assert_eq!(statuses.get(0).unwrap(), Some(InvoiceStatus::Pending));
+    assert_eq!(statuses.get(1).unwrap(), None);
+    assert_eq!(statuses.get(2).unwrap(), Some(InvoiceStatus::Pending));
+
+    // When input length exceeds MAX_QUERY_LIMIT, results are truncated but ordered.
+    let mut long_ids = Vec::new(&env);
+    for _ in 0..(crate::MAX_QUERY_LIMIT + 5) {
+        long_ids.push_back(invoice1_id.clone());
+    }
+    let long_statuses = client.get_invoices_by_status_batch(&long_ids);
+    assert_eq!(
+        long_statuses.len() as u32,
+        crate::MAX_QUERY_LIMIT,
+        "Batch query must enforce MAX_QUERY_LIMIT cap"
+    );
+    // All entries in the truncated result correspond to the first invoice id.
+    let mut idx: u32 = 0;
+    while idx < crate::MAX_QUERY_LIMIT {
+        assert_eq!(
+            long_statuses.get(idx).unwrap(),
+            Some(InvoiceStatus::Pending)
+        );
+        idx = idx.saturating_add(1);
+    }
+}
+
 #[test]
 fn test_update_invoice_status() {
     let env = Env::default();
