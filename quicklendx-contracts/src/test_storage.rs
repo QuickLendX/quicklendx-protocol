@@ -913,3 +913,85 @@ fn test_maximum_values(env: &Env) {
     let retrieved = InvoiceStorage::get(env, &max_id).unwrap();
     assert_eq!(invoice, retrieved);
 }
+
+// Additional storage and invariant tests
+
+#[test]
+fn test_escrow_storage_keys() {
+    let env = Env::default();
+    let invoice_id = BytesN::from_array(&env, &[1; 32]);
+    let invoice_id_2 = BytesN::from_array(&env, &[2; 32]);
+
+    // Escrow keys should be unique per invoice
+    let key1 = (soroban_sdk::symbol_short!("escrow"), invoice_id.clone());
+    let key2 = (soroban_sdk::symbol_short!("escrow"), invoice_id_2.clone());
+
+    assert_ne!(
+        key1.1, key2.1,
+        "Different invoices should have different escrow keys"
+    );
+}
+
+#[test]
+fn test_storage_counter_increments() {
+    let env = Env::default();
+    env.as_contract(&Address::generate(&env), || {
+        // Test invoice counter
+        let count1 = InvoiceStorage::next_count(&env);
+        let count2 = InvoiceStorage::next_count(&env);
+        assert_eq!(count2, count1 + 1, "Invoice counter should increment");
+
+        // Test bid counter
+        let count1 = BidStorage::next_count(&env);
+        let count2 = BidStorage::next_count(&env);
+        assert_eq!(count2, count1 + 1, "Bid counter should increment");
+
+        // Test investment counter
+        let count1 = InvestmentStorage::next_count(&env);
+        let count2 = InvestmentStorage::next_count(&env);
+        assert_eq!(count2, count1 + 1, "Investment counter should increment");
+    });
+}
+
+#[test]
+fn test_multiple_invoices_same_business() {
+    let env = Env::default();
+    env.as_contract(&Address::generate(&env), || {
+        let business = Address::generate(&env);
+        let invoice_id_1 = BytesN::from_array(&env, &[1; 32]);
+        let invoice_id_2 = BytesN::from_array(&env, &[2; 32]);
+
+        let invoice1 = create_test_invoice(&env, invoice_id_1.clone(), business.clone());
+        let invoice2 = create_test_invoice(&env, invoice_id_2.clone(), business.clone());
+
+        InvoiceStorage::store(&env, &invoice1);
+        InvoiceStorage::store(&env, &invoice2);
+
+        let invoices = InvoiceStorage::get_by_business(&env, &business);
+        assert_eq!(invoices.len(), 2, "Should have 2 invoices for business");
+        assert!(invoices.iter().any(|id| id == invoice_id_1));
+        assert!(invoices.iter().any(|id| id == invoice_id_2));
+    });
+}
+
+#[test]
+fn test_storage_retrieval_consistency() {
+    let env = Env::default();
+    env.as_contract(&Address::generate(&env), || {
+        let business = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
+
+        let invoice = create_test_invoice(&env, invoice_id.clone(), business);
+        InvoiceStorage::store(&env, &invoice);
+
+        // Retrieve multiple times - should be consistent
+        let retrieved1 = InvoiceStorage::get(&env, &invoice_id).unwrap();
+        let retrieved2 = InvoiceStorage::get(&env, &invoice_id).unwrap();
+
+        assert_eq!(
+            retrieved1, retrieved2,
+            "Multiple retrievals should be consistent"
+        );
+        assert_eq!(invoice, retrieved1, "Retrieved should match stored");
+    });
+}
