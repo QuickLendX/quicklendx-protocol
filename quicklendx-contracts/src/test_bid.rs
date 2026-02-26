@@ -8,6 +8,7 @@
 /// 4. Ranking - profit-based bid comparison works correctly
 use super::*;
 use crate::bid::BidStatus;
+use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::protocol_limits::compute_min_bid_amount;
 use soroban_sdk::{
@@ -1839,4 +1840,82 @@ fn test_cannot_accept_second_bid_after_first_accepted() {
     assert_eq!(invoice.status, InvoiceStatus::Funded);
     assert_eq!(invoice.funded_amount, 10_000);
     assert_eq!(invoice.investor, Some(investor1));
+}
+
+#[test]
+fn test_default_max_active_bids_per_investor_is_20() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    assert_eq!(client.get_max_active_bids_per_investor(), 20);
+}
+
+#[test]
+fn test_active_bid_limit_enforced_and_withdrawn_not_counted() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let _ = client.set_max_active_bids_per_investor(&2u32);
+
+    let investor = add_verified_investor(&env, &client, 1_000_000);
+    let business = Address::generate(&env);
+
+    let invoice_id_1 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    let invoice_id_2 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    let invoice_id_3 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    let bid_id_1 = client.place_bid(&investor, &invoice_id_1, &10_000, &12_000);
+    let _bid_id_2 = client.place_bid(&investor, &invoice_id_2, &11_000, &13_000);
+
+    let blocked = client.try_place_bid(&investor, &invoice_id_3, &12_000, &14_000);
+    assert_eq!(
+        blocked.err().unwrap().unwrap(),
+        QuickLendXError::OperationNotAllowed
+    );
+
+    let _ = client.withdraw_bid(&bid_id_1);
+
+    let retry = client.try_place_bid(&investor, &invoice_id_3, &12_000, &14_000);
+    assert!(retry.is_ok(), "Withdrawn bids must not count toward limit");
+}
+
+#[test]
+fn test_active_bid_limit_ignores_accepted_and_expired_bids() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let _ = client.set_max_active_bids_per_investor(&1u32);
+    let _ = client.set_bid_ttl_days(&1u64);
+
+    let investor = add_verified_investor(&env, &client, 1_000_000);
+    let business = Address::generate(&env);
+
+    let invoice_id_1 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    let invoice_id_2 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    let invoice_id_3 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    let bid_id_1 = client.place_bid(&investor, &invoice_id_1, &10_000, &12_000);
+    let blocked = client.try_place_bid(&investor, &invoice_id_2, &11_000, &13_000);
+    assert_eq!(
+        blocked.err().unwrap().unwrap(),
+        QuickLendXError::OperationNotAllowed
+    );
+
+    let _ = client.accept_bid(&invoice_id_1, &bid_id_1);
+
+    let bid_id_2 = client.place_bid(&investor, &invoice_id_2, &11_000, &13_000);
+    env.ledger().set_timestamp(env.ledger().timestamp() + 86401);
+
+    let bid_id_3 = client.place_bid(&investor, &invoice_id_3, &12_000, &14_000);
+    assert!(
+        client.get_bid(&bid_id_3).is_some(),
+        "Expired bids must not count toward limit"
+    );
+
+    let refreshed_bid_2 = client.get_bid(&bid_id_2).unwrap();
+    assert_eq!(refreshed_bid_2.status, BidStatus::Expired);
 }

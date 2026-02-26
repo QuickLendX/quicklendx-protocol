@@ -45,6 +45,10 @@ pub fn place_bid(
 7. Bid amount cannot exceed investor's investment limit
 8. Investor cannot have an existing active bid on the same invoice
 9. Expired bids are automatically cleaned up before validation
+10. Global active bid cap per investor is enforced across all invoices:
+   - Only `Placed` bids count
+   - `Withdrawn`, `Accepted`, `Expired`, and `Cancelled` do not count
+   - Default cap is `20` and can be changed by admin
 
 **Events Emitted:**
 - `bid_plc`: Bid placed event with bid details
@@ -56,7 +60,7 @@ pub fn place_bid(
 - `InvalidAmount`: Bid amount is invalid
 - `InvalidExpectedReturn`: Expected return is lower than bid amount
 - `InvoiceAmountInvalid`: Bid amount exceeds invoice amount
-- `OperationNotAllowed`: Investor already has an active bid on this invoice
+- `OperationNotAllowed`: Investor already has an active bid on this invoice, or active bid cap is exceeded
 
 **Example:**
 ```rust
@@ -247,6 +251,13 @@ pub enum BidStatus {
 - `get_bid_ttl_days(env) -> u64`: Read-only entrypoint returning the configured TTL in days (returns 7 if not set).
 
 Security: only the configured protocol admin may call `set_bid_ttl_days`. Calls require the admin to authorize the transaction.
+
+### Active Bid Cap Configuration (Admin)
+
+- `set_max_active_bids_per_investor(env, limit: u32) -> Result<u32, QuickLendXError>`: Admin-only entrypoint to set the maximum number of active `Placed` bids an investor can hold across all invoices. `0` disables the cap.
+- `get_max_active_bids_per_investor(env) -> u32`: Read-only entrypoint returning the configured cap (returns `20` if not set).
+
+Security: only the configured protocol admin may call `set_max_active_bids_per_investor`. Calls require the admin to authorize the transaction.
 
 2. **Withdraw Bid**: Investor withdraws their bid before acceptance
    - Status: `Withdrawn`
