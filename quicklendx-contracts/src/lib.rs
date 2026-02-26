@@ -926,9 +926,8 @@ impl QuickLendXContract {
             .ok_or(QuickLendXError::BusinessNotVerified)?;
         match verification.status {
             BusinessVerificationStatus::Verified => {
-                if bid_amount > verification.investment_limit {
-                    return Err(QuickLendXError::InvalidAmount);
-                }
+                // Enforce tier/risk-aware limits from investor analytics.
+                validate_investor_investment(&env, &investor, bid_amount)?;
             }
             BusinessVerificationStatus::Pending => return Err(QuickLendXError::KYCAlreadyPending),
             BusinessVerificationStatus::Rejected => {
