@@ -1602,10 +1602,14 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
+        let current_limits =
+            protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
             min_invoice_amount,
+            current_limits.min_bid_amount,
+            current_limits.min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
         )
