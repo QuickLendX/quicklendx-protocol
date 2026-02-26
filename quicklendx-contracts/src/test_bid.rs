@@ -1463,7 +1463,7 @@ fn test_only_one_escrow_created_for_accepted_bid() {
 
     // Verify exactly one escrow exists for this invoice
     let escrow = client.get_escrow_details(&invoice_id);
-    assert_eq!(escrow.status, EscrowStatus::Held, "Escrow should be in Held status");
+    assert_eq!(escrow.status, crate::payments::EscrowStatus::Held, "Escrow should be in Held status");
     assert_eq!(escrow.investor, investor2, "Escrow should reference investor2");
     assert_eq!(escrow.amount, 15_000, "Escrow should hold the accepted bid amount");
     assert_eq!(escrow.invoice_id, invoice_id, "Escrow should reference correct invoice");

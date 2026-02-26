@@ -570,9 +570,6 @@ fn test_timestamp_accuracy() {
 // Additional Edge Cases and Security Tests
 // ============================================================================
 
-// Additional Coverage Tests - Admin Authorization Edge Cases
-// ============================================================================
-
 #[test]
 fn test_verify_business_without_kyc_submission_fails() {
     let (env, client, admin) = setup();
@@ -600,7 +597,7 @@ fn test_double_verification_fails() {
     let business = Address::generate(&env);
     let kyc_data = create_test_kyc_data(&env, "TestBusiness");
 
-    // Submit and verify KYC
+    // Submit and verify
     client.submit_kyc_application(&business, &kyc_data);
     client.verify_business(&admin, &business);
 

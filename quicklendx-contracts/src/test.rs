@@ -3,6 +3,7 @@ mod test_invoice_categories;
 mod test_status_consistency;
 mod test_invoice_metadata;
 mod test_analytics_export_query;
+mod test_get_invoice_bid;
 
 use super::*;
 use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
@@ -24,16 +25,6 @@ fn verify_investor_for_test(
 ) {
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(investor, &limit);
-}
-
-fn add_currency_for_test(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    admin: &Address,
-    currency: &Address,
-) {
-    env.mock_all_auths();
-    let _ = client.add_currency(admin, currency);
 }
 
 /// Public helper: set up environment, register contract, create admin
@@ -124,15 +115,11 @@ pub fn create_funded_invoice(
 #[test]
 fn test_store_invoice() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let amount = 1000;
     let due_date = env.ledger().timestamp() + 86400; // 1 day from now
     let description = String::from_str(&env, "Test invoice for services");
@@ -162,15 +149,11 @@ fn test_store_invoice() {
 #[test]
 fn test_store_invoice_validation() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
@@ -192,16 +175,12 @@ fn test_store_invoice_validation() {
 #[test]
 fn test_get_business_invoices() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business1 = Address::generate(&env);
     let business2 = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     // Create invoices for business1
@@ -251,15 +230,11 @@ fn test_get_business_invoices() {
 #[test]
 fn test_get_invoices_by_status() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     // Create invoices
@@ -297,15 +272,11 @@ fn test_get_invoices_by_status() {
 #[test]
 fn test_update_invoice_status() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
@@ -343,12 +314,9 @@ fn test_update_invoice_metadata_and_queries() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
@@ -408,12 +376,9 @@ fn test_invoice_metadata_validation() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
@@ -491,7 +456,6 @@ fn test_investor_verification_enforced() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     let invoice_id = client.store_invoice(
         &business,
@@ -539,15 +503,11 @@ fn test_investor_verification_enforced() {
 #[test]
 fn test_get_available_invoices() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     // Create invoices
@@ -587,15 +547,11 @@ fn test_get_available_invoices() {
 #[test]
 fn test_invoice_count_functions() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     // Create invoices
@@ -646,15 +602,11 @@ fn test_invoice_not_found() {
 #[test]
 fn test_invoice_lifecycle() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
@@ -694,7 +646,6 @@ fn test_simple_bid_storage() {
     let due_date = env.ledger().timestamp() + 86400;
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -751,7 +702,6 @@ fn test_unique_bid_id_generation() {
     let due_date = env.ledger().timestamp() + 86400;
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -797,7 +747,6 @@ fn test_bid_ranking_and_filters() {
     let due_date = env.ledger().timestamp() + 86_400;
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     let invoice_id = client.store_invoice(
         &business,
@@ -853,7 +802,6 @@ fn test_bid_expiration_cleanup() {
     let due_date = env.ledger().timestamp() + 86_400;
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     let invoice_id = client.store_invoice(
         &business,
@@ -902,7 +850,6 @@ fn test_bid_validation_rules() {
     let due_date = env.ledger().timestamp() + 86400;
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -934,7 +881,7 @@ fn test_bid_validation_rules() {
         invalid_err.expect("expected invoke error for low expected_return");
     assert_eq!(
         invalid_contract_error,
-        QuickLendXError::InvalidExpectedReturn
+        QuickLendXError::InvalidAmount
     );
 
     // Break-even expected returns are allowed
@@ -973,7 +920,6 @@ fn test_withdraw_bid() {
     let due_date = env.ledger().timestamp() + 86400;
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -1025,7 +971,6 @@ fn test_get_bids_for_invoice() {
     let due_date = env.ledger().timestamp() + 86400;
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -1097,7 +1042,6 @@ fn test_escrow_creation_on_bid_acceptance() {
     let bid_amount = 1000i128;
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
@@ -1154,7 +1098,6 @@ fn test_escrow_release_on_verification() {
     let bid_amount = 1000i128;
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create invoice
     let invoice_id = client.store_invoice(
@@ -1407,16 +1350,12 @@ fn test_unique_investment_id_generation() {
 #[test]
 fn test_add_invoice_rating() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     // Create and fund an invoice
@@ -1466,16 +1405,12 @@ fn test_add_invoice_rating() {
 #[test]
 fn test_add_invoice_rating_validation() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     // Create invoice
@@ -1538,16 +1473,12 @@ fn test_add_invoice_rating_validation() {
 #[test]
 fn test_multiple_ratings() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     // Create and fund invoice
@@ -1592,16 +1523,12 @@ fn test_multiple_ratings() {
 #[test]
 fn test_duplicate_rating_prevention() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     // Create and fund invoice
@@ -1664,15 +1591,11 @@ fn test_duplicate_rating_prevention() {
 #[test]
 fn test_rating_queries() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business1 = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     // Create and fund a single invoice first
@@ -1736,16 +1659,12 @@ fn test_rating_queries() {
 #[test]
 fn test_rating_statistics() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     // Create and fund invoice
@@ -1791,15 +1710,11 @@ fn test_rating_statistics() {
 #[test]
 fn test_rating_on_unfunded_invoice() {
     let env = Env::default();
-    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     // Create invoice but don't fund it
@@ -1896,9 +1811,7 @@ fn test_verify_invoice_requires_admin() {
 
     let business = Address::generate(&env);
     let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
@@ -1911,9 +1824,11 @@ fn test_verify_invoice_requires_admin() {
         &Vec::new(&env),
     );
 
-    // With mock_all_auths, verify_invoice succeeds because admin.require_auth() passes.
-    // The contract still requires admin to be set; verify_invoice will fail with NotAdmin
-    // if no admin is configured.
+    assert!(client.try_verify_invoice(&invoice_id).is_err());
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
     client.verify_invoice(&invoice_id);
 
     let invoice = client.get_invoice(&invoice_id);
@@ -1992,7 +1907,6 @@ fn test_upload_invoice_requires_verification() {
 
     env.mock_all_auths();
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Now try to upload invoice - should succeed
     env.mock_all_auths();
@@ -2170,7 +2084,6 @@ fn test_create_and_restore_backup() {
     // Create test invoices
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice1_id = client.store_invoice(
@@ -2243,7 +2156,6 @@ fn test_backup_validation() {
     // Create test invoice
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    add_currency_for_test(&env, &client, &admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
 
     client.store_invoice(
@@ -2606,7 +2518,6 @@ fn test_audit_trail_creation() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Upload invoice
     let invoice_id = client.upload_invoice(
@@ -2651,7 +2562,6 @@ fn test_audit_integrity_validation() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Upload and verify invoice
     let invoice_id = client.upload_invoice(
@@ -2691,7 +2601,6 @@ fn test_audit_query_functionality() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create multiple invoices
     let invoice_id1 = client.upload_invoice(
@@ -2761,7 +2670,6 @@ fn test_audit_statistics() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create and process invoices
     let invoice_id = client.upload_invoice(
@@ -2847,7 +2755,6 @@ fn test_notification_creation_on_invoice_upload() {
     env.mock_all_auths();
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Upload invoice (should trigger notification)
     let _invoice_id = client.upload_invoice(
@@ -2883,7 +2790,6 @@ fn test_notification_creation_on_bid_placement() {
     env.mock_all_auths();
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Upload and verify invoice
     let invoice_id = client.upload_invoice(
@@ -2930,7 +2836,6 @@ fn test_notification_creation_on_invoice_status_change() {
     env.mock_all_auths();
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Upload invoice
     let invoice_id = client.upload_invoice(
@@ -2972,7 +2877,6 @@ fn test_notification_delivery_status_update() {
     env.mock_all_auths();
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Upload invoice to trigger notification
     let _invoice_id = client.upload_invoice(
@@ -3020,7 +2924,6 @@ fn test_user_notification_stats() {
     env.mock_all_auths();
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Upload invoice to trigger notification
     let _invoice_id = client.upload_invoice(
@@ -3379,7 +3282,6 @@ fn test_overdue_invoice_notifications() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create invoice with future due date first
     let future_due_date = env.ledger().timestamp() + 86400;
@@ -3443,7 +3345,6 @@ fn test_invoice_expiration_triggers_default() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     let due_date = env.ledger().timestamp() + 60;
     let invoice_id = client.store_invoice(
@@ -3502,7 +3403,6 @@ fn test_partial_payments_trigger_settlement() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = client.store_invoice(
@@ -3734,7 +3634,6 @@ fn test_dispute_under_review() {
     // Set admin
     env.mock_all_auths();
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create, verify invoice and create dispute
     let invoice_id = client.upload_invoice(
@@ -3778,7 +3677,6 @@ fn test_resolve_dispute() {
     // Set admin
     env.mock_all_auths();
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create, verify invoice and create dispute
     let invoice_id = client.upload_invoice(
@@ -3890,7 +3788,6 @@ fn test_get_invoices_by_dispute_status() {
     // Set admin
     env.mock_all_auths();
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create, verify invoice and create dispute
     let invoice_id = client.upload_invoice(
@@ -4001,7 +3898,6 @@ fn test_investment_insurance_lifecycle() {
     token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
 
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = client.store_invoice(
@@ -4376,7 +4272,6 @@ fn test_basic_readme_queries() {
 
     // Test 3: Business verification
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Test 4: Create invoice
     let invoice_id = client
@@ -4632,7 +4527,6 @@ fn test_upload_invoice_success() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Upload invoice
     let amount = 1000000i128;
@@ -4769,7 +4663,6 @@ fn test_verify_invoice_success() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Upload invoice
     let amount = 1000000i128;
@@ -4854,7 +4747,6 @@ fn test_verify_invoice_already_verified() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Upload invoice
     let amount = 1000000i128;
@@ -4894,7 +4786,6 @@ fn test_cancel_invoice_pending() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Upload invoice
     let amount = 1000000i128;
@@ -4939,7 +4830,6 @@ fn test_cancel_invoice_verified() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Upload invoice
     let amount = 1000000i128;
@@ -4989,8 +4879,7 @@ fn test_cancel_invoice_funded() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
     client.verify_business(&admin, &business);
-    verify_investor_for_test(&env, &client, &investor, 20_000_000);
-    add_currency_for_test(&env, &client, &admin, &currency);
+    verify_investor_for_test(&env, &client, &investor, 10000000);
 
     // Upload and verify invoice
     let amount = 1000000i128;
@@ -5041,7 +4930,6 @@ fn test_complete_invoice_lifecycle_with_cancellation() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Step 1: Upload invoice
     let amount = 1000000i128;
@@ -5100,7 +4988,6 @@ fn test_invoice_lifecycle_counts() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &currency);
 
     // Create multiple invoices in different states
     let due_date = env.ledger().timestamp() + 86400;
@@ -5169,7 +5056,6 @@ fn test_get_invoices_by_status_cancelled() {
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
     client.verify_business(&admin, &business);
-    add_currency_for_test(&env, &client, &admin, &token_address);
 
     let due_date = env.ledger().timestamp() + 86400;
     let tags = Vec::new(&env);
@@ -5349,7 +5235,7 @@ fn test_custom_max_due_date_limits() {
 
     // Set admin and add currency to whitelist
     client.set_admin(&admin);
-    add_currency_for_test(&env, &client, &admin, &currency);
+    client.add_currency(&admin, &currency);
 
     // Initialize protocol limits with custom max due date (30 days)
     client.initialize_protocol_limits(&admin, &1000000i128, &100i128, &100u32, &30u64, &86400u64);

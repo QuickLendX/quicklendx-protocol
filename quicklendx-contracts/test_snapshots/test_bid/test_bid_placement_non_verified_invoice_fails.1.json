@@ -71,32 +71,7 @@
         }
       ]
     ],
-<<<<<<< HEAD
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "add_currency",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
     [],
-=======
->>>>>>> main
     []
   ],
   "ledger": {
@@ -134,7 +109,6 @@
                     "storage": [
                       {
                         "key": {
-<<<<<<< HEAD
                           "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
                         },
                         "val": {
@@ -414,7 +388,7 @@
                       },
                       {
                         "key": {
-                          "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                          "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                         },
                         "val": {
                           "map": [
@@ -450,7 +424,7 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
-                                "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                                "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                               }
                             },
                             {
@@ -514,8 +488,6 @@
                       },
                       {
                         "key": {
-=======
->>>>>>> main
                           "string": "admin_address"
                         },
                         "val": {
@@ -544,42 +516,38 @@
                       },
                       {
                         "key": {
-<<<<<<< HEAD
+                          "symbol": "adm_init"
+                        },
+                        "val": {
+                          "bool": true
+                        }
+                      },
+                      {
+                        "key": {
+                          "symbol": "admin"
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                        }
+                      },
+                      {
+                        "key": {
                           "symbol": "all_aud"
                         },
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             }
                           ]
-=======
-                          "symbol": "adm_init"
-                        },
-                        "val": {
-                          "bool": true
->>>>>>> main
                         }
                       },
                       {
                         "key": {
-<<<<<<< HEAD
                           "symbol": "aud_cnt"
                         },
                         "val": {
                           "u64": 1
-                        }
-                      },
-                      {
-                        "key": {
-                          "symbol": "curr_wl"
-                        },
-                        "val": {
-                          "vec": [
-                            {
-                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                            }
-                          ]
                         }
                       },
                       {
@@ -616,7 +584,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             }
                           ]
                         }
@@ -644,6 +612,29 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "cat_idx"
+                            },
+                            {
+                              "vec": [
+                                {
+                                  "symbol": "Services"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "val": {
+                          "vec": [
+                            {
+                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "inv_aud"
                             },
                             {
@@ -654,7 +645,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             }
                           ]
                         }
@@ -677,7 +668,7 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             }
                           ]
                         }
@@ -696,15 +687,9 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             }
                           ]
-=======
-                          "symbol": "admin"
-                        },
-                        "val": {
-                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
->>>>>>> main
                         }
                       },
                       {
@@ -950,42 +935,6 @@
       [
         {
           "contract_data": {
-<<<<<<< HEAD
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-            "key": {
-              "ledger_key_nonce": {
-                "nonce": 4837995959683129791
-              }
-            },
-            "durability": "temporary"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-                "key": {
-                  "ledger_key_nonce": {
-                    "nonce": 4837995959683129791
-                  }
-                },
-                "durability": "temporary",
-                "val": "void"
-              }
-            },
-            "ext": "v0"
-          },
-          6311999
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-=======
->>>>>>> main
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
