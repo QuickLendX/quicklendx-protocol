@@ -340,7 +340,7 @@ fn test_rounding_boundary_cases() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
+    let _admin = setup_admin(&env, &client);
 
     // Test exact boundaries where fee should just cross integer threshold
     // At 2% (200 bps), fee = profit * 200 / 10000 = profit / 50
@@ -371,7 +371,7 @@ fn test_no_dust_comprehensive() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
+    let _admin = setup_admin(&env, &client);
 
     // Test many combinations to ensure no dust ever
     let investments = vec![100, 1000, 10000, 123456, 999999];
@@ -587,7 +587,7 @@ fn test_fee_config_max_boundary() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
+    let _admin = setup_admin(&env, &client);
 
     // Max allowed: 10% (1000 bps)
     client.set_platform_fee(&1000);
@@ -601,7 +601,7 @@ fn test_fee_config_exceeds_max() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
+    let _admin = setup_admin(&env, &client);
 
     // Attempt to set > 10% should fail
     let result = client.try_set_platform_fee(&1200);
@@ -765,4 +765,424 @@ fn test_calculate_with_fee_bps_normalizes_negative_amounts() {
     assert_eq!(platform_fee, 20);
     assert_eq!(investor_return, 980);
     assert_eq!(investor_return + platform_fee, 1000);
+}
+
+// ============================================================================
+// Additional Edge Case Tests
+// ============================================================================
+
+#[test]
+fn test_dust_prevention_various_amounts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Test various amounts to ensure no dust is created
+    let test_cases = vec![
+        (100, 101),
+        (100, 150),
+        (100, 200),
+        (1000, 1001),
+        (1000, 1100),
+        (10000, 10001),
+        (10000, 11000),
+        (999999, 1000000),
+        (1000000, 1000001),
+    ];
+
+    for (investment, payment) in test_cases {
+        let (investor_return, platform_fee) = client.calculate_profit(&investment, &payment);
+        assert_eq!(
+            investor_return + platform_fee,
+            payment,
+            "Dust detected for investment={}, payment={}",
+            investment,
+            payment
+        );
+    }
+}
+
+#[test]
+fn test_payment_equals_investment_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Exact payment = investment (no profit, no loss)
+    let investment_amount = 5_000_000;
+    let payment_amount = 5_000_000;
+
+    let (investor_return, platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
+
+    assert_eq!(platform_fee, 0, "No fee when no profit");
+    assert_eq!(
+        investor_return, payment_amount,
+        "Investor gets full payment"
+    );
+    assert_eq!(investor_return + platform_fee, payment_amount);
+}
+
+#[test]
+fn test_one_stroop_profit() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Smallest possible profit: 1 stroop
+    let investment_amount = 1_000_000;
+    let payment_amount = 1_000_001;
+
+    let (investor_return, platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
+
+    // 2% of 1 = 0.02 -> rounds down to 0
+    assert_eq!(platform_fee, 0);
+    assert_eq!(investor_return, 1_000_001);
+    assert_eq!(investor_return + platform_fee, payment_amount);
+}
+
+#[test]
+fn test_minimum_fee_threshold() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Find minimum profit that generates 1 stroop fee at 2%
+    // fee = profit * 200 / 10000 >= 1
+    // profit >= 10000 / 200 = 50
+    let investment_amount = 1_000_000;
+    let payment_amount = 1_000_050; // Profit of 50
+
+    let (investor_return, platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
+
+    assert_eq!(platform_fee, 1, "Minimum profit for 1 stroop fee");
+    assert_eq!(investor_return, 1_000_049);
+    assert_eq!(investor_return + platform_fee, payment_amount);
+}
+
+#[test]
+fn test_fee_just_below_threshold() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Profit of 49 should round down to 0 fee
+    let investment_amount = 1_000_000;
+    let payment_amount = 1_000_049;
+
+    let (investor_return, platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
+
+    assert_eq!(platform_fee, 0, "Just below threshold rounds to 0");
+    assert_eq!(investor_return, 1_000_049);
+    assert_eq!(investor_return + platform_fee, payment_amount);
+}
+
+#[test]
+fn test_maximum_safe_i128_values() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Test with very large but safe values (well below i128::MAX)
+    let investment_amount = 1_000_000_000_000_000i128; // 1 quadrillion
+    let payment_amount = 1_100_000_000_000_000i128; // 10% profit
+
+    let (investor_return, platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
+
+    // Profit: 100 trillion, Fee: 2% = 2 trillion
+    assert_eq!(platform_fee, 2_000_000_000_000);
+    assert_eq!(investor_return, 1_098_000_000_000_000);
+    assert_eq!(investor_return + platform_fee, payment_amount);
+}
+
+#[test]
+fn test_treasury_split_all_edge_cases() {
+    // Test 0% treasury share
+    let (treasury, remaining) = calculate_treasury_split(1000, 0);
+    assert_eq!(treasury, 0);
+    assert_eq!(remaining, 1000);
+    assert_eq!(treasury + remaining, 1000);
+
+    // Test 100% treasury share
+    let (treasury, remaining) = calculate_treasury_split(1000, 10000);
+    assert_eq!(treasury, 1000);
+    assert_eq!(remaining, 0);
+    assert_eq!(treasury + remaining, 1000);
+
+    // Test 50% treasury share
+    let (treasury, remaining) = calculate_treasury_split(1000, 5000);
+    assert_eq!(treasury, 500);
+    assert_eq!(remaining, 500);
+    assert_eq!(treasury + remaining, 1000);
+
+    // Test odd amount with 50% share (rounding)
+    let (treasury, remaining) = calculate_treasury_split(1001, 5000);
+    assert_eq!(treasury, 500); // floor(1001 * 5000 / 10000) = 500
+    assert_eq!(remaining, 501); // 1001 - 500 = 501
+    assert_eq!(treasury + remaining, 1001);
+
+    // Test 1% treasury share
+    let (treasury, remaining) = calculate_treasury_split(10000, 100);
+    assert_eq!(treasury, 100); // 1% of 10000
+    assert_eq!(remaining, 9900);
+    assert_eq!(treasury + remaining, 10000);
+
+    // Test 99% treasury share
+    let (treasury, remaining) = calculate_treasury_split(10000, 9900);
+    assert_eq!(treasury, 9900); // 99% of 10000
+    assert_eq!(remaining, 100);
+    assert_eq!(treasury + remaining, 10000);
+}
+
+#[test]
+fn test_treasury_split_with_small_fees() {
+    // Test treasury split with very small fees
+    let (treasury, remaining) = calculate_treasury_split(1, 5000);
+    assert_eq!(treasury, 0); // floor(1 * 5000 / 10000) = 0
+    assert_eq!(remaining, 1);
+    assert_eq!(treasury + remaining, 1);
+
+    let (treasury, remaining) = calculate_treasury_split(2, 5000);
+    assert_eq!(treasury, 1); // floor(2 * 5000 / 10000) = 1
+    assert_eq!(remaining, 1);
+    assert_eq!(treasury + remaining, 2);
+
+    let (treasury, remaining) = calculate_treasury_split(3, 5000);
+    assert_eq!(treasury, 1); // floor(3 * 5000 / 10000) = 1
+    assert_eq!(remaining, 2);
+    assert_eq!(treasury + remaining, 3);
+}
+
+#[test]
+fn test_treasury_split_negative_fee() {
+    // Negative fee should return (0, 0)
+    let (treasury, remaining) = calculate_treasury_split(-100, 5000);
+    assert_eq!(treasury, 0);
+    assert_eq!(remaining, 0);
+}
+
+#[test]
+fn test_treasury_split_over_max_share() {
+    // Share > 10000 (100%) should give all to treasury
+    let (treasury, remaining) = calculate_treasury_split(1000, 15000);
+    assert_eq!(treasury, 1000);
+    assert_eq!(remaining, 0);
+}
+
+#[test]
+fn test_validate_inputs_edge_cases() {
+    // Valid: zero investment, zero payment
+    assert!(validate_calculation_inputs(0, 0).is_ok());
+
+    // Valid: zero investment, positive payment
+    assert!(validate_calculation_inputs(0, 100).is_ok());
+
+    // Valid: positive investment, zero payment
+    assert!(validate_calculation_inputs(100, 0).is_ok());
+
+    // Invalid: negative investment
+    assert!(validate_calculation_inputs(-1, 100).is_err());
+
+    // Invalid: negative payment
+    assert!(validate_calculation_inputs(100, -1).is_err());
+
+    // Invalid: both negative
+    assert!(validate_calculation_inputs(-100, -100).is_err());
+}
+
+#[test]
+fn test_profit_with_various_fee_rates() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    let investment_amount = 10_000;
+    let payment_amount = 11_000; // 1000 profit
+
+    // Test various fee rates (max allowed is 1000 bps = 10%)
+    let fee_rates = vec![
+        (0, 0),      // 0% fee
+        (50, 5),     // 0.5% fee
+        (100, 10),   // 1% fee
+        (200, 20),   // 2% fee (default)
+        (500, 50),   // 5% fee
+        (750, 75),   // 7.5% fee
+        (1000, 100), // 10% fee (max)
+    ];
+
+    for (fee_bps, expected_fee) in fee_rates {
+        client.set_platform_fee(&fee_bps);
+        let (investor_return, platform_fee) =
+            client.calculate_profit(&investment_amount, &payment_amount);
+
+        assert_eq!(
+            platform_fee, expected_fee,
+            "Fee mismatch for rate {}bps",
+            fee_bps
+        );
+        assert_eq!(
+            investor_return + platform_fee,
+            payment_amount,
+            "Dust detected for rate {}bps",
+            fee_bps
+        );
+    }
+}
+
+#[test]
+fn test_sequential_calculations_consistency() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let investment_amount = 5_000;
+    let payment_amount = 5_500;
+
+    // Calculate multiple times - should be consistent
+    let result1 = client.calculate_profit(&investment_amount, &payment_amount);
+    let result2 = client.calculate_profit(&investment_amount, &payment_amount);
+    let result3 = client.calculate_profit(&investment_amount, &payment_amount);
+
+    assert_eq!(result1, result2, "Results should be consistent");
+    assert_eq!(result2, result3, "Results should be consistent");
+}
+
+#[test]
+fn test_profit_calculation_symmetry() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Test that profit calculation is symmetric for same profit amount
+    let test_cases = vec![
+        (1000, 1100), // 100 profit
+        (2000, 2100), // 100 profit
+        (5000, 5100), // 100 profit
+    ];
+
+    let mut fees = vec![];
+    for (investment, payment) in test_cases {
+        let (_, platform_fee) = client.calculate_profit(&investment, &payment);
+        fees.push(platform_fee);
+    }
+
+    // All should have same fee since profit is same
+    assert_eq!(fees[0], fees[1], "Same profit should yield same fee");
+    assert_eq!(fees[1], fees[2], "Same profit should yield same fee");
+}
+
+#[test]
+fn test_zero_investment_edge_case() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Zero investment, positive payment (all profit)
+    let investment_amount = 0;
+    let payment_amount = 1000;
+
+    let (investor_return, platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
+
+    // All payment is profit, so fee = 2% of 1000 = 20
+    assert_eq!(platform_fee, 20);
+    assert_eq!(investor_return, 980);
+    assert_eq!(investor_return + platform_fee, payment_amount);
+}
+
+#[test]
+fn test_payment_one_less_than_investment() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Payment is 1 less than investment (minimal loss)
+    let investment_amount = 10_000;
+    let payment_amount = 9_999;
+
+    let (investor_return, platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
+
+    assert_eq!(platform_fee, 0, "No fee on loss");
+    assert_eq!(investor_return, 9_999, "Investor gets payment amount");
+}
+
+#[test]
+fn test_payment_one_more_than_investment() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Payment is 1 more than investment (minimal profit)
+    let investment_amount = 10_000;
+    let payment_amount = 10_001;
+
+    let (investor_return, platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
+
+    // 2% of 1 = 0.02 -> rounds down to 0
+    assert_eq!(platform_fee, 0);
+    assert_eq!(investor_return, 10_001);
+    assert_eq!(investor_return + platform_fee, payment_amount);
+}
+
+#[test]
+fn test_rounding_at_various_profit_levels() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Test rounding behavior at different profit levels
+    let base_investment = 100_000;
+
+    // Profit levels that test rounding boundaries
+    let profit_levels = vec![
+        49,  // Just below minimum fee threshold
+        50,  // Minimum for 1 stroop fee
+        51,  // Just above minimum
+        99,  // Just below 2 stroop fee
+        100, // Exactly 2 stroop fee
+        101, // Just above 2 stroop fee
+        149, // Just below 3 stroop fee
+        150, // Exactly 3 stroop fee
+    ];
+
+    for profit in profit_levels {
+        let payment = base_investment + profit;
+        let (investor_return, platform_fee) = client.calculate_profit(&base_investment, &payment);
+
+        // Verify no dust
+        assert_eq!(
+            investor_return + platform_fee,
+            payment,
+            "Dust detected at profit level {}",
+            profit
+        );
+
+        // Verify fee is correct (2% of profit, rounded down)
+        let expected_fee = (profit * 200) / 10000;
+        assert_eq!(
+            platform_fee, expected_fee,
+            "Fee mismatch at profit level {}",
+            profit
+        );
+    }
 }

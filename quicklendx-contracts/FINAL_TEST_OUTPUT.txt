@@ -1,0 +1,1686 @@
+warning: unused import: `BytesN as _`
+  --> src/test_dispute.rs:15:31
+   |
+15 |     testutils::{Address as _, BytesN as _},
+   |                               ^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `PlatformFeeConfig` and `PlatformFee`
+  --> src/test_storage.rs:18:22
+   |
+18 | use crate::profits::{PlatformFee, PlatformFeeConfig};
+   |                      ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ConfigStorage`
+  --> src/test_storage.rs:20:17
+   |
+20 |     BidStorage, ConfigStorage, Indexes, InvestmentStorage, InvoiceStorage, StorageKeys,
+   |                 ^^^^^^^^^^^^^
+
+warning: unused import: `crate::verification::BusinessVerificationStatus`
+  --> src/test/test_invoice.rs:11:5
+   |
+11 | use crate::verification::BusinessVerificationStatus;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test/test_invoice.rs:13:31
+   |
+13 |     testutils::{Address as _, Ledger},
+   |                               ^^^^^^
+
+warning: unused import: `InvoiceStatus`
+ --> src/test/test_invoice_categories.rs:2:39
+  |
+2 | use crate::invoice::{InvoiceCategory, InvoiceStatus};
+  |                                       ^^^^^^^^^^^^^
+
+warning: unused imports: `AnalyticsStorage`, `FinancialMetrics`, and `PlatformMetrics`
+  --> src/test/test_analytics.rs:14:26
+   |
+14 |     AnalyticsCalculator, AnalyticsStorage, FinancialMetrics, PlatformMetrics, TimePeriod,
+   |                          ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test_partial_payments.rs:13:31
+   |
+13 |     testutils::{Address as _, Ledger},
+   |                               ^^^^^^
+
+warning: unused import: `crate::bid::BidStatus`
+ --> src/test_queries.rs:3:5
+  |
+3 | use crate::bid::BidStatus;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+ --> src/test_queries.rs:6:31
+  |
+6 |     testutils::{Address as _, Ledger},
+  |                               ^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test_investor_kyc.rs:17:35
+   |
+17 |         testutils::{Address as _, Ledger},
+   |                                   ^^^^^^
+
+warning: unused import: `crate::errors::QuickLendXError`
+ --> src/test_limit.rs:3:5
+  |
+3 | use crate::errors::QuickLendXError;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:361:24
+    |
+361 |     let currency = env.register_stellar_asset_contract(token_admin);
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:932:24
+    |
+932 |     let currency = env.register_stellar_asset_contract(token_admin);
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:988:24
+    |
+988 |     let currency = env.register_stellar_asset_contract(token_admin);
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1040:24
+     |
+1040 |     let currency = env.register_stellar_asset_contract(token_admin);
+     |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1097:24
+     |
+1097 |     let currency = env.register_stellar_asset_contract(token_admin);
+     |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1179:24
+     |
+1179 |     let currency = env.register_stellar_asset_contract(token_admin);
+     |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+ --> src/test_currency.rs:9:31
+  |
+9 |     testutils::{Address as _, Ledger},
+  |                               ^^^^^^
+
+warning: unused variable: `result`
+   --> src/test_cancel_refund.rs:552:9
+    |
+552 |     let result = client.try_cancel_invoice(&invoice_id);
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `result`
+   --> src/test_cancel_refund.rs:575:9
+    |
+575 |     let result = client.try_cancel_invoice(&invoice_id);
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `invoice_id_3`
+   --> src/test_dispute.rs:465:9
+    |
+465 |     let invoice_id_3 = create_test_invoice(&env, &client, &business, 200_000);
+    |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_invoice_id_3`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:159:10
+    |
+159 |     let (env, client, _admin) = setup_test();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:290:9
+    |
+290 |     let env = Env::default();
+    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:335:10
+    |
+335 |     let (env, client, _admin) = setup_test();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `business`
+   --> src/test/test_invoice.rs:451:9
+    |
+451 |     let business = setup_verified_business(&env, &client);
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `other_user`
+   --> src/test/test_invoice.rs:956:9
+    |
+956 |     let other_user = Address::generate(&env);
+    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_other_user`
+
+warning: unused variable: `non_admin`
+   --> src/test/test_invoice.rs:988:9
+    |
+988 |     let non_admin = Address::generate(&env);
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `env`
+   --> src/test/test_invoice_categories.rs:148:10
+    |
+148 |     let (env, client, _admin) = setup_env();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `token_client`
+   --> src/test.rs:362:9
+    |
+362 |     let token_client = token::Client::new(&env, &currency);
+    |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_token_client`
+
+warning: unused variable: `admin`
+  --> src/test_fees.rs:21:65
+   |
+21 | fn setup_investor(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
+   |                                                                 ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_fees.rs:73:9
+   |
+73 |     let admin = setup_admin(&env, &client);
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_fees.rs:103:9
+    |
+103 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_fees.rs:195:9
+    |
+195 |     let non_admin = Address::generate(&env);
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `admin`
+  --> src/test_audit.rs:37:5
+   |
+37 |     admin: &Address,
+   |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_audit.rs:111:23
+    |
+111 |     let (env, client, admin, business) = setup();
+    |                       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_currency.rs:166:23
+    |
+166 |     let (env, client, admin) = setup();
+    |                       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `token_client`
+  --> src/test_events.rs:91:9
+   |
+91 |     let token_client = token::Client::new(&env, &currency);
+   |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_token_client`
+
+warning: unused variable: `invoice2`
+   --> src/test_default.rs:418:9
+    |
+418 |     let invoice2 = client.get_invoice(&invoice2_id);
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_invoice2`
+
+warning: unused variable: `admin`
+  --> src/test_partial_payments.rs:81:5
+   |
+81 |     admin: &Address,
+   |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `actor`
+   --> src/test_queries.rs:242:9
+    |
+242 |     let actor = Address::generate(&env);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `filter_inv1`
+   --> src/test_queries.rs:288:9
+    |
+288 |     let filter_inv1 = AuditQueryFilter {
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_filter_inv1`
+
+warning: unused variable: `filter_created`
+   --> src/test_queries.rs:311:9
+    |
+311 |     let filter_created = AuditQueryFilter {
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_filter_created`
+
+warning: unused variable: `contract_id`
+   --> src/test_insurance.rs:147:23
+    |
+147 |     let (env, client, contract_id) = setup();
+    |                       ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_contract_id`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:102:27
+    |
+102 |         let (env, client, admin) = setup();
+    |                           ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_investor_kyc.rs:179:13
+    |
+179 |         let non_admin = Address::generate(&env);
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `result`
+   --> src/test_investor_kyc.rs:192:13
+    |
+192 |         let result = client.try_verify_investor(&investor, &investment_limit);
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:199:27
+    |
+199 |         let (env, client, admin) = setup();
+    |                           ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `business`
+   --> src/test_investor_kyc.rs:482:13
+    |
+482 |         let business = Address::generate(&env);
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `high_risk`
+   --> src/test_investor_kyc.rs:610:13
+    |
+610 |         let high_risk = client.get_investors_by_risk_level(&InvestorRiskLevel::High);
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_high_risk`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:752:27
+    |
+752 |         let (env, client, admin) = setup();
+    |                           ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:40:65
+   |
+40 | fn setup_investor(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
+   |                                                                 ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:80:9
+   |
+80 |     let admin = setup_admin(&env, &client);
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:103:9
+    |
+103 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:126:9
+    |
+126 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:301:9
+    |
+301 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:343:9
+    |
+343 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:374:9
+    |
+374 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:590:9
+    |
+590 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:604:9
+    |
+604 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: function `make_breakdown` is never used
+   --> src/profits.rs:491:8
+    |
+491 |     fn make_breakdown(
+    |        ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `get_payment_count` is never used
+   --> src/settlement.rs:276:8
+    |
+276 | pub fn get_payment_count(env: &Env, invoice_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: function `get_payment_records` is never used
+   --> src/settlement.rs:295:8
+    |
+295 | pub fn get_payment_records(
+    |        ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `ConfigStorage` is never constructed
+   --> src/storage.rs:472:12
+    |
+472 | pub struct ConfigStorage;
+    |            ^^^^^^^^^^^^^
+
+warning: associated functions `set_platform_fees` and `get_platform_fees` are never used
+   --> src/storage.rs:476:12
+    |
+474 | impl ConfigStorage {
+    | ------------------ associated functions in this implementation
+475 |     /// Store platform fee configuration
+476 |     pub fn set_platform_fees(env: &Env, config: &PlatformFeeConfig) {
+    |            ^^^^^^^^^^^^^^^^^
+...
+483 |     pub fn get_platform_fees(env: &Env) -> Option<PlatformFeeConfig> {
+    |            ^^^^^^^^^^^^^^^^^
+
+warning: associated function `is_business_verified` is never used
+   --> src/verification.rs:121:12
+    |
+ 69 | impl BusinessVerificationStorage {
+    | -------------------------------- associated function in this implementation
+...
+121 |     pub fn is_business_verified(env: &Env, business: &Address) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: associated constants `INVESTOR_HISTORY_KEY` and `INVESTOR_ANALYTICS_KEY` are never used
+   --> src/verification.rs:252:11
+    |
+247 | impl InvestorVerificationStorage {
+    | -------------------------------- associated constants in this implementation
+...
+252 |     const INVESTOR_HISTORY_KEY: &'static str = "investor_history";
+    |           ^^^^^^^^^^^^^^^^^^^^
+253 |     #[cfg(test)]
+254 |     const INVESTOR_ANALYTICS_KEY: &'static str = "investor_analytics";
+    |           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `require_business_verification` is never used
+   --> src/verification.rs:623:8
+    |
+623 | pub fn require_business_verification(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_trail_creation` is never used
+    --> src/test.rs:2142:4
+     |
+2142 | fn test_audit_trail_creation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_integrity_validation` is never used
+    --> src/test.rs:2186:4
+     |
+2186 | fn test_audit_integrity_validation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_query_functionality` is never used
+    --> src/test.rs:2225:4
+     |
+2225 | fn test_audit_query_functionality() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_statistics` is never used
+    --> src/test.rs:2294:4
+     |
+2294 | fn test_audit_statistics() {
+     |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_create_dispute` is never used
+    --> src/test.rs:2818:4
+     |
+2818 | fn test_create_dispute() {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_create_dispute_as_investor` is never used
+    --> src/test.rs:2863:4
+     |
+2863 | fn test_create_dispute_as_investor() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_unauthorized_dispute_creation` is never used
+    --> src/test.rs:2912:4
+     |
+2912 | fn test_unauthorized_dispute_creation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_duplicate_dispute_prevention` is never used
+    --> src/test.rs:2947:4
+     |
+2947 | fn test_duplicate_dispute_prevention() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_dispute_under_review` is never used
+    --> src/test.rs:2987:4
+     |
+2987 | fn test_dispute_under_review() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_resolve_dispute` is never used
+    --> src/test.rs:3030:4
+     |
+3030 | fn test_resolve_dispute() {
+     |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_get_invoices_with_disputes` is never used
+    --> src/test.rs:3088:4
+     |
+3088 | fn test_get_invoices_with_disputes() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_get_invoices_by_dispute_status` is never used
+    --> src/test.rs:3141:4
+     |
+3141 | fn test_get_invoices_by_dispute_status() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_dispute_validation` is never used
+    --> src/test.rs:3200:4
+     |
+3200 | fn test_dispute_validation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `setup_business` is never used
+  --> src/test_fees.rs:13:4
+   |
+13 | fn setup_business(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
+   |    ^^^^^^^^^^^^^^
+
+warning: function `setup_business` is never used
+  --> src/test_profit_fee_formula.rs:32:4
+   |
+32 | fn setup_business(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
+   |    ^^^^^^^^^^^^^^
+
+warning: function `setup_investor` is never used
+  --> src/test_profit_fee_formula.rs:40:4
+   |
+40 | fn setup_investor(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
+   |    ^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2583:13
+     |
+2583 |     assert!(stats.total_sent >= 0);
+     |             ^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_comparisons)]` on by default
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2584:13
+     |
+2584 |     assert!(stats.total_delivered >= 0);
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2585:13
+     |
+2585 |     assert!(stats.total_read >= 0);
+     |             ^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2586:13
+     |
+2586 |     assert!(stats.total_failed >= 0);
+     |             ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2681:13
+     |
+2681 |     assert!(overdue_count >= 0);
+     |             ^^^^^^^^^^^^^^^^^^
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/test/test_analytics.rs:26:24
+   |
+26 | fn setup_contract(env: &Env) -> (QuickLendXContractClient, Address, Address) {
+   |                        ^^^^      ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                        |
+   |                        the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+   = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+   |
+26 | fn setup_contract(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address) {
+   |                                                          ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/test_events.rs:25:24
+   |
+25 | fn setup_contract(env: &Env) -> (QuickLendXContractClient, Address, Address) {
+   |                        ^^^^      ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                        |
+   |                        the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+25 | fn setup_contract(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address) {
+   |                                                          ++++
+
+warning: `quicklendx-contracts` (lib test) generated 91 warnings (run `cargo fix --lib -p quicklendx-contracts --tests` to apply 55 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+     Running unittests src/lib.rs (target/debug/deps/quicklendx_contracts-bbe347640a360925)
+
+running 631 tests
+test profits::tests::test_rounding_down_small_profit ... ok
+test profits::tests::test_rounding_just_below_boundary ... ok
+test profits::tests::test_basic_profit_calculation ... ok
+test profits::tests::test_exact_payment_no_profit ... ok
+test profits::tests::test_overpayment_high_profit ... ok
+test profits::tests::test_rounding_boundary ... ok
+test profits::tests::test_large_amounts ... ok
+test profits::tests::test_max_fee ... ok
+test profits::tests::test_treasury_split_basic ... ok
+test profits::tests::test_breakdown_no_profit ... ok
+test profits::tests::test_breakdown_complete ... ok
+test profits::tests::test_treasury_split_full_share ... ok
+test profits::tests::test_treasury_split_rounding ... ok
+test profits::tests::test_treasury_split_uneven ... ok
+test profits::tests::test_treasury_split_zero_fee ... ok
+test profits::tests::test_treasury_split_zero_share ... ok
+test profits::tests::test_underpayment_loss ... ok
+test profits::tests::test_verify_no_dust_negative ... ok
+test profits::tests::test_verify_no_dust_positive ... ok
+test profits::tests::test_zero_fee ... ok
+test profits::tests::test_zero_investment ... ok
+test profits::tests::test_zero_payment ... ok
+test profits::tests::test_validate_inputs_negative ... ok
+test profits::tests::test_validate_inputs_valid ... ok
+test profits::tests::test_various_fee_percentages ... ok
+test test::test_analytics::test_financial_metrics_empty_data ... ok
+test test::test_analytics::test_investor_report_empty ... ok
+test test::test_analytics::test_business_report_empty ... ok
+test test::test_analytics::test_investor_report_stored_and_retrievable ... ok
+test test::test_analytics::test_performance_metrics_empty_data ... ok
+test test::test_analytics::test_period_dates_all_periods ... ok
+test test::test_analytics::test_period_dates_all_time ... ok
+test test::test_analytics::test_analytics_summary_returns_tuple ... ok
+test test::test_analytics::test_performance_metrics_storage_round_trip ... ok
+test test::test_analytics::test_financial_metrics_period_boundary ... ok
+test test::test_analytics::test_platform_metrics_empty_data ... ok
+test test::test_analytics::test_update_performance_metrics_requires_admin ... ok
+test test::test_analytics::test_update_platform_metrics_requires_admin ... ok
+test test::test_analytics::test_platform_metrics_storage_round_trip ... ok
+test test::test_analytics::test_business_report_stored_and_retrievable ... ok
+test test::test_analytics::test_user_behavior_new_user ... ok
+test test::test_analytics::test_financial_metrics_with_invoices_all_time ... ok
+test test::test_add_invoice_rating ... ok
+test test::test_archive_backup ... ok
+test test::test_add_invoice_rating_validation ... ok
+test test::test_analytics::test_update_user_behavior_metrics ... ok
+test test::test_analytics::test_performance_metrics_with_invoices ... ok
+test test::test_analytics::test_business_report_with_invoices ... ok
+test test::test_analytics::test_user_behavior_with_invoices ... ok
+test test::test_analytics::test_platform_metrics_with_invoices ... ok
+test test::test_backup_cleanup ... ok
+test test::test_backup_validation ... ok
+test test::test_analytics::test_platform_metrics_after_status_changes ... ok
+test test::test_bid_expiration_cleanup ... ok
+test test::test_duplicate_rating_prevention ... ok
+test test::test_cancel_invoice_pending ... ok
+test test::test_escrow_error_cases ... ok
+test test::test_cancel_invoice_verified ... ok
+test test::test_complete_invoice_lifecycle_with_cancellation ... ok
+test test::test_create_and_restore_backup ... ok
+test test::test_cancel_invoice_funded - should panic ... ok
+test test::test_bid_validation_rules ... ok
+test test::test_bid_ranking_and_filters ... ok
+test test::test_get_invoices_by_status ... ok
+test test::test_get_available_invoices ... ok
+test test::test_basic_readme_queries ... ok
+test test::test_escrow_creation_on_bid_acceptance ... ok
+test test::test_get_business_invoices ... ok
+test test::test_get_verification_lists ... ok
+test test::test_escrow_double_operation_prevention ... ok
+test test::test_invoice::test_invoice_creation_invalid_amount_negative ... ok
+test test::test_invoice::test_invoice_creation_invalid_amount_zero ... ok
+test test::test_invoice::test_invoice_creation_invalid_description_empty ... ok
+test test::test_invoice::test_invoice_creation_invalid_due_date_current ... ok
+test test::test_invoice::test_invoice_creation_invalid_due_date_past ... ok
+test test::test_get_bids_for_invoice ... ok
+test test::test_invoice::test_invoice_creation_invalid_tag_empty ... ok
+test test::test_invoice::test_invoice_creation_invalid_tag_limit_exceeded ... ok
+test test::test_invoice::test_invoice_creation_invalid_non_whitelisted_currency ... ok
+test test::test_invoice::test_invoice_creation_invalid_tag_too_long ... ok
+test test::test_escrow_refund ... ok
+test test::test_escrow_release_on_verification ... ok
+test test::test_escrow_status_tracking ... ok
+test test::test_invoice::test_invoice_creation_valid ... ok
+test test::test_invoice::test_invoice_cannot_verify_already_verified ... ok
+test test::test_invoice::test_invoice_creation_valid_tags ... ok
+test test::test_invoice::test_invoice_far_future_due_date ... ok
+test test::test_invoice::test_invoice_business_cannot_accept_own_bid ... ok
+test test::test_investor_verification_enforced ... ok
+test test::test_invoice::test_invoice_invalid_payment_amount_zero ... ok
+test test::test_invoice::test_invoice_invalid_payment_amount_negative ... ok
+test test::test_invoice::test_invoice_metadata_update_requires_business_owner ... ok
+test test::test_invoice::test_invoice_large_amount ... ok
+test test::test_invoice::test_invoice_minimum_amount ... ok
+test test::test_invoice::test_invoice_not_found ... ok
+test test::test_invoice::test_invoice_invalid_status_transition ... ok
+test test::test_get_invoices_by_status_cancelled ... ok
+test test::test_invoice::test_invoice_non_admin_cannot_update_status ... ok
+test test::test_invoice::test_invoice_non_owner_cannot_update_metadata ... ok
+test test::test_invoice::test_invoice_non_admin_cannot_verify ... ok
+test test::test_investment_insurance_lifecycle ... ok
+test test::test_invoice::test_invoice_full_lifecycle_with_status_assertions ... ok
+test test::test_invoice::test_invoice_overpayment_capped_at_100_percent ... ok
+test test::test_invoice::test_invoice_payment_progress_calculation ... ok
+test test::test_invoice::test_invoice_payment_tracking ... ok
+test test::test_invoice::test_invoice_multiple_invoices_same_business ... ok
+test test::test_invoice::test_invoice_rating_requires_funded_status ... ok
+test test::test_invoice::test_invoice_rating_invalid_value_too_high ... ok
+test test::test_invoice::test_invoice_rating_invalid_value_zero ... ok
+test test::test_invoice::test_invoice_rating_only_investor_can_rate ... ok
+test test::test_invoice::test_invoice_reject_cancel_defaulted_invoice ... ok
+test test::test_invoice::test_invoice_reject_update_to_pending_or_cancelled ... ok
+test test::test_invoice::test_invoice_creation_valid_categories ... ok
+test test::test_invoice::test_invoice_reject_cancel_paid_invoice ... ok
+test test::test_invoice::test_invoice_status_list_tracking ... ok
+test test::test_invoice::test_invoice_status_transition_pending_to_cancelled ... ok
+test test::test_invoice::test_invoice_status_transition_pending_to_verified ... ok
+test test::test_invoice::test_invoice_reject_cancel_funded_invoice ... ok
+test test::test_invoice::test_invoice_transition_defaulted_to_paid_behavior ... ok
+test test::test_invoice::test_invoice_transition_cancelled_to_verified_behavior ... ok
+test test::test_invoice::test_invoice_status_transition_funded_to_defaulted ... ok
+test test::test_invoice::test_invoice_status_transition_verified_to_cancelled ... ok
+test test::test_invoice::test_invoice_upload_requires_business_auth ... ok
+test test::test_invoice::test_invoice_upload_requires_business_verification ... ok
+test test::test_invoice::test_invoice_transition_pending_to_defaulted_behavior ... ok
+test test::test_invoice::test_invoice_status_transition_verified_to_funded ... ok
+test test::test_invoice::test_invoice_status_transition_funded_to_paid ... ok
+test test::test_invoice_categories::test_add_tag_to_nonexistent_invoice ... ok
+test test::test_invoice::test_invoice_verify_requires_admin ... ok
+test test::test_invoice::test_invoice_transition_pending_to_paid_behavior ... ok
+test test::test_invoice::test_invoice_transition_paid_to_funded_behavior ... ok
+test test::test_invoice_categories::test_get_invoices_by_category_empty ... ok
+test test::test_invoice_categories::test_add_invoice_tag ... ok
+test test::test_invoice_categories::test_get_invoices_by_tag_nonexistent ... ok
+test test::test_invoice::test_invoice_upload_verified_business_succeeds ... ok
+test test::test_invoice::test_invoice_transition_funded_to_verified_behavior ... ok
+test test::test_invoice::test_invoice_verify_admin_succeeds ... ok
+test test::test_invoice_categories::test_add_invoice_tag_business_auth ... ok
+test test::test_invoice_categories::test_remove_tag_from_nonexistent_invoice ... ok
+test test::test_invoice_categories::test_update_category_nonexistent_invoice ... ok
+test test::test_invoice_categories::test_add_multiple_tags ... ok
+test test::test_invoice_categories::test_complete_category_and_tag_workflow ... ok
+test test::test_invoice_categories::test_remove_invoice_tag ... ok
+test test::test_invoice_categories::test_remove_invoice_tag_business_auth ... ok
+test test::test_invoice_categories::test_update_invoice_category_business_auth ... ok
+test test::test_invoice_categories::test_update_invoice_category ... ok
+test test::test_invoice_count_functions ... ok
+test test::test_invoice_categories::test_get_invoices_by_category_services ... ok
+test test::test_invoice_not_found ... ok
+test test::test_kyc_already_pending ... ok
+test test::test_invoice_categories::test_get_invoices_by_tag_single_tag ... ok
+test test::test_kyc_already_verified ... ok
+test test::test_invoice_categories::test_get_invoices_by_category_all_categories ... ok
+test test::test_invoice_categories::test_get_invoices_by_tags_multiple ... ok
+test test::test_invoice_metadata_validation ... ok
+test test::test_invoice_categories::test_get_invoices_by_category_with_status_filter ... ok
+test test::test_notification_preferences_default ... ok
+test test::test_kyc_resubmission_after_rejection ... ok
+test test::test_invoice_lifecycle ... ok
+test test::test_platform_fee_configuration ... ok
+test test::test_multiple_ratings ... ok
+test test::test_query_investment_insurance_nonexistent_investment ... ok
+test test::test_notification_creation_on_invoice_upload ... ok
+test test::test_notification_delivery_status_update ... ok
+test test::test_notification_creation_on_invoice_status_change ... ok
+test test::test_rating_on_unfunded_invoice ... ok
+test test::test_notification_creation_on_bid_placement ... ok
+test test::test_rating_queries ... ok
+test test::test_reject_business ... ok
+test test::test_invoice_expiration_triggers_default ... ok
+test test::test_rating_statistics ... ok
+test test::test_invoice_lifecycle_counts ... ok
+test test::test_store_invoice ... ok
+test test::test_submit_kyc_application ... ok
+test test::test_unique_investment_id_generation ... ok
+test test::test_store_invoice_validation ... ok
+test test::test_overdue_invoice_notifications ... ok
+test test::test_update_notification_preferences ... ok
+test test::test_upload_invoice_not_verified_business - should panic ... ok
+test test::test_update_invoice_metadata_and_queries ... ok
+test test::test_query_investment_insurance_inactive_coverage ... ok
+test test::test_upload_invoice_invalid_amount - should panic ... ok
+test test::test_simple_bid_storage ... ok
+test test::test_upload_invoice_past_due_date - should panic ... ok
+test test::test_update_invoice_status ... ok
+test test::test_query_investment_insurance_premium_calculation ... ok
+test test::test_verification_unauthorized_access ... ok
+test test::test_verify_business ... ok
+test test::test_query_investment_insurance_single_coverage ... ok
+test test::test_unique_bid_id_generation ... ok
+test test::test_partial_payments_trigger_settlement ... ok
+test test_admin::test_admin::test_admin_can_set_platform_fee ... ok
+test test_admin::test_admin::test_get_admin_returns_none_before_init ... ok
+test test_admin::test_admin::test_get_current_admin_after_init_returns_address ... ok
+test test_admin::test_admin::test_get_current_admin_after_transfer_returns_new_address ... ok
+test test_admin::test_admin::test_get_current_admin_before_init_returns_none ... ok
+test test::test_user_notification_stats ... ok
+test test::test_upload_invoice_success ... ok
+test test::test_upload_invoice_requires_verification ... ok
+test test_admin::test_admin::test_initialize_admin_double_init_fails ... ok
+test test_admin::test_admin::test_initialize_admin_same_address_twice_fails ... ok
+test test_admin::test_admin::test_get_current_admin_tracks_full_lifecycle ... ok
+test test_admin::test_admin::test_is_admin_returns_false_before_init ... ok
+test test_admin::test_admin::test_initialize_admin_succeeds ... ok
+test test_admin::test_admin::test_require_admin_fails_before_init ... ok
+test test_admin::test_admin::test_initialize_emits_admin_set_event ... ok
+test test_admin::test_admin::test_is_admin_returns_false_for_different_address ... ok
+test test_admin::test_admin::test_is_admin_returns_true_for_current_admin ... ok
+test test_admin::test_admin::test_set_platform_fee_without_admin_fails ... ok
+test test_admin::test_admin::test_require_admin_succeeds_for_admin ... ok
+test test_admin::test_admin::test_require_admin_fails_for_non_admin ... ok
+test test_admin::test_admin::test_set_admin_rejects_non_admin_caller ... ok
+test test::test_verify_invoice_requires_admin ... ok
+test test_admin::test_admin::test_transfer_admin_without_init_fails ... ok
+test test_admin::test_admin::test_transfer_admin_to_self ... ok
+test test_admin::test_admin::test_transfer_admin_succeeds ... ok
+test test_admin::test_admin::test_transfer_admin_chain ... ok
+test test_admin::test_admin::test_transfer_emits_admin_transferred_event ... ok
+test test::test_verify_invoice_already_verified - should panic ... ok
+test test::test_verify_invoice_not_admin ... ok
+test test_audit::test_audit_get_entry_not_found - should panic ... ok
+test test::test_verify_invoice_success ... ok
+test test_admin::test_admin::test_admin_can_verify_invoice ... ok
+test test_audit::test_audit_integrity_no_invoice ... ok
+test test_admin::test_admin::test_verify_invoice_without_admin_fails ... ok
+test test::test_withdraw_bid ... ok
+test test_audit::test_audit_entry_contains_block_height ... ok
+test test_audit::test_audit_integrity_valid ... ok
+test test_audit::test_audit_invoice_created_and_trail ... ok
+test test_audit::test_audit_invoice_cancelled_produces_entry ... ok
+test test_audit::test_audit_bid_placed_produces_entry ... ok
+test test_audit::test_audit_entry_amount_tracking ... ok
+test test_audit::test_audit_bid_accepted_produces_entry ... ok
+test test_audit::test_audit_multiple_invoices_separate_trails ... ok
+test test_audit::test_audit_query_empty_results ... ok
+test test_audit::test_audit_escrow_created_produces_entry ... ok
+test test_audit::test_audit_operation_filter_specific ... ok
+test test_audit::test_audit_integrity_multiple_entries ... ok
+test test_audit::test_audit_query_by_operation ... ok
+test test_audit::test_audit_query_by_actor ... ok
+test test_audit::test_audit_query_time_range_boundaries ... ok
+test test_audit::test_audit_query_by_invoice ... ok
+test test_audit::test_audit_query_time_range ... ok
+test test_audit::test_audit_stats ... ok
+test test_audit::test_audit_stats_date_range ... ok
+test test_audit::test_audit_stats_operations_count ... ok
+test test_audit::test_audit_query_with_actor_filter ... ok
+test test_audit::test_audit_stats_unique_actors ... ok
+test test_audit::test_audit_trail_chronological_order ... ok
+test test_bid::test_bid_placement_non_verified_invoice_fails ... ok
+test test_bid::test_cancel_bid_nonexistent_returns_false ... ok
+test test_audit::test_audit_verify_produces_entry ... ok
+test test_bid::test_bid_placement_respects_investment_limit ... ok
+test test_audit::test_audit_query_limit_enforcement ... ok
+test test_bid::test_bid_expiration_and_cleanup ... ok
+test test_bid::test_bid_placement_verified_invoice_succeeds ... ok
+test test_bid::test_get_all_bids_by_investor_empty ... ok
+test test_bid::test_best_bid_excludes_withdrawn ... ok
+test test_bid::test_cancel_bid_on_cancelled_returns_false ... ok
+test test_bid::test_bid_withdrawal_by_owner_succeeds ... ok
+test test_bid::test_bid_withdrawal_only_placed_bids ... ok
+test test_bid::test_cancel_bid_on_withdrawn_returns_false ... ok
+test test_bid::test_set_investment_limit_non_admin_fails ... ok
+test test_bid::test_set_investment_limit_unverified_fails ... ok
+test test_bid::test_set_investment_limit_invalid_amount_fails ... ok
+test test_bid_ranking::test_compare_bids_by_expected_return_when_profit_equal ... ok
+test test_bid_ranking::test_compare_bids_by_profit ... ok
+test test_bid_ranking::test_compare_bids_equal ... ok
+test test_bid_ranking::test_compare_bids_tie_break_timestamp ... ok
+test test_bid::test_set_investment_limit_succeeds ... ok
+test test_bid::test_cancel_bid_succeeds ... ok
+test test_bid_ranking::test_empty_ranked_and_best_for_nonexistent_invoice ... ok
+test test_bid::test_bid_ranking_by_profit ... ok
+test test_bid::test_cancelled_bid_excluded_from_ranking ... ok
+test test_bid_ranking::test_empty_bid_list ... ok
+test test_business_kyc::test_business_can_submit_own_kyc ... ok
+test test_bid::test_get_all_bids_by_investor_cross_invoice ... ok
+test test_business_kyc::test_business_cannot_submit_kyc_for_another_business ... ok
+test test_business_kyc::test_get_business_verification_status_returns_none_for_unsubmitted ... ok
+test test_bid::test_updated_limit_enforced_in_bidding ... ok
+test test_bid::test_multiple_bids_indexing_and_query ... ok
+test test_business_kyc::test_kyc_already_pending_error ... ok
+test test_business_kyc::test_get_verification_lists ... ok
+test test_business_kyc::test_kyc_already_verified_error ... ok
+test test_business_kyc::test_kyc_data_integrity ... ok
+test test_business_kyc::test_kyc_submission_with_empty_data ... ok
+test test_business_kyc::test_kyc_resubmission_after_rejection ... ok
+test test_bid_ranking::test_single_bid_ranking_and_best_selection ... ok
+test test_business_kyc::test_multiple_businesses_independent_kyc_processes ... ok
+test test_business_kyc::test_only_admin_can_reject_business ... ok
+test test_business_kyc::test_only_admin_can_verify_business ... ok
+test test_bid::test_query_bids_by_investor ... ok
+test test_bid_ranking::test_equal_bids_tie_break_by_timestamp ... ok
+test test_business_kyc::test_unverified_business_cannot_upload_invoice ... ok
+test test_bid_ranking::test_ranked_excludes_withdrawn_and_expired ... ok
+test test_bid_ranking::test_best_bid_equals_first_ranked ... ok
+test test_business_kyc::test_timestamp_accuracy ... ok
+test test_business_kyc::test_complete_business_kyc_to_invoice_flow ... ok
+test test_bid_ranking::test_ranking_with_multiple_bids ... ok
+test test_cancel_refund::test_cancel_invoice_not_found ... ok
+test test_business_kyc::test_rejected_business_resubmission_flow ... ok
+test test_business_kyc::test_verified_business_can_upload_invoice ... ok
+test test_cancel_refund::test_cancel_invoice_defaulted_fails - should panic ... ok
+test test_cancel_refund::test_cancel_invoice_already_cancelled_fails - should panic ... ok
+test test_cancel_refund::test_cancel_invoice_admin_cannot_cancel ... ok
+test test_cancel_refund::test_cancel_invoice_multiple_times_fails ... ok
+test test_cancel_refund::test_cancel_invoice_non_owner_fails ... ok
+test test_cancel_refund::test_cancel_invoice_paid_fails - should panic ... ok
+test test_cancel_refund::test_cancel_invoice_pending_business_owner_only ... ok
+test test_cancel_refund::test_cancel_invoice_pending_emits_event ... ok
+test test_cancel_refund::test_cancel_invoice_pending_status ... ok
+test test_cancel_refund::test_cancel_invoice_updates_status_list ... ok
+test test_cancel_refund::test_cancel_invoice_verified_emits_event ... ok
+test test_cancel_refund::test_cancel_invoice_verified_status ... ok
+test test_cancel_refund::test_cancel_invoice_funded_fails - should panic ... ok
+test test_currency::test_add_currency_idempotent ... ok
+test test_cancel_refund::test_complete_lifecycle_with_cancellation ... ok
+test test_cancel_refund::test_cancel_invoice_funded_returns_error ... ok
+test test_currency::test_add_remove_currency_admin_only ... ok
+test test_currency::test_currency_count ... ok
+test test_currency::test_get_whitelisted_currencies_paged ... ok
+test test_currency::test_invoice_with_non_whitelisted_currency_fails_when_whitelist_set ... ok
+test test_currency::test_non_admin_cannot_add_currency ... ok
+test test_currency::test_non_admin_cannot_clear_currencies ... ok
+test test_currency::test_clear_currencies_allows_all ... ok
+test test_currency::test_non_admin_cannot_remove_currency ... ok
+test test_currency::test_non_admin_cannot_set_currencies ... ok
+test test_cancel_refund::test_refund_without_escrow_fails ... ok
+test test_currency::test_invoice_with_whitelisted_currency_succeeds ... ok
+test test_currency::test_set_currencies_deduplicates ... ok
+test test_currency::test_set_currencies_replaces_whitelist ... ok
+test test_currency::test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set ... ok
+test test_default::test_cannot_default_pending_invoice ... ok
+test test_cancel_refund::test_complete_lifecycle_with_refund ... ok
+test test_default::test_cannot_default_unfunded_invoice ... ok
+test test_default::test_cannot_default_paid_invoice ... FAILED
+test test_cancel_refund::test_refund_emits_event ... ok
+test test_cancel_refund::test_refund_escrow_after_funding ... ok
+test test_default::test_cannot_default_already_defaulted_invoice ... FAILED
+test test_cancel_refund::test_refund_idempotency ... ok
+test test_cancel_refund::test_refund_prevents_release ... ok
+test test_default::test_custom_grace_period ... FAILED
+test test_default::test_default_after_grace_period ... FAILED
+test test_default::test_default_exactly_at_grace_deadline ... FAILED
+test test_dispute::test_complete_dispute_lifecycle ... ok
+test test_default::test_default_investment_status_update ... FAILED
+test test_dispute::test_complete_dispute_lifecycle_with_queries ... ok
+test test_default::test_default_status_transition ... FAILED
+test test_default::test_zero_grace_period_defaults_immediately_after_due_date ... FAILED
+test test_dispute::test_create_dispute_by_business ... ok
+test test_default::test_no_default_before_grace_period ... FAILED
+test test_default::test_default_uses_default_grace_period_when_none_provided ... FAILED
+test test_default::test_multiple_invoices_default_handling ... FAILED
+test test_dispute::test_create_dispute_duplicate ... ok
+test test_dispute::test_create_dispute_empty_evidence ... ok
+test test_dispute::test_create_dispute_nonexistent_invoice ... ok
+test test_dispute::test_create_dispute_empty_reason ... ok
+test test_dispute::test_create_dispute_evidence_too_long ... ok
+test test_dispute::test_create_dispute_reason_too_long ... ok
+test test_dispute::test_create_dispute_unauthorized ... ok
+test test_dispute::test_create_dispute_reason_boundary_min ... ok
+test test_dispute::test_create_dispute_reason_boundary_max ... ok
+test test_dispute::test_get_invoices_by_dispute_status_resolved ... ok
+test test_dispute::test_put_dispute_under_review_requires_admin ... ok
+test test_dispute::test_put_under_review_invalid_transition ... ok
+test test_dispute::test_put_resolved_dispute_under_review_fails ... ok
+test test_dispute::test_get_invoices_by_dispute_status_under_review ... ok
+test test_dispute::test_get_invoices_by_dispute_status_none ... ok
+test test_dispute::test_get_invoices_by_dispute_status_disputed ... ok
+test test_dispute::test_get_invoices_with_disputes ... ok
+test test_dispute::test_multiple_disputes_different_invoices ... ok
+test test_emergency_withdraw::test_cancel_clears_pending ... ok
+test test_emergency_withdraw::test_cancel_prevents_execute ... ok
+test test_emergency_withdraw::test_cancel_without_pending_fails ... ok
+test test_dispute::test_query_dispute_none_exists ... ok
+test test_dispute::test_put_under_review_status_transition ... ok
+test test_emergency_withdraw::test_execute_before_timelock_fails ... ok
+test test_emergency_withdraw::test_execute_without_pending_fails ... ok
+test test_dispute::test_resolve_dispute_invalid_transition ... ok
+test test_dispute::test_resolve_dispute_empty_resolution ... ok
+test test_emergency_withdraw::test_initiate_zero_amount_fails ... ok
+test test_dispute::test_resolve_already_resolved_dispute_fails ... ok
+test test_emergency_withdraw::test_get_pending_returns_withdrawal_after_initiate ... ok
+test test_errors::test_error_message_consistency ... FAILED
+test test_errors::test_business_not_verified_error ... ok
+test test_emergency_withdraw::test_non_admin_cannot_cancel ... ok
+test test_emergency_withdraw::test_only_admin_can_initiate ... ok
+test test_errors::test_invalid_description_error ... ok
+test test_dispute::test_resolve_dispute_requires_admin ... ok
+test test_errors::test_invoice_amount_invalid_error ... ok
+test test_errors::test_invoice_due_date_invalid_error ... FAILED
+test test_dispute::test_dispute_status_tracking_multiple_invoices ... ok
+test test_errors::test_invoice_not_found_error ... ok
+test test_dispute::test_resolve_dispute_resolution_too_long ... ok
+test test_errors::test_no_panics_on_error_conditions ... FAILED
+test test_emergency_withdraw::test_execute_after_timelock_succeeds ... ok
+test test_errors::test_storage_key_not_found_error ... ok
+test test_emergency_withdraw::test_get_pending_none_after_execute ... ok
+test test_emergency_withdraw::test_target_receives_correct_amount_when_funded ... ok
+test test_errors::test_invoice_not_verified_error ... ok
+test test_errors::test_invalid_status_error ... ok
+test test_errors::test_invoice_not_funded_error ... ok
+test test_errors::test_not_admin_error ... ok
+test test_errors::test_invoice_already_defaulted_error ... FAILED
+test test_errors::test_invoice_already_funded_error ... FAILED
+test test_errors::test_unauthorized_error ... FAILED
+test test_errors::test_operation_not_allowed_before_grace_period ... FAILED
+test test_escrow::test_cannot_accept_withdrawn_bid ... ok
+test test_escrow::test_accept_bid_state_transitions ... ok
+test test_escrow::test_escrow_creation_validates_amount ... ok
+test test_escrow::test_escrow_invariants ... ok
+test test_escrow::test_funds_locked_exactly_once ... ok
+test test_escrow::test_only_invoice_owner_can_accept_bid ... ok
+test test_escrow::test_release_escrow_funds_idempotency_blocked ... ok
+test test_escrow::test_only_verified_invoice_can_be_funded ... ok
+test test_escrow::test_multiple_bids_only_one_accepted ... ok
+test test_escrow::test_rejects_double_accept ... ok
+test test_escrow::test_release_escrow_funds_success ... ok
+test test_escrow::test_token_transfer_idempotency ... ok
+test test_events::test_event_data_completeness ... ok
+test test_escrow_refund::test_refund_authorization_current_behavior_and_security_note ... ok
+test test_escrow_refund::test_refund_idempotency_and_release_blocked ... ok
+test test_events::test_bid_placed_event ... ok
+test test_escrow_refund::test_refund_transfers_and_updates_status ... ok
+test test_events::test_bid_withdrawn_event ... ok
+test test_fees::test_default_platform_fee ... ok
+test test_events::test_invoice_cancelled_event ... ok
+test test_fees::test_custom_platform_fee_bps ... ok
+test test_fees::test_fee_parameter_validation ... ok
+test test_events::test_invoice_uploaded_event ... ok
+test test_fees::test_comprehensive_fee_calculation ... ok
+test test_events::test_bid_accepted_event ... ok
+test test_fees::test_module_loaded ... ok
+test test_fees::test_early_payment_discounts ... ok
+test test_fees::test_fee_structure_updates ... ok
+test test_fees::test_fee_system_initialization ... ok
+test test_fees::test_platform_fee_edge_cases ... ok
+test test_fees::test_platform_fee_calculation ... ok
+test test_fees::test_only_admin_can_update_platform_fee ... ok
+test test_fees::test_revenue_distribution_config ... ok
+test test_fees::test_fee_analytics ... ok
+test test_fees::test_only_admin_can_update_fee_structure ... ok
+test test_events::test_escrow_created_event ... ok
+test test_events::test_invoice_verified_event ... ok
+test test_insurance::test_add_insurance_storage_key_not_found ... ok
+test test_insurance::test_add_insurance_requires_investor_auth ... ok
+test test_insurance::test_investment_helpers_cover_branches ... ok
+test test_fees::test_late_payment_penalties ... ok
+test test_insurance::test_add_insurance_requires_active_investment ... ok
+test test_fees::test_transaction_fee_calculation ... ok
+test test_insurance::test_duplicate_submission_rejected_and_state_unchanged ... ok
+test test_insurance::test_large_values_handle_saturation ... ok
+test test_fees::test_volume_tier_discounts ... ok
+test test_insurance::test_state_transition_before_add_rejected ... ok
+test test_fees::test_revenue_distribution_execution ... ok
+test test_fees::test_treasury_receives_exact_amount ... ok
+test test_insurance::test_zero_coverage_and_invalid_inputs ... ok
+test test_investment_queries::test_get_investments_by_investor_empty ... ok
+test test_insurance::test_premium_and_coverage_math_exact ... ok
+test test_insurance::test_multiple_entries_and_no_cross_investment_leakage ... ok
+test test_events::test_invoice_defaulted_event ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_risk_level ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investor_lists ... ok
+test test_events::test_multiple_events_in_sequence ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_tier ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_reject_investor ... ok
+test test_investment_queries::test_get_investment_by_invoice_not_found ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_verify_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_comprehensive_kyc_improves_risk_assessment ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_analytics_tracking ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_duplicate_submission_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_resubmission_after_rejection ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_submission_requires_auth ... ok
+test test_investment_queries::test_get_investment_by_invoice_at_most_one ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_submission_succeeds ... ok
+test test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_verification_data_integrity ... ok
+test test_investor_kyc::test_investor_kyc::test_complete_investor_workflow ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_verification_status_transitions ... ok
+test test_investor_kyc::test_investor_kyc::test_negative_investment_limit_verification_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_non_admin_cannot_verify_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid ... ok
+test test_investor_kyc::test_investor_kyc::test_risk_level_affects_investment_limits ... ok
+test test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid ... ok
+test test_investment_queries::test_get_investments_by_investor_correctness ... ok
+test test_investor_kyc::test_investor_kyc::test_multiple_investors_different_limits ... ok
+test test_investor_kyc::test_investor_kyc::test_verify_investor_without_kyc_submission_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_verify_investor_with_invalid_limit_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_verify_already_verified_investor_fails ... ok
+test test_limit::test_bid_amount_limits ... ok
+test test_limit::test_admin_operations_require_authorization ... ok
+test test_limit::test_description_length_limits ... ok
+test test_limit::test_due_date_limits ... ok
+test test_overflow::test_calculate_treasury_split_large_amounts ... ok
+test test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only ... ok
+test test_overflow::test_compare_bids_equal_profit_ordering ... ok
+test test_overflow::test_compare_bids_safe_overflow ... ok
+test test_overflow::test_compare_bids_underflow_safe ... ok
+test test_limit::test_invoice_amount_limits ... ok
+test test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid ... ok
+test test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding ... ok
+test test_overflow::test_fee_calculation_at_zero_bps ... ok
+test test_overflow::test_profit_fee_bps_max ... ok
+test test_overflow::test_fee_calculation_at_limit ... ok
+test test_overflow::test_fee_calculation_large_amounts_no_overflow ... ok
+test test_overflow::test_timestamp_bid_default_expiration_saturates ... ok
+test test_overflow::test_fee_calculation_no_profit ... ok
+test test_overflow::test_timestamp_invoice_grace_deadline_saturates ... FAILED
+test test_overflow::test_investor_investments_pagination_overflow_safe ... ok
+test test_overflow::test_revenue_accumulation_overflow ... ok
+test test_overflow::test_verify_no_dust_large_amounts ... FAILED
+test test_overflow::test_timestamp_pagination_overflow_safe ... ok
+test test_overflow::test_revenue_accumulation_saturates_at_max ... ok
+test test_overflow::test_total_invoice_count_saturating ... ok
+test test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit ... ok
+test test_partial_payments::test_partial_payment_on_nonexistent_invoice ... ok
+test test_overflow::test_volume_accumulation_overflow ... ok
+test test_overflow::test_timestamp_boundaries ... ok
+test test_overflow::test_volume_accumulation_saturates_at_max ... ok
+test test_partial_payments::test_partial_payment_on_unfunded_invoice ... ok
+test test_investment_queries::test_get_investor_investments_paged_status_filter ... ok
+test test_partial_payments::test_payment_after_reaching_full_amount ... ok
+test test_partial_payments::test_payment_progress_50_percent ... ok
+test test_partial_payments::test_payment_progress_100_percent ... ok
+test test_partial_payments::test_payment_progress_25_percent ... ok
+test test_investment_queries::test_get_investor_investments_paged_offset ... ok
+test test_investment_queries::test_get_investor_investments_paged_limit ... ok
+test test_investment_queries::test_get_investor_investments_paged_filter_and_pagination ... ok
+test test_partial_payments::test_payment_progress_75_percent ... ok
+test test_partial_payments::test_complete_partial_payment_workflow ... ok
+test test_profit_fee::test_calculate_platform_fee_full_payment ... ok
+test test_partial_payments::test_payment_progress_calculation_caps_at_100 ... ok
+test test_profit_fee::test_calculate_platform_fee_large_numbers ... ok
+test test_profit_fee::test_calculate_platform_fee_no_profit ... ok
+test test_profit_fee::test_calculate_platform_fee_partial_loss ... ok
+test test_profit_fee::test_calculate_platform_fee_rounding ... ok
+test test_profit_fee::test_calculate_platform_fee_small_fee ... ok
+test test_profit_fee_formula::test_default_scenario_no_profit ... ok
+test test_profit_fee_formula::test_exact_payment_no_profit ... ok
+test test_profit_fee_formula::test_exact_payment_one_unit_profit ... ok
+test test_profit_fee::test_calculate_platform_fee_updated_bps ... ok
+test test_profit_fee_formula::test_extreme_large_amounts ... ok
+test test_profit_fee_formula::test_fee_config_default ... ok
+test test_profit_fee_formula::test_fee_config_exceeds_max ... ok
+test test_profit_fee_formula::test_fee_config_max_boundary ... ok
+test test_profit_fee_formula::test_large_amounts_no_overflow ... ok
+test test_profit_fee_formula::test_fee_config_update ... ok
+test test_profit_fee_formula::test_many_calculations_no_dust ... ok
+test test_profit_fee_formula::test_minimal_profit_scenario ... ok
+test test_profit_fee_formula::test_overpayment_extreme_profit ... ok
+test test_profit_fee_formula::test_overpayment_large_profit ... ok
+test test_profit_fee_formula::test_profit_calculation_integration_with_fee_manager ... ok
+test test_profit_fee_formula::test_profit_fee_basic_calculation ... ok
+test test_profit_fee_formula::test_profit_fee_max_rate ... ok
+test test_profit_fee_formula::test_profit_fee_with_custom_rate ... ok
+test test_profit_fee_formula::test_profit_fee_zero_rate ... ok
+test test_profit_fee_formula::test_realistic_invoice_scenario ... ok
+test test_profit_fee_formula::test_rounding_boundary_cases ... ok
+test test_partial_payments::test_payment_progress_zero_percent ... ok
+test test_profit_fee_formula::test_treasury_split_equal ... ok
+test test_profit_fee_formula::test_treasury_split_full_share ... ok
+test test_profit_fee_formula::test_treasury_split_over_100_percent ... ok
+test test_profit_fee_formula::test_treasury_split_unequal ... ok
+test test_profit_fee_formula::test_treasury_split_with_rounding ... ok
+test test_profit_fee_formula::test_treasury_split_zero_fee ... ok
+test test_profit_fee_formula::test_treasury_split_zero_share ... ok
+test test_profit_fee_formula::test_underpayment_partial_loss ... ok
+test test_profit_fee_formula::test_underpayment_severe_loss ... ok
+test test_profit_fee_formula::test_underpayment_zero_payment ... ok
+test test_profit_fee_formula::test_validate_inputs_negative_investment ... ok
+test test_profit_fee_formula::test_validate_inputs_negative_payment ... ok
+test test_profit_fee_formula::test_validate_inputs_valid ... ok
+test test_profit_fee_formula::test_no_dust_comprehensive ... ok
+test test_profit_fee_formula::test_rounding_small_profit_various_fees ... ok
+test test_profit_fee_formula::test_zero_investment_all_profit ... ok
+test test_partial_payments::test_payment_records_single_payment ... ok
+test test_partial_payments::test_process_partial_payment_zero_amount ... ok
+test test_reentrancy::test_guard_allows_entry_when_lock_is_explicitly_false ... ok
+test test_partial_payments::test_process_partial_payment_negative_amount ... ok
+test test_reentrancy::test_guard_error_variant_is_operation_not_allowed ... ok
+test test_partial_payments::test_payment_progress_multiple_payments ... ok
+test test_partial_payments::test_process_partial_payment_valid ... ok
+test test_reentrancy::test_guard_releases_lock_when_closure_returns_err ... ok
+test test_reentrancy::test_guard_returns_closure_value ... ok
+test test_partial_payments::test_payment_records_multiple_payments ... ok
+test test_reentrancy::test_guard_unit_failure_clears_lock ... ok
+test test_partial_payments::test_payment_records_unique_transaction_ids ... ok
+test test_reentrancy::test_initial_lock_state_is_absent ... ok
+test test_reentrancy::test_guard_unit_reentrant_blocked ... ok
+test test_reentrancy::test_guard_unit_success ... ok
+test test_reentrancy::test_multiple_lock_release_cycles ... ok
+test test_queries::test_query_audit_logs_filters_and_limit ... ok
+test test_reentrancy::test_lock_not_set_on_fresh_contract ... ok
+test test_queries::test_get_business_invoices_paged_empty_and_pagination ... ok
+test test_reentrancy::test_accept_bid_and_fund_guard_blocks ... ok
+test test_reentrancy::test_guard_blocks_when_lock_is_set ... ok
+test test_reentrancy::test_guard_releases_lock_after_failure ... ok
+test test_queries::test_get_available_invoices_paged_filters_and_bounds ... ok
+test test_reentrancy::test_guard_releases_lock_after_success ... ok
+test test_revenue_split::test_50_50_split ... ok
+test test_reentrancy::test_refund_escrow_guard_blocks ... ok
+test test_reentrancy::test_release_escrow_guard_blocks ... ok
+test test_refund::test_cannot_refund_unfunded_invoice ... ok
+test test_revenue_split::test_60_20_20_split ... ok
+test test_storage::test_bid_storage ... FAILED
+test test_storage::test_concurrent_index_updates ... FAILED
+test test_storage::test_config_storage ... FAILED
+test test_storage::test_deterministic_behavior ... FAILED
+test test_storage::test_escrow_storage_keys ... ok
+test test_storage::test_index_consistency ... FAILED
+test test_storage::test_indexes ... FAILED
+test test_storage::test_investment_storage ... FAILED
+test test_storage::test_invoice_storage ... FAILED
+test test_storage::test_multiple_invoices_same_business ... FAILED
+test test_storage::test_storage_counter_increments ... FAILED
+test test_storage::test_storage_edge_cases ... FAILED
+test test_storage::test_storage_isolation ... FAILED
+test test_storage::test_storage_key_collision_detection ... FAILED
+test test_storage::test_storage_keys ... FAILED
+test test_storage::test_storage_retrieval_consistency ... FAILED
+test test_storage::test_type_serialization_integrity ... FAILED
+test test_revenue_split::test_get_revenue_split_config ... ok
+test test_revenue_split::test_only_admin_can_update_config ... ok
+test test_revenue_split::test_rounding ... ok
+test test_refund::test_admin_can_trigger_refund ... ok
+test test_reentrancy::test_mixed_sequential_endpoints ... ok
+test test_refund::test_business_can_trigger_refund ... ok
+test test_refund::test_cannot_refund_twice ... ok
+test test_reentrancy::test_sequential_protected_calls_succeed ... ok
+test test_refund::test_unauthorized_caller_cannot_trigger_refund ... ok
+
+failures:
+
+---- test_default::test_cannot_default_paid_invoice stdout ----
+
+thread 'test_default::test_cannot_default_paid_invoice' (1296712) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_cannot_default_paid_invoice" to "test_snapshots/test_default/test_cannot_default_paid_invoice.1.json".
+
+---- test_default::test_cannot_default_already_defaulted_invoice stdout ----
+
+thread 'test_default::test_cannot_default_already_defaulted_invoice' (1296711) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_cannot_default_already_defaulted_invoice" to "test_snapshots/test_default/test_cannot_default_already_defaulted_invoice.1.json".
+
+---- test_default::test_custom_grace_period stdout ----
+
+thread 'test_default::test_custom_grace_period' (1296759) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_custom_grace_period" to "test_snapshots/test_default/test_custom_grace_period.1.json".
+
+---- test_default::test_default_after_grace_period stdout ----
+
+thread 'test_default::test_default_after_grace_period' (1296764) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_default_after_grace_period" to "test_snapshots/test_default/test_default_after_grace_period.1.json".
+
+---- test_default::test_default_exactly_at_grace_deadline stdout ----
+
+thread 'test_default::test_default_exactly_at_grace_deadline' (1296767) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_default_exactly_at_grace_deadline" to "test_snapshots/test_default/test_default_exactly_at_grace_deadline.1.json".
+
+---- test_default::test_default_investment_status_update stdout ----
+
+thread 'test_default::test_default_investment_status_update' (1296771) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_default_investment_status_update" to "test_snapshots/test_default/test_default_investment_status_update.1.json".
+
+---- test_default::test_default_status_transition stdout ----
+
+thread 'test_default::test_default_status_transition' (1296774) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_default_status_transition" to "test_snapshots/test_default/test_default_status_transition.1.json".
+
+---- test_default::test_zero_grace_period_defaults_immediately_after_due_date stdout ----
+
+thread 'test_default::test_zero_grace_period_defaults_immediately_after_due_date' (1296780) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_zero_grace_period_defaults_immediately_after_due_date" to "test_snapshots/test_default/test_zero_grace_period_defaults_immediately_after_due_date.1.json".
+
+---- test_default::test_no_default_before_grace_period stdout ----
+
+thread 'test_default::test_no_default_before_grace_period' (1296777) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_no_default_before_grace_period" to "test_snapshots/test_default/test_no_default_before_grace_period.1.json".
+
+---- test_default::test_default_uses_default_grace_period_when_none_provided stdout ----
+
+thread 'test_default::test_default_uses_default_grace_period_when_none_provided' (1296775) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_default_uses_default_grace_period_when_none_provided" to "test_snapshots/test_default/test_default_uses_default_grace_period_when_none_provided.1.json".
+
+---- test_default::test_multiple_invoices_default_handling stdout ----
+
+thread 'test_default::test_multiple_invoices_default_handling' (1296776) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_default::test_multiple_invoices_default_handling" to "test_snapshots/test_default/test_multiple_invoices_default_handling.1.json".
+
+---- test_errors::test_error_message_consistency stdout ----
+
+thread 'test_errors::test_error_message_consistency' (1296869) panicked at src/test_errors.rs:405:5:
+assertion `left == right` failed
+  left: 1004
+ right: 1100
+
+---- test_errors::test_invoice_due_date_invalid_error stdout ----
+
+thread 'test_errors::test_invoice_due_date_invalid_error' (1296875) panicked at src/test_errors.rs:127:10:
+attempt to subtract with overflow
+Writing test snapshot file for test "test_errors::test_invoice_due_date_invalid_error" to "test_snapshots/test_errors/test_invoice_due_date_invalid_error.1.json".
+
+---- test_errors::test_no_panics_on_error_conditions stdout ----
+
+thread 'test_errors::test_no_panics_on_error_conditions' (1296879) panicked at src/test_errors.rs:392:10:
+attempt to subtract with overflow
+Writing test snapshot file for test "test_errors::test_no_panics_on_error_conditions" to "test_snapshots/test_errors/test_no_panics_on_error_conditions.1.json".
+
+---- test_errors::test_invoice_already_defaulted_error stdout ----
+
+thread 'test_errors::test_invoice_already_defaulted_error' (1296872) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_errors::test_invoice_already_defaulted_error" to "test_snapshots/test_errors/test_invoice_already_defaulted_error.1.json".
+
+---- test_errors::test_invoice_already_funded_error stdout ----
+
+thread 'test_errors::test_invoice_already_funded_error' (1296873) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_errors::test_invoice_already_funded_error" to "test_snapshots/test_errors/test_invoice_already_funded_error.1.json".
+
+---- test_errors::test_unauthorized_error stdout ----
+
+thread 'test_errors::test_unauthorized_error' (1296883) panicked at src/test_errors.rs:174:5:
+assertion failed: result.is_err()
+Writing test snapshot file for test "test_errors::test_unauthorized_error" to "test_snapshots/test_errors/test_unauthorized_error.1.json".
+
+---- test_errors::test_operation_not_allowed_before_grace_period stdout ----
+
+thread 'test_errors::test_operation_not_allowed_before_grace_period' (1296881) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:["contract call failed", accept_bid, [Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:["contract call failed", balance, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, balance], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM
+   7: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, accept_bid], data:[Bytes(0000000000000000000000000000000000000000000000000000000000000000), Bytes(b1d000000000000000000000000000000001d1d1d1d1d1d1d1d1d1d1d1d1d1d1)]
+
+Writing test snapshot file for test "test_errors::test_operation_not_allowed_before_grace_period" to "test_snapshots/test_errors/test_operation_not_allowed_before_grace_period.1.json".
+
+---- test_overflow::test_timestamp_invoice_grace_deadline_saturates stdout ----
+
+thread 'test_overflow::test_timestamp_invoice_grace_deadline_saturates' (1297236) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/storage.rs:141:9:
+this function is not accessible outside of a contract, wrap the call with `env.as_contract()` to access it from a particular contract
+
+---- test_overflow::test_verify_no_dust_large_amounts stdout ----
+
+thread 'test_overflow::test_verify_no_dust_large_amounts' (1297245) panicked at src/test_overflow.rs:368:5:
+assertion failed: verify_no_dust(investor_return, platform_fee, payment)
+
+---- test_storage::test_bid_storage stdout ----
+
+thread 'test_storage::test_bid_storage' (1297470) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_concurrent_index_updates stdout ----
+
+thread 'test_storage::test_concurrent_index_updates' (1297472) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_config_storage stdout ----
+
+thread 'test_storage::test_config_storage' (1297473) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_deterministic_behavior stdout ----
+
+thread 'test_storage::test_deterministic_behavior' (1297474) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_index_consistency stdout ----
+
+thread 'test_storage::test_index_consistency' (1297476) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_indexes stdout ----
+
+thread 'test_storage::test_indexes' (1297477) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_investment_storage stdout ----
+
+thread 'test_storage::test_investment_storage' (1297478) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_invoice_storage stdout ----
+
+thread 'test_storage::test_invoice_storage' (1297479) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_multiple_invoices_same_business stdout ----
+
+thread 'test_storage::test_multiple_invoices_same_business' (1297480) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_storage_counter_increments stdout ----
+
+thread 'test_storage::test_storage_counter_increments' (1297481) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_storage_edge_cases stdout ----
+
+thread 'test_storage::test_storage_edge_cases' (1297482) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_storage_isolation stdout ----
+
+thread 'test_storage::test_storage_isolation' (1297483) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_storage_key_collision_detection stdout ----
+
+thread 'test_storage::test_storage_key_collision_detection' (1297484) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_storage_keys stdout ----
+
+thread 'test_storage::test_storage_keys' (1297486) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_storage_retrieval_consistency stdout ----
+
+thread 'test_storage::test_storage_retrieval_consistency' (1297488) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_type_serialization_integrity stdout ----
+
+thread 'test_storage::test_type_serialization_integrity' (1297489) panicked at /Users/bankat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+
+failures:
+    test_default::test_cannot_default_already_defaulted_invoice
+    test_default::test_cannot_default_paid_invoice
+    test_default::test_custom_grace_period
+    test_default::test_default_after_grace_period
+    test_default::test_default_exactly_at_grace_deadline
+    test_default::test_default_investment_status_update
+    test_default::test_default_status_transition
+    test_default::test_default_uses_default_grace_period_when_none_provided
+    test_default::test_multiple_invoices_default_handling
+    test_default::test_no_default_before_grace_period
+    test_default::test_zero_grace_period_defaults_immediately_after_due_date
+    test_errors::test_error_message_consistency
+    test_errors::test_invoice_already_defaulted_error
+    test_errors::test_invoice_already_funded_error
+    test_errors::test_invoice_due_date_invalid_error
+    test_errors::test_no_panics_on_error_conditions
+    test_errors::test_operation_not_allowed_before_grace_period
+    test_errors::test_unauthorized_error
+    test_overflow::test_timestamp_invoice_grace_deadline_saturates
+    test_overflow::test_verify_no_dust_large_amounts
+    test_storage::test_bid_storage
+    test_storage::test_concurrent_index_updates
+    test_storage::test_config_storage
+    test_storage::test_deterministic_behavior
+    test_storage::test_index_consistency
+    test_storage::test_indexes
+    test_storage::test_investment_storage
+    test_storage::test_invoice_storage
+    test_storage::test_multiple_invoices_same_business
+    test_storage::test_storage_counter_increments
+    test_storage::test_storage_edge_cases
+    test_storage::test_storage_isolation
+    test_storage::test_storage_key_collision_detection
+    test_storage::test_storage_keys
+    test_storage::test_storage_retrieval_consistency
+    test_storage::test_type_serialization_integrity
+
+test result: FAILED. 595 passed; 36 failed; 0 ignored; 0 measured; 0 filtered out; finished in 25.76s
+
+error: test failed, to rerun pass `--lib`

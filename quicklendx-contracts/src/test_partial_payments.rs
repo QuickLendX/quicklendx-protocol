@@ -119,6 +119,112 @@ mod tests {
     }
 
     #[test]
+    fn test_transaction_id_is_stored_in_records() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+
+        let (invoice_id, business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+
+        let tx_id = String::from_str(&env, "tx-store-001");
+        env.ledger().set_timestamp(1_250);
+        client.process_partial_payment(&invoice_id, &275, &tx_id);
+
+        let durable_record = env.as_contract(&contract_id, || {
+            get_payment_record(&env, &invoice_id, 0).unwrap()
+        });
+        assert_eq!(durable_record.payer, business);
+        assert_eq!(durable_record.amount, 275);
+        assert_eq!(durable_record.timestamp, 1_250);
+        assert_eq!(durable_record.nonce, tx_id);
+
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.total_paid, 275);
+        assert_eq!(invoice.payment_history.len(), 1);
+        let inline_record = invoice.payment_history.get(0).unwrap();
+        assert_eq!(inline_record.amount, 275);
+        assert_eq!(inline_record.timestamp, 1_250);
+        assert_eq!(
+            inline_record.transaction_id,
+            String::from_str(&env, "tx-store-001")
+        );
+    }
+
+    #[test]
+    fn test_duplicate_transaction_id_is_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+
+        let (invoice_id, _business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+
+        let duplicate_tx = String::from_str(&env, "dup-tx");
+        env.ledger().set_timestamp(1_300);
+        client.process_partial_payment(&invoice_id, &100, &duplicate_tx);
+
+        let result = client.try_process_partial_payment(&invoice_id, &150, &duplicate_tx);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            QuickLendXError::OperationNotAllowed
+        );
+
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.total_paid, 100);
+        let count = env.as_contract(&contract_id, || {
+            get_payment_count(&env, &invoice_id).unwrap()
+        });
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_empty_transaction_id_is_allowed_and_recorded() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+
+        let (invoice_id, _business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+
+        let empty_tx = String::from_str(&env, "");
+        env.ledger().set_timestamp(1_400);
+        client.process_partial_payment(&invoice_id, &125, &empty_tx);
+
+        env.ledger().set_timestamp(1_500);
+        client.process_partial_payment(&invoice_id, &125, &empty_tx);
+
+        let count = env.as_contract(&contract_id, || {
+            get_payment_count(&env, &invoice_id).unwrap()
+        });
+        assert_eq!(count, 2);
+
+        let first = env.as_contract(&contract_id, || {
+            get_payment_record(&env, &invoice_id, 0).unwrap()
+        });
+        let second = env.as_contract(&contract_id, || {
+            get_payment_record(&env, &invoice_id, 1).unwrap()
+        });
+        assert_eq!(first.nonce, String::from_str(&env, ""));
+        assert_eq!(second.nonce, String::from_str(&env, ""));
+
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.payment_history.len(), 2);
+        assert_eq!(
+            invoice.payment_history.get(0).unwrap().transaction_id,
+            String::from_str(&env, "")
+        );
+        assert_eq!(
+            invoice.payment_history.get(1).unwrap().transaction_id,
+            String::from_str(&env, "")
+        );
+    }
+
+    #[test]
     fn test_final_payment_marks_invoice_paid() {
         let env = Env::default();
         env.mock_all_auths();
@@ -210,6 +316,26 @@ mod tests {
     }
 
     #[test]
+    fn test_missing_invoice_is_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+
+        let missing_id = BytesN::from_array(&env, &[7u8; 32]);
+        let result = client.try_process_partial_payment(
+            &missing_id,
+            &100,
+            &String::from_str(&env, "missing"),
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            QuickLendXError::InvoiceNotFound
+        );
+    }
+
+    #[test]
     fn test_payment_after_invoice_paid_is_rejected() {
         let env = Env::default();
         env.mock_all_auths();
@@ -285,14 +411,32 @@ mod tests {
         assert_eq!(first.payer, business);
         assert_eq!(first.amount, 100);
         assert_eq!(first.timestamp, 5_001);
+        assert_eq!(first.nonce, String::from_str(&env, "ord-1"));
 
         assert_eq!(second.payer, business);
         assert_eq!(second.amount, 200);
         assert_eq!(second.timestamp, 5_002);
+        assert_eq!(second.nonce, String::from_str(&env, "ord-2"));
 
         assert_eq!(third.payer, business);
         assert_eq!(third.amount, 300);
         assert_eq!(third.timestamp, 5_003);
+        assert_eq!(third.nonce, String::from_str(&env, "ord-3"));
+
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.payment_history.len(), 3);
+        assert_eq!(
+            invoice.payment_history.get(0).unwrap().transaction_id,
+            String::from_str(&env, "ord-1")
+        );
+        assert_eq!(
+            invoice.payment_history.get(1).unwrap().transaction_id,
+            String::from_str(&env, "ord-2")
+        );
+        assert_eq!(
+            invoice.payment_history.get(2).unwrap().transaction_id,
+            String::from_str(&env, "ord-3")
+        );
     }
 
     #[test]
@@ -325,35 +469,29 @@ mod tests {
         assert_eq!(progress.progress_percent, 100);
         assert_eq!(progress.remaining_due, 0);
     }
-//! Comprehensive tests for partial payments and settlement
-//!
-//! This module provides 95%+ test coverage for:
-//! - process_partial_payment validation (zero/negative amounts)
-//! - Payment progress tracking
-//! - Overpayment capped at 100%
-//! - Payment records and transaction IDs
-//! - Edge cases and error handling
 
-use super::*;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    token, Address, Env, String, Vec,
-};
+    // Comprehensive tests for partial payments and settlement
+    //
+    // This module provides 95%+ test coverage for:
+    // - process_partial_payment validation (zero/negative amounts)
+    // - Payment progress tracking
+    // - Overpayment capped at 100%
+    // - Payment records and transaction IDs
+    // - Edge cases and error handling
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
+    // ============================================================================
+    // HELPER FUNCTIONS (second set for tests below)
+    // ============================================================================
 
-fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address) {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-    (env, client, admin)
-}
+    fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        client.set_admin(&admin);
+        (env, client, admin)
+    }
 
     fn create_verified_business(
         env: &Env,
