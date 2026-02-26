@@ -33,6 +33,9 @@ mod test_investor_kyc {
 
         // Initialize protocol limits (max invoice amount, min bid amount, min bid bps, max due date, grace period)
         let _ = client.try_initialize_protocol_limits(&admin, &1_000_000i128, &1i128, &100u32, &365u64, &86400u64);
+        // Initialize protocol limits (min invoice: 1, min bid: 100, min bid bps: 100,
+        // max due date: 365 days, grace period: 86400s)
+        let _ = client.try_initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
 
         (env, client, admin)
     }
@@ -968,22 +971,32 @@ mod test_investor_kyc {
         let kyc_data = String::from_str(&env, "Valid KYC data");
 
         let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
-        
+
         let pending = client.get_pending_investors();
         assert_eq!(pending.len(), 1, "Should have 1 pending investor");
-        assert!(pending.contains(&investor), "Pending should contain investor");
-        
+        assert!(
+            pending.contains(&investor),
+            "Pending should contain investor"
+        );
+
         let verified = client.get_verified_investors();
         assert_eq!(verified.len(), 0, "Verified should be empty");
 
         let _ = client.try_verify_investor(&investor, &50_000i128);
 
         let pending = client.get_pending_investors();
-        assert_eq!(pending.len(), 0, "Pending should be empty after verification");
-        
+        assert_eq!(
+            pending.len(),
+            0,
+            "Pending should be empty after verification"
+        );
+
         let verified = client.get_verified_investors();
         assert_eq!(verified.len(), 1, "Should have 1 verified investor");
-        assert!(verified.contains(&investor), "Verified should contain investor");
+        assert!(
+            verified.contains(&investor),
+            "Verified should contain investor"
+        );
     }
 
     #[test]
@@ -994,10 +1007,10 @@ mod test_investor_kyc {
         let reason = String::from_str(&env, "Insufficient documentation");
 
         let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
-        
+
         let pending = client.get_pending_investors();
         assert_eq!(pending.len(), 1, "Should have 1 pending investor");
-        
+
         let rejected = client.get_rejected_investors();
         assert_eq!(rejected.len(), 0, "Rejected should be empty");
 
@@ -1005,10 +1018,13 @@ mod test_investor_kyc {
 
         let pending = client.get_pending_investors();
         assert_eq!(pending.len(), 0, "Pending should be empty after rejection");
-        
+
         let rejected = client.get_rejected_investors();
         assert_eq!(rejected.len(), 1, "Should have 1 rejected investor");
-        assert!(rejected.contains(&investor), "Rejected should contain investor");
+        assert!(
+            rejected.contains(&investor),
+            "Rejected should contain investor"
+        );
     }
 
     #[test]
@@ -1032,30 +1048,36 @@ mod test_investor_kyc {
         // This is tracked behavior - investor status is Pending but appears in both lists
         let pending = client.get_pending_investors();
         assert_eq!(pending.len(), 1, "Should have 1 pending investor");
-        assert!(pending.contains(&investor), "Pending should contain investor");
-        
+        assert!(
+            pending.contains(&investor),
+            "Pending should contain investor"
+        );
+
         // Verify the investor's status is actually Pending
         let verification = client.get_investor_verification(&investor);
         assert!(verification.is_some());
-        assert_eq!(verification.unwrap().status, BusinessVerificationStatus::Pending);
+        assert_eq!(
+            verification.unwrap().status,
+            BusinessVerificationStatus::Pending
+        );
     }
 
     #[test]
     fn test_get_investors_by_tier_empty_initially() {
         let (_env, client, _admin) = setup();
-        
+
         let basic = client.get_investors_by_tier(&InvestorTier::Basic);
         assert_eq!(basic.len(), 0, "Basic tier should be empty");
-        
+
         let silver = client.get_investors_by_tier(&InvestorTier::Silver);
         assert_eq!(silver.len(), 0, "Silver tier should be empty");
-        
+
         let gold = client.get_investors_by_tier(&InvestorTier::Gold);
         assert_eq!(gold.len(), 0, "Gold tier should be empty");
-        
+
         let platinum = client.get_investors_by_tier(&InvestorTier::Platinum);
         assert_eq!(platinum.len(), 0, "Platinum tier should be empty");
-        
+
         let vip = client.get_investors_by_tier(&InvestorTier::VIP);
         assert_eq!(vip.len(), 0, "VIP tier should be empty");
     }
@@ -1074,7 +1096,10 @@ mod test_investor_kyc {
 
         let tier_investors = client.get_investors_by_tier(&tier);
         assert_eq!(tier_investors.len(), 1, "Should have 1 investor in tier");
-        assert!(tier_investors.contains(&investor), "Should contain investor");
+        assert!(
+            tier_investors.contains(&investor),
+            "Should contain investor"
+        );
     }
 
     #[test]
@@ -1096,9 +1121,15 @@ mod test_investor_kyc {
 
         let tier1 = client.get_investor_verification(&investor1).unwrap().tier;
         let tier_investors = client.get_investors_by_tier(&tier1);
-        
-        assert!(tier_investors.len() >= 1, "Should have at least 1 investor in tier");
-        assert!(tier_investors.contains(&investor1), "Should contain investor1");
+
+        assert!(
+            tier_investors.len() >= 1,
+            "Should have at least 1 investor in tier"
+        );
+        assert!(
+            tier_investors.contains(&investor1),
+            "Should contain investor1"
+        );
     }
 
     #[test]
@@ -1115,21 +1146,27 @@ mod test_investor_kyc {
 
         let tier = client.get_investor_verification(&investor1).unwrap().tier;
         let tier_investors = client.get_investors_by_tier(&tier);
-        
-        assert!(tier_investors.contains(&investor1), "Should contain verified investor");
-        assert!(!tier_investors.contains(&investor2), "Should not contain pending investor");
+
+        assert!(
+            tier_investors.contains(&investor1),
+            "Should contain verified investor"
+        );
+        assert!(
+            !tier_investors.contains(&investor2),
+            "Should not contain pending investor"
+        );
     }
 
     #[test]
     fn test_get_investors_by_risk_level_empty_initially() {
         let (_env, client, _admin) = setup();
-        
+
         let low = client.get_investors_by_risk_level(&InvestorRiskLevel::Low);
         assert_eq!(low.len(), 0, "Low risk should be empty");
-        
+
         let medium = client.get_investors_by_risk_level(&InvestorRiskLevel::Medium);
         assert_eq!(medium.len(), 0, "Medium risk should be empty");
-        
+
         let high = client.get_investors_by_risk_level(&InvestorRiskLevel::High);
         assert_eq!(high.len(), 0, "High risk should be empty");
     }
@@ -1147,8 +1184,15 @@ mod test_investor_kyc {
         let risk_level = verification.risk_level;
 
         let risk_investors = client.get_investors_by_risk_level(&risk_level);
-        assert_eq!(risk_investors.len(), 1, "Should have 1 investor at risk level");
-        assert!(risk_investors.contains(&investor), "Should contain investor");
+        assert_eq!(
+            risk_investors.len(),
+            1,
+            "Should have 1 investor at risk level"
+        );
+        assert!(
+            risk_investors.contains(&investor),
+            "Should contain investor"
+        );
     }
 
     #[test]
@@ -1164,11 +1208,20 @@ mod test_investor_kyc {
         let _ = client.try_submit_investor_kyc(&investor2, &kyc_data);
         let _ = client.try_verify_investor(&investor2, &50_000i128);
 
-        let risk1 = client.get_investor_verification(&investor1).unwrap().risk_level;
+        let risk1 = client
+            .get_investor_verification(&investor1)
+            .unwrap()
+            .risk_level;
         let risk_investors = client.get_investors_by_risk_level(&risk1);
-        
-        assert!(risk_investors.len() >= 1, "Should have at least 1 investor at risk level");
-        assert!(risk_investors.contains(&investor1), "Should contain investor1");
+
+        assert!(
+            risk_investors.len() >= 1,
+            "Should have at least 1 investor at risk level"
+        );
+        assert!(
+            risk_investors.contains(&investor1),
+            "Should contain investor1"
+        );
     }
 
     #[test]
@@ -1183,11 +1236,20 @@ mod test_investor_kyc {
 
         let _ = client.try_submit_investor_kyc(&investor2, &kyc_data);
 
-        let risk = client.get_investor_verification(&investor1).unwrap().risk_level;
+        let risk = client
+            .get_investor_verification(&investor1)
+            .unwrap()
+            .risk_level;
         let risk_investors = client.get_investors_by_risk_level(&risk);
-        
-        assert!(risk_investors.contains(&investor1), "Should contain verified investor");
-        assert!(!risk_investors.contains(&investor2), "Should not contain pending investor");
+
+        assert!(
+            risk_investors.contains(&investor1),
+            "Should contain verified investor"
+        );
+        assert!(
+            !risk_investors.contains(&investor2),
+            "Should not contain pending investor"
+        );
     }
 
     #[test]
@@ -1203,24 +1265,72 @@ mod test_investor_kyc {
         let _ = client.try_submit_investor_kyc(&investor2, &kyc_data);
         let _ = client.try_submit_investor_kyc(&investor3, &kyc_data);
 
-        assert_eq!(client.get_pending_investors().len(), 3, "Should have 3 pending");
-        assert_eq!(client.get_verified_investors().len(), 0, "Should have 0 verified");
-        assert_eq!(client.get_rejected_investors().len(), 0, "Should have 0 rejected");
+        assert_eq!(
+            client.get_pending_investors().len(),
+            3,
+            "Should have 3 pending"
+        );
+        assert_eq!(
+            client.get_verified_investors().len(),
+            0,
+            "Should have 0 verified"
+        );
+        assert_eq!(
+            client.get_rejected_investors().len(),
+            0,
+            "Should have 0 rejected"
+        );
 
         let _ = client.try_verify_investor(&investor1, &50_000i128);
-        assert_eq!(client.get_pending_investors().len(), 2, "Should have 2 pending");
-        assert_eq!(client.get_verified_investors().len(), 1, "Should have 1 verified");
-        assert_eq!(client.get_rejected_investors().len(), 0, "Should have 0 rejected");
+        assert_eq!(
+            client.get_pending_investors().len(),
+            2,
+            "Should have 2 pending"
+        );
+        assert_eq!(
+            client.get_verified_investors().len(),
+            1,
+            "Should have 1 verified"
+        );
+        assert_eq!(
+            client.get_rejected_investors().len(),
+            0,
+            "Should have 0 rejected"
+        );
 
         let _ = client.try_reject_investor(&investor2, &reason);
-        assert_eq!(client.get_pending_investors().len(), 1, "Should have 1 pending");
-        assert_eq!(client.get_verified_investors().len(), 1, "Should have 1 verified");
-        assert_eq!(client.get_rejected_investors().len(), 1, "Should have 1 rejected");
+        assert_eq!(
+            client.get_pending_investors().len(),
+            1,
+            "Should have 1 pending"
+        );
+        assert_eq!(
+            client.get_verified_investors().len(),
+            1,
+            "Should have 1 verified"
+        );
+        assert_eq!(
+            client.get_rejected_investors().len(),
+            1,
+            "Should have 1 rejected"
+        );
 
         let _ = client.try_verify_investor(&investor3, &75_000i128);
-        assert_eq!(client.get_pending_investors().len(), 0, "Should have 0 pending");
-        assert_eq!(client.get_verified_investors().len(), 2, "Should have 2 verified");
-        assert_eq!(client.get_rejected_investors().len(), 1, "Should have 1 rejected");
+        assert_eq!(
+            client.get_pending_investors().len(),
+            0,
+            "Should have 0 pending"
+        );
+        assert_eq!(
+            client.get_verified_investors().len(),
+            2,
+            "Should have 2 verified"
+        );
+        assert_eq!(
+            client.get_rejected_investors().len(),
+            1,
+            "Should have 1 rejected"
+        );
     }
 
     #[test]
@@ -1241,7 +1351,10 @@ mod test_investor_kyc {
         assert!(verified.contains(&investor), "Should be in verified");
 
         let verified_count = verified.iter().filter(|i| *i == investor).count();
-        assert_eq!(verified_count, 1, "Should appear exactly once in verified list");
+        assert_eq!(
+            verified_count, 1,
+            "Should appear exactly once in verified list"
+        );
     }
 
     // ============================================================================
@@ -1585,3 +1698,4 @@ mod test_investor_kyc {
         assert_eq!(final_bids.len(), 5, "Should still have all 5 bids");
     }
 }
+

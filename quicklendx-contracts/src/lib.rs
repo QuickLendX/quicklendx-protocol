@@ -24,11 +24,8 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
-pub mod types;
 #[cfg(test)]
 mod storage;
-#[cfg(test)]
-mod test_string_limits;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
@@ -40,16 +37,26 @@ mod test_dispute;
 #[cfg(test)]
 mod test_emergency_withdraw;
 #[cfg(test)]
+mod test_init;
+#[cfg(test)]
+mod test_invoice;
+#[cfg(test)]
 mod test_overflow;
 #[cfg(test)]
 mod test_profit_fee;
 #[cfg(test)]
 mod test_refund;
 #[cfg(test)]
-mod test_init;
-#[cfg(test)]
 mod test_storage;
+#[cfg(test)]
+mod test_string_limits;
+#[cfg(test)]
+mod test_bid_ranking;
+#[cfg(test)]
+mod test_vesting;
+pub mod types;
 mod verification;
+mod vesting;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::{
@@ -93,12 +100,14 @@ use crate::notifications::{
     Notification, NotificationDeliveryStatus, NotificationPreferences, NotificationStats,
     NotificationSystem,
 };
+use crate::vesting::{Vesting, VestingSchedule};
 use analytics::{
     AnalyticsCalculator, AnalyticsStorage, BusinessReport, FinancialMetrics, InvestorAnalytics,
     InvestorPerformanceMetrics, InvestorReport, PerformanceMetrics, PlatformMetrics, TimePeriod,
     UserBehaviorMetrics,
 };
 use audit::{AuditLogEntry, AuditOperation, AuditQueryFilter, AuditStats, AuditStorage};
+use crate::currency::CurrencyWhitelist;
 
 #[contract]
 pub struct QuickLendXContract;
@@ -106,9 +115,32 @@ pub struct QuickLendXContract;
 /// Maximum number of records returned by paginated query endpoints.
 pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
 
+/// Maximum number of active (Placed) bids allowed per investor across all invoices.
+///
+/// This is a simple rate-limit to protect against excessive open positions from a
+/// single investor. Tests rely on this constant, so keep it reasonably small.
+pub(crate) const MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 10;
+
 #[inline]
 fn cap_query_limit(limit: u32) -> u32 {
     limit.min(MAX_QUERY_LIMIT)
+}
+
+#[inline]
+fn require_current_admin(env: &Env) -> Result<Address, QuickLendXError> {
+    let admin = AdminStorage::get_admin(env).ok_or(QuickLendXError::NotAdmin)?;
+    admin.require_auth();
+    Ok(admin)
+}
+
+#[inline]
+fn require_specific_admin(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
+    let current_admin = AdminStorage::get_admin(env).ok_or(QuickLendXError::NotAdmin)?;
+    if current_admin != *admin {
+        return Err(QuickLendXError::NotAdmin);
+    }
+    admin.require_auth();
+    Ok(())
 }
 
 #[contractimpl]
@@ -118,10 +150,7 @@ impl QuickLendXContract {
     // ============================================================================
 
     /// Initialize the protocol with all required configuration (one-time setup)
-    pub fn initialize(
-        env: Env,
-        params: init::InitializationParams,
-    ) -> Result<(), QuickLendXError> {
+    pub fn initialize(env: Env, params: init::InitializationParams) -> Result<(), QuickLendXError> {
         params.admin.require_auth();
         init::ProtocolInitializer::initialize(&env, &params)
     }
@@ -133,6 +162,7 @@ impl QuickLendXContract {
 
     /// Initialize the admin address (deprecated: use initialize)
     pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        admin.require_auth();
         AdminStorage::initialize(&env, &admin)
     }
 
@@ -171,6 +201,22 @@ impl QuickLendXContract {
     /// Get configured bid TTL in days (returns default 7 if not set)
     pub fn get_bid_ttl_days(env: Env) -> u64 {
         bid::BidStorage::get_bid_ttl_days(&env)
+    }
+
+    /// Admin-only: configure max active (Placed) bids per investor across all invoices.
+    /// A value of 0 disables the limit. Default is 20.
+    pub fn set_max_active_bids_per_investor(
+        env: Env,
+        limit: u32,
+    ) -> Result<u32, QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        bid::BidStorage::set_max_active_bids_per_investor(&env, &admin, limit)
+    }
+
+    /// Get configured max active (Placed) bids per investor across all invoices.
+    /// Returns default 20 if not set.
+    pub fn get_max_active_bids_per_investor(env: Env) -> u32 {
+        bid::BidStorage::get_max_active_bids_per_investor(&env)
     }
 
     /// Initiate emergency withdraw for stuck funds (admin only). Timelock applies before execute.
@@ -220,6 +266,67 @@ impl QuickLendXContract {
         currency::CurrencyWhitelist::is_allowed_currency(&env, &currency)
     }
 
+    // ============================================================================
+    // Vesting Functions
+    // ============================================================================
+
+    /// Create a vesting schedule (admin only). Tokens are transferred into contract custody.
+    ///
+    /// # Errors
+    /// - `NotAdmin`, `InvalidAmount`, `InvalidTimestamp`, transfer errors
+    pub fn create_vesting_schedule(
+        env: Env,
+        admin: Address,
+        token: Address,
+        beneficiary: Address,
+        total_amount: i128,
+        start_time: u64,
+        cliff_seconds: u64,
+        end_time: u64,
+    ) -> Result<u64, QuickLendXError> {
+        Vesting::create_schedule(
+            &env,
+            &admin,
+            token,
+            beneficiary,
+            total_amount,
+            start_time,
+            cliff_seconds,
+            end_time,
+        )
+    }
+
+    /// Get a vesting schedule by ID.
+    pub fn get_vesting_schedule(env: Env, id: u64) -> Option<VestingSchedule> {
+        Vesting::get_schedule(&env, id)
+    }
+
+    /// Return the vested amount at current ledger time.
+    pub fn get_vested_amount(env: Env, id: u64) -> Result<i128, QuickLendXError> {
+        let schedule =
+            Vesting::get_schedule(&env, id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Vesting::vested_amount(&env, &schedule)
+    }
+
+    /// Return releasable amount (vested minus already released).
+    pub fn get_vesting_releasable(env: Env, id: u64) -> Result<i128, QuickLendXError> {
+        let schedule =
+            Vesting::get_schedule(&env, id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Vesting::releasable_amount(&env, &schedule)
+    }
+
+    /// Release vested tokens to beneficiary (beneficiary must authorize).
+    ///
+    /// # Errors
+    /// - `Unauthorized`, `OperationNotAllowed`, `StorageKeyNotFound`, transfer errors
+    pub fn release_vested_tokens(
+        env: Env,
+        beneficiary: Address,
+        id: u64,
+    ) -> Result<i128, QuickLendXError> {
+        Vesting::release(&env, &beneficiary, id)
+    }
+
     /// Get all whitelisted token addresses.
     pub fn get_whitelisted_currencies(env: Env) -> Vec<Address> {
         currency::CurrencyWhitelist::get_whitelisted_currencies(&env)
@@ -253,6 +360,96 @@ impl QuickLendXContract {
     /// Cancel a pending emergency withdrawal (admin only).
     pub fn cancel_emergency_withdraw(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         emergency::EmergencyWithdraw::cancel(&env, &admin)
+    }
+
+    // ============================================================================
+    // Protocol Limits Management Functions
+    // ============================================================================
+
+    /// Initialize protocol limits with default values (one-time operation).
+    ///
+    /// Sets up system-wide constraints for invoice validation and default handling.
+    /// Can only be called once. Subsequent calls will fail.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract environment
+    /// * `admin` - The address that will have permission to update limits
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Initialization successful
+    /// * `Err(QuickLendXError::OperationNotAllowed)` - Already initialized
+    ///
+    /// # Security
+    ///
+    /// - Can only be called once
+    /// - Requires admin address authorization
+    /// - Admin address is permanently stored
+    pub fn init_protocol_limits_defaults(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        protocol_limits::ProtocolLimitsContract::initialize(env, admin)
+    }
+
+    /// Update protocol limits (admin only).
+    ///
+    /// Allows the admin to update system-wide limits. All parameters are validated
+    /// before being stored.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract environment
+    /// * `admin` - The admin address (must match stored admin)
+    /// * `min_invoice_amount` - New minimum invoice amount (must be > 0)
+    /// * `max_due_date_days` - New maximum due date days (must be 1-730)
+    /// * `grace_period_seconds` - New grace period (must be 0-2,592,000)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Update successful
+    /// * `Err(QuickLendXError::NotAdmin)` - Admin not configured
+    /// * `Err(QuickLendXError::Unauthorized)` - Caller is not admin
+    /// * `Err(QuickLendXError::InvalidAmount)` - Amount validation failed
+    /// * `Err(QuickLendXError::InvoiceDueDateInvalid)` - Days validation failed
+    /// * `Err(QuickLendXError::InvalidTimestamp)` - Grace period validation failed
+    ///
+    /// # Security
+    ///
+    /// - Requires admin authorization
+    /// - All parameters validated before storage
+    pub fn set_protocol_limits_basic(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+    ) -> Result<(), QuickLendXError> {
+        let current_limits =
+            protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+            env,
+            admin,
+            min_invoice_amount,
+            current_limits.min_bid_amount,
+            current_limits.min_bid_bps,
+            max_due_date_days,
+            grace_period_seconds,
+        )
+    }
+
+    /// Get current protocol limits.
+    ///
+    /// Returns the currently configured limits, or default values if not initialized.
+    /// This function never fails and always returns valid limits.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    ///
+    /// Current protocol limits or defaults if uninitialized
+    pub fn get_protocol_limits(env: Env) -> protocol_limits::ProtocolLimits {
+        protocol_limits::ProtocolLimitsContract::get_protocol_limits(env)
     }
 
     // ============================================================================
@@ -298,9 +495,7 @@ impl QuickLendXContract {
         }
 
         // Validate due date is not too far in the future using protocol limits
-        if !protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date) {
-            return Err(QuickLendXError::InvoiceDueDateInvalid);
-        }
+        protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
 
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
@@ -316,6 +511,11 @@ impl QuickLendXContract {
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&tags)?;
+
+        // Check currency is whitelisted
+        if !CurrencyWhitelist::is_allowed_currency(&env, &currency) {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
 
         // Create new invoice
         let invoice = Invoice::new(
@@ -356,13 +556,12 @@ impl QuickLendXContract {
         business.require_auth();
 
         // Check if business is verified
-        let verification = get_business_verification_status(&env, &business);
-        if verification.is_none()
-            || !matches!(
-                verification.unwrap().status,
-                verification::BusinessVerificationStatus::Verified
-            )
-        {
+        let verification = get_business_verification_status(&env, &business)
+            .ok_or(QuickLendXError::BusinessNotVerified)?;
+        if !matches!(
+            verification.status,
+            verification::BusinessVerificationStatus::Verified
+        ) {
             return Err(QuickLendXError::BusinessNotVerified);
         }
 
@@ -373,6 +572,11 @@ impl QuickLendXContract {
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&tags)?;
+
+        // Check currency is whitelisted
+        if !CurrencyWhitelist::is_allowed_currency(&env, &currency) {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
 
         // Create and store invoice
         let invoice = Invoice::new(
@@ -416,8 +620,7 @@ impl QuickLendXContract {
 
     /// Verify an invoice (admin or automated process)
     pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
+        let admin = require_current_admin(&env)?;
 
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -567,6 +770,31 @@ impl QuickLendXContract {
         InvoiceStorage::get_invoices_by_status(&env, &status)
     }
 
+    /// Batch helper: get invoice statuses for a list of invoice IDs.
+    ///
+    /// - Preserves input order.
+    /// - Returns `None` for nonexistent invoices.
+    /// - Applies `MAX_QUERY_LIMIT` to avoid unbounded iteration; inputs longer than
+    ///   the cap are truncated.
+    pub fn get_invoices_by_status_batch(
+        env: Env,
+        invoice_ids: Vec<BytesN<32>>,
+    ) -> Vec<Option<InvoiceStatus>> {
+        let mut result = Vec::new(&env);
+
+        let limit = cap_query_limit(invoice_ids.len());
+        let mut idx: u32 = 0;
+        while idx < limit {
+            if let Some(id) = invoice_ids.get(idx) {
+                let status = InvoiceStorage::get_invoice(&env, &id).map(|inv| inv.status);
+                result.push_back(status);
+            }
+            idx = idx.saturating_add(1);
+        }
+
+        result
+    }
+
     /// Get all available invoices (verified and not funded)
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
         InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified)
@@ -578,6 +806,9 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         new_status: InvoiceStatus,
     ) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -586,16 +817,16 @@ impl QuickLendXContract {
 
         // Update status
         match new_status {
-            InvoiceStatus::Verified => invoice.verify(&env, invoice.business.clone()),
+            InvoiceStatus::Verified => invoice.verify(&env, admin.clone()),
             InvoiceStatus::Paid => {
-                invoice.mark_as_paid(&env, invoice.business.clone(), env.ledger().timestamp())
+                invoice.mark_as_paid(&env, admin.clone(), env.ledger().timestamp())
             }
             InvoiceStatus::Defaulted => invoice.mark_as_defaulted(),
             InvoiceStatus::Funded => {
                 // For testing purposes - normally funding happens via accept_bid
                 invoice.mark_as_funded(
                     &env,
-                    invoice.business.clone(),
+                    admin.clone(),
                     invoice.amount,
                     env.ledger().timestamp(),
                 );
@@ -638,6 +869,22 @@ impl QuickLendXContract {
         invoices.len() as u32
     }
 
+    /// Get the settlement/default deadline for an invoice based on protocol limits.
+    ///
+    /// This uses the same grace-period rules as the defaults module:
+    /// `due_date + grace_period_seconds` (with saturation).
+    pub fn get_invoice_settlement_deadline(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<u64, QuickLendXError> {
+        let invoice =
+            InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        Ok(protocol_limits::ProtocolLimitsContract::get_default_date(
+            env,
+            invoice.due_date,
+        ))
+    }
+
     /// Get total invoice count
     pub fn get_total_invoice_count(env: Env) -> u32 {
         let pending = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Pending);
@@ -657,10 +904,9 @@ impl QuickLendXContract {
             .saturating_add(refunded)
     }
 
-
-
     /// Clear all invoices from storage (admin only, used for restore operations)
     pub fn clear_all_invoices(env: &Env) -> Result<(), QuickLendXError> {
+        let _ = require_current_admin(env)?;
         use crate::invoice::InvoiceStorage;
         InvoiceStorage::clear_all(env);
         Ok(())
@@ -735,6 +981,14 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidAmount);
         }
 
+        // Enforce per-investor rate limit on active (Placed) bids across all invoices.
+        let active_bids =
+            bid::BidStorage::count_active_bids_by_investor(&env, &investor);
+        if active_bids >= MAX_ACTIVE_BIDS_PER_INVESTOR {
+            // Use a generic business-logic error to avoid adding new error variants.
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
         // Validate invoice exists and is verified
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -743,13 +997,17 @@ impl QuickLendXContract {
         }
         currency::CurrencyWhitelist::require_allowed_currency(&env, &invoice.currency)?;
 
+        // Check invoice currency is whitelisted
+        if !CurrencyWhitelist::is_allowed_currency(&env, &invoice.currency) {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
+
         let verification = do_get_investor_verification(&env, &investor)
             .ok_or(QuickLendXError::BusinessNotVerified)?;
         match verification.status {
             BusinessVerificationStatus::Verified => {
-                if bid_amount > verification.investment_limit {
-                    return Err(QuickLendXError::InvalidAmount);
-                }
+                // Enforce tier/risk-aware limits from investor analytics.
+                validate_investor_investment(&env, &investor, bid_amount)?;
             }
             BusinessVerificationStatus::Pending => return Err(QuickLendXError::KYCAlreadyPending),
             BusinessVerificationStatus::Rejected => {
@@ -758,6 +1016,13 @@ impl QuickLendXContract {
         }
 
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
+        let max_active_bids = BidStorage::get_max_active_bids_per_investor(&env);
+        if max_active_bids > 0 {
+            let active_bids = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+            if active_bids >= max_active_bids {
+                return Err(QuickLendXError::OperationNotAllowed);
+            }
+        }
         validate_bid(&env, &invoice, bid_amount, expected_return, &investor)?;
         // Create bid
         let bid_id = BidStorage::generate_unique_bid_id(&env);
@@ -836,7 +1101,8 @@ impl QuickLendXContract {
         );
         InvoiceStorage::update_invoice(&env, &invoice);
 
-        // Add to new status list after status change
+        // Update status index so get_invoices_by_status(Funded) and check_overdue_invoices see this invoice
+        InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
         InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Funded, &invoice_id);
         let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         let investment = Investment {
@@ -851,7 +1117,7 @@ impl QuickLendXContract {
         InvestmentStorage::store_investment(&env, &investment);
 
         let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
-            .expect("Escrow should exist after creation");
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
         audit::log_bid_accepted(
@@ -1044,8 +1310,7 @@ impl QuickLendXContract {
     /// Handle invoice default (admin only)
     /// This is the internal handler - use mark_invoice_defaulted for public API
     pub fn handle_default(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
+        let _ = require_current_admin(&env)?;
 
         // Get the investment to track investor analytics
         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
@@ -1085,8 +1350,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         grace_period: Option<u64>,
     ) -> Result<(), QuickLendXError> {
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
+        let _ = require_current_admin(&env)?;
 
         // Get the investment to track investor analytics
         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
@@ -1119,7 +1383,7 @@ impl QuickLendXContract {
 
     /// Update the platform fee basis points (admin only)
     pub fn set_platform_fee(env: Env, new_fee_bps: i128) -> Result<(), QuickLendXError> {
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = require_current_admin(&env)?;
         PlatformFee::set_config(&env, &admin, new_fee_bps)?;
         Ok(())
     }
@@ -1211,8 +1475,7 @@ impl QuickLendXContract {
         investor: Address,
         investment_limit: i128,
     ) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = require_current_admin(&env)?;
         let verification = do_verify_investor(&env, &admin, &investor, investment_limit)?;
         emit_investor_verified(&env, &verification);
         Ok(())
@@ -1224,8 +1487,7 @@ impl QuickLendXContract {
         investor: Address,
         reason: String,
     ) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = require_current_admin(&env)?;
         do_reject_investor(&env, &admin, &investor, reason)
     }
 
@@ -1240,8 +1502,7 @@ impl QuickLendXContract {
         investor: Address,
         new_limit: i128,
     ) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = require_current_admin(&env)?;
         verification::set_investment_limit(&env, &admin, &investor, new_limit)
     }
 
@@ -1274,18 +1535,20 @@ impl QuickLendXContract {
 
     /// Set admin address (initialization function)
     pub fn set_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        if let Some(current_admin) = BusinessVerificationStorage::get_admin(&env) {
-            current_admin.require_auth();
+        if let Some(current_admin) = AdminStorage::get_admin(&env) {
+            AdminStorage::set_admin(&env, &current_admin, &admin)?;
         } else {
-            admin.require_auth();
+            AdminStorage::initialize(&env, &admin)?;
         }
+
+        // Keep legacy storage in sync for backward compatibility with older queries/tests.
         BusinessVerificationStorage::set_admin(&env, &admin);
         Ok(())
     }
 
     /// Get admin address
     pub fn get_admin(env: Env) -> Option<Address> {
-        BusinessVerificationStorage::get_admin(&env)
+        AdminStorage::get_admin(&env)
     }
 
     /// Initialize protocol limits (admin only). Sets min amount, max due date days, grace period.
@@ -1326,6 +1589,23 @@ impl QuickLendXContract {
             min_invoice_amount,
             min_bid_amount,
             min_bid_bps,
+            max_due_date_days,
+            grace_period_seconds,
+        )
+    }
+
+    /// Update protocol limits (admin only).
+    pub fn update_protocol_limits(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+    ) -> Result<(), QuickLendXError> {
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+            env,
+            admin,
+            min_invoice_amount,
             max_due_date_days,
             grace_period_seconds,
         )
@@ -1792,6 +2072,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         reviewer: Address,
     ) -> Result<(), QuickLendXError> {
+        require_specific_admin(&env, &reviewer)?;
         do_put_dispute_under_review(&env, &invoice_id, &reviewer)
     }
 
@@ -1802,6 +2083,7 @@ impl QuickLendXContract {
         resolver: Address,
         resolution: String,
     ) -> Result<(), QuickLendXError> {
+        require_specific_admin(&env, &resolver)?;
         do_resolve_dispute(&env, &invoice_id, &resolver, resolution)
     }
 
@@ -1845,9 +2127,7 @@ impl QuickLendXContract {
 
     /// Update platform metrics (admin only)
     pub fn update_platform_metrics(env: Env) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
+        let _ = require_current_admin(&env)?;
 
         let metrics = AnalyticsCalculator::calculate_platform_metrics(&env)?;
         AnalyticsStorage::store_platform_metrics(&env, &metrics);
@@ -1871,9 +2151,7 @@ impl QuickLendXContract {
 
     /// Update performance metrics (admin only)
     pub fn update_performance_metrics(env: Env) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
+        let _ = require_current_admin(&env)?;
 
         let metrics = AnalyticsCalculator::calculate_performance_metrics(&env)?;
         AnalyticsStorage::store_performance_metrics(&env, &metrics);
@@ -1999,11 +2277,17 @@ impl QuickLendXContract {
     pub fn get_analytics_summary(
         env: Env,
     ) -> Result<(PlatformMetrics, PerformanceMetrics), QuickLendXError> {
-        let platform_metrics = AnalyticsStorage::get_platform_metrics(&env)
-            .unwrap_or_else(|| AnalyticsCalculator::calculate_platform_metrics(&env).unwrap());
+        let platform_metrics = match AnalyticsStorage::get_platform_metrics(&env) {
+            Some(metrics) => metrics,
+            None => AnalyticsCalculator::calculate_platform_metrics(&env)
+                .map_err(|_| QuickLendXError::StorageError)?,
+        };
 
-        let performance_metrics = AnalyticsStorage::get_performance_metrics(&env)
-            .unwrap_or_else(|| AnalyticsCalculator::calculate_performance_metrics(&env).unwrap());
+        let performance_metrics = match AnalyticsStorage::get_performance_metrics(&env) {
+            Some(metrics) => metrics,
+            None => AnalyticsCalculator::calculate_performance_metrics(&env)
+                .map_err(|_| QuickLendXError::StorageError)?,
+        };
 
         Ok((platform_metrics, performance_metrics))
     }
@@ -2014,9 +2298,7 @@ impl QuickLendXContract {
         export_type: String,
         filters: Vec<String>,
     ) -> Result<String, QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
+        let admin = require_current_admin(&env)?;
 
         // Emit event
         events::emit_analytics_export(&env, &export_type, &admin, filters.len() as u32);
@@ -2117,9 +2399,7 @@ impl QuickLendXContract {
         env: Env,
         investor: Address,
     ) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
+        let _ = require_current_admin(&env)?;
 
         let analytics = AnalyticsCalculator::calculate_investor_analytics(&env, &investor)?;
         AnalyticsStorage::store_investor_analytics(&env, &investor, &analytics);
@@ -2138,9 +2418,7 @@ impl QuickLendXContract {
 
     /// Update platform investor performance metrics (admin only)
     pub fn update_investor_performance_data(env: Env) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
+        let _ = require_current_admin(&env)?;
 
         let metrics = AnalyticsCalculator::calc_investor_perf_metrics(&env)?;
         AnalyticsStorage::store_investor_performance(&env, &metrics);
@@ -2162,13 +2440,13 @@ impl QuickLendXContract {
 
     /// Initialize fee management system
     pub fn initialize_fee_system(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        require_specific_admin(&env, &admin)?;
         fees::FeeManager::initialize(&env, &admin)
     }
 
     /// Configure treasury address for platform fee routing (admin only)
     pub fn configure_treasury(env: Env, treasury_address: Address) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = require_current_admin(&env)?;
 
         let _treasury_config =
             fees::FeeManager::configure_treasury(&env, &admin, treasury_address.clone())?;
@@ -2181,9 +2459,7 @@ impl QuickLendXContract {
 
     /// Update platform fee basis points (admin only)
     pub fn update_platform_fee_bps(env: Env, new_fee_bps: u32) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
+        let admin = require_current_admin(&env)?;
 
         let old_config = fees::FeeManager::get_platform_fee_config(&env)?;
         let old_fee_bps = old_config.fee_bps;
@@ -2277,12 +2553,7 @@ impl QuickLendXContract {
         auto_distribution: bool,
         min_distribution_amount: i128,
     ) -> Result<(), QuickLendXError> {
-        // Verify admin
-        let stored_admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        if admin != stored_admin {
-            return Err(QuickLendXError::NotAdmin);
-        }
+        require_specific_admin(&env, &admin)?;
 
         let config = fees::RevenueConfig {
             treasury_address,
@@ -2306,6 +2577,7 @@ impl QuickLendXContract {
         admin: Address,
         period: u64,
     ) -> Result<(i128, i128, i128), QuickLendXError> {
+        require_specific_admin(&env, &admin)?;
         fees::FeeManager::distribute_revenue(&env, &admin, period)
     }
 
@@ -2686,7 +2958,12 @@ impl QuickLendXContract {
         };
 
         BackupStorage::set_retention_policy(&env, &policy);
-        events::emit_retention_policy_updated(&env, max_backups, max_age_seconds, auto_cleanup_enabled);
+        events::emit_retention_policy_updated(
+            &env,
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+        );
 
         Ok(())
     }
@@ -2722,16 +2999,13 @@ impl QuickLendXContract {
 }
 
 #[cfg(test)]
-mod test;
-
-#[cfg(test)]
 mod test_bid;
 
 #[cfg(test)]
-mod test_bid_ranking;
+mod test_fees;
 
 #[cfg(test)]
-mod test_fees;
+mod test_fees_extended;
 
 #[cfg(test)]
 mod test_escrow;
@@ -2766,16 +3040,22 @@ mod test_escrow_refund;
 #[cfg(test)]
 mod test_fuzz;
 #[cfg(test)]
+mod test_fuzz;
+#[cfg(test)]
 mod test_insurance;
 #[cfg(test)]
 mod test_investor_kyc;
 #[cfg(test)]
+mod test_lifecycle;
+#[cfg(test)]
 mod test_limit;
+#[cfg(test)]
+mod test_fuzz;
 #[cfg(test)]
 mod test_profit_fee_formula;
 #[cfg(test)]
 mod test_revenue_split;
 #[cfg(test)]
-mod test_types;
+mod test_risk_tier;
 #[cfg(test)]
-mod test_lifecycle;
+mod test_types;

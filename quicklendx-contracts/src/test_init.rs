@@ -3,7 +3,7 @@
 use super::*;
 use crate::init::InitializationParams;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Env, Vec, IntoVal};
+use soroban_sdk::{Address, Env, IntoVal, Vec};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>) {
     let env = Env::default();
@@ -66,7 +66,7 @@ fn test_initialization_requires_admin_auth() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    
+
     // No mock_all_auths()
     let admin = Address::generate(&env);
     let params = InitializationParams {
@@ -157,4 +157,3 @@ fn test_validation_invalid_grace_period() {
     let result = client.try_initialize(&params);
     assert_eq!(result, Err(Ok(QuickLendXError::InvalidTimestamp)));
 }
-

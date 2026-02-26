@@ -1,6 +1,6 @@
 //! Multi-currency whitelist: admin-managed list of token addresses allowed for invoice currency.
 //! Rejects invoice creation and bids for non-whitelisted tokens (e.g. USDC, EURC, stablecoins).
-
+//!
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use soroban_sdk::{symbol_short, Address, Env, Vec};
@@ -22,7 +22,6 @@ impl CurrencyWhitelist {
             return Err(QuickLendXError::NotAdmin);
         }
         // Auth handled by caller natively requiring auth on the admin argument
-
 
         let mut list = Self::get_whitelisted_currencies(env);
         if list.iter().any(|a| a == *currency) {

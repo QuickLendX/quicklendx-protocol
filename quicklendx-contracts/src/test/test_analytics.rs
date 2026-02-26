@@ -960,6 +960,495 @@ fn test_financial_metrics_profit_margins() {
 }
 
 // ============================================================================
+// GET_BUSINESS_REPORT TESTS (Issue #XXX)
+// ============================================================================
+
+#[test]
+fn test_get_business_report_returns_some_after_generate() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, business) = setup_contract(&env);
+
+    // Create some invoices for the business
+    create_invoice(&env, &client, &business, 5000, "Business report test 1");
+    create_invoice(&env, &client, &business, 3000, "Business report test 2");
+
+    // Generate a report
+    let report = client.generate_business_report(&business, &TimePeriod::AllTime);
+    let report_id = report.report_id.clone();
+
+    // Retrieve the report using get_business_report
+    let retrieved = client.get_business_report(&report_id);
+    
+    // Should return Some
+    assert!(retrieved.is_some());
+}
+
+#[test]
+fn test_get_business_report_returns_none_for_invalid_id() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, _business) = setup_contract(&env);
+
+    // Create an invalid report_id (random bytes)
+    let invalid_report_id = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
+
+    // Attempt to retrieve with invalid ID
+    let retrieved = client.get_business_report(&invalid_report_id);
+    
+    // Should return None
+    assert!(retrieved.is_none());
+}
+
+#[test]
+fn test_get_business_report_fields_match_generated_data() {
+    let env = Env::default();
+    let current_timestamp = 2_000_000u64;
+    env.ledger().set_timestamp(current_timestamp);
+    let (client, _admin, business) = setup_contract(&env);
+
+    // Create invoices with specific amounts
+    let inv1 = create_invoice(&env, &client, &business, 10000, "Match test inv 1");
+    let _inv2 = create_invoice(&env, &client, &business, 5000, "Match test inv 2");
+
+    // Fund one invoice
+    client.update_invoice_status(&inv1, &InvoiceStatus::Verified);
+    client.update_invoice_status(&inv1, &InvoiceStatus::Funded);
+
+    // Generate report
+    let generated = client.generate_business_report(&business, &TimePeriod::AllTime);
+    let report_id = generated.report_id.clone();
+
+    // Retrieve report
+    let retrieved = client.get_business_report(&report_id).unwrap();
+
+    // Verify all fields match
+    assert_eq!(retrieved.report_id, generated.report_id);
+    assert_eq!(retrieved.business_address, generated.business_address);
+    assert_eq!(retrieved.business_address, business);
+    assert_eq!(retrieved.period, generated.period);
+    assert_eq!(retrieved.period, TimePeriod::AllTime);
+    assert_eq!(retrieved.start_date, generated.start_date);
+    assert_eq!(retrieved.end_date, generated.end_date);
+    assert_eq!(retrieved.invoices_uploaded, generated.invoices_uploaded);
+    assert_eq!(retrieved.invoices_uploaded, 2);
+    assert_eq!(retrieved.invoices_funded, generated.invoices_funded);
+    assert_eq!(retrieved.invoices_funded, 1);
+    assert_eq!(retrieved.total_volume, generated.total_volume);
+    assert_eq!(retrieved.total_volume, 15000);
+    assert_eq!(retrieved.average_funding_time, generated.average_funding_time);
+    assert_eq!(retrieved.success_rate, generated.success_rate);
+    assert_eq!(retrieved.default_rate, generated.default_rate);
+    assert_eq!(retrieved.rating_average, generated.rating_average);
+    assert_eq!(retrieved.total_ratings, generated.total_ratings);
+    assert_eq!(retrieved.generated_at, generated.generated_at);
+    assert_eq!(retrieved.generated_at, current_timestamp);
+}
+
+#[test]
+fn test_get_business_report_category_breakdown_matches() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_500_000);
+    let (client, _admin, business) = setup_contract(&env);
+
+    // Create multiple invoices (all Services category by default)
+    create_invoice(&env, &client, &business, 1000, "Cat breakdown 1");
+    create_invoice(&env, &client, &business, 2000, "Cat breakdown 2");
+    create_invoice(&env, &client, &business, 3000, "Cat breakdown 3");
+
+    let generated = client.generate_business_report(&business, &TimePeriod::AllTime);
+    let retrieved = client.get_business_report(&generated.report_id).unwrap();
+
+    // Verify category breakdown matches
+    assert_eq!(retrieved.category_breakdown.len(), generated.category_breakdown.len());
+    
+    // Find Services category count in both
+    let mut gen_services_count = 0u32;
+    let mut ret_services_count = 0u32;
+    
+    for (cat, count) in generated.category_breakdown.iter() {
+        if cat == InvoiceCategory::Services {
+            gen_services_count = count;
+        }
+    }
+    
+    for (cat, count) in retrieved.category_breakdown.iter() {
+        if cat == InvoiceCategory::Services {
+            ret_services_count = count;
+        }
+    }
+    
+    assert_eq!(gen_services_count, 3);
+    assert_eq!(ret_services_count, 3);
+    assert_eq!(gen_services_count, ret_services_count);
+}
+
+#[test]
+fn test_get_business_report_multiple_reports_different_ids() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, business) = setup_contract(&env);
+
+    create_invoice(&env, &client, &business, 1000, "Multi report inv");
+
+    // Generate first report
+    let report1 = client.generate_business_report(&business, &TimePeriod::Daily);
+    let report1_id = report1.report_id.clone();
+
+    // Advance time slightly to get different report ID
+    env.ledger().set_timestamp(1_000_001);
+    
+    // Generate second report
+    let report2 = client.generate_business_report(&business, &TimePeriod::Weekly);
+    let report2_id = report2.report_id.clone();
+
+    // Both should be retrievable
+    let retrieved1 = client.get_business_report(&report1_id);
+    let retrieved2 = client.get_business_report(&report2_id);
+
+    assert!(retrieved1.is_some());
+    assert!(retrieved2.is_some());
+    
+    // Verify they have different periods
+    assert_eq!(retrieved1.unwrap().period, TimePeriod::Daily);
+    assert_eq!(retrieved2.unwrap().period, TimePeriod::Weekly);
+}
+
+#[test]
+fn test_get_business_report_with_paid_and_defaulted_invoices() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, business) = setup_contract(&env);
+
+    let inv1 = create_invoice(&env, &client, &business, 1000, "Paid invoice");
+    let inv2 = create_invoice(&env, &client, &business, 2000, "Defaulted invoice");
+    let _inv3 = create_invoice(&env, &client, &business, 3000, "Pending invoice");
+
+    // Mark one as paid, one as defaulted
+    client.update_invoice_status(&inv1, &InvoiceStatus::Paid);
+    client.update_invoice_status(&inv2, &InvoiceStatus::Defaulted);
+
+    let generated = client.generate_business_report(&business, &TimePeriod::AllTime);
+    let retrieved = client.get_business_report(&generated.report_id).unwrap();
+
+    // Verify success and default rates match
+    assert_eq!(retrieved.success_rate, generated.success_rate);
+    assert_eq!(retrieved.default_rate, generated.default_rate);
+    assert_eq!(retrieved.invoices_uploaded, 3);
+    assert_eq!(retrieved.total_volume, 6000);
+}
+
+#[test]
+fn test_get_business_report_empty_business() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, _business) = setup_contract(&env);
+
+    // Generate report for a business with no invoices
+    let empty_business = Address::generate(&env);
+    let generated = client.generate_business_report(&empty_business, &TimePeriod::AllTime);
+    let retrieved = client.get_business_report(&generated.report_id).unwrap();
+
+    // Verify empty report fields match
+    assert_eq!(retrieved.invoices_uploaded, 0);
+    assert_eq!(retrieved.invoices_funded, 0);
+    assert_eq!(retrieved.total_volume, 0);
+    assert_eq!(retrieved.success_rate, 0);
+    assert_eq!(retrieved.default_rate, 0);
+    assert!(retrieved.rating_average.is_none());
+}
+
+// ============================================================================
+// GET_INVESTOR_REPORT TESTS (Issue #XXX)
+// ============================================================================
+
+#[test]
+fn test_get_investor_report_returns_some_after_generate() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, _business) = setup_contract(&env);
+
+    let investor = Address::generate(&env);
+
+    // Generate a report
+    let report = client.generate_investor_report(&investor, &TimePeriod::AllTime);
+    let report_id = report.report_id.clone();
+
+    // Retrieve the report using get_investor_report
+    let retrieved = client.get_investor_report(&report_id);
+    
+    // Should return Some
+    assert!(retrieved.is_some());
+}
+
+#[test]
+fn test_get_investor_report_returns_none_for_invalid_id() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, _business) = setup_contract(&env);
+
+    // Create an invalid report_id (random bytes)
+    let invalid_report_id = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
+
+    // Attempt to retrieve with invalid ID
+    let retrieved = client.get_investor_report(&invalid_report_id);
+    
+    // Should return None
+    assert!(retrieved.is_none());
+}
+
+#[test]
+fn test_get_investor_report_fields_match_generated_data() {
+    let env = Env::default();
+    let current_timestamp = 2_000_000u64;
+    env.ledger().set_timestamp(current_timestamp);
+    let (client, _admin, _business) = setup_contract(&env);
+
+    let investor = Address::generate(&env);
+
+    // Generate report
+    let generated = client.generate_investor_report(&investor, &TimePeriod::AllTime);
+    let report_id = generated.report_id.clone();
+
+    // Retrieve report
+    let retrieved = client.get_investor_report(&report_id).unwrap();
+
+    // Verify all fields match
+    assert_eq!(retrieved.report_id, generated.report_id);
+    assert_eq!(retrieved.investor_address, generated.investor_address);
+    assert_eq!(retrieved.investor_address, investor);
+    assert_eq!(retrieved.period, generated.period);
+    assert_eq!(retrieved.period, TimePeriod::AllTime);
+    assert_eq!(retrieved.start_date, generated.start_date);
+    assert_eq!(retrieved.end_date, generated.end_date);
+    assert_eq!(retrieved.investments_made, generated.investments_made);
+    assert_eq!(retrieved.total_invested, generated.total_invested);
+    assert_eq!(retrieved.total_returns, generated.total_returns);
+    assert_eq!(retrieved.average_return_rate, generated.average_return_rate);
+    assert_eq!(retrieved.success_rate, generated.success_rate);
+    assert_eq!(retrieved.default_rate, generated.default_rate);
+    assert_eq!(retrieved.risk_tolerance, generated.risk_tolerance);
+    assert_eq!(retrieved.portfolio_diversity, generated.portfolio_diversity);
+    assert_eq!(retrieved.generated_at, generated.generated_at);
+    assert_eq!(retrieved.generated_at, current_timestamp);
+}
+
+#[test]
+fn test_get_investor_report_preferred_categories_match() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_500_000);
+    let (client, _admin, _business) = setup_contract(&env);
+
+    let investor = Address::generate(&env);
+
+    let generated = client.generate_investor_report(&investor, &TimePeriod::AllTime);
+    let retrieved = client.get_investor_report(&generated.report_id).unwrap();
+
+    // Verify preferred categories length matches
+    assert_eq!(retrieved.preferred_categories.len(), generated.preferred_categories.len());
+    
+    // Verify each category matches
+    for i in 0..generated.preferred_categories.len() {
+        let (gen_cat, gen_count) = generated.preferred_categories.get(i).unwrap();
+        let (ret_cat, ret_count) = retrieved.preferred_categories.get(i).unwrap();
+        assert_eq!(gen_cat, ret_cat);
+        assert_eq!(gen_count, ret_count);
+    }
+}
+
+#[test]
+fn test_get_investor_report_multiple_reports_different_ids() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, _business) = setup_contract(&env);
+
+    let investor = Address::generate(&env);
+
+    // Generate first report
+    let report1 = client.generate_investor_report(&investor, &TimePeriod::Daily);
+    let report1_id = report1.report_id.clone();
+
+    // Advance time slightly to get different report ID
+    env.ledger().set_timestamp(1_000_001);
+    
+    // Generate second report
+    let report2 = client.generate_investor_report(&investor, &TimePeriod::Monthly);
+    let report2_id = report2.report_id.clone();
+
+    // Both should be retrievable
+    let retrieved1 = client.get_investor_report(&report1_id);
+    let retrieved2 = client.get_investor_report(&report2_id);
+
+    assert!(retrieved1.is_some());
+    assert!(retrieved2.is_some());
+    
+    // Verify they have different periods
+    assert_eq!(retrieved1.unwrap().period, TimePeriod::Daily);
+    assert_eq!(retrieved2.unwrap().period, TimePeriod::Monthly);
+}
+
+#[test]
+fn test_get_investor_report_all_time_periods() {
+    let env = Env::default();
+    env.ledger().set_timestamp(500 * 86400);
+    let (client, _admin, _business) = setup_contract(&env);
+
+    let investor = Address::generate(&env);
+
+    // Generate and retrieve reports for all periods
+    let periods = [
+        TimePeriod::Daily,
+        TimePeriod::Weekly,
+        TimePeriod::Monthly,
+        TimePeriod::Quarterly,
+        TimePeriod::Yearly,
+        TimePeriod::AllTime,
+    ];
+
+    for period in periods.iter() {
+        let generated = client.generate_investor_report(&investor, period);
+        let retrieved = client.get_investor_report(&generated.report_id);
+        
+        assert!(retrieved.is_some());
+        let retrieved = retrieved.unwrap();
+        assert_eq!(retrieved.period, *period);
+        assert_eq!(retrieved.investor_address, investor);
+    }
+}
+
+#[test]
+fn test_get_investor_report_empty_investor() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, _business) = setup_contract(&env);
+
+    // Generate report for an investor with no investments
+    let empty_investor = Address::generate(&env);
+    let generated = client.generate_investor_report(&empty_investor, &TimePeriod::AllTime);
+    let retrieved = client.get_investor_report(&generated.report_id).unwrap();
+
+    // Verify empty report fields match
+    assert_eq!(retrieved.investments_made, 0);
+    assert_eq!(retrieved.total_invested, 0);
+    assert_eq!(retrieved.total_returns, 0);
+    assert_eq!(retrieved.average_return_rate, 0);
+    assert_eq!(retrieved.success_rate, 0);
+    assert_eq!(retrieved.default_rate, 0);
+    assert_eq!(retrieved.risk_tolerance, 25); // Default low risk
+    assert_eq!(retrieved.portfolio_diversity, 0);
+}
+
+#[test]
+fn test_get_investor_report_period_dates_match() {
+    let env = Env::default();
+    let current_timestamp = 100_000_000u64;
+    env.ledger().set_timestamp(current_timestamp);
+    let (client, _admin, _business) = setup_contract(&env);
+
+    let investor = Address::generate(&env);
+
+    // Test Daily period dates
+    let daily_report = client.generate_investor_report(&investor, &TimePeriod::Daily);
+    let retrieved_daily = client.get_investor_report(&daily_report.report_id).unwrap();
+    
+    assert_eq!(retrieved_daily.end_date, current_timestamp);
+    assert_eq!(retrieved_daily.start_date, current_timestamp - 86400);
+
+    // Test Weekly period dates
+    let weekly_report = client.generate_investor_report(&investor, &TimePeriod::Weekly);
+    let retrieved_weekly = client.get_investor_report(&weekly_report.report_id).unwrap();
+    
+    assert_eq!(retrieved_weekly.end_date, current_timestamp);
+    assert_eq!(retrieved_weekly.start_date, current_timestamp - 7 * 86400);
+}
+
+#[test]
+fn test_get_business_report_different_businesses_same_time() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, business1) = setup_contract(&env);
+    let business2 = Address::generate(&env);
+
+    // Create invoices for both businesses
+    create_invoice(&env, &client, &business1, 5000, "Business 1 invoice");
+    
+    // Generate reports for both
+    let report1 = client.generate_business_report(&business1, &TimePeriod::AllTime);
+    let report2 = client.generate_business_report(&business2, &TimePeriod::AllTime);
+
+    // Retrieve both
+    let retrieved1 = client.get_business_report(&report1.report_id).unwrap();
+    let retrieved2 = client.get_business_report(&report2.report_id).unwrap();
+
+    // Verify different business addresses
+    assert_eq!(retrieved1.business_address, business1);
+    assert_eq!(retrieved2.business_address, business2);
+    
+    // Verify different data
+    assert_eq!(retrieved1.invoices_uploaded, 1);
+    assert_eq!(retrieved1.total_volume, 5000);
+    assert_eq!(retrieved2.invoices_uploaded, 0);
+    assert_eq!(retrieved2.total_volume, 0);
+}
+
+#[test]
+fn test_get_investor_report_different_investors_same_time() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, _business) = setup_contract(&env);
+
+    let investor1 = Address::generate(&env);
+    let investor2 = Address::generate(&env);
+
+    // Generate reports for both investors
+    let report1 = client.generate_investor_report(&investor1, &TimePeriod::AllTime);
+    let report2 = client.generate_investor_report(&investor2, &TimePeriod::AllTime);
+
+    // Retrieve both
+    let retrieved1 = client.get_investor_report(&report1.report_id).unwrap();
+    let retrieved2 = client.get_investor_report(&report2.report_id).unwrap();
+
+    // Verify different investor addresses
+    assert_eq!(retrieved1.investor_address, investor1);
+    assert_eq!(retrieved2.investor_address, investor2);
+}
+
+#[test]
+fn test_get_business_report_nonexistent_after_valid() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, business) = setup_contract(&env);
+
+    create_invoice(&env, &client, &business, 1000, "Test invoice");
+
+    // Generate a valid report
+    let valid_report = client.generate_business_report(&business, &TimePeriod::AllTime);
+    
+    // Verify valid report exists
+    assert!(client.get_business_report(&valid_report.report_id).is_some());
+    
+    // Create invalid ID and verify it returns None
+    let invalid_id = soroban_sdk::BytesN::from_array(&env, &[255u8; 32]);
+    assert!(client.get_business_report(&invalid_id).is_none());
+}
+
+#[test]
+fn test_get_investor_report_nonexistent_after_valid() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, _admin, _business) = setup_contract(&env);
+
+    let investor = Address::generate(&env);
+
+    // Generate a valid report
+    let valid_report = client.generate_investor_report(&investor, &TimePeriod::AllTime);
+    
+    // Verify valid report exists
+    assert!(client.get_investor_report(&valid_report.report_id).is_some());
+    
+    // Create invalid ID and verify it returns None
+    let invalid_id = soroban_sdk::BytesN::from_array(&env, &[255u8; 32]);
+    assert!(client.get_investor_report(&invalid_id).is_none());
 // INVESTOR ANALYTICS TESTS
 // ============================================================================
 
@@ -982,6 +1471,17 @@ fn test_investor_analytics_empty_data() {
     let data_stored = client.get_investor_analytics_data(&investor);
     assert!(data_stored.is_some());
     assert_eq!(data_stored.unwrap().investor_address, investor);
+}
+
+#[test]
+fn test_calculate_investor_analytics_requires_verified_status() {
+    let env = Env::default();
+    let (client, _admin, _business) = setup_contract(&env);
+    let investor = Address::generate(&env);
+
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
+    let result = client.try_calculate_investor_analytics(&investor);
+    assert!(result.is_err());
 }
 
 #[test]

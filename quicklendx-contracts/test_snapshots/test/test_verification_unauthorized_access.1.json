@@ -103,6 +103,8 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
+=======
                           "symbol": "adm_init"
                         },
                         "val": {
@@ -119,6 +121,7 @@
                       },
                       {
                         "key": {
+>>>>>>> main
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                         },
                         "val": {

@@ -1,3 +1,4 @@
+use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{
     emit_dispute_created, emit_dispute_resolved, emit_dispute_under_review, emit_insurance_claimed,
@@ -209,6 +210,9 @@ pub fn put_dispute_under_review(
 ) -> Result<(), QuickLendXError> {
     reviewer.require_auth();
 
+    // Verify reviewer is admin
+    AdminStorage::require_admin(env, reviewer)?;
+
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -237,6 +241,9 @@ pub fn resolve_dispute(
     resolution: String,
 ) -> Result<(), QuickLendXError> {
     resolver.require_auth();
+
+    // Verify resolver is admin
+    AdminStorage::require_admin(env, resolver)?;
 
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
