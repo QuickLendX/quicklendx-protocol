@@ -508,7 +508,7 @@ pub fn validate_bid(
 
     // Expected return must cover the original bid to avoid negative payoff.
     if expected_return < bid_amount {
-        return Err(QuickLendXError::InvalidExpectedReturn);
+        return Err(QuickLendXError::InvalidAmount);
     }
 
     // Validate investor can make this investment
@@ -658,15 +658,7 @@ pub fn verify_invoice_data(
     }
 
     // Validate due date is not too far in the future using protocol limits
-    let limits = crate::protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
-    if amount < limits.min_invoice_amount {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
-    let max_due_date = current_timestamp + (limits.max_due_date_days * 86400);
-    if due_date > max_due_date {
-        return Err(QuickLendXError::InvoiceDueDateInvalid);
-    }
+    crate::protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
     if description.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }

@@ -571,33 +571,33 @@ fn test_timestamp_accuracy() {
 // ============================================================================
 
 #[test]
-fn test_verify_nonexistent_business_fails() {
+fn test_verify_business_without_kyc_submission_fails() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);
 
-    // Try to verify a business that never submitted KYC
+    // Try to verify a business that hasn't submitted KYC - should fail
     let result = client.try_verify_business(&admin, &business);
     assert!(result.is_err());
 }
 
 #[test]
-fn test_reject_nonexistent_business_fails() {
+fn test_reject_business_without_kyc_submission_fails() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);
-    let reason = String::from_str(&env, "No KYC submitted");
+    let rejection_reason = String::from_str(&env, "Test rejection");
 
-    // Try to reject a business that never submitted KYC
-    let result = client.try_reject_business(&admin, &business, &reason);
+    // Try to reject a business that hasn't submitted KYC - should fail
+    let result = client.try_reject_business(&admin, &business, &rejection_reason);
     assert!(result.is_err());
 }
 
 #[test]
-fn test_cannot_verify_already_verified_business() {
+fn test_double_verification_fails() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);
     let kyc_data = create_test_kyc_data(&env, "TestBusiness");
 
-    // Submit and verify KYC
+    // Submit and verify
     client.submit_kyc_application(&business, &kyc_data);
     client.verify_business(&admin, &business);
 
@@ -607,15 +607,15 @@ fn test_cannot_verify_already_verified_business() {
 }
 
 #[test]
-fn test_cannot_reject_already_rejected_business() {
+fn test_double_rejection_fails() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);
     let kyc_data = create_test_kyc_data(&env, "TestBusiness");
-    let reason = String::from_str(&env, "Bad docs");
+    let rejection_reason = String::from_str(&env, "Test rejection");
 
-    // Submit and reject
+    // Submit and reject KYC
     client.submit_kyc_application(&business, &kyc_data);
-    client.reject_business(&admin, &business, &reason);
+    client.reject_business(&admin, &business, &rejection_reason);
 
     // Try to reject again - should fail with InvalidKYCStatus
     let result = client.try_reject_business(&admin, &business, &reason);
@@ -623,17 +623,17 @@ fn test_cannot_reject_already_rejected_business() {
 }
 
 #[test]
-fn test_cannot_verify_rejected_business_without_resubmission() {
+fn test_verify_already_rejected_business_fails() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);
     let kyc_data = create_test_kyc_data(&env, "TestBusiness");
-    let reason = String::from_str(&env, "Incomplete");
+    let rejection_reason = String::from_str(&env, "Test rejection");
 
-    // Submit and reject
+    // Submit and reject KYC
     client.submit_kyc_application(&business, &kyc_data);
-    client.reject_business(&admin, &business, &reason);
+    client.reject_business(&admin, &business, &rejection_reason);
 
-    // Try to verify the rejected business directly - should fail
+    // Try to verify rejected business - should fail
     let result = client.try_verify_business(&admin, &business);
     assert!(result.is_err());
 }
