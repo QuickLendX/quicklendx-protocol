@@ -322,6 +322,24 @@ impl BidStorage {
         }
         result
     }
+
+    /// Count the number of currently active (Placed) bids for a given investor.
+    ///
+    /// This is used by rate-limiting logic in the main contract to enforce a
+    /// maximum number of open bids per investor across all invoices.
+    pub fn count_active_bids_by_investor(env: &Env, investor: &Address) -> u32 {
+        let all_bids = Self::get_all_bids_by_investor(env, investor);
+        let mut count: u32 = 0;
+        let mut idx: u32 = 0;
+        while idx < all_bids.len() {
+            let bid = all_bids.get(idx).unwrap();
+            if bid.status == BidStatus::Placed {
+                count = count.saturating_add(1);
+            }
+            idx = idx.saturating_add(1);
+        }
+        count
+    }
     /// Generates a unique 32-byte bid ID using timestamp and a simple counter.
     /// This approach avoids potential serialization issues with large counters.
     pub fn generate_unique_bid_id(env: &Env) -> BytesN<32> {

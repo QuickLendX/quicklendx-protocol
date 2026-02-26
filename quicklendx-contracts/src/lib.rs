@@ -112,6 +112,12 @@ pub struct QuickLendXContract;
 /// Maximum number of records returned by paginated query endpoints.
 pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
 
+/// Maximum number of active (Placed) bids allowed per investor across all invoices.
+///
+/// This is a simple rate-limit to protect against excessive open positions from a
+/// single investor. Tests rely on this constant, so keep it reasonably small.
+pub(crate) const MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 10;
+
 #[inline]
 fn cap_query_limit(limit: u32) -> u32 {
     limit.min(MAX_QUERY_LIMIT)
@@ -735,6 +741,31 @@ impl QuickLendXContract {
         InvoiceStorage::get_invoices_by_status(&env, &status)
     }
 
+    /// Batch helper: get invoice statuses for a list of invoice IDs.
+    ///
+    /// - Preserves input order.
+    /// - Returns `None` for nonexistent invoices.
+    /// - Applies `MAX_QUERY_LIMIT` to avoid unbounded iteration; inputs longer than
+    ///   the cap are truncated.
+    pub fn get_invoices_by_status_batch(
+        env: Env,
+        invoice_ids: Vec<BytesN<32>>,
+    ) -> Vec<Option<InvoiceStatus>> {
+        let mut result = Vec::new(&env);
+
+        let limit = cap_query_limit(invoice_ids.len());
+        let mut idx: u32 = 0;
+        while idx < limit {
+            if let Some(id) = invoice_ids.get(idx) {
+                let status = InvoiceStorage::get_invoice(&env, &id).map(|inv| inv.status);
+                result.push_back(status);
+            }
+            idx = idx.saturating_add(1);
+        }
+
+        result
+    }
+
     /// Get all available invoices (verified and not funded)
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
         InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified)
@@ -807,6 +838,22 @@ impl QuickLendXContract {
     pub fn get_invoice_count_by_status(env: Env, status: InvoiceStatus) -> u32 {
         let invoices = InvoiceStorage::get_invoices_by_status(&env, &status);
         invoices.len() as u32
+    }
+
+    /// Get the settlement/default deadline for an invoice based on protocol limits.
+    ///
+    /// This uses the same grace-period rules as the defaults module:
+    /// `due_date + grace_period_seconds` (with saturation).
+    pub fn get_invoice_settlement_deadline(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<u64, QuickLendXError> {
+        let invoice =
+            InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        Ok(protocol_limits::ProtocolLimitsContract::get_default_date(
+            env,
+            invoice.due_date,
+        ))
     }
 
     /// Get total invoice count
@@ -903,6 +950,14 @@ impl QuickLendXContract {
         // Validate bid amount is positive
         if bid_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
+        }
+
+        // Enforce per-investor rate limit on active (Placed) bids across all invoices.
+        let active_bids =
+            bid::BidStorage::count_active_bids_by_investor(&env, &investor);
+        if active_bids >= MAX_ACTIVE_BIDS_PER_INVESTOR {
+            // Use a generic business-logic error to avoid adding new error variants.
+            return Err(QuickLendXError::OperationNotAllowed);
         }
 
         // Validate invoice exists and is verified
