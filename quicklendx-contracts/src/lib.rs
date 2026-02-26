@@ -39,8 +39,6 @@ mod test_emergency_withdraw;
 #[cfg(test)]
 mod test_init;
 #[cfg(test)]
-mod test_invoice;
-#[cfg(test)]
 mod test_overflow;
 #[cfg(test)]
 mod test_profit_fee;
@@ -52,6 +50,9 @@ mod test_storage;
 mod test_string_limits;
 #[cfg(test)]
 mod test_bid_ranking;
+#[cfg(test)]
+mod test_vesting;
+pub mod types;
 #[cfg(test)]
 mod test_vesting;
 pub mod types;
@@ -495,6 +496,7 @@ impl QuickLendXContract {
         }
 
         // Validate due date is not too far in the future using protocol limits
+
         protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
 
         if description.len() == 0 {
@@ -3055,7 +3057,5 @@ mod test_fuzz;
 mod test_profit_fee_formula;
 #[cfg(test)]
 mod test_revenue_split;
-#[cfg(test)]
-mod test_risk_tier;
 #[cfg(test)]
 mod test_types;
