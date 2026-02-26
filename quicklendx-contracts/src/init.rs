@@ -32,6 +32,15 @@ use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 /// Storage key for protocol initialization flag
 const PROTOCOL_INITIALIZED_KEY: Symbol = symbol_short!("proto_in");
 
+/// Storage key for protocol version
+const PROTOCOL_VERSION_KEY: Symbol = symbol_short!("proto_v");
+
+/// Current protocol/contract version.
+///
+/// This is stored during initialization so off-chain components can perform
+/// migration and compatibility checks via `get_version()`.
+pub const PROTOCOL_VERSION: u32 = 1;
+
 /// Storage key for protocol configuration
 const PROTOCOL_CONFIG_KEY: Symbol = symbol_short!("proto_cf");
 
@@ -160,6 +169,11 @@ impl ProtocolInitializer {
         };
         env.storage().instance().set(&PROTOCOL_CONFIG_KEY, &config);
 
+        // Store protocol version for off-chain migration/compatibility checks.
+        env.storage()
+            .instance()
+            .set(&PROTOCOL_VERSION_KEY, &PROTOCOL_VERSION);
+
         // Mark protocol as initialized (atomic commit point)
         env.storage()
             .instance()
@@ -192,6 +206,17 @@ impl ProtocolInitializer {
             .instance()
             .get(&PROTOCOL_INITIALIZED_KEY)
             .unwrap_or(false)
+    }
+
+    /// Get the stored protocol/contract version.
+    ///
+    /// Returns the version written during initialization, or the current
+    /// `PROTOCOL_VERSION` constant if the contract has not been initialized yet.
+    pub fn get_protocol_version(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&PROTOCOL_VERSION_KEY)
+            .unwrap_or(PROTOCOL_VERSION)
     }
 
     /// Validate initialization parameters.
