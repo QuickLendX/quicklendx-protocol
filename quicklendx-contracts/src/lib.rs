@@ -19,6 +19,7 @@ mod init;
 mod investment;
 mod invoice;
 mod notifications;
+mod pause;
 mod payments;
 mod profits;
 mod protocol_limits;
@@ -39,9 +40,9 @@ mod test_emergency_withdraw;
 #[cfg(test)]
 mod test_init;
 #[cfg(test)]
-mod test_invoice;
-#[cfg(test)]
 mod test_overflow;
+#[cfg(test)]
+mod test_pause;
 #[cfg(test)]
 mod test_profit_fee;
 #[cfg(test)]
@@ -52,6 +53,9 @@ mod test_storage;
 mod test_string_limits;
 #[cfg(test)]
 mod test_bid_ranking;
+#[cfg(test)]
+mod test_vesting;
+pub mod types;
 #[cfg(test)]
 mod test_vesting;
 pub mod types;
@@ -158,6 +162,21 @@ impl QuickLendXContract {
     /// Check if the protocol has been initialized
     pub fn is_initialized(env: Env) -> bool {
         init::ProtocolInitializer::is_initialized(&env)
+    }
+
+    /// Get the protocol/contract version
+    ///
+    /// Returns the version written during initialization, or the current
+    /// PROTOCOL_VERSION constant if the contract has not been initialized yet.
+    ///
+    /// # Returns
+    /// * `u32` - The protocol version number
+    ///
+    /// # Version Format
+    /// Version is a simple integer increment (e.g., 1, 2, 3...)
+    /// Major versions indicate breaking changes that require migration.
+    pub fn get_version(env: Env) -> u32 {
+        init::ProtocolInitializer::get_protocol_version(&env)
     }
 
     /// Initialize the admin address (deprecated: use initialize)
@@ -362,6 +381,21 @@ impl QuickLendXContract {
         emergency::EmergencyWithdraw::cancel(&env, &admin)
     }
 
+    /// Pause the contract (admin only). When paused, mutating operations fail with ContractPaused; getters succeed.
+    pub fn pause(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        pause::Pause::pause(&env, &admin)
+    }
+
+    /// Unpause the contract (admin only).
+    pub fn unpause(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        pause::Pause::unpause(&env, &admin)
+    }
+
+    /// Return whether the contract is currently paused.
+    pub fn is_paused(env: Env) -> bool {
+        pause::Pause::is_paused(&env)
+    }
+
     // ============================================================================
     // Protocol Limits Management Functions
     // ============================================================================
@@ -484,6 +518,7 @@ impl QuickLendXContract {
         category: invoice::InvoiceCategory,
         tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         // Validate input parameters
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -494,7 +529,9 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
         }
 
+        // Validate amount and due date using protocol limits
         // Validate due date is not too far in the future using protocol limits
+
         protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
 
         if description.len() == 0 {
@@ -552,6 +589,7 @@ impl QuickLendXContract {
         category: invoice::InvoiceCategory,
         tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         // Only the business can upload their own invoice
         business.require_auth();
 
@@ -615,6 +653,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || do_accept_bid_and_fund(&env, &invoice_id, &bid_id))
     }
 
@@ -662,6 +701,7 @@ impl QuickLendXContract {
 
     /// Cancel an invoice (business only, before funding)
     pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -973,6 +1013,7 @@ impl QuickLendXContract {
         bid_amount: i128,
         expected_return: i128,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         // Authorization check: Only the investor can place their own bid
         investor.require_auth();
 
@@ -1016,6 +1057,13 @@ impl QuickLendXContract {
         }
 
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
+        
+        // Check if maximum bids per invoice limit is reached
+        let active_bid_count = BidStorage::get_active_bid_count(&env, &invoice_id);
+        if active_bid_count >= bid::MAX_BIDS_PER_INVOICE {
+            return Err(QuickLendXError::MaxBidsPerInvoiceExceeded);
+        }
+        
         let max_active_bids = BidStorage::get_max_active_bids_per_investor(&env);
         if max_active_bids > 0 {
             let active_bids = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
@@ -1057,6 +1105,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || {
             Self::accept_bid_impl(env.clone(), invoice_id.clone(), bid_id.clone())
         })
@@ -1206,6 +1255,7 @@ impl QuickLendXContract {
     /// - Bid is in Placed status (prevents withdrawal of accepted/expired/withdrawn bids)
     /// - Updates bid status to Withdrawn
     pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         // Get bid and validate it exists
         let mut bid =
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
@@ -1595,6 +1645,7 @@ impl QuickLendXContract {
     }
 
     /// Update protocol limits (admin only).
+s
 pub fn update_protocol_limits(
     env: Env,
     admin: Address,
@@ -1614,6 +1665,28 @@ pub fn update_protocol_limits(
         grace_period_seconds,
     )
 }
+
+    pub fn update_protocol_limits(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+    ) -> Result<(), QuickLendXError> {
+        let current_limits =
+            protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+            env,
+            admin,
+            min_invoice_amount,
+            current_limits.min_bid_amount,
+            current_limits.min_bid_bps,
+            max_due_date_days,
+            grace_period_seconds,
+        )
+    }
+
+
     /// Get all verified businesses
     pub fn get_verified_businesses(env: Env) -> Vec<Address> {
         BusinessVerificationStorage::get_verified_businesses(&env)
@@ -1739,6 +1812,7 @@ pub fn update_protocol_limits(
 
     /// Release escrow funds to business upon invoice verification
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || {
             let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
                 .ok_or(QuickLendXError::StorageKeyNotFound)?;
@@ -1766,6 +1840,7 @@ pub fn update_protocol_limits(
         invoice_id: BytesN<32>,
         caller: Address,
     ) -> Result<(), QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || do_refund_escrow_funds(&env, &invoice_id, &caller))
     }
 
@@ -3055,10 +3130,14 @@ mod test_limit;
 #[cfg(test)]
 mod test_fuzz;
 #[cfg(test)]
+mod test_ledger_timestamp_consistency;
+#[cfg(test)]
+mod test_lifecycle;
+#[cfg(test)]
 mod test_profit_fee_formula;
 #[cfg(test)]
 mod test_revenue_split;
 #[cfg(test)]
-mod test_risk_tier;
-#[cfg(test)]
 mod test_types;
+#[cfg(test)]
+mod test_min_invoice_amount;

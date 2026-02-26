@@ -41,6 +41,7 @@ pub enum QuickLendXError {
     PaymentTooLow = 1403,
     PlatformAccountNotConfigured = 1404,
     InvalidCoveragePercentage = 1405,
+    MaxBidsPerInvoiceExceeded = 1406,
 
     // Rating (1500–1503)
     InvalidRating = 1500,
