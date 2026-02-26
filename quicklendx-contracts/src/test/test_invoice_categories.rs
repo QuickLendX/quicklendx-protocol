@@ -13,7 +13,7 @@ fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
     (env, client, admin)
 }
 
@@ -879,11 +879,11 @@ fn test_remove_invoice_tag_nonexistent_fails() {
         &Vec::new(&env),
     );
 
-    let result = client.try_remove_invoice_tag(
-        &invoice_id,
-        &String::from_str(&env, "nonexistent"),
+    let result = client.try_remove_invoice_tag(&invoice_id, &String::from_str(&env, "nonexistent"));
+    assert!(
+        result.is_err(),
+        "remove_invoice_tag should fail for nonexistent tag"
     );
-    assert!(result.is_err(), "remove_invoice_tag should fail for nonexistent tag");
 }
 
 #[test]
@@ -903,14 +903,25 @@ fn test_update_invoice_category_index_update() {
         &Vec::new(&env),
     );
 
-    assert!(client.get_invoices_by_category(&InvoiceCategory::Services).contains(&invoice_id));
-    assert!(!client.get_invoices_by_category(&InvoiceCategory::Products).contains(&invoice_id));
+    assert!(client
+        .get_invoices_by_category(&InvoiceCategory::Services)
+        .contains(&invoice_id));
+    assert!(!client
+        .get_invoices_by_category(&InvoiceCategory::Products)
+        .contains(&invoice_id));
 
     client.update_invoice_category(&invoice_id, &InvoiceCategory::Products);
 
-    assert!(!client.get_invoices_by_category(&InvoiceCategory::Services).contains(&invoice_id));
-    assert!(client.get_invoices_by_category(&InvoiceCategory::Products).contains(&invoice_id));
-    assert_eq!(client.get_invoice(&invoice_id).category, InvoiceCategory::Products);
+    assert!(!client
+        .get_invoices_by_category(&InvoiceCategory::Services)
+        .contains(&invoice_id));
+    assert!(client
+        .get_invoices_by_category(&InvoiceCategory::Products)
+        .contains(&invoice_id));
+    assert_eq!(
+        client.get_invoice(&invoice_id).category,
+        InvoiceCategory::Products
+    );
 }
 
 // ============================================================================

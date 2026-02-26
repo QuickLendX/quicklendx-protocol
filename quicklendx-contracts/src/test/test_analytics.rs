@@ -492,7 +492,7 @@ fn test_update_user_behavior_metrics() {
 fn test_time_period_daily_calculation() {
     let current_timestamp: u64 = 1_000_000;
     let (start, end) = AnalyticsCalculator::get_period_dates(current_timestamp, TimePeriod::Daily);
-    
+
     assert_eq!(end, current_timestamp);
     assert_eq!(start, current_timestamp - 86400); // 24 hours in seconds
     assert_eq!(end - start, 86400);
@@ -502,7 +502,7 @@ fn test_time_period_daily_calculation() {
 fn test_time_period_weekly_calculation() {
     let current_timestamp: u64 = 1_000_000;
     let (start, end) = AnalyticsCalculator::get_period_dates(current_timestamp, TimePeriod::Weekly);
-    
+
     assert_eq!(end, current_timestamp);
     assert_eq!(start, current_timestamp - 7 * 86400); // 7 days
     assert_eq!(end - start, 7 * 86400);
@@ -511,8 +511,9 @@ fn test_time_period_weekly_calculation() {
 #[test]
 fn test_time_period_monthly_calculation() {
     let current_timestamp: u64 = 10_000_000;
-    let (start, end) = AnalyticsCalculator::get_period_dates(current_timestamp, TimePeriod::Monthly);
-    
+    let (start, end) =
+        AnalyticsCalculator::get_period_dates(current_timestamp, TimePeriod::Monthly);
+
     assert_eq!(end, current_timestamp);
     assert_eq!(start, current_timestamp - 30 * 86400); // 30 days
     assert_eq!(end - start, 30 * 86400);
@@ -521,8 +522,9 @@ fn test_time_period_monthly_calculation() {
 #[test]
 fn test_time_period_quarterly_calculation() {
     let current_timestamp: u64 = 50_000_000;
-    let (start, end) = AnalyticsCalculator::get_period_dates(current_timestamp, TimePeriod::Quarterly);
-    
+    let (start, end) =
+        AnalyticsCalculator::get_period_dates(current_timestamp, TimePeriod::Quarterly);
+
     assert_eq!(end, current_timestamp);
     assert_eq!(start, current_timestamp - 90 * 86400); // 90 days
     assert_eq!(end - start, 90 * 86400);
@@ -532,7 +534,7 @@ fn test_time_period_quarterly_calculation() {
 fn test_time_period_yearly_calculation() {
     let current_timestamp: u64 = 100_000_000;
     let (start, end) = AnalyticsCalculator::get_period_dates(current_timestamp, TimePeriod::Yearly);
-    
+
     assert_eq!(end, current_timestamp);
     assert_eq!(start, current_timestamp - 365 * 86400); // 365 days
     assert_eq!(end - start, 365 * 86400);
@@ -541,8 +543,9 @@ fn test_time_period_yearly_calculation() {
 #[test]
 fn test_time_period_all_time_starts_at_zero() {
     let current_timestamp: u64 = 500_000_000;
-    let (start, end) = AnalyticsCalculator::get_period_dates(current_timestamp, TimePeriod::AllTime);
-    
+    let (start, end) =
+        AnalyticsCalculator::get_period_dates(current_timestamp, TimePeriod::AllTime);
+
     assert_eq!(start, 0);
     assert_eq!(end, current_timestamp);
 }
@@ -551,7 +554,7 @@ fn test_time_period_all_time_starts_at_zero() {
 fn test_time_period_underflow_protection() {
     // Test with timestamp smaller than period duration
     let small_timestamp: u64 = 1000; // Very small timestamp
-    
+
     // Daily period should use saturating_sub to prevent underflow
     let (start, _end) = AnalyticsCalculator::get_period_dates(small_timestamp, TimePeriod::Daily);
     assert_eq!(start, 0); // Should saturate to 0, not underflow
@@ -757,7 +760,7 @@ fn test_report_period_dates_consistency() {
     create_invoice(&env, &client, &business, 1000, "Period dates test");
 
     let report = client.generate_business_report(&business, &TimePeriod::Daily);
-    
+
     // Verify period dates match expected calculation
     assert_eq!(report.end_date, current_timestamp);
     assert_eq!(report.start_date, current_timestamp - 86400);
@@ -772,7 +775,7 @@ fn test_time_period_enum_equality() {
     assert_eq!(TimePeriod::Quarterly, TimePeriod::Quarterly);
     assert_eq!(TimePeriod::Yearly, TimePeriod::Yearly);
     assert_eq!(TimePeriod::AllTime, TimePeriod::AllTime);
-    
+
     // Test inequality
     assert_ne!(TimePeriod::Daily, TimePeriod::Weekly);
     assert_ne!(TimePeriod::Monthly, TimePeriod::Yearly);
@@ -787,10 +790,10 @@ fn test_volume_by_period_in_financial_metrics() {
     create_invoice(&env, &client, &business, 5000, "Volume by period test");
 
     let metrics = client.get_financial_metrics(&TimePeriod::Monthly);
-    
+
     // volume_by_period should contain the period with its volume
     assert!(metrics.volume_by_period.len() > 0);
-    
+
     let mut found_monthly = false;
     for (period, volume) in metrics.volume_by_period.iter() {
         if period == TimePeriod::Monthly {
@@ -812,7 +815,7 @@ fn test_category_breakdown_in_reports() {
     create_invoice(&env, &client, &business, 2000, "Category test 2");
 
     let report = client.generate_business_report(&business, &TimePeriod::AllTime);
-    
+
     // Category breakdown should have Services with count 2
     let mut services_count = 0u32;
     for (cat, count) in report.category_breakdown.iter() {
@@ -902,11 +905,11 @@ fn test_investor_report_empty_all_periods() {
 fn test_period_dates_boundary_conditions() {
     // Test exact boundary conditions
     let timestamp = 86400u64; // Exactly 1 day
-    
+
     let (start, end) = AnalyticsCalculator::get_period_dates(timestamp, TimePeriod::Daily);
     assert_eq!(start, 0);
     assert_eq!(end, timestamp);
-    
+
     // Weekly with exactly 7 days
     let week_timestamp = 7 * 86400u64;
     let (start, end) = AnalyticsCalculator::get_period_dates(week_timestamp, TimePeriod::Weekly);
@@ -923,7 +926,7 @@ fn test_financial_metrics_currency_distribution() {
     create_invoice(&env, &client, &business, 5000, "Currency distribution test");
 
     let metrics = client.get_financial_metrics(&TimePeriod::AllTime);
-    
+
     // Should have at least one currency in distribution
     assert!(metrics.currency_distribution.len() > 0);
 }
@@ -937,7 +940,7 @@ fn test_financial_metrics_fee_breakdown() {
     create_invoice(&env, &client, &business, 10000, "Fee breakdown test");
 
     let metrics = client.get_financial_metrics(&TimePeriod::AllTime);
-    
+
     // Fee breakdown should exist
     assert!(metrics.fee_breakdown.len() > 0);
 }
@@ -951,7 +954,7 @@ fn test_financial_metrics_profit_margins() {
     create_invoice(&env, &client, &business, 10000, "Profit margins test");
 
     let metrics = client.get_financial_metrics(&TimePeriod::AllTime);
-    
+
     // Profit margins should exist
     assert!(metrics.profit_margins.len() > 0);
 }
@@ -1446,4 +1449,129 @@ fn test_get_investor_report_nonexistent_after_valid() {
     // Create invalid ID and verify it returns None
     let invalid_id = soroban_sdk::BytesN::from_array(&env, &[255u8; 32]);
     assert!(client.get_investor_report(&invalid_id).is_none());
+// INVESTOR ANALYTICS TESTS
+// ============================================================================
+
+#[test]
+fn test_investor_analytics_empty_data() {
+    let env = Env::default();
+    let (client, _admin, _business) = setup_contract(&env);
+    let investor = Address::generate(&env);
+
+    let data_opt = client.get_investor_analytics_data(&investor);
+    assert!(data_opt.is_none());
+
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
+    client.verify_investor(&investor, &100000);
+
+    let analytics_calc = client.calculate_investor_analytics(&investor);
+    assert_eq!(analytics_calc.investor_address, investor);
+    assert_eq!(analytics_calc.total_invested, 0);
+
+    let data_stored = client.get_investor_analytics_data(&investor);
+    assert!(data_stored.is_some());
+    assert_eq!(data_stored.unwrap().investor_address, investor);
+}
+
+#[test]
+fn test_calculate_investor_analytics_requires_verified_status() {
+    let env = Env::default();
+    let (client, _admin, _business) = setup_contract(&env);
+    let investor = Address::generate(&env);
+
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
+    let result = client.try_calculate_investor_analytics(&investor);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_investor_analytics_after_settle() {
+    let env = Env::default();
+    let (client, _admin, _business) = setup_contract(&env);
+    let investor = Address::generate(&env);
+
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
+    client.verify_investor(&investor, &100000);
+
+    client.update_investor_analytics(&investor, &1000, &true);
+    client.update_investor_analytics(&investor, &2000, &true);
+
+    let analytics = client.calculate_investor_analytics(&investor);
+    assert_eq!(analytics.total_invested, 3000);
+}
+
+#[test]
+fn test_investor_analytics_after_default() {
+    let env = Env::default();
+    let (client, _admin, _business) = setup_contract(&env);
+    let investor = Address::generate(&env);
+
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
+    client.verify_investor(&investor, &100000);
+
+    client.update_investor_analytics(&investor, &1000, &false);
+    client.update_investor_analytics(&investor, &2000, &false);
+
+    let analytics = client.calculate_investor_analytics(&investor);
+    assert_eq!(analytics.total_invested, 3000);
+    assert_eq!(analytics.success_rate, 0);
+}
+
+#[test]
+fn test_investor_performance_metrics() {
+    let env = Env::default();
+    let (client, _admin, _business) = setup_contract(&env);
+    let investor1 = Address::generate(&env);
+    let investor2 = Address::generate(&env);
+
+    client.submit_investor_kyc(&investor1, &String::from_str(&env, "KYC1"));
+    client.verify_investor(&investor1, &100000);
+    client.submit_investor_kyc(&investor2, &String::from_str(&env, "KYC2"));
+    client.verify_investor(&investor2, &100000);
+
+    client.update_investor_analytics(&investor1, &1000, &true);
+    client.update_investor_analytics(&investor2, &2000, &false);
+
+    let perf = client.calc_investor_perf_metrics();
+    assert_eq!(perf.total_investors, 2);
+
+    let stored_perf = client.get_investor_performance_metrics();
+    assert!(stored_perf.is_some());
+    assert_eq!(stored_perf.unwrap().total_investors, 2);
+}
+
+#[test]
+fn test_update_investor_analytics_data_admin() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let investor = Address::generate(&env);
+
+    let fail_result = client.try_update_investor_analytics_data(&investor);
+    assert!(fail_result.is_err());
+
+    let admin = Address::generate(&env);
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
+    client.verify_investor(&investor, &100000);
+
+    client.update_investor_analytics_data(&investor);
+}
+
+#[test]
+fn test_update_investor_performance_data_admin() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let fail_result = client.try_update_investor_performance_data();
+    assert!(fail_result.is_err());
+
+    let admin = Address::generate(&env);
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    client.update_investor_performance_data();
 }

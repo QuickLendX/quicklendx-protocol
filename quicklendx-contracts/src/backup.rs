@@ -210,7 +210,7 @@ impl BackupStorage {
             while i < backup_timestamps.len() {
                 let (backup_id, timestamp) = backup_timestamps.get(i).unwrap();
                 let age = current_time.saturating_sub(timestamp);
-                
+
                 if age > policy.max_age_seconds {
                     Self::remove_from_backup_list(env, &backup_id);
                     backup_timestamps.remove(i);

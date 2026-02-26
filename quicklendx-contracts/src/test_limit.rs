@@ -2,8 +2,9 @@
 
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
+use crate::verification::{InvestorRiskLevel, InvestorTier};
 use crate::{QuickLendXContract, QuickLendXContractClient};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 #[test]
 fn test_invoice_amount_limits() {

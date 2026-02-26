@@ -2,9 +2,7 @@
 extern crate std;
 
 use crate::{
-    backup::BackupStatus,
-    invoice::InvoiceCategory,
-    QuickLendXContract, QuickLendXContractClient,
+    backup::BackupStatus, invoice::InvoiceCategory, QuickLendXContract, QuickLendXContractClient,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -53,11 +51,7 @@ fn setup_verified_business(
     business
 }
 
-fn setup_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    limit: i128,
-) -> Address {
+fn setup_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i128) -> Address {
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &limit);
@@ -69,7 +63,7 @@ fn create_funded_invoice(
     client: &QuickLendXContractClient,
     admin: &Address,
 ) -> (BytesN<32>, Address, Address, i128, Address) {
-    client.initialize_protocol_limits(admin, &1i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
     let business = setup_verified_business(env, client, admin);
     let investor = setup_verified_investor(env, client, 50_000);
     let currency = setup_token(env, &business, &investor, &client.address);
@@ -118,7 +112,7 @@ fn test_create_and_validate_backup() {
 fn test_restore_backup() {
     let (env, client, admin) = setup();
 
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
     let business = setup_verified_business(&env, &client, &admin);
     let investor = setup_verified_investor(&env, &client, 50_000);
     let currency = setup_token(&env, &business, &investor, &client.address);
