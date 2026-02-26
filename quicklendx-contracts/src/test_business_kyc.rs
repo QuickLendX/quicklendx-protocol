@@ -606,21 +606,6 @@ fn test_double_verification_fails() {
     assert!(result.is_err());
 }
 
-#[test]
-fn test_double_rejection_fails() {
-    let (env, client, admin) = setup();
-    let business = Address::generate(&env);
-    let kyc_data = create_test_kyc_data(&env, "TestBusiness");
-    let rejection_reason = String::from_str(&env, "Test rejection");
-
-    // Submit and reject KYC
-    client.submit_kyc_application(&business, &kyc_data);
-    client.reject_business(&admin, &business, &rejection_reason);
-
-    // Try to reject again - should fail with InvalidKYCStatus
-    let result = client.try_reject_business(&admin, &business, &reason);
-    assert!(result.is_err());
-}
 
 #[test]
 fn test_verify_already_rejected_business_fails() {

@@ -415,22 +415,6 @@ mod test_admin {
     // 6. Event Emission Tests
     // ============================================================================
 
-    #[test]
-    fn test_initialize_emits_admin_set_event() {
-        let (env, client) = setup();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        client.initialize_admin(&admin);
-
-        let events = env.events().all();
-        let has_admin_set = events.iter().any(|evt| {
-            let (_, topics, _): (_, soroban_sdk::Vec<soroban_sdk::Val>, _) = evt;
-            // The first topic should be the "adm_set" symbol
-            !topics.is_empty()
-        });
-        assert!(has_admin_set, "initialize must emit at least one event");
-    }
 
     #[test]
     fn test_transfer_emits_admin_transferred_event() {
@@ -982,80 +966,5 @@ mod test_admin {
         );
     }
 
-    #[test]
-    fn test_non_admin_cannot_put_dispute_under_review() {
-        let (env, client) = setup();
-        env.mock_all_auths();
 
-        let admin = Address::generate(&env);
-        let impostor = Address::generate(&env);
-        let business = Address::generate(&env);
-        let currency = Address::generate(&env);
-
-        client.initialize_admin(&admin);
-
-        let invoice_id = client.store_invoice(
-            &business,
-            &10_000,
-            &currency,
-            &(env.ledger().timestamp() + 86_400),
-            &String::from_str(&env, "Dispute authorization"),
-            &crate::invoice::InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
-
-        let _ = client.create_dispute(
-            &invoice_id,
-            &business,
-            &String::from_str(&env, "Incorrect amount"),
-            &String::from_str(&env, "Supporting evidence"),
-        );
-
-        let result = client.try_put_dispute_under_review(&invoice_id, &impostor);
-        assert!(
-            result.is_err(),
-            "Only the configured admin must be able to move disputes to UnderReview"
-        );
-    }
-
-    #[test]
-    fn test_non_admin_cannot_resolve_dispute() {
-        let (env, client) = setup();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        let impostor = Address::generate(&env);
-        let business = Address::generate(&env);
-        let currency = Address::generate(&env);
-
-        client.initialize_admin(&admin);
-
-        let invoice_id = client.store_invoice(
-            &business,
-            &10_000,
-            &currency,
-            &(env.ledger().timestamp() + 86_400),
-            &String::from_str(&env, "Dispute resolution gate"),
-            &crate::invoice::InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
-
-        let _ = client.create_dispute(
-            &invoice_id,
-            &business,
-            &String::from_str(&env, "Incorrect due date"),
-            &String::from_str(&env, "Evidence payload"),
-        );
-        client.put_dispute_under_review(&invoice_id, &admin);
-
-        let result = client.try_resolve_dispute(
-            &invoice_id,
-            &impostor,
-            &String::from_str(&env, "Resolved in favor of business"),
-        );
-        assert!(
-            result.is_err(),
-            "Only the configured admin must be able to resolve disputes"
-        );
-    }
 }

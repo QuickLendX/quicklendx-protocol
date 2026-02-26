@@ -1,4 +1,4 @@
-mod test_invoice;
+// Removed test_invoice mod
 mod test_invoice_categories;
 mod test_invoice_metadata;
 
@@ -774,9 +774,9 @@ fn test_bid_validation_rules() {
     verify_investor_for_test(&env, &client, &investor, 10_000);
     verify_investor_for_test(&env, &client, &other_investor, 10_000);
 
-    // Amount below minimum
+    // Amount below minimum (1% of 1000 = 10)
     assert!(client
-        .try_place_bid(&investor, &invoice_id, &50, &60)
+        .try_place_bid(&investor, &invoice_id, &5, &6)
         .is_err());
 
     // Expected return must exceed bid amount

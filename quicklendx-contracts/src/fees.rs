@@ -224,7 +224,7 @@ impl FeeManager {
 
         env.storage()
             .instance()
-            .set(&symbol_short!("plat_fee"), &config);
+            .set(&PLATFORM_FEE_KEY, &config);
 
         env.events().publish((symbol_short!("fee_upd"),), fee_bps);
         Ok(())

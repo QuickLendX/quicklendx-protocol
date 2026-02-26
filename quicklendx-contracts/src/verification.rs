@@ -2,7 +2,7 @@ use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::protocol_limits::{
-    check_string_length, compute_min_bid_amount, ProtocolLimitsContract, MAX_KYC_DATA_LENGTH,
+    check_string_length, ProtocolLimitsContract, MAX_KYC_DATA_LENGTH,
     MAX_REJECTION_REASON_LENGTH,
 };
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
@@ -500,7 +500,7 @@ pub fn validate_bid(
     }
 
     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
-    let min_bid_amount = compute_min_bid_amount(invoice.amount, &limits);
+    let min_bid_amount = invoice.amount / 100; // 1% min bid
     if bid_amount < min_bid_amount {
         return Err(QuickLendXError::InvalidAmount);
     }
@@ -509,8 +509,8 @@ pub fn validate_bid(
         return Err(QuickLendXError::InvoiceAmountInvalid);
     }
 
-    // Expected return must cover the original bid to avoid negative payoff.
-    if expected_return < bid_amount {
+    // Expected return must exceed the original bid to avoid negative payoff.
+    if expected_return <= bid_amount {
         return Err(QuickLendXError::InvalidAmount);
     }
 
@@ -661,11 +661,13 @@ pub fn verify_invoice_data(
     }
 
     // Validate due date is not too far in the future using protocol limits
-    crate::protocol_limits::ProtocolLimitsContract::validate_invoice(
+    if !crate::protocol_limits::ProtocolLimitsContract::validate_invoice(
         env.clone(),
         amount,
         due_date,
-    )?;
+    ) {
+        return Err(QuickLendXError::InvoiceDueDateInvalid);
+    }
     if description.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }
