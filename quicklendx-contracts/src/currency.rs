@@ -23,7 +23,6 @@ impl CurrencyWhitelist {
         }
         // Auth handled by caller natively requiring auth on the admin argument
 
-
         let mut list = Self::get_whitelisted_currencies(env);
         if list.iter().any(|a| a == *currency) {
             return Ok(()); // idempotent: already present

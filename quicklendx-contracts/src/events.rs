@@ -376,7 +376,6 @@ pub fn emit_backups_cleaned(env: &Env, removed_count: u32) {
     );
 }
 
-
 /// Emit audit validation event
 pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool) {
     env.events().publish(

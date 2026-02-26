@@ -33,9 +33,15 @@ pub struct VestingStorage;
 
 impl VestingStorage {
     fn next_id(env: &Env) -> u64 {
-        let next: u64 = env.storage().instance().get(&VESTING_COUNTER_KEY).unwrap_or(0);
+        let next: u64 = env
+            .storage()
+            .instance()
+            .get(&VESTING_COUNTER_KEY)
+            .unwrap_or(0);
         let new_next = next.saturating_add(1);
-        env.storage().instance().set(&VESTING_COUNTER_KEY, &new_next);
+        env.storage()
+            .instance()
+            .set(&VESTING_COUNTER_KEY, &new_next);
         new_next
     }
 
@@ -44,7 +50,9 @@ impl VestingStorage {
     }
 
     pub fn store(env: &Env, schedule: &VestingSchedule) {
-        env.storage().persistent().set(&Self::key(schedule.id), schedule);
+        env.storage()
+            .persistent()
+            .set(&Self::key(schedule.id), schedule);
     }
 
     pub fn get(env: &Env, id: u64) -> Option<VestingSchedule> {
@@ -52,7 +60,9 @@ impl VestingStorage {
     }
 
     pub fn update(env: &Env, schedule: &VestingSchedule) {
-        env.storage().persistent().set(&Self::key(schedule.id), schedule);
+        env.storage()
+            .persistent()
+            .set(&Self::key(schedule.id), schedule);
     }
 }
 
@@ -123,7 +133,15 @@ impl Vesting {
         VestingStorage::store(env, &schedule);
         env.events().publish(
             (symbol_short!("vest_new"),),
-            (id, beneficiary, token, total_amount, start_time, cliff_time, end_time),
+            (
+                id,
+                beneficiary,
+                token,
+                total_amount,
+                start_time,
+                cliff_time,
+                end_time,
+            ),
         );
 
         Ok(id)
@@ -173,15 +191,11 @@ impl Vesting {
     /// # Security
     /// - Requires beneficiary authorization
     /// - Enforces timelock/cliff and prevents over-release
-    pub fn release(
-        env: &Env,
-        beneficiary: &Address,
-        id: u64,
-    ) -> Result<i128, QuickLendXError> {
+    pub fn release(env: &Env, beneficiary: &Address, id: u64) -> Result<i128, QuickLendXError> {
         beneficiary.require_auth();
 
-        let mut schedule = VestingStorage::get(env, id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let mut schedule =
+            VestingStorage::get(env, id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         if &schedule.beneficiary != beneficiary {
             return Err(QuickLendXError::Unauthorized);
@@ -195,9 +209,7 @@ impl Vesting {
         let contract = env.current_contract_address();
         transfer_funds(env, &schedule.token, &contract, beneficiary, releasable)?;
 
-        schedule.released_amount = schedule
-            .released_amount
-            .saturating_add(releasable);
+        schedule.released_amount = schedule.released_amount.saturating_add(releasable);
         VestingStorage::update(env, &schedule);
 
         env.events().publish(

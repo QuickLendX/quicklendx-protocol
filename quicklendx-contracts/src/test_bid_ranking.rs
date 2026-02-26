@@ -70,7 +70,10 @@ fn test_empty_bid_list() {
     let fake_invoice_id = BytesN::from_array(&env, &[0u8; 32]);
 
     let best_bid = client.get_best_bid(&fake_invoice_id);
-    assert!(best_bid.is_none(), "Should return None for non-existent invoice");
+    assert!(
+        best_bid.is_none(),
+        "Should return None for non-existent invoice"
+    );
 }
 
 /// Test: get_best_bid returns None when invoice has only withdrawn bids
@@ -80,7 +83,7 @@ fn test_best_bid_excludes_withdrawn() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let business = Address::generate(&env);
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
@@ -97,7 +100,10 @@ fn test_best_bid_excludes_withdrawn() {
 
     // Best bid should be None
     let best_bid = client.get_best_bid(&invoice_id);
-    assert!(best_bid.is_none(), "Should return None when all bids are withdrawn");
+    assert!(
+        best_bid.is_none(),
+        "Should return None when all bids are withdrawn"
+    );
 }
 
 /// Test: get_best_bid returns None when invoice has only expired bids
@@ -107,7 +113,7 @@ fn test_best_bid_excludes_expired() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let business = Address::generate(&env);
     let investor = add_verified_investor(&env, &client, 100_000);
 
@@ -123,7 +129,10 @@ fn test_best_bid_excludes_expired() {
 
     // Best bid should be None after expiration
     let best_bid = client.get_best_bid(&invoice_id);
-    assert!(best_bid.is_none(), "Should return None when all bids are expired");
+    assert!(
+        best_bid.is_none(),
+        "Should return None when all bids are expired"
+    );
 }
 
 // ============================================================================
@@ -137,7 +146,7 @@ fn test_single_bid_ranking_and_best_selection() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let business = Address::generate(&env);
     let investor = add_verified_investor(&env, &client, 100_000);
 
@@ -148,8 +157,15 @@ fn test_single_bid_ranking_and_best_selection() {
 
     // Best bid should be Some
     let best_bid = client.get_best_bid(&invoice_id);
-    assert!(best_bid.is_some(), "Should return Some for single valid bid");
-    assert_eq!(best_bid.unwrap().bid_id, bid_id, "Should return the correct bid");
+    assert!(
+        best_bid.is_some(),
+        "Should return Some for single valid bid"
+    );
+    assert_eq!(
+        best_bid.unwrap().bid_id,
+        bid_id,
+        "Should return the correct bid"
+    );
 }
 
 /// Test: get_best_bid returns highest profit bid from multiple bids
@@ -159,7 +175,7 @@ fn test_ranking_with_multiple_bids() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let business = Address::generate(&env);
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
@@ -170,17 +186,24 @@ fn test_ranking_with_multiple_bids() {
     // Place bids with different profit margins
     // Bid 1: 5000 -> 6000 (profit: 1000, margin: 20%)
     let bid1 = client.place_bid(&investor1, &invoice_id, &5_000, &6_000);
-    
+
     // Bid 2: 5000 -> 7000 (profit: 2000, margin: 40%) - BEST
     let bid2 = client.place_bid(&investor2, &invoice_id, &5_000, &7_000);
-    
+
     // Bid 3: 5000 -> 6500 (profit: 1500, margin: 30%)
     let bid3 = client.place_bid(&investor3, &invoice_id, &5_000, &6_500);
 
     // Best bid should be bid2 (highest profit)
     let best_bid = client.get_best_bid(&invoice_id);
-    assert!(best_bid.is_some(), "Should return Some for multiple valid bids");
-    assert_eq!(best_bid.unwrap().bid_id, bid2, "Should return highest profit bid");
+    assert!(
+        best_bid.is_some(),
+        "Should return Some for multiple valid bids"
+    );
+    assert_eq!(
+        best_bid.unwrap().bid_id,
+        bid2,
+        "Should return highest profit bid"
+    );
 }
 
 /// Test: get_best_bid excludes withdrawn bids and selects from remaining
@@ -190,7 +213,7 @@ fn test_best_bid_after_withdrawal() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let business = Address::generate(&env);
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
@@ -199,7 +222,7 @@ fn test_best_bid_after_withdrawal() {
 
     // Bid 1: 5000 -> 7000 (profit: 2000) - BEST initially
     let bid1 = client.place_bid(&investor1, &invoice_id, &5_000, &7_000);
-    
+
     // Bid 2: 5000 -> 6000 (profit: 1000)
     let bid2 = client.place_bid(&investor2, &invoice_id, &5_000, &6_000);
 
@@ -209,7 +232,11 @@ fn test_best_bid_after_withdrawal() {
     // Best bid should now be bid2
     let best_bid = client.get_best_bid(&invoice_id);
     assert!(best_bid.is_some(), "Should return Some after withdrawal");
-    assert_eq!(best_bid.unwrap().bid_id, bid2, "Should return next best bid after withdrawal");
+    assert_eq!(
+        best_bid.unwrap().bid_id,
+        bid2,
+        "Should return next best bid after withdrawal"
+    );
 }
 
 // ============================================================================
@@ -227,10 +254,17 @@ fn test_empty_ranked_and_best_for_nonexistent_invoice() {
     let fake_invoice_id = BytesN::from_array(&env, &[0u8; 32]);
 
     let ranked_bids = client.get_ranked_bids(&fake_invoice_id);
-    assert_eq!(ranked_bids.len(), 0, "Should return empty vec for non-existent invoice");
-    
+    assert_eq!(
+        ranked_bids.len(),
+        0,
+        "Should return empty vec for non-existent invoice"
+    );
+
     let best_bid = client.get_best_bid(&fake_invoice_id);
-    assert!(best_bid.is_none(), "Should return None for non-existent invoice");
+    assert!(
+        best_bid.is_none(),
+        "Should return None for non-existent invoice"
+    );
 }
 
 /// Test: get_ranked_bids excludes withdrawn and expired bids
@@ -240,7 +274,7 @@ fn test_ranked_excludes_withdrawn_and_expired() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let business = Address::generate(&env);
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
@@ -268,7 +302,11 @@ fn test_ranked_excludes_withdrawn_and_expired() {
     // Only bid4 should remain in ranked list (others are expired or withdrawn)
     let ranked_bids = client.get_ranked_bids(&invoice_id);
     assert_eq!(ranked_bids.len(), 1, "Should only include active bids");
-    assert_eq!(ranked_bids.get(0).unwrap().bid_id, bid4, "Should only include non-withdrawn, non-expired bid");
+    assert_eq!(
+        ranked_bids.get(0).unwrap().bid_id,
+        bid4,
+        "Should only include non-withdrawn, non-expired bid"
+    );
 }
 
 /// Test: get_ranked_bids orders by profit descending
@@ -278,7 +316,7 @@ fn test_ranked_bids_profit_ordering() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let business = Address::generate(&env);
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
@@ -289,20 +327,32 @@ fn test_ranked_bids_profit_ordering() {
     // Place bids in non-sorted order
     // Bid 1: profit 1000 (should be 3rd)
     let bid1 = client.place_bid(&investor1, &invoice_id, &5_000, &6_000);
-    
+
     // Bid 2: profit 2000 (should be 1st)
     let bid2 = client.place_bid(&investor2, &invoice_id, &5_000, &7_000);
-    
+
     // Bid 3: profit 1500 (should be 2nd)
     let bid3 = client.place_bid(&investor3, &invoice_id, &5_000, &6_500);
 
     let ranked_bids = client.get_ranked_bids(&invoice_id);
     assert_eq!(ranked_bids.len(), 3, "Should have all 3 bids");
-    
+
     // Verify ordering: bid2, bid3, bid1
-    assert_eq!(ranked_bids.get(0).unwrap().bid_id, bid2, "First should be highest profit");
-    assert_eq!(ranked_bids.get(1).unwrap().bid_id, bid3, "Second should be middle profit");
-    assert_eq!(ranked_bids.get(2).unwrap().bid_id, bid1, "Third should be lowest profit");
+    assert_eq!(
+        ranked_bids.get(0).unwrap().bid_id,
+        bid2,
+        "First should be highest profit"
+    );
+    assert_eq!(
+        ranked_bids.get(1).unwrap().bid_id,
+        bid3,
+        "Second should be middle profit"
+    );
+    assert_eq!(
+        ranked_bids.get(2).unwrap().bid_id,
+        bid1,
+        "Third should be lowest profit"
+    );
 }
 
 // ============================================================================
@@ -316,7 +366,7 @@ fn test_best_bid_equals_first_ranked() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let business = Address::generate(&env);
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
@@ -334,7 +384,7 @@ fn test_best_bid_equals_first_ranked() {
 
     assert!(best_bid.is_some(), "Best bid should exist");
     assert!(ranked_bids.len() > 0, "Ranked bids should not be empty");
-    
+
     assert_eq!(
         best_bid.unwrap().bid_id,
         ranked_bids.get(0).unwrap().bid_id,
@@ -353,7 +403,7 @@ fn test_equal_bids_tie_break_by_timestamp() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let business = Address::generate(&env);
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
@@ -362,12 +412,12 @@ fn test_equal_bids_tie_break_by_timestamp() {
 
     // Place two bids with identical profit
     let bid1 = client.place_bid(&investor1, &invoice_id, &5_000, &6_000);
-    
+
     // Advance time slightly
     env.ledger().with_mut(|li| {
         li.timestamp = li.timestamp + 100;
     });
-    
+
     let bid2 = client.place_bid(&investor2, &invoice_id, &5_000, &6_000);
 
     let best_bid = client.get_best_bid(&invoice_id);
@@ -375,6 +425,14 @@ fn test_equal_bids_tie_break_by_timestamp() {
 
     // Earlier bid (bid1) should win the tie
     assert_eq!(best_bid.unwrap().bid_id, bid1, "Earlier bid should win tie");
-    assert_eq!(ranked_bids.get(0).unwrap().bid_id, bid1, "Earlier bid should be ranked first");
-    assert_eq!(ranked_bids.get(1).unwrap().bid_id, bid2, "Later bid should be ranked second");
+    assert_eq!(
+        ranked_bids.get(0).unwrap().bid_id,
+        bid1,
+        "Earlier bid should be ranked first"
+    );
+    assert_eq!(
+        ranked_bids.get(1).unwrap().bid_id,
+        bid2,
+        "Later bid should be ranked second"
+    );
 }

@@ -1,5 +1,5 @@
 use core::cmp::Ordering;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Vec, Symbol};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
@@ -114,11 +114,7 @@ impl BidStorage {
     }
 
     /// Admin-only: set bid TTL in days. Enforces bounds.
-    pub fn set_bid_ttl_days(
-        env: &Env,
-        admin: &Address,
-        days: u64,
-    ) -> Result<u64, QuickLendXError> {
+    pub fn set_bid_ttl_days(env: &Env, admin: &Address, days: u64) -> Result<u64, QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(env, admin)?;
 

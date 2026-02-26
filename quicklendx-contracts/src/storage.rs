@@ -16,8 +16,8 @@
 //! - Persistent storage for long-term data retention
 //! - Upgrade-safe: Keys are designed to avoid conflicts during contract upgrades
 
-use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec, String};
- // Removed ToString import; not needed in Soroban environment.
+use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Symbol, Vec};
+// Removed ToString import; not needed in Soroban environment.
 
 use crate::bid::{Bid, BidStatus};
 use crate::investment::{Investment, InvestmentStatus};
@@ -132,7 +132,9 @@ impl Indexes {
     }
 
     /// Index: invoices by customer name
-    pub fn invoices_by_customer(customer_name: &soroban_sdk::String) -> (Symbol, soroban_sdk::String) {
+    pub fn invoices_by_customer(
+        customer_name: &soroban_sdk::String,
+    ) -> (Symbol, soroban_sdk::String) {
         (symbol_short!("inv_cust"), customer_name.clone())
     }
 
@@ -161,12 +163,18 @@ impl InvoiceStorage {
 
     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
         let key = Indexes::invoices_by_business(business);
-        env.storage().persistent().get(&key).unwrap_or(Vec::new(env))
+        env.storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(env))
     }
 
     pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
         let key = Indexes::invoices_by_status(status);
-        env.storage().persistent().get(&key).unwrap_or(Vec::new(env))
+        env.storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(env))
     }
 
     /// Get an invoice by ID
@@ -236,7 +244,11 @@ impl InvoiceStorage {
 
     pub fn add_to_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_customer(customer_name);
-        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        let mut ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(env));
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
@@ -245,7 +257,11 @@ impl InvoiceStorage {
 
     pub fn remove_from_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_customer(customer_name);
-        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        let mut ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(env));
         let mut filtered = Vec::new(env);
         for id in ids.iter() {
             if id != *invoice_id {
@@ -257,7 +273,11 @@ impl InvoiceStorage {
 
     pub fn add_to_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_tax_id(tax_id);
-        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        let mut ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(env));
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
@@ -266,7 +286,11 @@ impl InvoiceStorage {
 
     pub fn remove_from_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_tax_id(tax_id);
-        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        let mut ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(env));
         let mut filtered = Vec::new(env);
         for id in ids.iter() {
             if id != *invoice_id {

@@ -2,9 +2,7 @@
 extern crate std;
 
 use crate::{
-    backup::BackupStatus,
-    invoice::InvoiceCategory,
-    QuickLendXContract, QuickLendXContractClient,
+    backup::BackupStatus, invoice::InvoiceCategory, QuickLendXContract, QuickLendXContractClient,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -32,11 +30,7 @@ fn create_verified_business(
     business
 }
 
-fn create_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    limit: i128,
-) -> Address {
+fn create_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i128) -> Address {
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &limit);
