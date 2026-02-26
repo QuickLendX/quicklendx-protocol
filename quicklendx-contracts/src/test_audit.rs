@@ -16,15 +16,6 @@ use soroban_sdk::{
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    
-    // Set timestamp to a reasonable value (Jan 1, 2025)
-    env.ledger().set_timestamp(1_735_689_600);
-    
-    // Set sequence number via ledger mutation
-    env.ledger().with_mut(|li| {
-        li.sequence_number = 1000;
-    });
-    
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -32,56 +23,6 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let business = Address::generate(&env);
 
     (env, client, admin, business)
-}
-
-fn setup_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    admin: &Address,
-) -> Address {
-    let investor = Address::generate(env);
-    
-    // Submit KYC
-    client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
-    
-    // Verify investor with admin
-    // In test environment with mock_all_auths(), we can call directly
-    client.verify_investor(&investor, &100_000i128);
-    
-    // Verify the investor was actually verified
-    let verification = client.get_investor_verification(&investor);
-    assert!(verification.is_some(), "Investor should be verified");
-    if let Some(verif) = verification {
-        assert_eq!(verif.status, verification::BusinessVerificationStatus::Verified);
-    }
-    
-    investor
-}
-
-fn create_and_verify_invoice(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    business: &Address,
-    amount: i128,
-) -> BytesN<32> {
-    let currency = Address::generate(env);
-    let due_date = env.ledger().timestamp() + 86400; // 1 day from now
-    
-    // Create invoice
-    let invoice_id = client.store_invoice(
-        business,
-        &amount,
-        &currency,
-        &due_date,
-        &String::from_str(env, "Test Invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(env),
-    );
-    
-    // Verify the invoice
-    client.verify_invoice(&invoice_id);
-    
-    invoice_id
 }
 
 #[test]

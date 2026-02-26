@@ -106,6 +106,22 @@ impl BidStorage {
             .get(&Self::invoice_key(invoice_id))
             .unwrap_or_else(|| Vec::new(env))
     }
+    
+    pub fn get_active_bid_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+        let _ = Self::refresh_expired_bids(env, invoice_id);
+        let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
+        let mut active_count = 0u32;
+        let mut idx: u32 = 0;
+        while idx < bid_ids.len() {
+            let bid_id = bid_ids.get(idx).unwrap();
+            if let Some(bid) = Self::get_bid(env, &bid_id) {
+                if bid.status == BidStatus::Placed {
+                    active_count += 1;
+                }
+            }
+            idx += 1;
+        }
+        active_count
 
     /// Get configured bid TTL in days (returns default if not set)
     pub fn get_bid_ttl_days(env: &Env) -> u64 {

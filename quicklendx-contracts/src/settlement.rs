@@ -9,8 +9,6 @@ use crate::invoice::{
     Invoice, InvoiceStatus, InvoiceStorage, PaymentRecord as InvoicePaymentRecord,
 };
 use crate::notifications::NotificationSystem;
-use crate::{defaults::DEFAULT_GRACE_PERIOD, events::emit_invoice_settled_final};
-use crate::events::TOPIC_INVOICE_SETTLED_FINAL;
 use crate::payments::transfer_funds;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
