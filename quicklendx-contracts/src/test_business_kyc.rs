@@ -571,15 +571,6 @@ fn test_timestamp_accuracy() {
 // ============================================================================
 
 #[test]
-fn test_verify_nonexistent_business_fails() {
-    let (env, client, admin) = setup();
-    let business = Address::generate(&env);
-
-    // Try to verify a business that never submitted KYC
-// Additional Coverage Tests - Admin Authorization Edge Cases
-// ============================================================================
-
-#[test]
 fn test_verify_business_without_kyc_submission_fails() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);
@@ -590,13 +581,6 @@ fn test_verify_business_without_kyc_submission_fails() {
 }
 
 #[test]
-fn test_reject_nonexistent_business_fails() {
-    let (env, client, admin) = setup();
-    let business = Address::generate(&env);
-    let reason = String::from_str(&env, "No KYC submitted");
-
-    // Try to reject a business that never submitted KYC
-    let result = client.try_reject_business(&admin, &business, &reason);
 fn test_reject_business_without_kyc_submission_fails() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);
@@ -608,7 +592,6 @@ fn test_reject_business_without_kyc_submission_fails() {
 }
 
 #[test]
-fn test_cannot_verify_already_verified_business() {
 fn test_double_verification_fails() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);
@@ -618,29 +601,8 @@ fn test_double_verification_fails() {
     client.submit_kyc_application(&business, &kyc_data);
     client.verify_business(&admin, &business);
 
-    // Try to verify again - should fail (status is no longer Pending)
-    // Submit and verify KYC
-    client.submit_kyc_application(&business, &kyc_data);
-    client.verify_business(&admin, &business);
-
     // Try to verify again - should fail with InvalidKYCStatus
     let result = client.try_verify_business(&admin, &business);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_cannot_reject_already_rejected_business() {
-    let (env, client, admin) = setup();
-    let business = Address::generate(&env);
-    let kyc_data = create_test_kyc_data(&env, "TestBusiness");
-    let reason = String::from_str(&env, "Bad docs");
-
-    // Submit and reject
-    client.submit_kyc_application(&business, &kyc_data);
-    client.reject_business(&admin, &business, &reason);
-
-    // Try to reject again - should fail (status is no longer Pending)
-    let result = client.try_reject_business(&admin, &business, &reason);
     assert!(result.is_err());
 }
 
@@ -657,22 +619,6 @@ fn test_double_rejection_fails() {
 
     // Try to reject again - should fail with InvalidKYCStatus
     let result = client.try_reject_business(&admin, &business, &rejection_reason);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_cannot_verify_rejected_business_without_resubmission() {
-    let (env, client, admin) = setup();
-    let business = Address::generate(&env);
-    let kyc_data = create_test_kyc_data(&env, "TestBusiness");
-    let reason = String::from_str(&env, "Incomplete");
-
-    // Submit and reject
-    client.submit_kyc_application(&business, &kyc_data);
-    client.reject_business(&admin, &business, &reason);
-
-    // Try to verify the rejected business directly - should fail
-    let result = client.try_verify_business(&admin, &business);
     assert!(result.is_err());
 }
 
@@ -801,6 +747,9 @@ fn test_multiple_businesses_concurrent_kyc() {
     assert_eq!(client.get_verified_businesses().len(), 3);
     assert_eq!(client.get_rejected_businesses().len(), 2);
     assert_eq!(client.get_pending_businesses().len(), 0);
+}
+
+#[test]
 fn test_reject_already_verified_business_fails() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);

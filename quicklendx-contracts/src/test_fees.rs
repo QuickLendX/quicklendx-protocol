@@ -780,13 +780,6 @@ fn test_comprehensive_fee_calculation() {
 /// Base case: no flags set, Standard tier — verifies raw fee with no modifiers
 #[test]
 fn test_calculate_transaction_fees_base_case() {
-// ============================================================================
-// Treasury Configuration Tests
-// ============================================================================
-
-/// Test configure_treasury sets treasury address correctly
-#[test]
-fn test_configure_treasury() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
@@ -803,9 +796,17 @@ fn test_configure_treasury() {
     assert_eq!(fees, 350);
 }
 
-/// is_early_payment = true: Platform fee gets an extra 10% reduction
+// ============================================================================
+// Treasury Configuration Tests
+// ============================================================================
+
+/// Test configure_treasury sets treasury address correctly
 #[test]
-fn test_calculate_transaction_fees_early_payment_flag() {
+fn test_configure_treasury() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = setup_admin_init(&env, &client);
     let treasury = Address::generate(&env);
 
@@ -821,9 +822,9 @@ fn test_calculate_transaction_fees_early_payment_flag() {
     assert_eq!(treasury_addr.unwrap(), treasury);
 }
 
-/// Test get_treasury_address returns None before configuration
+/// is_early_payment = true: Platform fee gets an extra 10% reduction
 #[test]
-fn test_get_treasury_address_before_config() {
+fn test_calculate_transaction_fees_early_payment_flag() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
@@ -843,44 +844,25 @@ fn test_get_treasury_address_before_config() {
     assert!(early_fees < base_fees, "Early payment must reduce total fees");
 }
 
-/// is_late_payment = true: LatePayment fee is added with 20% surcharge on top
+/// Test get_treasury_address returns None before configuration
 #[test]
-fn test_calculate_transaction_fees_late_payment_flag() {
+fn test_get_treasury_address_before_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
 
     // Treasury address should be None before configuration
     let treasury_addr = client.get_treasury_address();
     assert!(treasury_addr.is_none());
 }
 
-/// Test treasury address is reflected in platform fee config
+/// is_late_payment = true: LatePayment fee is added with 20% surcharge on top
 #[test]
-fn test_treasury_address_in_platform_fee_config() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin_init(&env, &client);
-    let treasury = Address::generate(&env);
-
-    // Initialize fee system first
-    client.initialize_fee_system(&admin);
-
-    // Before treasury config, platform fee config should have no treasury
-    let config_before = client.get_platform_fee_config();
-    assert!(config_before.treasury_address.is_none());
-
-    // Configure treasury
-    client.configure_treasury(&treasury);
-
-    // After treasury config, platform fee config should have treasury address
-    let config_after = client.get_platform_fee_config();
-    assert!(config_after.treasury_address.is_some());
-    assert_eq!(config_after.treasury_address.unwrap(), treasury);
-}
-
-/// Test treasury address can be updated
-#[test]
-fn test_treasury_address_update() {
+fn test_calculate_transaction_fees_late_payment_flag() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
@@ -910,9 +892,68 @@ fn test_treasury_address_update() {
     assert!(late_fees > base_fees, "Late payment must increase total fees");
 }
 
+/// Test treasury address is reflected in platform fee config
+#[test]
+fn test_treasury_address_in_platform_fee_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    // Initialize fee system first
+    client.initialize_fee_system(&admin);
+
+    // Before treasury config, platform fee config should have no treasury
+    let config_before = client.get_platform_fee_config();
+    assert!(config_before.treasury_address.is_none());
+
+    // Configure treasury
+    client.configure_treasury(&treasury);
+
+    // After treasury config, platform fee config should have treasury address
+    let config_after = client.get_platform_fee_config();
+    assert!(config_after.treasury_address.is_some());
+    assert_eq!(config_after.treasury_address.unwrap(), treasury);
+}
+
 /// Both flags true: early payment discount AND late payment penalty applied together
 #[test]
 fn test_calculate_transaction_fees_both_flags() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    client.update_fee_structure(
+        &admin,
+        &FeeType::LatePayment,
+        &100,
+        &50,
+        &10_000,
+        &true,
+    );
+
+    let amount = 10_000_i128;
+    let both_flags_fees = client.calculate_transaction_fees(&user, &amount, &true, &true);
+    let base_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
+
+    // Both flags: early discount reduces platform fee AND late fee adds surcharge
+    assert!(both_flags_fees != base_fees, "Both flags must change total fees");
+}
+
+/// Test treasury address can be updated
+#[test]
+fn test_treasury_address_update() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = setup_admin_init(&env, &client);
     let treasury1 = Address::generate(&env);
     let treasury2 = Address::generate(&env);
