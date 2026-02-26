@@ -91,6 +91,51 @@ fn test_create_dispute_by_business() {
     assert_eq!(dispute.resolved_at, 0);
 }
 
+#[test]
+fn test_get_invoice_dispute_status_direct() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+
+    // Initially None
+    let status = client.get_invoice_dispute_status(&invoice_id);
+    assert_eq!(status, DisputeStatus::None);
+
+    // Create dispute
+    let reason = String::from_str(&env, "Test dispute");
+    let evidence = String::from_str(&env, "Evidence");
+    client.create_dispute(&invoice_id, &business, &reason, &evidence);
+
+    let status = client.get_invoice_dispute_status(&invoice_id);
+    assert_eq!(status, DisputeStatus::Disputed);
+
+    // Move to UnderReview
+    client.put_dispute_under_review(&invoice_id, &admin);
+    let status = client.get_invoice_dispute_status(&invoice_id);
+    assert_eq!(status, DisputeStatus::UnderReview);
+
+    // Resolve
+    let resolution = String::from_str(&env, "Resolved");
+    client.resolve_dispute(&invoice_id, &admin, &resolution);
+
+    let status = client.get_invoice_dispute_status(&invoice_id);
+    assert_eq!(status, DisputeStatus::Resolved);
+}
+
+#[test]
+fn test_get_invoices_by_dispute_status_empty_result() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+
+    let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+
+    // No disputes created
+    let disputed = client.get_invoices_by_dispute_status(&DisputeStatus::Disputed);
+
+    assert!(!disputed.contains(&invoice_id));
+}
+
+
 /// Test 2: Cannot create dispute for nonexistent invoice
 #[test]
 fn test_create_dispute_nonexistent_invoice() {

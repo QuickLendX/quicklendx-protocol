@@ -1595,22 +1595,25 @@ impl QuickLendXContract {
     }
 
     /// Update protocol limits (admin only).
-    pub fn update_protocol_limits(
-        env: Env,
-        admin: Address,
-        min_invoice_amount: i128,
-        max_due_date_days: u64,
-        grace_period_seconds: u64,
-    ) -> Result<(), QuickLendXError> {
-        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
-            env,
-            admin,
-            min_invoice_amount,
-            max_due_date_days,
-            grace_period_seconds,
-        )
-    }
-
+pub fn update_protocol_limits(
+    env: Env,
+    admin: Address,
+    min_invoice_amount: i128,
+    min_bid_amount: i128,        // NEW
+    min_bid_bps: u32,            // NEW
+    max_due_date_days: u64,
+    grace_period_seconds: u64,
+) -> Result<(), QuickLendXError> {
+    protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+        env,
+        admin,
+        min_invoice_amount,
+        min_bid_amount,           // NEW
+        min_bid_bps,              // NEW
+        max_due_date_days,
+        grace_period_seconds,
+    )
+}
     /// Get all verified businesses
     pub fn get_verified_businesses(env: Env) -> Vec<Address> {
         BusinessVerificationStorage::get_verified_businesses(&env)

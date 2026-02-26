@@ -825,6 +825,7 @@ fn test_audit_invoice_cancelled_produces_entry() {
     let (env, client, _admin, business) = setup();
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
+
     let invoice_id = client.store_invoice(
 fn test_query_audit_logs_operation_actor_time_combinations_and_limits() {
     let (env, client, admin, business) = setup();
