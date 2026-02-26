@@ -51,6 +51,8 @@ mod test_storage;
 #[cfg(test)]
 mod test_string_limits;
 #[cfg(test)]
+mod test_bid_ranking;
+#[cfg(test)]
 mod test_vesting;
 pub mod types;
 mod verification;
@@ -2983,9 +2985,6 @@ impl QuickLendXContract {
 mod test_bid;
 
 #[cfg(test)]
-mod test_bid_ranking;
-
-#[cfg(test)]
 mod test_fees;
 
 #[cfg(test)]
@@ -3021,6 +3020,8 @@ mod test_reentrancy;
 mod test_backup;
 #[cfg(test)]
 mod test_escrow_refund;
+#[cfg(test)]
+mod test_fuzz;
 #[cfg(test)]
 mod test_fuzz;
 #[cfg(test)]

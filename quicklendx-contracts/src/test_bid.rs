@@ -361,59 +361,6 @@ fn test_query_bids_by_investor() {
 // Category 4: Bid Ranking - Profit-Based Comparison Logic
 // ============================================================================
 
-/// Core Test: Best bid selection based on profit margin
-#[test]
-fn test_bid_ranking_by_profit() {
-    let (env, client) = setup();
-    env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
-    let investor1 = add_verified_investor(&env, &client, 100_000);
-    let investor2 = add_verified_investor(&env, &client, 100_000);
-    let investor3 = add_verified_investor(&env, &client, 100_000);
-    let business = Address::generate(&env);
-
-    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
-
-    // Place bids with different profit margins
-    // investor1: profit = 12k - 10k = 2k
-    let _bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
-
-    // investor2: profit = 18k - 15k = 3k (highest)
-    let _bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
-
-    // investor3: profit = 13k - 12k = 1k (lowest)
-    let _bid_3 = client.place_bid(&investor3, &invoice_id, &12_000, &13_000);
-
-    // Best bid should be investor2 (highest profit)
-    let best_bid = client.get_best_bid(&invoice_id);
-    assert!(best_bid.is_some());
-    assert_eq!(
-        best_bid.unwrap().investor,
-        investor2,
-        "Best bid must have highest profit"
-    );
-
-    // Ranked bids should order by profit descending
-    let ranked = client.get_ranked_bids(&invoice_id);
-    assert_eq!(ranked.len(), 3, "Should have 3 ranked bids");
-    assert_eq!(
-        ranked.get(0).unwrap().investor,
-        investor2,
-        "Rank 1: investor2 (profit 3k)"
-    );
-    assert_eq!(
-        ranked.get(1).unwrap().investor,
-        investor1,
-        "Rank 2: investor1 (profit 2k)"
-    );
-    assert_eq!(
-        ranked.get(2).unwrap().investor,
-        investor3,
-        "Rank 3: investor3 (profit 1k)"
-    );
-}
-
 /// Core Test: Best bid ignores withdrawn bids
 #[test]
 fn test_best_bid_excludes_withdrawn() {

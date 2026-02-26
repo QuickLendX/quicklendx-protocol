@@ -803,63 +803,6 @@ fn test_unique_bid_id_generation() {
 }
 
 #[test]
-fn test_bid_ranking_and_filters() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    let business = Address::generate(&env);
-    let investor_a = Address::generate(&env);
-    let investor_b = Address::generate(&env);
-    let investor_c = Address::generate(&env);
-    let currency = Address::generate(&env);
-    let due_date = env.ledger().timestamp() + 86_400;
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-
-    let invoice_id = client.store_invoice(
-        &business,
-        &2_000,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Ranking invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
-    verify_investor_for_test(&env, &client, &investor_a, 10_000);
-    verify_investor_for_test(&env, &client, &investor_b, 10_000);
-    verify_investor_for_test(&env, &client, &investor_c, 10_000);
-
-    let bid_a = client.place_bid(&investor_a, &invoice_id, &700, &880);
-    let bid_b = client.place_bid(&investor_b, &invoice_id, &800, &1_050);
-    let _bid_c = client.place_bid(&investor_c, &invoice_id, &900, &1_200);
-
-    let ranked = client.get_ranked_bids(&invoice_id);
-    assert_eq!(ranked.len(), 3);
-
-    let best = client.get_best_bid(&invoice_id).unwrap();
-    assert_eq!(best.bid_id, ranked.get(0).unwrap().bid_id);
-    assert_eq!(best.investor, investor_c);
-
-    env.as_contract(&contract_id, || {
-        let mut bid = BidStorage::get_bid(&env, &bid_a).unwrap();
-        bid.status = BidStatus::Accepted;
-        BidStorage::update_bid(&env, &bid);
-    });
-
-    let placed = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
-    assert_eq!(placed.len(), 2);
-    let accepted = client.get_bids_by_status(&invoice_id, &BidStatus::Accepted);
-    assert_eq!(accepted.len(), 1);
-
-    let investor_filter = client.get_bids_by_investor(&invoice_id, &investor_b);
-    assert_eq!(investor_filter.len(), 1);
-    assert_eq!(investor_filter.get(0).unwrap().bid_id, bid_b);
-}
-
-#[test]
 fn test_bid_expiration_cleanup() {
     let env = Env::default();
     env.mock_all_auths();
@@ -2565,7 +2508,6 @@ fn test_manual_cleanup_backups() {
     let backups = client.get_backups();
     assert_eq!(backups.len(), 3);
 }
-
 
 // TODO: Fix authorization issues in test environment
 // #[test]
@@ -5342,7 +5284,7 @@ fn test_custom_max_due_date_limits() {
     assert_eq!(result, Err(Ok(QuickLendXError::InvoiceDueDateInvalid)));
 
     // Test 3: Update limits to 730 days and test old boundary now succeeds
-    client.initialize_protocol_limits(&admin, &1000000i128, &730u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1000000i128, &100i128, &100u32, &730u64, &86400u64);
     let old_over_max_due_date = current_time + (365 * 86400);
     let invoice_id2 = client.store_invoice(
         &business,

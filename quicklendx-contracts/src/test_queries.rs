@@ -935,6 +935,29 @@ fn test_get_investments_by_investor_only_returns_investor_investments() {
         &client,
         &business,
         15_000,
+        InvoiceCategory::Products,
+        true,
+    );
+
+    // Investor1 funds invoice1
+    let bid1 = client.place_bid(&investor1, &invoice_id1, &5_000, &6_000);
+    client.accept_bid(&invoice_id1, &bid1);
+
+    // Investor2 funds invoice2
+    let bid2 = client.place_bid(&investor2, &invoice_id2, &7_500, &8_500);
+    client.accept_bid(&invoice_id2, &bid2);
+
+    // Verify investor1 only sees their investment
+    let invs1 = client.get_investments_by_investor(&investor1);
+    assert_eq!(invs1.len(), 1);
+    assert_eq!(invs1.get(0).unwrap().invoice_id, invoice_id1);
+
+    // Verify investor2 only sees their investment
+    let invs2 = client.get_investments_by_investor(&investor2);
+    assert_eq!(invs2.len(), 1);
+    assert_eq!(invs2.get(0).unwrap().invoice_id, invoice_id2);
+}
+
 #[test]
 fn test_get_business_invoices_paged_edge_cases_filters_and_no_overflow() {
     let (env, client) = setup();
@@ -1190,6 +1213,9 @@ fn test_get_investments_by_investor_after_mixed_bid_outcomes() {
         &client,
         &business,
         25_000,
+        InvoiceCategory::Products,
+        true,
+    );
     let pending = client.get_business_invoices_paged(
         &business,
         &Some(InvoiceStatus::Pending),
