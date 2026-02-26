@@ -3174,3 +3174,109 @@ fn test_investment_insurance_lifecycle() {
     assert!(!insurance_after.active);
     assert_eq!(insurance_after.coverage_amount, expected_coverage);
 }
+
+#[test]
+fn test_max_bids_per_invoice_limit() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let amount = 10_000;
+    let due_date = env.ledger().timestamp() + 86400 * 30; // 30 days from now
+    let description = String::from_str(&env, "Test invoice for max bids limit");
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &description,
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.verify_invoice(&invoice_id);
+
+    // Create multiple verified investors
+    let mut investors = Vec::new(&env);
+    for i in 0..55 {
+        let investor = Address::generate(&env);
+        verify_investor_for_test(&env, &client, &investor, 1_000);
+        investors.push_back(investor);
+    }
+
+    // Place bids up to the limit (50)
+    let mut bid_ids = Vec::new(&env);
+    for i in 0..50 {
+        let investor = investors.get(i).unwrap();
+        let bid_id = client.place_bid(&investor, &invoice_id, &(500 + i as i128), &(600 + i as i128));
+        bid_ids.push_back(bid_id);
+    }
+
+    // Verify we have exactly 50 active bids
+    let active_bid_count = BidStorage::get_active_bid_count(&env, &invoice_id);
+    assert_eq!(active_bid_count, 50);
+
+    // Attempt to place one more bid (should fail)
+    let excess_investor = investors.get(50).unwrap();
+    let excess_bid_attempt = client.try_place_bid(&excess_investor, &invoice_id, &550, &650);
+    let err = excess_bid_attempt.err().expect("expected contract error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::MaxBidsPerInvoiceExceeded);
+
+    // Verify bid count is still 50
+    let active_bid_count_after = BidStorage::get_active_bid_count(&env, &invoice_id);
+    assert_eq!(active_bid_count_after, 50);
+
+    // Withdraw a bid and verify a new bid can be placed
+    let first_bid_id = bid_ids.get(0).unwrap();
+    client.withdraw_bid(&first_bid_id);
+
+    // Now we should be able to place a new bid
+    let new_investor = investors.get(51).unwrap();
+    let new_bid_id = client.place_bid(&new_investor, &invoice_id, &560, &660);
+
+    // Verify we still have 50 active bids
+    let final_bid_count = BidStorage::get_active_bid_count(&env, &invoice_id);
+    assert_eq!(final_bid_count, 50);
+
+    // Accept a bid and verify it reduces active count
+    let second_bid_id = bid_ids.get(1).unwrap();
+    client.accept_bid(&invoice_id, &second_bid_id);
+
+    // Active bids should now be 49 (one accepted, one withdrawn)
+    let after_accept_count = BidStorage::get_active_bid_count(&env, &invoice_id);
+    assert_eq!(after_accept_count, 49);
+
+    // Now we should be able to place another bid
+    let another_investor = investors.get(52).unwrap();
+    let another_bid_id = client.place_bid(&another_investor, &invoice_id, &570, &670);
+
+    // Back to 50 active bids
+    let back_to_limit_count = BidStorage::get_active_bid_count(&env, &invoice_id);
+    assert_eq!(back_to_limit_count, 50);
+
+    // Test that expired bids don't count towards the limit
+    // Simulate time passage for bid expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 8 * 24 * 60 * 60); // 8 days later
+
+    // Cleanup expired bids
+    let expired_count = client.cleanup_expired_bids(&invoice_id);
+    
+    // After cleanup, we should have fewer active bids
+    let after_cleanup_count = BidStorage::get_active_bid_count(&env, &invoice_id);
+    assert!(after_cleanup_count < 50);
+
+    // Now we should be able to place more bids
+    let remaining_investors = 2;
+    for i in 0..remaining_investors {
+        let investor = investors.get(53 + i).unwrap();
+        let bid_result = client.try_place_bid(&investor, &invoice_id, &(580 + i as i128), &(680 + i as i128));
+        assert!(bid_result.is_ok(), "Should be able to place bid after expired cleanup");
+    }
+}

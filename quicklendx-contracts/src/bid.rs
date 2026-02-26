@@ -4,6 +4,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Vec};
 use crate::events::emit_bid_expired;
 
 const DEFAULT_BID_TTL: u64 = 7 * 24 * 60 * 60;
+pub const MAX_BIDS_PER_INVOICE: u32 = 50;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -58,6 +59,23 @@ impl BidStorage {
             .instance()
             .get(&Self::invoice_key(invoice_id))
             .unwrap_or_else(|| Vec::new(env))
+    }
+    
+    pub fn get_active_bid_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+        let _ = Self::refresh_expired_bids(env, invoice_id);
+        let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
+        let mut active_count = 0u32;
+        let mut idx: u32 = 0;
+        while idx < bid_ids.len() {
+            let bid_id = bid_ids.get(idx).unwrap();
+            if let Some(bid) = Self::get_bid(env, &bid_id) {
+                if bid.status == BidStatus::Placed {
+                    active_count += 1;
+                }
+            }
+            idx += 1;
+        }
+        active_count
     }
     pub fn add_bid_to_invoice(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
         let mut bids = Self::get_bids_for_invoice(env, invoice_id);

@@ -41,6 +41,7 @@ pub enum QuickLendXError {
     PaymentTooLow = 1403,
     PlatformAccountNotConfigured = 1404,
     InvalidCoveragePercentage = 1405,
+    MaxBidsPerInvoiceExceeded = 1406,
 
     // Rating errors (1500-1599)
     InvalidRating = 1500,
@@ -76,63 +77,4 @@ pub enum QuickLendXError {
     // Notification errors
     NotificationNotFound = 2000,
     NotificationBlocked = 2001,
-}
-
-impl From<QuickLendXError> for Symbol {
-    fn from(error: QuickLendXError) -> Self {
-        match error {
-            QuickLendXError::InvoiceNotFound => symbol_short!("INV_NF"),
-            QuickLendXError::InvoiceAlreadyExists => symbol_short!("INV_EX"),
-            QuickLendXError::InvoiceNotAvailableForFunding => symbol_short!("INV_NA"),
-            QuickLendXError::InvoiceAlreadyFunded => symbol_short!("INV_FD"),
-            QuickLendXError::InvoiceAmountInvalid => symbol_short!("INV_AI"),
-            QuickLendXError::InvoiceDueDateInvalid => symbol_short!("INV_DI"),
-            QuickLendXError::InvoiceNotVerified => symbol_short!("INV_NV"),
-            QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NF"),
-            QuickLendXError::InvoiceAlreadyPaid => symbol_short!("INV_PD"),
-            QuickLendXError::InvoiceAlreadyDefaulted => symbol_short!("INV_DF"),
-            QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
-            QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
-            QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
-            QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
-            QuickLendXError::InvalidAmount => symbol_short!("INV_AMT"),
-            QuickLendXError::InvalidAddress => symbol_short!("INV_ADR"),
-            QuickLendXError::InvalidCurrency => symbol_short!("INV_CR"),
-            QuickLendXError::InvalidTimestamp => symbol_short!("INV_TM"),
-            QuickLendXError::InvalidDescription => symbol_short!("INV_DS"),
-            QuickLendXError::StorageError => symbol_short!("STORE"),
-            QuickLendXError::StorageKeyNotFound => symbol_short!("KEY_NF"),
-            QuickLendXError::InsufficientFunds => symbol_short!("INSUF"),
-            QuickLendXError::InvalidStatus => symbol_short!("INV_ST"),
-            QuickLendXError::OperationNotAllowed => symbol_short!("OP_NA"),
-            QuickLendXError::PaymentTooLow => symbol_short!("PAY_LOW"),
-            QuickLendXError::PlatformAccountNotConfigured => symbol_short!("PLT_NC"),
-            QuickLendXError::InvalidCoveragePercentage => symbol_short!("INS_CV"),
-            QuickLendXError::InvalidRating => symbol_short!("INV_RT"),
-            QuickLendXError::NotFunded => symbol_short!("NOT_FD"),
-            QuickLendXError::AlreadyRated => symbol_short!("ALR_RT"),
-            QuickLendXError::NotRater => symbol_short!("NOT_RT"),
-            QuickLendXError::BusinessNotVerified => symbol_short!("BUS_NV"),
-            QuickLendXError::KYCAlreadyPending => symbol_short!("KYC_PD"),
-            QuickLendXError::KYCAlreadyVerified => symbol_short!("KYC_VF"),
-            QuickLendXError::KYCNotFound => symbol_short!("KYC_NF"),
-            QuickLendXError::InvalidKYCStatus => symbol_short!("KYC_IS"),
-            QuickLendXError::AuditLogNotFound => symbol_short!("AUD_NF"),
-            QuickLendXError::AuditIntegrityError => symbol_short!("AUD_IE"),
-            QuickLendXError::AuditQueryError => symbol_short!("AUD_QE"),
-            QuickLendXError::InvalidTag => symbol_short!("INV_TAG"),
-            QuickLendXError::TagLimitExceeded => symbol_short!("TAG_LIM"),
-            // Dispute errors
-            QuickLendXError::DisputeNotFound => symbol_short!("DSP_NF"),
-            QuickLendXError::DisputeAlreadyExists => symbol_short!("DSP_EX"),
-            QuickLendXError::DisputeNotAuthorized => symbol_short!("DSP_NA"),
-            QuickLendXError::DisputeAlreadyResolved => symbol_short!("DSP_RS"),
-            QuickLendXError::DisputeNotUnderReview => symbol_short!("DSP_UR"),
-            QuickLendXError::InvalidDisputeReason => symbol_short!("DSP_RN"),
-            QuickLendXError::InvalidDisputeEvidence => symbol_short!("DSP_EV"),
-            // Notification errors
-            QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
-            QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
-        }
-    }
 }
