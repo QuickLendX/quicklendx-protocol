@@ -1793,14 +1793,6 @@ fn test_update_fee_structure_sets_updated_by() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    client.initialize_fee_system(&admin);
-
-    let result = client.try_calculate_transaction_fees(&user, &0_i128, &false, &false);
-    assert!(result.is_err(), "Zero amount must return InvalidAmount error");
-}
     let admin = setup_admin_init(&env, &client);
 
     client.initialize_fee_system(&admin);

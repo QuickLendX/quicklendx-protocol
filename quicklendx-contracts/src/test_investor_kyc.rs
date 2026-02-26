@@ -1312,6 +1312,7 @@ mod test_investor_kyc {
                 "Investment limit should be positive"
             );
         }
+    }
     // Category 9: Investor List Query Tests (Issue #343)
     // ============================================================================
 
@@ -2096,4 +2097,5 @@ mod test_investor_kyc {
         let final_bids = client.get_all_bids_by_investor(&investor);
         assert_eq!(final_bids.len(), 5, "Should still have all 5 bids");
     }
+}
 
