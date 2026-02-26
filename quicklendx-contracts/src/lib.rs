@@ -495,6 +495,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
         }
 
+        // Validate amount and due date using protocol limits
         // Validate due date is not too far in the future using protocol limits
 
         protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
@@ -1604,10 +1605,14 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
+        let current_limits =
+            protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
             min_invoice_amount,
+            current_limits.min_bid_amount,
+            current_limits.min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
         )
@@ -3059,3 +3064,5 @@ mod test_profit_fee_formula;
 mod test_revenue_split;
 #[cfg(test)]
 mod test_types;
+#[cfg(test)]
+mod test_min_invoice_amount;

@@ -160,6 +160,56 @@ fn test_invoice_creation_invalid_amount_negative() {
 }
 
 #[test]
+fn test_invoice_creation_below_minimum_amount() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Default minimum is 1000 in test mode (see protocol_limits.rs)
+    let result = client.try_store_invoice(
+        &business,
+        &999, // Below minimum
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Below minimum amount"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidAmount);
+}
+
+#[test]
+fn test_invoice_creation_at_minimum_amount() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Default minimum is 1000 in test mode
+    let result = client.try_store_invoice(
+        &business,
+        &1000, // At minimum
+        &currency,
+        &due_date,
+        &String::from_str(&env, "At minimum amount"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert!(result.is_ok());
+}
+
+#[test]
 fn test_invoice_creation_invalid_due_date_past() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
