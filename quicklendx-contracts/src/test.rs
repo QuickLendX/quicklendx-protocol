@@ -269,6 +269,76 @@ fn test_get_invoices_by_status() {
     assert_eq!(verified_invoices.len(), 0);
 }
 
+/// Batch status query: mix of existing and nonexistent IDs, cap, and order preservation.
+#[test]
+fn test_get_invoices_by_status_batch() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Create two invoices
+    let invoice1_id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Batch Invoice 1"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let invoice2_id = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Batch Invoice 2"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    // Nonexistent id
+    let missing_id = BytesN::from_array(&env, &[42u8; 32]);
+
+    // Input order: existing, missing, existing
+    let mut ids = Vec::new(&env);
+    ids.push_back(invoice1_id.clone());
+    ids.push_back(missing_id.clone());
+    ids.push_back(invoice2_id.clone());
+
+    let statuses = client.get_invoices_by_status_batch(&ids);
+    assert_eq!(statuses.len(), 3);
+
+    // All newly stored invoices are Pending by default.
+    assert_eq!(statuses.get(0).unwrap(), Some(InvoiceStatus::Pending));
+    assert_eq!(statuses.get(1).unwrap(), None);
+    assert_eq!(statuses.get(2).unwrap(), Some(InvoiceStatus::Pending));
+
+    // When input length exceeds MAX_QUERY_LIMIT, results are truncated but ordered.
+    let mut long_ids = Vec::new(&env);
+    for _ in 0..(crate::MAX_QUERY_LIMIT + 5) {
+        long_ids.push_back(invoice1_id.clone());
+    }
+    let long_statuses = client.get_invoices_by_status_batch(&long_ids);
+    assert_eq!(
+        long_statuses.len() as u32,
+        crate::MAX_QUERY_LIMIT,
+        "Batch query must enforce MAX_QUERY_LIMIT cap"
+    );
+    // All entries in the truncated result correspond to the first invoice id.
+    let mut idx: u32 = 0;
+    while idx < crate::MAX_QUERY_LIMIT {
+        assert_eq!(
+            long_statuses.get(idx).unwrap(),
+            Some(InvoiceStatus::Pending)
+        );
+        idx = idx.saturating_add(1);
+    }
+}
+
 #[test]
 fn test_update_invoice_status() {
     let env = Env::default();
@@ -730,63 +800,6 @@ fn test_unique_bid_id_generation() {
         duplicate.is_err(),
         "Duplicate active bids should be rejected"
     );
-}
-
-#[test]
-fn test_bid_ranking_and_filters() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    let business = Address::generate(&env);
-    let investor_a = Address::generate(&env);
-    let investor_b = Address::generate(&env);
-    let investor_c = Address::generate(&env);
-    let currency = Address::generate(&env);
-    let due_date = env.ledger().timestamp() + 86_400;
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-
-    let invoice_id = client.store_invoice(
-        &business,
-        &2_000,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Ranking invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
-    verify_investor_for_test(&env, &client, &investor_a, 10_000);
-    verify_investor_for_test(&env, &client, &investor_b, 10_000);
-    verify_investor_for_test(&env, &client, &investor_c, 10_000);
-
-    let bid_a = client.place_bid(&investor_a, &invoice_id, &700, &880);
-    let bid_b = client.place_bid(&investor_b, &invoice_id, &800, &1_050);
-    let _bid_c = client.place_bid(&investor_c, &invoice_id, &900, &1_200);
-
-    let ranked = client.get_ranked_bids(&invoice_id);
-    assert_eq!(ranked.len(), 3);
-
-    let best = client.get_best_bid(&invoice_id).unwrap();
-    assert_eq!(best.bid_id, ranked.get(0).unwrap().bid_id);
-    assert_eq!(best.investor, investor_c);
-
-    env.as_contract(&contract_id, || {
-        let mut bid = BidStorage::get_bid(&env, &bid_a).unwrap();
-        bid.status = BidStatus::Accepted;
-        BidStorage::update_bid(&env, &bid);
-    });
-
-    let placed = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
-    assert_eq!(placed.len(), 2);
-    let accepted = client.get_bids_by_status(&invoice_id, &BidStatus::Accepted);
-    assert_eq!(accepted.len(), 1);
-
-    let investor_filter = client.get_bids_by_investor(&invoice_id, &investor_b);
-    assert_eq!(investor_filter.len(), 1);
-    assert_eq!(investor_filter.get(0).unwrap().bid_id, bid_b);
 }
 
 #[test]
@@ -2495,7 +2508,6 @@ fn test_manual_cleanup_backups() {
     let backups = client.get_backups();
     assert_eq!(backups.len(), 3);
 }
-
 
 // TODO: Fix authorization issues in test environment
 // #[test]
@@ -5306,7 +5318,8 @@ fn test_custom_max_due_date_limits() {
     assert_eq!(result, Err(Ok(QuickLendXError::InvoiceDueDateInvalid)));
 
     // Test 3: Update limits to 730 days and test old boundary now succeeds
-    client.initialize_protocol_limits(&admin, &1000000i128, &730u64, &86400u64);
+    client.update_protocol_limits(&admin, &1000000i128, &730u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1000000i128, &100i128, &100u32, &730u64, &86400u64);
     let old_over_max_due_date = current_time + (365 * 86400);
     let invoice_id2 = client.store_invoice(
         &business,

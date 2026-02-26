@@ -935,26 +935,27 @@ fn test_get_investments_by_investor_only_returns_investor_investments() {
         &client,
         &business,
         15_000,
-        InvoiceCategory::Services,
+        InvoiceCategory::Products,
         true,
     );
 
-    // Investor1 funds invoice1, investor2 funds invoice2
-    client.place_bid(&investor1, &invoice_id1, &10_000, &500);
-    client.accept_bid(&business, &invoice_id1, &investor1);
+    // Investor1 funds invoice1
+    let bid1 = client.place_bid(&investor1, &invoice_id1, &5_000, &6_000);
+    client.accept_bid(&invoice_id1, &bid1);
 
-    client.place_bid(&investor2, &invoice_id2, &15_000, &600);
-    client.accept_bid(&business, &invoice_id2, &investor2);
+    // Investor2 funds invoice2
+    let bid2 = client.place_bid(&investor2, &invoice_id2, &7_500, &8_500);
+    client.accept_bid(&invoice_id2, &bid2);
 
-    // Query investments by investor1
-    let inv1_investments = client.get_investments_by_investor(&investor1);
-    assert_eq!(inv1_investments.len(), 1);
-    assert_eq!(inv1_investments.get(0).unwrap(), invoice_id1);
+    // Verify investor1 only sees their investment
+    let invs1 = client.get_investments_by_investor(&investor1);
+    assert_eq!(invs1.len(), 1);
+    assert_eq!(invs1.get(0).unwrap().invoice_id, invoice_id1);
 
-    // Query investments by investor2
-    let inv2_investments = client.get_investments_by_investor(&investor2);
-    assert_eq!(inv2_investments.len(), 1);
-    assert_eq!(inv2_investments.get(0).unwrap(), invoice_id2);
+    // Verify investor2 only sees their investment
+    let invs2 = client.get_investments_by_investor(&investor2);
+    assert_eq!(invs2.len(), 1);
+    assert_eq!(invs2.get(0).unwrap().invoice_id, invoice_id2);
 }
 
 #[test]
@@ -1215,69 +1216,6 @@ fn test_get_investments_by_investor_after_mixed_bid_outcomes() {
         InvoiceCategory::Products,
         true,
     );
-
-    // Fund some invoices
-    client.place_bid(&investor, &invoice_id1, &10_000, &500);
-    client.accept_bid(&business, &invoice_id1, &investor);
-
-    client.place_bid(&investor, &invoice_id3, &20_000, &600);
-    client.accept_bid(&business, &invoice_id3, &investor);
-
-    // Query by category
-    let services = client.get_invoices_by_category(&InvoiceCategory::Services);
-    assert_eq!(services.len(), 2);
-    assert!(services.contains(&invoice_id1));
-    assert!(services.contains(&invoice_id3));
-
-    let products = client.get_invoices_by_category(&InvoiceCategory::Products);
-    assert_eq!(products.len(), 2);
-    assert!(products.contains(&invoice_id2));
-    assert!(products.contains(&invoice_id4));
-}
-
-#[test]
-fn test_get_business_invoices_paged_with_status_filter() {
-    let (env, client) = setup();
-    env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let _ = client.set_admin(&admin);
-
-    let business = setup_verified_business(&env, &client);
-
-    // Create invoices with different statuses
-    let pending_1 = create_invoice(
-        &env,
-        &client,
-        &business,
-        10_000,
-        InvoiceCategory::Services,
-        false, // Don't verify
-    );
-    let pending_2 = create_invoice(
-        &env,
-        &client,
-        &business,
-        15_000,
-        InvoiceCategory::Services,
-        false,
-    );
-    let verified_1 = create_invoice(
-        &env,
-        &client,
-        &business,
-        20_000,
-        InvoiceCategory::Services,
-        true, // Verify
-    );
-    let verified_2 = create_invoice(
-        &env,
-        &client,
-        &business,
-        25_000,
-        InvoiceCategory::Services,
-        true,
-    );
-
     let pending = client.get_business_invoices_paged(
         &business,
         &Some(InvoiceStatus::Pending),

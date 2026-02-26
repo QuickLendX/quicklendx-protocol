@@ -51,6 +51,8 @@ mod test_storage;
 #[cfg(test)]
 mod test_string_limits;
 #[cfg(test)]
+mod test_bid_ranking;
+#[cfg(test)]
 mod test_vesting;
 pub mod types;
 mod verification;
@@ -105,12 +107,19 @@ use analytics::{
     UserBehaviorMetrics,
 };
 use audit::{AuditLogEntry, AuditOperation, AuditQueryFilter, AuditStats, AuditStorage};
+use crate::currency::CurrencyWhitelist;
 
 #[contract]
 pub struct QuickLendXContract;
 
 /// Maximum number of records returned by paginated query endpoints.
 pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
+
+/// Maximum number of active (Placed) bids allowed per investor across all invoices.
+///
+/// This is a simple rate-limit to protect against excessive open positions from a
+/// single investor. Tests rely on this constant, so keep it reasonably small.
+pub(crate) const MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 10;
 
 #[inline]
 fn cap_query_limit(limit: u32) -> u32 {
@@ -192,6 +201,22 @@ impl QuickLendXContract {
     /// Get configured bid TTL in days (returns default 7 if not set)
     pub fn get_bid_ttl_days(env: Env) -> u64 {
         bid::BidStorage::get_bid_ttl_days(&env)
+    }
+
+    /// Admin-only: configure max active (Placed) bids per investor across all invoices.
+    /// A value of 0 disables the limit. Default is 20.
+    pub fn set_max_active_bids_per_investor(
+        env: Env,
+        limit: u32,
+    ) -> Result<u32, QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        bid::BidStorage::set_max_active_bids_per_investor(&env, &admin, limit)
+    }
+
+    /// Get configured max active (Placed) bids per investor across all invoices.
+    /// Returns default 20 if not set.
+    pub fn get_max_active_bids_per_investor(env: Env) -> u32 {
+        bid::BidStorage::get_max_active_bids_per_investor(&env)
     }
 
     /// Initiate emergency withdraw for stuck funds (admin only). Timelock applies before execute.
@@ -487,6 +512,11 @@ impl QuickLendXContract {
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&tags)?;
 
+        // Check currency is whitelisted
+        if !CurrencyWhitelist::is_allowed_currency(&env, &currency) {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
+
         // Create new invoice
         let invoice = Invoice::new(
             &env,
@@ -542,6 +572,11 @@ impl QuickLendXContract {
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&tags)?;
+
+        // Check currency is whitelisted
+        if !CurrencyWhitelist::is_allowed_currency(&env, &currency) {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
 
         // Create and store invoice
         let invoice = Invoice::new(
@@ -735,6 +770,31 @@ impl QuickLendXContract {
         InvoiceStorage::get_invoices_by_status(&env, &status)
     }
 
+    /// Batch helper: get invoice statuses for a list of invoice IDs.
+    ///
+    /// - Preserves input order.
+    /// - Returns `None` for nonexistent invoices.
+    /// - Applies `MAX_QUERY_LIMIT` to avoid unbounded iteration; inputs longer than
+    ///   the cap are truncated.
+    pub fn get_invoices_by_status_batch(
+        env: Env,
+        invoice_ids: Vec<BytesN<32>>,
+    ) -> Vec<Option<InvoiceStatus>> {
+        let mut result = Vec::new(&env);
+
+        let limit = cap_query_limit(invoice_ids.len());
+        let mut idx: u32 = 0;
+        while idx < limit {
+            if let Some(id) = invoice_ids.get(idx) {
+                let status = InvoiceStorage::get_invoice(&env, &id).map(|inv| inv.status);
+                result.push_back(status);
+            }
+            idx = idx.saturating_add(1);
+        }
+
+        result
+    }
+
     /// Get all available invoices (verified and not funded)
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
         InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified)
@@ -807,6 +867,22 @@ impl QuickLendXContract {
     pub fn get_invoice_count_by_status(env: Env, status: InvoiceStatus) -> u32 {
         let invoices = InvoiceStorage::get_invoices_by_status(&env, &status);
         invoices.len() as u32
+    }
+
+    /// Get the settlement/default deadline for an invoice based on protocol limits.
+    ///
+    /// This uses the same grace-period rules as the defaults module:
+    /// `due_date + grace_period_seconds` (with saturation).
+    pub fn get_invoice_settlement_deadline(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<u64, QuickLendXError> {
+        let invoice =
+            InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        Ok(protocol_limits::ProtocolLimitsContract::get_default_date(
+            env,
+            invoice.due_date,
+        ))
     }
 
     /// Get total invoice count
@@ -905,6 +981,14 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidAmount);
         }
 
+        // Enforce per-investor rate limit on active (Placed) bids across all invoices.
+        let active_bids =
+            bid::BidStorage::count_active_bids_by_investor(&env, &investor);
+        if active_bids >= MAX_ACTIVE_BIDS_PER_INVESTOR {
+            // Use a generic business-logic error to avoid adding new error variants.
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
         // Validate invoice exists and is verified
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -912,6 +996,11 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
         currency::CurrencyWhitelist::require_allowed_currency(&env, &invoice.currency)?;
+
+        // Check invoice currency is whitelisted
+        if !CurrencyWhitelist::is_allowed_currency(&env, &invoice.currency) {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
 
         let verification = do_get_investor_verification(&env, &investor)
             .ok_or(QuickLendXError::BusinessNotVerified)?;
@@ -927,6 +1016,13 @@ impl QuickLendXContract {
         }
 
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
+        let max_active_bids = BidStorage::get_max_active_bids_per_investor(&env);
+        if max_active_bids > 0 {
+            let active_bids = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+            if active_bids >= max_active_bids {
+                return Err(QuickLendXError::OperationNotAllowed);
+            }
+        }
         validate_bid(&env, &invoice, bid_amount, expected_return, &investor)?;
         // Create bid
         let bid_id = BidStorage::generate_unique_bid_id(&env);
@@ -1493,6 +1589,23 @@ impl QuickLendXContract {
             min_invoice_amount,
             min_bid_amount,
             min_bid_bps,
+            max_due_date_days,
+            grace_period_seconds,
+        )
+    }
+
+    /// Update protocol limits (admin only).
+    pub fn update_protocol_limits(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+    ) -> Result<(), QuickLendXError> {
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+            env,
+            admin,
+            min_invoice_amount,
             max_due_date_days,
             grace_period_seconds,
         )
@@ -2889,9 +3002,6 @@ impl QuickLendXContract {
 mod test_bid;
 
 #[cfg(test)]
-mod test_bid_ranking;
-
-#[cfg(test)]
 mod test_fees;
 
 #[cfg(test)]
@@ -2927,6 +3037,8 @@ mod test_reentrancy;
 mod test_backup;
 #[cfg(test)]
 mod test_escrow_refund;
+#[cfg(test)]
+mod test_fuzz;
 #[cfg(test)]
 mod test_fuzz;
 #[cfg(test)]
