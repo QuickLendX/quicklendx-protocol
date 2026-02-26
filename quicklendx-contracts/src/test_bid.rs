@@ -36,12 +36,13 @@ fn add_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i1
 fn create_verified_invoice(
     env: &Env,
     client: &QuickLendXContractClient,
-    _admin: &Address,
+    admin: &Address,
     business: &Address,
     amount: i128,
 ) -> BytesN<32> {
     let currency = Address::generate(env);
     let due_date = env.ledger().timestamp() + 86400;
+    let _ = client.add_currency(admin, &currency);
 
     let invoice_id = client.store_invoice(
         business,
@@ -71,6 +72,7 @@ fn test_bid_placement_non_verified_invoice_fails() {
     let investor = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
+    let _ = client.add_currency(&admin, &currency);
 
     // Create pending invoice (not verified)
     let invoice_id = client.store_invoice(

@@ -105,6 +105,7 @@ use analytics::{
     UserBehaviorMetrics,
 };
 use audit::{AuditLogEntry, AuditOperation, AuditQueryFilter, AuditStats, AuditStorage};
+use crate::currency::CurrencyWhitelist;
 
 #[contract]
 pub struct QuickLendXContract;
@@ -509,6 +510,11 @@ impl QuickLendXContract {
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&tags)?;
 
+        // Check currency is whitelisted
+        if !CurrencyWhitelist::is_allowed_currency(&env, &currency) {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
+
         // Create new invoice
         let invoice = Invoice::new(
             &env,
@@ -564,6 +570,11 @@ impl QuickLendXContract {
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&tags)?;
+
+        // Check currency is whitelisted
+        if !CurrencyWhitelist::is_allowed_currency(&env, &currency) {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
 
         // Create and store invoice
         let invoice = Invoice::new(
@@ -983,6 +994,11 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
         currency::CurrencyWhitelist::require_allowed_currency(&env, &invoice.currency)?;
+
+        // Check invoice currency is whitelisted
+        if !CurrencyWhitelist::is_allowed_currency(&env, &invoice.currency) {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
 
         let verification = do_get_investor_verification(&env, &investor)
             .ok_or(QuickLendXError::BusinessNotVerified)?;
