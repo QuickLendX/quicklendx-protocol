@@ -2210,16 +2210,92 @@ mod test_investor_kyc {
         );
 
         // Verify investments were created for accepted bids
-        assert!(client.get_investment_by_invoice(&invoice_id1).is_some());
-        assert!(client.get_investment_by_invoice(&invoice_id3).is_some());
-        assert!(client.get_investment_by_invoice(&invoice_id5).is_some());
+        assert!(client.try_get_invoice_investment(&invoice_id1).is_ok());
+        assert!(client.try_get_invoice_investment(&invoice_id3).is_ok());
+        assert!(client.try_get_invoice_investment(&invoice_id5).is_ok());
 
         // Verify no investments for withdrawn bids
-        assert!(client.get_investment_by_invoice(&invoice_id2).is_none());
-        assert!(client.get_investment_by_invoice(&invoice_id4).is_none());
+        assert!(client.try_get_invoice_investment(&invoice_id2).is_err());
+        assert!(client.try_get_invoice_investment(&invoice_id4).is_err());
 
         // Verify get_all_bids_by_investor still returns all 5 bids
         let final_bids = client.get_all_bids_by_investor(&investor);
         assert_eq!(final_bids.len(), 5, "Should still have all 5 bids");
+    }
+
+    #[test]
+    fn test_calculate_investment_limit_boundaries() {
+        let (env, client, _admin) = setup();
+        let base_limit = 100_000i128;
+
+        let basic_low =
+            client.calculate_investment_limit(&InvestorTier::Basic, &InvestorRiskLevel::Low, &base_limit);
+        let basic_medium = client.calculate_investment_limit(
+            &InvestorTier::Basic,
+            &InvestorRiskLevel::Medium,
+            &base_limit,
+        );
+        let basic_high =
+            client.calculate_investment_limit(&InvestorTier::Basic, &InvestorRiskLevel::High, &base_limit);
+        let basic_very_high = client.calculate_investment_limit(
+            &InvestorTier::Basic,
+            &InvestorRiskLevel::VeryHigh,
+            &base_limit,
+        );
+        let vip_low =
+            client.calculate_investment_limit(&InvestorTier::VIP, &InvestorRiskLevel::Low, &base_limit);
+
+        assert_eq!(basic_low, 100_000);
+        assert_eq!(basic_medium, 75_000);
+        assert_eq!(basic_high, 50_000);
+        assert_eq!(basic_very_high, 25_000);
+        assert_eq!(vip_low, 1_000_000);
+        assert!(basic_low > basic_medium);
+        assert!(basic_medium > basic_high);
+        assert!(basic_high > basic_very_high);
+    }
+
+    #[test]
+    fn test_update_investor_analytics_preserves_approved_base_limit() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+
+        client.submit_investor_kyc(&investor, &String::from_str(&env, "Minimal KYC data"));
+        client.verify_investor(&investor, &40_000);
+
+        let before = client.get_investor_analytics(&investor);
+        assert_eq!(before.investment_limit, 30_000);
+
+        client.update_investor_analytics(&investor, &5_000, &true);
+
+        let after = client.get_investor_analytics(&investor);
+        assert_eq!(
+            after.investment_limit, 30_000,
+            "Analytics updates must not reset limits to a hardcoded baseline"
+        );
+    }
+
+    #[test]
+    fn test_place_bid_enforces_risk_level_cap_not_only_limit() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+
+        client.submit_investor_kyc(&investor, &String::from_str(&env, "Minimal KYC data"));
+        client.verify_investor(&investor, &200_000);
+
+        // Record a failed investment to move investor into VeryHigh risk while still
+        // retaining a limit above 10k, so the risk-level cap is the deciding factor.
+        client.update_investor_analytics(&investor, &20_000, &false);
+        let verification = client.get_investor_analytics(&investor);
+        assert_eq!(verification.risk_level, InvestorRiskLevel::VeryHigh);
+        assert!(verification.investment_limit > 10_000);
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 100_000);
+        let result = client.try_place_bid(&investor, &invoice_id, &20_000, &22_000);
+        assert!(
+            result.is_err(),
+            "place_bid must reject bids above the VeryHigh risk cap even when stored limit is higher"
+        );
     }
 }

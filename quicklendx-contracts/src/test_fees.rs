@@ -1,9 +1,6 @@
 use super::*;
 use crate::{errors::QuickLendXError, fees::FeeType};
-use soroban_sdk::{
-    testutils::{Address as _, MockAuth, MockAuthInvoke},
-    Address, Env, IntoVal, Map, String,
-};
+use soroban_sdk::{testutils::Address as _, Address, Env, Map, String};
 
 /// Helper function to set up admin for testing
 fn setup_admin(env: &Env, client: &QuickLendXContractClient) -> Address {
@@ -83,7 +80,7 @@ fn test_get_platform_fee_config_after_init_has_defaults() {
     assert_eq!(fee_config.updated_at, env.ledger().timestamp());
 }
 
-/// FeeManager getter reflects updates from set_platform_fee
+/// FeeManager getter reflects updates from update_platform_fee_bps
 #[test]
 fn test_get_platform_fee_config_after_update_platform_fee_bps() {
     let env = Env::default();
@@ -93,11 +90,11 @@ fn test_get_platform_fee_config_after_update_platform_fee_bps() {
     let admin = setup_admin(&env, &client);
 
     client.initialize_fee_system(&admin);
-    client.set_platform_fee(&450);
+    client.update_platform_fee_bps(&450);
 
-    // Use get_platform_fee() which reads from PlatformFee::get_config (same storage as set_platform_fee)
-    let fee_config = client.get_platform_fee();
+    let fee_config = client.get_platform_fee_config();
     assert_eq!(fee_config.fee_bps, 450);
+    assert_eq!(fee_config.treasury_address, None);
     assert_eq!(fee_config.updated_by, admin);
     assert_eq!(fee_config.updated_at, env.ledger().timestamp());
 }

@@ -203,7 +203,7 @@ impl ProtocolInitializer {
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // Validate fee basis points (0% to 10%)
-        if params.fee_bps < MIN_FEE_BPS || params.fee_bps > MAX_FEE_BPS {
+        if params.fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
@@ -314,7 +314,7 @@ impl ProtocolInitializer {
         }
 
         // Validate fee basis points
-        if fee_bps < MIN_FEE_BPS || fee_bps > MAX_FEE_BPS {
+        if fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 

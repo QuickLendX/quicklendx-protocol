@@ -5,6 +5,7 @@
 
 use super::*;
 use crate::audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter};
+use crate::bid::{Bid, BidStatus, BidStorage};
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
@@ -268,6 +269,35 @@ fn test_get_business_invoices_paged_pagination_correctness() {
     for id in page2.iter() {
         assert!(all.contains(&id));
     }
+}
+
+#[test]
+fn test_get_business_invoices_paged_limit_is_capped_to_max_query_limit() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+
+    for i in 0..120u32 {
+        let _ = create_invoice(
+            &env,
+            &client,
+            &business,
+            1_000 + i as i128,
+            InvoiceCategory::Services,
+            false,
+        );
+    }
+
+    let capped = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &500u32,
+    );
+    assert_eq!(
+        capped.len(),
+        crate::MAX_QUERY_LIMIT,
+        "business invoice query should enforce MAX_QUERY_LIMIT cap"
+    );
 }
 
 #[test]
