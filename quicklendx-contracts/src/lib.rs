@@ -200,6 +200,22 @@ impl QuickLendXContract {
         bid::BidStorage::get_bid_ttl_days(&env)
     }
 
+    /// Admin-only: configure max active (Placed) bids per investor across all invoices.
+    /// A value of 0 disables the limit. Default is 20.
+    pub fn set_max_active_bids_per_investor(
+        env: Env,
+        limit: u32,
+    ) -> Result<u32, QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        bid::BidStorage::set_max_active_bids_per_investor(&env, &admin, limit)
+    }
+
+    /// Get configured max active (Placed) bids per investor across all invoices.
+    /// Returns default 20 if not set.
+    pub fn get_max_active_bids_per_investor(env: Env) -> u32 {
+        bid::BidStorage::get_max_active_bids_per_investor(&env)
+    }
+
     /// Initiate emergency withdraw for stuck funds (admin only). Timelock applies before execute.
     /// See docs/contracts/emergency-recovery.md. Last-resort only.
     pub fn initiate_emergency_withdraw(
@@ -982,6 +998,13 @@ impl QuickLendXContract {
         }
 
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
+        let max_active_bids = BidStorage::get_max_active_bids_per_investor(&env);
+        if max_active_bids > 0 {
+            let active_bids = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+            if active_bids >= max_active_bids {
+                return Err(QuickLendXError::OperationNotAllowed);
+            }
+        }
         validate_bid(&env, &invoice, bid_amount, expected_return, &investor)?;
         // Create bid
         let bid_id = BidStorage::generate_unique_bid_id(&env);
