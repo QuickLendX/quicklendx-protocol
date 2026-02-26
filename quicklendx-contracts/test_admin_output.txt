@@ -1,0 +1,56 @@
+
+running 51 tests
+test test_admin::test_admin::test_admin_can_set_platform_fee ... ok
+test test_admin::test_admin::test_admin_can_reject_investor ... ok
+test test_admin::test_admin::test_admin_can_reject_business_after_set_admin ... ok
+test test_admin::test_admin::test_admin_verification_workflow_with_initialize_admin ... ok
+test test_admin::test_admin::test_admin_authorization_in_investor_verification ... ok
+test test_admin::test_admin::test_get_admin_returns_none_before_any_initialization ... ok
+test test_admin::test_admin::test_get_admin_returns_none_before_init ... ok
+test test_admin::test_admin::test_get_admin_consistency_between_modules ... ok
+test test_admin::test_admin::test_get_current_admin_after_init_returns_address ... ok
+test test_admin::test_admin::test_get_current_admin_before_init_returns_none ... ok
+test test_admin::test_admin::test_coverage_edge_case_admin_transfer_to_same_address ... ok
+test test_admin::test_admin::test_get_current_admin_after_transfer_returns_new_address ... ok
+test test_admin::test_admin::test_admin_verification_workflow_with_set_admin ... ok
+test test_admin::test_admin::test_initialize_admin_same_address_twice_fails ... ok
+test test_admin::test_admin::test_initialize_emits_admin_set_event ... ok
+test test_admin::test_admin::test_admin_storage_persistence_across_operations ... ok
+test test_admin::test_admin::test_initialize_admin_succeeds ... ok
+test test_admin::test_admin::test_initialize_admin_double_init_fails ... ok
+test test_admin::test_admin::test_is_admin_returns_false_before_init ... ok
+test test_admin::test_admin::test_get_current_admin_tracks_full_lifecycle ... ok
+test test_admin::test_admin::test_admin_operations_fail_without_initialization ... ok
+test test_admin::test_admin::test_initialize_admin_and_set_admin_consistency ... ok
+test test_admin::test_admin::test_require_admin_fails_before_init ... ok
+test test_admin::test_admin::test_is_admin_returns_false_for_different_address ... ok
+test test_admin::test_admin::test_non_admin_cannot_verify_after_set_admin ... ok
+test test_admin::test_admin::test_is_admin_returns_true_for_current_admin ... ok
+test test_admin::test_admin::test_require_admin_fails_for_non_admin ... ok
+test test_admin::test_admin::test_require_admin_succeeds_for_admin ... ok
+test test_admin::test_admin::test_set_admin_and_initialize_admin_consistency ... ok
+test test_admin::test_admin::test_set_platform_fee_without_admin_fails ... ok
+test test_admin::test_admin::test_set_admin_first_time_via_verification_module ... ok
+test test_admin::test_admin::test_admin_can_verify_invoice ... ok
+test test_admin::test_admin::test_set_admin_rejects_non_admin_caller ... ok
+test test_admin::test_admin::test_transfer_admin_without_init_fails ... ok
+test test_admin::test_admin::test_set_admin_syncs_with_admin_storage_initialization_flag ... ok
+test test_admin::test_admin::test_set_admin_transfer_via_verification_module ... ok
+test test_admin::test_admin::test_non_admin_cannot_verify_investor ... ok
+test test_admin::test_admin::test_transfer_admin_to_self ... ok
+test test_admin::test_admin::test_transfer_admin_succeeds ... ok
+test test_admin::test_admin::test_multiple_admin_transfers_in_verification_context ... ok
+test test_admin::test_admin::test_transfer_admin_chain ... ok
+test test_admin::test_admin::test_transfer_emits_admin_transferred_event ... ok
+test test_limit::test_admin_operations_require_authorization ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_tier ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_reject_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_risk_level ... ok
+test test_admin::test_admin::test_transferred_admin_can_verify_business ... ok
+test test_admin::test_admin::test_verify_invoice_without_admin_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_verify_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investor_lists ... ok
+test test_refund::test_admin_can_trigger_refund ... ok
+
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 578 filtered out; finished in 0.30s
+

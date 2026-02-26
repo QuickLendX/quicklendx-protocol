@@ -7,19 +7,12 @@
 //! global invariants: total_invoice_count, status counts, audit trail length,
 //! escrow released, investment completed, and no orphaned storage.
 
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::investment::{InvestmentStatus, InvestmentStorage};
+use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::payments::EscrowStatus;
 use crate::QuickLendXContract;
 use crate::QuickLendXContractClient;
-use soroban_sdk::{
-    testutils::Address as _,
-    token,
-    Address,
-    Env,
-    String,
-    Vec,
-};
+use soroban_sdk::{testutils::Address as _, token, Address, Env, String, Vec};
 
 /// Invariant test scaffold for protocol state consistency.
 /// Intentionally minimal and non-invasive.
@@ -111,7 +104,10 @@ fn test_invariants_after_full_lifecycle() {
     let defaulted_count = client.get_invoice_count_by_status(&InvoiceStatus::Defaulted);
     let cancelled_count = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
 
-    assert_eq!(paid_count, 1, "exactly one invoice must be Paid after full lifecycle");
+    assert_eq!(
+        paid_count, 1,
+        "exactly one invoice must be Paid after full lifecycle"
+    );
 
     // status counts sum to total (global invariant: no orphaned storage)
     let sum_status = pending_count

@@ -605,7 +605,7 @@ fn test_resolve_already_resolved_dispute_fails() {
     let evidence = String::from_str(&env, "Test evidence");
     client.create_dispute(&invoice_id, &business, &reason, &evidence);
     client.put_dispute_under_review(&invoice_id, &admin);
-    
+
     let resolution = String::from_str(&env, "First resolution");
     client.resolve_dispute(&invoice_id, &admin, &resolution);
 
@@ -634,7 +634,7 @@ fn test_put_resolved_dispute_under_review_fails() {
     let evidence = String::from_str(&env, "Test evidence");
     client.create_dispute(&invoice_id, &business, &reason, &evidence);
     client.put_dispute_under_review(&invoice_id, &admin);
-    
+
     let resolution = String::from_str(&env, "Resolution");
     client.resolve_dispute(&invoice_id, &admin, &resolution);
 
@@ -768,7 +768,7 @@ fn test_dispute_status_tracking_multiple_invoices() {
     client.put_dispute_under_review(&invoice_id_2, &admin);
     client.put_dispute_under_review(&invoice_id_3, &admin);
     client.put_dispute_under_review(&invoice_id_4, &admin);
-    
+
     let resolution = String::from_str(&env, "Resolved");
     client.resolve_dispute(&invoice_id_4, &admin, &resolution);
 

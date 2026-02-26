@@ -26,7 +26,7 @@ pub fn place_bid(
 - `investor`: Address of the investor placing the bid (must be authenticated)
 - `invoice_id`: Unique identifier of the invoice
 - `bid_amount`: Amount the investor is willing to fund (must be positive)
-- `expected_return`: Expected return amount (must be greater than bid_amount)
+- `expected_return`: Expected return amount (must be greater than or equal to bid_amount)
 
 **Returns:**
 - `Ok(BytesN<32>)`: The unique bid ID on success
@@ -36,12 +36,19 @@ pub fn place_bid(
 1. Invoice must exist and be in `Verified` status
 2. Investor must be authenticated (require_auth)
 3. Investor must be verified with valid KYC status
-4. Bid amount must be positive and meet minimum threshold (100)
+4. Bid amount must be positive and meet the minimum threshold:
+   - `min_bid = max(min_bid_amount, invoice.amount * min_bid_bps / 10_000)`
+   - Defaults: `min_bid_amount = 100`, `min_bid_bps = 100` (1% of invoice amount)
+   - Limits can be updated via `ProtocolLimitsContract::set_protocol_limits`
 5. Bid amount cannot exceed invoice amount
-6. Expected return must be greater than bid amount
+6. Expected return must be greater than or equal to bid amount
 7. Bid amount cannot exceed investor's investment limit
 8. Investor cannot have an existing active bid on the same invoice
 9. Expired bids are automatically cleaned up before validation
+10. Global active bid cap per investor is enforced across all invoices:
+   - Only `Placed` bids count
+   - `Withdrawn`, `Accepted`, `Expired`, and `Cancelled` do not count
+   - Default cap is `20` and can be changed by admin
 
 **Events Emitted:**
 - `bid_plc`: Bid placed event with bid details
@@ -50,9 +57,10 @@ pub fn place_bid(
 - `InvoiceNotFound`: Invoice does not exist
 - `InvalidStatus`: Invoice is not verified
 - `BusinessNotVerified`: Investor is not verified
-- `InvalidAmount`: Bid amount or expected return is invalid
+- `InvalidAmount`: Bid amount is invalid
+- `InvalidExpectedReturn`: Expected return is lower than bid amount
 - `InvoiceAmountInvalid`: Bid amount exceeds invoice amount
-- `OperationNotAllowed`: Investor already has an active bid on this invoice
+- `OperationNotAllowed`: Investor already has an active bid on this invoice, or active bid cap is exceeded
 
 **Example:**
 ```rust
@@ -244,6 +252,13 @@ pub enum BidStatus {
 
 Security: only the configured protocol admin may call `set_bid_ttl_days`. Calls require the admin to authorize the transaction.
 
+### Active Bid Cap Configuration (Admin)
+
+- `set_max_active_bids_per_investor(env, limit: u32) -> Result<u32, QuickLendXError>`: Admin-only entrypoint to set the maximum number of active `Placed` bids an investor can hold across all invoices. `0` disables the cap.
+- `get_max_active_bids_per_investor(env) -> u32`: Read-only entrypoint returning the configured cap (returns `20` if not set).
+
+Security: only the configured protocol admin may call `set_max_active_bids_per_investor`. Calls require the admin to authorize the transaction.
+
 2. **Withdraw Bid**: Investor withdraws their bid before acceptance
    - Status: `Withdrawn`
    - Only possible if status is `Placed`
@@ -326,7 +341,8 @@ All entrypoints return `Result<T, QuickLendXError>` for proper error handling. C
 - `InvoiceNotFound`: Invoice does not exist
 - `InvalidStatus`: Invalid invoice or bid status
 - `BusinessNotVerified`: Investor verification required
-- `InvalidAmount`: Invalid bid amount or expected return
+- `InvalidAmount`: Invalid bid amount
+- `InvalidExpectedReturn`: Expected return is lower than bid amount
 - `StorageKeyNotFound`: Bid does not exist
 - `OperationNotAllowed`: Operation not allowed in current state
 

@@ -130,7 +130,7 @@ pub struct FeeManager;
 
 impl FeeManager {
     pub fn initialize(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
-        admin.require_auth();
+        // Auth handled by ProtocolInitializer
 
         // Initialize default fee structures
         let default_fees = vec![
@@ -211,24 +211,23 @@ impl FeeManager {
     pub fn update_platform_fee(
         env: &Env,
         admin: &Address,
-        new_fee_bps: u32,
-    ) -> Result<PlatformFeeConfig, QuickLendXError> {
-        admin.require_auth();
+        fee_bps: u32,
+    ) -> Result<(), QuickLendXError> {
+        // Auth is checked by the caller
 
-        if new_fee_bps > MAX_PLATFORM_FEE_BPS {
-            return Err(QuickLendXError::InvalidAmount);
+        if fee_bps > 1000 {
+            return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
-        let mut platform_config = Self::get_platform_fee_config(env)?;
-        platform_config.fee_bps = new_fee_bps;
-        platform_config.updated_at = env.ledger().timestamp();
-        platform_config.updated_by = admin.clone();
+        let mut config = Self::get_platform_fee_config(env)?;
+        config.fee_bps = fee_bps;
 
         env.storage()
             .instance()
-            .set(&PLATFORM_FEE_KEY, &platform_config);
+            .set(&symbol_short!("plat_fee"), &config);
 
-        Ok(platform_config)
+        env.events().publish((symbol_short!("fee_upd"),), fee_bps);
+        Ok(())
     }
 
     /// Get platform fee configuration

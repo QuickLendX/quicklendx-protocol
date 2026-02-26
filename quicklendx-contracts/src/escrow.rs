@@ -81,6 +81,9 @@ pub fn accept_bid_and_fund(
     BidStorage::update_bid(env, &bid);
 
     // Update Invoice
+    // Remove from old status list before changing status
+    InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Verified, invoice_id);
+
     // mark_as_funded updates status, funded_amount, investor, and logs audit
     invoice.mark_as_funded(
         env,
@@ -88,6 +91,9 @@ pub fn accept_bid_and_fund(
         bid.bid_amount,
     );
     InvoiceStorage::update_invoice(env, &invoice);
+
+    // Add to new status list after status change
+    InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
 
     // Create Investment
     let investment_id = InvestmentStorage::generate_unique_investment_id(env);
