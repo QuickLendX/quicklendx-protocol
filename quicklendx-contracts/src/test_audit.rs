@@ -885,6 +885,37 @@ fn test_audit_invoice_cancelled_produces_entry() {
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &invoice::InvoiceCategory::Services,
+        &Vec::from_array(&env, [String::from_str(&env, "test")]),
+    ).unwrap();
+
+    client.cancel_invoice(&invoice_id);
+
+    let logs = client.query_audit_logs(
+        &None,
+        &None,
+        &None,
+        &None,
+        &None,
+        &10
+    );
+    
+    assert!(logs.len() >= 1);
+    
+    // Find the cancellation entry
+    let cancel_entry = logs.iter().find(|log| {
+        log.operation == audit::AuditOperation::InvoiceCancelled
+    }).unwrap();
+    
+    assert_eq!(cancel_entry.actor, business);
+}
+
+#[test]
 fn test_query_audit_logs_operation_actor_time_combinations_and_limits() {
     let (env, client, admin, business) = setup();
     let business2 = Address::generate(&env);
