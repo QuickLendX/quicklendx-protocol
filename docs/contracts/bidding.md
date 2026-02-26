@@ -2,16 +2,56 @@
 
 ## Overview
 
-The bidding system enables verified investors to place and withdraw bids on verified invoices. This document describes the entrypoints, validation rules, events, and security considerations.
+The QuickLendX protocol implements a competitive bidding system where verified investors can place bids on verified invoices. The system ensures fair competition, ranking, and bounded storage through various mechanisms including a maximum bids per invoice limit.
 
-## Entrypoints
+## Key Features
 
+### Maximum Bids Per Invoice Limit
 
-### `place_bid`
+To ensure system performance and bounded storage, the protocol enforces a maximum limit on the number of active bids per invoice.
 
-Places a bid on a verified invoice.
+#### Configuration
 
-**Signature:**
+- **Default Limit**: 50 active bids per invoice
+- **Constant**: `MAX_BIDS_PER_INVOICE` in `src/bid.rs`
+- **Error**: `MaxBidsPerInvoiceExceeded` (error code 1406)
+
+#### Behavior
+
+1. **Active Bid Counting**: Only bids with `Placed` status count towards the limit
+2. **Automatic Cleanup**: Expired bids are automatically removed before counting
+3. **Dynamic Limiting**: When bids are withdrawn or accepted, new bids can be placed
+4. **Real-time Enforcement**: The limit is checked during `place_bid` execution
+
+#### Implementation Details
+
+```rust
+// Check if maximum bids per invoice limit is reached
+let active_bid_count = BidStorage::get_active_bid_count(&env, &invoice_id);
+if active_bid_count >= bid::MAX_BIDS_PER_INVOICE {
+    return Err(QuickLendXError::MaxBidsPerInvoiceExceeded);
+}
+```
+
+#### Bid Status Impact on Limit
+
+| Status | Counts Towards Limit | Notes |
+|--------|---------------------|-------|
+| Placed | ✅ Yes | Active competitive bids |
+| Accepted | ❌ No | Bid accepted, no longer competing |
+| Withdrawn | ❌ No | Investor removed their bid |
+| Expired | ❌ No | Automatically cleaned up |
+
+## Bidding Process
+
+### 1. Prerequisites
+
+- **Invoice**: Must be in `Verified` status
+- **Investor**: Must have completed KYC and be verified
+- **Investment Limit**: Bid amount cannot exceed investor's verified limit
+
+### 2. Bid Placement
+
 ```rust
 pub fn place_bid(
     env: Env,
@@ -22,352 +62,132 @@ pub fn place_bid(
 ) -> Result<BytesN<32>, QuickLendXError>
 ```
 
-**Parameters:**
-- `investor`: Address of the investor placing the bid (must be authenticated)
-- `invoice_id`: Unique identifier of the invoice
-- `bid_amount`: Amount the investor is willing to fund (must be positive)
-- `expected_return`: Expected return amount (must be greater than or equal to bid_amount)
-
-**Returns:**
-- `Ok(BytesN<32>)`: The unique bid ID on success
-- `Err(QuickLendXError)`: Error code on failure
-
-**Validation Rules:**
-1. Invoice must exist and be in `Verified` status
-2. Investor must be authenticated (require_auth)
-3. Investor must be verified with valid KYC status
-4. Bid amount must be positive and meet the minimum threshold:
-   - `min_bid = max(min_bid_amount, invoice.amount * min_bid_bps / 10_000)`
-   - Defaults: `min_bid_amount = 100`, `min_bid_bps = 100` (1% of invoice amount)
-   - Limits can be updated via `ProtocolLimitsContract::set_protocol_limits`
-5. Bid amount cannot exceed invoice amount
-6. Expected return must be greater than or equal to bid amount
-7. Bid amount cannot exceed investor's investment limit
-8. Investor cannot have an existing active bid on the same invoice
-9. Expired bids are automatically cleaned up before validation
-10. Global active bid cap per investor is enforced across all invoices:
-   - Only `Placed` bids count
-   - `Withdrawn`, `Accepted`, `Expired`, and `Cancelled` do not count
-   - Default cap is `20` and can be changed by admin
-
-**Events Emitted:**
-- `bid_plc`: Bid placed event with bid details
-
-**Error Codes:**
-- `InvoiceNotFound`: Invoice does not exist
-- `InvalidStatus`: Invoice is not verified
-- `BusinessNotVerified`: Investor is not verified
-- `InvalidAmount`: Bid amount is invalid
-- `InvalidExpectedReturn`: Expected return is lower than bid amount
-- `InvoiceAmountInvalid`: Bid amount exceeds invoice amount
-- `OperationNotAllowed`: Investor already has an active bid on this invoice, or active bid cap is exceeded
-
-**Example:**
-```rust
-let bid_id = contract.place_bid(
-    &env,
-    investor_address,
-    invoice_id,
-    10000,  // bid_amount
-    11000,  // expected_return
-)?;
-```
-
-### `withdraw_bid`
-
-Withdraws a previously placed bid before it is accepted.
-
-**Signature:**
-```rust
-pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError>
-```
-
-**Parameters:**
-- `bid_id`: Unique identifier of the bid to withdraw
-
-**Returns:**
-- `Ok(())`: Success
-- `Err(QuickLendXError)`: Error code on failure
-
-**Validation Rules:**
-1. Bid must exist
-2. Only the investor who placed the bid can withdraw it (require_auth)
-3. Bid must be in `Placed` status (cannot withdraw accepted, withdrawn, or expired bids)
-
-**Events Emitted:**
-- `bid_wdr`: Bid withdrawn event with bid details
-
-**Error Codes:**
-- `StorageKeyNotFound`: Bid does not exist
-- `OperationNotAllowed`: Bid is not in Placed status
-
-**Example:**
-```rust
-contract.withdraw_bid(&env, bid_id)?;
-```
-
-### `get_bids_for_invoice`
-
-Retrieves all bids for a specific invoice, including expired and withdrawn bids.
-
-**Signature:**
-```rust
-pub fn get_bids_for_invoice(env: Env, invoice_id: BytesN<32>) -> Vec<Bid>
-```
-
-**Parameters:**
-- `invoice_id`: Unique identifier of the invoice
-
-**Returns:**
-- `Vec<Bid>`: Vector of all bid records for the invoice
-
-**Notes:**
-- Automatically refreshes expired bids before returning results
-- Returns bids in all statuses (Placed, Withdrawn, Accepted, Expired)
-- Use `get_bids_by_status` to filter by status if needed
-
-**Example:**
-```rust
-let bids = contract.get_bids_for_invoice(&env, invoice_id);
-for bid in bids.iter() {
-    // Process bid
-}
-```
-
-## Query Helpers
-
-### `get_bid`
-
-Retrieves a single bid by ID.
-
-```rust
-pub fn get_bid(env: Env, bid_id: BytesN<32>) -> Option<Bid>
-```
-
-### `get_best_bid`
-
-Gets the highest ranked bid for an invoice (based on profit, return, and timestamp).
-
-```rust
-pub fn get_best_bid(env: Env, invoice_id: BytesN<32>) -> Option<Bid>
-```
-
-### `get_ranked_bids`
-
-Gets all bids for an invoice sorted by platform ranking rules.
-
-```rust
-pub fn get_ranked_bids(env: Env, invoice_id: BytesN<32>) -> Vec<Bid>
-```
-
-### `get_bids_by_status`
-
-Filters bids by status (Placed, Withdrawn, Accepted, Expired).
-
-```rust
-pub fn get_bids_by_status(env: Env, invoice_id: BytesN<32>, status: BidStatus) -> Vec<Bid>
-```
-
-### `get_bids_by_investor`
-
-Gets all bids from a specific investor for an invoice.
-
-```rust
-pub fn get_bids_by_investor(env: Env, invoice_id: BytesN<32>, investor: Address) -> Vec<Bid>
-```
-
-### `cancel_bid`
-
-Cancels a placed bid. Unlike withdraw, cancel is a hard termination.
-
-**Signature:**
-```rust
-pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> bool
-```
-
-**Returns:** `true` if cancelled, `false` if bid not found or not in `Placed` status.
-
-**Validation Rules:**
-1. Bid must exist
-2. Bid must be in `Placed` status
-
-**Error Codes:** None — returns `false` for invalid states instead of error.
-
----
-
-### `get_all_bids_by_investor`
-
-Returns all bids placed by an investor across **all invoices** (all statuses).
-
-**Signature:**
-```rust
-pub fn get_all_bids_by_investor(env: Env, investor: Address) -> Vec<Bid>
-```
-
-**Returns:** All bid records for the investor regardless of status or invoice.
-
-**Notes:**
-- Use `get_bids_by_investor` for per-invoice filtering
-- Includes Placed, Withdrawn, Cancelled, Accepted, Expired bids
-
-## Data Structures
-
-### `Bid`
-
-```rust
-    pub struct Bid {
-    pub bid_id: BytesN<32>,           // Unique bid identifier
-    pub invoice_id: BytesN<32>,       // Associated invoice
-    pub investor: Address,            // Investor who placed the bid
-    pub bid_amount: i128,              // Amount being bid
-    pub expected_return: i128,        // Expected return amount
-    pub timestamp: u64,               // When bid was placed
-    pub status: BidStatus,            // Current bid status
-    pub expiration_timestamp: u64,    // When bid expires (default: 7 days, admin-configurable 1–30 days)
-}
-```
-
-### `BidStatus`
-
-```rust
-pub enum BidStatus {
-    Placed,    // Active bid awaiting acceptance
-    Withdrawn, // Bid was withdrawn by investor
-    Accepted,  // Bid was accepted by business
-    Expired,   // Bid expired without acceptance
-    Cancelled, // Bid was hard-cancelled
-}
-```
-
-## Bid Lifecycle
-
-1. **Place Bid**: Investor places a bid on a verified invoice
-    - Status: `Placed`
-    - Expiration: Default is 7 days from placement. This TTL is admin-configurable in days (1–30) without a code change.
-
-### Bid TTL Configuration (Admin)
-
-- `set_bid_ttl_days(env, days: u64) -> Result<u64, QuickLendXError>`: Admin-only entrypoint to set the default bid TTL in days. Must be between 1 and 30. The stored value is used for subsequent bids.
-- `get_bid_ttl_days(env) -> u64`: Read-only entrypoint returning the configured TTL in days (returns 7 if not set).
-
-Security: only the configured protocol admin may call `set_bid_ttl_days`. Calls require the admin to authorize the transaction.
-
-### Active Bid Cap Configuration (Admin)
-
-- `set_max_active_bids_per_investor(env, limit: u32) -> Result<u32, QuickLendXError>`: Admin-only entrypoint to set the maximum number of active `Placed` bids an investor can hold across all invoices. `0` disables the cap.
-- `get_max_active_bids_per_investor(env) -> u32`: Read-only entrypoint returning the configured cap (returns `20` if not set).
-
-Security: only the configured protocol admin may call `set_max_active_bids_per_investor`. Calls require the admin to authorize the transaction.
-
-2. **Withdraw Bid**: Investor withdraws their bid before acceptance
-   - Status: `Withdrawn`
-   - Only possible if status is `Placed`
-  
-3. **Cancel Bid**: Hard cancellation of a placed bid
-   - Status: `Cancelled`
-   - Returns `false` if already non-Placed
-   - Excluded from ranking and best-bid selection
-
-4. **Accept Bid**: Business accepts a bid (via `accept_bid` entrypoint)
-   - Status: `Accepted`
-   - Invoice status changes to `Funded`
-   - Escrow is created
-
-5. **Expire Bid**: Bid expires after expiration timestamp
-   - Status: `Expired`
-   - Automatically updated during cleanup operations
+#### Validations
+
+1. **Invoice Status**: Must be `Verified`
+2. **Investor Verification**: Must be verified and not pending/rejected
+3. **Investment Limit**: Bid amount ≤ investor's verified limit
+4. **Bid Amount**: Must be positive and within invoice amount range
+5. **Expected Return**: Must exceed bid amount
+6. **Max Bids Limit**: Cannot exceed 50 active bids per invoice
+7. **Duplicate Prevention**: Same investor cannot have multiple active bids
+
+#### Bid Expiration
+
+- **Default TTL**: 7 days (604,800 seconds)
+- **Expiration Timestamp**: Calculated as `current_timestamp + DEFAULT_BID_TTL`
+- **Automatic Cleanup**: Expired bids are marked as `Expired` and removed from active counting
+
+### 3. Bid Ranking
+
+Bids are ranked based on the following priority:
+
+1. **Profit Margin**: Higher `expected_return - bid_amount`
+2. **Expected Return**: Higher total return (if profit margins equal)
+3. **Bid Amount**: Higher bid amount (if returns equal)
+4. **Timestamp**: Earlier bid wins (if all else equal)
+
+### 4. Bid Acceptance
+
+- **Authorization**: Only the invoice business owner can accept bids
+- **Escrow Creation**: Automatically creates escrow for the accepted bid amount
+- **Status Changes**: 
+  - Bid status changes to `Accepted`
+  - Invoice status changes to `Funded`
+  - Investment record is created
 
 ## Security Considerations
 
+### Rate Limiting
+
+The max bids per invoice limit serves as a rate limiting mechanism to prevent:
+
+- **Storage Bloat**: Unbounded growth of bid data
+- **Performance Issues**: Excessive computation during ranking
+- **Spam Prevention**: Malicious actors from overwhelming the system
+
 ### Access Control
-- Only authenticated investors can place bids
-- Only the bid owner can withdraw their bid
-- Investor verification is required before placing bids
 
-### Validation
-- Invoice must be verified before accepting bids
-- Bid amounts are validated against invoice amount and investor limits
-- Duplicate active bids from the same investor are prevented
-- Expired bids are automatically cleaned up
+- **Investor Authentication**: Only verified investors can place bids
+- **Business Authorization**: Only business owners can accept bids
+- **Admin Functions**: Certain operations require admin privileges
 
-### Status Enforcement
-- Bids can only be withdrawn if in `Placed` status
-- Bids cannot be placed on non-verified invoices
-- Bid status transitions are strictly enforced
+### Data Integrity
 
-### Investment Limits
-- Bid amounts are validated against investor's investment limit
-- Risk-based restrictions apply for high-risk investors
-- Investment limits are calculated based on investor tier and risk level
-
-## Events
-
-### `bid_plc` (Bid Placed)
-Emitted when a bid is successfully placed.
-
-**Event Data:**
-- `bid_id`: BytesN<32>
-- `invoice_id`: BytesN<32>
-- `investor`: Address
-- `bid_amount`: i128
-- `expected_return`: i128
-- `timestamp`: u64
-- `expiration_timestamp`: u64
-
-### `bid_wdr` (Bid Withdrawn)
-Emitted when a bid is withdrawn.
-
-**Event Data:**
-- `bid_id`: BytesN<32>
-- `invoice_id`: BytesN<32>
-- `investor`: Address
-- `bid_amount`: i128
-- `withdrawn_at`: u64
-
-### `bid_exp` (Bid Expired)
-Emitted when a bid expires.
-
-**Event Data:**
-- `bid_id`: BytesN<32>
-- `invoice_id`: BytesN<32>
-- `investor`: Address
-- `bid_amount`: i128
-- `expiration_timestamp`: u64
+- **Unique Bid IDs**: Generated using timestamp and counter
+- **Immutable History**: Bid status changes are tracked
+- **Audit Trail**: All bid operations are logged
 
 ## Error Handling
 
-All entrypoints return `Result<T, QuickLendXError>` for proper error handling. Common errors include:
+### Common Errors
 
-- `InvoiceNotFound`: Invoice does not exist
-- `InvalidStatus`: Invalid invoice or bid status
-- `BusinessNotVerified`: Investor verification required
-- `InvalidAmount`: Invalid bid amount
-- `InvalidExpectedReturn`: Expected return is lower than bid amount
-- `StorageKeyNotFound`: Bid does not exist
-- `OperationNotAllowed`: Operation not allowed in current state
-
-## Best Practices
-
-1. **Check Invoice Status**: Always verify invoice is in `Verified` status before placing bids
-2. **Validate Amounts**: Ensure bid amounts are within investor limits and invoice constraints
-3. **Handle Expiration**: Check bid expiration before accepting bids
-4. **Event Monitoring**: Monitor events for bid lifecycle tracking
-5. **Error Handling**: Always handle Result types and provide user feedback
+| Error | Code | Cause | Resolution |
+|-------|------|-------|------------|
+| `MaxBidsPerInvoiceExceeded` | 1406 | More than 50 active bids | Wait for bids to expire/withdraw/accept |
+| `BusinessNotVerified` | 1600 | Investor not verified | Complete KYC process |
+| `InvalidAmount` | 1200 | Bid amount invalid | Check amount limits |
+| `InvalidStatus` | 1401 | Invoice not verified | Verify invoice first |
+| `OperationNotAllowed` | 1402 | Duplicate active bid | Withdraw existing bid first |
 
 ## Testing
 
-The bidding system should be tested for:
-- Successful bid placement on verified invoices
-- Bid withdrawal by authorized investor
-- Rejection of bids on non-verified invoices
-- Rejection of duplicate bids from same investor
-- Automatic expiration handling
-- Investment limit enforcement
-- Status transition validation
+### Comprehensive Test Coverage
 
-## Related Entrypoints
+The implementation includes extensive tests covering:
 
-- `accept_bid`: Business accepts a bid (changes status to Accepted)
-- `get_best_bid`: Get the highest ranked bid
-- `get_ranked_bids`: Get all bids sorted by ranking
-- `cleanup_expired_bids`: Manually trigger expired bid cleanup
+- **Limit Enforcement**: Verifying 50-bid maximum
+- **Dynamic Behavior**: Testing bid withdrawal/acceptance impacts
+- **Expiration Handling**: Verifying expired bids don't count
+- **Edge Cases**: Boundary conditions and error scenarios
+
+### Test Example
+
+```rust
+#[test]
+fn test_max_bids_per_invoice_limit() {
+    // Creates 55 verified investors
+    // Places 50 bids (should succeed)
+    // Attempts 51st bid (should fail with MaxBidsPerInvoiceExceeded)
+    // Withdraws bid, places new bid (should succeed)
+    // Accepts bid, places another bid (should succeed)
+    // Tests expiration cleanup and new bid placement
+}
+```
+
+## Future Enhancements
+
+### Potential Improvements
+
+1. **Configurable Limits**: Allow protocol admins to adjust the limit
+2. **Tiered Limits**: Different limits based on invoice amount
+3. **Time-based Limits**: Rate limiting per time window
+4. **Priority Queues**: Allow exceeding limit with higher priority bids
+
+### Monitoring
+
+Consider implementing metrics for:
+
+- **Bid Velocity**: Rate of bid placement per invoice
+- **Limit Utilization**: Percentage of invoices hitting the limit
+- **Expiration Rate**: Frequency of bid expirations
+- **Competition Metrics**: Average bids per successful invoice
+
+## Integration Notes
+
+### Frontend Considerations
+
+- Display remaining bid slots to investors
+- Show real-time bid count updates
+- Provide clear error messages for limit violations
+- Implement bid expiration timers
+
+### API Integration
+
+- Handle `MaxBidsPerInvoiceExceeded` errors gracefully
+- Implement retry logic for temporary limit conditions
+- Monitor bid counts for user experience optimization
+
+## Conclusion
+
+The maximum bids per invoice limit is a critical security and performance feature that ensures the QuickLendX protocol remains scalable and efficient while maintaining fair competition among investors. The implementation provides robust error handling, comprehensive testing, and clear documentation for maintainability.

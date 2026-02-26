@@ -1042,6 +1042,13 @@ impl QuickLendXContract {
         }
 
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
+        
+        // Check if maximum bids per invoice limit is reached
+        let active_bid_count = BidStorage::get_active_bid_count(&env, &invoice_id);
+        if active_bid_count >= bid::MAX_BIDS_PER_INVOICE {
+            return Err(QuickLendXError::MaxBidsPerInvoiceExceeded);
+        }
+        
         let max_active_bids = BidStorage::get_max_active_bids_per_investor(&env);
         if max_active_bids > 0 {
             let active_bids = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
