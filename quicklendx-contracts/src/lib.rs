@@ -3034,6 +3034,10 @@ mod test_limit;
 #[cfg(test)]
 mod test_fuzz;
 #[cfg(test)]
+mod test_ledger_timestamp_consistency;
+#[cfg(test)]
+mod test_lifecycle;
+#[cfg(test)]
 mod test_profit_fee_formula;
 #[cfg(test)]
 mod test_revenue_split;
