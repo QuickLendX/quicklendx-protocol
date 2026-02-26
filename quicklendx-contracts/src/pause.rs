@@ -1,17 +1,19 @@
-//! Emergency pause: when the contract is paused, mutating operations are blocked;
-//! getters remain allowed. Only admin can pause and unpause.
-
+use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use crate::AdminStorage;
 use soroban_sdk::{symbol_short, Address, Env, Symbol};
 
+/// Storage key for protocol pause flag.
 const PAUSED_KEY: Symbol = symbol_short!("paused");
 
-/// Pause state and admin-only pause/unpause.
-pub struct Pause;
+/// Pause controller for the protocol.
+///
+/// When the protocol is paused:
+/// - Non-view, non-admin entrypoints MUST reject with `OperationNotAllowed`
+/// - Admin configuration and emergency flows remain available
+pub struct PauseControl;
 
-impl Pause {
-    /// Return whether the contract is currently paused.
+impl PauseControl {
+    /// Returns true if the protocol is currently paused.
     pub fn is_paused(env: &Env) -> bool {
         env.storage()
             .instance()
@@ -19,36 +21,25 @@ impl Pause {
             .unwrap_or(false)
     }
 
-    /// Set paused flag. Only admin. Used by pause() and unpause().
-    fn set_paused(env: &Env, paused: bool) {
+    /// Set the pause flag (admin only).
+    pub fn set_paused(env: &Env, admin: &Address, paused: bool) -> Result<(), QuickLendXError> {
+        admin.require_auth();
+        if !AdminStorage::is_admin(env, admin) {
+            return Err(QuickLendXError::NotAdmin);
+        }
+
         env.storage().instance().set(&PAUSED_KEY, &paused);
-    }
-
-    /// Pause the contract (admin only). Mutating operations will return ContractPaused until unpause.
-    pub fn pause(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin(env, admin)?;
-        admin.require_auth();
-        Self::set_paused(env, true);
-        env.events()
-            .publish((symbol_short!("paused"),), (admin.clone(), env.ledger().timestamp()));
         Ok(())
     }
 
-    /// Unpause the contract (admin only).
-    pub fn unpause(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin(env, admin)?;
-        admin.require_auth();
-        Self::set_paused(env, false);
-        env.events()
-            .publish((symbol_short!("unpaused"),), (admin.clone(), env.ledger().timestamp()));
-        Ok(())
-    }
-
-    /// Require that the contract is not paused. Call at the start of mutating entrypoints.
+    /// Require that the protocol is not paused.
+    ///
+    /// Returns `OperationNotAllowed` when paused.
     pub fn require_not_paused(env: &Env) -> Result<(), QuickLendXError> {
         if Self::is_paused(env) {
-            return Err(QuickLendXError::ContractPaused);
+            return Err(QuickLendXError::OperationNotAllowed);
         }
         Ok(())
     }
 }
+

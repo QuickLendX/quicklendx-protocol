@@ -10,10 +10,10 @@ edition = "2021"
 crate-type = ["lib"]
 
 [dependencies]
-soroban-sdk = { version = "22.0.0" }
+soroban-sdk = { version = "25.1.1" }
 
 [dev-dependencies]
-soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+soroban-sdk = { version = "25.1.1", features = ["testutils"] }
 proptest = "1.4"
 
 [features]

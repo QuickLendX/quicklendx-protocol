@@ -1,0 +1,98 @@
+#341 Test – calculate_profit integration with settlement
+QuickLendX/quicklendx-protocol
+
+Settlement tests (#341) are in src/test_settlement.rs and pass (they are among the 577 passed).
+The 33 failures listed below are pre-existing (test_default, test_errors, test_overflow, test_storage).
+
+Settlement tests added:
+  - test_settle_invoice_profit_split_matches_calculate_profit_and_config
+  - test_settle_invoice_verify_amounts_with_get_platform_fee_config
+  - test_settle_invoice_fee_to_treasury_investor_gets_remainder
+
+To reproduce (from quicklendx-contracts):
+  cargo test --lib
+
+These tests run with the rest of the lib tests; filter by name if needed, e.g.:
+  cargo test profit_split
+  cargo test platform_fee_config
+  cargo test fee_to_treasury
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_storage_isolation stdout ----
+
+thread 'test_storage::test_storage_isolation' (1543556) panicked at /Users/Jeyvers/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_storage_key_collision_detection stdout ----
+
+thread 'test_storage::test_storage_key_collision_detection' (1543557) panicked at /Users/Jeyvers/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_storage_keys stdout ----
+
+thread 'test_storage::test_storage_keys' (1543558) panicked at /Users/Jeyvers/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+---- test_storage::test_type_serialization_integrity stdout ----
+
+thread 'test_storage::test_type_serialization_integrity' (1543559) panicked at /Users/Jeyvers/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/env.rs:1529:14:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Storage, MissingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Storage, MissingValue)], data:"trying to get non-existing value for contract instance"
+
+
+
+failures:
+    test_default::test_cannot_default_already_defaulted_invoice
+    test_default::test_cannot_default_paid_invoice
+    test_default::test_custom_grace_period
+    test_default::test_default_after_grace_period
+    test_default::test_default_exactly_at_grace_deadline
+    test_default::test_default_investment_status_update
+    test_default::test_default_status_transition
+    test_default::test_default_uses_default_grace_period_when_none_provided
+    test_default::test_multiple_invoices_default_handling
+    test_default::test_no_default_before_grace_period
+    test_default::test_zero_grace_period_defaults_immediately_after_due_date
+    test_errors::test_error_message_consistency
+    test_errors::test_invoice_already_defaulted_error
+    test_errors::test_invoice_already_funded_error
+    test_errors::test_invoice_due_date_invalid_error
+    test_errors::test_no_panics_on_error_conditions
+    test_errors::test_operation_not_allowed_before_grace_period
+    test_errors::test_unauthorized_error
+    test_overflow::test_timestamp_invoice_grace_deadline_saturates
+    test_overflow::test_verify_no_dust_large_amounts
+    test_storage::test_bid_storage
+    test_storage::test_concurrent_index_updates
+    test_storage::test_config_storage
+    test_storage::test_deterministic_behavior
+    test_storage::test_index_consistency
+    test_storage::test_indexes
+    test_storage::test_investment_storage
+    test_storage::test_invoice_storage
+    test_storage::test_storage_edge_cases
+    test_storage::test_storage_isolation
+    test_storage::test_storage_key_collision_detection
+    test_storage::test_storage_keys
+    test_storage::test_type_serialization_integrity
+
+test result: FAILED. 577 passed; 33 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.61s
+
+error: test failed, to rerun pass `--lib`
