@@ -129,7 +129,7 @@ fn test_cancel_invoice_pending_emits_event() {
 
     // Verify InvoiceCancelled event was emitted
     let events = env.events().all();
-    let event_count = events.len();
+    let event_count = events.events().len();
     assert!(event_count > 0, "Expected events to be emitted");
 }
 
@@ -216,7 +216,7 @@ fn test_cancel_invoice_verified_emits_event() {
 
     // Verify events were emitted
     let events = env.events().all();
-    assert!(events.len() > 0, "Expected events to be emitted");
+    assert!(events.events().len() > 0, "Expected events to be emitted");
 }
 
 // ============================================================================
@@ -451,7 +451,7 @@ fn test_refund_emits_event() {
     client.refund_escrow_funds(&invoice_id, &business);
 
     let events = env.events().all();
-    assert!(events.len() > 0, "Expected refund events to be emitted");
+    assert!(events.events().len() > 0, "Expected refund events to be emitted");
 }
 
 #[test]

@@ -1,30 +1,27 @@
-/// Comprehensive test suite for event system
+/// Event payload validation tests for critical protocol operations.
 ///
-/// Test Coverage:
-/// 1. InvoiceUploaded - emitted when invoice is uploaded
-/// 2. InvoiceVerified - emitted when invoice is verified
-/// 3. BidPlaced - emitted when bid is placed
-/// 4. BidAccepted - emitted when bid is accepted
-/// 5. BidWithdrawn - emitted when bid is withdrawn
-/// 6. InvoiceSettled - emitted when invoice is settled
-/// 7. InvoiceDefaulted - emitted when invoice defaults
-/// 8. InvoiceCancelled - emitted when invoice is cancelled
-/// 9. EscrowCreated - emitted when escrow is created
-///
-/// Security Notes:
-/// - All events include timestamps for indexing
-/// - Events contain all relevant data (invoice_id, addresses, amounts)
-/// - Events are emitted for all state-changing operations
+/// These tests assert exact Soroban event topics and payload tuples for:
+/// - Invoice lifecycle (uploaded/verified/cancelled/defaulted)
+/// - Bid lifecycle (placed/accepted/withdrawn)
+/// - Escrow lifecycle (created/released)
+/// - Audit events (query/integrity validation)
+/// - Platform fee configuration updates
 use super::*;
+use crate::audit::{AuditOperationFilter, AuditQueryFilter};
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use crate::payments::EscrowStatus;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    token, Address, Env, String, Vec,
+    symbol_short,
+    testutils::{Address as _, Events, Ledger},
+    token, Address, Env, String, TryFromVal, Val, Vec,
 };
+
+const TEST_INVOICE_AMOUNT: i128 = 1_500_000;
+const TEST_INVESTOR_LIMIT: i128 = 5_000_000;
+const TEST_EXPECTED_RETURN: i128 = 1_650_000;
 
 fn setup_contract(env: &Env) -> (QuickLendXContractClient, Address, Address) {
     let contract_id = env.register(QuickLendXContract, ());
-    // ensure ledger timestamp is non-zero so created_at fields are populated
     env.ledger().set_timestamp(1);
     let client = QuickLendXContractClient::new(env, &contract_id);
     let admin = Address::generate(env);
@@ -65,407 +62,397 @@ fn init_currency_for_test(
     let token_client = token::Client::new(env, &currency);
     let sac_client = token::StellarAssetClient::new(env, &currency);
 
-    let initial_balance = 10_000i128;
+    let initial_balance = 10_000_000i128;
     sac_client.mint(business, &initial_balance);
-    // ensure contract instance exists for token lookups
     sac_client.mint(contract_id, &1i128);
+
     if let Some(inv) = investor {
         sac_client.mint(inv, &initial_balance);
         let expiration = env.ledger().sequence() + 1_000;
         token_client.approve(business, contract_id, &initial_balance, &expiration);
         token_client.approve(inv, contract_id, &initial_balance, &expiration);
     }
+
     currency
 }
 
-#[test]
-fn test_invoice_uploaded_event() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let (client, admin, contract_id) = setup_contract(&env);
-    let business = Address::generate(&env);
-    let token_admin = Address::generate(&env);
-    let currency = env
-        .register_stellar_asset_contract_v2(token_admin.clone())
-        .address();
-    let token_client = token::Client::new(&env, &currency);
-    let sac_client = token::StellarAssetClient::new(&env, &currency);
-    let amount = 1000i128;
-    let due_date = env.ledger().timestamp() + 86400;
+fn latest_event_payload<T>(env: &Env, topic: soroban_sdk::Symbol) -> T
+where
+    T: TryFromVal<Env, Val> + core::fmt::Debug + PartialEq,
+{
+    let events = env.events().all();
 
-    verify_business_for_test(&env, &client, &admin, &business);
-    // initialize token balances for business and contract to avoid MissingValue on token instance
-    let initial_balance = 10_000i128;
-    sac_client.mint(&business, &initial_balance);
-    sac_client.mint(&contract_id, &1i128);
+    let mut index = events.len();
+    while index > 0 {
+        index -= 1;
+        let (_, topics, data): (_, soroban_sdk::Vec<Val>, Val) = events.get(index).unwrap();
+        if topics.is_empty() {
+            continue;
+        }
 
-    // Upload invoice - this should emit InvoiceUploaded event
-    let invoice_id = client.upload_invoice(
-        &business,
-        &amount,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Test invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
+        let mut topic_found = false;
+        for topic_part in topics.iter() {
+            if let Ok(actual_topic) = soroban_sdk::Symbol::try_from_val(env, &topic_part) {
+                if actual_topic == topic {
+                    topic_found = true;
+                    break;
+                }
+            }
+        }
 
-    // Verify invoice was created (indirectly confirms event was emitted)
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.business, business);
-    assert_eq!(invoice.amount, amount);
-    assert_eq!(invoice.status, InvoiceStatus::Pending);
+        if topic_found {
+            return T::try_from_val(env, &data)
+                .expect("event payload should decode to expected type");
+        }
+    }
+
+    panic!("expected event topic not found: {:?}; events: {:?}", topic, events);
+}
+
+fn assert_latest_event_payload<T>(env: &Env, topic: soroban_sdk::Symbol, expected_payload: T)
+where
+    T: TryFromVal<Env, Val> + core::fmt::Debug + PartialEq,
+{
+    let actual_payload: T = latest_event_payload(env, topic);
+    assert_eq!(actual_payload, expected_payload);
 }
 
 #[test]
-fn test_invoice_verified_event() {
+fn test_invoice_events_emit_correct_topics_and_payloads() {
     let env = Env::default();
     env.mock_all_auths();
     let (client, admin, contract_id) = setup_contract(&env);
     let business = Address::generate(&env);
     let currency = init_currency_for_test(&env, &contract_id, &business, None);
-    let amount = 1000i128;
-    let due_date = env.ledger().timestamp() + 86400;
+    let amount = TEST_INVOICE_AMOUNT;
+    let due_date = env.ledger().timestamp() + 86_400;
 
     verify_business_for_test(&env, &client, &admin, &business);
 
+    let upload_ts = env.ledger().timestamp();
     let invoice_id = client.upload_invoice(
         &business,
         &amount,
         &currency,
         &due_date,
-        &String::from_str(&env, "Test invoice"),
+        &String::from_str(&env, "Invoice event test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
 
-    // Verify invoice - this should emit InvoiceVerified event
+    assert_latest_event_payload(
+        &env,
+        symbol_short!("inv_up"),
+        (
+            invoice_id.clone(),
+            business.clone(),
+            amount,
+            currency.clone(),
+            due_date,
+            upload_ts,
+        ),
+    );
+
+    let verify_ts = upload_ts + 10;
+    env.ledger().set_timestamp(verify_ts);
     client.verify_invoice(&invoice_id);
 
-    // Verify invoice status changed (indirectly confirms event was emitted)
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Verified);
-}
-
-#[test]
-fn test_bid_placed_event() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let (client, admin, contract_id) = setup_contract(&env);
-    let business = Address::generate(&env);
-    let investor = Address::generate(&env);
-    let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
-    let amount = 1000i128;
-    let due_date = env.ledger().timestamp() + 86400;
-
-    verify_business_for_test(&env, &client, &admin, &business);
-    verify_investor_for_test(&env, &client, &investor, 5000i128);
-
-    let invoice_id = client.upload_invoice(
-        &business,
-        &amount,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Test invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
+    assert_latest_event_payload(
+        &env,
+        symbol_short!("inv_ver"),
+        (invoice_id.clone(), business.clone(), verify_ts),
     );
 
-    client.verify_invoice(&invoice_id);
-
-    // Place bid - this should emit BidPlaced event
-    let bid_amount = 1000i128;
-    let expected_return = 1100i128;
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
-
-    // Verify bid was created (indirectly confirms event was emitted)
-    let bid = client.get_bid(&bid_id);
-    assert!(bid.is_some());
-    let bid_data = bid.unwrap();
-    assert_eq!(bid_data.investor, investor);
-    assert_eq!(bid_data.bid_amount, bid_amount);
-    assert_eq!(bid_data.expected_return, expected_return);
-}
-
-#[test]
-fn test_bid_accepted_event() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let (client, admin, contract_id) = setup_contract(&env);
-    let business = Address::generate(&env);
-    let investor = Address::generate(&env);
-    let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
-    let amount = 1000i128;
-    let due_date = env.ledger().timestamp() + 86400;
-
-    verify_business_for_test(&env, &client, &admin, &business);
-    verify_investor_for_test(&env, &client, &investor, 5000i128);
-
-    let invoice_id = client.upload_invoice(
-        &business,
-        &amount,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Test invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-
-    client.verify_invoice(&invoice_id);
-
-    let bid_amount = 1000i128;
-    let expected_return = 1100i128;
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
-
-    // Accept bid - this should emit BidAccepted event
-    client.accept_bid(&invoice_id, &bid_id);
-
-    // Verify bid was accepted and invoice was funded (indirectly confirms event was emitted)
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Funded);
-    assert_eq!(invoice.funded_amount, bid_amount);
-    assert_eq!(invoice.investor, Some(investor.clone()));
-
-    let bid = client.get_bid(&bid_id);
-    assert!(bid.is_some());
-    assert_eq!(bid.unwrap().status, crate::bid::BidStatus::Accepted);
-}
-
-#[test]
-fn test_bid_withdrawn_event() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let (client, admin, contract_id) = setup_contract(&env);
-    let business = Address::generate(&env);
-    let investor = Address::generate(&env);
-    let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
-    let amount = 1000i128;
-    let due_date = env.ledger().timestamp() + 86400;
-
-    verify_business_for_test(&env, &client, &admin, &business);
-    verify_investor_for_test(&env, &client, &investor, 5000i128);
-
-    let invoice_id = client.upload_invoice(
-        &business,
-        &amount,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Test invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-
-    client.verify_invoice(&invoice_id);
-
-    let bid_amount = 1000i128;
-    let expected_return = 1100i128;
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
-
-    // Withdraw bid - this should emit BidWithdrawn event
-    client.withdraw_bid(&bid_id);
-
-    // Verify bid was withdrawn (indirectly confirms event was emitted)
-    let bid = client.get_bid(&bid_id);
-    assert!(bid.is_some());
-    assert_eq!(bid.unwrap().status, crate::bid::BidStatus::Withdrawn);
-}
-
-// test_invoice_settled_event removed: flaky in CI and not required for core contract behavior
-
-#[test]
-fn test_invoice_defaulted_event() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let (client, admin, contract_id) = setup_contract(&env);
-    let business = Address::generate(&env);
-    let investor = Address::generate(&env);
-    let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
-    let amount = 1000i128;
-    let due_date = env.ledger().timestamp() + 86400;
-
-    verify_business_for_test(&env, &client, &admin, &business);
-    verify_investor_for_test(&env, &client, &investor, 5000i128);
-
-    let invoice_id = client.upload_invoice(
-        &business,
-        &amount,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Test invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-
-    client.verify_invoice(&invoice_id);
-
-    let bid_amount = 1000i128;
-    let expected_return = 1100i128;
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
-
-    client.accept_bid(&invoice_id, &bid_id);
-
-    // Advance time past due date
-    env.ledger().set_timestamp(due_date + 1);
-
-    // Handle default - this should emit InvoiceDefaulted event
-    client.handle_default(&invoice_id);
-
-    // Verify invoice was defaulted (indirectly confirms event was emitted)
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Defaulted);
-}
-
-#[test]
-fn test_invoice_cancelled_event() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let (client, admin, contract_id) = setup_contract(&env);
-    let business = Address::generate(&env);
-    let currency = init_currency_for_test(&env, &contract_id, &business, None);
-    let amount = 1000i128;
-    let due_date = env.ledger().timestamp() + 86400;
-
-    verify_business_for_test(&env, &client, &admin, &business);
-
-    let invoice_id = client.upload_invoice(
-        &business,
-        &amount,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Test invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-
-    // Cancel invoice - this should emit InvoiceCancelled event
+    let cancel_ts = verify_ts + 10;
+    env.ledger().set_timestamp(cancel_ts);
     client.cancel_invoice(&invoice_id);
 
-    // Verify invoice was cancelled (indirectly confirms event was emitted)
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Cancelled);
+    assert_latest_event_payload(
+        &env,
+        symbol_short!("inv_canc"),
+        (invoice_id.clone(), business.clone(), cancel_ts),
+    );
+
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Cancelled);
 }
 
 #[test]
-fn test_escrow_created_event() {
+fn test_bid_placed_and_withdrawn_events_emit_correct_payloads() {
     let env = Env::default();
     env.mock_all_auths();
     let (client, admin, contract_id) = setup_contract(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
-    let amount = 1000i128;
-    let due_date = env.ledger().timestamp() + 86400;
+    let amount = TEST_INVOICE_AMOUNT;
+    let due_date = env.ledger().timestamp() + 86_400;
 
     verify_business_for_test(&env, &client, &admin, &business);
-    verify_investor_for_test(&env, &client, &investor, 5000i128);
+    verify_investor_for_test(&env, &client, &investor, TEST_INVESTOR_LIMIT);
 
     let invoice_id = client.upload_invoice(
         &business,
         &amount,
         &currency,
         &due_date,
-        &String::from_str(&env, "Test invoice"),
+        &String::from_str(&env, "Bid events test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-
     client.verify_invoice(&invoice_id);
 
-    let bid_amount = 1000i128;
-    let expected_return = 1100i128;
+    let bid_amount = TEST_INVOICE_AMOUNT;
+    let expected_return = TEST_EXPECTED_RETURN;
+    let placed_ts = 100u64;
+    env.ledger().set_timestamp(placed_ts);
     let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
 
-    // Accept bid - this should emit EscrowCreated event
-    client.accept_bid(&invoice_id, &bid_id);
+    let bid_placed_payload: (BytesN<32>, BytesN<32>, Address, i128, i128, u64, u64) =
+        latest_event_payload(&env, symbol_short!("bid_plc"));
 
-    // Verify escrow was created (indirectly confirms event was emitted)
-    // Check invoice status to verify escrow creation
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Funded);
-    assert_eq!(invoice.funded_amount, bid_amount);
-    assert_eq!(invoice.investor, Some(investor.clone()));
+    assert_eq!(bid_placed_payload.0, bid_id.clone());
+    assert_eq!(bid_placed_payload.1, invoice_id.clone());
+    assert_eq!(bid_placed_payload.2, investor.clone());
+    assert_eq!(bid_placed_payload.3, bid_amount);
+    assert_eq!(bid_placed_payload.4, expected_return);
+    assert_eq!(bid_placed_payload.5, placed_ts);
+    assert_eq!(bid_placed_payload.6, crate::bid::Bid::default_expiration(placed_ts));
+
+    let withdraw_ts = 120u64;
+    env.ledger().set_timestamp(withdraw_ts);
+    client.withdraw_bid(&bid_id);
+
+    assert_latest_event_payload(
+        &env,
+        symbol_short!("bid_wdr"),
+        (
+            bid_id.clone(),
+            invoice_id.clone(),
+            investor.clone(),
+            bid_amount,
+            withdraw_ts,
+        ),
+    );
+
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Withdrawn
+    );
 }
 
 #[test]
-fn test_event_data_completeness() {
+fn test_bid_accepted_and_escrow_created_events_emit_correct_payloads() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, contract_id) = setup_contract(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
+    let amount = TEST_INVOICE_AMOUNT;
+    let due_date = env.ledger().timestamp() + 86_400;
+
+    verify_business_for_test(&env, &client, &admin, &business);
+    verify_investor_for_test(&env, &client, &investor, TEST_INVESTOR_LIMIT);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Bid accepted event test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &TEST_INVOICE_AMOUNT,
+        &TEST_EXPECTED_RETURN,
+    );
+    let accepted_ts = 200u64;
+    env.ledger().set_timestamp(accepted_ts);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let bid_accepted_payload: (BytesN<32>, BytesN<32>, Address, Address, i128, i128, u64) =
+        latest_event_payload(&env, symbol_short!("bid_acc"));
+    let escrow_created_payload: (BytesN<32>, BytesN<32>, Address, Address, i128) =
+        latest_event_payload(&env, symbol_short!("esc_cr"));
+
+    let escrow = client.get_escrow_details(&invoice_id);
+
+    assert_eq!(bid_accepted_payload.0, bid_id.clone());
+    assert_eq!(bid_accepted_payload.1, invoice_id.clone());
+    assert_eq!(bid_accepted_payload.2, investor.clone());
+    assert_eq!(bid_accepted_payload.3, business.clone());
+    assert_eq!(bid_accepted_payload.4, TEST_INVOICE_AMOUNT);
+    assert_eq!(bid_accepted_payload.5, TEST_EXPECTED_RETURN);
+    assert_eq!(bid_accepted_payload.6, accepted_ts);
+
+    assert_eq!(escrow_created_payload.0, escrow.escrow_id.clone());
+    assert_eq!(escrow_created_payload.1, invoice_id.clone());
+    assert_eq!(escrow_created_payload.2, investor.clone());
+    assert_eq!(escrow_created_payload.3, business.clone());
+    assert_eq!(escrow_created_payload.4, escrow.amount);
+
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+}
+
+#[test]
+fn test_escrow_released_event_emits_correct_topic_and_payload() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, contract_id) = setup_contract(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
+    let amount = TEST_INVOICE_AMOUNT;
+    let due_date = env.ledger().timestamp() + 86_400;
+
+    verify_business_for_test(&env, &client, &admin, &business);
+    verify_investor_for_test(&env, &client, &investor, TEST_INVESTOR_LIMIT);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Escrow release event test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &TEST_EXPECTED_RETURN);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let escrow = client.get_escrow_details(&invoice_id);
+    client.release_escrow_funds(&invoice_id);
+
+    assert_latest_event_payload(
+        &env,
+        symbol_short!("esc_rel"),
+        (
+            escrow.escrow_id.clone(),
+            invoice_id.clone(),
+            business.clone(),
+            escrow.amount,
+        ),
+    );
+
+    assert_eq!(client.get_escrow_status(&invoice_id), EscrowStatus::Released);
+}
+
+#[test]
+fn test_invoice_defaulted_event_emits_correct_topic_and_payload() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, contract_id) = setup_contract(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
+    let amount = TEST_INVOICE_AMOUNT;
+    let due_date = env.ledger().timestamp() + 86_400;
+
+    verify_business_for_test(&env, &client, &admin, &business);
+    verify_investor_for_test(&env, &client, &investor, TEST_INVESTOR_LIMIT);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Default event test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &TEST_EXPECTED_RETURN);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let default_ts = due_date + 1;
+    env.ledger().set_timestamp(default_ts);
+    client.handle_default(&invoice_id);
+
+    assert_latest_event_payload(
+        &env,
+        symbol_short!("inv_def"),
+        (
+            invoice_id.clone(),
+            business.clone(),
+            investor.clone(),
+            default_ts,
+        ),
+    );
+
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Defaulted);
+}
+
+#[test]
+fn test_audit_events_emit_correct_topics_and_payloads() {
     let env = Env::default();
     env.mock_all_auths();
     let (client, admin, contract_id) = setup_contract(&env);
     let business = Address::generate(&env);
     let currency = init_currency_for_test(&env, &contract_id, &business, None);
-    let amount = 1000i128;
-    let due_date = env.ledger().timestamp() + 86400;
+    let due_date = env.ledger().timestamp() + 86_400;
 
     verify_business_for_test(&env, &client, &admin, &business);
 
-    // Test invoice upload - event should contain all required fields
     let invoice_id = client.upload_invoice(
         &business,
-        &amount,
+        &TEST_INVOICE_AMOUNT,
         &currency,
         &due_date,
-        &String::from_str(&env, "Test invoice"),
+        &String::from_str(&env, "Audit events test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
 
-    // Verify invoice has all expected data (confirms event would have complete data)
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.id, invoice_id);
-    assert_eq!(invoice.business, business);
-    assert_eq!(invoice.amount, amount);
-    assert_eq!(invoice.currency, currency);
-    assert_eq!(invoice.due_date, due_date);
-    assert!(invoice.created_at > 0); // Timestamp should be present
+    let filter = AuditQueryFilter {
+        invoice_id: Some(invoice_id.clone()),
+        operation: AuditOperationFilter::Any,
+        actor: None,
+        start_timestamp: None,
+        end_timestamp: None,
+    };
+
+    let results = client.query_audit_logs(&filter, &50u32);
+    assert_latest_event_payload(
+        &env,
+        symbol_short!("aud_qry"),
+        (
+            String::from_str(&env, "query_audit_logs"),
+            results.len() as u32,
+        ),
+    );
+
+    let validation_ts = 300u64;
+    env.ledger().set_timestamp(validation_ts);
+    let is_valid = client.validate_invoice_audit_integrity(&invoice_id);
+
+    assert_latest_event_payload(
+        &env,
+        symbol_short!("aud_val"),
+        (invoice_id.clone(), is_valid, validation_ts),
+    );
 }
 
 #[test]
-fn test_multiple_events_in_sequence() {
+fn test_platform_fee_updated_event_emits_correct_topic_and_payload() {
     let env = Env::default();
     env.mock_all_auths();
-    let (client, admin, contract_id) = setup_contract(&env);
-    let business = Address::generate(&env);
-    let investor = Address::generate(&env);
-    let currency = init_currency_for_test(&env, &contract_id, &business, Some(&investor));
-    let amount = 1000i128;
-    let due_date = env.ledger().timestamp() + 86400;
+    let (client, admin, _contract_id) = setup_contract(&env);
 
-    verify_business_for_test(&env, &client, &admin, &business);
-    verify_investor_for_test(&env, &client, &investor, 5000i128);
+    let update_ts = 400u64;
+    env.ledger().set_timestamp(update_ts);
+    client.set_platform_fee(&250i128);
 
-    // Sequence: Upload -> Verify -> Place Bid -> Accept Bid
-    // Each step should emit an event
-
-    // 1. Upload invoice (InvoiceUploaded event)
-    let invoice_id = client.upload_invoice(
-        &business,
-        &amount,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Test invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Pending
+    assert_latest_event_payload(
+        &env,
+        symbol_short!("fee_upd"),
+        (250i128, update_ts, admin.clone()),
     );
 
-    // 2. Verify invoice (InvoiceVerified event)
-    client.verify_invoice(&invoice_id);
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Verified
-    );
-
-    // 3. Place bid (BidPlaced event)
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
-    assert!(client.get_bid(&bid_id).is_some());
-
-    // 4. Accept bid (BidAccepted and EscrowCreated events)
-    client.accept_bid(&invoice_id, &bid_id);
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Funded
-    );
+    assert_eq!(client.get_platform_fee().fee_bps, 250i128);
 }

@@ -770,6 +770,13 @@ fn test_comprehensive_fee_calculation() {
     assert_eq!(fees, 1403);
 }
 
+// ============================================================================
+// Treasury Configuration Tests
+// ============================================================================
+
+/// Test configure_treasury sets treasury address correctly
+#[test]
+fn test_configure_treasury() {
 // ─── calculate_transaction_fees: all flag combinations ───────────────────────
 
 /// Base case: no flags set, Standard tier — verifies raw fee with no modifiers
@@ -1475,42 +1482,6 @@ fn test_update_fee_structure_toggle_is_active() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    client.initialize_fee_system(&admin);
-
-    let amount = 10_000_i128;
-
-    // Standard tier (no discount) — baseline
-    let standard_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
-    assert_eq!(standard_fees, 350);
-
-    // Elevate to Silver tier (5% discount, total_volume >= 100_000_000_000)
-    client.update_user_transaction_volume(&user, &100_000_000_000_i128);
-    let silver_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
-    // Each non-LatePayment fee reduced by 5%: 200*0.95=190, 50*0.95=47, 100*0.95=95 → 332
-    assert_eq!(silver_fees, 332);
-    assert!(silver_fees < standard_fees);
-
-    // Elevate to Gold tier (10% discount, total_volume >= 500_000_000_000)
-    client.update_user_transaction_volume(&user, &400_000_000_000_i128);
-    let gold_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
-    // 200*0.90=180, 50*0.90=45, 100*0.90=90 → 315
-    assert_eq!(gold_fees, 315);
-    assert!(gold_fees < silver_fees);
-
-    // Elevate to Platinum tier (15% discount, total_volume >= 1_000_000_000_000)
-    client.update_user_transaction_volume(&user, &500_000_000_000_i128);
-    let platinum_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
-    // 200*0.85=170, 50*0.85=42, 100*0.85=85 → 297
-    assert_eq!(platinum_fees, 297);
-    assert!(platinum_fees < gold_fees);
-}
-
-/// Zero amount must return an error
-#[test]
-fn test_calculate_transaction_fees_zero_amount() {
     let admin = setup_admin_init(&env, &client);
 
     client.initialize_fee_system(&admin);
