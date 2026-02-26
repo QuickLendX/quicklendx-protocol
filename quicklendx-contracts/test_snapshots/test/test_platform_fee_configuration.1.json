@@ -94,7 +94,27 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
                           "symbol": "fee_cfg"
+=======
+                          "symbol": "adm_init"
+                        },
+                        "val": {
+                          "bool": true
+                        }
+                      },
+                      {
+                        "key": {
+                          "symbol": "admin"
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                        }
+                      },
+                      {
+                        "key": {
+                          "symbol": "pf_cfg"
+>>>>>>> main
                         },
                         "val": {
                           "map": [

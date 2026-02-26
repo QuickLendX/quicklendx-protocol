@@ -4,19 +4,25 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"]
 
 [dependencies]
-soroban-sdk = "22.0.0"
+soroban-sdk = { version = "25.1.1" }
 
 [dev-dependencies]
-soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+soroban-sdk = { version = "25.1.1", features = ["testutils"] }
+proptest = "1.4"
 
+[features]
+# Enable fuzz tests (disabled by default to avoid blocking CI)
+fuzz-tests = []
+
+# Optimized for minimal WASM size and network deployment limits (see README size budget).
 [profile.release]
 opt-level = "z"
 overflow-checks = true
 debug = 0
-strip = "symbols"
+strip = true
 debug-assertions = false
 panic = "abort"
 codegen-units = 1

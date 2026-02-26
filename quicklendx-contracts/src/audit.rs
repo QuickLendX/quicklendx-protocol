@@ -107,7 +107,8 @@ impl AuditLogEntry {
         let sequence = env.ledger().sequence();
         let counter_key = symbol_short!("aud_cnt");
         let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
-        env.storage().instance().set(&counter_key, &(counter + 1));
+        let next_counter = counter.saturating_add(1);
+        env.storage().instance().set(&counter_key, &next_counter);
 
         let mut id_bytes = [0u8; 32];
         // Add audit prefix
@@ -118,10 +119,14 @@ impl AuditLogEntry {
         // Embed sequence
         id_bytes[10..14].copy_from_slice(&sequence.to_be_bytes());
         // Embed counter
-        id_bytes[14..22].copy_from_slice(&counter.to_be_bytes());
-        // Fill remaining with pattern
+        id_bytes[14..22].copy_from_slice(&next_counter.to_be_bytes());
+        // Fill remaining with pattern (overflow-safe)
+        let mix = timestamp
+            .saturating_add(sequence as u64)
+            .saturating_add(next_counter)
+            .saturating_add(0xAD1F);
         for i in 22..32 {
-            id_bytes[i] = ((timestamp + sequence as u64 + counter + 0xAD1F) % 256) as u8;
+            id_bytes[i] = (mix % 256) as u8;
         }
         BytesN::from_array(env, &id_bytes)
     }
@@ -223,8 +228,13 @@ impl AuditStorage {
         filter: &AuditQueryFilter,
         limit: u32,
     ) -> Vec<AuditLogEntry> {
+        let capped_limit = limit.min(crate::MAX_QUERY_LIMIT);
         let mut results = Vec::new(env);
         let mut count = 0u32;
+
+        if capped_limit == 0 {
+            return results;
+        }
 
         // Start with invoice-specific entries if invoice_id is provided
         let audit_ids = if let Some(invoice_id) = &filter.invoice_id {
@@ -239,7 +249,7 @@ impl AuditStorage {
         };
 
         for audit_id in audit_ids.iter() {
-            if count >= limit {
+            if count >= capped_limit {
                 break;
             }
 
@@ -260,7 +270,7 @@ impl AuditStorage {
         let all_entries = Self::get_all_audit_entries(env);
         let total_entries = all_entries.len() as u32;
 
-        let mut operations_count = Vec::new(env);
+        let operations_count = Vec::new(env);
         let mut unique_actors: Vec<Address> = Vec::new(env);
         let mut min_timestamp = u64::MAX;
         let mut max_timestamp = 0u64;
@@ -401,8 +411,9 @@ impl AuditStorage {
     }
 }
 
-/// Audit trail helper functions
-pub fn log_invoice_operation(
+/// Internal audit entrypoint: log a critical operation with actor, timestamp, and payload.
+/// Gas-efficient append-only; used by invoice, bid, escrow, and settlement flows.
+pub fn log_operation(
     env: &Env,
     invoice_id: BytesN<32>,
     operation: AuditOperation,
@@ -422,8 +433,30 @@ pub fn log_invoice_operation(
         amount,
         additional_data,
     );
-
     AuditStorage::store_audit_entry(env, &entry);
+}
+
+/// Convenience wrapper for log_operation (used by invoice helpers).
+pub fn log_invoice_operation(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    operation: AuditOperation,
+    actor: Address,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    amount: Option<i128>,
+    additional_data: Option<String>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        amount,
+        additional_data,
+    );
 }
 
 /// Log invoice creation
@@ -445,8 +478,8 @@ pub fn log_invoice_status_change(
     env: &Env,
     invoice_id: BytesN<32>,
     actor: Address,
-    old_status: InvoiceStatus,
-    new_status: InvoiceStatus,
+    _old_status: InvoiceStatus,
+    _new_status: InvoiceStatus,
 ) {
     let old_value = String::from_str(env, "Status changed");
     let new_value = String::from_str(env, "Status updated");
@@ -494,5 +527,143 @@ pub fn log_payment_processed(
         Some(String::from_str(env, "Payment processed")),
         Some(amount),
         Some(payment_type),
+    );
+}
+
+/// Log invoice refund
+pub fn log_invoice_refunded(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowRefunded,
+        actor,
+        None,
+        Some(String::from_str(env, "Refunded")),
+        None,
+        None,
+    );
+}
+
+/// Log invoice uploaded (business flow).
+pub fn log_invoice_uploaded(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::InvoiceUploaded,
+        actor,
+        None,
+        Some(String::from_str(env, "Invoice uploaded")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log invoice verified (admin).
+pub fn log_invoice_verified(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::InvoiceVerified,
+        actor,
+        None,
+        Some(String::from_str(env, "Invoice verified")),
+        None,
+        None,
+    );
+}
+
+/// Log invoice cancelled.
+pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::InvoiceStatusChanged,
+        actor,
+        None,
+        Some(String::from_str(env, "Invoice cancelled")),
+        None,
+        None,
+    );
+}
+
+/// Log bid placed.
+pub fn log_bid_placed(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    bid_amount: i128,
+    _bid_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidPlaced,
+        actor,
+        None,
+        Some(String::from_str(env, "Bid placed")),
+        Some(bid_amount),
+        None,
+    );
+}
+
+/// Log bid accepted.
+pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidAccepted,
+        actor,
+        None,
+        Some(String::from_str(env, "Bid accepted")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log bid withdrawn.
+pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid_id: BytesN<32>) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidWithdrawn,
+        actor,
+        None,
+        Some(String::from_str(env, "Bid withdrawn")),
+        None,
+        None,
+    );
+}
+
+/// Log escrow created.
+pub fn log_escrow_created(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    _escrow_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowCreated,
+        actor,
+        None,
+        Some(String::from_str(env, "Escrow created")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log settlement completed (full payment).
+pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::SettlementCompleted,
+        actor,
+        None,
+        Some(String::from_str(env, "Settlement completed")),
+        Some(amount),
+        None,
     );
 }

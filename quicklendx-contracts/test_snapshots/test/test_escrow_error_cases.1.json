@@ -1,6 +1,10 @@
 {
   "generators": {
+<<<<<<< HEAD
     "address": 1,
+=======
+    "address": 2,
+>>>>>>> main
     "nonce": 0
   },
   "auth": [

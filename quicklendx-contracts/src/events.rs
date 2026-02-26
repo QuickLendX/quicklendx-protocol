@@ -1,28 +1,63 @@
-use crate::audit::AuditLogEntry;
 use crate::bid::Bid;
 use crate::invoice::{Invoice, InvoiceMetadata};
-use crate::payments::{Escrow, EscrowStatus};
+use crate::payments::Escrow;
 use crate::profits::PlatformFeeConfig;
 use crate::verification::InvestorVerification;
-use soroban_sdk::{symbol_short, Address, BytesN, Env, String};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Symbol};
+
+// Standardized event topics for off-chain indexers. These constants mirror the
+// short-symbol topics used in `env.events().publish` so subscribers can
+// reference them without hardcoding string literals.
+pub const TOPIC_INVOICE_UPLOADED: Symbol = symbol_short!("inv_up");
+pub const TOPIC_INVOICE_VERIFIED: Symbol = symbol_short!("inv_ver");
+pub const TOPIC_INVOICE_CANCELLED: Symbol = symbol_short!("inv_canc");
+pub const TOPIC_INVOICE_SETTLED: Symbol = symbol_short!("inv_set");
+pub const TOPIC_INVOICE_DEFAULTED: Symbol = symbol_short!("inv_def");
+pub const TOPIC_INVOICE_EXPIRED: Symbol = symbol_short!("inv_exp");
+pub const TOPIC_PARTIAL_PAYMENT: Symbol = symbol_short!("inv_pp");
+pub const TOPIC_PAYMENT_RECORDED: Symbol = symbol_short!("pay_rec");
+pub const TOPIC_INVOICE_SETTLED_FINAL: Symbol = symbol_short!("inv_stlf");
+pub const TOPIC_BID_PLACED: Symbol = symbol_short!("bid_plc");
+pub const TOPIC_BID_ACCEPTED: Symbol = symbol_short!("bid_acc");
+pub const TOPIC_BID_WITHDRAWN: Symbol = symbol_short!("bid_wdr");
+pub const TOPIC_BID_EXPIRED: Symbol = symbol_short!("bid_exp");
+pub const TOPIC_ESCROW_CREATED: Symbol = symbol_short!("esc_cr");
+pub const TOPIC_ESCROW_RELEASED: Symbol = symbol_short!("esc_rel");
+pub const TOPIC_ESCROW_REFUNDED: Symbol = symbol_short!("esc_ref");
 
 pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
     env.events().publish(
-        (symbol_short!("inv_up"),),
+        (TOPIC_INVOICE_UPLOADED,),
         (
             invoice.id.clone(),
             invoice.business.clone(),
             invoice.amount,
             invoice.currency.clone(),
             invoice.due_date,
+            env.ledger().timestamp(),
         ),
     );
 }
 
 pub fn emit_invoice_verified(env: &Env, invoice: &Invoice) {
     env.events().publish(
-        (symbol_short!("inv_ver"),),
-        (invoice.id.clone(), invoice.business.clone()),
+        (TOPIC_INVOICE_VERIFIED,),
+        (
+            invoice.id.clone(),
+            invoice.business.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+pub fn emit_invoice_cancelled(env: &Env, invoice: &Invoice) {
+    env.events().publish(
+        (TOPIC_INVOICE_CANCELLED,),
+        (
+            invoice.id.clone(),
+            invoice.business.clone(),
+            env.ledger().timestamp(),
+        ),
     );
 }
 
@@ -69,12 +104,17 @@ pub fn emit_invoice_settled(
     platform_fee: i128,
 ) {
     env.events().publish(
-        (symbol_short!("inv_set"),),
+        (TOPIC_INVOICE_SETTLED,),
         (
             invoice.id.clone(),
             invoice.business.clone(),
+            invoice.investor.clone().unwrap_or(Address::from_str(
+                env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            )),
             investor_return,
             platform_fee,
+            env.ledger().timestamp(),
         ),
     );
 }
@@ -88,7 +128,7 @@ pub fn emit_partial_payment(
     transaction_id: String,
 ) {
     env.events().publish(
-        (symbol_short!("inv_pp"),),
+        (TOPIC_PARTIAL_PAYMENT,),
         (
             invoice.id.clone(),
             invoice.business.clone(),
@@ -102,7 +142,7 @@ pub fn emit_partial_payment(
 
 pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
     env.events().publish(
-        (symbol_short!("inv_exp"),),
+        (TOPIC_INVOICE_EXPIRED,),
         (
             invoice.id.clone(),
             invoice.business.clone(),
@@ -113,8 +153,16 @@ pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
 
 pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::invoice::Invoice) {
     env.events().publish(
-        (symbol_short!("inv_def"),),
-        (invoice.id.clone(), invoice.business.clone()),
+        (TOPIC_INVOICE_DEFAULTED,),
+        (
+            invoice.id.clone(),
+            invoice.business.clone(),
+            invoice.investor.clone().unwrap_or(Address::from_str(
+                env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            )),
+            env.ledger().timestamp(),
+        ),
     );
 }
 
@@ -244,16 +292,49 @@ pub fn emit_bid_expired(env: &Env, bid: &Bid) {
     );
 }
 
-/// Emit event when escrow status changes
-pub fn emit_escrow_status_changed(
-    env: &Env,
-    escrow_id: &BytesN<32>,
-    old_status: EscrowStatus,
-    new_status: EscrowStatus,
-) {
+/// Emit event when a bid is placed
+pub fn emit_bid_placed(env: &Env, bid: &Bid) {
     env.events().publish(
-        (symbol_short!("esc_st"),),
-        (escrow_id.clone(), old_status, new_status),
+        (symbol_short!("bid_plc"),),
+        (
+            bid.bid_id.clone(),
+            bid.invoice_id.clone(),
+            bid.investor.clone(),
+            bid.bid_amount,
+            bid.expected_return,
+            bid.timestamp,
+            bid.expiration_timestamp,
+        ),
+    );
+}
+
+/// Emit event when a bid is withdrawn
+pub fn emit_bid_withdrawn(env: &Env, bid: &Bid) {
+    env.events().publish(
+        (symbol_short!("bid_wdr"),),
+        (
+            bid.bid_id.clone(),
+            bid.invoice_id.clone(),
+            bid.investor.clone(),
+            bid.bid_amount,
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when a bid is accepted
+pub fn emit_bid_accepted(env: &Env, bid: &Bid, invoice_id: &BytesN<32>, business: &Address) {
+    env.events().publish(
+        (symbol_short!("bid_acc"),),
+        (
+            bid.bid_id.clone(),
+            invoice_id.clone(),
+            bid.investor.clone(),
+            business.clone(),
+            bid.bid_amount,
+            bid.expected_return,
+            env.ledger().timestamp(),
+        ),
     );
 }
 
@@ -289,17 +370,29 @@ pub fn emit_backup_archived(env: &Env, backup_id: &BytesN<32>) {
     );
 }
 
-/// Emit audit log event
-pub fn emit_audit_log_created(env: &Env, entry: &AuditLogEntry) {
+/// Emit event when retention policy is updated
+pub fn emit_retention_policy_updated(
+    env: &Env,
+    max_backups: u32,
+    max_age_seconds: u64,
+    auto_cleanup_enabled: bool,
+) {
     env.events().publish(
-        (symbol_short!("aud_log"),),
+        (symbol_short!("ret_pol"),),
         (
-            entry.audit_id.clone(),
-            entry.invoice_id.clone(),
-            entry.operation.clone(),
-            entry.actor.clone(),
-            entry.timestamp,
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+            env.ledger().timestamp(),
         ),
+    );
+}
+
+/// Emit event when backups are cleaned up
+pub fn emit_backups_cleaned(env: &Env, removed_count: u32) {
+    env.events().publish(
+        (symbol_short!("bkup_cln"),),
+        (removed_count, env.ledger().timestamp()),
     );
 }
 
@@ -405,6 +498,18 @@ pub fn emit_dispute_resolved(
             invoice_id.clone(),
             resolved_by.clone(),
             resolution.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+pub fn emit_invoice_funded(env: &Env, invoice_id: &BytesN<32>, investor: &Address, amount: i128) {
+    env.events().publish(
+        (symbol_short!("inv_fnd"),),
+        (
+            invoice_id.clone(),
+            investor.clone(),
+            amount,
             env.ledger().timestamp(),
         ),
     );
@@ -534,24 +639,6 @@ pub fn emit_investor_report_generated(
     );
 }
 
-/// Emit event when analytics data is updated
-pub fn emit_analytics_data_updated(
-    env: &Env,
-    data_type: &String,
-    record_count: u32,
-    last_updated: u64,
-) {
-    env.events().publish(
-        (symbol_short!("anal_upd"),),
-        (
-            data_type.clone(),
-            record_count,
-            last_updated,
-            env.ledger().timestamp(),
-        ),
-    );
-}
-
 /// Emit event when analytics query is performed
 pub fn emit_analytics_query(
     env: &Env,
@@ -583,6 +670,118 @@ pub fn emit_analytics_export(
             export_type.clone(),
             requested_by.clone(),
             record_count,
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+pub fn emit_investor_analytics_updated(
+    env: &Env,
+    investor: &Address,
+    success_rate: i128,
+    risk_score: u32,
+    compliance_score: u32,
+) {
+    env.events().publish(
+        (symbol_short!("inv_anal"),),
+        (investor.clone(), success_rate, risk_score, compliance_score),
+    );
+}
+
+pub fn emit_investor_performance_updated(
+    env: &Env,
+    total_investors: u32,
+    verified_investors: u32,
+    platform_success_rate: i128,
+    average_risk_score: u32,
+) {
+    env.events().publish(
+        (symbol_short!("inv_perf"),),
+        (
+            total_investors,
+            verified_investors,
+            platform_success_rate,
+            average_risk_score,
+        ),
+    );
+}
+/// Emit event when platform fee is routed to treasury
+pub fn emit_platform_fee_routed(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    recipient: &Address,
+    fee_amount: i128,
+) {
+    env.events().publish(
+        (symbol_short!("fee_rout"),),
+        (
+            invoice_id.clone(),
+            recipient.clone(),
+            fee_amount,
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when treasury configuration is updated
+pub fn emit_treasury_configured(env: &Env, treasury_address: &Address, configured_by: &Address) {
+    env.events().publish(
+        (symbol_short!("trs_cfg"),),
+        (
+            treasury_address.clone(),
+            configured_by.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when platform fee configuration is updated
+pub fn emit_platform_fee_config_updated(
+    env: &Env,
+    old_fee_bps: u32,
+    new_fee_bps: u32,
+    updated_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("fee_cfg"),),
+        (
+            old_fee_bps,
+            new_fee_bps,
+            updated_by.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit detailed profit and fee breakdown event for transparency
+///
+/// This event provides full visibility into settlement calculations:
+/// - investment_amount: Original principal invested
+/// - payment_amount: Total payment received
+/// - gross_profit: Profit before fees
+/// - platform_fee: Fee charged
+/// - investor_return: Net amount to investor
+#[allow(dead_code)]
+pub fn emit_profit_fee_breakdown(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investment_amount: i128,
+    payment_amount: i128,
+    gross_profit: i128,
+    platform_fee: i128,
+    investor_return: i128,
+    fee_bps_applied: i128,
+) {
+    env.events().publish(
+        (symbol_short!("pf_brk"),),
+        (
+            invoice_id.clone(),
+            investment_amount,
+            payment_amount,
+            gross_profit,
+            platform_fee,
+            investor_return,
+            fee_bps_applied,
             env.ledger().timestamp(),
         ),
     );

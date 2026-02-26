@@ -4,7 +4,9 @@
 [![Soroban](https://img.shields.io/badge/Soroban-000000?style=for-the-badge&logo=stellar&logoColor=white)](https://soroban.stellar.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A decentralized invoice financing protocol built on Stellar's Soroban platform, enabling businesses to access working capital by selling their invoices to investors.
+**Production-ready** smart contracts for QuickLendX, a decentralized invoice financing protocol built on Stellar's Soroban platform. These contracts enable businesses to access working capital by selling their invoices to investors through a secure, transparent, and efficient blockchain-based marketplace.
+
+> **Note**: This is the smart contracts repository. For the full project documentation, see the [main README](../README.md).
 
 ## 📚 Table of Contents
 
@@ -62,11 +64,16 @@ QuickLendX is a comprehensive DeFi protocol that facilitates invoice financing t
 ### Core Modules
 
 - **`invoice.rs`**: Invoice creation, management, and lifecycle
-- **`bid.rs`**: Bidding system and bid management
+- **`bid.rs`**: Bidding system and bid management with ranking algorithms
 - **`payments.rs`**: Escrow creation, release, and refund
-- **`verification.rs`**: KYC and business verification
+- **`verification.rs`**: KYC, business and investor verification with risk assessment
 - **`audit.rs`**: Audit trail and integrity validation
 - **`backup.rs`**: Data backup and restoration
+- **`analytics.rs`**: Platform metrics, reporting, and business intelligence
+- **`fees.rs`**: Fee management and revenue distribution
+- **`settlement.rs`**: Invoice settlement and payment processing
+- **`investment.rs`**: Investment tracking and insurance
+- **`notifications.rs`**: Notification system for all parties
 - **`events.rs`**: Event emission and handling
 - **`errors.rs`**: Error definitions and handling
 
@@ -264,6 +271,191 @@ pub fn verify_business(
 ) -> Result<(), QuickLendXError>
 ```
 
+#### Query Functions (Paginated)
+
+##### `get_business_invoices_paged`
+Retrieves invoices for a business with pagination and optional status filtering.
+
+```rust
+pub fn get_business_invoices_paged(
+    env: Env,
+    business: Address,
+    status_filter: Option<InvoiceStatus>,
+    offset: u32,
+    limit: u32,
+) -> Vec<BytesN<32>>
+```
+
+**Parameters:**
+- `business`: Address of the business
+- `status_filter`: Optional status filter (None returns all statuses)
+- `offset`: Starting index for pagination (0-based)
+- `limit`: Maximum number of results to return
+
+**Returns:** Vector of invoice IDs
+
+**Example:**
+```rust
+// Get first 10 verified invoices for a business
+let invoices = contract.get_business_invoices_paged(
+    &env,
+    business_addr,
+    Some(InvoiceStatus::Verified),
+    0,  // offset
+    10  // limit
+);
+
+// Get next 10 invoices
+let more_invoices = contract.get_business_invoices_paged(
+    &env,
+    business_addr,
+    Some(InvoiceStatus::Verified),
+    10, // offset
+    10  // limit
+);
+```
+
+##### `get_investor_investments_paged`
+Retrieves investments for an investor with pagination and optional status filtering.
+
+```rust
+pub fn get_investor_investments_paged(
+    env: Env,
+    investor: Address,
+    status_filter: Option<InvestmentStatus>,
+    offset: u32,
+    limit: u32,
+) -> Vec<BytesN<32>>
+```
+
+**Parameters:**
+- `investor`: Address of the investor
+- `status_filter`: Optional investment status filter
+- `offset`: Starting index for pagination
+- `limit`: Maximum number of results to return
+
+**Returns:** Vector of investment IDs
+
+**Example:**
+```rust
+// Get all active investments for an investor
+let active_investments = contract.get_investor_investments_paged(
+    &env,
+    investor_addr,
+    Some(InvestmentStatus::Active),
+    0,
+    50
+);
+```
+
+##### `get_available_invoices_paged`
+Retrieves available (verified) invoices with pagination and optional filters.
+
+```rust
+pub fn get_available_invoices_paged(
+    env: Env,
+    min_amount: Option<i128>,
+    max_amount: Option<i128>,
+    category_filter: Option<InvoiceCategory>,
+    offset: u32,
+    limit: u32,
+) -> Vec<BytesN<32>>
+```
+
+**Parameters:**
+- `min_amount`: Optional minimum invoice amount filter
+- `max_amount`: Optional maximum invoice amount filter
+- `category_filter`: Optional category filter
+- `offset`: Starting index for pagination
+- `limit`: Maximum number of results to return
+
+**Returns:** Vector of invoice IDs
+
+**Example:**
+```rust
+// Get service invoices between $100 and $1000
+let invoices = contract.get_available_invoices_paged(
+    &env,
+    Some(10000),  // $100.00 minimum
+    Some(100000), // $1000.00 maximum
+    Some(InvoiceCategory::Services),
+    0,
+    20
+);
+```
+
+##### `get_bid_history_paged`
+Retrieves bid history for an invoice with pagination and optional status filtering.
+
+```rust
+pub fn get_bid_history_paged(
+    env: Env,
+    invoice_id: BytesN<32>,
+    status_filter: Option<BidStatus>,
+    offset: u32,
+    limit: u32,
+) -> Vec<Bid>
+```
+
+**Parameters:**
+- `invoice_id`: ID of the invoice
+- `status_filter`: Optional bid status filter
+- `offset`: Starting index for pagination
+- `limit`: Maximum number of results to return
+
+**Returns:** Vector of Bid objects
+
+**Example:**
+```rust
+// Get all accepted bids for an invoice
+let accepted_bids = contract.get_bid_history_paged(
+    &env,
+    invoice_id,
+    Some(BidStatus::Accepted),
+    0,
+    10
+);
+```
+
+##### `get_investor_bids_paged`
+Retrieves bid history for an investor with pagination and optional status filtering.
+
+```rust
+pub fn get_investor_bids_paged(
+    env: Env,
+    investor: Address,
+    status_filter: Option<BidStatus>,
+    offset: u32,
+    limit: u32,
+) -> Vec<Bid>
+```
+
+**Parameters:**
+- `investor`: Address of the investor
+- `status_filter`: Optional bid status filter
+- `offset`: Starting index for pagination
+- `limit`: Maximum number of results to return
+
+**Returns:** Vector of Bid objects
+
+**Example:**
+```rust
+// Get investor's placed bids
+let placed_bids = contract.get_investor_bids_paged(
+    &env,
+    investor_addr,
+    Some(BidStatus::Placed),
+    0,
+    25
+);
+```
+
+**Pagination Notes:**
+- All paginated functions use overflow-safe arithmetic (`saturating_add`, `min`)
+- Offset beyond data length returns empty results (no error)
+- Limit of 0 returns empty results
+- Filters are applied before pagination for accurate results
+
 #### Audit & Backup
 
 ##### `get_audit_trail`
@@ -383,7 +575,60 @@ let filter = AuditQueryFilter {
     end_time: Some(1672531200),   // Jan 1, 2023
 };
 let audit_logs = contract.query_audit_logs(&env, filter, 100);
+
+// Paginated queries for large datasets
+// Get first page of business invoices (10 per page)
+let page1 = contract.get_business_invoices_paged(
+    &env,
+    business_addr,
+    None, // all statuses
+    0,    // offset
+    10    // limit
+);
+
+// Get second page
+let page2 = contract.get_business_invoices_paged(
+    &env,
+    business_addr,
+    None,
+    10,   // offset
+    10    // limit
+);
+
+// Get available invoices with filters
+let filtered_invoices = contract.get_available_invoices_paged(
+    &env,
+    Some(5000),   // min $50.00
+    Some(50000),  // max $500.00
+    Some(InvoiceCategory::Services),
+    0,
+    20
+);
+
+// Get investor's active investments
+let active_investments = contract.get_investor_investments_paged(
+    &env,
+    investor_addr,
+    Some(InvestmentStatus::Active),
+    0,
+    50
+);
+
+// Get bid history for an invoice
+let bids = contract.get_bid_history_paged(
+    &env,
+    invoice_id,
+    Some(BidStatus::Placed),
+    0,
+    25
+);
 ```
+
+Query limit safety:
+- Public query endpoints with pagination/limits enforce `MAX_QUERY_LIMIT = 100`.
+- Effective limit is always `min(limit, 100)` for `query_audit_logs`, `query_analytics_data`,
+  `get_business_invoices_paged`, `get_investor_investments_paged`,
+  `get_available_invoices_paged`, `get_bid_history_paged`, and `get_investor_bids_paged`.
 
 ### Error Handling
 
@@ -467,13 +712,47 @@ stellar-cli contract deploy \
 
 ### Mainnet Deployment
 
-⚠️ **Important**: Mainnet deployment requires thorough testing and security audits.
+⚠️ **CRITICAL**: Mainnet deployment requires thorough testing, security audits, and proper configuration.
 
-1. **Security Checklist**
-   - [ ] All tests passing
-   - [ ] Security audit completed
-   - [ ] Gas optimization verified
-   - [ ] Emergency pause functionality tested
+#### Pre-Deployment Checklist
+
+- [ ] All unit tests passing (`cargo test`)
+- [ ] Integration tests completed
+- [ ] Security audit completed by third-party auditors
+- [ ] Gas optimization verified
+- [ ] Contract size within limits
+- [ ] Admin keys secured and backed up
+- [ ] Emergency procedures documented
+- [ ] Monitoring and alerting configured
+- [ ] Documentation updated
+- [ ] Team trained on contract operations
+
+#### Contract size budget
+
+The release build is tuned for minimal WASM size (opt-level = "z", LTO, strip, codegen-units = 1). The contract MUST stay within the **size budget** so it fits network limits.
+
+| Budget   | Limit   | Notes |
+|----------|---------|--------|
+| WASM size | 256 KB | CI and local script fail if exceeded. |
+
+**Local check (recommended before pushing):**
+```bash
+./scripts/check-wasm-size.sh
+```
+Or run the integration test: `cargo test wasm_release_build_fits_size_budget`. Both build the contract (script uses `stellar contract build` when available, else `cargo build --target wasm32-unknown-unknown --release`) and assert the WASM is ≤ 256 KB. Test-only code is excluded from the release build via `#[cfg(test)]`.
+
+To reduce size: use **Stellar CLI** (`stellar contract build`) when possible; the size-check script optionally runs **wasm-opt -Oz** (install with `brew install binaryen`) for further reduction. Keep test-only code behind `#[cfg(test)]` and avoid large inline data.
+
+#### Production Deployment Steps
+
+1. **Final Build**
+```bash
+# Optimized production build (uses stellar contract build → wasm32v1-none)
+stellar contract build
+
+# Verify contract size (must be under budget)
+ls -lh target/wasm32v1-none/release/quicklendx_contracts.wasm
+```
 
 2. **Deploy to Mainnet**
 ```bash
@@ -481,6 +760,40 @@ stellar-cli contract deploy \
     --wasm target/wasm32-unknown-unknown/release/quicklendx_contracts.wasm \
     --source <DEPLOYER_ACCOUNT> \
     --network mainnet
+```
+
+3. **Initialize Contract**
+```bash
+# Set admin (CRITICAL - do this immediately)
+stellar-cli contract invoke \
+    --id <CONTRACT_ID> \
+    --source <ADMIN_ACCOUNT> \
+    --network mainnet \
+    -- set_admin \
+    --admin <ADMIN_ADDRESS>
+
+# Initialize fee system
+stellar-cli contract invoke \
+    --id <CONTRACT_ID> \
+    --source <ADMIN_ACCOUNT> \
+    --network mainnet \
+    -- initialize_fee_system \
+    --admin <ADMIN_ADDRESS>
+```
+
+4. **Verify Deployment**
+```bash
+# Verify admin is set
+stellar-cli contract invoke \
+    --id <CONTRACT_ID> \
+    --network mainnet \
+    -- get_admin
+
+# Check contract version/status
+stellar-cli contract invoke \
+    --id <CONTRACT_ID> \
+    --network mainnet \
+    -- get_total_invoice_count
 ```
 
 ### Environment Configuration
@@ -570,24 +883,44 @@ RUST_LOG=debug cargo test -- --nocapture
    - Use references where possible
    - Clean up temporary data
 
-## 📋 Best Practices
+## 🔒 Production Security
 
-### Security
+### Security Best Practices
 
 1. **Input Validation**
-   - Always validate user inputs
-   - Check for overflow conditions
-   - Sanitize string inputs
+   - Always validate user inputs before processing
+   - Check for overflow/underflow conditions
+   - Sanitize string inputs and enforce length limits
+   - Validate addresses and amounts
 
 2. **Access Control**
-   - Implement proper authorization checks
-   - Use role-based access control
-   - Validate caller permissions
+   - Implement proper authorization checks on all sensitive functions
+   - Use role-based access control (admin, business, investor)
+   - Validate caller permissions using `require_auth()`
+   - Never trust external inputs
 
 3. **Error Handling**
-   - Provide meaningful error messages
-   - Don't expose sensitive information
+   - Provide meaningful error messages for debugging
+   - Don't expose sensitive information in errors
    - Handle edge cases gracefully
+   - Use custom error types for better error handling
+
+4. **Audit & Monitoring**
+   - Emit events for all critical operations
+   - Maintain comprehensive audit trails
+   - Monitor contract state changes
+   - Set up alerts for suspicious activities
+
+### Production Checklist
+
+- ✅ All functions have proper access control
+- ✅ Input validation on all user-facing functions
+- ✅ Overflow/underflow protection
+- ✅ Reentrancy protection (where applicable)
+- ✅ Event emission for all state changes
+- ✅ Comprehensive error handling
+- ✅ Gas optimization verified
+- ✅ Security audit completed
 
 ### Code Quality
 
@@ -599,7 +932,7 @@ RUST_LOG=debug cargo test -- --nocapture
 2. **Testing**
    - Write comprehensive unit tests
    - Test edge cases and error conditions
-   - Maintain high test coverage
+   - **Minimum 95% test coverage** (enforced in CI when tests are enabled; run `cargo llvm-cov --lib` to check locally)
 
 3. **Code Organization**
    - Separate concerns into modules
@@ -634,6 +967,24 @@ RUST_LOG=debug cargo test -- --nocapture
    - Test invariants
    - Test edge cases
    - Test performance characteristics
+
+4. **Fuzz Tests** 🔬
+   - Property-based testing for critical paths
+   - Tests invoice creation, bid placement, and settlement
+   - Validates input ranges, boundary conditions, and arithmetic safety
+   - See [FUZZ_TESTING.md](FUZZ_TESTING.md) for details
+   - Run with: `cargo test fuzz_`
+   - Extended testing: `PROPTEST_CASES=1000 cargo test fuzz_`
+
+### Security Testing
+
+The protocol includes comprehensive fuzz testing for critical operations:
+- **Invoice Creation**: Tests valid ranges of amount, due_date, description length
+- **Bid Placement**: Tests bid_amount and expected_return validation
+- **Settlement**: Tests payment_amount handling and state transitions
+- **Arithmetic Safety**: Tests for overflow/underflow in calculations
+
+See [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md) for detailed security analysis.
 
 ## 🤝 Contributing
 

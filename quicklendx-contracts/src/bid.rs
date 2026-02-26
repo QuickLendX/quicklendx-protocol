@@ -1,10 +1,18 @@
 use core::cmp::Ordering;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
+use crate::admin::AdminStorage;
+use crate::errors::QuickLendXError;
 use crate::events::emit_bid_expired;
 
-const DEFAULT_BID_TTL: u64 = 7 * 24 * 60 * 60;
-pub const MAX_BIDS_PER_INVOICE: u32 = 50;
+// TTL stored in days (admin configurable). Defaults to 7 days. Bounds: 1..=30
+const DEFAULT_BID_TTL_DAYS: u64 = 7;
+const MIN_BID_TTL_DAYS: u64 = 1;
+const MAX_BID_TTL_DAYS: u64 = 30;
+const BID_TTL_KEY: Symbol = symbol_short!("bid_ttl");
+const MAX_ACTIVE_BIDS_PER_INVESTOR_KEY: Symbol = symbol_short!("mx_actbd");
+const DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 20;
+const SECONDS_PER_DAY: u64 = 86400;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -13,6 +21,7 @@ pub enum BidStatus {
     Withdrawn,
     Accepted,
     Expired,
+    Cancelled,
 }
 
 #[contracttype]
@@ -33,8 +42,15 @@ impl Bid {
         current_timestamp > self.expiration_timestamp
     }
 
+    /// Backward-compatible helper used by some tests: uses compile-time default.
     pub fn default_expiration(now: u64) -> u64 {
-        now.saturating_add(DEFAULT_BID_TTL)
+        now.saturating_add(DEFAULT_BID_TTL_DAYS.saturating_mul(SECONDS_PER_DAY))
+    }
+
+    /// Compute default expiration using configured TTL (admin-configurable).
+    pub fn default_expiration_with_env(env: &Env, now: u64) -> u64 {
+        let days = BidStorage::get_bid_ttl_days(env);
+        now.saturating_add(days.saturating_mul(SECONDS_PER_DAY))
     }
 }
 
@@ -45,8 +61,38 @@ impl BidStorage {
         (symbol_short!("bids"), invoice_id.clone())
     }
 
+    fn investor_bids_key(investor: &Address) -> (soroban_sdk::Symbol, Address) {
+        (symbol_short!("bid_inv"), investor.clone())
+    }
+
+    pub fn get_bids_by_investor_all(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
+        let key = Self::investor_bids_key(investor);
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    fn add_to_investor_bids(env: &Env, investor: &Address, bid_id: &BytesN<32>) {
+        let key = Self::investor_bids_key(investor);
+        let mut bids = Self::get_bids_by_investor_all(env, investor);
+        let mut exists = false;
+        for bid in bids.iter() {
+            if bid == *bid_id {
+                exists = true;
+                break;
+            }
+        }
+        if !exists {
+            bids.push_back(bid_id.clone());
+            env.storage().instance().set(&key, &bids);
+        }
+    }
+
     pub fn store_bid(env: &Env, bid: &Bid) {
         env.storage().instance().set(&bid.bid_id, bid);
+        // Add to investor index
+        Self::add_to_investor_bids(env, &bid.investor, &bid.bid_id);
     }
     pub fn get_bid(env: &Env, bid_id: &BytesN<32>) -> Option<Bid> {
         env.storage().instance().get(bid_id)
@@ -76,6 +122,75 @@ impl BidStorage {
             idx += 1;
         }
         active_count
+
+    /// Get configured bid TTL in days (returns default if not set)
+    pub fn get_bid_ttl_days(env: &Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&BID_TTL_KEY)
+            .unwrap_or(DEFAULT_BID_TTL_DAYS)
+    }
+
+    /// Admin-only: set bid TTL in days. Enforces bounds.
+    pub fn set_bid_ttl_days(env: &Env, admin: &Address, days: u64) -> Result<u64, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(env, admin)?;
+
+        if days < MIN_BID_TTL_DAYS || days > MAX_BID_TTL_DAYS {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        env.storage().instance().set(&BID_TTL_KEY, &days);
+        Ok(days)
+    }
+
+    /// Get configured max number of active (Placed) bids per investor across all invoices.
+    /// A value of 0 disables this limit.
+    pub fn get_max_active_bids_per_investor(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&MAX_ACTIVE_BIDS_PER_INVESTOR_KEY)
+            .unwrap_or(DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR)
+    }
+
+    /// Admin-only: set max number of active (Placed) bids per investor across all invoices.
+    /// A value of 0 disables this limit.
+    pub fn set_max_active_bids_per_investor(
+        env: &Env,
+        admin: &Address,
+        limit: u32,
+    ) -> Result<u32, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(env, admin)?;
+        env.storage()
+            .instance()
+            .set(&MAX_ACTIVE_BIDS_PER_INVESTOR_KEY, &limit);
+        Ok(limit)
+    }
+
+    /// Count currently active (Placed) bids for an investor across all invoices.
+    /// Expired bids are transitioned to `Expired` during this scan and do not count.
+    pub fn count_active_placed_bids_for_investor(env: &Env, investor: &Address) -> u32 {
+        let current_timestamp = env.ledger().timestamp();
+        let bid_ids = Self::get_bids_by_investor_all(env, investor);
+        let mut count = 0u32;
+
+        for bid_id in bid_ids.iter() {
+            if let Some(mut bid) = Self::get_bid(env, &bid_id) {
+                if bid.status != BidStatus::Placed {
+                    continue;
+                }
+                if bid.is_expired(current_timestamp) {
+                    bid.status = BidStatus::Expired;
+                    Self::update_bid(env, &bid);
+                    emit_bid_expired(env, &bid);
+                } else {
+                    count = count.saturating_add(1);
+                }
+            }
+        }
+
+        count
     }
     pub fn add_bid_to_invoice(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
         let mut bids = Self::get_bids_for_invoice(env, invoice_id);
@@ -94,21 +209,6 @@ impl BidStorage {
                 .instance()
                 .set(&Self::invoice_key(invoice_id), &bids);
         }
-    }
-    pub fn remove_bid_from_invoice(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
-        let bids = Self::get_bids_for_invoice(env, invoice_id);
-        let mut filtered = Vec::new(env);
-        let mut idx: u32 = 0;
-        while idx < bids.len() {
-            let current = bids.get(idx).unwrap();
-            if current != *bid_id {
-                filtered.push_back(current);
-            }
-            idx += 1;
-        }
-        env.storage()
-            .instance()
-            .set(&Self::invoice_key(invoice_id), &filtered);
     }
     fn refresh_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let current_timestamp = env.ledger().timestamp();
@@ -183,8 +283,8 @@ impl BidStorage {
         filtered
     }
     pub fn compare_bids(bid1: &Bid, bid2: &Bid) -> Ordering {
-        let profit1 = bid1.expected_return - bid1.bid_amount;
-        let profit2 = bid2.expected_return - bid2.bid_amount;
+        let profit1 = bid1.expected_return.saturating_sub(bid1.bid_amount);
+        let profit2 = bid2.expected_return.saturating_sub(bid2.bid_amount);
         if profit1 != profit2 {
             return profit1.cmp(&profit2);
         }
@@ -264,14 +364,57 @@ impl BidStorage {
 
         ranked
     }
+
+    /// Cancel a placed bid by bid_id. Only transitions Placed → Cancelled.
+    /// Returns false if bid not found or already not Placed.
+    pub fn cancel_bid(env: &Env, bid_id: &BytesN<32>) -> bool {
+        if let Some(mut bid) = Self::get_bid(env, bid_id) {
+            if bid.status == BidStatus::Placed {
+                bid.status = BidStatus::Cancelled;
+                Self::update_bid(env, &bid);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Return all bids placed by an investor across all invoices, with their full Bid records.
+    pub fn get_all_bids_by_investor(env: &Env, investor: &Address) -> Vec<Bid> {
+        let bid_ids = Self::get_bids_by_investor_all(env, investor);
+        let mut result = Vec::new(env);
+        for bid_id in bid_ids.iter() {
+            if let Some(bid) = Self::get_bid(env, &bid_id) {
+                result.push_back(bid);
+            }
+        }
+        result
+    }
+
+    /// Count the number of currently active (Placed) bids for a given investor.
+    ///
+    /// This is used by rate-limiting logic in the main contract to enforce a
+    /// maximum number of open bids per investor across all invoices.
+    pub fn count_active_bids_by_investor(env: &Env, investor: &Address) -> u32 {
+        let all_bids = Self::get_all_bids_by_investor(env, investor);
+        let mut count: u32 = 0;
+        let mut idx: u32 = 0;
+        while idx < all_bids.len() {
+            let bid = all_bids.get(idx).unwrap();
+            if bid.status == BidStatus::Placed {
+                count = count.saturating_add(1);
+            }
+            idx = idx.saturating_add(1);
+        }
+        count
+    }
     /// Generates a unique 32-byte bid ID using timestamp and a simple counter.
     /// This approach avoids potential serialization issues with large counters.
     pub fn generate_unique_bid_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let counter_key = symbol_short!("bid_cnt");
-        let mut counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
-        counter += 1;
-        env.storage().instance().set(&counter_key, &counter);
+        let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
+        let next_counter = counter.saturating_add(1);
+        env.storage().instance().set(&counter_key, &next_counter);
 
         let mut bytes = [0u8; 32];
         // Add bid prefix to distinguish from other entity types
@@ -280,10 +423,13 @@ impl BidStorage {
                          // Embed timestamp in next 8 bytes
         bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
         // Embed counter in next 8 bytes
-        bytes[10..18].copy_from_slice(&counter.to_be_bytes());
-        // Fill remaining bytes with a pattern to ensure uniqueness
+        bytes[10..18].copy_from_slice(&next_counter.to_be_bytes());
+        // Fill remaining bytes with a pattern to ensure uniqueness (overflow-safe)
+        let mix = timestamp
+            .saturating_add(next_counter)
+            .saturating_add(0xB1D0);
         for i in 18..32 {
-            bytes[i] = ((timestamp + counter as u64 + 0xB1D0) % 256) as u8;
+            bytes[i] = (mix % 256) as u8;
         }
         BytesN::from_array(env, &bytes)
     }
