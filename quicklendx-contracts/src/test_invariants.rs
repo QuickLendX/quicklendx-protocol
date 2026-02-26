@@ -3,7 +3,7 @@
 //! Invariant tests for protocol state consistency after a full lifecycle.
 //!
 //! This module provides an integration test that runs the complete flow
-//! (KYC, upload, verify, bid, accept, release/settle, rate) and then asserts
+//! (KYC, upload, verify, bid, accept, release/settle) and then asserts
 //! global invariants: total_invoice_count, status counts, audit trail length,
 //! escrow released, investment completed, and no orphaned storage.
 
@@ -29,8 +29,7 @@ fn invariant_env_creation_is_safe() {
     let _ = env.ledger().timestamp();
 }
 
-/// Full lifecycle integration test: KYC → upload → verify → bid → accept →
-/// release escrow → settle (partial payment to full) → rate.
+/// release escrow → settle (partial payment to full).
 /// Asserts: total_invoice_count, status counts, audit trail length,
 /// escrow gone (Released), investment completed, no orphaned storage.
 #[test]
@@ -94,13 +93,6 @@ fn test_invariants_after_full_lifecycle() {
         &String::from_str(&env, "lifecycle-tx-1"),
     );
 
-    // 6. Rate (allowed for Funded or Paid)
-    client.add_invoice_rating(
-        &invoice_id,
-        &5,
-        &String::from_str(&env, "Smooth process"),
-        &investor,
-    );
 
     // --- Invariant assertions ---
 
@@ -136,7 +128,7 @@ fn test_invariants_after_full_lifecycle() {
     // audit trail length: at least create, verify, funding, payment, settlement, rating
     let audit_trail = client.get_invoice_audit_trail(&invoice_id);
     assert!(
-        audit_trail.len() >= 4,
+        audit_trail.len() >= 3,
         "audit trail must have multiple entries (create, verify, payment, etc.)"
     );
 

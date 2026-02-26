@@ -349,7 +349,7 @@
               "function_name": "create_backup",
               "args": [
                 {
-                  "string": "Test backup"
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 }
               ]
             }
@@ -1702,7 +1702,7 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "string": "Test backup"
+                                "string": "Admin created backup"
                               }
                             },
                             {

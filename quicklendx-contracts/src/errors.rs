@@ -2,7 +2,8 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 
 /// Custom error types for the QuickLendX contract
 #[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(test, derive(Debug))]
 #[repr(u32)]
 pub enum QuickLendXError {
     // Core errors

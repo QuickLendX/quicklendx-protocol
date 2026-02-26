@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 5,
+    "address": 3,
     "nonce": 0
   },
   "auth": [
@@ -53,12 +53,6 @@
                     },
                     {
                       "key": {
-                        "symbol": "average_rating"
-                      },
-                      "val": "void"
-                    },
-                    {
-                      "key": {
                         "symbol": "business"
                       },
                       "val": {
@@ -99,83 +93,6 @@
                       },
                       "val": {
                         "string": "Complex consulting services"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "dispute"
-                      },
-                      "val": {
-                        "map": [
-                          {
-                            "key": {
-                              "symbol": "created_at"
-                            },
-                            "val": {
-                              "u64": 1234567890
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "created_by"
-                            },
-                            "val": {
-                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "evidence"
-                            },
-                            "val": {
-                              "string": "Evidence documents"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "reason"
-                            },
-                            "val": {
-                              "string": "Quality dispute"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "resolution"
-                            },
-                            "val": {
-                              "string": "Resolved amicably"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "resolved_at"
-                            },
-                            "val": {
-                              "u64": 1234567950
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "resolved_by"
-                            },
-                            "val": {
-                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "dispute_status"
-                      },
-                      "val": {
-                        "vec": [
-                          {
-                            "symbol": "None"
-                          }
-                        ]
                       }
                     },
                     {
@@ -381,14 +298,6 @@
                     },
                     {
                       "key": {
-                        "symbol": "ratings"
-                      },
-                      "val": {
-                        "vec": []
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "settled_at"
                       },
                       "val": "void"
@@ -429,14 +338,6 @@
                           "hi": 0,
                           "lo": 3000
                         }
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "total_ratings"
-                      },
-                      "val": {
-                        "u32": 0
                       }
                     }
                   ]
@@ -504,6 +405,55 @@
             "key": {
               "vec": [
                 {
+                  "symbol": "inv_cust"
+                },
+                {
+                  "string": "Complex Corp"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "inv_cust"
+                    },
+                    {
+                      "string": "Complex Corp"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "vec": [
+                    {
+                      "bytes": "0101010101010101010101010101010101010101010101010101010101010101"
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
                   "symbol": "inv_stat"
                 },
                 {
@@ -528,6 +478,55 @@
                     },
                     {
                       "symbol": "pending"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "vec": [
+                    {
+                      "bytes": "0101010101010101010101010101010101010101010101010101010101010101"
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "inv_taxid"
+                },
+                {
+                  "string": "TAX123456789"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "inv_taxid"
+                    },
+                    {
+                      "string": "TAX123456789"
                     }
                   ]
                 },

@@ -1,10 +1,11 @@
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String};
+use soroban_sdk::{contracttype, Address, Env, String};
 
 use crate::errors::QuickLendXError;
 
 #[allow(dead_code)]
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct ProtocolLimits {
     pub min_invoice_amount: i128,
     pub max_due_date_days: u64,

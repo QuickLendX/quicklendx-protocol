@@ -7,7 +7,8 @@ use crate::protocol_limits::{
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub enum BusinessVerificationStatus {
     Pending,
     Verified,
@@ -26,7 +27,8 @@ pub struct BusinessVerification {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub enum InvestorTier {
     Basic,
     Silver,
@@ -36,7 +38,8 @@ pub enum InvestorTier {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub enum InvestorRiskLevel {
     Low,
     Medium,

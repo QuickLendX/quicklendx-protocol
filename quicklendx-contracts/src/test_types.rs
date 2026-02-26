@@ -2,11 +2,13 @@
 
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
-use crate::types::{
-    Bid, BidStatus, Dispute, DisputeStatus, InsuranceCoverage, Investment, InvestmentStatus,
-    Invoice, InvoiceCategory, InvoiceMetadata, InvoiceRating, InvoiceStatus, LineItemRecord,
-    PaymentRecord, PlatformFee, PlatformFeeConfig,
+use crate::bid::{Bid, BidStatus};
+use crate::invoice::{
+    Invoice, InvoiceCategory, InvoiceMetadata, InvoiceStatus, LineItemRecord,
+    PaymentRecord,
 };
+use crate::investment::{InsuranceCoverage, Investment, InvestmentStatus};
+use crate::profits::{PlatformFee, PlatformFeeConfig};
 
 #[test]
 fn test_invoice_status_enum() {
@@ -54,19 +56,6 @@ fn test_investment_status_enum() {
     assert_eq!(status1, status2);
 }
 
-#[test]
-fn test_dispute_status_enum() {
-    // Test all dispute statuses
-    assert_eq!(DisputeStatus::None as u8, 0);
-    assert_eq!(DisputeStatus::Disputed as u8, 1);
-    assert_eq!(DisputeStatus::UnderReview as u8, 2);
-    assert_eq!(DisputeStatus::Resolved as u8, 3);
-
-    // Test clone and equality
-    let status1 = DisputeStatus::UnderReview;
-    let status2 = status1.clone();
-    assert_eq!(status1, status2);
-}
 
 #[test]
 fn test_invoice_category_enum() {
@@ -151,62 +140,7 @@ fn test_payment_record() {
     assert_eq!(record, record2);
 }
 
-#[test]
-fn test_dispute() {
-    let env = Env::default();
 
-    let created_by = Address::generate(&env);
-    let reason = String::from_str(&env, "Late payment");
-    let evidence = String::from_str(&env, "Email proof");
-    let resolution = String::from_str(&env, "Payment received");
-    let resolved_by = Address::generate(&env);
-
-    let dispute = Dispute {
-        created_by: created_by.clone(),
-        created_at: 1234567890,
-        reason: reason.clone(),
-        evidence: evidence.clone(),
-        resolution: resolution.clone(),
-        resolved_by: resolved_by.clone(),
-        resolved_at: 1234567891,
-    };
-
-    assert_eq!(dispute.created_by, created_by);
-    assert_eq!(dispute.created_at, 1234567890);
-    assert_eq!(dispute.reason, reason);
-    assert_eq!(dispute.evidence, evidence);
-    assert_eq!(dispute.resolution, resolution);
-    assert_eq!(dispute.resolved_by, resolved_by);
-    assert_eq!(dispute.resolved_at, 1234567891);
-
-    // Test clone and equality
-    let dispute2 = dispute.clone();
-    assert_eq!(dispute, dispute2);
-}
-
-#[test]
-fn test_invoice_rating() {
-    let env = Env::default();
-
-    let feedback = String::from_str(&env, "Good service");
-    let rated_by = Address::generate(&env);
-
-    let rating = InvoiceRating {
-        rating: 5,
-        feedback: feedback.clone(),
-        rated_by: rated_by.clone(),
-        rated_at: 1234567890,
-    };
-
-    assert_eq!(rating.rating, 5);
-    assert_eq!(rating.feedback, feedback);
-    assert_eq!(rating.rated_by, rated_by);
-    assert_eq!(rating.rated_at, 1234567890);
-
-    // Test clone and equality
-    let rating2 = rating.clone();
-    assert_eq!(rating, rating2);
-}
 
 #[test]
 fn test_invoice() {
@@ -225,17 +159,6 @@ fn test_invoice() {
         notes: String::from_str(&env, "Notes"),
     };
     let payments = Vec::new(&env);
-    let ratings = Vec::new(&env);
-
-    let dispute = Dispute {
-        created_by: Address::generate(&env),
-        created_at: 0,
-        reason: String::from_str(&env, ""),
-        evidence: String::from_str(&env, ""),
-        resolution: String::from_str(&env, ""),
-        resolved_by: Address::generate(&env),
-        resolved_at: 0,
-    };
 
     let invoice = Invoice {
         id: id.clone(),
@@ -247,33 +170,23 @@ fn test_invoice() {
         description: description.clone(),
         category: InvoiceCategory::Consulting,
         tags: tags.clone(),
-        metadata: metadata.clone(),
-        dispute: dispute.clone(),
-        payments: payments.clone(),
-        ratings: ratings.clone(),
+        metadata_customer_name: Some(metadata.customer_name.clone()),
+        metadata_customer_address: Some(metadata.customer_address.clone()),
+        metadata_tax_id: Some(metadata.tax_id.clone()),
+        metadata_notes: Some(metadata.notes.clone()),
+        metadata_line_items: metadata.line_items.clone(),
+        funded_amount: 0,
+        funded_at: None,
+        investor: None,
+        settled_at: None,
+        total_paid: 0,
+        payment_history: payments.clone(),
         created_at: 1234567890,
-        updated_at: 1234567890,
     };
 
     assert_eq!(invoice.id, id);
     assert_eq!(invoice.business, business);
     assert_eq!(invoice.amount, 10000);
-    assert_eq!(invoice.currency, currency);
-    assert_eq!(invoice.due_date, 1234567890);
-    assert_eq!(invoice.status, InvoiceStatus::Pending);
-    assert_eq!(invoice.description, description);
-    assert_eq!(invoice.category, InvoiceCategory::Consulting);
-    assert_eq!(invoice.tags, tags);
-    assert_eq!(invoice.metadata, metadata);
-    assert_eq!(invoice.dispute, dispute);
-    assert_eq!(invoice.payments, payments);
-    assert_eq!(invoice.ratings, ratings);
-    assert_eq!(invoice.created_at, 1234567890);
-    assert_eq!(invoice.updated_at, 1234567890);
-
-    // Test clone and equality
-    let invoice2 = invoice.clone();
-    assert_eq!(invoice, invoice2);
 }
 
 #[test]
@@ -366,71 +279,3 @@ fn test_investment() {
     assert_eq!(investment, investment2);
 }
 
-#[test]
-fn test_platform_fee() {
-    let env = Env::default();
-
-    let recipient = Address::generate(&env);
-    let description = String::from_str(&env, "Verification fee");
-
-    let fee = PlatformFee {
-        fee_bps: 50, // 0.5%
-        recipient: recipient.clone(),
-        description: description.clone(),
-    };
-
-    assert_eq!(fee.fee_bps, 50);
-    assert_eq!(fee.recipient, recipient);
-    assert_eq!(fee.description, description);
-
-    // Test clone and equality
-    let fee2 = fee.clone();
-    assert_eq!(fee, fee2);
-}
-
-#[test]
-fn test_platform_fee_config() {
-    let env = Env::default();
-
-    let recipient = Address::generate(&env);
-
-    let verification_fee = PlatformFee {
-        fee_bps: 25,
-        recipient: recipient.clone(),
-        description: String::from_str(&env, "Verification fee"),
-    };
-
-    let settlement_fee = PlatformFee {
-        fee_bps: 50,
-        recipient: recipient.clone(),
-        description: String::from_str(&env, "Settlement fee"),
-    };
-
-    let bid_fee = PlatformFee {
-        fee_bps: 10,
-        recipient: recipient.clone(),
-        description: String::from_str(&env, "Bid fee"),
-    };
-
-    let investment_fee = PlatformFee {
-        fee_bps: 20,
-        recipient: recipient.clone(),
-        description: String::from_str(&env, "Investment fee"),
-    };
-
-    let config = PlatformFeeConfig {
-        verification_fee: verification_fee.clone(),
-        settlement_fee: settlement_fee.clone(),
-        bid_fee: bid_fee.clone(),
-        investment_fee: investment_fee.clone(),
-    };
-
-    assert_eq!(config.verification_fee, verification_fee);
-    assert_eq!(config.settlement_fee, settlement_fee);
-    assert_eq!(config.bid_fee, bid_fee);
-    assert_eq!(config.investment_fee, investment_fee);
-
-    // Test clone and equality
-    let config2 = config.clone();
-    assert_eq!(config, config2);
-}

@@ -13,7 +13,8 @@ const BID_TTL_KEY: Symbol = symbol_short!("bid_ttl");
 const SECONDS_PER_DAY: u64 = 86400;
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub enum BidStatus {
     Placed,
     Withdrawn,
@@ -23,7 +24,8 @@ pub enum BidStatus {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct Bid {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,

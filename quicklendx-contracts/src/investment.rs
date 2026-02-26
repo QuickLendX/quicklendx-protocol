@@ -5,7 +5,8 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 pub const DEFAULT_INSURANCE_PREMIUM_BPS: i128 = 200; // 2% of the covered amount.
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct InsuranceCoverage {
     pub provider: Address,
     pub coverage_amount: i128,
@@ -15,7 +16,8 @@ pub struct InsuranceCoverage {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub enum InvestmentStatus {
     Active,
     Withdrawn,
@@ -25,7 +27,8 @@ pub enum InvestmentStatus {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct Investment {
     pub investment_id: BytesN<32>,
     pub invoice_id: BytesN<32>,

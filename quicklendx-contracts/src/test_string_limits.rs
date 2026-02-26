@@ -4,7 +4,6 @@ extern crate std;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceMetadata};
-use crate::notifications::{NotificationType, NotificationPriority, NotificationSystem};
 use crate::protocol_limits::*;
 use soroban_sdk::{
     testutils::Address as _,
@@ -118,79 +117,6 @@ fn test_invoice_metadata_limits() {
     metadata.notes = String::from_str(&env, "Valid Notes");
 }
 
-#[test]
-fn test_dispute_limits() {
-    let (env, client, admin) = setup();
-    let business = Address::generate(&env);
-    let currency = Address::generate(&env);
-    let due_date = env.ledger().timestamp() + 86400;
-
-    let invoice_id = client.store_invoice(
-        &business,
-        &1000,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Test"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-
-    // Business creates dispute
-    let reason_over = create_long_string(&env, MAX_DISPUTE_REASON_LENGTH + 1);
-    let evidence_over = create_long_string(&env, MAX_DISPUTE_EVIDENCE_LENGTH + 1);
-
-    let res = client.try_create_dispute(&invoice_id, &business, &reason_over, &String::from_str(&env, "valid"));
-    assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDisputeReason);
-
-    let res = client.try_create_dispute(&invoice_id, &business, &String::from_str(&env, "valid"), &evidence_over);
-    assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDisputeEvidence);
-
-    // Resolution limits
-    client.create_dispute(&invoice_id, &business, &String::from_str(&env, "valid"), &String::from_str(&env, "valid"));
-    client.put_dispute_under_review(&invoice_id, &admin);
-
-    let res_over = create_long_string(&env, MAX_DISPUTE_RESOLUTION_LENGTH + 1);
-    let res = client.try_resolve_dispute(&invoice_id, &admin, &res_over);
-    assert!(res.is_err());
-    assert_eq!(res.err().unwrap().unwrap(), QuickLendXError::InvalidDisputeReason);
-}
-
-#[test]
-fn test_notification_limits() {
-    let (env, client, _admin) = setup();
-    let recipient = Address::generate(&env);
-
-    let title_over = create_long_string(&env, MAX_NOTIFICATION_TITLE_LENGTH + 1);
-    let msg_over = create_long_string(&env, MAX_NOTIFICATION_MESSAGE_LENGTH + 1);
-
-    env.as_contract(&client.address, || {
-        let res = NotificationSystem::create_notification(
-            &env,
-            recipient.clone(),
-            NotificationType::InvoiceCreated,
-            NotificationPriority::Medium,
-            title_over,
-            String::from_str(&env, "valid"),
-            None,
-        );
-        assert!(res.is_err());
-        assert_eq!(res.err().unwrap(), QuickLendXError::InvalidDescription);
-
-        let res = NotificationSystem::create_notification(
-            &env,
-            recipient.clone(),
-            NotificationType::InvoiceCreated,
-            NotificationPriority::Medium,
-            String::from_str(&env, "valid"),
-            msg_over,
-            None,
-        );
-        assert!(res.is_err());
-        assert_eq!(res.err().unwrap(), QuickLendXError::InvalidDescription);
-    });
-}
 
 #[test]
 fn test_kyc_limits() {

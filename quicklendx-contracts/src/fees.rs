@@ -19,7 +19,8 @@ const PLATFORM_FEE_KEY: Symbol = symbol_short!("plt_fee");
 
 /// Fee types supported by the platform
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub enum FeeType {
     Platform,
     Processing,
@@ -30,7 +31,8 @@ pub enum FeeType {
 
 /// Volume tier for discounted fees
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub enum VolumeTier {
     Standard,
     Silver,
@@ -40,7 +42,8 @@ pub enum VolumeTier {
 
 /// Fee structure configuration
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
 pub struct FeeStructure {
     pub fee_type: FeeType,
     pub base_fee_bps: u32,
@@ -53,7 +56,8 @@ pub struct FeeStructure {
 
 /// User volume data
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
 pub struct UserVolumeData {
     pub user: Address,
     pub total_volume: i128,
@@ -64,7 +68,8 @@ pub struct UserVolumeData {
 
 /// Treasury configuration for platform fees
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
 pub struct TreasuryConfig {
     pub treasury_address: Address,
     pub is_active: bool,
@@ -74,7 +79,8 @@ pub struct TreasuryConfig {
 
 /// Platform fee configuration  
 #[contracttype]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct PlatformFeeConfig {
     pub fee_bps: u32,
     pub treasury_address: Option<Address>, // Simplified - just store address directly
@@ -84,7 +90,8 @@ pub struct PlatformFeeConfig {
 
 /// Revenue configuration
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
 pub struct RevenueConfig {
     pub treasury_address: Address,
     pub treasury_share_bps: u32,
@@ -96,7 +103,8 @@ pub struct RevenueConfig {
 
 /// Revenue tracking
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
 pub struct RevenueData {
     pub period: u64,
     pub total_collected: i128,
@@ -108,7 +116,8 @@ pub struct RevenueData {
 
 /// Fee analytics
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
 pub struct FeeAnalytics {
     pub period: u64,
     pub total_fees: i128,

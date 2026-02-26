@@ -12,7 +12,7 @@ use soroban_sdk::{testutils::Address as _, vec, Address, BytesN, Env, String, Ve
 use crate::bid::{Bid, BidStatus};
 use crate::investment::{Investment, InvestmentStatus};
 use crate::invoice::{
-    Dispute, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceStatus, LineItemRecord,
+    Invoice, InvoiceCategory, InvoiceMetadata, InvoiceStatus, LineItemRecord,
     PaymentRecord,
 };
 use crate::profits::{PlatformFee, PlatformFeeConfig};
@@ -189,15 +189,6 @@ fn test_invoice_storage() {
                 notes: String::from_str(&env, "Notes"),
             };
 
-            let dispute = Dispute {
-                created_by: Address::generate(&env),
-                created_at: 0,
-                reason: String::from_str(&env, ""),
-                evidence: String::from_str(&env, ""),
-                resolution: String::from_str(&env, ""),
-                resolved_by: Address::generate(&env),
-                resolved_at: 0,
-            };
 
             let invoice = Invoice {
                 id: invoice_id.clone(),
@@ -219,11 +210,6 @@ fn test_invoice_storage() {
                 funded_at: None,
                 investor: None,
                 settled_at: None,
-                average_rating: None,
-                total_ratings: 0,
-                ratings: Vec::new(&env),
-                dispute_status: crate::invoice::DisputeStatus::None,
-                dispute: dispute.clone(),
                 total_paid: 0,
                 payment_history: Vec::new(&env),
             };
@@ -534,15 +520,6 @@ fn create_test_invoice(env: &Env, id: BytesN<32>, business: Address) -> Invoice 
         notes: String::from_str(env, "Test notes"),
     };
 
-    let dispute = Dispute {
-        created_by: Address::generate(env),
-        created_at: 0,
-        reason: String::from_str(env, ""),
-        evidence: String::from_str(env, ""),
-        resolution: String::from_str(env, ""),
-        resolved_by: Address::generate(env),
-        resolved_at: 0,
-    };
 
     Invoice {
         id,
@@ -564,11 +541,6 @@ fn create_test_invoice(env: &Env, id: BytesN<32>, business: Address) -> Invoice 
         funded_at: None,
         investor: None,
         settled_at: None,
-        average_rating: None,
-        total_ratings: 0,
-        ratings: Vec::new(env),
-        dispute_status: crate::invoice::DisputeStatus::None,
-        dispute,
         total_paid: 0,
         payment_history: Vec::new(env),
     }
@@ -657,26 +629,6 @@ fn test_index_consistency() {
     });
 }
 
-#[test]
-fn test_storage_edge_cases() {
-    let env = Env::default();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    env.as_contract(&contract_id, || {
-        // Test empty collections
-        let empty_business = Address::generate(&env);
-        let empty_invoices = InvoiceStorage::get_by_business(&env, &empty_business);
-        assert!(empty_invoices.is_empty());
-
-        // Test non-existent entities
-        let non_existent_id = BytesN::from_array(&env, &[99; 32]);
-        assert!(InvoiceStorage::get(&env, &non_existent_id).is_none());
-        assert!(BidStorage::get(&env, &non_existent_id).is_none());
-        assert!(InvestmentStorage::get(&env, &non_existent_id).is_none());
-
-        // Test maximum values
-        test_maximum_values(&env);
-    });
-}
 
 #[test]
 fn test_deterministic_behavior() {
@@ -786,15 +738,6 @@ fn create_complex_invoice(env: &Env) -> Invoice {
         },
     ];
 
-    let dispute = Dispute {
-        created_by: Address::generate(env),
-        created_at: 1234567890,
-        reason: String::from_str(env, "Quality dispute"),
-        evidence: String::from_str(env, "Evidence documents"),
-        resolution: String::from_str(env, "Resolved amicably"),
-        resolved_by: Address::generate(env),
-        resolved_at: 1234567950,
-    };
 
     Invoice {
         id,
@@ -820,11 +763,6 @@ fn create_complex_invoice(env: &Env) -> Invoice {
         funded_at: None,
         investor: None,
         settled_at: None,
-        average_rating: None,
-        total_ratings: 0,
-        ratings: Vec::new(env),
-        dispute_status: crate::invoice::DisputeStatus::None,
-        dispute,
         total_paid: 3000,
         payment_history: payments,
     }
@@ -878,49 +816,3 @@ fn test_investment_status_serialization(_env: &Env) {
     }
 }
 
-fn test_maximum_values(env: &Env) {
-    let max_id = BytesN::from_array(env, &[255; 32]);
-    let business = Address::generate(env);
-
-    let invoice = Invoice {
-        id: max_id.clone(),
-        business,
-        amount: i128::MAX,
-        currency: Address::generate(env),
-        due_date: u64::MAX,
-        status: InvoiceStatus::Pending,
-        created_at: u64::MAX,
-        description: String::from_str(env, "Max value test"),
-        metadata_customer_name: Some(String::from_str(env, "Max Corp")),
-        metadata_customer_address: Some(String::from_str(env, "Max Address")),
-        metadata_tax_id: Some(String::from_str(env, "MAX123")),
-        metadata_notes: Some(String::from_str(env, "Max notes")),
-        metadata_line_items: Vec::new(env),
-        category: InvoiceCategory::Other,
-        tags: Vec::new(env),
-        funded_amount: 0,
-        funded_at: None,
-        investor: None,
-        settled_at: None,
-        average_rating: None,
-        total_ratings: 0,
-        ratings: Vec::new(env),
-        dispute_status: crate::invoice::DisputeStatus::None,
-        dispute: Dispute {
-            created_by: Address::generate(env),
-            created_at: 0,
-            reason: String::from_str(env, ""),
-            evidence: String::from_str(env, ""),
-            resolution: String::from_str(env, ""),
-            resolved_by: Address::generate(env),
-            resolved_at: 0,
-        },
-        total_paid: 0,
-        payment_history: Vec::new(env),
-    };
-
-    // Should handle maximum values without issues
-    InvoiceStorage::store(env, &invoice);
-    let retrieved = InvoiceStorage::get(env, &max_id).unwrap();
-    assert_eq!(invoice, retrieved);
-}

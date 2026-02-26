@@ -731,7 +731,7 @@ fn test_invoice_status_transition_verified_to_funded() {
     // Directly mark as funded to avoid escrow/token dependencies
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 900, env.ledger().timestamp());
+        invoice.mark_as_funded(&env, investor.clone(), 900);
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
@@ -772,7 +772,7 @@ fn test_invoice_status_transition_funded_to_paid() {
     // Mark as funded directly
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
+        invoice.mark_as_funded(&env, investor.clone(), 1000);
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
@@ -818,7 +818,7 @@ fn test_invoice_status_transition_funded_to_defaulted() {
     // Mark as funded directly
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
+        invoice.mark_as_funded(&env, investor.clone(), 1000);
         InvoiceStorage::update_invoice(&env, &invoice);
     });
 
@@ -1149,7 +1149,7 @@ fn test_invoice_business_cannot_accept_own_bid() {
     // Instead of calling accept (escrow dependency), directly mark funded and assert status
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 900, env.ledger().timestamp());
+        invoice.mark_as_funded(&env, investor.clone(), 900);
         InvoiceStorage::update_invoice(&env, &invoice);
     });
     let invoice = client.get_invoice(&invoice_id);
@@ -1380,108 +1380,6 @@ fn test_invoice_invalid_payment_amount_negative() {
     });
 }
 
-// ============================================================================
-// RATING SYSTEM TESTS
-// ============================================================================
-
-#[test]
-fn test_invoice_rating_requires_funded_status() {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    let business = Address::generate(&env);
-    let investor = Address::generate(&env);
-    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
-
-    // Try to rate pending invoice - should fail
-    let result = client.try_add_invoice_rating(
-        &invoice_id,
-        &5,
-        &String::from_str(&env, "Great!"),
-        &investor,
-    );
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_invoice_rating_invalid_value_zero() {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    let business = Address::generate(&env);
-    let investor = Address::generate(&env);
-    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
-
-    env.as_contract(&contract_id, || {
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
-        InvoiceStorage::update_invoice(&env, &invoice);
-    });
-
-    // Try to add rating with value 0 - should fail
-    let result = client.try_add_invoice_rating(
-        &invoice_id,
-        &0,
-        &String::from_str(&env, "Invalid"),
-        &investor,
-    );
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_invoice_rating_invalid_value_too_high() {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    let business = Address::generate(&env);
-    let investor = Address::generate(&env);
-    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
-
-    env.as_contract(&contract_id, || {
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
-        InvoiceStorage::update_invoice(&env, &invoice);
-    });
-
-    // Try to add rating with value 6 - should fail
-    let result = client.try_add_invoice_rating(
-        &invoice_id,
-        &6,
-        &String::from_str(&env, "Invalid"),
-        &investor,
-    );
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_invoice_rating_only_investor_can_rate() {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    let business = Address::generate(&env);
-    let investor = Address::generate(&env);
-    let other_user = Address::generate(&env);
-    let invoice_id = create_test_invoice(&env, &client, &business, 1000);
-
-    env.as_contract(&contract_id, || {
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
-        InvoiceStorage::update_invoice(&env, &invoice);
-    });
-
-    // Try to rate as non-investor - should fail
-    let result = client.try_add_invoice_rating(
-        &invoice_id,
-        &5,
-        &String::from_str(&env, "Great!"),
-        &other_user,
-    );
-    assert!(result.is_err());
-}
 
 // ============================================================================
 // SUMMARY AND SECURITY NOTES
@@ -1494,15 +1392,13 @@ fn test_invoice_rating_only_investor_can_rate() {
 //    - Invoice verification requires admin authentication
 //    - Status updates require admin authentication
 //    - Metadata updates require business owner authentication
-//    - Ratings can only be added by the investor who funded the invoice
-//
+////
 // 2. VALIDATION CHECKS:
 //    - Invoice amount must be positive (> 0)
 //    - Due date must be in the future (> current timestamp)
 //    - Description cannot be empty
 //    - Payment amounts must be positive
-//    - Rating values must be between 1-5
-//
+////
 // 3. STATE MANAGEMENT:
 //    - Status transitions are strictly controlled
 //    - Invoices can only be verified once
@@ -1653,7 +1549,7 @@ fn test_invoice_transition_funded_to_verified_behavior() {
     client.verify_invoice(&invoice_id);
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 900, env.ledger().timestamp());
+        invoice.mark_as_funded(&env, investor.clone(), 900);
         InvoiceStorage::update_invoice(&env, &invoice);
     });
     assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
@@ -1757,7 +1653,7 @@ fn test_invoice_reject_cancel_funded_invoice() {
 
     env.as_contract(&contract_id, || {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        invoice.mark_as_funded(&env, investor.clone(), 1000, env.ledger().timestamp());
+        invoice.mark_as_funded(&env, investor.clone(), 1000);
         InvoiceStorage::update_invoice(&env, &invoice);
     });
     assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
@@ -1888,7 +1784,7 @@ fn test_invoice_full_lifecycle_with_status_assertions() {
     // Step 3: Funded
     env.as_contract(&contract_id, || {
         let mut inv = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        inv.mark_as_funded(&env, investor.clone(), 4500, env.ledger().timestamp());
+        inv.mark_as_funded(&env, investor.clone(), 4500);
         InvoiceStorage::update_invoice(&env, &inv);
     });
     let invoice = client.get_invoice(&invoice_id);

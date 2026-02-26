@@ -15,7 +15,8 @@ const PENDING_WITHDRAWAL_KEY: soroban_sdk::Symbol = symbol_short!("emg_wd");
 
 /// A pending emergency withdrawal (single slot; new initiate overwrites or clears after execute).
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct PendingEmergencyWithdrawal {
     pub token: Address,
     pub amount: i128,

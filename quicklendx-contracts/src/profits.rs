@@ -63,7 +63,8 @@ pub const MIN_VALID_AMOUNT: i128 = 0;
 
 /// Platform fee configuration stored on-chain
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
 pub struct PlatformFeeConfig {
     /// Fee in basis points (e.g., 200 = 2%)
     pub fee_bps: i128,
@@ -82,7 +83,8 @@ pub struct PlatformFeeConfig {
 /// - Audit trail and verification
 /// - Testing and validation
 #[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct ProfitFeeBreakdown {
     /// Original investment amount (principal)
     pub investment_amount: i128,

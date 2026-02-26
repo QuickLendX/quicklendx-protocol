@@ -187,7 +187,7 @@
                               "val": {
                                 "i128": {
                                   "hi": 0,
-                                  "lo": 35599358038398
+                                  "lo": 50262622659590
                                 }
                               }
                             },
@@ -238,7 +238,7 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "string": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                "string": "xxxxxxxxxxxxx"
                               }
                             },
                             {
@@ -323,7 +323,7 @@
                                 "symbol": "due_date"
                               },
                               "val": {
-                                "u64": 96899913
+                                "u64": 11657685
                               }
                             },
                             {
@@ -452,6 +452,9 @@
                                   },
                                   {
                                     "string": "tag"
+                                  },
+                                  {
+                                    "string": "tag"
                                   }
                                 ]
                               }
@@ -497,7 +500,7 @@
                                 "symbol": "additional_data"
                               },
                               "val": {
-                                "string": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                "string": "xxxxxxxxxxxxx"
                               }
                             },
                             {
@@ -507,7 +510,7 @@
                               "val": {
                                 "i128": {
                                   "hi": 0,
-                                  "lo": 35599358038398
+                                  "lo": 50262622659590
                                 }
                               }
                             },

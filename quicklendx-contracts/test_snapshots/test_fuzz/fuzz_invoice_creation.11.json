@@ -187,7 +187,7 @@
                               "val": {
                                 "i128": {
                                   "hi": 0,
-                                  "lo": 58985743045041
+                                  "lo": 21693025096430
                                 }
                               }
                             },
@@ -238,7 +238,7 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "string": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                "string": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                               }
                             },
                             {
@@ -323,7 +323,7 @@
                                 "symbol": "due_date"
                               },
                               "val": {
-                                "u64": 65830433
+                                "u64": 5168763
                               }
                             },
                             {
@@ -428,7 +428,17 @@
                                 "symbol": "tags"
                               },
                               "val": {
-                                "vec": []
+                                "vec": [
+                                  {
+                                    "string": "tag"
+                                  },
+                                  {
+                                    "string": "tag"
+                                  },
+                                  {
+                                    "string": "tag"
+                                  }
+                                ]
                               }
                             },
                             {
@@ -472,7 +482,7 @@
                                 "symbol": "additional_data"
                               },
                               "val": {
-                                "string": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                "string": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                               }
                             },
                             {
@@ -482,7 +492,7 @@
                               "val": {
                                 "i128": {
                                   "hi": 0,
-                                  "lo": 58985743045041
+                                  "lo": 21693025096430
                                 }
                               }
                             },
@@ -760,6 +770,25 @@
                           "vec": [
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "tag_idx"
+                            },
+                            {
+                              "string": "tag"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "vec": [
+                            {
+                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
                             }
                           ]
                         }
