@@ -1642,7 +1642,7 @@ fn test_only_one_escrow_created_for_accepted_bid() {
     let escrow = client.get_escrow_details(&invoice_id);
     assert_eq!(
         escrow.status,
-        EscrowStatus::Held,
+        crate::payments::EscrowStatus::Held,
         "Escrow should be in Held status"
     );
     assert_eq!(
