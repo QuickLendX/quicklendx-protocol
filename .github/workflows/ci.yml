@@ -32,7 +32,10 @@ jobs:
 
     - name: Build Cargo project
       run: |
+        source $HOME/.cargo/env
         cd quicklendx-contracts
+        rustc --version
+        cargo --version
         cargo build --verbose
 
     - name: Check code quality

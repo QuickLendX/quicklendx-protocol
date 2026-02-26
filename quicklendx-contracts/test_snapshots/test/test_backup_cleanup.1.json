@@ -34,7 +34,11 @@
               "function_name": "create_backup",
               "args": [
                 {
+<<<<<<< HEAD
                   "string": "Backup 0"
+=======
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                 }
               ]
             }
@@ -53,7 +57,11 @@
               "function_name": "create_backup",
               "args": [
                 {
+<<<<<<< HEAD
                   "string": "Backup 1"
+=======
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                 }
               ]
             }
@@ -72,7 +80,11 @@
               "function_name": "create_backup",
               "args": [
                 {
+<<<<<<< HEAD
                   "string": "Backup"
+=======
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                 }
               ]
             }
@@ -91,7 +103,11 @@
               "function_name": "create_backup",
               "args": [
                 {
+<<<<<<< HEAD
                   "string": "Backup"
+=======
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                 }
               ]
             }
@@ -110,7 +126,11 @@
               "function_name": "create_backup",
               "args": [
                 {
+<<<<<<< HEAD
                   "string": "Backup"
+=======
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                 }
               ]
             }
@@ -129,7 +149,11 @@
               "function_name": "create_backup",
               "args": [
                 {
+<<<<<<< HEAD
                   "string": "Backup"
+=======
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                 }
               ]
             }
@@ -148,7 +172,11 @@
               "function_name": "create_backup",
               "args": [
                 {
+<<<<<<< HEAD
                   "string": "Backup"
+=======
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                 }
               ]
             }
@@ -167,7 +195,11 @@
               "function_name": "create_backup",
               "args": [
                 {
+<<<<<<< HEAD
                   "string": "Backup"
+=======
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                 }
               ]
             }
@@ -186,7 +218,11 @@
               "function_name": "create_backup",
               "args": [
                 {
+<<<<<<< HEAD
                   "string": "Backup"
+=======
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                 }
               ]
             }
@@ -205,7 +241,11 @@
               "function_name": "create_backup",
               "args": [
                 {
+<<<<<<< HEAD
                   "string": "Backup"
+=======
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+>>>>>>> main
                 }
               ]
             }
@@ -251,6 +291,62 @@
                     "storage": [
                       {
                         "key": {
+<<<<<<< HEAD
+                          "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "backup_id"
+                              },
+                              "val": {
+                                "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "description"
+                              },
+                              "val": {
+                                "string": "Backup 0"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "invoice_count"
+                              },
+                              "val": {
+                                "u32": 0
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "status"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "Active"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "timestamp"
+                              },
+                              "val": {
+                                "u64": 0
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+=======
+>>>>>>> main
                           "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
                         },
                         "val": {
@@ -268,7 +364,11 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "string": "Backup 0"
+<<<<<<< HEAD
+                                "string": "Backup 1"
+=======
+                                "string": "Admin created backup"
+>>>>>>> main
                               }
                             },
                             {
@@ -321,7 +421,11 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "string": "Backup 1"
+<<<<<<< HEAD
+                                "string": "Backup"
+=======
+                                "string": "Admin created backup"
+>>>>>>> main
                               }
                             },
                             {
@@ -374,7 +478,11 @@
                                 "symbol": "description"
                               },
                               "val": {
+<<<<<<< HEAD
                                 "string": "Backup"
+=======
+                                "string": "Admin created backup"
+>>>>>>> main
                               }
                             },
                             {
@@ -427,7 +535,11 @@
                                 "symbol": "description"
                               },
                               "val": {
+<<<<<<< HEAD
                                 "string": "Backup"
+=======
+                                "string": "Admin created backup"
+>>>>>>> main
                               }
                             },
                             {
@@ -480,7 +592,11 @@
                                 "symbol": "description"
                               },
                               "val": {
+<<<<<<< HEAD
                                 "string": "Backup"
+=======
+                                "string": "Admin created backup"
+>>>>>>> main
                               }
                             },
                             {
@@ -533,7 +649,11 @@
                                 "symbol": "description"
                               },
                               "val": {
+<<<<<<< HEAD
                                 "string": "Backup"
+=======
+                                "string": "Admin created backup"
+>>>>>>> main
                               }
                             },
                             {
@@ -586,7 +706,11 @@
                                 "symbol": "description"
                               },
                               "val": {
+<<<<<<< HEAD
                                 "string": "Backup"
+=======
+                                "string": "Admin created backup"
+>>>>>>> main
                               }
                             },
                             {
@@ -639,7 +763,11 @@
                                 "symbol": "description"
                               },
                               "val": {
+<<<<<<< HEAD
                                 "string": "Backup"
+=======
+                                "string": "Admin created backup"
+>>>>>>> main
                               }
                             },
                             {
@@ -692,7 +820,10 @@
                                 "symbol": "description"
                               },
                               "val": {
+<<<<<<< HEAD
                                 "string": "Backup"
+=======
+                                "string": "Admin created backup"
                               }
                             },
                             {
@@ -745,7 +876,8 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "string": "Backup"
+                                "string": "Admin created backup"
+>>>>>>> main
                               }
                             },
                             {
@@ -789,6 +921,8 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
+=======
                           "symbol": "adm_init"
                         },
                         "val": {
@@ -805,11 +939,18 @@
                       },
                       {
                         "key": {
+>>>>>>> main
                           "symbol": "backups"
                         },
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
+                              "bytes": "b4c400000000000000000000000000000005c9c9c9c9c9c9c9c9c9c9c9c9c9c9"
+                            },
+                            {
+=======
+>>>>>>> main
                               "bytes": "b4c400000000000000000000000000000006cacacacacacacacacacacacacaca"
                             },
                             {
@@ -820,9 +961,12 @@
                             },
                             {
                               "bytes": "b4c400000000000000000000000000000009cdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+<<<<<<< HEAD
+=======
                             },
                             {
                               "bytes": "b4c40000000000000000000000000000000acececececececececececececece"
+>>>>>>> main
                             }
                           ]
                         }
@@ -842,6 +986,24 @@
                               "symbol": "bkup_data"
                             },
                             {
+<<<<<<< HEAD
+                              "bytes": "b4c400000000000000000000000000000000c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "vec": []
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "bkup_data"
+                            },
+                            {
+=======
+>>>>>>> main
                               "bytes": "b4c400000000000000000000000000000001c5c5c5c5c5c5c5c5c5c5c5c5c5c5"
                             }
                           ]
@@ -969,6 +1131,8 @@
                         "val": {
                           "vec": []
                         }
+<<<<<<< HEAD
+=======
                       },
                       {
                         "key": {
@@ -984,6 +1148,7 @@
                         "val": {
                           "vec": []
                         }
+>>>>>>> main
                       }
                     ]
                   }

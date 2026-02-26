@@ -183,3 +183,241 @@ fn test_get_revenue_split_config() {
     assert_eq!(config.auto_distribution, true);
     assert_eq!(config.min_distribution_amount, 500);
 }
+
+// ============================================================================
+// Treasury and Revenue Config – Additional Tests
+// ============================================================================
+
+#[test]
+fn test_distribute_revenue_requires_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // Collect fees without configuring revenue distribution
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 500);
+    client.collect_transaction_fees(&user, &fees_by_type, &500);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    // Should fail — no revenue config set
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert!(result.is_err(), "Should fail without revenue config");
+
+    // Now configure and verify it works
+    let treasury = Address::generate(&env);
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &2500, &2500, &false, &100);
+
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert!(result.is_ok(), "Should succeed after revenue config is set");
+}
+
+#[test]
+fn test_invalid_shares_not_summing_to_10000() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    // Sum = 8000 (not 10000)
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &3000, &3000, &2000, &false, &100);
+    assert!(result.is_err(), "Shares not summing to 10000 should fail");
+
+    // Sum = 12000
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &5000, &4000, &3000, &false, &100);
+    assert!(result.is_err(), "Shares exceeding 10000 should fail");
+}
+
+#[test]
+fn test_100_percent_treasury_split() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // 100% to treasury
+    client.configure_revenue_distribution(&admin, &treasury, &10000, &0, &0, &false, &1);
+
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 777);
+    client.collect_transaction_fees(&user, &fees_by_type, &777);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    let (treasury_amount, developer_amount, platform_amount) =
+        client.distribute_revenue(&admin, &current_period);
+
+    assert_eq!(treasury_amount, 777);
+    assert_eq!(developer_amount, 0);
+    assert_eq!(platform_amount, 0);
+}
+
+#[test]
+fn test_100_percent_developer_split() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // 100% to developer
+    client.configure_revenue_distribution(&admin, &treasury, &0, &10000, &0, &false, &1);
+
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 500);
+    client.collect_transaction_fees(&user, &fees_by_type, &500);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    let (treasury_amount, developer_amount, platform_amount) =
+        client.distribute_revenue(&admin, &current_period);
+
+    assert_eq!(treasury_amount, 0);
+    assert_eq!(developer_amount, 500);
+    assert_eq!(platform_amount, 0);
+}
+
+#[test]
+fn test_revenue_config_reconfiguration() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // First config
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &100);
+    let config = client.get_revenue_split_config();
+    assert_eq!(config.treasury_share_bps, 5000);
+
+    // Reconfigure
+    client.configure_revenue_distribution(&admin, &treasury, &8000, &1000, &1000, &true, &50);
+    let config = client.get_revenue_split_config();
+    assert_eq!(config.treasury_share_bps, 8000);
+    assert_eq!(config.developer_share_bps, 1000);
+    assert_eq!(config.platform_share_bps, 1000);
+    assert_eq!(config.auto_distribution, true);
+    assert_eq!(config.min_distribution_amount, 50);
+}
+
+#[test]
+fn test_revenue_config_treasury_address_stored() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &100);
+
+    let config = client.get_revenue_split_config();
+    assert_eq!(config.treasury_address, treasury);
+}
+
+#[test]
+fn test_accumulated_fees_distribution() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &1);
+
+    // Collect fees in multiple transactions
+    for _ in 0..5 {
+        let mut fees_by_type = Map::new(&env);
+        fees_by_type.set(FeeType::Platform, 200);
+        client.collect_transaction_fees(&user, &fees_by_type, &200);
+    }
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    let (treasury_amount, developer_amount, platform_amount) =
+        client.distribute_revenue(&admin, &current_period);
+
+    // Total collected = 5 * 200 = 1000
+    assert_eq!(treasury_amount, 500); // 50%
+    assert_eq!(developer_amount, 300); // 30%
+    assert_eq!(platform_amount, 200); // 20%
+    assert_eq!(treasury_amount + developer_amount + platform_amount, 1000);
+}
+
+#[test]
+fn test_distribute_revenue_no_revenue_data_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &100);
+
+    // No fees collected — period has no data
+    let result = client.try_distribute_revenue(&admin, &9999);
+    assert!(
+        result.is_err(),
+        "Should fail when no revenue data exists for period"
+    );
+}
+
+#[test]
+fn test_double_distribution_same_period_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &100);
+
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 1000);
+    client.collect_transaction_fees(&user, &fees_by_type, &1000);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    // First distribution succeeds
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert!(result.is_ok());
+
+    // Second distribution fails — pending is now 0
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert!(result.is_err(), "Double distribution should fail");
+}
