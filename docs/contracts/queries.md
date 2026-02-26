@@ -4,6 +4,12 @@
 
 The QuickLendX contract provides comprehensive read-only query functions to support frontend dashboards and analytics. All query functions are gas-efficient and support pagination where needed.
 
+## Global Query Limit Cap
+
+- `MAX_QUERY_LIMIT = 100` for public paginated/query endpoints.
+- For any endpoint with a `limit` argument, the contract applies `effective_limit = min(limit, 100)`.
+- This prevents unbounded reads and reduces DoS risk from oversized queries.
+
 ## Query Functions
 
 ### Invoice Queries
@@ -15,7 +21,7 @@ Get invoices for a specific business with optional status filter and pagination.
 - `business: Address` - Business address
 - `status_filter: Option<InvoiceStatus>` - Optional status filter (Pending, Verified, Funded, Paid, Defaulted, Cancelled)
 - `offset: u32` - Pagination offset (0-based)
-- `limit: u32` - Maximum number of results to return
+- `limit: u32` - Maximum number of results to return (capped at 100)
 
 **Returns:** `Vec<BytesN<32>>` - List of invoice IDs
 
@@ -38,7 +44,7 @@ Get available invoices (verified and not funded) with optional filters and pagin
 - `max_amount: Option<i128>` - Optional maximum amount filter
 - `category_filter: Option<InvoiceCategory>` - Optional category filter
 - `offset: u32` - Pagination offset
-- `limit: u32` - Maximum number of results
+- `limit: u32` - Maximum number of results (capped at 100)
 
 **Returns:** `Vec<BytesN<32>>` - List of invoice IDs
 
@@ -68,7 +74,7 @@ Get investments for a specific investor with optional status filter and paginati
 - `investor: Address` - Investor address
 - `status_filter: Option<InvestmentStatus>` - Optional status filter (Active, Withdrawn, Completed, Defaulted)
 - `offset: u32` - Pagination offset
-- `limit: u32` - Maximum number of results
+- `limit: u32` - Maximum number of results (capped at 100)
 
 **Returns:** `Vec<BytesN<32>>` - List of investment IDs
 
@@ -100,7 +106,7 @@ Get bid history for an invoice with optional status filter and pagination.
 - `invoice_id: BytesN<32>` - Invoice identifier
 - `status_filter: Option<BidStatus>` - Optional status filter (Placed, Withdrawn, Accepted, Expired)
 - `offset: u32` - Pagination offset
-- `limit: u32` - Maximum number of results
+- `limit: u32` - Maximum number of results (capped at 100)
 
 **Returns:** `Vec<Bid>` - List of bid records
 
@@ -122,7 +128,7 @@ Get bid history for an investor with optional status filter and pagination.
 - `investor: Address` - Investor address
 - `status_filter: Option<BidStatus>` - Optional status filter
 - `offset: u32` - Pagination offset
-- `limit: u32` - Maximum number of results
+- `limit: u32` - Maximum number of results (capped at 100)
 
 **Returns:** `Vec<Bid>` - List of bid records
 

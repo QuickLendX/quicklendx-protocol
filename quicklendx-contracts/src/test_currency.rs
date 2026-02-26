@@ -22,6 +22,61 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
 }
 
 #[test]
+fn test_get_whitelisted_currencies_empty_by_default() {
+    let (env, client, _admin) = setup();
+    let currency = Address::generate(&env);
+
+    let list = client.get_whitelisted_currencies();
+    assert_eq!(list.len(), 0, "whitelist should start empty");
+    assert!(
+        !client.is_allowed_currency(&currency),
+        "currency should not be allowed before add"
+    );
+}
+
+#[test]
+fn test_get_whitelisted_currencies_after_add_and_remove() {
+    let (env, client, admin) = setup();
+    let currency_a = Address::generate(&env);
+    let currency_b = Address::generate(&env);
+
+    client.add_currency(&admin, &currency_a);
+    client.add_currency(&admin, &currency_b);
+
+    let after_add = client.get_whitelisted_currencies();
+    assert_eq!(after_add.len(), 2);
+    assert!(after_add.contains(&currency_a));
+    assert!(after_add.contains(&currency_b));
+
+    client.remove_currency(&admin, &currency_a);
+    let after_remove_one = client.get_whitelisted_currencies();
+    assert_eq!(after_remove_one.len(), 1);
+    assert!(!after_remove_one.contains(&currency_a));
+    assert!(after_remove_one.contains(&currency_b));
+
+    client.remove_currency(&admin, &currency_b);
+    let after_remove_all = client.get_whitelisted_currencies();
+    assert_eq!(after_remove_all.len(), 0);
+}
+
+#[test]
+fn test_is_allowed_currency_true_false_paths() {
+    let (env, client, admin) = setup();
+    let allowed = Address::generate(&env);
+    let disallowed = Address::generate(&env);
+
+    client.add_currency(&admin, &allowed);
+    assert!(client.is_allowed_currency(&allowed));
+    assert!(!client.is_allowed_currency(&disallowed));
+
+    client.remove_currency(&admin, &allowed);
+    assert!(
+        !client.is_allowed_currency(&allowed),
+        "removed currency should no longer be allowed"
+    );
+}
+
+#[test]
 fn test_add_remove_currency_admin_only() {
     let (env, client, admin) = setup();
     let currency = Address::generate(&env);
@@ -135,6 +190,20 @@ fn test_add_currency_idempotent() {
 }
 
 #[test]
+fn test_remove_currency_when_missing_is_noop() {
+    let (env, client, admin) = setup();
+    let currency = Address::generate(&env);
+
+    client.add_currency(&admin, &currency);
+    client.remove_currency(&admin, &currency);
+    assert_eq!(client.get_whitelisted_currencies().len(), 0);
+
+    let second_remove = client.try_remove_currency(&admin, &currency);
+    assert!(
+        second_remove.is_ok(),
+        "removing an already absent currency should be a no-op"
+    );
+    assert_eq!(client.get_whitelisted_currencies().len(), 0);
 fn test_set_currencies_replaces_whitelist() {
     let (env, client, admin) = setup();
     let currency_a = Address::generate(&env);

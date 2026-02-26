@@ -70,6 +70,51 @@ fn setup_funded_invoice(
     invoice_id
 }
 
+/// Settlement deadline helper should align with protocol limits (due_date + grace).
+#[test]
+fn test_get_invoice_settlement_deadline_matches_protocol_limits() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let _ = client.try_initialize_admin(&admin);
+
+    // Configure protocol limits with a small, known grace period.
+    let min_amount: i128 = 1;
+    let max_due_days: u64 = 365;
+    let grace_period: u64 = 3600; // 1 hour
+    let _ = client.try_initialize_protocol_limits(&admin, &min_amount, &max_due_days, &grace_period);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
+
+    let now = env.ledger().timestamp();
+    let due_date = now + 10_000;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Deadline invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let deadline = client
+        .get_invoice_settlement_deadline(&invoice_id)
+        .expect("deadline query should succeed");
+    assert_eq!(
+        deadline,
+        due_date.saturating_add(grace_period),
+        "Settlement/default deadline must equal due_date + grace_period"
+    );
+}
+
 /// Test that unfunded invoices cannot be settled
 #[test]
 fn test_cannot_settle_unfunded_invoice() {
@@ -309,6 +354,202 @@ fn test_payout_with_profit() {
     assert!(
         investor_received > investment_amount,
         "Investor should receive more than their investment when there's profit"
+    );
+}
+
+// ============================================================================
+// calculate_profit integration with settlement (#341)
+// ============================================================================
+// NOTE: settle_invoice uses calculate_profit (or FeeManager::calculate_platform_fee)
+// correctly: profit is split to platform/treasury (fee) and remainder to investor.
+// These tests verify amounts with get_platform_fee_config and balance deltas.
+
+/// settle_invoice uses calculate_profit (or FeeManager) correctly: investor receives
+/// (payment - platform_fee), platform/treasury receives platform_fee; amounts match
+/// get_platform_fee_config when fee system is initialized.
+#[test]
+fn test_settle_invoice_profit_split_matches_calculate_profit_and_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+    client.initialize_fee_system(&admin);
+    client.update_platform_fee_bps(&500u32); // 5%
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    let invoice_amount = 1_000i128;
+    let investment_amount = 900i128;
+    let payment_amount = 1_000i128; // profit = 100
+
+    let invoice_id = setup_funded_invoice(
+        &env,
+        &client,
+        &business,
+        &investor,
+        &currency,
+        invoice_amount,
+        investment_amount,
+    );
+
+    let config = client
+        .get_platform_fee_config()
+        .expect("Fee config should exist after initialize_fee_system");
+    assert_eq!(config.fee_bps, 500, "Config should reflect 5% fee");
+
+    let (expected_investor_return, expected_platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
+    assert_eq!(
+        expected_investor_return + expected_platform_fee,
+        payment_amount,
+        "calculate_profit must satisfy no-dust invariant"
+    );
+
+    let token_client = token::Client::new(&env, &currency);
+    let initial_investor = token_client.balance(&investor);
+    let initial_contract = token_client.balance(&contract_id);
+
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    sac_client.mint(&business, &payment_amount);
+    let expiration = env.ledger().sequence() + 1_000;
+    token_client.approve(
+        &business,
+        &contract_id,
+        &payment_amount,
+        &expiration,
+    );
+
+    client.settle_invoice(&invoice_id, &payment_amount);
+
+    let investor_received = token_client.balance(&investor) - initial_investor;
+    let platform_received = token_client.balance(&contract_id) - initial_contract;
+
+    assert_eq!(
+        investor_received, expected_investor_return,
+        "Investor must receive amount from calculate_profit"
+    );
+    assert_eq!(
+        platform_received, expected_platform_fee,
+        "Platform/treasury must receive fee from calculate_profit"
+    );
+}
+
+/// With fee config set via get_platform_fee_config: settlement amounts match
+/// (investor_return, platform_fee) derived from config.fee_bps.
+#[test]
+fn test_settle_invoice_verify_amounts_with_get_platform_fee_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+    client.initialize_fee_system(&admin);
+    client.update_platform_fee_bps(&200u32); // 2%
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    let investment_amount = 800i128;
+    let payment_amount = 1_000i128;
+
+    let invoice_id = setup_funded_invoice(
+        &env,
+        &client,
+        &business,
+        &investor,
+        &currency,
+        1_000i128,
+        investment_amount,
+    );
+
+    let config = client.get_platform_fee_config().unwrap();
+    assert_eq!(config.fee_bps, 200);
+
+    let (investor_return, platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
+    assert_eq!(platform_fee, 4); // 2% of 200 profit
+    assert_eq!(investor_return, 996);
+
+    let token_client = token::Client::new(&env, &currency);
+    let initial_investor = token_client.balance(&investor);
+    let initial_platform = token_client.balance(&contract_id);
+
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    sac_client.mint(&business, &payment_amount);
+    let exp = env.ledger().sequence() + 1_000;
+    token_client.approve(&business, &contract_id, &payment_amount, &exp);
+
+    client.settle_invoice(&invoice_id, &payment_amount);
+
+    assert_eq!(token_client.balance(&investor) - initial_investor, investor_return);
+    assert_eq!(token_client.balance(&contract_id) - initial_platform, platform_fee);
+}
+
+/// Platform fee is routed to treasury when configured; remainder goes to investor.
+#[test]
+fn test_settle_invoice_fee_to_treasury_investor_gets_remainder() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    client.set_admin(&admin);
+    client.initialize_fee_system(&admin);
+    client.update_platform_fee_bps(&500u32);
+    client.configure_treasury(&treasury);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    let investment_amount = 1_000i128;
+    let payment_amount = 1_100i128; // profit 100, 5% = 5 fee
+
+    let invoice_id = setup_funded_invoice(
+        &env,
+        &client,
+        &business,
+        &investor,
+        &currency,
+        1_100i128,
+        investment_amount,
+    );
+
+    let (expected_investor_return, expected_platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
+    assert_eq!(expected_platform_fee, 5);
+    assert_eq!(expected_investor_return, 1_095);
+
+    let token_client = token::Client::new(&env, &currency);
+    let initial_investor = token_client.balance(&investor);
+    let initial_treasury = token_client.balance(&treasury);
+
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    sac_client.mint(&business, &payment_amount);
+    let exp = env.ledger().sequence() + 1_000;
+    token_client.approve(&business, &contract_id, &payment_amount, &exp);
+
+    client.settle_invoice(&invoice_id, &payment_amount);
+
+    assert_eq!(
+        token_client.balance(&investor) - initial_investor,
+        expected_investor_return,
+        "Investor must receive remainder after platform fee"
+    );
+    assert_eq!(
+        token_client.balance(&treasury) - initial_treasury,
+        expected_platform_fee,
+        "Treasury must receive platform fee when configured"
     );
 }
 

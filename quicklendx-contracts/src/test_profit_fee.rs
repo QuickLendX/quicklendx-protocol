@@ -2,7 +2,7 @@
 extern crate std;
 
 use crate::fees::FeeManager;
-use crate::QuickLendXContract;
+use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 #[test]
@@ -192,4 +192,42 @@ fn test_calculate_platform_fee_large_numbers() {
         assert_eq!(platform_fee, 20_000);
         assert_eq!(investor_return, 1_980_000);
     });
+}
+
+#[test]
+fn test_calculate_profit_no_dust_rounding_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(QuickLendXContract, ());
+    let admin = Address::generate(&env);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let _ = client.initialize_admin(&admin);
+    // 2% fee, profit=49 -> fee rounds down to 0.
+    let (investor_return, platform_fee) = client.calculate_profit(&1000, &1049);
+    assert_eq!(platform_fee, 0);
+    assert_eq!(investor_return, 1049);
+    assert_eq!(investor_return + platform_fee, 1049);
+}
+
+#[test]
+fn test_calculate_profit_large_amount_no_overflow() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(QuickLendXContract, ());
+    let admin = Address::generate(&env);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let _ = client.initialize_admin(&admin);
+    let investment_amount: i128 = 1_000_000_000_000_000_000_000_000_000_000_000_000;
+    let payment_amount: i128 = 1_100_000_000_000_000_000_000_000_000_000_000_000;
+    let (investor_return, platform_fee) =
+        client.calculate_profit(&investment_amount, &payment_amount);
+
+    assert_eq!(platform_fee, 2_000_000_000_000_000_000_000_000_000_000_000);
+    assert_eq!(
+        investor_return,
+        1_098_000_000_000_000_000_000_000_000_000_000_000
+    );
+    assert_eq!(investor_return + platform_fee, payment_amount);
 }
