@@ -2946,6 +2946,8 @@ mod test_fuzz;
 #[cfg(test)]
 mod test_revenue_split;
 #[cfg(test)]
+mod test_risk_tier;
+#[cfg(test)]
 mod test_types;
 #[cfg(test)]
 mod test_lifecycle;
