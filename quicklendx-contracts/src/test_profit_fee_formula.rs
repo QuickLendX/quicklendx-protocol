@@ -340,7 +340,7 @@ fn test_rounding_boundary_cases() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
+    let _admin = setup_admin(&env, &client);
 
     // Test exact boundaries where fee should just cross integer threshold
     // At 2% (200 bps), fee = profit * 200 / 10000 = profit / 50
@@ -371,7 +371,7 @@ fn test_no_dust_comprehensive() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
+    let _admin = setup_admin(&env, &client);
 
     // Test many combinations to ensure no dust ever
     let investments = vec![100, 1000, 10000, 123456, 999999];
@@ -587,7 +587,7 @@ fn test_fee_config_max_boundary() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
+    let _admin = setup_admin(&env, &client);
 
     // Max allowed: 10% (1000 bps)
     client.set_platform_fee(&1000);
@@ -601,7 +601,7 @@ fn test_fee_config_exceeds_max() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
+    let _admin = setup_admin(&env, &client);
 
     // Attempt to set > 10% should fail
     let result = client.try_set_platform_fee(&1200);

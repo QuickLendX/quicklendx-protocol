@@ -17,6 +17,7 @@ mod fees;
 mod investment;
 mod invoice;
 mod notifications;
+mod pause;
 mod payments;
 mod profits;
 mod protocol_limits;
@@ -36,6 +37,8 @@ mod test_dispute;
 mod test_emergency_withdraw;
 #[cfg(test)]
 mod test_overflow;
+#[cfg(test)]
+mod test_pause;
 #[cfg(test)]
 mod test_profit_fee;
 #[cfg(test)]
@@ -227,6 +230,21 @@ impl QuickLendXContract {
         emergency::EmergencyWithdraw::cancel(&env, &admin)
     }
 
+    /// Pause the contract (admin only). When paused, mutating operations fail with ContractPaused; getters succeed.
+    pub fn pause(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        pause::Pause::pause(&env, &admin)
+    }
+
+    /// Unpause the contract (admin only).
+    pub fn unpause(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        pause::Pause::unpause(&env, &admin)
+    }
+
+    /// Return whether the contract is currently paused.
+    pub fn is_paused(env: Env) -> bool {
+        pause::Pause::is_paused(&env)
+    }
+
     // ============================================================================
     // Invoice Management Functions
     // ============================================================================
@@ -259,6 +277,7 @@ impl QuickLendXContract {
         category: invoice::InvoiceCategory,
         tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         // Validate input parameters
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -319,6 +338,7 @@ impl QuickLendXContract {
         category: invoice::InvoiceCategory,
         tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         // Only the business can upload their own invoice
         business.require_auth();
 
@@ -378,11 +398,13 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || do_accept_bid_and_fund(&env, &invoice_id, &bid_id))
     }
 
     /// Verify an invoice (admin or automated process)
     pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
 
@@ -420,6 +442,7 @@ impl QuickLendXContract {
 
     /// Cancel an invoice (business only, before funding)
     pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -539,6 +562,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         new_status: InvoiceStatus,
     ) -> Result<(), QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -677,6 +701,7 @@ impl QuickLendXContract {
         bid_amount: i128,
         expected_return: i128,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         // Authorization check: Only the investor can place their own bid
         investor.require_auth();
 
@@ -742,6 +767,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || {
             Self::accept_bid_impl(env.clone(), invoice_id.clone(), bid_id.clone())
         })
@@ -887,6 +913,7 @@ impl QuickLendXContract {
     /// - Bid is in Placed status (prevents withdrawal of accepted/expired/withdrawn bids)
     /// - Updates bid status to Withdrawn
     pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         // Get bid and validate it exists
         let mut bid =
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
@@ -1360,6 +1387,7 @@ impl QuickLendXContract {
 
     /// Release escrow funds to business upon invoice verification
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || {
             let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
                 .ok_or(QuickLendXError::StorageKeyNotFound)?;
@@ -1387,6 +1415,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         caller: Address,
     ) -> Result<(), QuickLendXError> {
+        pause::Pause::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || do_refund_escrow_funds(&env, &invoice_id, &caller))
     }
 

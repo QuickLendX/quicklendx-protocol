@@ -36,8 +36,6 @@ pub enum QuickLendXError {
     KYCNotFound = 1027,
     InvalidKYCStatus = 1028,
     AuditLogNotFound = 1029,
-    AuditIntegrityError = 1030,
-    AuditQueryError = 1031,
     InvalidFeeConfiguration = 1032,
     TreasuryNotConfigured = 1033,
     InvalidFeeBasisPoints = 1034,
@@ -56,6 +54,7 @@ pub enum QuickLendXError {
     InvoiceNotAvailableForFunding = 1047,
     InvoiceNotFunded = 1048,
     InvoiceAlreadyDefaulted = 1049,
+    ContractPaused = 1050,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -91,8 +90,6 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::KYCNotFound => symbol_short!("KYC_NF"),
             QuickLendXError::InvalidKYCStatus => symbol_short!("KYC_IS"),
             QuickLendXError::AuditLogNotFound => symbol_short!("AUD_NF"),
-            QuickLendXError::AuditIntegrityError => symbol_short!("AUD_IE"),
-            QuickLendXError::AuditQueryError => symbol_short!("AUD_QE"),
             QuickLendXError::InvalidFeeConfiguration => symbol_short!("FEE_CFG"),
             QuickLendXError::TreasuryNotConfigured => symbol_short!("TRS_NC"),
             QuickLendXError::InvalidFeeBasisPoints => symbol_short!("FEE_BPS"),
@@ -111,6 +108,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvoiceNotAvailableForFunding => symbol_short!("INV_NAF"),
             QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NDF"),
             QuickLendXError::InvoiceAlreadyDefaulted => symbol_short!("INV_AD"),
+            QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
         }
     }
 }

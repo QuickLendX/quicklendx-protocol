@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib", "lib"]
+# rlib only: avoids Windows GNU "export ordinal too large" when building cdylib.
+# For WASM contract build use: cargo build --release --target wasm32-unknown-unknown
+# (add crate-type = ["cdylib"] temporarily or build in WSL/Linux if you need the .so artifact).
+crate-type = ["lib"]
 
 [dependencies]
 soroban-sdk = { version = "22.0.0" }
