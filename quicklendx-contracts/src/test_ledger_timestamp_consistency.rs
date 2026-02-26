@@ -1,3 +1,32 @@
+//! Ledger Timestamp Consistency Audit Test Suite
+//!
+//! This comprehensive test module verifies that `env.ledger().timestamp()` is used
+//! consistently and correctly throughout the QuickLendX protocol, particularly in
+//! critical timestamp-dependent operations:
+//!
+//! - **Invoice.created_at**: Timestamp when invoice is created
+//! - **due_date**: When invoice payment is due
+//! - **grace_deadline**: due_date + grace_period with saturation safety
+//! - **Dispute timestamps**: When disputes are created/resolved
+//! - **Timelock periods**: Enforced time delays for security operations
+//!
+//! ## Test Coverage (23 Tests, 6 Modules)
+//!
+//! 1. **Timestamp Source Verification** (3 tests): Confirms timestamp capture consistency
+//! 2. **Off-by-One Boundaries** (5 tests): Validates exclusive/inclusive boundary checks
+//! 3. **Grace Period Consistency** (5 tests): Ensures grace_deadline calculations are sound
+//! 4. **Time Advancement** (4 tests): Verifies set_timestamp() behavior for deterministic testing
+//! 5. **Edge Cases & Invariants** (5 tests): Tests saturation, zero values, and ordering
+//! 6. **Integration & Real-World Flows** (3 tests): Complete lifecycle simulations with time progression
+//!
+//! ## Key Insights
+//!
+//! - Grace deadline uses saturating arithmetic: `due_date.saturating_add(grace_period)`
+//! - Overdue check is exclusive: `current_timestamp > due_date` (NOT >=)
+//! - Default-allowed check is inclusive: `current_timestamp > grace_deadline` (NOT >=)
+//! - Proper time advancement requires `env.ledger().set_timestamp()` between invoice creations
+//! - All tests simulate realistic time progressions to catch off-by-one errors
+
 #![cfg(test)]
 extern crate std;
 
