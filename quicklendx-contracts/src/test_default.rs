@@ -30,7 +30,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
 fn set_protocol_grace_period(env: &Env, admin: &Address, grace_period_seconds: u64) {
     // Use default protocol values instead of reading from storage
     let min_invoice_amount = 1_000_000; // DEFAULT_MIN_AMOUNT
-    let max_due_date_days = 365;        // DEFAULT_MAX_DUE_DATE_DAYS
+    let max_due_date_days = 365; // DEFAULT_MAX_DUE_DATE_DAYS
     ProtocolInitializer::set_protocol_config(
         env,
         admin,
@@ -79,7 +79,7 @@ fn create_and_fund_invoice(
     due_date: u64,
 ) -> BytesN<32> {
     let currency = Address::generate(env);
-    
+
     let invoice_id = client.store_invoice(
         business,
         &amount,
@@ -1108,7 +1108,8 @@ fn test_grace_period_boundary_very_small_grace_period() {
     let small_grace = 1; // 1 second grace period
 
     // Move just past small grace period
-    env.ledger().set_timestamp(invoice.due_date + small_grace + 1);
+    env.ledger()
+        .set_timestamp(invoice.due_date + small_grace + 1);
 
     // Should default with 1 second grace
     client.mark_invoice_defaulted(&invoice_id, &Some(small_grace));
@@ -1290,4 +1291,3 @@ fn test_default_status_lists_consistency_with_invoice_status() {
     let defaulted_list = client.get_invoices_by_status(&InvoiceStatus::Defaulted);
     assert!(defaulted_list.iter().any(|id| id == invoice_id));
 }
-

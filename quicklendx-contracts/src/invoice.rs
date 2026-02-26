@@ -944,7 +944,10 @@ impl InvoiceStorage {
     }
 
     /// Get rating statistics for a specific invoice from storage
-    pub fn get_invoice_rating_stats(env: &Env, invoice_id: &BytesN<32>) -> Option<InvoiceRatingStats> {
+    pub fn get_invoice_rating_stats(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Option<InvoiceRatingStats> {
         Self::get_invoice(env, invoice_id).map(|inv| inv.get_invoice_rating_stats())
     }
 

@@ -70,6 +70,31 @@
     ],
     [
       [
+<<<<<<< HEAD
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "function_name": "add_currency",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+=======
+>>>>>>> main
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
         {
           "function": {
@@ -467,7 +492,11 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
+                          "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+=======
                           "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+>>>>>>> main
                         },
                         "val": {
                           "map": [
@@ -503,7 +532,11 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
+<<<<<<< HEAD
+                                "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+=======
                                 "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+>>>>>>> main
                               }
                             },
                             {
@@ -567,6 +600,9 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
+                          "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+=======
                           "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
                         },
                         "val": {
@@ -666,6 +702,7 @@
                       {
                         "key": {
                           "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
+>>>>>>> main
                         },
                         "val": {
                           "map": [
@@ -694,7 +731,11 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
+<<<<<<< HEAD
+                                "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+=======
                                 "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
+>>>>>>> main
                               }
                             },
                             {
@@ -760,6 +801,9 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
+                          "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
+=======
                           "bytes": "ad1f000000000000000000000000000000000000000423232323232323232323"
                         },
                         "val": {
@@ -854,6 +898,7 @@
                       {
                         "key": {
                           "bytes": "ad1f000000000000000000000000000000000000000524242424242424242424"
+>>>>>>> main
                         },
                         "val": {
                           "map": [
@@ -882,7 +927,11 @@
                                 "symbol": "audit_id"
                               },
                               "val": {
+<<<<<<< HEAD
+                                "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
+=======
                                 "bytes": "ad1f000000000000000000000000000000000000000524242424242424242424"
+>>>>>>> main
                               }
                             },
                             {
@@ -948,6 +997,8 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
+=======
                           "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
                         },
                         "val": {
@@ -1041,6 +1092,7 @@
                       },
                       {
                         "key": {
+>>>>>>> main
                           "string": "admin_address"
                         },
                         "val": {
@@ -1069,6 +1121,8 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
+=======
                           "symbol": "adm_init"
                         },
                         "val": {
@@ -1085,15 +1139,24 @@
                       },
                       {
                         "key": {
+>>>>>>> main
                           "symbol": "all_aud"
                         },
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
+                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                            },
+                            {
+=======
+>>>>>>> main
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
+<<<<<<< HEAD
+=======
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
@@ -1106,6 +1169,7 @@
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
+>>>>>>> main
                             }
                           ]
                         }
@@ -1115,7 +1179,11 @@
                           "symbol": "aud_cnt"
                         },
                         "val": {
+<<<<<<< HEAD
+                          "u64": 3
+=======
                           "u64": 6
+>>>>>>> main
                         }
                       },
                       {
@@ -1132,6 +1200,21 @@
                       },
                       {
                         "key": {
+<<<<<<< HEAD
+                          "symbol": "curr_wl"
+                        },
+                        "val": {
+                          "vec": [
+                            {
+                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+=======
+>>>>>>> main
                           "symbol": "inv_cnt"
                         },
                         "val": {
@@ -1313,10 +1396,14 @@
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+=======
                               "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000423232323232323232323"
+>>>>>>> main
                             }
                           ]
                         }
@@ -1335,6 +1422,12 @@
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
+                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                            },
+                            {
+                              "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
+=======
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             },
                             {
@@ -1345,6 +1438,7 @@
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
+>>>>>>> main
                             }
                           ]
                         }
@@ -1372,6 +1466,8 @@
                         "key": {
                           "vec": [
                             {
+<<<<<<< HEAD
+=======
                               "symbol": "cat_idx"
                             },
                             {
@@ -1395,6 +1491,7 @@
                         "key": {
                           "vec": [
                             {
+>>>>>>> main
                               "symbol": "inv_aud"
                             },
                             {
@@ -1405,10 +1502,18 @@
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
+                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                            },
+                            {
+=======
+>>>>>>> main
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
+<<<<<<< HEAD
+=======
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
@@ -1421,6 +1526,7 @@
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
+>>>>>>> main
                             }
                           ]
                         }
@@ -1443,7 +1549,11 @@
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
+                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+=======
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+>>>>>>> main
                             }
                           ]
                         }
@@ -1466,6 +1576,11 @@
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
+                              "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
+                            },
+                            {
+=======
                               "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
                             },
                             {
@@ -1495,6 +1610,7 @@
                         "val": {
                           "vec": [
                             {
+>>>>>>> main
                               "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
                             }
                           ]
@@ -1504,6 +1620,8 @@
                         "key": {
                           "vec": [
                             {
+<<<<<<< HEAD
+=======
                               "symbol": "op_aud"
                             },
                             {
@@ -1527,6 +1645,7 @@
                         "key": {
                           "vec": [
                             {
+>>>>>>> main
                               "symbol": "ts_aud"
                             },
                             {
@@ -1537,10 +1656,18 @@
                         "val": {
                           "vec": [
                             {
+<<<<<<< HEAD
+                              "bytes": "ad1f00000000000000000000000000000000000000001f1f1f1f1f1f1f1f1f1f"
+                            },
+                            {
+=======
+>>>>>>> main
                               "bytes": "ad1f000000000000000000000000000000000000000120202020202020202020"
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000221212121212121212121"
+<<<<<<< HEAD
+=======
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000322222222222222222222"
@@ -1553,6 +1680,7 @@
                             },
                             {
                               "bytes": "ad1f000000000000000000000000000000000000000625252525252525252525"
+>>>>>>> main
                             }
                           ]
                         }
@@ -1706,7 +1834,11 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
+<<<<<<< HEAD
+                "nonce": 4270020994084947596
+=======
                 "nonce": 2032731177588607455
+>>>>>>> main
               }
             },
             "durability": "temporary"
@@ -1721,7 +1853,44 @@
                 "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
                 "key": {
                   "ledger_key_nonce": {
+<<<<<<< HEAD
+                    "nonce": 4270020994084947596
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          6311999
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+            "key": {
+              "ledger_key_nonce": {
+                "nonce": 4837995959683129791
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": 4837995959683129791
+=======
                     "nonce": 2032731177588607455
+>>>>>>> main
                   }
                 },
                 "durability": "temporary",
@@ -1739,7 +1908,11 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
+<<<<<<< HEAD
+                "nonce": 2032731177588607455
+=======
                 "nonce": 4270020994084947596
+>>>>>>> main
               }
             },
             "durability": "temporary"
@@ -1754,6 +1927,9 @@
                 "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
                 "key": {
                   "ledger_key_nonce": {
+<<<<<<< HEAD
+                    "nonce": 2032731177588607455
+=======
                     "nonce": 4270020994084947596
                   }
                 },
@@ -1788,6 +1964,7 @@
                 "key": {
                   "ledger_key_nonce": {
                     "nonce": 4837995959683129791
+>>>>>>> main
                   }
                 },
                 "durability": "temporary",
@@ -1834,6 +2011,42 @@
       ],
       [
         {
+<<<<<<< HEAD
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "ledger_key_nonce": {
+                "nonce": 8370022561469687789
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": 8370022561469687789
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          6311999
+        ]
+      ],
+      [
+        {
+=======
+>>>>>>> main
           "contract_code": {
             "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           }

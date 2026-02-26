@@ -32,6 +32,15 @@ use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 /// Storage key for protocol initialization flag
 const PROTOCOL_INITIALIZED_KEY: Symbol = symbol_short!("proto_in");
 
+/// Storage key for protocol version
+const PROTOCOL_VERSION_KEY: Symbol = symbol_short!("proto_v");
+
+/// Current protocol/contract version.
+///
+/// This is stored during initialization so off-chain components can perform
+/// migration and compatibility checks via `get_version()`.
+pub const PROTOCOL_VERSION: u32 = 1;
+
 /// Storage key for protocol configuration
 const PROTOCOL_CONFIG_KEY: Symbol = symbol_short!("proto_cf");
 
@@ -121,8 +130,7 @@ impl ProtocolInitializer {
     /// - Validates all parameters before any state changes
     /// - Emits initialization event for audit trail
     pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
-        // Require authorization from the admin
-        params.admin.require_auth();
+        // Auth is checked by the outermost contract entry point
 
         // Check if already initialized (re-initialization protection)
         if Self::is_initialized(env) {
@@ -139,14 +147,20 @@ impl ProtocolInitializer {
             .instance()
             .set(&crate::admin::ADMIN_KEY, &params.admin);
 
-        // Store treasury address
-        env.storage()
-            .instance()
-            .set(&TREASURY_KEY, &params.treasury);
+        // Initialize fee manager with default structures
+        crate::fees::FeeManager::initialize(env, &params.admin)?;
+
+        // Override default platform fee with params and set treasury
+        crate::fees::FeeManager::update_platform_fee(env, &params.admin, params.fee_bps)?;
+        crate::fees::FeeManager::configure_treasury(env, &params.admin, params.treasury.clone())?;
 
         // Initialize currency whitelist
         if !params.initial_currencies.is_empty() {
-            crate::currency::CurrencyWhitelist::set_currencies(env, &params.admin, &params.initial_currencies)?;
+            crate::currency::CurrencyWhitelist::set_currencies(
+                env,
+                &params.admin,
+                &params.initial_currencies,
+            )?;
         }
 
         // Store protocol configuration
@@ -158,6 +172,11 @@ impl ProtocolInitializer {
             updated_by: params.admin.clone(),
         };
         env.storage().instance().set(&PROTOCOL_CONFIG_KEY, &config);
+
+        // Store protocol version for off-chain migration/compatibility checks.
+        env.storage()
+            .instance()
+            .set(&PROTOCOL_VERSION_KEY, &PROTOCOL_VERSION);
 
         // Mark protocol as initialized (atomic commit point)
         env.storage()
@@ -193,6 +212,17 @@ impl ProtocolInitializer {
             .unwrap_or(false)
     }
 
+    /// Get the stored protocol/contract version.
+    ///
+    /// Returns the version written during initialization, or the current
+    /// `PROTOCOL_VERSION` constant if the contract has not been initialized yet.
+    pub fn get_protocol_version(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&PROTOCOL_VERSION_KEY)
+            .unwrap_or(PROTOCOL_VERSION)
+    }
+
     /// Validate initialization parameters.
     ///
     /// Performs comprehensive validation of all parameters before
@@ -202,7 +232,7 @@ impl ProtocolInitializer {
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // Validate fee basis points (0% to 10%)
-        if params.fee_bps < MIN_FEE_BPS || params.fee_bps > MAX_FEE_BPS {
+        if params.fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
@@ -313,7 +343,7 @@ impl ProtocolInitializer {
         }
 
         // Validate fee basis points
-        if fee_bps < MIN_FEE_BPS || fee_bps > MAX_FEE_BPS {
+        if fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 

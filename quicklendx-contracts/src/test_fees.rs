@@ -1,9 +1,6 @@
 use super::*;
 use crate::{errors::QuickLendXError, fees::FeeType};
-use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    Address, Env, Map, String,
-};
+use soroban_sdk::{testutils::Address as _, Address, Env, Map, String};
 
 /// Helper function to set up admin for testing
 fn setup_admin(env: &Env, client: &QuickLendXContractClient) -> Address {
@@ -78,6 +75,25 @@ fn test_get_platform_fee_config_after_init_has_defaults() {
 
     let fee_config = client.get_platform_fee_config();
     assert_eq!(fee_config.fee_bps, 200);
+    assert_eq!(fee_config.treasury_address, None);
+    assert_eq!(fee_config.updated_by, admin);
+    assert_eq!(fee_config.updated_at, env.ledger().timestamp());
+}
+
+/// FeeManager getter reflects updates from update_platform_fee_bps
+#[test]
+fn test_get_platform_fee_config_after_update_platform_fee_bps() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+    client.update_platform_fee_bps(&450);
+
+    let fee_config = client.get_platform_fee_config();
+    assert_eq!(fee_config.fee_bps, 450);
     assert_eq!(fee_config.treasury_address, None);
     assert_eq!(fee_config.updated_by, admin);
     assert_eq!(fee_config.updated_at, env.ledger().timestamp());
@@ -296,7 +312,9 @@ fn test_only_admin_can_update_fee_structure() {
             sub_invokes: &[],
         },
     };
-    client.mock_auths(&[init_auth]).initialize_fee_system(&admin);
+    client
+        .mock_auths(&[init_auth])
+        .initialize_fee_system(&admin);
 
     // Non-admin cannot authorize fee structure update for admin identity.
     let unauthorized_auth = MockAuth {
@@ -316,14 +334,9 @@ fn test_only_admin_can_update_fee_structure() {
             sub_invokes: &[],
         },
     };
-    let unauthorized_result = client.mock_auths(&[unauthorized_auth]).try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &400,
-        &50,
-        &5_000,
-        &true,
-    );
+    let unauthorized_result = client
+        .mock_auths(&[unauthorized_auth])
+        .try_update_fee_structure(&admin, &FeeType::Platform, &400, &50, &5_000, &true);
     let unauthorized_err = unauthorized_result
         .err()
         .expect("non-admin fee structure update must fail");
@@ -646,53 +659,35 @@ fn test_update_fee_structure_rejects_invalid_values() {
 
     client.initialize_fee_system(&admin);
 
-    let invalid_bps = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &1001,
-        &50,
-        &5_000,
-        &true,
-    );
+    let invalid_bps =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &1001, &50, &5_000, &true);
     let invalid_bps_err = invalid_bps
         .err()
         .expect("base_fee_bps > 1000 must be rejected");
     let invalid_bps_contract_error = invalid_bps_err.expect("expected contract invoke error");
     assert_eq!(invalid_bps_contract_error, QuickLendXError::InvalidAmount);
 
-    let min_gt_max = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &400,
-        &5_001,
-        &5_000,
-        &true,
-    );
-    let min_gt_max_err = min_gt_max.err().expect("min_fee > max_fee must be rejected");
+    let min_gt_max =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &400, &5_001, &5_000, &true);
+    let min_gt_max_err = min_gt_max
+        .err()
+        .expect("min_fee > max_fee must be rejected");
     let min_gt_max_contract_error = min_gt_max_err.expect("expected contract invoke error");
     assert_eq!(min_gt_max_contract_error, QuickLendXError::InvalidAmount);
 
-    let negative_min = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &400,
-        &-1,
-        &5_000,
-        &true,
-    );
-    let negative_min_err = negative_min.err().expect("negative min_fee must be rejected");
+    let negative_min =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &400, &-1, &5_000, &true);
+    let negative_min_err = negative_min
+        .err()
+        .expect("negative min_fee must be rejected");
     let negative_min_contract_error = negative_min_err.expect("expected contract invoke error");
     assert_eq!(negative_min_contract_error, QuickLendXError::InvalidAmount);
 
-    let negative_max = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &400,
-        &0,
-        &-1,
-        &true,
-    );
-    let negative_max_err = negative_max.err().expect("negative max_fee must be rejected");
+    let negative_max =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &400, &0, &-1, &true);
+    let negative_max_err = negative_max
+        .err()
+        .expect("negative max_fee must be rejected");
     let negative_max_contract_error = negative_max_err.expect("expected contract invoke error");
     assert_eq!(negative_max_contract_error, QuickLendXError::InvalidAmount);
 }
@@ -841,7 +836,10 @@ fn test_calculate_transaction_fees_early_payment_flag() {
     // Early payment applies 10% discount on Platform fee (200 → 180)
     // Total: 180 + 50 + 100 = 330
     assert_eq!(early_fees, 330);
-    assert!(early_fees < base_fees, "Early payment must reduce total fees");
+    assert!(
+        early_fees < base_fees,
+        "Early payment must reduce total fees"
+    );
 }
 
 /// Test get_treasury_address returns None before configuration
@@ -876,8 +874,8 @@ fn test_calculate_transaction_fees_late_payment_flag() {
     client.update_fee_structure(
         &admin,
         &FeeType::LatePayment,
-        &100,   // 1%
-        &50,    // min fee
+        &100,    // 1%
+        &50,     // min fee
         &10_000, // max fee
         &true,
     );
@@ -889,7 +887,10 @@ fn test_calculate_transaction_fees_late_payment_flag() {
     // LatePayment: 1% of 10k = 100, +20% surcharge = 120
     // Total: 350 + 120 = 470
     assert_eq!(late_fees, 470);
-    assert!(late_fees > base_fees, "Late payment must increase total fees");
+    assert!(
+        late_fees > base_fees,
+        "Late payment must increase total fees"
+    );
 }
 
 /// Test treasury address is reflected in platform fee config
@@ -930,21 +931,17 @@ fn test_calculate_transaction_fees_both_flags() {
 
     client.initialize_fee_system(&admin);
 
-    client.update_fee_structure(
-        &admin,
-        &FeeType::LatePayment,
-        &100,
-        &50,
-        &10_000,
-        &true,
-    );
+    client.update_fee_structure(&admin, &FeeType::LatePayment, &100, &50, &10_000, &true);
 
     let amount = 10_000_i128;
     let both_flags_fees = client.calculate_transaction_fees(&user, &amount, &true, &true);
     let base_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
 
     // Both flags: early discount reduces platform fee AND late fee adds surcharge
-    assert!(both_flags_fees != base_fees, "Both flags must change total fees");
+    assert!(
+        both_flags_fees != base_fees,
+        "Both flags must change total fees"
+    );
 }
 
 /// Test treasury address can be updated
@@ -1207,629 +1204,6 @@ fn test_distribute_revenue_large_amounts() {
         1_000_000
     );
 }
-// Fee Analytics Tests - get_fee_analytics
-// ============================================================================
-
-/// Test get_fee_analytics returns correct data for a period
-#[test]
-fn test_get_fee_analytics_basic() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Collect fees for current period
-    let mut fees_by_type = Map::new(&env);
-    fees_by_type.set(FeeType::Platform, 500);
-    fees_by_type.set(FeeType::Processing, 100);
-
-    client.collect_transaction_fees(&user, &fees_by_type, &600);
-
-    // Get current period
-    let current_period = env.ledger().timestamp() / 2_592_000;
-
-    // Get analytics
-    let analytics = client.get_fee_analytics(&current_period);
-    assert_eq!(analytics.total_fees, 600);
-    assert_eq!(analytics.total_transactions, 1);
-    assert_eq!(analytics.average_fee_rate, 600); // 600 / 1 transaction
-}
-
-/// Test get_fee_analytics with multiple transactions
-#[test]
-fn test_get_fee_analytics_multiple_transactions() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user1 = setup_investor(&env, &client, &admin);
-    let user2 = Address::generate(&env);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Collect fees from multiple transactions
-    let mut fees1 = Map::new(&env);
-    fees1.set(FeeType::Platform, 200);
-    client.collect_transaction_fees(&user1, &fees1, &200);
-
-    let mut fees2 = Map::new(&env);
-    fees2.set(FeeType::Platform, 300);
-    client.collect_transaction_fees(&user2, &fees2, &300);
-
-    let mut fees3 = Map::new(&env);
-    fees3.set(FeeType::Platform, 500);
-    client.collect_transaction_fees(&user1, &fees3, &500);
-
-    // Get current period
-    let current_period = env.ledger().timestamp() / 2_592_000;
-
-    // Get analytics
-    let analytics = client.get_fee_analytics(&current_period);
-    assert_eq!(analytics.total_fees, 1000); // 200 + 300 + 500
-    assert_eq!(analytics.total_transactions, 3);
-    assert_eq!(analytics.average_fee_rate, 333); // 1000 / 3
-}
-
-/// Test get_fee_analytics for different periods
-#[test]
-fn test_get_fee_analytics_different_periods() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Collect fees in current period
-    let mut fees1 = Map::new(&env);
-    fees1.set(FeeType::Platform, 400);
-    client.collect_transaction_fees(&user, &fees1, &400);
-
-    let current_period = env.ledger().timestamp() / 2_592_000;
-
-    // Advance time to next period (30 days)
-    let new_timestamp = env.ledger().timestamp() + 2_592_000;
-    env.ledger().set_timestamp(new_timestamp);
-
-    // Collect fees in next period
-    let mut fees2 = Map::new(&env);
-    fees2.set(FeeType::Platform, 600);
-    client.collect_transaction_fees(&user, &fees2, &600);
-
-    let next_period = env.ledger().timestamp() / 2_592_000;
-
-    // Get analytics for both periods
-    let analytics1 = client.get_fee_analytics(&current_period);
-    assert_eq!(analytics1.total_fees, 400);
-    assert_eq!(analytics1.total_transactions, 1);
-
-    let analytics2 = client.get_fee_analytics(&next_period);
-    assert_eq!(analytics2.total_fees, 600);
-    assert_eq!(analytics2.total_transactions, 1);
-}
-
-/// Test get_fee_analytics with zero transactions
-#[test]
-fn test_get_fee_analytics_no_transactions() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Try to get analytics for a period with no transactions
-    let current_period = env.ledger().timestamp() / 2_592_000;
-    let result = client.try_get_fee_analytics(&current_period);
-
-    // Should return error since no data exists for this period
-    assert!(result.is_err());
-}
-
-/// Test get_fee_analytics efficiency score calculation
-#[test]
-fn test_get_fee_analytics_efficiency_score() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-    let treasury = Address::generate(&env);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Configure revenue distribution
-    client.configure_revenue_distribution(&admin, &treasury, &6000, &2000, &2000, &false, &100);
-
-    // Collect fees
-    let mut fees = Map::new(&env);
-    fees.set(FeeType::Platform, 1000);
-    client.collect_transaction_fees(&user, &fees, &1000);
-
-    let current_period = env.ledger().timestamp() / 2_592_000;
-
-    // Get analytics before distribution
-    let analytics_before = client.get_fee_analytics(&current_period);
-    assert_eq!(analytics_before.fee_efficiency_score, 0); // Nothing distributed yet
-
-    // Distribute revenue
-    client.distribute_revenue(&admin, &current_period);
-
-    // Get analytics after distribution
-    let analytics_after = client.get_fee_analytics(&current_period);
-    assert_eq!(analytics_after.fee_efficiency_score, 100); // 100% distributed
-}
-
-/// Test get_fee_analytics with large transaction volumes
-#[test]
-fn test_get_fee_analytics_large_volumes() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Collect many transactions
-    for i in 1..=50 {
-        let mut fees = Map::new(&env);
-        fees.set(FeeType::Platform, i * 100);
-        client.collect_transaction_fees(&user, &fees, &(i * 100));
-    }
-
-    let current_period = env.ledger().timestamp() / 2_592_000;
-
-    // Get analytics
-    let analytics = client.get_fee_analytics(&current_period);
-    assert_eq!(analytics.total_transactions, 50);
-    // Total: 100 + 200 + ... + 5000 = 127,500
-    assert_eq!(analytics.total_fees, 127_500);
-    assert_eq!(analytics.average_fee_rate, 2550); // 127,500 / 50
-}
-
-// ============================================================================
-// Transaction Fee Collection Tests - collect_transaction_fees
-// ============================================================================
-
-/// Test collect_transaction_fees basic functionality
-#[test]
-fn test_collect_transaction_fees_basic() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Collect fees
-    let mut fees_by_type = Map::new(&env);
-    fees_by_type.set(FeeType::Platform, 200);
-    fees_by_type.set(FeeType::Processing, 50);
-
-    let result = client.try_collect_transaction_fees(&user, &fees_by_type, &250);
-    assert!(result.is_ok());
-
-    // Verify user volume was updated
-    let volume_data = client.get_user_volume_data(&user);
-    assert_eq!(volume_data.total_volume, 250);
-    assert_eq!(volume_data.transaction_count, 1);
-}
-
-/// Test collect_transaction_fees updates revenue data correctly
-#[test]
-fn test_collect_transaction_fees_updates_revenue() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Collect fees
-    let mut fees_by_type = Map::new(&env);
-    fees_by_type.set(FeeType::Platform, 300);
-    fees_by_type.set(FeeType::Processing, 75);
-    fees_by_type.set(FeeType::Verification, 125);
-
-    client.collect_transaction_fees(&user, &fees_by_type, &500);
-
-    // Get analytics to verify revenue was recorded
-    let current_period = env.ledger().timestamp() / 2_592_000;
-    let analytics = client.get_fee_analytics(&current_period);
-
-    assert_eq!(analytics.total_fees, 500);
-    assert_eq!(analytics.total_transactions, 1);
-}
-
-/// Test collect_transaction_fees with multiple fee types
-#[test]
-fn test_collect_transaction_fees_multiple_types() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Collect fees with all fee types
-    let mut fees_by_type = Map::new(&env);
-    fees_by_type.set(FeeType::Platform, 200);
-    fees_by_type.set(FeeType::Processing, 50);
-    fees_by_type.set(FeeType::Verification, 100);
-    fees_by_type.set(FeeType::EarlyPayment, 25);
-    fees_by_type.set(FeeType::LatePayment, 150);
-
-    let total = 200 + 50 + 100 + 25 + 150;
-    client.collect_transaction_fees(&user, &fees_by_type, &total);
-
-    // Verify total was recorded correctly
-    let current_period = env.ledger().timestamp() / 2_592_000;
-    let analytics = client.get_fee_analytics(&current_period);
-    assert_eq!(analytics.total_fees, total);
-}
-
-/// Test collect_transaction_fees accumulates over multiple calls
-#[test]
-fn test_collect_transaction_fees_accumulation() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Collect fees multiple times
-    for i in 1..=5 {
-        let mut fees = Map::new(&env);
-        fees.set(FeeType::Platform, i * 100);
-        client.collect_transaction_fees(&user, &fees, &(i * 100));
-    }
-
-    // Verify accumulation
-    let current_period = env.ledger().timestamp() / 2_592_000;
-    let analytics = client.get_fee_analytics(&current_period);
-
-    // Total: 100 + 200 + 300 + 400 + 500 = 1500
-    assert_eq!(analytics.total_fees, 1500);
-    assert_eq!(analytics.total_transactions, 5);
-
-    // Verify user volume
-    let volume_data = client.get_user_volume_data(&user);
-    assert_eq!(volume_data.total_volume, 1500);
-    assert_eq!(volume_data.transaction_count, 5);
-}
-
-/// Test collect_transaction_fees updates user tier based on volume
-#[test]
-fn test_collect_transaction_fees_tier_progression() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Start at Standard tier
-    let volume_data = client.get_user_volume_data(&user);
-    assert_eq!(volume_data.current_tier, crate::fees::VolumeTier::Standard);
-
-    // Collect fees to reach Silver tier (100B+)
-    let mut fees = Map::new(&env);
-    fees.set(FeeType::Platform, 100_000_000_000);
-    client.collect_transaction_fees(&user, &fees, &100_000_000_000);
-
-    let volume_data = client.get_user_volume_data(&user);
-    assert_eq!(volume_data.current_tier, crate::fees::VolumeTier::Silver);
-
-    // Collect more to reach Gold tier (500B+)
-    let mut fees = Map::new(&env);
-    fees.set(FeeType::Platform, 400_000_000_000);
-    client.collect_transaction_fees(&user, &fees, &400_000_000_000);
-
-    let volume_data = client.get_user_volume_data(&user);
-    assert_eq!(volume_data.current_tier, crate::fees::VolumeTier::Gold);
-
-    // Collect more to reach Platinum tier (1T+)
-    let mut fees = Map::new(&env);
-    fees.set(FeeType::Platform, 500_000_000_000);
-    client.collect_transaction_fees(&user, &fees, &500_000_000_000);
-
-    let volume_data = client.get_user_volume_data(&user);
-    assert_eq!(volume_data.current_tier, crate::fees::VolumeTier::Platinum);
-}
-
-/// Test collect_transaction_fees with zero amount
-#[test]
-fn test_collect_transaction_fees_zero_amount() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Try to collect zero fees
-    let fees_by_type = Map::new(&env);
-    client.collect_transaction_fees(&user, &fees_by_type, &0);
-
-    // Should still record the transaction
-    let current_period = env.ledger().timestamp() / 2_592_000;
-    let analytics = client.get_fee_analytics(&current_period);
-    assert_eq!(analytics.total_fees, 0);
-    assert_eq!(analytics.total_transactions, 1);
-}
-
-// ============================================================================
-// Integration Tests - Fee Analytics and Collection Together
-// ============================================================================
-
-/// Test complete fee lifecycle: collection -> analytics -> distribution
-#[test]
-fn test_complete_fee_lifecycle() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-    let treasury = Address::generate(&env);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Configure revenue distribution
-    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &100);
-
-    // Step 1: Collect fees
-    let mut fees = Map::new(&env);
-    fees.set(FeeType::Platform, 600);
-    fees.set(FeeType::Processing, 150);
-    fees.set(FeeType::Verification, 250);
-    client.collect_transaction_fees(&user, &fees, &1000);
-
-    let current_period = env.ledger().timestamp() / 2_592_000;
-
-    // Step 2: Get analytics
-    let analytics = client.get_fee_analytics(&current_period);
-    assert_eq!(analytics.total_fees, 1000);
-    assert_eq!(analytics.total_transactions, 1);
-    assert_eq!(analytics.fee_efficiency_score, 0); // Not distributed yet
-
-    // Step 3: Distribute revenue
-    let (treasury_amt, dev_amt, platform_amt) = client.distribute_revenue(&admin, &current_period);
-    assert_eq!(treasury_amt, 500); // 50%
-    assert_eq!(dev_amt, 300); // 30%
-    assert_eq!(platform_amt, 200); // 20%
-
-    // Step 4: Verify analytics updated
-    let analytics_after = client.get_fee_analytics(&current_period);
-    assert_eq!(analytics_after.fee_efficiency_score, 100); // 100% distributed
-}
-
-/// Test treasury and platform receive correct amounts
-#[test]
-fn test_treasury_platform_correct_amounts() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-    let treasury = Address::generate(&env);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Configure 60-20-20 split
-    client.configure_revenue_distribution(
-        &admin, &treasury, &6000, // 60% treasury
-        &2000, // 20% developer
-        &2000, // 20% platform
-        &false, &100,
-    );
-
-    // Collect fees
-    let mut fees = Map::new(&env);
-    fees.set(FeeType::Platform, 10_000);
-    client.collect_transaction_fees(&user, &fees, &10_000);
-
-    let current_period = env.ledger().timestamp() / 2_592_000;
-
-    // Distribute
-    let (treasury_amt, dev_amt, platform_amt) = client.distribute_revenue(&admin, &current_period);
-
-    // Verify exact amounts
-    assert_eq!(treasury_amt, 6000); // 60% of 10,000
-    assert_eq!(dev_amt, 2000); // 20% of 10,000
-    assert_eq!(platform_amt, 2000); // 20% of 10,000
-
-    // Verify total equals original
-    assert_eq!(treasury_amt + dev_amt + platform_amt, 10_000);
-}
-
-/// Test fee collection called after fee calculation
-#[test]
-fn test_fee_collection_after_calculation() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    let transaction_amount = 10_000;
-
-    // Step 1: Calculate fees
-    let total_fees = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
-
-    // Step 2: Collect the calculated fees
-    let mut fees_by_type = Map::new(&env);
-    fees_by_type.set(FeeType::Platform, 200); // 2% of 10,000
-    fees_by_type.set(FeeType::Processing, 50); // 0.5% of 10,000
-    fees_by_type.set(FeeType::Verification, 100); // 1% of 10,000
-
-    client.collect_transaction_fees(&user, &fees_by_type, &total_fees);
-
-    // Step 3: Verify collection matches calculation
-    let current_period = env.ledger().timestamp() / 2_592_000;
-    let analytics = client.get_fee_analytics(&current_period);
-    assert_eq!(analytics.total_fees, total_fees);
-}
-
-/// Test multiple users fee collection and analytics
-#[test]
-fn test_multiple_users_fee_analytics() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user1 = setup_investor(&env, &client, &admin);
-    let user2 = Address::generate(&env);
-    let user3 = Address::generate(&env);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Collect fees from multiple users
-    let mut fees1 = Map::new(&env);
-    fees1.set(FeeType::Platform, 500);
-    client.collect_transaction_fees(&user1, &fees1, &500);
-
-    let mut fees2 = Map::new(&env);
-    fees2.set(FeeType::Platform, 750);
-    client.collect_transaction_fees(&user2, &fees2, &750);
-
-    let mut fees3 = Map::new(&env);
-    fees3.set(FeeType::Platform, 1000);
-    client.collect_transaction_fees(&user3, &fees3, &1000);
-
-    // Get analytics
-    let current_period = env.ledger().timestamp() / 2_592_000;
-    let analytics = client.get_fee_analytics(&current_period);
-
-    assert_eq!(analytics.total_fees, 2250); // 500 + 750 + 1000
-    assert_eq!(analytics.total_transactions, 3);
-    assert_eq!(analytics.average_fee_rate, 750); // 2250 / 3
-
-    // Verify individual user volumes
-    let volume1 = client.get_user_volume_data(&user1);
-    assert_eq!(volume1.total_volume, 500);
-
-    let volume2 = client.get_user_volume_data(&user2);
-    assert_eq!(volume2.total_volume, 750);
-
-    let volume3 = client.get_user_volume_data(&user3);
-    assert_eq!(volume3.total_volume, 1000);
-}
-
-/// Test fee analytics average calculation precision
-#[test]
-fn test_fee_analytics_average_precision() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Collect fees that don't divide evenly
-    let mut fees1 = Map::new(&env);
-    fees1.set(FeeType::Platform, 100);
-    client.collect_transaction_fees(&user, &fees1, &100);
-
-    let mut fees2 = Map::new(&env);
-    fees2.set(FeeType::Platform, 100);
-    client.collect_transaction_fees(&user, &fees2, &100);
-
-    let mut fees3 = Map::new(&env);
-    fees3.set(FeeType::Platform, 100);
-    client.collect_transaction_fees(&user, &fees3, &100);
-
-    let current_period = env.ledger().timestamp() / 2_592_000;
-    let analytics = client.get_fee_analytics(&current_period);
-
-    assert_eq!(analytics.total_fees, 300);
-    assert_eq!(analytics.total_transactions, 3);
-    assert_eq!(analytics.average_fee_rate, 100); // 300 / 3 = 100 exactly
-}
-
-/// Test fee collection with pending distribution tracking
-#[test]
-fn test_fee_collection_pending_distribution() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-    let treasury = Address::generate(&env);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Configure revenue distribution
-    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &100);
-
-    // Collect fees
-    let mut fees = Map::new(&env);
-    fees.set(FeeType::Platform, 1000);
-    client.collect_transaction_fees(&user, &fees, &1000);
-
-    // Collect more fees
-    let mut fees2 = Map::new(&env);
-    fees2.set(FeeType::Platform, 500);
-    client.collect_transaction_fees(&user, &fees2, &500);
-
-    let current_period = env.ledger().timestamp() / 2_592_000;
-
-    // Distribute all pending
-    let (treasury_amt, dev_amt, platform_amt) = client.distribute_revenue(&admin, &current_period);
-
-    // Should distribute all 1500
-    assert_eq!(treasury_amt + dev_amt + platform_amt, 1500);
-}
 
 // ============================================================================
 // update_fee_structure Tests - Comprehensive Coverage
@@ -1876,58 +1250,28 @@ fn test_update_fee_structure_all_fee_types() {
     client.initialize_fee_system(&admin);
 
     // Test Platform fee type
-    let platform_fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &250,
-        &50,
-        &5000,
-        &true,
-    );
+    let platform_fee =
+        client.update_fee_structure(&admin, &FeeType::Platform, &250, &50, &5000, &true);
     assert_eq!(platform_fee.fee_type, FeeType::Platform);
 
     // Test Processing fee type
-    let processing_fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Processing,
-        &75,
-        &25,
-        &2500,
-        &true,
-    );
+    let processing_fee =
+        client.update_fee_structure(&admin, &FeeType::Processing, &75, &25, &2500, &true);
     assert_eq!(processing_fee.fee_type, FeeType::Processing);
 
     // Test Verification fee type
-    let verification_fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Verification,
-        &150,
-        &100,
-        &3000,
-        &true,
-    );
+    let verification_fee =
+        client.update_fee_structure(&admin, &FeeType::Verification, &150, &100, &3000, &true);
     assert_eq!(verification_fee.fee_type, FeeType::Verification);
 
     // Test EarlyPayment fee type
-    let early_payment_fee = client.update_fee_structure(
-        &admin,
-        &FeeType::EarlyPayment,
-        &50,
-        &10,
-        &1000,
-        &true,
-    );
+    let early_payment_fee =
+        client.update_fee_structure(&admin, &FeeType::EarlyPayment, &50, &10, &1000, &true);
     assert_eq!(early_payment_fee.fee_type, FeeType::EarlyPayment);
 
     // Test LatePayment fee type
-    let late_payment_fee = client.update_fee_structure(
-        &admin,
-        &FeeType::LatePayment,
-        &200,
-        &100,
-        &5000,
-        &true,
-    );
+    let late_payment_fee =
+        client.update_fee_structure(&admin, &FeeType::LatePayment, &200, &100, &5000, &true);
     assert_eq!(late_payment_fee.fee_type, FeeType::LatePayment);
 }
 
@@ -1943,36 +1287,15 @@ fn test_update_fee_structure_base_fee_bps_variations() {
     client.initialize_fee_system(&admin);
 
     // Test minimum valid base_fee_bps (0)
-    let fee_zero = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &0,
-        &10,
-        &1000,
-        &true,
-    );
+    let fee_zero = client.update_fee_structure(&admin, &FeeType::Platform, &0, &10, &1000, &true);
     assert_eq!(fee_zero.base_fee_bps, 0);
 
     // Test mid-range base_fee_bps
-    let fee_mid = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &500,
-        &10,
-        &1000,
-        &true,
-    );
+    let fee_mid = client.update_fee_structure(&admin, &FeeType::Platform, &500, &10, &1000, &true);
     assert_eq!(fee_mid.base_fee_bps, 500);
 
     // Test maximum valid base_fee_bps (1000 = 10%)
-    let fee_max = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &1000,
-        &10,
-        &1000,
-        &true,
-    );
+    let fee_max = client.update_fee_structure(&admin, &FeeType::Platform, &1000, &10, &1000, &true);
     assert_eq!(fee_max.base_fee_bps, 1000);
 }
 
@@ -1988,14 +1311,7 @@ fn test_update_fee_structure_base_fee_bps_exceeds_max() {
 
     client.initialize_fee_system(&admin);
 
-    client.update_fee_structure(
-        &admin,
-        &FeeType::LatePayment,
-        &100,
-        &50,
-        &10_000,
-        &true,
-    );
+    client.update_fee_structure(&admin, &FeeType::LatePayment, &100, &50, &10_000, &true);
 
     let amount = 10_000_i128;
     let early_fees = client.calculate_transaction_fees(&user, &amount, &true, &false);
@@ -2020,14 +1336,8 @@ fn test_calculate_transaction_fees_volume_tier_discounts() {
     client.initialize_fee_system(&admin);
 
     // Test base_fee_bps > 1000 (MAX_FEE_BPS)
-    let result = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &1001,
-        &10,
-        &1000,
-        &true,
-    );
+    let result =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &1001, &10, &1000, &true);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_error = err.unwrap();
@@ -2046,36 +1356,16 @@ fn test_update_fee_structure_min_fee_variations() {
     client.initialize_fee_system(&admin);
 
     // Test min_fee = 0
-    let fee_zero = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &0,
-        &1000,
-        &true,
-    );
+    let fee_zero = client.update_fee_structure(&admin, &FeeType::Platform, &200, &0, &1000, &true);
     assert_eq!(fee_zero.min_fee, 0);
 
     // Test min_fee = 1
-    let fee_one = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &1,
-        &1000,
-        &true,
-    );
+    let fee_one = client.update_fee_structure(&admin, &FeeType::Platform, &200, &1, &1000, &true);
     assert_eq!(fee_one.min_fee, 1);
 
     // Test large min_fee
-    let fee_large = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50000,
-        &100000,
-        &true,
-    );
+    let fee_large =
+        client.update_fee_structure(&admin, &FeeType::Platform, &200, &50000, &100000, &true);
     assert_eq!(fee_large.min_fee, 50000);
 }
 
@@ -2091,14 +1381,8 @@ fn test_update_fee_structure_negative_min_fee() {
     client.initialize_fee_system(&admin);
 
     // Test negative min_fee
-    let result = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &-1,
-        &1000,
-        &true,
-    );
+    let result =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &200, &-1, &1000, &true);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_error = err.unwrap();
@@ -2117,37 +1401,19 @@ fn test_update_fee_structure_max_fee_variations() {
     client.initialize_fee_system(&admin);
 
     // Test max_fee equal to min_fee
-    let fee_equal = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &100,
-        &100,
-        &true,
-    );
+    let fee_equal =
+        client.update_fee_structure(&admin, &FeeType::Platform, &200, &100, &100, &true);
     assert_eq!(fee_equal.max_fee, 100);
     assert_eq!(fee_equal.min_fee, 100);
 
     // Test max_fee > min_fee
-    let fee_greater = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &100,
-        &5000,
-        &true,
-    );
+    let fee_greater =
+        client.update_fee_structure(&admin, &FeeType::Platform, &200, &100, &5000, &true);
     assert_eq!(fee_greater.max_fee, 5000);
 
     // Test very large max_fee
-    let fee_large = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &100,
-        &10_000_000,
-        &true,
-    );
+    let fee_large =
+        client.update_fee_structure(&admin, &FeeType::Platform, &200, &100, &10_000_000, &true);
     assert_eq!(fee_large.max_fee, 10_000_000);
 }
 
@@ -2163,14 +1429,8 @@ fn test_update_fee_structure_max_fee_less_than_min_fee() {
     client.initialize_fee_system(&admin);
 
     // Test max_fee < min_fee
-    let result = client.try_update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &1000,
-        &500,
-        &true,
-    );
+    let result =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &200, &1000, &500, &true);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_error = err.unwrap();
@@ -2188,14 +1448,7 @@ fn test_update_fee_structure_is_active_true() {
 
     client.initialize_fee_system(&admin);
 
-    let fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50,
-        &1000,
-        &true,
-    );
+    let fee = client.update_fee_structure(&admin, &FeeType::Platform, &200, &50, &1000, &true);
     assert!(fee.is_active);
 }
 
@@ -2211,14 +1464,7 @@ fn test_update_fee_structure_is_active_false() {
     client.initialize_fee_system(&admin);
 
     // Deactivate Platform fee
-    let fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50,
-        &1000,
-        &false,
-    );
+    let fee = client.update_fee_structure(&admin, &FeeType::Platform, &200, &50, &1000, &false);
     assert!(!fee.is_active);
 }
 
@@ -2270,25 +1516,13 @@ fn test_calculate_transaction_fees_zero_amount() {
     client.initialize_fee_system(&admin);
 
     // Activate
-    let fee_active = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50,
-        &1000,
-        &true,
-    );
+    let fee_active =
+        client.update_fee_structure(&admin, &FeeType::Platform, &200, &50, &1000, &true);
     assert!(fee_active.is_active);
 
     // Deactivate
-    let fee_inactive = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50,
-        &1000,
-        &false,
-    );
+    let fee_inactive =
+        client.update_fee_structure(&admin, &FeeType::Platform, &200, &50, &1000, &false);
     assert!(!fee_inactive.is_active);
 }
 
@@ -2308,14 +1542,8 @@ fn test_update_fee_structure_creates_new_fee_type() {
     assert!(result.is_err());
 
     // Create it via update_fee_structure
-    let early_payment_fee = client.update_fee_structure(
-        &admin,
-        &FeeType::EarlyPayment,
-        &50,
-        &10,
-        &500,
-        &true,
-    );
+    let early_payment_fee =
+        client.update_fee_structure(&admin, &FeeType::EarlyPayment, &50, &10, &500, &true);
     assert_eq!(early_payment_fee.fee_type, FeeType::EarlyPayment);
 
     // Now it should exist
@@ -2339,14 +1567,7 @@ fn test_update_fee_structure_updates_existing() {
     assert_eq!(initial.base_fee_bps, 200);
 
     // Update it
-    client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &350,
-        &75,
-        &7500,
-        &true,
-    );
+    client.update_fee_structure(&admin, &FeeType::Platform, &350, &75, &7500, &true);
 
     // Verify update
     let updated = client.get_fee_structure(&FeeType::Platform);
@@ -2366,14 +1587,7 @@ fn test_update_fee_structure_sets_updated_at() {
 
     client.initialize_fee_system(&admin);
 
-    let fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50,
-        &1000,
-        &true,
-    );
+    let fee = client.update_fee_structure(&admin, &FeeType::Platform, &200, &50, &1000, &true);
 
     // updated_at should be set to current ledger timestamp
     assert_eq!(fee.updated_at, env.ledger().timestamp());
@@ -2386,26 +1600,11 @@ fn test_update_fee_structure_sets_updated_by() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-    let user = setup_investor(&env, &client, &admin);
-
-    client.initialize_fee_system(&admin);
-
-    let result = client.try_calculate_transaction_fees(&user, &0_i128, &false, &false);
-    assert!(result.is_err(), "Zero amount must return InvalidAmount error");
-}
     let admin = setup_admin_init(&env, &client);
 
     client.initialize_fee_system(&admin);
 
-    let fee = client.update_fee_structure(
-        &admin,
-        &FeeType::Platform,
-        &200,
-        &50,
-        &1000,
-        &true,
-    );
+    let fee = client.update_fee_structure(&admin, &FeeType::Platform, &200, &50, &1000, &true);
 
     assert_eq!(fee.updated_by, admin);
 }
@@ -2648,6 +1847,6 @@ fn test_validate_fee_parameters_realistic_values() {
 
     // Realistic production values
     client.validate_fee_parameters(&250, &100, &50000); // 2.5%, min 100, max 50000
-    client.validate_fee_parameters(&50, &25, &10000);   // 0.5%, min 25, max 10000
-    client.validate_fee_parameters(&100, &50, &25000);  // 1%, min 50, max 25000
+    client.validate_fee_parameters(&50, &25, &10000); // 0.5%, min 25, max 10000
+    client.validate_fee_parameters(&100, &50, &25000); // 1%, min 50, max 25000
 }

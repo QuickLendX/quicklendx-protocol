@@ -985,6 +985,17 @@ fn test_investor_analytics_empty_data() {
 }
 
 #[test]
+fn test_calculate_investor_analytics_requires_verified_status() {
+    let env = Env::default();
+    let (client, _admin, _business) = setup_contract(&env);
+    let investor = Address::generate(&env);
+
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
+    let result = client.try_calculate_investor_analytics(&investor);
+    assert!(result.is_err());
+}
+
+#[test]
 fn test_investor_analytics_after_settle() {
     let env = Env::default();
     let (client, _admin, _business) = setup_contract(&env);

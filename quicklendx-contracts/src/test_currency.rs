@@ -190,6 +190,20 @@ fn test_add_currency_idempotent() {
 }
 
 #[test]
+fn test_remove_currency_when_missing_is_noop() {
+    let (env, client, admin) = setup();
+    let currency = Address::generate(&env);
+
+    client.add_currency(&admin, &currency);
+    client.remove_currency(&admin, &currency);
+    assert_eq!(client.get_whitelisted_currencies().len(), 0);
+
+    let second_remove = client.try_remove_currency(&admin, &currency);
+    assert!(
+        second_remove.is_ok(),
+        "removing an already absent currency should be a no-op"
+    );
+    assert_eq!(client.get_whitelisted_currencies().len(), 0);
 fn test_set_currencies_replaces_whitelist() {
     let (env, client, admin) = setup();
     let currency_a = Address::generate(&env);

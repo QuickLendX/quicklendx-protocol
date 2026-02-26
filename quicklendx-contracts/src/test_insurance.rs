@@ -407,7 +407,14 @@ fn test_query_investment_insurance_empty() {
     env.mock_all_auths();
 
     let investor = Address::generate(&env);
-    let investment_id = store_investment(&env, &contract_id, &investor, 5_000, InvestmentStatus::Active, 20);
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        5_000,
+        InvestmentStatus::Active,
+        20,
+    );
 
     let result = client.query_investment_insurance(&investment_id);
     assert_eq!(result.len(), 0);
@@ -420,13 +427,20 @@ fn test_query_investment_insurance_single_active() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let investment_id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 21);
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        21,
+    );
 
     client.add_investment_insurance(&investment_id, &provider, &60u32);
 
     let result = client.query_investment_insurance(&investment_id);
     assert_eq!(result.len(), 1);
-    
+
     let coverage = result.get(0).unwrap();
     assert_eq!(coverage.provider, provider);
     assert_eq!(coverage.coverage_percentage, 60);
@@ -443,7 +457,14 @@ fn test_query_investment_insurance_multiple_entries() {
     let investor = Address::generate(&env);
     let provider1 = Address::generate(&env);
     let provider2 = Address::generate(&env);
-    let investment_id = store_investment(&env, &contract_id, &investor, 20_000, InvestmentStatus::Active, 22);
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        20_000,
+        InvestmentStatus::Active,
+        22,
+    );
 
     client.add_investment_insurance(&investment_id, &provider1, &50u32);
     set_insurance_inactive(&env, &contract_id, &investment_id, 0);
@@ -470,8 +491,10 @@ fn test_query_investment_insurance_nonexistent_investment() {
 
     let nonexistent_id = BytesN::from_array(&env, &[0u8; 32]);
     let result = client.try_query_investment_insurance(&nonexistent_id);
-    
-    let err = result.err().expect("expected error for nonexistent investment");
+
+    let err = result
+        .err()
+        .expect("expected error for nonexistent investment");
     let contract_error = err.expect("expected contract error");
     assert_eq!(contract_error, QuickLendXError::StorageKeyNotFound);
 }
@@ -480,11 +503,18 @@ fn test_query_investment_insurance_nonexistent_investment() {
 fn test_query_investment_insurance_no_auth_required() {
     let (env, client, contract_id) = setup();
     env.mock_all_auths();
-    
+
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    
-    let investment_id = store_investment(&env, &contract_id, &investor, 8_000, InvestmentStatus::Active, 23);
+
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        8_000,
+        InvestmentStatus::Active,
+        23,
+    );
     client.add_investment_insurance(&investment_id, &provider, &40u32);
 
     // Query without any special auth setup should work (queries are public)
@@ -503,8 +533,15 @@ fn test_query_investment_insurance_historical_tracking() {
     let provider1 = Address::generate(&env);
     let provider2 = Address::generate(&env);
     let provider3 = Address::generate(&env);
-    
-    let investment_id = store_investment(&env, &contract_id, &investor, 15_000, InvestmentStatus::Active, 24);
+
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        15_000,
+        InvestmentStatus::Active,
+        24,
+    );
 
     // Add first insurance
     client.add_investment_insurance(&investment_id, &provider1, &30u32);

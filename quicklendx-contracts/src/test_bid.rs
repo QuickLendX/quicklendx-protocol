@@ -8,6 +8,7 @@
 /// 4. Ranking - profit-based bid comparison works correctly
 use super::*;
 use crate::bid::BidStatus;
+use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::protocol_limits::compute_min_bid_amount;
 use soroban_sdk::{
@@ -35,12 +36,13 @@ fn add_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i1
 fn create_verified_invoice(
     env: &Env,
     client: &QuickLendXContractClient,
-    _admin: &Address,
+    admin: &Address,
     business: &Address,
     amount: i128,
 ) -> BytesN<32> {
     let currency = Address::generate(env);
     let due_date = env.ledger().timestamp() + 86400;
+    let _ = client.add_currency(admin, &currency);
 
     let invoice_id = client.store_invoice(
         business,
@@ -70,6 +72,7 @@ fn test_bid_placement_non_verified_invoice_fails() {
     let investor = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
+    let _ = client.add_currency(&admin, &currency);
 
     // Create pending invoice (not verified)
     let invoice_id = client.store_invoice(
@@ -1430,6 +1433,122 @@ fn test_get_all_bids_by_investor_empty() {
     assert_eq!(all_bids.len(), 0, "Must return empty for unknown investor");
 }
 
+/// Rate-limit: investor can only have a bounded number of active (Placed) bids.
+#[test]
+fn test_rate_limit_place_bid_per_investor() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    // Set up verified business and invoice currency
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    client.submit_kyc_application(
+        &business,
+        &String::from_str(&env, "Business KYC for rate-limit test"),
+    );
+    client.verify_business(&admin, &business);
+
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &50_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Rate-limit invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    // Set up verified investor with sufficient investment limit
+    let investor = add_verified_investor(&env, &client, 1_000_000);
+
+    // Place bids up to the configured per-investor active bid limit.
+    let mut placed_ids: Vec<BytesN<32>> = Vec::new(&env);
+    let max_active = crate::MAX_ACTIVE_BIDS_PER_INVESTOR;
+    let bid_amount: i128 = 5_000;
+    let expected_return: i128 = 6_000;
+
+    let mut i: u32 = 0;
+    while i < max_active {
+        let bid_id = client
+            .place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+        placed_ids.push_back(bid_id);
+        i = i.saturating_add(1);
+    }
+
+    // Next bid should fail with OperationNotAllowed due to rate limit.
+    let result = client.try_place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+    assert!(result.is_err(), "Bid beyond active limit must fail");
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::OperationNotAllowed);
+
+    // After cancelling one bid, investor should be able to place a new bid again.
+    let first_bid = placed_ids.get(0).unwrap();
+    let cancelled = client.cancel_bid(&first_bid);
+    assert!(cancelled, "Cancelling an active bid should succeed");
+
+    let result_after_cancel =
+        client.try_place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+    assert!(
+        result_after_cancel.is_ok(),
+        "Bid after freeing one active slot must succeed"
+    );
+}
+
+/// Rate-limit isolation: different investors have independent active bid limits.
+#[test]
+fn test_rate_limit_place_bid_per_investor_isolated() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC multi"));
+    client.verify_business(&admin, &business);
+
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &80_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Isolated rate-limit invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let investor_a = add_verified_investor(&env, &client, 1_000_000);
+    let investor_b = add_verified_investor(&env, &client, 1_000_000);
+
+    let max_active = crate::MAX_ACTIVE_BIDS_PER_INVESTOR;
+    let bid_amount: i128 = 10_000;
+    let expected_return: i128 = 11_000;
+
+    // Saturate investor A's active bid limit.
+    let mut i: u32 = 0;
+    while i < max_active {
+        let _ = client.place_bid(&investor_a, &invoice_id, &bid_amount, &expected_return);
+        i = i.saturating_add(1);
+    }
+    let result_a = client.try_place_bid(&investor_a, &invoice_id, &bid_amount, &expected_return);
+    assert!(result_a.is_err());
+
+    // Investor B should still be able to place bids up to the limit independently.
+    let result_b1 = client.try_place_bid(&investor_b, &invoice_id, &bid_amount, &expected_return);
+    assert!(
+        result_b1.is_ok(),
+        "Second investor must not be affected by first investor's rate limit"
+    );
+}
+
 // ============================================================================
 // Multiple Investors - Same Invoice Tests (Issue #343)
 // ============================================================================
@@ -1441,7 +1560,7 @@ fn test_multiple_investors_place_bids_on_same_invoice() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     // Create 5 verified investors
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
@@ -1461,18 +1580,41 @@ fn test_multiple_investors_place_bids_on_same_invoice() {
 
     // Verify all bids are in Placed status
     let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
-    assert_eq!(placed_bids.len(), 5, "All 5 bids should be in Placed status");
+    assert_eq!(
+        placed_bids.len(),
+        5,
+        "All 5 bids should be in Placed status"
+    );
 
     // Verify get_bids_for_invoice returns all bid IDs
     let all_bid_ids = client.get_bids_for_invoice(&invoice_id);
-    assert_eq!(all_bid_ids.len(), 5, "get_bids_for_invoice should return all 5 bid IDs");
-    
+    assert_eq!(
+        all_bid_ids.len(),
+        5,
+        "get_bids_for_invoice should return all 5 bid IDs"
+    );
+
     // Verify all specific bid IDs are present
-    assert!(all_bid_ids.iter().any(|id| id == bid_id1), "bid_id1 should be in list");
-    assert!(all_bid_ids.iter().any(|id| id == bid_id2), "bid_id2 should be in list");
-    assert!(all_bid_ids.iter().any(|id| id == bid_id3), "bid_id3 should be in list");
-    assert!(all_bid_ids.iter().any(|id| id == bid_id4), "bid_id4 should be in list");
-    assert!(all_bid_ids.iter().any(|id| id == bid_id5), "bid_id5 should be in list");
+    assert!(
+        all_bid_ids.iter().any(|id| id == bid_id1),
+        "bid_id1 should be in list"
+    );
+    assert!(
+        all_bid_ids.iter().any(|id| id == bid_id2),
+        "bid_id2 should be in list"
+    );
+    assert!(
+        all_bid_ids.iter().any(|id| id == bid_id3),
+        "bid_id3 should be in list"
+    );
+    assert!(
+        all_bid_ids.iter().any(|id| id == bid_id4),
+        "bid_id4 should be in list"
+    );
+    assert!(
+        all_bid_ids.iter().any(|id| id == bid_id5),
+        "bid_id5 should be in list"
+    );
 }
 
 /// Test: Multiple investors bids are correctly ranked by profit
@@ -1482,7 +1624,7 @@ fn test_multiple_investors_bids_ranking_order() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
     let investor3 = add_verified_investor(&env, &client, 100_000);
@@ -1504,21 +1646,36 @@ fn test_multiple_investors_bids_ranking_order() {
     assert_eq!(ranked.len(), 5, "Should have 5 ranked bids");
 
     // Verify ranking order by profit (descending)
-    assert_eq!(ranked.get(0).unwrap().investor, investor2, "Rank 1: investor2 (profit 5k)");
-    assert_eq!(ranked.get(1).unwrap().investor, investor3, "Rank 2: investor3 (profit 4k)");
+    assert_eq!(
+        ranked.get(0).unwrap().investor,
+        investor2,
+        "Rank 1: investor2 (profit 5k)"
+    );
+    assert_eq!(
+        ranked.get(1).unwrap().investor,
+        investor3,
+        "Rank 2: investor3 (profit 4k)"
+    );
     // investor4 and investor5 both have 3k profit - either order is valid
     let rank3_investor = ranked.get(2).unwrap().investor;
     let rank4_investor = ranked.get(3).unwrap().investor;
     assert!(
-        (rank3_investor == investor4 && rank4_investor == investor5) ||
-        (rank3_investor == investor5 && rank4_investor == investor4),
+        (rank3_investor == investor4 && rank4_investor == investor5)
+            || (rank3_investor == investor5 && rank4_investor == investor4),
         "Ranks 3-4: investor4 and investor5 (both profit 3k)"
     );
-    assert_eq!(ranked.get(4).unwrap().investor, investor1, "Rank 5: investor1 (profit 2k)");
+    assert_eq!(
+        ranked.get(4).unwrap().investor,
+        investor1,
+        "Rank 5: investor1 (profit 2k)"
+    );
 
     // Verify best bid is investor2
     let best = client.get_best_bid(&invoice_id).unwrap();
-    assert_eq!(best.investor, investor2, "Best bid should be investor2 with highest profit");
+    assert_eq!(
+        best.investor, investor2,
+        "Best bid should be investor2 with highest profit"
+    );
 }
 
 /// Test: Business accepts one bid, others remain Placed
@@ -1528,7 +1685,7 @@ fn test_business_accepts_one_bid_others_remain_placed() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
     let investor3 = add_verified_investor(&env, &client, 100_000);
@@ -1547,18 +1704,34 @@ fn test_business_accepts_one_bid_others_remain_placed() {
 
     // Verify bid2 is Accepted
     let bid2 = client.get_bid(&bid_id2).unwrap();
-    assert_eq!(bid2.status, BidStatus::Accepted, "Accepted bid should have Accepted status");
+    assert_eq!(
+        bid2.status,
+        BidStatus::Accepted,
+        "Accepted bid should have Accepted status"
+    );
 
     // Verify bid1 and bid3 remain Placed
     let bid1 = client.get_bid(&bid_id1).unwrap();
-    assert_eq!(bid1.status, BidStatus::Placed, "Non-accepted bid1 should remain Placed");
-    
+    assert_eq!(
+        bid1.status,
+        BidStatus::Placed,
+        "Non-accepted bid1 should remain Placed"
+    );
+
     let bid3 = client.get_bid(&bid_id3).unwrap();
-    assert_eq!(bid3.status, BidStatus::Placed, "Non-accepted bid3 should remain Placed");
+    assert_eq!(
+        bid3.status,
+        BidStatus::Placed,
+        "Non-accepted bid3 should remain Placed"
+    );
 
     // Verify invoice is now Funded
     let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Funded, "Invoice should be Funded after accepting bid");
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Invoice should be Funded after accepting bid"
+    );
 }
 
 /// Test: Only one escrow is created when business accepts a bid
@@ -1568,7 +1741,7 @@ fn test_only_one_escrow_created_for_accepted_bid() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
     let investor3 = add_verified_investor(&env, &client, 100_000);
@@ -1586,15 +1759,35 @@ fn test_only_one_escrow_created_for_accepted_bid() {
 
     // Verify exactly one escrow exists for this invoice
     let escrow = client.get_escrow_details(&invoice_id);
-    assert_eq!(escrow.status, crate::payments::EscrowStatus::Held, "Escrow should be in Held status");
-    assert_eq!(escrow.investor, investor2, "Escrow should reference investor2");
-    assert_eq!(escrow.amount, 15_000, "Escrow should hold the accepted bid amount");
-    assert_eq!(escrow.invoice_id, invoice_id, "Escrow should reference correct invoice");
+    assert_eq!(
+        escrow.status,
+        crate::payments::EscrowStatus::Held,
+        "Escrow should be in Held status"
+    );
+    assert_eq!(
+        escrow.investor, investor2,
+        "Escrow should reference investor2"
+    );
+    assert_eq!(
+        escrow.amount, 15_000,
+        "Escrow should hold the accepted bid amount"
+    );
+    assert_eq!(
+        escrow.invoice_id, invoice_id,
+        "Escrow should reference correct invoice"
+    );
 
     // Verify invoice funded amount matches escrow amount
     let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.funded_amount, 15_000, "Invoice funded amount should match escrow");
-    assert_eq!(invoice.investor, Some(investor2), "Invoice should reference investor2");
+    assert_eq!(
+        invoice.funded_amount, 15_000,
+        "Invoice funded amount should match escrow"
+    );
+    assert_eq!(
+        invoice.investor,
+        Some(investor2),
+        "Invoice should reference investor2"
+    );
 }
 
 /// Test: Non-accepted investors can withdraw their bids after one is accepted
@@ -1604,7 +1797,7 @@ fn test_non_accepted_investors_can_withdraw_after_acceptance() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
     let investor3 = add_verified_investor(&env, &client, 100_000);
@@ -1622,25 +1815,47 @@ fn test_non_accepted_investors_can_withdraw_after_acceptance() {
 
     // investor1 withdraws their bid
     let result1 = client.try_withdraw_bid(&bid_id1);
-    assert!(result1.is_ok(), "investor1 should be able to withdraw their bid");
-    
+    assert!(
+        result1.is_ok(),
+        "investor1 should be able to withdraw their bid"
+    );
+
     let bid1 = client.get_bid(&bid_id1).unwrap();
-    assert_eq!(bid1.status, BidStatus::Withdrawn, "bid1 should be Withdrawn");
+    assert_eq!(
+        bid1.status,
+        BidStatus::Withdrawn,
+        "bid1 should be Withdrawn"
+    );
 
     // investor3 withdraws their bid
     let result3 = client.try_withdraw_bid(&bid_id3);
-    assert!(result3.is_ok(), "investor3 should be able to withdraw their bid");
-    
+    assert!(
+        result3.is_ok(),
+        "investor3 should be able to withdraw their bid"
+    );
+
     let bid3 = client.get_bid(&bid_id3).unwrap();
-    assert_eq!(bid3.status, BidStatus::Withdrawn, "bid3 should be Withdrawn");
+    assert_eq!(
+        bid3.status,
+        BidStatus::Withdrawn,
+        "bid3 should be Withdrawn"
+    );
 
     // Verify bid2 remains Accepted
     let bid2 = client.get_bid(&bid_id2).unwrap();
-    assert_eq!(bid2.status, BidStatus::Accepted, "bid2 should remain Accepted");
+    assert_eq!(
+        bid2.status,
+        BidStatus::Accepted,
+        "bid2 should remain Accepted"
+    );
 
     // Verify only Accepted bid remains in Placed status query
     let placed_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Placed);
-    assert_eq!(placed_bids.len(), 0, "No bids should be in Placed status after withdrawals");
+    assert_eq!(
+        placed_bids.len(),
+        0,
+        "No bids should be in Placed status after withdrawals"
+    );
 
     let withdrawn_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Withdrawn);
     assert_eq!(withdrawn_bids.len(), 2, "Two bids should be Withdrawn");
@@ -1653,7 +1868,7 @@ fn test_get_bids_for_invoice_returns_all_bids() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
     let investor3 = add_verified_investor(&env, &client, 100_000);
@@ -1687,10 +1902,19 @@ fn test_get_bids_for_invoice_returns_all_bids() {
     assert_eq!(all_bids_after.len(), 4, "Should still return all 4 bid IDs");
 
     // Verify we can retrieve each bid with different statuses
-    assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Withdrawn);
-    assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Accepted);
+    assert_eq!(
+        client.get_bid(&bid_id1).unwrap().status,
+        BidStatus::Withdrawn
+    );
+    assert_eq!(
+        client.get_bid(&bid_id2).unwrap().status,
+        BidStatus::Accepted
+    );
     assert_eq!(client.get_bid(&bid_id3).unwrap().status, BidStatus::Placed);
-    assert_eq!(client.get_bid(&bid_id4).unwrap().status, BidStatus::Cancelled);
+    assert_eq!(
+        client.get_bid(&bid_id4).unwrap().status,
+        BidStatus::Cancelled
+    );
 }
 
 /// Test: Cannot accept second bid after one is already accepted
@@ -1700,7 +1924,7 @@ fn test_cannot_accept_second_bid_after_first_accepted() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-    
+
     let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
@@ -1717,10 +1941,16 @@ fn test_cannot_accept_second_bid_after_first_accepted() {
 
     // Attempt to accept bid2 should fail (invoice already funded)
     let result = client.try_accept_bid(&invoice_id, &bid_id2);
-    assert!(result.is_err(), "Second accept should fail - invoice already funded");
+    assert!(
+        result.is_err(),
+        "Second accept should fail - invoice already funded"
+    );
 
     // Verify only bid1 is Accepted
-    assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Accepted);
+    assert_eq!(
+        client.get_bid(&bid_id1).unwrap().status,
+        BidStatus::Accepted
+    );
     assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Placed);
 
     // Verify invoice is Funded with bid1's amount
@@ -1728,4 +1958,82 @@ fn test_cannot_accept_second_bid_after_first_accepted() {
     assert_eq!(invoice.status, InvoiceStatus::Funded);
     assert_eq!(invoice.funded_amount, 10_000);
     assert_eq!(invoice.investor, Some(investor1));
+}
+
+#[test]
+fn test_default_max_active_bids_per_investor_is_20() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    assert_eq!(client.get_max_active_bids_per_investor(), 20);
+}
+
+#[test]
+fn test_active_bid_limit_enforced_and_withdrawn_not_counted() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let _ = client.set_max_active_bids_per_investor(&2u32);
+
+    let investor = add_verified_investor(&env, &client, 1_000_000);
+    let business = Address::generate(&env);
+
+    let invoice_id_1 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    let invoice_id_2 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    let invoice_id_3 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    let bid_id_1 = client.place_bid(&investor, &invoice_id_1, &10_000, &12_000);
+    let _bid_id_2 = client.place_bid(&investor, &invoice_id_2, &11_000, &13_000);
+
+    let blocked = client.try_place_bid(&investor, &invoice_id_3, &12_000, &14_000);
+    assert_eq!(
+        blocked.err().unwrap().unwrap(),
+        QuickLendXError::OperationNotAllowed
+    );
+
+    let _ = client.withdraw_bid(&bid_id_1);
+
+    let retry = client.try_place_bid(&investor, &invoice_id_3, &12_000, &14_000);
+    assert!(retry.is_ok(), "Withdrawn bids must not count toward limit");
+}
+
+#[test]
+fn test_active_bid_limit_ignores_accepted_and_expired_bids() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let _ = client.set_max_active_bids_per_investor(&1u32);
+    let _ = client.set_bid_ttl_days(&1u64);
+
+    let investor = add_verified_investor(&env, &client, 1_000_000);
+    let business = Address::generate(&env);
+
+    let invoice_id_1 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    let invoice_id_2 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+    let invoice_id_3 = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    let bid_id_1 = client.place_bid(&investor, &invoice_id_1, &10_000, &12_000);
+    let blocked = client.try_place_bid(&investor, &invoice_id_2, &11_000, &13_000);
+    assert_eq!(
+        blocked.err().unwrap().unwrap(),
+        QuickLendXError::OperationNotAllowed
+    );
+
+    let _ = client.accept_bid(&invoice_id_1, &bid_id_1);
+
+    let bid_id_2 = client.place_bid(&investor, &invoice_id_2, &11_000, &13_000);
+    env.ledger().set_timestamp(env.ledger().timestamp() + 86401);
+
+    let bid_id_3 = client.place_bid(&investor, &invoice_id_3, &12_000, &14_000);
+    assert!(
+        client.get_bid(&bid_id_3).is_some(),
+        "Expired bids must not count toward limit"
+    );
+
+    let refreshed_bid_2 = client.get_bid(&bid_id_2).unwrap();
+    assert_eq!(refreshed_bid_2.status, BidStatus::Expired);
 }

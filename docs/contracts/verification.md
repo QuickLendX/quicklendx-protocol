@@ -122,6 +122,7 @@ pub fn set_investment_limit(env: Env, admin: Address, investor: Address, new_lim
 
 - Admin-only operation to adjust a verified investor's limit
 - Recalculates using tier and risk multipliers
+- Preserves admin-approved baseline and applies dynamic multipliers deterministically
 
 ## Risk Assessment
 
@@ -171,6 +172,19 @@ final_limit = base_limit × tier_multiplier × risk_multiplier / 100
 | Silver | 2× |   | VeryHigh | 25% |
 | Basic | 1× |   | | |
 
+`base_limit` is normalized to non-negative values before multiplier application.
+
+### Analytics Recalculation Safety
+
+When `update_investor_analytics` runs after settlement/default updates, it:
+
+- updates totals and success/default counters,
+- recalculates `risk_score`, `risk_level`, and `tier`,
+- **recovers the previously approved baseline limit** from the current derived limit,
+- reapplies multipliers using the updated profile.
+
+This prevents unintended resets to hardcoded limits during analytics refresh.
+
 ## Bid Enforcement
 
 ### In `place_bid` (lib.rs)
@@ -179,7 +193,7 @@ The `place_bid` function enforces investor verification before any bid is accept
 
 1. Retrieves `InvestorVerification` — fails with `BusinessNotVerified` if none
 2. Checks `status`:
-   - `Verified` → proceeds; checks `bid_amount ≤ investment_limit`
+   - `Verified` → proceeds; enforces `validate_investor_investment` (limit + risk caps)
    - `Pending` → returns `KYCAlreadyPending`
    - `Rejected` → returns `BusinessNotVerified`
 3. Calls `validate_bid` → `validate_investor_investment` for risk-level caps
@@ -221,7 +235,7 @@ fn get_investor_analytics(env: Env, investor: Address) -> Result<InvestorVerific
 
 ## Analytics Tracking
 
-`update_investor_analytics` is called after investment settlement to update:
+`update_investor_analytics` is called after investment settlement and default handling to update:
 - `total_invested`, `total_returns`
 - `successful_investments` / `defaulted_investments`
 - `last_activity` timestamp

@@ -16,7 +16,10 @@ use super::*;
 use crate::bid::BidStatus;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::payments::EscrowStatus;
-use soroban_sdk::{testutils::{Address as _, Ledger}, token, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, BytesN, Env, String, Vec,
+};
 
 // ============================================================================
 // Helper Functions
@@ -714,11 +717,11 @@ fn test_multiple_bids_only_accepted_creates_escrow() {
     let currency = setup_token(&env, &business, &investor1, &contract_id);
     let token_client = token::Client::new(&env, &currency);
     let sac_client = token::StellarAssetClient::new(&env, &currency);
-    
+
     let initial_balance = 100_000i128;
     sac_client.mint(&investor2, &initial_balance);
     sac_client.mint(&investor3, &initial_balance);
-    
+
     let expiration = env.ledger().sequence() + 10_000;
     token_client.approve(&investor2, &contract_id, &initial_balance, &expiration);
     token_client.approve(&investor3, &contract_id, &initial_balance, &expiration);
@@ -765,8 +768,14 @@ fn test_multiple_bids_only_accepted_creates_escrow() {
 
     // Verify escrow details
     let escrow = client.get_escrow_details(&invoice_id);
-    assert_eq!(escrow.investor, investor2, "Escrow should reference investor2");
-    assert_eq!(escrow.amount, 9_000, "Escrow should hold investor2's bid amount");
+    assert_eq!(
+        escrow.investor, investor2,
+        "Escrow should reference investor2"
+    );
+    assert_eq!(
+        escrow.amount, 9_000,
+        "Escrow should hold investor2's bid amount"
+    );
     assert_eq!(escrow.status, EscrowStatus::Held, "Escrow should be Held");
 }
 
@@ -787,7 +796,7 @@ fn test_multiple_bids_complete_workflow() {
     let currency = setup_token(&env, &business, &investor1, &contract_id);
     let token_client = token::Client::new(&env, &currency);
     let sac_client = token::StellarAssetClient::new(&env, &currency);
-    
+
     let initial_balance = 100_000i128;
     for investor in [&investor2, &investor3, &investor4] {
         sac_client.mint(investor, &initial_balance);
@@ -811,14 +820,21 @@ fn test_multiple_bids_complete_workflow() {
 
     // Verify ranking
     let ranked = client.get_ranked_bids(&invoice_id);
-    assert_eq!(ranked.get(0).unwrap().investor, investor2, "investor2 should be ranked first");
+    assert_eq!(
+        ranked.get(0).unwrap().investor,
+        investor2,
+        "investor2 should be ranked first"
+    );
 
     // Business accepts the best bid (investor2)
     client.accept_bid(&invoice_id, &bid_id2);
 
     // Verify bid statuses
     assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Placed);
-    assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Accepted);
+    assert_eq!(
+        client.get_bid(&bid_id2).unwrap().status,
+        BidStatus::Accepted
+    );
     assert_eq!(client.get_bid(&bid_id3).unwrap().status, BidStatus::Placed);
     assert_eq!(client.get_bid(&bid_id4).unwrap().status, BidStatus::Placed);
 
@@ -840,9 +856,18 @@ fn test_multiple_bids_complete_workflow() {
     client.withdraw_bid(&bid_id4);
 
     // Verify withdrawals
-    assert_eq!(client.get_bid(&bid_id1).unwrap().status, BidStatus::Withdrawn);
-    assert_eq!(client.get_bid(&bid_id3).unwrap().status, BidStatus::Withdrawn);
-    assert_eq!(client.get_bid(&bid_id4).unwrap().status, BidStatus::Withdrawn);
+    assert_eq!(
+        client.get_bid(&bid_id1).unwrap().status,
+        BidStatus::Withdrawn
+    );
+    assert_eq!(
+        client.get_bid(&bid_id3).unwrap().status,
+        BidStatus::Withdrawn
+    );
+    assert_eq!(
+        client.get_bid(&bid_id4).unwrap().status,
+        BidStatus::Withdrawn
+    );
 
     // Verify get_bids_for_invoice still returns all bids
     let all_bids = client.get_bids_for_invoice(&invoice_id);
@@ -862,7 +887,7 @@ fn test_single_escrow_per_invoice_with_multiple_bids() {
     let currency = setup_token(&env, &business, &investor1, &contract_id);
     let token_client = token::Client::new(&env, &currency);
     let sac_client = token::StellarAssetClient::new(&env, &currency);
-    
+
     let initial_balance = 100_000i128;
     sac_client.mint(&investor2, &initial_balance);
     let expiration = env.ledger().sequence() + 10_000;
@@ -885,10 +910,19 @@ fn test_single_escrow_per_invoice_with_multiple_bids() {
 
     // Attempt to accept second bid should fail
     let result = client.try_accept_bid(&invoice_id, &_bid_id1);
-    assert!(result.is_err(), "Cannot accept second bid on funded invoice");
+    assert!(
+        result.is_err(),
+        "Cannot accept second bid on funded invoice"
+    );
 
     // Verify still only one escrow
     let escrow_after = client.get_escrow_details(&invoice_id);
-    assert_eq!(escrow_after.escrow_id, escrow.escrow_id, "Should be same escrow");
-    assert_eq!(escrow_after.investor, investor2, "Escrow investor unchanged");
+    assert_eq!(
+        escrow_after.escrow_id, escrow.escrow_id,
+        "Should be same escrow"
+    );
+    assert_eq!(
+        escrow_after.investor, investor2,
+        "Escrow investor unchanged"
+    );
 }

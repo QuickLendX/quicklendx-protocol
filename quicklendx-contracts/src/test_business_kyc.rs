@@ -618,7 +618,7 @@ fn test_double_rejection_fails() {
     client.reject_business(&admin, &business, &rejection_reason);
 
     // Try to reject again - should fail with InvalidKYCStatus
-    let result = client.try_reject_business(&admin, &business, &rejection_reason);
+    let result = client.try_reject_business(&admin, &business, &reason);
     assert!(result.is_err());
 }
 
@@ -747,6 +747,15 @@ fn test_multiple_businesses_concurrent_kyc() {
     assert_eq!(client.get_verified_businesses().len(), 3);
     assert_eq!(client.get_rejected_businesses().len(), 2);
     assert_eq!(client.get_pending_businesses().len(), 0);
+
+    // Verify expected businesses are in each status list
+    let verified = client.get_verified_businesses();
+    assert!(verified.contains(&businesses[0]));
+    assert!(verified.contains(&businesses[1]));
+    assert!(verified.contains(&businesses[2]));
+    let rejected = client.get_rejected_businesses();
+    assert!(rejected.contains(&businesses[3]));
+    assert!(rejected.contains(&businesses[4]));
 }
 
 #[test]
