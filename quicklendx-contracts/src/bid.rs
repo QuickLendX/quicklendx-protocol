@@ -14,9 +14,11 @@ const MAX_ACTIVE_BIDS_PER_INVESTOR_KEY: Symbol = symbol_short!("mx_actbd");
 const DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 20;
 const SECONDS_PER_DAY: u64 = 86400;
 
+/// Maximum number of bids allowed per invoice to prevent unbound storage growth
+pub const MAX_BIDS_PER_INVOICE: u32 = 50;
+
 #[contracttype]
-#[derive(Clone, Eq, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BidStatus {
     Placed,
     Withdrawn,
@@ -26,8 +28,7 @@ pub enum BidStatus {
 }
 
 #[contracttype]
-#[derive(Clone, Eq, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Bid {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -107,6 +108,23 @@ impl BidStorage {
             .instance()
             .get(&Self::invoice_key(invoice_id))
             .unwrap_or_else(|| Vec::new(env))
+    }
+    
+    pub fn get_active_bid_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+        let _ = Self::refresh_expired_bids(env, invoice_id);
+        let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
+        let mut active_count = 0u32;
+        let mut idx: u32 = 0;
+        while idx < bid_ids.len() {
+            let bid_id = bid_ids.get(idx).unwrap();
+            if let Some(bid) = Self::get_bid(env, &bid_id) {
+                if bid.status == BidStatus::Placed {
+                    active_count += 1;
+                }
+            }
+            idx += 1;
+        }
+        active_count
     }
 
     /// Get configured bid TTL in days (returns default if not set)

@@ -1,0 +1,1893 @@
+warning: unused import: `crate::currency::CurrencyWhitelist`
+  --> src/init.rs:29:5
+   |
+29 | use crate::currency::CurrencyWhitelist;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `env`
+   --> src/init.rs:210:9
+    |
+210 |         env: &Env,
+    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `env`
+   --> src/invoice.rs:164:13
+    |
+164 | ...   env: &Env,
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: constant `PROTOCOL_INITIALIZED_KEY` is never used
+  --> src/init.rs:34:7
+   |
+34 | const PROTOCOL_INITIALIZED_KEY: S...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `TREASURY_KEY` is never used
+  --> src/init.rs:40:7
+   |
+40 | const TREASURY_KEY: S...
+   |       ^^^^^^^^^^^^
+
+warning: constant `FEE_BPS_KEY` is never used
+  --> src/init.rs:43:7
+   |
+43 | const FEE_BPS_KEY: S...
+   |       ^^^^^^^^^^^
+
+warning: constant `WHITELIST_KEY` is never used
+  --> src/init.rs:46:7
+   |
+46 | const WHITELIST_KEY: S...
+   |       ^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MIN_INVOICE_AMOUNT` is never used
+  --> src/init.rs:49:7
+   |
+49 | const DEFAULT_MIN_INVOICE_AMOUNT: i...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MAX_DUE_DATE_DAYS` is never used
+  --> src/init.rs:52:7
+   |
+52 | const DEFAULT_MAX_DUE_DATE_DAYS: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_GRACE_PERIOD_SECONDS` is never used
+  --> src/init.rs:53:7
+   |
+53 | const DEFAULT_GRACE_PERIOD_SECONDS: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_FEE_BPS` is never used
+  --> src/init.rs:54:7
+   |
+54 | const DEFAULT_FEE_BPS: u...
+   |       ^^^^^^^^^^^^^^^
+
+warning: constant `MAX_FEE_BPS` is never used
+  --> src/init.rs:55:7
+   |
+55 | const MAX_FEE_BPS: u...
+   |       ^^^^^^^^^^^
+
+warning: constant `MIN_FEE_BPS` is never used
+  --> src/init.rs:56:7
+   |
+56 | const MIN_FEE_BPS: u...
+   |       ^^^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src/init.rs:126:12
+    |
+103 | impl ProtocolInitializer {
+    | ------------------------ associated functions in this implementation
+...
+126 |     pub fn initialize(
+    |            ^^^^^^^^^^
+...
+198 |     pub fn is_initialized(env: &Env) -> ...
+    |            ^^^^^^^^^^^^^^
+...
+209 |     fn validate_initialization_params(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+253 |     pub fn set_protocol_config(
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+315 |     pub fn set_fee_config(
+    |            ^^^^^^^^^^^^^^
+...
+352 |     pub fn set_treasury(
+    |            ^^^^^^^^^^^^
+...
+393 |     pub fn get_fee_bps(env: &Env) -> u32 {
+    |            ^^^^^^^^^^^
+...
+408 |     pub fn get_treasury(env: &Env) -> Op...
+    |            ^^^^^^^^^^^^
+...
+419 |     pub fn get_min_invoice_amount(env: &...
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+432 |     pub fn get_max_due_date_days(env: &E...
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+445 |     pub fn get_grace_period_seconds(env:...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_protocol_initialized` is never used
+   --> src/init.rs:457:4
+    |
+457 | fn emit_protocol_initialized(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_protocol_config_updated` is never used
+   --> src/init.rs:481:4
+    |
+481 | fn emit_protocol_config_updated(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_fee_config_updated` is never used
+   --> src/init.rs:501:4
+    |
+501 | fn emit_fee_config_updated(en...
+    |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_treasury_updated` is never used
+   --> src/init.rs:509:4
+    |
+509 | fn emit_treasury_updated(en...
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_TAG_LENGTH` is never used
+  --> src/protocol_limits.rs:31:11
+   |
+31 | ...st MAX_TAG_LENGTH: u...
+   |       ^^^^^^^^^^^^^^
+
+warning: function `get_payment_count` is never used
+   --> src/settlement.rs:293:8
+    |
+293 | ...fn get_payment_count(en...
+    |       ^^^^^^^^^^^^^^^^^
+
+warning: function `get_payment_records` is never used
+   --> src/settlement.rs:312:8
+    |
+312 | ...fn get_payment_records(
+    |       ^^^^^^^^^^^^^^^^^^^
+
+warning: `quicklendx-contracts` (lib) generated 21 warnings (run `cargo fix --lib -p quicklendx-contracts` to apply 3 suggestions)
+warning: unused import: `BytesN`
+  --> src/test_string_limits.rs:11:14
+   |
+11 | ...s, BytesN, En...
+   |       ^^^^^^
+
+warning: unused import: `BytesN as _`
+  --> src/test_dispute.rs:15:31
+   |
+15 | ..._, BytesN as _},
+   |       ^^^^^^^^^^^
+
+warning: unused imports: `PlatformFeeConfig` and `PlatformFee`
+  --> src/test_storage.rs:18:22
+   |
+18 | ...::{PlatformFee, PlatformFeeConfig};
+   |       ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ConfigStorage`
+  --> src/test_storage.rs:20:17
+   |
+20 | ...e, ConfigStorage, I...
+   |       ^^^^^^^^^^^^^
+
+warning: unused import: `crate::verification::BusinessVerificationStatus`
+  --> src/test/test_invoice.rs:11:5
+   |
+11 | use c...ationStatus;
+   |     ^...^^^^^^^^^^^
+
+warning: unused import: `InvoiceStatus`
+ --> src/test/test_invoice_categories.rs:2:39
+  |
+2 | ...y, InvoiceStatus};
+  |       ^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+ --> src/test/test_invoice_metadata.rs:5:31
+  |
+5 | ... _, Ledger},
+  |        ^^^^^^
+
+warning: unused imports: `AnalyticsStorage`, `FinancialMetrics`, and `PlatformMetrics`
+  --> src/test/test_analytics.rs:14:26
+   |
+14 | ...r, AnalyticsStorage, FinancialMetrics, PlatformMetrics, T...
+   |       ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: cannot test inner items
+   --> src/test_bid.rs:225:1
+    |
+225 | #[test]
+    | ^^^^^^^
+    |
+    = note: `#[warn(unnameable_test_items)]` on by default
+
+warning: cannot test inner items
+   --> src/test_bid.rs:244:1
+    |
+244 | #[test]
+    | ^^^^^^^
+
+warning: cannot test inner items
+   --> src/test_bid.rs:266:1
+    |
+266 | #[test]
+    | ^^^^^^^
+
+warning: unused import: `crate::bid::BidStatus`
+  --> src/test_bid_ranking.rs:10:5
+   |
+10 | use crate::bid::BidStatus;
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BytesN`
+ --> src/test_fuzz.rs:7:102
+  |
+7 | ...ec, BytesN};
+  |        ^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test_investor_kyc.rs:17:35
+   |
+17 | ..._, Ledger},
+   |       ^^^^^^
+
+warning: unused import: `crate::errors::QuickLendXError`
+ --> src/test_limit.rs:3:5
+  |
+3 | use crate::errors::QuickLendXError;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:362:24
+    |
+362 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:933:24
+    |
+933 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:989:24
+    |
+989 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1041:24
+     |
+1041 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1098:24
+     |
+1098 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1180:24
+     |
+1180 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+ --> src/test_currency.rs:9:31
+  |
+9 | ... _, Ledger},
+  |        ^^^^^^
+
+warning: unused import: `Ledger`
+ --> src/test_queries.rs:6:31
+  |
+6 | ... _, Ledger},
+  |        ^^^^^^
+
+warning: variable does not need to be mutable
+   --> src/storage.rs:248:13
+    |
+248 | ...et mut ids: V...
+    |       ----^^^
+    |       |
+    |       help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src/storage.rs:269:13
+    |
+269 | ...et mut ids: V...
+    |       ----^^^
+    |       |
+    |       help: remove this `mut`
+
+warning: unused variable: `env`
+    --> src/test_business_kyc.rs:1012:10
+     |
+1012 | ...t (env, cli...
+     |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+    --> src/test_business_kyc.rs:1020:10
+     |
+1020 | ...t (env, cli...
+     |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+    --> src/test_business_kyc.rs:1028:10
+     |
+1028 | ...t (env, cli...
+     |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `result`
+   --> src/test_cancel_refund.rs:552:9
+    |
+552 | ...et result = ...
+    |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `result`
+   --> src/test_cancel_refund.rs:575:9
+    |
+575 | ...et result = ...
+    |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `invoice_id_3`
+   --> src/test_dispute.rs:465:9
+    |
+465 | ...et invoice_id_3 = ...
+    |       ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_invoice_id_3`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:159:10
+    |
+159 | ...t (env, clie...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:290:9
+    |
+290 | ...et env = Env...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:338:10
+    |
+338 | ...t (env, clie...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `business`
+   --> src/test/test_invoice.rs:460:9
+    |
+460 | ...et business = ...
+    |       ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `other_user`
+    --> src/test/test_invoice.rs:1066:9
+     |
+1066 | ...et other_user = ...
+     |       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_other_user`
+
+warning: unused variable: `non_admin`
+    --> src/test/test_invoice.rs:1098:9
+     |
+1098 | ...et non_admin = ...
+     |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `env`
+   --> src/test/test_invoice_categories.rs:149:10
+    |
+149 | ...t (env, clie...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test/test_invoice_categories.rs:256:10
+    |
+256 | ...t (env, clie...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `token_client`
+   --> src/test.rs:363:9
+    |
+363 | ...et token_client = ...
+    |       ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_token_client`
+
+warning: unused variable: `i`
+    --> src/test.rs:2101:9
+     |
+2101 | ...or i in 0.....
+     |       ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: unused variable: `bid1`
+   --> src/test_bid_ranking.rs:172:9
+    |
+172 | ...et bid1 = cl...
+    |       ^^^^ help: if this is intentional, prefix it with an underscore: `_bid1`
+
+warning: unused variable: `bid3`
+   --> src/test_bid_ranking.rs:178:9
+    |
+178 | ...et bid3 = cl...
+    |       ^^^^ help: if this is intentional, prefix it with an underscore: `_bid3`
+
+warning: unused variable: `admin`
+  --> src/test_fees.rs:21:65
+   |
+21 | ...t, admin: &Ad...
+   |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_fees.rs:147:9
+    |
+147 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_fees.rs:177:9
+    |
+177 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_fees.rs:269:9
+    |
+269 | ...et non_admin = ...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `admin`
+  --> src/test_audit.rs:53:23
+   |
+53 | ...t, admin, bus...
+   |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_currency.rs:166:23
+    |
+166 | ...t, admin) = ...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `token_client`
+  --> src/test_events.rs:91:9
+   |
+91 | ...et token_client = ...
+   |       ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_token_client`
+
+warning: unused variable: `admin`
+  --> src/test_default.rs:60:5
+   |
+60 |     admin: &Addr...
+   |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `invoice2`
+   --> src/test_default.rs:524:9
+    |
+524 | ...et invoice2 = ...
+    |       ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_invoice2`
+
+warning: unused variable: `admin`
+   --> src/test_partial_payments.rs:402:5
+    |
+402 |     admin: &Add...
+    |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `actor`
+   --> src/test_queries.rs:403:9
+    |
+403 | ...et actor = A...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `filter_inv1`
+   --> src/test_queries.rs:449:9
+    |
+449 | ...et filter_inv1 = ...
+    |       ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_filter_inv1`
+
+warning: unused variable: `filter_created`
+   --> src/test_queries.rs:472:9
+    |
+472 | ...et filter_created = ...
+    |       ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_filter_created`
+
+warning: unused variable: `env`
+   --> src/test_backup.rs:181:10
+    |
+181 | ...t (env, clie...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `contract`
+   --> src/test_escrow_refund.rs:329:10
+    |
+329 | ...r (contract, t...
+    |       ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_contract`
+
+warning: unused variable: `contract_id`
+   --> src/test_insurance.rs:160:23
+    |
+160 | ...t, contract_id) =...
+    |       ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_contract_id`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:102:27
+    |
+102 | ...t, admin) = ...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_investor_kyc.rs:179:13
+    |
+179 | ...et non_admin = ...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `result`
+   --> src/test_investor_kyc.rs:192:13
+    |
+192 | ...et result = ...
+    |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:199:27
+    |
+199 | ...t, admin) = ...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `business`
+   --> src/test_investor_kyc.rs:482:13
+    |
+482 | ...et business = ...
+    |       ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `high_risk`
+   --> src/test_investor_kyc.rs:610:13
+    |
+610 | ...et high_risk = ...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_high_risk`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:752:27
+    |
+752 | ...t, admin) = ...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:40:65
+   |
+40 | ...t, admin: &Ad...
+   |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:80:9
+   |
+80 | ...et admin = se...
+   |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:103:9
+    |
+103 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:126:9
+    |
+126 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:301:9
+    |
+301 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:343:9
+    |
+343 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:374:9
+    |
+374 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:590:9
+    |
+590 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:604:9
+    |
+604 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: multiple associated functions are never used
+   --> src/init.rs:126:12
+    |
+103 | impl ProtocolInitializer {
+    | ------------------------ associated functions in this implementation
+...
+126 |     pub fn initialize(
+    |            ^^^^^^^^^^
+...
+198 |     pub fn is_initialized(env: &Env) -> ...
+    |            ^^^^^^^^^^^^^^
+...
+209 |     fn validate_initialization_params(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+315 |     pub fn set_fee_config(
+    |            ^^^^^^^^^^^^^^
+...
+352 |     pub fn set_treasury(
+    |            ^^^^^^^^^^^^
+...
+393 |     pub fn get_fee_bps(env: &Env) -> u32 {
+    |            ^^^^^^^^^^^
+...
+408 |     pub fn get_treasury(env: &Env) -> Op...
+    |            ^^^^^^^^^^^^
+...
+445 |     pub fn get_grace_period_seconds(env:...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `make_breakdown` is never used
+   --> src/profits.rs:501:8
+    |
+501 | ...fn make_breakdown(
+    |       ^^^^^^^^^^^^^^
+
+warning: struct `ConfigStorage` is never constructed
+   --> src/storage.rs:537:12
+    |
+537 | ...ct ConfigStorage;
+    |       ^^^^^^^^^^^^^
+
+warning: associated functions `set_platform_fees` and `get_platform_fees` are never used
+   --> src/storage.rs:541:12
+    |
+539 | impl ConfigStorage {
+    | ------------------ associated functions in this implementation
+540 |     /// Store platform fee conf...
+541 |     pub fn set_platform_fees(en...
+    |            ^^^^^^^^^^^^^^^^^
+...
+548 |     pub fn get_platform_fees(en...
+    |            ^^^^^^^^^^^^^^^^^
+
+warning: associated function `is_business_verified` is never used
+   --> src/verification.rs:124:12
+    |
+ 72 | impl BusinessVerificationStorage {
+    | -------------------------------- associated function in this implementation
+...
+124 |     pub fn is_business_verified(env...
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: associated constants `INVESTOR_HISTORY_KEY` and `INVESTOR_ANALYTICS_KEY` are never used
+   --> src/verification.rs:255:11
+    |
+250 | impl InvestorVerificationStorage {
+    | -------------------------------- associated constants in this implementation
+...
+255 |     const INVESTOR_HISTORY_KEY: &'s...
+    |           ^^^^^^^^^^^^^^^^^^^^
+256 |     #[cfg(test)]
+257 |     const INVESTOR_ANALYTICS_KEY: &...
+    |           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `require_business_verification` is never used
+   --> src/verification.rs:629:8
+    |
+629 | ...fn require_business_verification(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_trail_creation` is never used
+    --> src/test.rs:2140:4
+     |
+2140 | fn test_audit_trail_creation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_integrity_validation` is never used
+    --> src/test.rs:2184:4
+     |
+2184 | fn test_audit_integrity_validation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_query_functionality` is never used
+    --> src/test.rs:2223:4
+     |
+2223 | fn test_audit_query_functionality() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_audit_statistics` is never used
+    --> src/test.rs:2292:4
+     |
+2292 | fn test_audit_statistics() {
+     |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_create_dispute` is never used
+    --> src/test.rs:2816:4
+     |
+2816 | fn test_create_dispute() {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_create_dispute_as_investor` is never used
+    --> src/test.rs:2861:4
+     |
+2861 | fn test_create_dispute_as_investor() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_unauthorized_dispute_creation` is never used
+    --> src/test.rs:2910:4
+     |
+2910 | fn test_unauthorized_dispute_creation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_duplicate_dispute_prevention` is never used
+    --> src/test.rs:2945:4
+     |
+2945 | fn test_duplicate_dispute_prevention() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_dispute_under_review` is never used
+    --> src/test.rs:2985:4
+     |
+2985 | fn test_dispute_under_review() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_resolve_dispute` is never used
+    --> src/test.rs:3028:4
+     |
+3028 | fn test_resolve_dispute() {
+     |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_get_invoices_with_disputes` is never used
+    --> src/test.rs:3086:4
+     |
+3086 | fn test_get_invoices_with_disputes() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_get_invoices_by_dispute_status` is never used
+    --> src/test.rs:3139:4
+     |
+3139 | f...spute_status() {
+     |  ...^^^^^^^^^^^^
+
+warning: function `test_dispute_validation` is never used
+    --> src/test.rs:3198:4
+     |
+3198 | fn test_dispute_validation() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_default_bid_ttl_used_in_place_bid` is never used
+   --> src/test_bid.rs:226:4
+    |
+226 | fn ...in_place_bid() {
+    |    ...^^^^^^^^^^^^
+
+warning: function `test_admin_can_update_ttl_and_bid_uses_new_value` is never used
+   --> src/test_bid.rs:245:4
+    |
+245 | fn ...es_new_value() {
+    |    ...^^^^^^^^^^^^
+
+warning: function `test_set_bid_ttl_bounds_enforced` is never used
+   --> src/test_bid.rs:267:4
+    |
+267 | fn test_set_bid_ttl_bounds_enforced() {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `setup_business` is never used
+  --> src/test_fees.rs:13:4
+   |
+13 | fn setup_business(en...
+   |    ^^^^^^^^^^^^^^
+
+warning: function `setup_business` is never used
+  --> src/test_profit_fee_formula.rs:32:4
+   |
+32 | fn setup_business(en...
+   |    ^^^^^^^^^^^^^^
+
+warning: function `setup_investor` is never used
+  --> src/test_profit_fee_formula.rs:40:4
+   |
+40 | fn setup_investor(en...
+   |    ^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2581:13
+     |
+2581 | ...t!(stats.total_sent >= 0);
+     |       ^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_comparisons)]` on by default
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2582:13
+     |
+2582 | ...t!(stats.total_delivered >= 0);
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2583:13
+     |
+2583 | ...t!(stats.total_read >= 0);
+     |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2584:13
+     |
+2584 | ...t!(stats.total_failed >= 0);
+     |       ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+    --> src/test.rs:2679:13
+     |
+2679 | ...t!(overdue_count >= 0);
+     |       ^^^^^^^^^^^^^^^^^^
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+ --> src/test/test_invoice_metadata.rs:9:24
+  |
+9 | ...v: &Env) -> (QuickLendXContractClient, A...
+  |       ^^^^      ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+  |       |
+  |       the lifetime is elided here
+  |
+  = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+  = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+  |
+9 | fn setup_contract(env: &Env) -> (QuickLendXContractClient<'_>, Address) {
+  |                                                          ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/test/test_analytics.rs:26:24
+   |
+26 | ...v: &Env) -> (QuickLendXContractClient, A...
+   |       ^^^^      ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |       |
+   |       the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+26 | fn setup_contract(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address) {
+   |                                                          ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/test_events.rs:25:24
+   |
+25 | ...v: &Env) -> (QuickLendXContractClient, A...
+   |       ^^^^      ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |       |
+   |       the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+25 | fn setup_contract(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address) {
+   |                                                          ++++
+
+warning: `quicklendx-contracts` (lib test) generated 124 warnings (15 duplicates) (run `cargo fix --lib -p quicklendx-contracts --tests` to apply 67 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.00s
+     Running unittests src/lib.rs (target/debug/deps/quicklendx_contracts-fbb502ccd865f2e5)
+
+running 834 tests
+test profits::tests::test_basic_profit_calculation ... ok
+test profits::tests::test_breakdown_complete ... ok
+test profits::tests::test_exact_payment_no_profit ... ok
+test profits::tests::test_breakdown_no_profit ... ok
+test profits::tests::test_large_amounts ... ok
+test profits::tests::test_max_fee ... ok
+test profits::tests::test_overpayment_high_profit ... ok
+test profits::tests::test_rounding_boundary ... ok
+test profits::tests::test_rounding_down_small_profit ... ok
+test profits::tests::test_rounding_just_below_boundary ... ok
+test profits::tests::test_treasury_split_basic ... ok
+test profits::tests::test_treasury_split_full_share ... ok
+test profits::tests::test_treasury_split_rounding ... ok
+test profits::tests::test_treasury_split_uneven ... ok
+test profits::tests::test_treasury_split_zero_fee ... ok
+test profits::tests::test_treasury_split_zero_share ... ok
+test profits::tests::test_underpayment_loss ... ok
+test profits::tests::test_validate_inputs_negative ... ok
+test profits::tests::test_validate_inputs_valid ... ok
+test profits::tests::test_various_fee_percentages ... ok
+test profits::tests::test_verify_no_dust_negative ... ok
+test profits::tests::test_verify_no_dust_positive ... ok
+test profits::tests::test_zero_fee ... ok
+test profits::tests::test_zero_investment ... ok
+test profits::tests::test_zero_payment ... ok
+test test::test_analytics::test_analytics_summary_returns_tuple ... ok
+test test::test_analytics::test_business_report_daily_period ... ok
+test test::test_analytics::test_business_report_empty ... ok
+test test::test_add_invoice_rating ... ok
+test test::test_add_invoice_rating_validation ... ok
+test test::test_analytics::test_business_report_monthly_period ... ok
+test test::test_analytics::test_business_report_quarterly_period ... ok
+test test::test_analytics::test_business_report_stored_and_retrievable ... ok
+test test::test_analytics::test_business_report_weekly_period ... ok
+test test::test_analytics::test_business_report_yearly_period ... ok
+test test::test_analytics::test_empty_business_report_all_periods ... ok
+test test::test_analytics::test_financial_metrics_currency_distribution ... ok
+test test::test_analytics::test_financial_metrics_daily_period ... ok
+test test::test_analytics::test_financial_metrics_empty_data ... ok
+test test::test_analytics::test_category_breakdown_in_reports ... ok
+test test::test_analytics::test_financial_metrics_empty_trends ... ok
+test test::test_analytics::test_financial_metrics_monthly_period ... ok
+test test::test_analytics::test_financial_metrics_fee_breakdown ... ok
+test test::test_analytics::test_business_report_with_invoices ... ok
+test test::test_analytics::test_financial_metrics_period_boundary ... ok
+test test::test_analytics::test_financial_metrics_profit_margins ... ok
+test test::test_analytics::test_financial_metrics_weekly_period ... ok
+test test::test_analytics::test_financial_metrics_quarterly_period ... ok
+test test::test_analytics::test_financial_metrics_yearly_period ... ok
+test test::test_analytics::test_investor_report_all_periods ... ok
+test test::test_analytics::test_investor_report_empty ... ok
+test test::test_analytics::test_investor_report_empty_all_periods ... ok
+test test::test_analytics::test_financial_metrics_non_empty_trends ... ok
+test test::test_analytics::test_performance_metrics_empty_data ... ok
+test test::test_analytics::test_investor_report_stored_and_retrievable ... ok
+test test::test_analytics::test_performance_metrics_storage_round_trip ... ok
+test test::test_analytics::test_period_dates_all_periods ... ok
+test test::test_analytics::test_period_dates_all_time ... ok
+test test::test_analytics::test_period_dates_boundary_conditions ... ok
+test test::test_analytics::test_financial_metrics_with_invoices_all_time ... ok
+test test::test_analytics::test_platform_metrics_empty_data ... ok
+test test::test_analytics::test_platform_metrics_storage_round_trip ... ok
+test test::test_analytics::test_multiple_invoices_different_periods ... ok
+test test::test_analytics::test_report_generated_at_timestamp ... ok
+test test::test_analytics::test_performance_metrics_with_invoices ... ok
+test test::test_analytics::test_time_period_all_time_starts_at_zero ... ok
+test test::test_analytics::test_time_period_daily_calculation ... ok
+test test::test_analytics::test_time_period_enum_equality ... ok
+test test::test_analytics::test_time_period_monthly_calculation ... ok
+test test::test_analytics::test_time_period_quarterly_calculation ... ok
+test test::test_analytics::test_time_period_underflow_protection ... ok
+test test::test_analytics::test_time_period_weekly_calculation ... ok
+test test::test_analytics::test_time_period_yearly_calculation ... ok
+test test::test_analytics::test_update_performance_metrics_requires_admin ... ok
+test test::test_analytics::test_update_platform_metrics_requires_admin ... ok
+test test::test_analytics::test_report_period_dates_consistency ... ok
+test test::test_analytics::test_platform_metrics_with_invoices ... ok
+test test::test_analytics::test_user_behavior_new_user ... ok
+test test::test_analytics::test_volume_by_period_in_financial_metrics ... ok
+test test::test_analytics::test_update_user_behavior_metrics ... ok
+test test::test_archive_backup ... ok
+test test::test_analytics::test_platform_metrics_after_status_changes ... ok
+test test::test_analytics::test_user_behavior_with_invoices ... ok
+test test::test_backup_validation ... ok
+test test::test_backup_cleanup ... ok
+test test::test_bid_expiration_cleanup ... ok
+test test::test_bid_validation_rules ... ok
+test test::test_cancel_invoice_funded - should panic ... ok
+test test::test_cancel_invoice_pending ... ok
+test test::test_bid_ranking_and_filters ... ok
+test test::test_cancel_invoice_verified ... ok
+test test::test_complete_invoice_lifecycle_with_cancellation ... ok
+test test::test_create_and_restore_backup ... ok
+test test::test_custom_max_due_date_limits ... ok
+test test::test_basic_readme_queries ... ok
+test test::test_duplicate_rating_prevention ... ok
+test test::test_escrow_error_cases ... ok
+test test::test_due_date_bounds_edge_cases ... ok
+test test::test_escrow_creation_on_bid_acceptance ... ok
+test test::test_escrow_double_operation_prevention ... ok
+test test::test_escrow_release_on_verification ... ok
+test test::test_escrow_refund ... ok
+test test::test_get_available_invoices ... ok
+test test::test_get_business_invoices ... ok
+test test::test_get_invoices_by_status ... ok
+test test::test_get_verification_lists ... ok
+test test::test_escrow_status_tracking ... ok
+test test::test_get_bids_for_invoice ... ok
+test test::test_invoice::test_invoice_business_cannot_accept_own_bid ... ok
+test test::test_investor_verification_enforced ... ok
+test test::test_invoice::test_invoice_creation_invalid_amount_negative ... ok
+test test::test_invoice::test_invoice_creation_invalid_amount_zero ... ok
+test test::test_invoice::test_invoice_creation_invalid_description_empty ... ok
+test test::test_invoice::test_invoice_creation_invalid_due_date_current ... ok
+test test::test_invoice::test_invoice_creation_invalid_due_date_past ... ok
+test test::test_invoice::test_invoice_creation_invalid_non_whitelisted_currency ... ok
+test test::test_invoice::test_invoice_creation_invalid_tag_empty ... ok
+test test::test_invoice::test_invoice_creation_invalid_tag_limit_exceeded ... ok
+test test::test_invoice::test_invoice_creation_invalid_tag_too_long ... ok
+test test::test_invoice::test_invoice_cannot_verify_already_verified ... ok
+test test::test_get_invoices_by_status_cancelled ... ok
+test test::test_invoice::test_invoice_creation_valid ... ok
+test test::test_investment_insurance_lifecycle ... ok
+test test::test_invoice::test_invoice_creation_valid_tags ... ok
+test test::test_invoice::test_invoice_far_future_due_date ... ok
+test test::test_invoice::test_invoice_get_payment_progress_value ... ok
+test test::test_invoice::test_invoice_invalid_payment_amount_negative ... ok
+test test::test_invoice::test_invoice_invalid_payment_amount_zero ... ok
+test test::test_invoice::test_invoice_large_amount ... ok
+test test::test_invoice::test_invoice_invalid_status_transition ... ok
+test test::test_invoice::test_invoice_minimum_amount ... FAILED
+test test::test_invoice::test_invoice_full_lifecycle_with_status_assertions ... ok
+test test::test_invoice::test_invoice_metadata_update_requires_business_owner ... ok
+test test::test_invoice::test_invoice_non_admin_cannot_verify ... ok
+test test::test_invoice::test_invoice_non_admin_cannot_update_status ... ok
+test test::test_invoice::test_invoice_not_found ... ok
+test test::test_invoice::test_invoice_non_owner_cannot_update_metadata ... ok
+test test::test_invoice::test_invoice_multiple_invoices_same_business ... ok
+test test::test_invoice::test_invoice_creation_valid_categories ... ok
+test test::test_invoice::test_invoice_overpayment_capped_at_100_percent ... ok
+test test::test_invoice::test_invoice_payment_tracking ... ok
+test test::test_invoice::test_invoice_payment_progress_multiple_partials_then_full ... ok
+test test::test_invoice::test_invoice_payment_progress_calculation ... ok
+test test::test_invoice::test_invoice_rating_invalid_value_too_high ... ok
+test test::test_invoice::test_invoice_rating_requires_funded_status ... ok
+test test::test_invoice::test_invoice_rating_invalid_value_zero ... ok
+test test::test_invoice::test_invoice_rating_only_investor_can_rate ... ok
+test test::test_invoice::test_invoice_reject_update_to_pending_or_cancelled ... ok
+test test::test_invoice::test_invoice_reject_cancel_defaulted_invoice ... ok
+test test::test_invoice::test_invoice_reject_cancel_paid_invoice ... ok
+test test::test_invoice::test_invoice_status_list_tracking ... ok
+test test::test_invoice::test_invoice_reject_cancel_funded_invoice ... ok
+test test::test_invoice::test_invoice_status_transition_pending_to_cancelled ... ok
+test test::test_invoice::test_invoice_status_transition_funded_to_defaulted ... ok
+test test::test_invoice::test_invoice_status_transition_funded_to_paid ... ok
+test test::test_invoice::test_invoice_status_transition_pending_to_verified ... ok
+test test::test_invoice::test_invoice_transition_defaulted_to_paid_behavior ... ok
+test test::test_invoice::test_invoice_transition_cancelled_to_verified_behavior ... ok
+test test::test_invoice::test_invoice_status_transition_verified_to_cancelled ... ok
+test test::test_invoice::test_invoice_status_transition_verified_to_funded ... ok
+test test::test_invoice::test_invoice_transition_pending_to_defaulted_behavior ... ok
+test test::test_invoice::test_invoice_upload_pending_business_fails ... ok
+test test::test_invoice::test_invoice_upload_rejected_business_fails ... ok
+test test::test_invoice::test_invoice_transition_paid_to_funded_behavior ... ok
+test test::test_invoice::test_invoice_upload_requires_business_verification ... ok
+test test::test_invoice::test_invoice_upload_requires_business_auth ... ok
+test test::test_invoice::test_invoice_transition_pending_to_paid_behavior ... ok
+test test::test_invoice::test_invoice_transition_funded_to_verified_behavior ... ok
+test test::test_invoice::test_invoice_upload_verified_business_succeeds ... ok
+test test::test_invoice::test_invoice_verify_requires_admin ... ok
+test test::test_invoice::test_invoice_upload_verified_business_succeeds_emits_event ... ok
+test test::test_invoice::test_invoice_verify_admin_succeeds ... ok
+test test::test_invoice_categories::test_add_invoice_tag_business_auth ... ok
+test test::test_invoice_categories::test_add_invoice_tag ... ok
+test test::test_invoice_categories::test_add_tag_to_nonexistent_invoice ... ok
+test test::test_invoice_categories::test_add_invoice_tag_duplicate_idempotent ... ok
+test test::test_invoice_categories::test_get_all_categories_returns_expected_set ... ok
+test test::test_invoice_categories::test_add_multiple_tags ... ok
+test test::test_invoice_categories::test_complete_category_and_tag_workflow ... ok
+test test::test_invoice_categories::test_get_invoice_tags_returns_all_tags ... ok
+test test::test_invoice_categories::test_get_invoices_by_category_empty ... ok
+test test::test_invoice_categories::test_get_invoice_count_by_tag_matches_list_length_for_various_tags ... ok
+test test::test_invoice_categories::test_get_invoices_by_category_services ... ok
+test test::test_invoice_categories::test_get_invoices_by_tag_nonexistent ... ok
+test test::test_invoice_categories::test_get_invoices_by_category_all_categories ... ok
+test test::test_invoice_categories::test_get_invoices_by_category_with_status_filter ... ok
+test test::test_invoice_categories::test_get_invoices_by_tag_single_tag ... ok
+test test::test_invoice_categories::test_get_invoices_by_tags_multiple ... ok
+test test::test_invoice_categories::test_invoice_has_tag_true_and_false ... ok
+test test::test_invoice_categories::test_remove_invoice_tag ... ok
+test test::test_invoice_categories::test_remove_invoice_tag_business_auth ... ok
+test test::test_invoice_categories::test_remove_tag_from_nonexistent_invoice ... ok
+test test::test_invoice_categories::test_get_invoice_count_by_category_matches_list_length_for_each_category ... ok
+test test::test_invoice_categories::test_update_category_nonexistent_invoice ... ok
+test test::test_invoice_categories::test_remove_invoice_tag_nonexistent_fails ... ok
+test test::test_invoice_categories::test_update_invoice_category_business_auth ... ok
+test test::test_invoice_categories::test_update_invoice_category ... ok
+test test::test_invoice_categories::test_update_invoice_category_index_update ... ok
+test test::test_invoice_count_functions ... ok
+test test::test_invoice_metadata::test_clear_metadata_no_op ... ok
+test test::test_invoice_lifecycle ... ok
+test test::test_invoice_metadata::test_clear_metadata_success ... ok
+test test::test_invoice_metadata::test_get_invoices_by_customer_and_tax_id ... ok
+test test::test_invoice_metadata::test_index_removed_on_clear ... ok
+test test::test_invoice_metadata::test_update_metadata_non_owner_rejected - should panic ... ok
+test test::test_invoice_metadata::test_index_removed_on_metadata_update ... ok
+test test::test_invoice_lifecycle_counts ... ok
+test test::test_invoice_metadata::test_update_metadata_success ... ok
+test test::test_invoice_expiration_triggers_default ... ok
+test test::test_invoice_metadata::test_validation_empty_customer_address ... ok
+test test::test_invoice_metadata::test_validation_empty_customer_name ... ok
+test test::test_invoice_metadata::test_validation_empty_line_items ... ok
+test test::test_invoice_metadata::test_validation_empty_tax_id ... ok
+test test::test_invoice_metadata::test_validation_invalid_line_item_desc ... ok
+test test::test_invoice_metadata_validation ... ok
+test test::test_invoice_not_found ... ok
+test test::test_invoice_metadata::test_validation_invalid_line_item_qty_price ... ok
+test test::test_invoice_metadata::test_validation_mismatched_invoice_total ... ok
+test test::test_invoice_metadata::test_validation_mismatched_computation ... ok
+test test::test_kyc_already_pending ... ok
+test test::test_kyc_already_verified ... ok
+test test::test_kyc_resubmission_after_rejection ... ok
+test test::test_multiple_ratings ... ok
+test test::test_notification_creation_on_invoice_upload ... ok
+test test::test_notification_preferences_default ... ok
+test test::test_notification_creation_on_invoice_status_change ... ok
+test test::test_notification_delivery_status_update ... ok
+test test::test_platform_fee_configuration ... ok
+test test::test_notification_creation_on_bid_placement ... ok
+test test::test_query_investment_insurance_nonexistent_investment ... ok
+test test::test_overdue_invoice_notifications ... ok
+test test::test_query_investment_insurance_premium_calculation ... ok
+test test::test_query_investment_insurance_inactive_coverage ... ok
+test test::test_rating_on_unfunded_invoice ... ok
+test test::test_partial_payments_trigger_settlement ... ok
+test test::test_reject_business ... ok
+test test::test_rating_queries ... ok
+test test::test_rating_statistics ... ok
+test test::test_store_invoice ... ok
+test test::test_store_invoice_validation ... ok
+test test::test_submit_kyc_application ... ok
+test test::test_store_invoice_max_due_date_boundary ... ok
+test test::test_simple_bid_storage ... ok
+test test::test_unique_investment_id_generation ... ok
+test test::test_query_investment_insurance_single_coverage ... ok
+test test::test_update_notification_preferences ... ok
+test test::test_upload_invoice_invalid_amount - should panic ... ok
+test test::test_update_invoice_metadata_and_queries ... ok
+test test::test_upload_invoice_not_verified_business - should panic ... ok
+test test::test_update_invoice_status ... ok
+test test::test_upload_invoice_past_due_date - should panic ... ok
+test test::test_unique_bid_id_generation ... ok
+test test::test_upload_invoice_success ... ok
+test test::test_upload_invoice_requires_verification ... ok
+test test::test_user_notification_stats ... ok
+test test::test_verification_unauthorized_access ... ok
+test test::test_verify_business ... ok
+test test::test_upload_invoice_max_due_date_boundary ... ok
+test test::test_verify_invoice_requires_admin ... ok
+test test::test_verify_invoice_already_verified - should panic ... ok
+test test_admin::test_admin::test_admin_can_set_platform_fee ... ok
+test test::test_verify_invoice_not_admin ... ok
+test test_admin::test_admin::test_get_admin_returns_none_before_init ... ok
+test test_admin::test_admin::test_get_current_admin_after_init_returns_address ... ok
+test test_admin::test_admin::test_get_current_admin_after_transfer_returns_new_address ... ok
+test test_admin::test_admin::test_get_current_admin_before_init_returns_none ... ok
+test test_admin::test_admin::test_get_current_admin_tracks_full_lifecycle ... ok
+test test_admin::test_admin::test_initialize_admin_double_init_fails ... ok
+test test_admin::test_admin::test_initialize_admin_same_address_twice_fails ... ok
+test test_admin::test_admin::test_initialize_admin_succeeds ... ok
+test test::test_verify_invoice_success ... ok
+test test_admin::test_admin::test_initialize_emits_admin_set_event ... ok
+test test_admin::test_admin::test_is_admin_returns_false_before_init ... ok
+test test_admin::test_admin::test_admin_can_verify_invoice ... ok
+test test_admin::test_admin::test_is_admin_returns_false_for_different_address ... ok
+test test_admin::test_admin::test_require_admin_fails_before_init ... ok
+test test_admin::test_admin::test_is_admin_returns_true_for_current_admin ... ok
+test test_admin::test_admin::test_require_admin_fails_for_non_admin ... ok
+test test_admin::test_admin::test_require_admin_succeeds_for_admin ... ok
+test test_admin::test_admin::test_set_platform_fee_without_admin_fails ... ok
+test test_admin::test_admin::test_set_admin_rejects_non_admin_caller ... ok
+test test_admin::test_admin::test_transfer_admin_succeeds ... ok
+test test_admin::test_admin::test_transfer_admin_to_self ... ok
+test test_admin::test_admin::test_transfer_admin_without_init_fails ... ok
+test test_admin::test_admin::test_transfer_admin_chain ... ok
+test test_audit::test_audit_get_entry_not_found - should panic ... ok
+test test_admin::test_admin::test_transfer_emits_admin_transferred_event ... ok
+test test_audit::test_audit_integrity_no_invoice ... ok
+test test_admin::test_admin::test_verify_invoice_without_admin_fails ... ok
+test test::test_withdraw_bid ... ok
+test test_audit::test_audit_integrity_valid ... ok
+test test_audit::test_audit_invoice_created_and_trail ... ok
+test test_audit::test_audit_query_by_operation ... ok
+test test_audit::test_audit_query_by_actor ... ok
+test test_audit::test_audit_query_by_invoice ... ok
+test test_audit::test_audit_query_time_range ... ok
+test test_audit::test_audit_stats ... ok
+test test_audit::test_audit_stats_consistency_across_calls ... ok
+test test_audit::test_audit_stats_after_bid_withdrawal ... FAILED
+test test_audit::test_audit_stats_comprehensive_workflow ... FAILED
+test test_audit::test_audit_stats_empty_state ... ok
+test test_audit::test_audit_stats_date_range_single_entry ... ok
+test test_audit::test_audit_stats_date_range_multiple_entries ... ok
+test test_audit::test_audit_stats_operations_count_structure ... ok
+test test_audit::test_audit_stats_incremental_updates ... ok
+test test_audit::test_audit_stats_multiple_operations ... ok
+test test_audit::test_audit_stats_total_entries_after_bid ... FAILED
+test test_audit::test_audit_stats_total_entries_after_invoice_create ... ok
+test test_audit::test_audit_stats_total_entries_after_escrow ... FAILED
+test test_audit::test_audit_stats_total_entries_after_verify ... ok
+test test_audit::test_audit_stats_unique_actors_duplicate_operations ... ok
+test test_audit::test_audit_stats_unique_actors_single ... ok
+test test_audit::test_audit_stats_unique_actors_multiple ... FAILED
+test test_audit::test_audit_verify_produces_entry ... ok
+test test_audit::test_get_audit_entries_by_actor_business_investor_admin_empty_and_multiple ... ok
+test test_backup::test_archive_backup ... ok
+test test_audit::test_query_audit_logs_operation_actor_time_combinations_and_limits ... ok
+test test_backup::test_backup_limit_cleanup ... ok
+test test_backup::test_backup_id_format_and_storage ... ok
+test test_backup::test_get_backup_details_none_for_invalid_id ... ok
+test test_audit::test_get_audit_entries_by_operation_each_type_empty_and_non_empty ... ok
+test test_backup::test_create_and_validate_backup ... ok
+test test_backup::test_get_backup_details_some_with_correct_fields ... ok
+test test_backup::test_get_backups_order_and_after_archive ... ok
+test test_bid::test_best_bid_excludes_withdrawn ... ok
+test test_backup::test_restore_backup ... ok
+test test_bid::test_bid_at_exact_expiration_not_expired ... ok
+test test_bid::test_bid_default_ttl_seven_days ... ok
+test test_bid::test_bid_expiration_and_cleanup ... ok
+test test_bid::test_bid_one_second_past_expiration_expired ... ok
+test test_bid::test_bid_placement_non_verified_invoice_fails ... ok
+test test_bid::test_bid_placement_respects_investment_limit ... ok
+test test_bid::test_bid_placement_verified_invoice_succeeds ... ok
+test test_bid::test_bid_withdrawal_by_owner_succeeds ... ok
+test test_bid::test_cancel_bid_nonexistent_returns_false ... ok
+test test_bid::test_bid_withdrawal_only_placed_bids ... ok
+test test_bid::test_bid_ranking_by_profit ... ok
+test test_bid::test_cancel_bid_on_cancelled_returns_false ... ok
+test test_bid::test_cancel_bid_on_withdrawn_returns_false ... ok
+test test_bid::test_cancel_bid_succeeds ... ok
+test test_bid::test_cannot_accept_expired_bid ... ok
+test test_bid::test_cancelled_bid_excluded_from_ranking ... ok
+test test_bid::test_cancelled_bids_not_affected_by_expiration ... ok
+test test_bid::test_cleanup_on_invoice_with_no_bids ... ok
+test test_bid::test_cleanup_triggered_on_query_after_expiration ... ok
+test test_bid::test_cleanup_expired_bids_returns_count ... ok
+test test_bid::test_cleanup_with_no_expired_bids_returns_zero ... ok
+test test_bid::test_expired_bids_removed_from_invoice_list ... ok
+test test_bid::test_get_all_bids_by_investor_empty ... ok
+test test_bid::test_get_all_bids_by_investor_cross_invoice ... ok
+test test_bid::test_expiration_cleanup_isolated_per_invoice ... ok
+test test_bid::test_get_best_bid_excludes_expired ... ok
+test test_bid::test_get_ranked_bids_excludes_expired ... ok
+test test_bid::test_mixed_status_bids_only_placed_expire ... ok
+test test_bid::test_multiple_bids_indexing_and_query ... ok
+test test_bid::test_partial_expiration_cleanup ... ok
+test test_bid::test_place_bid_cleans_up_expired_before_placing ... ok
+test test_bid::test_set_investment_limit_invalid_amount_fails ... ok
+test test_bid::test_set_investment_limit_non_admin_fails ... ok
+test test_bid::test_set_investment_limit_succeeds ... ok
+test test_bid::test_set_investment_limit_unverified_fails ... ok
+test test_bid::test_query_bids_by_investor ... ok
+test test_bid::test_ranking_after_all_bids_expire ... ok
+test test_bid::test_updated_limit_enforced_in_bidding ... ok
+test test_bid_ranking::test_best_bid_after_withdrawal ... ok
+test test_bid::test_withdrawn_bids_not_affected_by_expiration ... ok
+test test_bid_ranking::test_best_bid_equals_first_ranked ... ok
+test test_bid_ranking::test_empty_bid_list ... ok
+test test_bid_ranking::test_empty_ranked_and_best_for_nonexistent_invoice ... ok
+test test_bid_ranking::test_best_bid_excludes_expired ... ok
+test test_bid_ranking::test_best_bid_excludes_withdrawn ... ok
+test test_bid_ranking::test_equal_bids_tie_break_by_timestamp ... ok
+test test_bid_ranking::test_ranked_bids_profit_ordering ... ok
+test test_bid_ranking::test_ranked_excludes_withdrawn_and_expired ... ok
+test test_bid_ranking::test_single_bid_ranking_and_best_selection ... ok
+test test_business_kyc::test_business_can_submit_own_kyc ... ok
+test test_business_kyc::test_business_cannot_submit_kyc_for_another_business ... ok
+test test_business_kyc::test_double_rejection_fails ... ok
+test test_business_kyc::test_double_verification_fails ... ok
+test test_bid_ranking::test_ranking_with_multiple_bids ... ok
+test test_business_kyc::test_get_business_verification_status_returns_none_for_unsubmitted ... ok
+test test_business_kyc::test_get_pending_businesses_empty_initially ... ok
+test test_business_kyc::test_get_rejected_businesses_empty_initially ... ok
+test test_business_kyc::test_get_verified_businesses_empty_initially ... ok
+test test_business_kyc::test_kyc_already_pending_error ... ok
+test test_business_kyc::test_get_verification_lists ... ok
+test test_business_kyc::test_kyc_already_verified_error ... ok
+test test_business_kyc::test_kyc_data_integrity ... ok
+test test_business_kyc::test_kyc_resubmission_after_rejection ... ok
+test test_business_kyc::test_kyc_submission_with_empty_data ... ok
+test test_business_kyc::test_kyc_with_special_characters ... ok
+test test_business_kyc::test_kyc_with_long_data ... ok
+test test_business_kyc::test_complete_business_kyc_to_invoice_flow ... ok
+test test_business_kyc::test_multiple_businesses_independent_kyc_processes ... ok
+test test_business_kyc::test_only_admin_can_reject_business ... ok
+test test_business_kyc::test_pending_business_cannot_upload_invoice ... ok
+test test_business_kyc::test_only_admin_can_verify_business ... ok
+test test_business_kyc::test_reject_business_without_kyc_submission_fails ... ok
+test test_business_kyc::test_reject_already_verified_business_fails ... ok
+test test_business_kyc::test_multiple_businesses_all_statuses ... ok
+test test_business_kyc::test_rejected_business_cannot_upload_invoice ... ok
+test test_business_kyc::test_rejected_list_updates_correctly_on_rejection ... ok
+test test_business_kyc::test_rejection_reason_stored_correctly ... ok
+test test_business_kyc::test_resubmission_moves_from_rejected_to_pending ... ok
+test test_business_kyc::test_status_transitions_pending_to_rejected ... ok
+test test_business_kyc::test_status_transitions_pending_to_verified ... ok
+test test_business_kyc::test_status_transitions_rejected_to_pending_on_resubmit ... ok
+test test_business_kyc::test_submitted_at_timestamp_non_zero ... ok
+test test_business_kyc::test_unverified_business_cannot_upload_invoice ... ok
+test test_business_kyc::test_timestamp_accuracy ... ok
+test test_business_kyc::test_verified_by_field_set_correctly ... ok
+test test_business_kyc::test_verified_list_updates_correctly_on_verification ... ok
+test test_business_kyc::test_verify_already_rejected_business_fails ... ok
+test test_business_kyc::test_verify_business_without_kyc_submission_fails ... ok
+test test_business_kyc::test_rejected_business_resubmission_flow ... ok
+test test_business_kyc::test_verified_business_can_upload_invoice ... ok
+test test_cancel_refund::test_cancel_invoice_already_cancelled_fails - should panic ... ok
+test test_cancel_refund::test_cancel_invoice_admin_cannot_cancel ... ok
+test test_cancel_refund::test_cancel_invoice_defaulted_fails - should panic ... ok
+test test_cancel_refund::test_cancel_invoice_multiple_times_fails ... ok
+test test_cancel_refund::test_cancel_invoice_non_owner_fails ... ok
+test test_cancel_refund::test_cancel_invoice_not_found ... ok
+test test_cancel_refund::test_cancel_invoice_funded_fails - should panic ... ok
+test test_cancel_refund::test_cancel_invoice_funded_returns_error ... ok
+test test_cancel_refund::test_cancel_invoice_paid_fails - should panic ... ok
+test test_cancel_refund::test_cancel_invoice_pending_emits_event ... ok
+test test_cancel_refund::test_cancel_invoice_pending_business_owner_only ... ok
+test test_cancel_refund::test_cancel_invoice_pending_status ... ok
+test test_cancel_refund::test_cancel_invoice_updates_status_list ... ok
+test test_cancel_refund::test_cancel_invoice_verified_emits_event ... ok
+test test_cancel_refund::test_cancel_invoice_verified_status ... ok
+test test_cancel_refund::test_complete_lifecycle_with_cancellation ... ok
+test test_cancel_refund::test_complete_lifecycle_with_refund ... ok
+test test_cancel_refund::test_refund_emits_event ... ok
+test test_cancel_refund::test_refund_escrow_after_funding ... ok
+test test_cancel_refund::test_refund_without_escrow_fails ... ok
+test test_currency::test_add_currency_idempotent ... ok
+test test_currency::test_add_remove_currency_admin_only ... ok
+test test_cancel_refund::test_refund_idempotency ... ok
+test test_cancel_refund::test_refund_prevents_release ... ok
+test test_currency::test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set ... ok
+test test_currency::test_currency_count ... ok
+test test_currency::test_invoice_with_non_whitelisted_currency_fails_when_whitelist_set ... ok
+test test_currency::test_get_whitelisted_currencies_paged ... ok
+test test_currency::test_clear_currencies_allows_all ... ok
+test test_currency::test_non_admin_cannot_add_currency ... ok
+test test_currency::test_non_admin_cannot_clear_currencies ... ok
+test test_currency::test_non_admin_cannot_remove_currency ... ok
+test test_currency::test_non_admin_cannot_set_currencies ... ok
+test test_currency::test_set_currencies_deduplicates ... ok
+test test_currency::test_set_currencies_replaces_whitelist ... ok
+test test_currency::test_invoice_with_whitelisted_currency_succeeds ... ok
+test test_default::test_cannot_default_pending_invoice ... ok
+test test_default::test_cannot_default_unfunded_invoice ... ok
+test test_default::test_check_invoice_expiration_uses_protocol_config_when_none ... FAILED
+test test_default::test_cannot_default_already_defaulted_invoice ... ok
+test test_default::test_cannot_default_paid_invoice ... ok
+test test_default::test_custom_grace_period ... ok
+test test_default::test_default_after_grace_period ... ok
+test test_default::test_default_exactly_at_grace_deadline ... ok
+test test_default::test_default_investment_status_update ... ok
+test test_default::test_default_status_transition ... ok
+test test_default::test_default_uses_default_grace_period_when_none_provided ... ok
+test test_default::test_default_uses_protocol_config_when_none ... FAILED
+test test_default::test_per_invoice_grace_overrides_protocol_config ... FAILED
+test test_default::test_no_default_before_grace_period ... ok
+test test_default::test_zero_grace_period_defaults_immediately_after_due_date ... ok
+test test_dispute::test_complete_dispute_lifecycle ... ok
+test test_dispute::test_create_dispute_by_business ... ok
+test test_dispute::test_complete_dispute_lifecycle_with_queries ... ok
+test test_dispute::test_create_dispute_empty_evidence ... ok
+test test_dispute::test_create_dispute_duplicate ... ok
+test test_dispute::test_create_dispute_evidence_too_long ... FAILED
+test test_dispute::test_create_dispute_empty_reason ... ok
+test test_default::test_multiple_invoices_default_handling ... ok
+test test_dispute::test_create_dispute_nonexistent_invoice ... ok
+test test_dispute::test_create_dispute_reason_boundary_min ... ok
+test test_dispute::test_create_dispute_reason_boundary_max ... ok
+test test_dispute::test_create_dispute_reason_too_long ... FAILED
+test test_dispute::test_create_dispute_unauthorized ... ok
+test test_dispute::test_get_invoices_by_dispute_status_disputed ... ok
+test test_dispute::test_get_invoices_by_dispute_status_none ... ok
+test test_dispute::test_get_invoices_by_dispute_status_resolved ... ok
+test test_dispute::test_dispute_status_tracking_multiple_invoices ... ok
+test test_dispute::test_get_invoices_by_dispute_status_under_review ... ok
+test test_dispute::test_put_dispute_under_review_requires_admin ... ok
+test test_dispute::test_multiple_disputes_different_invoices ... ok
+test test_dispute::test_get_invoices_with_disputes ... ok
+test test_dispute::test_put_resolved_dispute_under_review_fails ... ok
+test test_dispute::test_put_under_review_invalid_transition ... ok
+test test_dispute::test_query_dispute_none_exists ... ok
+test test_dispute::test_put_under_review_status_transition ... ok
+test test_dispute::test_resolve_already_resolved_dispute_fails ... ok
+test test_dispute::test_resolve_dispute_invalid_transition ... ok
+test test_dispute::test_resolve_dispute_empty_resolution ... ok
+test test_emergency_withdraw::test_cancel_clears_pending ... ok
+test test_emergency_withdraw::test_cancel_prevents_execute ... ok
+test test_emergency_withdraw::test_cancel_without_pending_fails ... ok
+test test_dispute::test_resolve_dispute_requires_admin ... ok
+test test_emergency_withdraw::test_execute_before_timelock_fails ... ok
+test test_emergency_withdraw::test_execute_without_pending_fails ... ok
+test test_dispute::test_resolve_dispute_resolution_too_long ... FAILED
+test test_emergency_withdraw::test_get_pending_returns_withdrawal_after_initiate ... ok
+test test_emergency_withdraw::test_initiate_zero_amount_fails ... ok
+test test_emergency_withdraw::test_execute_after_timelock_succeeds ... ok
+test test_emergency_withdraw::test_non_admin_cannot_cancel ... ok
+test test_emergency_withdraw::test_only_admin_can_initiate ... ok
+test test_emergency_withdraw::test_get_pending_none_after_execute ... ok
+test test_errors::test_error_message_consistency ... ok
+test test_errors::test_business_not_verified_error ... ok
+test test_errors::test_invalid_description_error ... ok
+test test_emergency_withdraw::test_target_receives_correct_amount_when_funded ... ok
+test test_errors::test_invalid_status_error ... ok
+test test_errors::test_invoice_amount_invalid_error ... ok
+test test_errors::test_invoice_due_date_invalid_error ... ok
+test test_errors::test_invoice_not_found_error ... ok
+test test_errors::test_invoice_already_funded_error ... ok
+test test_errors::test_invoice_already_defaulted_error ... ok
+test test_errors::test_no_panics_on_error_conditions ... ok
+test test_errors::test_invoice_not_funded_error ... ok
+test test_errors::test_invoice_not_verified_error ... ok
+test test_errors::test_storage_key_not_found_error ... ok
+test test_errors::test_not_admin_error ... ok
+test test_errors::test_unauthorized_error ... ok
+test test_errors::test_operation_not_allowed_before_grace_period ... ok
+test test_escrow::test_cannot_accept_withdrawn_bid ... ok
+test test_escrow::test_accept_bid_state_transitions ... ok
+test test_escrow::test_escrow_creation_validates_amount ... ok
+test test_escrow::test_escrow_invariants ... ok
+test test_escrow::test_funds_locked_exactly_once ... ok
+test test_escrow::test_only_invoice_owner_can_accept_bid ... ok
+test test_escrow::test_multiple_bids_only_one_accepted ... ok
+test test_escrow::test_only_verified_invoice_can_be_funded ... ok
+test test_escrow::test_release_escrow_funds_idempotency_blocked ... ok
+test test_escrow::test_release_escrow_funds_success ... ok
+test test_escrow::test_rejects_double_accept ... ok
+test test_escrow::test_token_transfer_idempotency ... ok
+test test_escrow_refund::test_refund_authorization_current_behavior_and_security_note ... ok
+test test_escrow::test_verify_invoice_when_funded_triggers_release_escrow_funds ... ok
+test test_escrow_refund::test_refund_fails_if_invoice_status_not_funded ... ok
+test test_escrow_refund::test_refund_fails_when_caller_is_neither_admin_nor_business ... ok
+test test_escrow_refund::test_refund_events_emitted_correctly ... ok
+test test_escrow_refund::test_refund_idempotency_and_release_blocked ... ok
+test test_escrow_refund::test_refund_transfers_and_updates_status ... ok
+test test_events::test_bid_accepted_event ... ok
+test test_events::test_bid_placed_event ... ok
+test test_events::test_event_data_completeness ... ok
+test test_events::test_bid_withdrawn_event ... ok
+test test_events::test_invoice_cancelled_event ... ok
+test test_events::test_escrow_created_event ... ok
+test test_events::test_invoice_uploaded_event ... ok
+test test_events::test_invoice_verified_event ... ok
+test test_fees::test_comprehensive_fee_calculation ... ok
+test test_events::test_invoice_defaulted_event ... ok
+test test_fees::test_configure_treasury_fails_without_admin ... ok
+test test_fees::test_custom_platform_fee_bps ... ok
+test test_fees::test_default_platform_fee ... ok
+test test_fees::test_configure_treasury ... ok
+test test_fees::test_distribute_revenue_below_minimum ... ok
+test test_fees::test_distribute_revenue_clears_pending ... ok
+test test_fees::test_distribute_revenue_nonexistent_period ... ok
+test test_fees::test_distribute_revenue_large_amounts ... ok
+test test_events::test_multiple_events_in_sequence ... ok
+test test_fees::test_distribute_revenue_without_revenue_config ... ok
+test test_fees::test_fee_parameter_validation ... ok
+test test_fees::test_early_payment_discounts ... ok
+test test_fees::test_fee_structure_updates ... ok
+test test_fees::test_fee_system_initialization ... ok
+test test_fees::test_fee_analytics ... ok
+test test_fees::test_get_platform_fee_config_before_init_returns_storage_key_not_found ... ok
+test test_fees::test_get_platform_fee_config_after_init_has_defaults ... ok
+test test_fees::test_get_revenue_split_config_before_configuration ... ok
+test test_fees::test_get_treasury_address_before_config ... ok
+test test_fees::test_get_platform_fee_config_after_update_platform_fee_bps ... FAILED
+test test_fees::test_module_loaded ... ok
+test test_fees::test_get_platform_fee_config_includes_treasury_when_set ... ok
+test test_fees::test_only_admin_can_update_fee_structure ... ok
+test test_fees::test_only_admin_can_update_platform_fee ... ok
+test test_fees::test_platform_fee_edge_cases ... ok
+test test_fees::test_platform_fee_calculation ... ok
+test test_fees::test_revenue_config_invalid_shares_sum ... ok
+test test_fees::test_revenue_config_shares_exceed_10000 ... ok
+test test_fees::test_late_payment_penalties ... ok
+test test_fees::test_revenue_config_reconfiguration ... ok
+test test_fees::test_revenue_distribution_config ... ok
+test test_fees::test_treasury_address_in_platform_fee_config ... ok
+test test_fees::test_transaction_fee_calculation ... ok
+test test_fees::test_treasury_address_update ... ok
+test test_fees::test_revenue_distribution_execution ... ok
+test test_fees::test_treasury_receives_exact_amount ... ok
+test test_fuzz::fuzz_arithmetic_safety ... ok
+test test_fees::test_volume_tier_discounts ... ok
+test test_fuzz::extra_tests::test_fuzz_infrastructure_smoke_test ... ok
+test test_audit::test_audit_query_limit_is_capped_to_max_query_limit ... ok
+test test_insurance::test_add_insurance_requires_active_investment ... ok
+test test_insurance::test_add_insurance_requires_investor_auth ... ok
+test test_insurance::test_add_insurance_storage_key_not_found ... ok
+test test_insurance::test_add_insurance_when_not_active_rejected ... ok
+test test_insurance::test_duplicate_submission_rejected_and_state_unchanged ... ok
+test test_insurance::test_insurance_multiple_coverages_different_providers_and_percentages ... ok
+test test_insurance::test_insurance_premium_calculation_multiple_coverages ... ok
+test test_insurance::test_investment_helpers_cover_branches ... ok
+test test_insurance::test_large_values_handle_saturation ... ok
+test test_insurance::test_multiple_entries_and_no_cross_investment_leakage ... ok
+test test_insurance::test_premium_and_coverage_math_exact ... ok
+test test_insurance::test_query_investment_insurance_returns_all_entries ... ok
+test test_insurance::test_state_transition_before_add_rejected ... ok
+test test_insurance::test_zero_coverage_and_invalid_inputs ... ok
+test test_invariants::invariant_env_creation_is_safe ... ok
+test test_invariants::test_invariants_after_full_lifecycle ... ok
+test test_investment_queries::test_get_investment_by_invoice_at_most_one ... ok
+test test_investment_queries::test_get_investment_by_invoice_not_found ... ok
+test test_investment_queries::test_get_investments_by_investor_correctness ... ok
+test test_investment_queries::test_get_investments_by_investor_empty ... ok
+test test_investment_queries::test_get_investor_investments_paged_filter_and_pagination ... ok
+test test_investment_queries::test_get_investor_investments_paged_limit ... ok
+test test_investment_queries::test_get_investor_investments_paged_offset ... ok
+test test_fuzz::fuzz_invoice_creation ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investor_lists ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_risk_level ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_tier ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_reject_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_verify_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds ... ok
+test test_investor_kyc::test_investor_kyc::test_complete_investor_workflow ... ok
+test test_investor_kyc::test_investor_kyc::test_comprehensive_kyc_improves_risk_assessment ... ok
+test test_investor_kyc::test_investor_kyc::test_get_investors_by_risk_level_after_verification ... ok
+test test_investor_kyc::test_investor_kyc::test_get_investors_by_risk_level_empty_initially ... ok
+test test_investment_queries::test_get_investor_investments_paged_status_filter ... ok
+test test_investor_kyc::test_investor_kyc::test_get_investors_by_risk_level_multiple_investors ... ok
+test test_investor_kyc::test_investor_kyc::test_get_investors_by_tier_after_verification ... ok
+test test_investor_kyc::test_investor_kyc::test_get_investors_by_tier_empty_initially ... ok
+test test_investor_kyc::test_investor_kyc::test_get_investors_by_risk_level_only_returns_verified ... ok
+test test_investor_kyc::test_investor_kyc::test_get_investors_by_tier_only_returns_verified ... ok
+test test_investor_kyc::test_investor_kyc::test_get_investors_by_tier_multiple_investors ... ok
+test test_investor_kyc::test_investor_kyc::test_get_pending_investors_empty_initially ... ok
+test test_investor_kyc::test_investor_kyc::test_get_pending_investors_after_submission ... ok
+test test_investor_kyc::test_investor_kyc::test_get_rejected_investors_empty_initially ... ok
+test test_investor_kyc::test_investor_kyc::test_get_rejected_investors_after_rejection ... ok
+test test_investor_kyc::test_investor_kyc::test_get_verified_investors_empty_initially ... ok
+test test_investor_kyc::test_investor_kyc::test_get_verified_investors_after_verification ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_analytics_tracking ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_duplicate_submission_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_submission_requires_auth ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_resubmission_after_rejection ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_submission_succeeds ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_moves_from_pending_to_rejected ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_moves_from_pending_to_verified ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_moves_from_rejected_to_pending_on_resubmission ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_verification_data_integrity ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_verification_status_transitions ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid ... ok
+test test_investor_kyc::test_investor_kyc::test_list_consistency_across_multiple_operations ... ok
+test test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only ... ok
+test test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding ... ok
+test test_investor_kyc::test_investor_kyc::test_negative_investment_limit_verification_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_multiple_investors_different_limits ... ok
+test test_investor_kyc::test_investor_kyc::test_no_duplicate_investors_in_lists ... ok
+test test_investor_kyc::test_investor_kyc::test_non_admin_cannot_verify_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_risk_level_affects_investment_limits ... ok
+test test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid ... ok
+test test_investor_kyc::test_investor_kyc::test_verify_already_verified_investor_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid ... ok
+test test_investor_kyc::test_investor_kyc::test_verify_investor_without_kyc_submission_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_verify_investor_with_invalid_limit_fails ... ok
+test test_limit::test_admin_operations_require_authorization ... ok
+test test_limit::test_bid_amount_limits ... ok
+test test_limit::test_description_length_limits ... ok
+test test_limit::test_due_date_limits ... ok
+test test_limit::test_invoice_amount_limits ... ok
+test test_overflow::test_calculate_treasury_split_large_amounts ... ok
+test test_overflow::test_compare_bids_equal_profit_ordering ... ok
+test test_overflow::test_compare_bids_safe_overflow ... ok
+test test_overflow::test_compare_bids_underflow_safe ... ok
+test test_overflow::test_fee_calculation_at_limit ... ok
+test test_overflow::test_fee_calculation_at_zero_bps ... ok
+test test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit ... ok
+test test_overflow::test_fee_calculation_large_amounts_no_overflow ... ok
+test test_overflow::test_fee_calculation_no_profit ... ok
+test test_overflow::test_profit_fee_bps_max ... ok
+test test_overflow::test_investor_investments_pagination_overflow_safe ... ok
+test test_overflow::test_revenue_accumulation_overflow ... ok
+test test_overflow::test_timestamp_bid_default_expiration_saturates ... ok
+test test_overflow::test_revenue_accumulation_saturates_at_max ... ok
+test test_overflow::test_timestamp_boundaries ... ok
+test test_overflow::test_timestamp_pagination_overflow_safe ... ok
+test test_overflow::test_timestamp_invoice_grace_deadline_saturates ... ok
+test test_overflow::test_verify_no_dust_large_amounts ... ok
+test test_overflow::test_total_invoice_count_saturating ... ok
+test test_overflow::test_volume_accumulation_overflow ... ok
+test test_overflow::test_volume_accumulation_saturates_at_max ... ok
+test test_partial_payments::tests::test_final_payment_marks_invoice_paid ... ok
+test test_partial_payments::tests::test_complete_partial_payment_workflow ... ok
+test test_partial_payments::tests::test_negative_amount_rejected ... ok
+test test_partial_payments::tests::test_lifecycle_create_invoice_to_paid_with_multiple_payments ... ok
+test test_partial_payments::tests::test_overpayment_capped_no_excess_applied ... ok
+test test_partial_payments::tests::test_overpayment_is_capped_at_total_due ... ok
+test test_partial_payments::tests::test_partial_payment_on_nonexistent_invoice ... ok
+test test_partial_payments::tests::test_partial_payment_on_unfunded_invoice ... ok
+test test_partial_payments::tests::test_partial_payment_accumulates_correctly ... ok
+test test_partial_payments::tests::test_payment_after_invoice_paid_is_rejected ... ok
+test test_partial_payments::tests::test_payment_after_reaching_full_amount ... ok
+test test_partial_payments::tests::test_payment_progress_100_percent ... ok
+test test_partial_payments::tests::test_payment_progress_25_percent ... ok
+test test_partial_payments::tests::test_payment_progress_50_percent ... ok
+test test_partial_payments::tests::test_payment_progress_75_percent ... ok
+test test_partial_payments::tests::test_payment_progress_calculation_caps_at_100 ... ok
+test test_partial_payments::tests::test_payment_progress_multiple_payments ... ok
+test test_partial_payments::tests::test_payment_progress_zero_percent ... ok
+test test_partial_payments::tests::test_payment_records_are_queryable_and_ordered ... ok
+test test_partial_payments::tests::test_payment_records_multiple_payments ... ok
+test test_partial_payments::tests::test_payment_records_single_payment ... ok
+test test_partial_payments::tests::test_payment_to_cancelled_invoice_is_rejected ... ok
+test test_partial_payments::tests::test_payment_records_unique_transaction_ids ... ok
+test test_partial_payments::tests::test_process_partial_payment_negative_amount ... ok
+test test_partial_payments::tests::test_process_partial_payment_valid ... ok
+test test_partial_payments::tests::test_process_partial_payment_zero_amount ... ok
+test test_profit_fee::test_calculate_platform_fee_full_payment ... ok
+test test_profit_fee::test_calculate_platform_fee_large_numbers ... ok
+test test_profit_fee::test_calculate_platform_fee_no_profit ... ok
+test test_profit_fee::test_calculate_platform_fee_partial_loss ... ok
+test test_profit_fee::test_calculate_platform_fee_rounding ... ok
+test test_profit_fee::test_calculate_platform_fee_small_fee ... ok
+test test_profit_fee::test_calculate_platform_fee_updated_bps ... ok
+test test_profit_fee::test_calculate_profit_large_amount_no_overflow ... ok
+test test_profit_fee::test_calculate_profit_no_dust_rounding_boundary ... ok
+test test_profit_fee_formula::test_calculate_with_fee_bps_clamps_invalid_fee_bounds ... ok
+test test_profit_fee_formula::test_calculate_with_fee_bps_normalizes_negative_amounts ... ok
+test test_partial_payments::tests::test_zero_amount_rejected ... ok
+test test_profit_fee_formula::test_default_scenario_no_profit ... ok
+test test_profit_fee_formula::test_exact_payment_no_profit ... ok
+test test_profit_fee_formula::test_exact_payment_one_unit_profit ... ok
+test test_profit_fee_formula::test_extreme_large_amounts ... ok
+test test_profit_fee_formula::test_fee_config_default ... ok
+test test_profit_fee_formula::test_fee_config_exceeds_max ... ok
+test test_profit_fee_formula::test_fee_config_max_boundary ... ok
+test test_profit_fee_formula::test_large_amounts_no_overflow ... ok
+test test_profit_fee_formula::test_fee_config_update ... ok
+test test_profit_fee_formula::test_minimal_profit_scenario ... ok
+test test_profit_fee_formula::test_many_calculations_no_dust ... ok
+test test_profit_fee_formula::test_overpayment_extreme_profit ... ok
+test test_profit_fee_formula::test_overpayment_large_profit ... ok
+test test_profit_fee_formula::test_profit_calculation_integration_with_fee_manager ... ok
+test test_profit_fee_formula::test_profit_fee_basic_calculation ... ok
+test test_profit_fee_formula::test_profit_fee_max_rate ... ok
+test test_profit_fee_formula::test_profit_fee_with_custom_rate ... ok
+test test_profit_fee_formula::test_profit_fee_zero_rate ... ok
+test test_profit_fee_formula::test_realistic_invoice_scenario ... ok
+test test_profit_fee_formula::test_rounding_boundary_cases ... ok
+test test_profit_fee_formula::test_rounding_small_profit_various_fees ... ok
+test test_profit_fee_formula::test_treasury_split_equal ... ok
+test test_profit_fee_formula::test_treasury_split_full_share ... ok
+test test_profit_fee_formula::test_treasury_split_over_100_percent ... ok
+test test_profit_fee_formula::test_treasury_split_unequal ... ok
+test test_profit_fee_formula::test_treasury_split_with_rounding ... ok
+test test_profit_fee_formula::test_treasury_split_zero_fee ... ok
+test test_profit_fee_formula::test_treasury_split_zero_share ... ok
+test test_profit_fee_formula::test_underpayment_partial_loss ... ok
+test test_profit_fee_formula::test_underpayment_severe_loss ... ok
+test test_profit_fee_formula::test_underpayment_zero_payment ... ok
+test test_profit_fee_formula::test_validate_inputs_negative_investment ... ok
+test test_profit_fee_formula::test_validate_inputs_negative_payment ... ok
+test test_profit_fee_formula::test_validate_inputs_valid ... ok
+test test_profit_fee_formula::test_zero_investment_all_profit ... ok
+test test_profit_fee_formula::test_no_dust_comprehensive ... ok
+test test_queries::test_get_available_invoices ... ok
+test test_queries::test_get_available_invoices_paged_empty_and_edge_cases ... ok
+test test_queries::test_get_available_invoices_paged_filters_and_bounds ... ok
+test test_queries::test_get_available_invoices_paged_pagination_comprehensive ... ok
+test test_queries::test_get_business_invoices_paged_empty_and_pagination ... ok
+test test_queries::test_bid_query_pagination_limit_is_capped_to_max_query_limit ... ok
+test test_queries::test_query_audit_logs_filters_and_limit ... ok
+test test_reentrancy::test_accept_bid_and_fund_guard_blocks ... ok
+test test_reentrancy::test_guard_allows_entry_when_lock_is_explicitly_false ... ok
+test test_reentrancy::test_guard_blocks_when_lock_is_set ... ok
+test test_reentrancy::test_guard_error_variant_is_operation_not_allowed ... ok
+test test_reentrancy::test_guard_releases_lock_after_failure ... ok
+test test_reentrancy::test_guard_releases_lock_after_success ... ok
+test test_reentrancy::test_guard_releases_lock_when_closure_returns_err ... ok
+test test_reentrancy::test_guard_returns_closure_value ... ok
+test test_reentrancy::test_guard_unit_failure_clears_lock ... ok
+test test_reentrancy::test_guard_unit_reentrant_blocked ... ok
+test test_reentrancy::test_guard_unit_success ... ok
+test test_reentrancy::test_initial_lock_state_is_absent ... ok
+test test_reentrancy::test_lock_not_set_on_fresh_contract ... ok
+test test_reentrancy::test_mixed_sequential_endpoints ... ok
+test test_reentrancy::test_multiple_lock_release_cycles ... ok
+test test_reentrancy::test_refund_escrow_guard_blocks ... ok
+test test_reentrancy::test_release_escrow_guard_blocks ... ok
+test test_fuzz::fuzz_bid_placement ... ok
+test test_reentrancy::test_sequential_protected_calls_succeed ... ok
+test test_refund::test_admin_can_trigger_refund ... ok
+test test_refund::test_business_can_trigger_refund ... ok
+test test_refund::test_cannot_refund_nonexistent_invoice ... ok
+test test_refund::test_cannot_refund_missing_escrow ... ok
+test test_refund::test_cannot_refund_twice ... ok
+test test_refund::test_cannot_refund_unfunded_invoice ... ok
+test test_refund::test_unauthorized_caller_cannot_trigger_refund ... ok
+test test_revenue_split::test_100_percent_developer_split ... ok
+test test_refund::test_refund_updates_internal_states_correctly ... ok
+test test_revenue_split::test_100_percent_treasury_split ... ok
+test test_revenue_split::test_50_50_split ... ok
+test test_revenue_split::test_60_20_20_split ... ok
+test test_revenue_split::test_accumulated_fees_distribution ... ok
+test test_revenue_split::test_distribute_revenue_no_revenue_data_fails ... ok
+test test_revenue_split::test_distribute_revenue_requires_config ... ok
+test test_revenue_split::test_double_distribution_same_period_fails ... ok
+test test_revenue_split::test_get_revenue_split_config ... ok
+test test_revenue_split::test_invalid_shares_not_summing_to_10000 ... ok
+test test_revenue_split::test_only_admin_can_update_config ... ok
+test test_revenue_split::test_revenue_config_reconfiguration ... ok
+test test_revenue_split::test_revenue_config_treasury_address_stored ... ok
+test test_revenue_split::test_rounding ... ok
+test test_storage::test_bid_storage ... ok
+test test_storage::test_config_storage ... ok
+test test_storage::test_deterministic_behavior ... ok
+test test_storage::test_index_consistency ... ok
+test test_storage::test_indexes ... ok
+test test_storage::test_investment_storage ... ok
+test test_storage::test_concurrent_index_updates ... ok
+test test_storage::test_storage_edge_cases ... ok
+test test_storage::test_invoice_storage ... ok
+test test_storage::test_storage_key_collision_detection ... ok
+test test_storage::test_storage_keys ... ok
+test test_storage::test_type_serialization_integrity ... ok
+test test_storage::test_storage_isolation ... ok
+test test_string_limits::test_invoice_description_limits ... ok
+test test_string_limits::test_dispute_limits ... ok
+test test_string_limits::test_kyc_limits ... ok
+test test_string_limits::test_notification_limits ... ok
+test test_fuzz::fuzz_settlement_capping has been running for over 60 seconds
+test test_string_limits::test_invoice_metadata_limits ... ok
+test test_fuzz::fuzz_settlement_capping ... ok
+test test_queries::test_get_business_invoices_paged_limit_is_capped_to_max_query_limit ... ok
+
+failures:
+
+---- test::test_invoice::test_invoice_minimum_amount stdout ----
+
+thread 'test::test_invoice::test_invoice_minimum_amount' (662421) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #1013)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1013)], data:["contract call failed", store_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 86400, "Minimum invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1013)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, store_invoice], data:Error(Contract, #1013)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, store_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 86400, "Minimum invoice", [Services], []]
+
+Writing test snapshot file for test "test::test_invoice::test_invoice_minimum_amount" to "test_snapshots/test/test_invoice/test_invoice_minimum_amount.1.json".
+
+---- test_audit::test_audit_stats_after_bid_withdrawal stdout ----
+
+thread 'test_audit::test_audit_stats_after_bid_withdrawal' (662651) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #1007)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1007)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1007)], data:["contract call failed", place_bid, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, Bytes(0000000000000000000000000000000000000000000000000000000000000000), 900, 950]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1007)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, place_bid], data:Error(Contract, #1007)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, place_bid], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, Bytes(0000000000000000000000000000000000000000000000000000000000000000), 900, 950]
+
+Writing test snapshot file for test "test_audit::test_audit_stats_after_bid_withdrawal" to "test_snapshots/test_audit/test_audit_stats_after_bid_withdrawal.1.json".
+
+---- test_audit::test_audit_stats_comprehensive_workflow stdout ----
+
+thread 'test_audit::test_audit_stats_comprehensive_workflow' (662653) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #1007)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1007)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1007)], data:["contract call failed", place_bid, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, Bytes(0000000000000000000000000000000000000000000000000000000000000000), 900, 950]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1007)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, place_bid], data:Error(Contract, #1007)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, place_bid], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, Bytes(0000000000000000000000000000000000000000000000000000000000000000), 900, 950]
+
+Writing test snapshot file for test "test_audit::test_audit_stats_comprehensive_workflow" to "test_snapshots/test_audit/test_audit_stats_comprehensive_workflow.1.json".
+
+---- test_audit::test_audit_stats_total_entries_after_bid stdout ----
+
+thread 'test_audit::test_audit_stats_total_entries_after_bid' (662667) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #1007)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1007)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1007)], data:["contract call failed", place_bid, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, Bytes(0000000000000000000000000000000000000000000000000000000000000000), 900, 950]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1007)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, place_bid], data:Error(Contract, #1007)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, place_bid], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, Bytes(0000000000000000000000000000000000000000000000000000000000000000), 900, 950]
+
+Writing test snapshot file for test "test_audit::test_audit_stats_total_entries_after_bid" to "test_snapshots/test_audit/test_audit_stats_total_entries_after_bid.1.json".
+
+---- test_audit::test_audit_stats_total_entries_after_escrow stdout ----
+
+thread 'test_audit::test_audit_stats_total_entries_after_escrow' (662668) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #1007)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1007)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1007)], data:["contract call failed", place_bid, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, Bytes(0000000000000000000000000000000000000000000000000000000000000000), 900, 950]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1007)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, place_bid], data:Error(Contract, #1007)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, place_bid], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, Bytes(0000000000000000000000000000000000000000000000000000000000000000), 900, 950]
+
+Writing test snapshot file for test "test_audit::test_audit_stats_total_entries_after_escrow" to "test_snapshots/test_audit/test_audit_stats_total_entries_after_escrow.1.json".
+
+---- test_audit::test_audit_stats_unique_actors_multiple stdout ----
+
+thread 'test_audit::test_audit_stats_unique_actors_multiple' (662674) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #1007)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1007)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1007)], data:["contract call failed", place_bid, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, Bytes(0000000000000000000000000000000000000000000000000000000000000000), 900, 950]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1007)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, place_bid], data:Error(Contract, #1007)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, place_bid], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, Bytes(0000000000000000000000000000000000000000000000000000000000000000), 900, 950]
+
+Writing test snapshot file for test "test_audit::test_audit_stats_unique_actors_multiple" to "test_snapshots/test_audit/test_audit_stats_unique_actors_multiple.1.json".
+
+---- test_default::test_check_invoice_expiration_uses_protocol_config_when_none stdout ----
+
+thread 'test_default::test_check_invoice_expiration_uses_protocol_config_when_none' (662958) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/storage.rs:141:9:
+this function is not accessible outside of a contract, wrap the call with `env.as_contract()` to access it from a particular contract
+Writing test snapshot file for test "test_default::test_check_invoice_expiration_uses_protocol_config_when_none" to "test_snapshots/test_default/test_check_invoice_expiration_uses_protocol_config_when_none.1.json".
+
+---- test_default::test_default_uses_protocol_config_when_none stdout ----
+
+thread 'test_default::test_default_uses_protocol_config_when_none' (662972) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/storage.rs:141:9:
+this function is not accessible outside of a contract, wrap the call with `env.as_contract()` to access it from a particular contract
+Writing test snapshot file for test "test_default::test_default_uses_protocol_config_when_none" to "test_snapshots/test_default/test_default_uses_protocol_config_when_none.1.json".
+
+---- test_default::test_per_invoice_grace_overrides_protocol_config stdout ----
+
+thread 'test_default::test_per_invoice_grace_overrides_protocol_config' (662976) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.8/src/storage.rs:141:9:
+this function is not accessible outside of a contract, wrap the call with `env.as_contract()` to access it from a particular contract
+Writing test snapshot file for test "test_default::test_per_invoice_grace_overrides_protocol_config" to "test_snapshots/test_default/test_per_invoice_grace_overrides_protocol_config.1.json".
+
+---- test_dispute::test_create_dispute_evidence_too_long stdout ----
+
+thread 'test_dispute::test_create_dispute_evidence_too_long' (662992) panicked at src/test_dispute.rs:214:5:
+assertion failed: result.is_err()
+Writing test snapshot file for test "test_dispute::test_create_dispute_evidence_too_long" to "test_snapshots/test_dispute/test_create_dispute_evidence_too_long.1.json".
+
+---- test_dispute::test_create_dispute_reason_too_long stdout ----
+
+thread 'test_dispute::test_create_dispute_reason_too_long' (662996) panicked at src/test_dispute.rs:179:5:
+assertion failed: result.is_err()
+Writing test snapshot file for test "test_dispute::test_create_dispute_reason_too_long" to "test_snapshots/test_dispute/test_create_dispute_reason_too_long.1.json".
+
+---- test_dispute::test_resolve_dispute_resolution_too_long stdout ----
+
+thread 'test_dispute::test_resolve_dispute_resolution_too_long' (663022) panicked at src/test_dispute.rs:360:5:
+assertion failed: result.is_err()
+Writing test snapshot file for test "test_dispute::test_resolve_dispute_resolution_too_long" to "test_snapshots/test_dispute/test_resolve_dispute_resolution_too_long.1.json".
+
+---- test_fees::test_get_platform_fee_config_after_update_platform_fee_bps stdout ----
+
+thread 'test_fees::test_get_platform_fee_config_after_update_platform_fee_bps' (663175) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Auth, ExistingValue)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Auth, ExistingValue)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Auth, ExistingValue)], data:["contract call failed", update_platform_fee_bps, [450]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Auth, ExistingValue)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Auth, ExistingValue)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Auth, ExistingValue)], data:"frame is already authorized"
+   5: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, update_platform_fee_bps], data:450
+
+Writing test snapshot file for test "test_fees::test_get_platform_fee_config_after_update_platform_fee_bps" to "test_snapshots/test_fees/test_get_platform_fee_config_after_update_platform_fee_bps.1.json".
+
+
+failures:
+    test::test_invoice::test_invoice_minimum_amount
+    test_audit::test_audit_stats_after_bid_withdrawal
+    test_audit::test_audit_stats_comprehensive_workflow
+    test_audit::test_audit_stats_total_entries_after_bid
+    test_audit::test_audit_stats_total_entries_after_escrow
+    test_audit::test_audit_stats_unique_actors_multiple
+    test_default::test_check_invoice_expiration_uses_protocol_config_when_none
+    test_default::test_default_uses_protocol_config_when_none
+    test_default::test_per_invoice_grace_overrides_protocol_config
+    test_dispute::test_create_dispute_evidence_too_long
+    test_dispute::test_create_dispute_reason_too_long
+    test_dispute::test_resolve_dispute_resolution_too_long
+    test_fees::test_get_platform_fee_config_after_update_platform_fee_bps
+
+test result: FAILED. 821 passed; 13 failed; 0 ignored; 0 measured; 0 filtered out; finished in 131.74s
+
+error: test failed, to rerun pass `--lib`

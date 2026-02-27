@@ -28,8 +28,7 @@ pub struct BusinessVerification {
 }
 
 #[contracttype]
-#[derive(Clone, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(Clone, PartialEq, Debug)]
 pub enum InvestorTier {
     Basic,
     Silver,
@@ -39,8 +38,7 @@ pub enum InvestorTier {
 }
 
 #[contracttype]
-#[derive(Clone, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(Clone, PartialEq, Debug)]
 pub enum InvestorRiskLevel {
     Low,
     Medium,
@@ -661,13 +659,11 @@ pub fn verify_invoice_data(
     }
 
     // Validate due date is not too far in the future using protocol limits
-    if !crate::protocol_limits::ProtocolLimitsContract::validate_invoice(
+    crate::protocol_limits::ProtocolLimitsContract::validate_invoice(
         env.clone(),
         amount,
         due_date,
-    ) {
-        return Err(QuickLendXError::InvoiceDueDateInvalid);
-    }
+    )?;
     if description.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }

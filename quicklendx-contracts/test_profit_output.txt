@@ -1,3 +1,4 @@
+   Compiling quicklendx-contracts v0.1.0 (/Users/bankat/Documents/opensource/quicklendx-protocol/quicklendx-contracts)
 warning: unused import: `BytesN as _`
   --> src/test_dispute.rs:15:31
    |
@@ -111,6 +112,12 @@ warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_cont
      |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: unused import: `Ledger`
+  --> src/test_audit.rs:10:31
+   |
+10 |     testutils::{Address as _, Ledger},
+   |                               ^^^^^^
+
+warning: unused import: `Ledger`
  --> src/test_currency.rs:9:31
   |
 9 |     testutils::{Address as _, Ledger},
@@ -209,16 +216,10 @@ warning: unused variable: `non_admin`
     |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
 
 warning: unused variable: `admin`
-  --> src/test_audit.rs:37:5
+  --> src/test_audit.rs:52:23
    |
-37 |     admin: &Address,
-   |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
-
-warning: unused variable: `admin`
-   --> src/test_audit.rs:111:23
-    |
-111 |     let (env, client, admin, business) = setup();
-    |                       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+52 |     let (env, client, admin, business) = setup();
+   |                       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
 
 warning: unused variable: `admin`
    --> src/test_currency.rs:166:23
@@ -362,6 +363,12 @@ warning: unused variable: `admin`
    --> src/test_profit_fee_formula.rs:604:9
     |
 604 |     let admin = setup_admin(&env, &client);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:976:9
+    |
+976 |     let admin = setup_admin(&env, &client);
     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
 
 warning: function `make_breakdown` is never used
@@ -586,38 +593,73 @@ help: use `'_` for type paths
 25 | fn setup_contract(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address) {
    |                                                          ++++
 
-warning: `quicklendx-contracts` (lib test) generated 91 warnings (run `cargo fix --lib -p quicklendx-contracts --tests` to apply 55 suggestions)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.40s
+warning: `quicklendx-contracts` (lib test) generated 92 warnings (run `cargo fix --lib -p quicklendx-contracts --tests` to apply 55 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.84s
      Running unittests src/lib.rs (target/debug/deps/quicklendx_contracts-bbe347640a360925)
 
-running 27 tests
-test test_audit::test_audit_integrity_no_invoice ... ok
-test test_audit::test_audit_get_entry_not_found - should panic ... ok
-test test_audit::test_audit_integrity_valid ... ok
-test test_audit::test_audit_invoice_created_and_trail ... ok
-test test_audit::test_audit_entry_contains_block_height ... ok
-test test_audit::test_audit_invoice_cancelled_produces_entry ... ok
-test test_audit::test_audit_multiple_invoices_separate_trails ... ok
-test test_audit::test_audit_query_empty_results ... ok
-test test_audit::test_audit_operation_filter_specific ... ok
-test test_audit::test_audit_bid_accepted_produces_entry ... ok
-test test_audit::test_audit_query_by_operation ... ok
-test test_audit::test_audit_bid_placed_produces_entry ... ok
-test test_audit::test_audit_query_by_actor ... ok
-test test_audit::test_audit_escrow_created_produces_entry ... ok
-test test_audit::test_audit_integrity_multiple_entries ... ok
-test test_audit::test_audit_query_by_invoice ... ok
-test test_audit::test_audit_entry_amount_tracking ... ok
-test test_audit::test_audit_query_time_range ... ok
-test test_audit::test_audit_stats ... ok
-test test_audit::test_audit_query_time_range_boundaries ... ok
-test test_audit::test_audit_stats_operations_count ... ok
-test test_audit::test_audit_stats_date_range ... ok
-test test_audit::test_audit_query_with_actor_filter ... ok
-test test_audit::test_audit_stats_unique_actors ... ok
-test test_audit::test_audit_trail_chronological_order ... ok
-test test_audit::test_audit_verify_produces_entry ... ok
-test test_audit::test_audit_query_limit_enforcement ... ok
+running 62 tests
+test test_overflow::test_profit_fee_bps_max ... ok
+test test_profit_fee_formula::test_default_scenario_no_profit ... ok
+test test_profit_fee_formula::test_dust_prevention_various_amounts ... ok
+test test_profit_fee_formula::test_exact_payment_no_profit ... ok
+test test_profit_fee_formula::test_extreme_large_amounts ... ok
+test test_profit_fee_formula::test_fee_config_default ... ok
+test test_profit_fee_formula::test_exact_payment_one_unit_profit ... ok
+test test_profit_fee_formula::test_fee_config_exceeds_max ... ok
+test test_profit_fee_formula::test_fee_just_below_threshold ... ok
+test test_profit_fee_formula::test_fee_config_update ... ok
+test test_profit_fee_formula::test_large_amounts_no_overflow ... ok
+test test_profit_fee_formula::test_fee_config_max_boundary ... ok
+test test_profit_fee_formula::test_maximum_safe_i128_values ... ok
+test test_profit_fee_formula::test_minimal_profit_scenario ... ok
+test test_profit_fee_formula::test_minimum_fee_threshold ... ok
+test test_profit_fee_formula::test_many_calculations_no_dust ... ok
+test test_profit_fee::test_calculate_platform_fee_large_numbers ... ok
+test test_profit_fee::test_calculate_platform_fee_full_payment ... ok
+test test_profit_fee_formula::test_one_stroop_profit ... ok
+test test_profit_fee::test_calculate_platform_fee_no_profit ... ok
+test test_profit_fee::test_calculate_platform_fee_partial_loss ... ok
+test test_profit_fee_formula::test_overpayment_extreme_profit ... ok
+test test_profit_fee::test_calculate_platform_fee_small_fee ... ok
+test test_profit_fee::test_calculate_platform_fee_rounding ... ok
+test test_profit_fee_formula::test_overpayment_large_profit ... ok
+test test_profit_fee_formula::test_payment_one_less_than_investment ... ok
+test test_profit_fee_formula::test_payment_equals_investment_boundary ... ok
+test test_profit_fee_formula::test_payment_one_more_than_investment ... ok
+test test_profit_fee::test_calculate_platform_fee_updated_bps ... ok
+test test_profit_fee_formula::test_profit_calculation_symmetry ... ok
+test test_profit_fee_formula::test_profit_fee_basic_calculation ... ok
+test test_profit_fee_formula::test_realistic_invoice_scenario ... ok
+test test_profit_fee_formula::test_rounding_at_various_profit_levels ... ok
+test test_profit_fee_formula::test_treasury_split_all_edge_cases ... ok
+test test_profit_fee_formula::test_treasury_split_equal ... ok
+test test_profit_fee_formula::test_treasury_split_full_share ... ok
+test test_profit_fee_formula::test_treasury_split_negative_fee ... ok
+test test_profit_fee_formula::test_treasury_split_over_100_percent ... ok
+test test_profit_fee_formula::test_treasury_split_over_max_share ... ok
+test test_profit_fee_formula::test_treasury_split_unequal ... ok
+test test_profit_fee_formula::test_treasury_split_with_rounding ... ok
+test test_profit_fee_formula::test_treasury_split_with_small_fees ... ok
+test test_profit_fee_formula::test_treasury_split_zero_fee ... ok
+test test_profit_fee_formula::test_treasury_split_zero_share ... ok
+test test_profit_fee_formula::test_sequential_calculations_consistency ... ok
+test test_profit_fee_formula::test_underpayment_partial_loss ... ok
+test test_profit_fee_formula::test_underpayment_severe_loss ... ok
+test test_profit_fee_formula::test_profit_fee_zero_rate ... ok
+test test_profit_fee_formula::test_validate_inputs_edge_cases ... ok
+test test_profit_fee_formula::test_validate_inputs_negative_investment ... ok
+test test_profit_fee_formula::test_validate_inputs_negative_payment ... ok
+test test_profit_fee_formula::test_validate_inputs_valid ... ok
+test test_profit_fee_formula::test_profit_fee_max_rate ... ok
+test test_profit_fee_formula::test_underpayment_zero_payment ... ok
+test test_profit_fee_formula::test_profit_fee_with_custom_rate ... ok
+test test_profit_fee_formula::test_rounding_boundary_cases ... ok
+test test_profit_fee_formula::test_zero_investment_edge_case ... ok
+test test_profit_fee_formula::test_zero_investment_all_profit ... ok
+test test_profit_fee_formula::test_profit_with_various_fee_rates ... ok
+test test_profit_fee_formula::test_rounding_small_profit_various_fees ... ok
+test test_profit_fee_formula::test_profit_calculation_integration_with_fee_manager ... ok
+test test_profit_fee_formula::test_no_dust_comprehensive ... ok
 
-test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 1.07s
+test result: ok. 62 passed; 0 failed; 0 ignored; 0 measured; 566 filtered out; finished in 0.28s
 

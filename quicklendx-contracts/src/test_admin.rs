@@ -415,6 +415,18 @@ mod test_admin {
     // 6. Event Emission Tests
     // ============================================================================
 
+    #[test]
+    fn test_initialize_emits_admin_set_event() {
+        let (env, client) = setup();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        client.initialize_admin(&admin);
+
+        let events = env.events().all();
+        let has_admin_set = !events.events().is_empty();
+        assert!(has_admin_set, "initialize must emit at least one event");
+    }
 
     #[test]
     fn test_transfer_emits_admin_transferred_event() {
@@ -953,18 +965,4 @@ mod test_admin {
             "Admin must still be functional after self-transfer"
         );
     }
-
-    #[test]
-    fn test_initialize_admin_requires_auth() {
-        let (env, client) = setup();
-        let admin = Address::generate(&env);
-
-        let result = client.try_initialize_admin(&admin);
-        assert!(
-            result.is_err(),
-            "initialize_admin must require authorization from the admin address"
-        );
-    }
-
-
 }

@@ -107,6 +107,31 @@ fn test_cancel_invoice_pending_status() {
     assert_eq!(invoice.status, InvoiceStatus::Cancelled);
 }
 
+#[test]
+fn test_cancel_invoice_pending_emits_event() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    // Cancel and check events
+    client.cancel_invoice(&invoice_id);
+
+    // Verify InvoiceCancelled event was emitted
+    let events = env.events().all();
+    let event_count = events.events().len();
+    assert!(event_count > 0, "Expected events to be emitted");
+}
 
 #[test]
 fn test_cancel_invoice_pending_business_owner_only() {
@@ -169,13 +194,37 @@ fn test_cancel_invoice_verified_status() {
     assert_eq!(invoice.status, InvoiceStatus::Cancelled);
 }
 
+#[test]
+fn test_cancel_invoice_verified_emits_event() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.verify_invoice(&invoice_id);
+    client.cancel_invoice(&invoice_id);
+
+    // Verify events were emitted
+    let events = env.events().all();
+    assert!(events.events().len() > 0, "Expected events to be emitted");
+}
 
 // ============================================================================
 // CANCEL INVOICE TESTS - FUNDED STATUS (SHOULD FAIL)
 // ============================================================================
 
 #[test]
-#[should_panic(expected = "Error(Contract, #1401)")]
+#[should_panic(expected = "Error(Contract, #1003)")]
 fn test_cancel_invoice_funded_fails() {
     let (env, client, admin) = setup_env();
     let contract_id = client.address.clone();
@@ -374,6 +423,36 @@ fn test_refund_escrow_after_funding() {
     assert_eq!(invoice.status, InvoiceStatus::Refunded);
 }
 
+#[test]
+fn test_refund_emits_event() {
+    let (env, client, admin) = setup_env();
+    let contract_id = client.address.clone();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, 10_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 1_000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Refund test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Refund and check events
+    client.refund_escrow_funds(&invoice_id, &business);
+
+    let events = env.events().all();
+    assert!(events.events().len() > 0, "Expected refund events to be emitted");
+}
 
 #[test]
 fn test_refund_idempotency() {

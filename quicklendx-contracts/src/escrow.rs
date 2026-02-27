@@ -89,6 +89,7 @@ pub fn accept_bid_and_fund(
         env,
         bid.investor.clone(),
         bid.bid_amount,
+        env.ledger().timestamp(),
     );
     InvoiceStorage::update_invoice(env, &invoice);
 

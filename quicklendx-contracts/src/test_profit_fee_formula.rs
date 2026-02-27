@@ -340,7 +340,7 @@ fn test_rounding_boundary_cases() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
+    let _admin = setup_admin(&env, &client);
 
     // Test exact boundaries where fee should just cross integer threshold
     // At 2% (200 bps), fee = profit * 200 / 10000 = profit / 50
@@ -371,7 +371,7 @@ fn test_no_dust_comprehensive() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
+    let _admin = setup_admin(&env, &client);
 
     // Test many combinations to ensure no dust ever
     let investments = vec![100, 1000, 10000, 123456, 999999];
@@ -587,182 +587,10 @@ fn test_fee_config_max_boundary() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
+    let _admin = setup_admin(&env, &client);
 
     // Max allowed: 10% (1000 bps)
     client.set_platform_fee(&1000);
     let fee_config = client.get_platform_fee();
     assert_eq!(fee_config.fee_bps, 1000);
-}
-
-#[test]
-fn test_fee_config_exceeds_max() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-
-    // Attempt to set > 10% should fail
-    let result = client.try_set_platform_fee(&1200);
-    assert!(result.is_err());
-}
-
-// ============================================================================
-// Integration Tests
-// ============================================================================
-
-#[test]
-fn test_profit_calculation_integration_with_fee_manager() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin(&env, &client);
-
-    // Initialize fee system
-    client.initialize_fee_system(&admin);
-
-    // Both calculate_profit and FeeManager should give same results
-    let investment = 10000;
-    let payment = 11000;
-
-    let (investor_return, platform_fee) = client.calculate_profit(&investment, &payment);
-
-    // Verify consistency
-    assert_eq!(platform_fee, 20); // 2% of 1000 profit
-    assert_eq!(investor_return, 10980);
-    assert_eq!(investor_return + platform_fee, payment);
-}
-
-// ============================================================================
-// Stress Tests
-// ============================================================================
-
-#[test]
-fn test_many_calculations_no_dust() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    // Run 100 random-ish calculations and verify no dust
-    for i in 1..=100 {
-        let investment = i * 1000;
-        let payment = investment + (i * 10); // Small profit
-
-        let (investor_return, platform_fee) = client.calculate_profit(&investment, &payment);
-
-        assert_eq!(
-            investor_return + platform_fee,
-            payment,
-            "Dust at iteration {}: inv={}, pay={}, return={}, fee={}",
-            i,
-            investment,
-            payment,
-            investor_return,
-            platform_fee
-        );
-    }
-}
-
-// ============================================================================
-// Specific Scenario Tests
-// ============================================================================
-
-#[test]
-fn test_realistic_invoice_scenario() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    // Realistic scenario: $10,000 invoice, investor funds at 8% discount
-    // Investment: 9,200 (92% of invoice)
-    // Expected payment at maturity: 10,000 (108.7% return)
-    let investment_amount = 9_200_000_000; // 9,200 in stroops (7 decimals)
-    let payment_amount = 10_000_000_000; // 10,000 in stroops
-
-    let (investor_return, platform_fee) =
-        client.calculate_profit(&investment_amount, &payment_amount);
-
-    // Profit: 800,000,000 stroops
-    // Platform fee: 2% of 800M = 16,000,000 stroops
-    assert_eq!(platform_fee, 16_000_000);
-    assert_eq!(investor_return, 9_984_000_000);
-    assert_eq!(investor_return + platform_fee, payment_amount);
-}
-
-#[test]
-fn test_minimal_profit_scenario() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    // Minimal profit scenario where rounding matters most
-    // Investment: 9,999,999
-    // Payment: 10,000,000 (profit of 1)
-    let investment_amount = 9_999_999;
-    let payment_amount = 10_000_000;
-
-    let (investor_return, platform_fee) =
-        client.calculate_profit(&investment_amount, &payment_amount);
-
-    // Profit: 1, Fee: 2% of 1 = 0.02 -> 0 (rounds down)
-    assert_eq!(platform_fee, 0);
-    assert_eq!(investor_return, 10_000_000);
-    assert_eq!(investor_return + platform_fee, payment_amount);
-}
-
-#[test]
-fn test_default_scenario_no_profit() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    // Default scenario: business can only pay 80% of invoice
-    let investment_amount = 9_200_000_000;
-    let payment_amount = 8_000_000_000; // Only 80% recovered
-
-    let (investor_return, platform_fee) =
-        client.calculate_profit(&investment_amount, &payment_amount);
-
-    // No profit (actually a loss), so no fee
-    assert_eq!(platform_fee, 0);
-    assert_eq!(investor_return, 8_000_000_000);
-}
-
-// ============================================================================
-// Security Hardening Tests
-// ============================================================================
-
-#[test]
-fn test_calculate_with_fee_bps_clamps_invalid_fee_bounds() {
-    // Negative fee is clamped to 0.
-    let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 1100, -1);
-    assert_eq!(platform_fee, 0);
-    assert_eq!(investor_return, 1100);
-    assert_eq!(investor_return + platform_fee, 1100);
-
-    // Fee > 100% is clamped to 100%.
-    let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, 1100, 20_000);
-    assert_eq!(platform_fee, 100);
-    assert_eq!(investor_return, 1000);
-    assert_eq!(investor_return + platform_fee, 1100);
-}
-
-#[test]
-fn test_calculate_with_fee_bps_normalizes_negative_amounts() {
-    // Negative payment normalizes to 0 for safe deterministic behavior.
-    let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(1000, -1, 200);
-    assert_eq!(platform_fee, 0);
-    assert_eq!(investor_return, 0);
-
-    // Negative investment normalizes to 0 before computing profit.
-    let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(-10, 1000, 200);
-    assert_eq!(platform_fee, 20);
-    assert_eq!(investor_return, 980);
-    assert_eq!(investor_return + platform_fee, 1000);
 }

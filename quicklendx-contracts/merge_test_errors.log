@@ -1,0 +1,2168 @@
+warning: unused imports: `emit_dispute_created`, `emit_dispute_resolved`, and `emit_dispute_under_review`
+ --> src/defaults.rs:3:5
+  |
+3 |     emit_dispute_created, emit_dispute_resolved, emit_dispute_under_review, e...
+  |     ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Address`, `String`, and `Vec`
+ --> src/defaults.rs:9:19
+  |
+9 | ...::{Address, BytesN, Env, String, Vec};
+  |       ^^^^^^^               ^^^^^^  ^^^
+
+warning: unused import: `MAX_FEEDBACK_LENGTH`
+ --> src/invoice.rs:6:70
+  |
+6 | ...H, MAX_FEEDBACK_LENGTH,
+  |       ^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `emit_invoice_category_updated`, `emit_invoice_tag_added`, `emit_invoice_tag_removed`, `emit_platform_fee_config_updated`, and `emit_treasury_configured`
+  --> src/lib.rs:58:28
+   |
+58 |     emit_invoice_verified, emit_invoice_category_updated, emit_invoice_tag_added,
+   |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^
+59 |     emit_invoice_tag_removed, emit_treasury_configured, emit_platform_fee_config_updated,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/admin.rs:168:18
+    |
+168 | ...().publish(
+    |       ^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/admin.rs:176:18
+    |
+176 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src/emergency.rs:66:22
+   |
+66 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/emergency.rs:108:22
+    |
+108 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/emergency.rs:143:22
+    |
+143 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src/events.rs:29:18
+   |
+29 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src/events.rs:43:18
+   |
+43 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src/events.rs:54:18
+   |
+54 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src/events.rs:70:18
+   |
+70 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src/events.rs:83:18
+   |
+83 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src/events.rs:90:18
+   |
+90 | ...().publish(
+   |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:106:18
+    |
+106 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:130:18
+    |
+130 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:144:18
+    |
+144 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:155:18
+    |
+155 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:179:18
+    |
+179 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:199:18
+    |
+199 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:212:18
+    |
+212 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:224:18
+    |
+224 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:232:18
+    |
+232 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:252:18
+    |
+252 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:271:18
+    |
+271 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:283:18
+    |
+283 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:297:18
+    |
+297 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:313:18
+    |
+313 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:327:18
+    |
+327 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:343:18
+    |
+343 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:351:18
+    |
+351 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:359:18
+    |
+359 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:367:18
+    |
+367 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:380:18
+    |
+380 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:393:18
+    |
+393 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:401:18
+    |
+401 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:410:10
+    |
+410 | ...  .publish((s...
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:421:18
+    |
+421 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:439:18
+    |
+439 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:452:18
+    |
+452 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:465:18
+    |
+465 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:478:18
+    |
+478 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:495:18
+    |
+495 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:507:18
+    |
+507 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:525:18
+    |
+525 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:538:18
+    |
+538 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:555:18
+    |
+555 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/events.rs:585:18
+    |
+585 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/fees.rs:229:22
+    |
+229 | ...().publish((s...
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/init.rs:266:18
+    |
+266 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/settlement.rs:460:18
+    |
+460 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/settlement.rs:478:18
+    |
+478 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/verification.rs:679:18
+    |
+679 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/verification.rs:686:18
+    |
+686 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/verification.rs:693:18
+    |
+693 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/lib.rs:312:22
+    |
+312 | ...().publish(
+    |       ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/lib.rs:572:22
+    |
+572 | ...().publish(
+    |       ^^^^^^^
+
+warning: unused variable: `admin`
+   --> src/fees.rs:213:9
+    |
+213 | ...   admin: &A...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `actor`
+   --> src/invoice.rs:276:47
+    |
+276 | ...v, actor: Ad...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `env`
+   --> src/invoice.rs:282:40
+    |
+282 | ...f, env: &Env...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `actor`
+   --> src/invoice.rs:282:51
+    |
+282 | ...v, actor: Ad...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `env`
+   --> src/invoice.rs:381:30
+    |
+381 | ...f, env: &Env...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `actor`
+   --> src/invoice.rs:381:41
+    |
+381 | ...v, actor: Ad...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `env`
+   --> src/invoice.rs:391:30
+    |
+391 | ...f, env: &Env...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `actor`
+   --> src/invoice.rs:391:41
+    |
+391 | ...v, actor: Ad...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `limits`
+   --> src/verification.rs:502:9
+    |
+502 | ...et limits = ...
+    |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_limits`
+
+warning: unused variable: `investment`
+   --> src/lib.rs:900:13
+    |
+900 | ...et investment = ...
+    |       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
+
+warning: unused variable: `investment`
+   --> src/lib.rs:977:13
+    |
+977 | ...et investment = ...
+    |       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
+
+warning: unused variable: `investment`
+    --> src/lib.rs:1011:13
+     |
+1011 | ...et investment = ...
+     |       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
+
+warning: constant `MAX_ACTIVE_BIDS_PER_INVESTOR_KEY` is never used
+  --> src/bid.rs:13:7
+   |
+13 | const MAX_ACTIVE_BIDS_PER_INVESTOR_KEY: S...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR` is never used
+  --> src/bid.rs:14:7
+   |
+14 | const DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_max_active_bids_per_investor`, `set_max_active_bids_per_investor`, `count_active_placed_bids_for_investor`, and `count_active_bids_by_investor` are never used
+   --> src/bid.rs:135:12
+    |
+ 61 | impl BidStorage {
+    | --------------- associated functions in this implementation
+...
+135 |     pub fn get_max_active_bids_per_investor(env: &E...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+144 |     pub fn set_max_active_bids_per_investor(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+159 |     pub fn ...for_investor(en...
+    |            ...^^^^^^^^^^^^
+...
+383 |     pub fn count_active_bids_by_investor(env: &Env,...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `TOPIC_PAYMENT_RECORDED` is never used
+  --> src/events.rs:18:11
+   |
+18 | ...st TOPIC_PAYMENT_RECORDED: S...
+   |       ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `TOPIC_INVOICE_SETTLED_FINAL` is never used
+  --> src/events.rs:19:11
+   |
+19 | ...st TOPIC_INVOICE_SETTLED_FINAL: S...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `TOPIC_BID_PLACED` is never used
+  --> src/events.rs:20:11
+   |
+20 | ...st TOPIC_BID_PLACED: S...
+   |       ^^^^^^^^^^^^^^^^
+
+warning: constant `TOPIC_BID_ACCEPTED` is never used
+  --> src/events.rs:21:11
+   |
+21 | ...st TOPIC_BID_ACCEPTED: S...
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `TOPIC_BID_WITHDRAWN` is never used
+  --> src/events.rs:22:11
+   |
+22 | ...st TOPIC_BID_WITHDRAWN: S...
+   |       ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `TOPIC_BID_EXPIRED` is never used
+  --> src/events.rs:23:11
+   |
+23 | ...st TOPIC_BID_EXPIRED: S...
+   |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `TOPIC_ESCROW_CREATED` is never used
+  --> src/events.rs:24:11
+   |
+24 | ...st TOPIC_ESCROW_CREATED: S...
+   |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `TOPIC_ESCROW_RELEASED` is never used
+  --> src/events.rs:25:11
+   |
+25 | ...st TOPIC_ESCROW_RELEASED: S...
+   |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `TOPIC_ESCROW_REFUNDED` is never used
+  --> src/events.rs:26:11
+   |
+26 | ...st TOPIC_ESCROW_REFUNDED: S...
+   |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_backup_created` is never used
+   --> src/events.rs:342:8
+    |
+342 | ...fn emit_backup_created(en...
+    |       ^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_backup_restored` is never used
+   --> src/events.rs:350:8
+    |
+350 | ...fn emit_backup_restored(en...
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_backup_validated` is never used
+   --> src/events.rs:358:8
+    |
+358 | ...fn emit_backup_validated(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_backup_archived` is never used
+   --> src/events.rs:366:8
+    |
+366 | ...fn emit_backup_archived(en...
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_retention_policy_updated` is never used
+   --> src/events.rs:374:8
+    |
+374 | ...fn emit_retention_policy_updated(
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_backups_cleaned` is never used
+   --> src/events.rs:392:8
+    |
+392 | ...fn emit_backups_cleaned(en...
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_audit_validation` is never used
+   --> src/events.rs:400:8
+    |
+400 | ...fn emit_audit_validation(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_audit_query` is never used
+   --> src/events.rs:408:8
+    |
+408 | ...fn emit_audit_query(en...
+    |       ^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_created` is never used
+   --> src/events.rs:459:8
+    |
+459 | ...fn emit_dispute_created(
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_under_review` is never used
+   --> src/events.rs:477:8
+    |
+477 | ...fn emit_dispute_under_review(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_resolved` is never used
+   --> src/events.rs:489:8
+    |
+489 | ...fn emit_dispute_resolved(
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_PLATFORM_FEE_BPS` is never used
+  --> src/fees.rs:10:7
+   |
+10 | const MAX_PLATFORM_FEE_BPS: u...
+   |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MIN_INVOICE_AMOUNT` is never used
+  --> src/init.rs:49:7
+   |
+49 | const DEFAULT_MIN_INVOICE_AMOUNT: i...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MAX_DUE_DATE_DAYS` is never used
+  --> src/init.rs:52:7
+   |
+52 | const DEFAULT_MAX_DUE_DATE_DAYS: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_GRACE_PERIOD_SECONDS` is never used
+  --> src/init.rs:53:7
+   |
+53 | const DEFAULT_GRACE_PERIOD_SECONDS: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_FEE_BPS` is never used
+  --> src/init.rs:54:7
+   |
+54 | const DEFAULT_FEE_BPS: u...
+   |       ^^^^^^^^^^^^^^^
+
+warning: constant `MAX_TAG_LENGTH` is never used
+  --> src/protocol_limits.rs:32:11
+   |
+32 | ...st MAX_TAG_LENGTH: u...
+   |       ^^^^^^^^^^^^^^
+
+warning: constant `MAX_DISPUTE_REASON_LENGTH` is never used
+  --> src/protocol_limits.rs:34:11
+   |
+34 | ...st MAX_DISPUTE_REASON_LENGTH: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_DISPUTE_EVIDENCE_LENGTH` is never used
+  --> src/protocol_limits.rs:35:11
+   |
+35 | ...st MAX_DISPUTE_EVIDENCE_LENGTH: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_DISPUTE_RESOLUTION_LENGTH` is never used
+  --> src/protocol_limits.rs:36:11
+   |
+36 | ...st MAX_DISPUTE_RESOLUTION_LENGTH: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_NOTIFICATION_TITLE_LENGTH` is never used
+  --> src/protocol_limits.rs:37:11
+   |
+37 | ...st MAX_NOTIFICATION_TITLE_LENGTH: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_NOTIFICATION_MESSAGE_LENGTH` is never used
+  --> src/protocol_limits.rs:38:11
+   |
+38 | ...st MAX_NOTIFICATION_MESSAGE_LENGTH: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_FEEDBACK_LENGTH` is never used
+  --> src/protocol_limits.rs:41:11
+   |
+41 | ...st MAX_FEEDBACK_LENGTH: u...
+   |       ^^^^^^^^^^^^^^^^^^^
+
+warning: associated function `is_business_verified` is never used
+   --> src/verification.rs:125:12
+    |
+ 74 | impl BusinessVerificationStorage {
+    | -------------------------------- associated function in this implementation
+...
+125 |     pub fn is_business_verified(env...
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `require_business_verification` is never used
+   --> src/verification.rs:636:8
+    |
+636 | ...fn require_business_verification(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `recover_base_limit_from_current_limit` is never used
+   --> src/verification.rs:944:4
+    |
+944 | fn ...urrent_limit(
+    |    ...^^^^^^^^^^^^
+
+warning: function `update_investor_analytics` is never used
+   --> src/verification.rs:965:8
+    |
+965 | ...fn update_investor_analytics(
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_investor_analytics` is never used
+    --> src/verification.rs:1018:8
+     |
+1018 | ...fn get_investor_analytics(
+     |       ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `quicklendx-contracts` (lib) generated 110 warnings (run `cargo fix --lib -p quicklendx-contracts` to apply 16 suggestions)
+warning: unused import: `BytesN`
+  --> src/test_string_limits.rs:10:14
+   |
+10 | ...s, BytesN, En...
+   |       ^^^^^^
+
+warning: unused import: `Events`
+  --> src/test_admin.rs:21:35
+   |
+21 | ..._, Events},
+   |       ^^^^^^
+
+warning: unused import: `Events`
+  --> src/test_cancel_refund.rs:15:31
+   |
+15 | ..._, Events},
+   |       ^^^^^^
+
+warning: unused imports: `PlatformFeeConfig` and `PlatformFee`
+  --> src/test_types.rs:11:22
+   |
+11 | ...::{PlatformFee, PlatformFeeConfig};
+   |       ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `PlatformFeeConfig` and `PlatformFee`
+  --> src/test_storage.rs:18:22
+   |
+18 | ...::{PlatformFee, PlatformFeeConfig};
+   |       ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ConfigStorage`
+  --> src/test_storage.rs:20:17
+   |
+20 | ...e, ConfigStorage, I...
+   |       ^^^^^^^^^^^^^
+
+warning: unused imports: `InvoiceCategory` and `InvoiceStatus`
+ --> src/test/test_invoice_categories.rs:2:22
+  |
+2 | ...::{InvoiceCategory, InvoiceStatus};
+  |       ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `Vec`
+ --> src/test/test_invoice_categories.rs:3:66
+  |
+3 | ...ing, Vec};
+  |         ^^^
+
+warning: unused import: `Ledger`
+ --> src/test/test_invoice_metadata.rs:5:31
+  |
+5 | ... _, Ledger},
+  |        ^^^^^^
+
+warning: unused import: `crate::errors::QuickLendXError`
+  --> src/test_bid.rs:11:5
+   |
+11 | use crate::errors::QuickLendXError;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: cannot test inner items
+   --> src/test_bid.rs:239:5
+    |
+239 |     #[test]
+    |     ^^^^^^^
+    |
+    = note: `#[warn(unnameable_test_items)]` on by default
+
+warning: cannot test inner items
+   --> src/test_bid.rs:258:5
+    |
+258 |     #[test]
+    |     ^^^^^^^
+
+warning: cannot test inner items
+   --> src/test_bid.rs:280:5
+    |
+280 |     #[test]
+    |     ^^^^^^^
+
+warning: unused import: `crate::bid::BidStatus`
+  --> src/test_bid_ranking.rs:10:5
+   |
+10 | use crate::bid::BidStatus;
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `DEFAULT_INSURANCE_PREMIUM_BPS`
+  --> src/test_insurance.rs:14:54
+   |
+14 | ...e, DEFAULT_INSURANCE_PREMIUM_BPS,
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `IntoVal`, `MockAuthInvoke`, and `MockAuth`
+  --> src/test_insurance.rs:17:31
+   |
+17 | ... as _, MockAuth, MockAuthInvoke},
+   |           ^^^^^^^^  ^^^^^^^^^^^^^^
+18 | ...v, IntoVal, Vec,
+   |       ^^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test_investor_kyc.rs:17:35
+   |
+17 | ..._, Ledger},
+   |       ^^^^^^
+
+warning: unused import: `crate::errors::QuickLendXError`
+ --> src/test_limit.rs:3:5
+  |
+3 | use crate::errors::QuickLendXError;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `InvestorRiskLevel` and `InvestorTier`
+ --> src/test_limit.rs:5:27
+  |
+5 | ...::{InvestorRiskLevel, InvestorTier};
+  |       ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^
+
+warning: unused import: `Vec`
+ --> src/test_limit.rs:7:74
+  |
+7 | ...ing, Vec};
+  |         ^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:360:24
+    |
+360 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:931:24
+    |
+931 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:987:24
+    |
+987 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1039:24
+     |
+1039 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1096:24
+     |
+1096 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1178:24
+     |
+1178 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+  --> src/test_bid.rs:51:24
+   |
+51 | ...nv.register_stellar_asset_contract(ad...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test_escrow.rs:20:31
+   |
+20 | ..._, Ledger},
+   |       ^^^^^^
+
+warning: variable does not need to be mutable
+   --> src/storage.rs:260:13
+    |
+260 | ...et mut ids: V...
+    |       ----^^^
+    |       |
+    |       help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src/storage.rs:289:13
+    |
+289 | ...et mut ids: V...
+    |       ----^^^
+    |       |
+    |       help: remove this `mut`
+
+warning: unused variable: `env`
+   --> src/test_admin.rs:714:14
+    |
+714 | ...t (env, clie...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `reason`
+   --> src/test_business_kyc.rs:656:9
+    |
+656 | ...et reason = ...
+    |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_reason`
+
+warning: unused variable: `env`
+    --> src/test_business_kyc.rs:1135:10
+     |
+1135 | ...t (env, cli...
+     |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+    --> src/test_business_kyc.rs:1143:10
+     |
+1143 | ...t (env, cli...
+     |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+    --> src/test_business_kyc.rs:1151:10
+     |
+1151 | ...t (env, cli...
+     |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `result`
+   --> src/test_cancel_refund.rs:469:9
+    |
+469 | ...et result = ...
+    |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `result`
+   --> src/test_cancel_refund.rs:492:9
+    |
+492 | ...et result = ...
+    |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:159:10
+    |
+159 | ...t (env, clie...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:293:9
+    |
+293 | ...et env = Env...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:336:10
+    |
+336 | ...t (env, clie...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+  --> src/test_types.rs:15:9
+   |
+15 | ...et env = Env:...
+   |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `token_client`
+   --> src/test.rs:361:9
+    |
+361 | ...et token_client = ...
+    |       ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_token_client`
+
+warning: unused variable: `bid1`
+   --> src/test_bid_ranking.rs:188:9
+    |
+188 | ...et bid1 = cl...
+    |       ^^^^ help: if this is intentional, prefix it with an underscore: `_bid1`
+
+warning: unused variable: `bid3`
+   --> src/test_bid_ranking.rs:194:9
+    |
+194 | ...et bid3 = cl...
+    |       ^^^^ help: if this is intentional, prefix it with an underscore: `_bid3`
+
+warning: unused variable: `admin`
+  --> src/test_fees.rs:21:65
+   |
+21 | ...t, admin: &Ad...
+   |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_fees.rs:162:9
+    |
+162 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `contract_id`
+  --> src/test_insurance.rs:87:23
+   |
+87 | ...t, contract_id) =...
+   |       ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_contract_id`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:116:27
+    |
+116 | ...t, admin) = ...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_investor_kyc.rs:193:13
+    |
+193 | ...et non_admin = ...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `result`
+   --> src/test_investor_kyc.rs:206:13
+    |
+206 | ...et result = ...
+    |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:213:27
+    |
+213 | ...t, admin) = ...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `business`
+   --> src/test_investor_kyc.rs:496:13
+    |
+496 | ...et business = ...
+    |       ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `high_risk`
+   --> src/test_investor_kyc.rs:624:13
+    |
+624 | ...et high_risk = ...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_high_risk`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:766:27
+    |
+766 | ...t, admin) = ...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `env`
+    --> src/test_investor_kyc.rs:1973:14
+     |
+1973 | ...t (env, cli...
+     |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:40:65
+   |
+40 | ...t, admin: &Ad...
+   |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:80:9
+   |
+80 | ...et admin = se...
+   |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:103:9
+    |
+103 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:126:9
+    |
+126 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:301:9
+    |
+301 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:343:9
+    |
+343 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:374:9
+    |
+374 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:590:9
+    |
+590 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:604:9
+    |
+604 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: constant `DEFAULT_MIN_INVOICE_AMOUNT` is never used
+  --> src/init.rs:51:7
+   |
+51 | const DEFAULT_MIN_INVOICE_AMOUNT: i...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `make_breakdown` is never used
+   --> src/profits.rs:503:8
+    |
+503 | ...fn make_breakdown(
+    |       ^^^^^^^^^^^^^^
+
+warning: associated constants `INVESTOR_HISTORY_KEY` and `INVESTOR_ANALYTICS_KEY` are never used
+   --> src/verification.rs:256:11
+    |
+251 | impl InvestorVerificationStorage {
+    | -------------------------------- associated constants in this implementation
+...
+256 |     const INVESTOR_HISTORY_KEY: &'s...
+    |           ^^^^^^^^^^^^^^^^^^^^
+257 |     #[cfg(test)]
+258 |     const INVESTOR_ANALYTICS_KEY: &...
+    |           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `ConfigStorage` is never constructed
+   --> src/storage.rs:561:12
+    |
+561 | ...ct ConfigStorage;
+    |       ^^^^^^^^^^^^^
+
+warning: associated functions `set_platform_fees` and `get_platform_fees` are never used
+   --> src/storage.rs:565:12
+    |
+563 | impl ConfigStorage {
+    | ------------------ associated functions in this implementation
+564 |     /// Store platform fee conf...
+565 |     pub fn set_platform_fees(en...
+    |            ^^^^^^^^^^^^^^^^^
+...
+572 |     pub fn get_platform_fees(en...
+    |            ^^^^^^^^^^^^^^^^^
+
+warning: function `create_verified_business` is never used
+  --> src/test/test_invoice_categories.rs:10:4
+   |
+10 | fn create_verified_business(
+   |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `test_default_bid_ttl_used_in_place_bid` is never used
+   --> src/test_bid.rs:240:8
+    |
+240 | ...fn t...n_place_bid() {
+    |       ^...^^^^^^^^^^^
+
+warning: function `test_admin_can_update_ttl_and_bid_uses_new_value` is never used
+   --> src/test_bid.rs:259:8
+    |
+259 | ...fn t...s_new_value() {
+    |       ^...^^^^^^^^^^^
+
+warning: function `test_set_bid_ttl_bounds_enforced` is never used
+   --> src/test_bid.rs:281:8
+    |
+281 | ...fn test_set_bid_ttl_bounds_enforced() {
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `setup_business` is never used
+  --> src/test_fees.rs:13:4
+   |
+13 | fn setup_business(en...
+   |    ^^^^^^^^^^^^^^
+
+warning: function `setup_business` is never used
+  --> src/test_profit_fee_formula.rs:32:4
+   |
+32 | fn setup_business(en...
+   |    ^^^^^^^^^^^^^^
+
+warning: function `setup_investor` is never used
+  --> src/test_profit_fee_formula.rs:40:4
+   |
+40 | fn setup_investor(en...
+   |    ^^^^^^^^^^^^^^
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+ --> src/test/test_invoice_metadata.rs:9:24
+  |
+9 | ...v: &Env) -> (QuickLendXContractClient, A...
+  |       ^^^^      ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+  |       |
+  |       the lifetime is elided here
+  |
+  = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+  = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+  |
+9 | fn setup_contract(env: &Env) -> (QuickLendXContractClient<'_>, Address) {
+  |                                                          ++++
+
+warning: comparison is useless due to type limits
+    --> src/test_investor_kyc.rs:1143:13
+     |
+1143 | ...   veri...y >= 0,
+     |       ^^^^...^^^^^^
+     |
+     = note: `#[warn(unused_comparisons)]` on by default
+
+warning: `quicklendx-contracts` (lib test) generated 187 warnings (109 duplicates) (run `cargo fix --lib -p quicklendx-contracts --tests` to apply 54 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.89s
+     Running unittests src/lib.rs (target/debug/deps/quicklendx_contracts-83fde9e6236ddc12)
+
+running 562 tests
+test profits::tests::test_exact_payment_no_profit ... ok
+test profits::tests::test_breakdown_no_profit ... ok
+test profits::tests::test_basic_profit_calculation ... ok
+test profits::tests::test_large_amounts ... ok
+test profits::tests::test_breakdown_complete ... ok
+test profits::tests::test_max_fee ... ok
+test profits::tests::test_overpayment_high_profit ... ok
+test profits::tests::test_rounding_boundary ... ok
+test profits::tests::test_rounding_down_small_profit ... ok
+test profits::tests::test_rounding_just_below_boundary ... ok
+test profits::tests::test_treasury_split_basic ... ok
+test profits::tests::test_treasury_split_full_share ... ok
+test profits::tests::test_treasury_split_rounding ... ok
+test profits::tests::test_treasury_split_uneven ... ok
+test profits::tests::test_treasury_split_zero_fee ... ok
+test profits::tests::test_treasury_split_zero_share ... ok
+test profits::tests::test_underpayment_loss ... ok
+test profits::tests::test_verify_no_dust_negative ... ok
+test profits::tests::test_validate_inputs_valid ... ok
+test profits::tests::test_validate_inputs_negative ... ok
+test profits::tests::test_various_fee_percentages ... ok
+test profits::tests::test_verify_no_dust_positive ... ok
+test profits::tests::test_zero_fee ... ok
+test profits::tests::test_zero_investment ... ok
+test profits::tests::test_zero_payment ... ok
+test test::test_cancel_invoice_funded - should panic ... ok
+test test::test_bid_expiration_cleanup ... ok
+test test::test_cancel_invoice_pending ... ok
+test test::test_complete_invoice_lifecycle_with_cancellation ... ok
+test test::test_bid_validation_rules ... ok
+test test::test_cancel_invoice_verified ... ok
+test test::test_due_date_bounds_edge_cases ... ok
+test test::test_custom_max_due_date_limits ... ok
+test test::test_escrow_error_cases ... ok
+test test::test_bid_ranking_and_filters ... ok
+test test::test_escrow_creation_on_bid_acceptance ... ok
+test test::test_escrow_double_operation_prevention ... ok
+test test::test_get_available_invoices ... ok
+test test::test_escrow_refund ... ok
+test test::test_escrow_release_on_verification ... ok
+test test::test_get_invoices_by_status ... ok
+test test::test_get_business_invoices ... ok
+test test::test_get_verification_lists ... ok
+test test::test_escrow_status_tracking ... ok
+test test::test_get_bids_for_invoice ... ok
+test test::test_invoice_count_functions ... ok
+test test::test_get_invoices_by_status_cancelled ... ok
+test test::test_invoice_lifecycle ... ok
+test test::test_investor_verification_enforced ... ok
+test test::test_invoice_metadata::test_clear_metadata_no_op ... ok
+test test::test_invoice_metadata::test_clear_metadata_success ... ok
+test test::test_invoice_lifecycle_counts ... ok
+test test::test_invoice_metadata::test_index_removed_on_clear ... ok
+test test::test_investment_insurance_lifecycle ... ok
+test test::test_invoice_metadata::test_update_metadata_non_owner_rejected - should panic ... ok
+test test::test_invoice_metadata::test_index_removed_on_metadata_update ... ok
+test test::test_invoice_metadata::test_validation_empty_customer_address ... ok
+test test::test_invoice_metadata::test_get_invoices_by_customer_and_tax_id ... ok
+test test::test_invoice_expiration_triggers_default ... ok
+test test::test_invoice_metadata::test_update_metadata_success ... ok
+test test::test_invoice_metadata::test_validation_invalid_line_item_desc ... ok
+test test::test_invoice_metadata::test_validation_empty_tax_id ... ok
+test test::test_invoice_metadata::test_validation_invalid_line_item_qty_price ... ok
+test test::test_invoice_metadata::test_validation_mismatched_computation ... ok
+test test::test_invoice_metadata::test_validation_empty_customer_name ... ok
+test test::test_invoice_metadata_validation ... ok
+test test::test_invoice_metadata::test_validation_mismatched_invoice_total ... ok
+test test::test_invoice_not_found ... ok
+test test::test_invoice_metadata::test_validation_empty_line_items ... ok
+test test::test_kyc_already_pending ... ok
+test test::test_kyc_already_verified ... ok
+test test::test_platform_fee_configuration ... ok
+test test::test_query_investment_insurance_nonexistent_investment ... ok
+test test::test_kyc_resubmission_after_rejection ... ok
+test test::test_query_investment_insurance_premium_calculation ... ok
+test test::test_reject_business ... ok
+test test::test_query_investment_insurance_single_coverage ... ok
+test test::test_store_invoice ... ok
+test test::test_simple_bid_storage ... ok
+test test::test_query_investment_insurance_inactive_coverage ... ok
+test test::test_store_invoice_validation ... ok
+test test::test_submit_kyc_application ... ok
+test test::test_store_invoice_max_due_date_boundary ... ok
+test test::test_update_invoice_metadata_and_queries ... ok
+test test::test_unique_investment_id_generation ... ok
+test test::test_upload_invoice_invalid_amount - should panic ... ok
+test test::test_update_invoice_status ... ok
+test test::test_upload_invoice_not_verified_business - should panic ... ok
+test test::test_upload_invoice_past_due_date - should panic ... ok
+test test::test_partial_payments_trigger_settlement ... ok
+test test::test_upload_invoice_requires_verification ... ok
+test test::test_upload_invoice_success ... ok
+test test::test_verification_unauthorized_access ... ok
+test test::test_verify_business ... ok
+test test::test_verify_invoice_already_verified - should panic ... ok
+test test::test_upload_invoice_max_due_date_boundary ... ok
+test test::test_verify_invoice_requires_admin ... ok
+test test::test_verify_invoice_not_admin ... ok
+test test_admin::test_admin::test_admin_authorization_in_investor_verification ... ok
+test test::test_verify_invoice_success ... ok
+test test::test_unique_bid_id_generation ... ok
+test test_admin::test_admin::test_admin_can_reject_business_after_set_admin ... ok
+test test_admin::test_admin::test_admin_can_set_platform_fee ... ok
+test test_admin::test_admin::test_admin_can_reject_investor ... ok
+test test_admin::test_admin::test_admin_can_verify_invoice ... ok
+test test_admin::test_admin::test_admin_operations_fail_without_initialization ... ok
+test test_admin::test_admin::test_admin_verification_workflow_with_set_admin ... ok
+test test_admin::test_admin::test_admin_verification_workflow_with_initialize_admin ... ok
+test test_admin::test_admin::test_get_admin_consistency_between_modules ... ok
+test test_admin::test_admin::test_get_admin_returns_none_before_any_initialization ... ok
+test test_admin::test_admin::test_get_admin_returns_none_before_init ... ok
+test test_admin::test_admin::test_coverage_edge_case_admin_transfer_to_same_address ... ok
+test test_admin::test_admin::test_get_current_admin_after_init_returns_address ... ok
+test test_admin::test_admin::test_get_current_admin_before_init_returns_none ... ok
+test test_admin::test_admin::test_get_current_admin_after_transfer_returns_new_address ... ok
+test test_admin::test_admin::test_initialize_admin_and_set_admin_consistency ... ok
+test test_admin::test_admin::test_get_current_admin_tracks_full_lifecycle ... ok
+test test_admin::test_admin::test_initialize_admin_double_init_fails ... ok
+test test_admin::test_admin::test_initialize_admin_requires_auth ... ok
+test test_admin::test_admin::test_initialize_admin_same_address_twice_fails ... ok
+test test_admin::test_admin::test_initialize_admin_succeeds ... ok
+test test_admin::test_admin::test_is_admin_returns_false_before_init ... ok
+test test_admin::test_admin::test_is_admin_returns_true_for_current_admin ... ok
+test test_admin::test_admin::test_is_admin_returns_false_for_different_address ... ok
+test test_admin::test_admin::test_non_admin_cannot_verify_after_set_admin ... ok
+test test_admin::test_admin::test_non_admin_cannot_verify_investor ... ok
+test test::test_withdraw_bid ... ok
+test test_admin::test_admin::test_require_admin_fails_before_init ... ok
+test test_admin::test_admin::test_require_admin_fails_for_non_admin ... ok
+test test_admin::test_admin::test_require_admin_succeeds_for_admin ... ok
+test test_admin::test_admin::test_set_admin_and_initialize_admin_consistency ... ok
+test test_admin::test_admin::test_multiple_admin_transfers_in_verification_context ... ok
+test test_admin::test_admin::test_set_admin_first_time_via_verification_module ... ok
+test test_admin::test_admin::test_set_admin_syncs_with_admin_storage_initialization_flag ... ok
+test test_admin::test_admin::test_set_admin_transfer_via_verification_module ... ok
+test test_admin::test_admin::test_set_admin_rejects_non_admin_caller ... ok
+test test_admin::test_admin::test_set_platform_fee_without_admin_fails ... ok
+test test_admin::test_admin::test_transfer_admin_succeeds ... ok
+test test_admin::test_admin::test_transfer_admin_to_self ... ok
+test test_admin::test_admin::test_transfer_admin_without_init_fails ... ok
+test test_admin::test_admin::test_transfer_emits_admin_transferred_event ... ok
+test test_admin::test_admin::test_transfer_admin_chain ... ok
+test test_admin::test_admin::test_verify_invoice_without_admin_fails ... ok
+test test_admin::test_admin::test_transferred_admin_can_verify_business ... ok
+test test_admin::test_admin::test_admin_storage_persistence_across_operations ... ok
+test test_bid::test_bid_default_ttl_seven_days ... ok
+test test_bid::test_bid_at_exact_expiration_not_expired ... ok
+test test_bid::test_bid_expiration_and_cleanup ... ok
+test test_bid::test_bid_placement_non_verified_invoice_fails ... ok
+test test_bid::test_best_bid_excludes_withdrawn ... ok
+test test_bid::test_bid_placement_respects_investment_limit ... ok
+test test_bid::test_bid_one_second_past_expiration_expired ... ok
+test test_bid::test_bid_placement_verified_invoice_succeeds ... ok
+test test_bid::test_bid_withdrawal_by_owner_succeeds ... ok
+test test_bid::test_cancel_bid_nonexistent_returns_false ... ok
+test test_bid::test_bid_withdrawal_only_placed_bids ... ok
+test test_bid::test_cancel_bid_on_cancelled_returns_false ... ok
+test test_bid::test_bid_ranking_by_profit ... ok
+test test_bid::test_cancel_bid_on_withdrawn_returns_false ... ok
+test test_bid::test_cancel_bid_succeeds ... ok
+test test_bid::test_cancelled_bid_excluded_from_ranking ... ok
+test test_bid::test_cannot_accept_expired_bid ... ok
+test test_bid::test_cancelled_bids_not_affected_by_expiration ... ok
+test test_bid::test_business_accepts_one_bid_others_remain_placed ... ok
+test test_bid::test_cleanup_on_invoice_with_no_bids ... ok
+test test_bid::test_cleanup_with_no_expired_bids_returns_zero ... ok
+test test_bid::test_cleanup_triggered_on_query_after_expiration ... ok
+test test_bid::test_cleanup_expired_bids_returns_count ... ok
+test test_bid::test_cannot_accept_second_bid_after_first_accepted ... ok
+test test_bid::test_get_all_bids_by_investor_empty ... ok
+test test_bid::test_expiration_cleanup_isolated_per_invoice ... ok
+test test_bid::test_expired_bids_removed_from_invoice_list ... ok
+test test_bid::test_get_all_bids_by_investor_cross_invoice ... ok
+test test_bid::test_get_best_bid_excludes_expired ... ok
+test test_bid::test_get_ranked_bids_excludes_expired ... ok
+test test_bid::test_multiple_bids_indexing_and_query ... ok
+test test_bid::test_mixed_status_bids_only_placed_expire ... ok
+test test_bid::test_get_bids_for_invoice_returns_all_bids ... ok
+test test_bid::test_multiple_investors_bids_ranking_order ... ok
+test test_bid::test_partial_expiration_cleanup ... ok
+test test_bid::test_place_bid_cleans_up_expired_before_placing ... ok
+test test_bid::test_non_accepted_investors_can_withdraw_after_acceptance ... ok
+test test_bid::test_set_investment_limit_invalid_amount_fails ... ok
+test test_bid::test_set_investment_limit_non_admin_fails ... ok
+test test_bid::test_only_one_escrow_created_for_accepted_bid ... ok
+test test_bid::test_set_investment_limit_unverified_fails ... ok
+test test_bid::test_set_investment_limit_succeeds ... ok
+test test_bid::test_query_bids_by_investor ... ok
+test test_bid::test_updated_limit_enforced_in_bidding ... ok
+test test_bid::test_withdrawn_bids_not_affected_by_expiration ... ok
+test test_bid::test_ranking_after_all_bids_expire ... ok
+test test_bid_ranking::test_best_bid_after_withdrawal ... ok
+test test_bid_ranking::test_empty_bid_list ... ok
+test test_bid_ranking::test_empty_ranked_and_best_for_nonexistent_invoice ... ok
+test test_bid_ranking::test_best_bid_excludes_expired ... ok
+test test_bid_ranking::test_best_bid_equals_first_ranked ... ok
+test test_bid_ranking::test_best_bid_excludes_withdrawn ... ok
+test test_bid_ranking::test_equal_bids_tie_break_by_timestamp ... ok
+test test_bid_ranking::test_single_bid_ranking_and_best_selection ... ok
+test test_business_kyc::test_business_can_submit_own_kyc ... ok
+test test_business_kyc::test_business_cannot_submit_kyc_for_another_business ... ok
+test test_bid_ranking::test_ranked_bids_profit_ordering ... ok
+test test_business_kyc::test_complete_business_kyc_to_invoice_flow ... ok
+test test_business_kyc::test_double_verification_fails ... ok
+test test_business_kyc::test_get_business_verification_status_returns_none_for_unsubmitted ... ok
+test test_business_kyc::test_get_pending_businesses_empty_initially ... ok
+test test_business_kyc::test_get_rejected_businesses_empty_initially ... ok
+test test_business_kyc::test_full_rejection_resubmission_verification_cycle ... ok
+test test_business_kyc::test_get_verified_businesses_empty_initially ... ok
+test test_bid_ranking::test_ranking_with_multiple_bids ... ok
+test test_business_kyc::test_kyc_already_pending_error ... ok
+test test_business_kyc::test_get_verification_lists ... ok
+test test_business_kyc::test_kyc_resubmission_after_rejection ... ok
+test test_business_kyc::test_kyc_submission_with_empty_data ... ok
+test test_business_kyc::test_kyc_data_integrity ... ok
+test test_business_kyc::test_kyc_already_verified_error ... ok
+test test_business_kyc::test_kyc_with_long_data ... ok
+test test_business_kyc::test_kyc_with_special_characters ... ok
+test test_business_kyc::test_large_kyc_data_submission ... ok
+test test_business_kyc::test_multiple_businesses_independent_kyc_processes ... ok
+test test_bid_ranking::test_ranked_excludes_withdrawn_and_expired ... ok
+test test_business_kyc::test_only_admin_can_reject_business ... ok
+test test_business_kyc::test_only_admin_can_verify_business ... ok
+test test_business_kyc::test_pending_business_cannot_upload_invoice ... ok
+test test_business_kyc::test_reject_business_without_kyc_submission_fails ... ok
+test test_business_kyc::test_rejected_business_cannot_upload_invoice ... ok
+test test_business_kyc::test_reject_already_verified_business_fails ... ok
+test test_business_kyc::test_rejected_list_updates_correctly_on_rejection ... ok
+test test_business_kyc::test_rejection_lists_consistency ... ok
+test test_business_kyc::test_rejection_reason_stored_correctly ... ok
+test test_business_kyc::test_resubmission_moves_from_rejected_to_pending ... ok
+test test_business_kyc::test_multiple_businesses_all_statuses ... ok
+test test_business_kyc::test_status_transitions_pending_to_rejected ... ok
+test test_business_kyc::test_multiple_businesses_concurrent_kyc ... ok
+test test_business_kyc::test_status_transitions_pending_to_verified ... ok
+test test_business_kyc::test_submitted_at_timestamp_non_zero ... ok
+test test_business_kyc::test_status_transitions_rejected_to_pending_on_resubmit ... ok
+test test_business_kyc::test_unverified_business_cannot_upload_invoice ... ok
+test test_business_kyc::test_rejected_business_resubmission_flow ... ok
+test test_business_kyc::test_timestamp_accuracy ... ok
+test test_business_kyc::test_verification_lists_consistency_after_transitions ... ok
+test test_business_kyc::test_verify_already_rejected_business_fails ... ok
+test test_business_kyc::test_verified_list_updates_correctly_on_verification ... ok
+test test_business_kyc::test_verified_by_field_set_correctly ... ok
+test test_business_kyc::test_verify_business_without_kyc_submission_fails ... ok
+test test_business_kyc::test_verified_business_can_upload_invoice ... ok
+test test_cancel_refund::test_cancel_invoice_defaulted_fails - should panic ... ok
+test test_cancel_refund::test_cancel_invoice_already_cancelled_fails - should panic ... ok
+test test_cancel_refund::test_cancel_invoice_admin_cannot_cancel ... ok
+test test_cancel_refund::test_cancel_invoice_non_owner_fails ... ok
+test test_cancel_refund::test_cancel_invoice_not_found ... ok
+test test_cancel_refund::test_cancel_invoice_multiple_times_fails ... ok
+test test_cancel_refund::test_cancel_invoice_paid_fails - should panic ... ok
+test test_cancel_refund::test_cancel_invoice_pending_business_owner_only ... ok
+test test_cancel_refund::test_cancel_invoice_pending_status ... ok
+test test_cancel_refund::test_cancel_invoice_updates_status_list ... ok
+test test_cancel_refund::test_complete_lifecycle_with_cancellation ... ok
+test test_cancel_refund::test_cancel_invoice_verified_status ... ok
+test test_cancel_refund::test_cancel_invoice_funded_fails - should panic ... ok
+test test_cancel_refund::test_cancel_invoice_funded_returns_error ... ok
+test test_cancel_refund::test_refund_prevents_release ... ok
+test test_cancel_refund::test_complete_lifecycle_with_refund ... ok
+test test_cancel_refund::test_refund_without_escrow_fails ... ok
+test test_cancel_refund::test_refund_idempotency ... ok
+test test_emergency_withdraw::test_cancel_without_pending_fails ... ok
+test test_emergency_withdraw::test_cancel_clears_pending ... ok
+test test_emergency_withdraw::test_cancel_prevents_execute ... ok
+test test_emergency_withdraw::test_execute_before_timelock_fails ... ok
+test test_cancel_refund::test_refund_escrow_after_funding ... ok
+test test_emergency_withdraw::test_execute_one_second_before_timelock_fails ... ok
+test test_emergency_withdraw::test_execute_without_pending_fails ... ok
+test test_emergency_withdraw::test_get_pending_none_when_no_withdrawal_initiated ... ok
+test test_emergency_withdraw::test_get_pending_returns_withdrawal_after_initiate ... ok
+test test_emergency_withdraw::test_execute_at_exact_timelock_boundary_succeeds ... ok
+test test_emergency_withdraw::test_initiate_zero_amount_fails ... ok
+test test_emergency_withdraw::test_negative_amount_fails ... ok
+test test_emergency_withdraw::test_multiple_initiates_overwrites_previous ... ok
+test test_emergency_withdraw::test_non_admin_cannot_cancel ... ok
+test test_emergency_withdraw::test_only_admin_can_initiate ... ok
+test test_emergency_withdraw::test_pending_withdrawal_contains_correct_fields ... ok
+test test_emergency_withdraw::test_execute_after_timelock_succeeds ... ok
+test test_emergency_withdraw::test_get_pending_none_after_execute ... ok
+test test_emergency_withdraw::test_target_receives_correct_amount_when_funded ... ok
+test test_escrow::test_cannot_accept_withdrawn_bid ... ok
+test test_escrow::test_escrow_creation_validates_amount ... ok
+test test_escrow::test_accept_bid_state_transitions ... ok
+test test_escrow::test_escrow_invariants ... ok
+test test_escrow::test_funds_locked_exactly_once ... ok
+test test_escrow::test_multiple_bids_only_one_accepted ... ok
+test test_escrow::test_only_invoice_owner_can_accept_bid ... ok
+test test_escrow::test_multiple_bids_only_accepted_creates_escrow ... ok
+test test_escrow::test_only_verified_invoice_can_be_funded ... ok
+test test_escrow::test_release_escrow_funds_idempotency_blocked ... ok
+test test_escrow::test_multiple_bids_complete_workflow ... ok
+test test_escrow::test_rejects_double_accept ... ok
+test test_escrow::test_release_escrow_funds_success ... ok
+test test_escrow::test_token_transfer_idempotency ... ok
+test test_escrow_refund::test_refund_fails_if_invoice_status_not_funded ... ok
+test test_escrow::test_verify_invoice_when_funded_triggers_release_escrow_funds ... ok
+test test_escrow_refund::test_refund_authorization_current_behavior_and_security_note ... ok
+test test_escrow::test_single_escrow_per_invoice_with_multiple_bids ... ok
+test test_fees::test_calculate_transaction_fees_base_case ... ok
+test test_fees::test_calculate_transaction_fees_both_flags ... ok
+test test_fees::test_calculate_transaction_fees_early_payment_flag ... ok
+test test_escrow_refund::test_refund_fails_when_caller_is_neither_admin_nor_business ... ok
+test test_fees::test_calculate_transaction_fees_late_payment_flag ... ok
+test test_escrow_refund::test_refund_transfers_and_updates_status ... ok
+test test_escrow_refund::test_refund_idempotency_and_release_blocked ... ok
+test test_fees::test_configure_treasury ... ok
+test test_fees::test_configure_treasury_fails_without_admin ... ok
+test test_fees::test_default_platform_fee ... ok
+test test_fees::test_custom_platform_fee_bps ... ok
+test test_fees::test_distribute_revenue_large_amounts ... ok
+test test_fees::test_distribute_revenue_nonexistent_period ... ok
+test test_fees::test_comprehensive_fee_calculation ... ok
+test test_fees::test_distribute_revenue_below_minimum ... ok
+test test_fees::test_distribute_revenue_clears_pending ... ok
+test test_fees::test_fee_parameter_validation ... ok
+test test_fees::test_distribute_revenue_without_revenue_config ... ok
+test test_fees::test_early_payment_discounts ... ok
+test test_fees::test_fee_structure_updates ... ok
+test test_fees::test_fee_system_initialization ... ok
+test test_fees::test_get_platform_fee_config_before_init_returns_storage_key_not_found ... ok
+test test_fees::test_get_platform_fee_config_after_init_has_defaults ... ok
+test test_fees::test_get_revenue_split_config_before_configuration ... ok
+test test_fees::test_get_treasury_address_before_config ... ok
+test test_fees::test_get_platform_fee_config_after_update_platform_fee_bps ... ok
+test test_fees::test_get_platform_fee_config_includes_treasury_when_set ... ok
+test test_fees::test_module_loaded ... ok
+test test_fees::test_platform_fee_edge_cases ... ok
+test test_fees::test_revenue_config_invalid_shares_sum ... ok
+test test_fees::test_platform_fee_calculation ... ok
+test test_fees::test_revenue_config_shares_exceed_10000 ... ok
+test test_fees::test_revenue_config_reconfiguration ... ok
+test test_fees::test_fee_analytics ... ok
+test test_fees::test_revenue_distribution_config ... ok
+test test_fees::test_treasury_address_in_platform_fee_config ... ok
+test test_fees::test_transaction_fee_calculation ... ok
+test test_fees::test_treasury_address_update ... ok
+test test_fees::test_late_payment_penalties ... ok
+test test_fees::test_revenue_distribution_execution ... ok
+test test_fees::test_treasury_receives_exact_amount ... ok
+test test_fees::test_update_fee_structure_all_fee_types ... ok
+test test_fees::test_update_fee_structure_is_active_false ... ok
+test test_fees::test_update_fee_structure_base_fee_bps_variations ... ok
+test test_fees::test_update_fee_structure_creates_new_fee_type ... ok
+test test_fees::test_update_fee_structure_max_fee_less_than_min_fee ... ok
+test test_fees::test_update_fee_structure_max_fee_variations ... ok
+test test_fees::test_update_fee_structure_base_fee_bps_exceeds_max ... ok
+test test_fees::test_update_fee_structure_is_active_true ... ok
+test test_fees::test_update_fee_structure_negative_min_fee ... ok
+test test_fees::test_update_fee_structure_rejects_invalid_values ... ok
+test test_fees::test_update_fee_structure_sets_updated_at ... ok
+test test_fees::test_update_fee_structure_min_fee_variations ... ok
+test test_fees::test_update_fee_structure_with_admin ... ok
+test test_fees::test_validate_fee_parameters_base_fee_bps_exceeds_max ... ok
+test test_fees::test_validate_fee_parameters_base_fee_bps_far_exceeds_max ... ok
+test test_fees::test_validate_fee_parameters_base_fee_bps_max ... ok
+test test_fees::test_validate_fee_parameters_base_fee_bps_zero ... ok
+test test_fees::test_validate_fee_parameters_both_negative ... ok
+test test_fees::test_validate_fee_parameters_boundary_values ... ok
+test test_fees::test_validate_fee_parameters_large_negative_min_fee ... ok
+test test_fees::test_validate_fee_parameters_large_valid_values ... ok
+test test_fees::test_validate_fee_parameters_max_fee_zero ... ok
+test test_fees::test_validate_fee_parameters_min_equals_max ... ok
+test test_fees::test_validate_fee_parameters_min_fee_zero ... ok
+test test_fees::test_validate_fee_parameters_min_greater_than_max ... ok
+test test_fees::test_validate_fee_parameters_multiple_invalid_conditions ... ok
+test test_fees::test_validate_fee_parameters_negative_max_fee ... ok
+test test_fees::test_validate_fee_parameters_negative_min_fee ... ok
+test test_fees::test_update_fee_structure_sets_updated_by ... ok
+test test_fees::test_validate_fee_parameters_realistic_values ... ok
+test test_fees::test_validate_fee_parameters_valid ... ok
+test test_fees::test_update_fee_structure_updates_existing ... ok
+test test_insurance::test_investment_helpers_cover_branches ... ok
+test test_insurance::test_add_insurance_storage_key_not_found ... ok
+test test_fees::test_update_fee_structure_toggle_is_active ... ok
+test test_insurance::test_query_investment_insurance_returns_all_entries ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_risk_level ... ok
+test test_insurance::test_zero_coverage_and_invalid_inputs ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investors_by_tier ... ok
+test test_fees::test_volume_tier_discounts ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_reject_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_cannot_verify_without_kyc_submission ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_cannot_reject_without_kyc_submission ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_verify_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_bid_validation_checks_investor_verification_status ... FAILED
+test test_investor_kyc::test_investor_kyc::test_calculate_investment_limit_boundaries ... ok
+test test_investor_kyc::test_investor_kyc::test_admin_can_query_investor_lists ... ok
+test test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails ... FAILED
+test test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds ... FAILED
+test test_investor_kyc::test_investor_kyc::test_comprehensive_kyc_improves_risk_assessment ... ok
+test test_investor_kyc::test_investor_kyc::test_empty_kyc_data_handling ... ok
+test test_investor_kyc::test_investor_kyc::test_complete_investor_workflow ... FAILED
+test test_investor_kyc::test_investor_kyc::test_investment_limit_applies_across_all_bids ... FAILED
+test test_investor_kyc::test_investor_kyc::test_investor_analytics_tracking ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_cannot_resubmit_kyc_while_verified ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_compliance_notes ... ok
+test test_investor_kyc::test_investor_kyc::test_investment_limit_calculation_with_different_tiers ... ok
+test test_investor_kyc::test_investor_kyc::test_concurrent_investor_verifications ... ok
+test test_investor_kyc::test_investor_kyc::test_get_pending_verified_rejected_investors ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_duplicate_submission_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_submission_requires_auth ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_rejection_reason_stored ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_submission_succeeds ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_kyc_resubmission_after_rejection ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_verification_status_transitions ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_verification_data_integrity ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_tier_assignment ... ok
+test test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid ... FAILED
+test test_investor_kyc::test_investor_kyc::test_investor_verification_timestamps ... ok
+test test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_none ... FAILED
+test test_investor_kyc::test_investor_kyc::test_investor_risk_score_calculation ... ok
+test test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_pending ... FAILED
+test test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_rejected ... FAILED
+test test_investor_kyc::test_investor_kyc::test_is_investor_verified_state_transitions ... ok
+test test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_true_for_verified ... FAILED
+test test_investor_kyc::test_investor_kyc::test_maximum_investment_limit ... ok
+test test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only ... FAILED
+test test_investor_kyc::test_investor_kyc::test_multiple_accepted_bids_create_multiple_investments ... FAILED
+test test_investor_kyc::test_investor_kyc::test_is_investor_verified_with_different_risk_levels ... FAILED
+test test_investor_kyc::test_investor_kyc::test_negative_investment_limit_verification_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_multiple_investors_different_limits ... FAILED
+test test_investor_kyc::test_investor_kyc::test_non_admin_cannot_verify_investor ... ok
+test test_investor_kyc::test_investor_kyc::test_rejected_investor_can_resubmit_with_updated_kyc ... ok
+test test_investor_kyc::test_investor_kyc::test_risk_level_affects_investment_limits ... ok
+test test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid ... FAILED
+test test_investor_kyc::test_investor_kyc::test_single_investor_bids_on_multiple_invoices ... FAILED
+test test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding ... FAILED
+test test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid ... FAILED
+test test_investor_kyc::test_investor_kyc::test_validate_investor_investment_at_limit_boundary ... FAILED
+test test_investor_kyc::test_investor_kyc::test_validate_investor_investment_pending_investor ... FAILED
+test test_investor_kyc::test_investor_kyc::test_validate_investor_investment_unverified_investor ... FAILED
+test test_investor_kyc::test_investor_kyc::test_validate_investor_investment_rejected_investor ... FAILED
+test test_investor_kyc::test_investor_kyc::test_validate_investor_investment_over_limit ... FAILED
+test test_investor_kyc::test_investor_kyc::test_validate_investor_investment_multiple_bids_independent_validation ... FAILED
+test test_investor_kyc::test_investor_kyc::test_verify_investor_without_kyc_submission_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_verify_investor_with_invalid_limit_fails ... ok
+test test_investor_kyc::test_investor_kyc::test_verify_already_verified_investor_fails ... ok
+test test_limit::test_admin_operations_require_authorization ... ok
+test test_limit::test_bid_amount_limits ... ok
+test test_limit::test_description_length_limits ... ok
+test test_limit::test_due_date_limits ... ok
+test test_limit::test_invoice_amount_limits ... ok
+test test_overflow::test_calculate_treasury_split_large_amounts ... ok
+test test_overflow::test_compare_bids_equal_profit_ordering ... ok
+test test_overflow::test_compare_bids_safe_overflow ... ok
+test test_overflow::test_compare_bids_underflow_safe ... ok
+test test_investor_kyc::test_investor_kyc::test_very_high_risk_investor_restrictions ... FAILED
+test test_investor_kyc::test_investor_kyc::test_validate_investor_investment_within_limit ... FAILED
+test test_overflow::test_fee_calculation_at_limit ... ok
+test test_overflow::test_fee_calculation_at_zero_bps ... ok
+test test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit ... FAILED
+test test_overflow::test_profit_fee_bps_max ... ok
+test test_overflow::test_revenue_accumulation_overflow ... ok
+test test_overflow::test_investor_investments_pagination_overflow_safe ... ok
+test test_overflow::test_timestamp_bid_default_expiration_saturates ... ok
+test test_overflow::test_fee_calculation_large_amounts_no_overflow ... ok
+test test_overflow::test_fee_calculation_no_profit ... ok
+test test_overflow::test_timestamp_boundaries ... ok
+test test_overflow::test_timestamp_invoice_grace_deadline_saturates ... ok
+test test_overflow::test_verify_no_dust_large_amounts ... ok
+test test_overflow::test_total_invoice_count_saturating ... ok
+test test_overflow::test_revenue_accumulation_saturates_at_max ... ok
+test test_overflow::test_volume_accumulation_overflow ... ok
+test test_profit_fee::test_calculate_platform_fee_large_numbers ... ok
+test test_profit_fee::test_calculate_platform_fee_no_profit ... ok
+test test_overflow::test_timestamp_pagination_overflow_safe ... ok
+test test_profit_fee::test_calculate_platform_fee_full_payment ... ok
+test test_profit_fee::test_calculate_platform_fee_partial_loss ... ok
+test test_profit_fee::test_calculate_platform_fee_rounding ... ok
+test test_profit_fee::test_calculate_profit_large_amount_no_overflow ... ok
+test test_profit_fee::test_calculate_profit_no_dust_rounding_boundary ... ok
+test test_profit_fee_formula::test_calculate_with_fee_bps_clamps_invalid_fee_bounds ... ok
+test test_profit_fee_formula::test_calculate_with_fee_bps_normalizes_negative_amounts ... ok
+test test_profit_fee_formula::test_default_scenario_no_profit ... ok
+test test_profit_fee_formula::test_exact_payment_no_profit ... ok
+test test_profit_fee_formula::test_exact_payment_one_unit_profit ... ok
+test test_profit_fee_formula::test_extreme_large_amounts ... ok
+test test_profit_fee_formula::test_fee_config_default ... ok
+test test_profit_fee_formula::test_fee_config_exceeds_max ... ok
+test test_profit_fee::test_calculate_platform_fee_updated_bps ... ok
+test test_profit_fee_formula::test_fee_config_max_boundary ... ok
+test test_profit_fee_formula::test_large_amounts_no_overflow ... ok
+test test_overflow::test_volume_accumulation_saturates_at_max ... ok
+test test_profit_fee_formula::test_minimal_profit_scenario ... ok
+test test_profit_fee_formula::test_fee_config_update ... ok
+test test_profit_fee_formula::test_overpayment_extreme_profit ... ok
+test test_profit_fee_formula::test_overpayment_large_profit ... ok
+test test_profit_fee::test_calculate_platform_fee_small_fee ... ok
+test test_profit_fee_formula::test_profit_calculation_integration_with_fee_manager ... ok
+test test_profit_fee_formula::test_profit_fee_basic_calculation ... ok
+test test_profit_fee_formula::test_profit_fee_max_rate ... ok
+test test_profit_fee_formula::test_profit_fee_with_custom_rate ... ok
+test test_profit_fee_formula::test_realistic_invoice_scenario ... ok
+test test_profit_fee_formula::test_profit_fee_zero_rate ... ok
+test test_profit_fee_formula::test_rounding_boundary_cases ... ok
+test test_profit_fee_formula::test_treasury_split_equal ... ok
+test test_profit_fee_formula::test_treasury_split_full_share ... ok
+test test_profit_fee_formula::test_treasury_split_over_100_percent ... ok
+test test_profit_fee_formula::test_treasury_split_unequal ... ok
+test test_profit_fee_formula::test_treasury_split_with_rounding ... ok
+test test_profit_fee_formula::test_treasury_split_zero_fee ... ok
+test test_profit_fee_formula::test_treasury_split_zero_share ... ok
+test test_profit_fee_formula::test_underpayment_partial_loss ... ok
+test test_profit_fee_formula::test_underpayment_severe_loss ... ok
+test test_profit_fee_formula::test_underpayment_zero_payment ... ok
+test test_profit_fee_formula::test_validate_inputs_negative_investment ... ok
+test test_profit_fee_formula::test_validate_inputs_negative_payment ... ok
+test test_profit_fee_formula::test_validate_inputs_valid ... ok
+test test_profit_fee_formula::test_zero_investment_all_profit ... ok
+test test_profit_fee_formula::test_many_calculations_no_dust ... ok
+test test_profit_fee_formula::test_rounding_small_profit_various_fees ... ok
+test test_refund::test_cannot_refund_missing_escrow ... ok
+test test_refund::test_cannot_refund_nonexistent_invoice ... ok
+test test_refund::test_admin_can_trigger_refund ... ok
+test test_refund::test_business_can_trigger_refund ... ok
+test test_refund::test_cannot_refund_unfunded_invoice ... ok
+test test_profit_fee_formula::test_no_dust_comprehensive ... ok
+test test_revenue_split::test_100_percent_developer_split ... ok
+test test_refund::test_cannot_refund_twice ... ok
+test test_revenue_split::test_100_percent_treasury_split ... ok
+test test_revenue_split::test_60_20_20_split ... ok
+test test_revenue_split::test_50_50_split ... ok
+test test_revenue_split::test_accumulated_fees_distribution ... ok
+test test_revenue_split::test_distribute_revenue_no_revenue_data_fails ... ok
+test test_revenue_split::test_double_distribution_same_period_fails ... ok
+test test_revenue_split::test_distribute_revenue_requires_config ... ok
+test test_revenue_split::test_invalid_shares_not_summing_to_10000 ... ok
+test test_revenue_split::test_get_revenue_split_config ... ok
+test test_refund::test_refund_updates_internal_states_correctly ... ok
+test test_revenue_split::test_only_admin_can_update_config ... ok
+test test_revenue_split::test_revenue_config_treasury_address_stored ... ok
+test test_revenue_split::test_rounding ... ok
+test test_revenue_split::test_revenue_config_reconfiguration ... ok
+test test_storage::test_config_storage ... ok
+test test_storage::test_bid_storage ... ok
+test test_storage::test_index_consistency ... ok
+test test_storage::test_indexes ... ok
+test test_storage::test_investment_storage ... ok
+test test_refund::test_unauthorized_caller_cannot_trigger_refund ... ok
+test test_storage::test_invoice_storage ... ok
+test test_storage::test_storage_key_collision_detection ... ok
+test test_storage::test_storage_keys ... ok
+test test_storage::test_type_serialization_integrity ... ok
+test test_storage::test_storage_isolation ... ok
+test test_string_limits::test_invoice_metadata_limits ... ok
+test test_string_limits::test_invoice_description_limits ... ok
+test test_types::test_bid ... ok
+test test_types::test_bid_status_enum ... ok
+test test_types::test_insurance_coverage ... ok
+test test_types::test_investment ... ok
+test test_types::test_investment_status_enum ... ok
+test test_types::test_invoice ... ok
+test test_types::test_invoice_category_enum ... ok
+test test_types::test_invoice_metadata ... ok
+test test_types::test_invoice_status_enum ... ok
+test test_types::test_line_item_record ... ok
+test test_types::test_payment_record ... ok
+test test_string_limits::test_kyc_limits ... ok
+test test_storage::test_deterministic_behavior ... ok
+test test_storage::test_concurrent_index_updates ... ok
+
+failures:
+
+---- test_investor_kyc::test_investor_kyc::test_bid_validation_checks_investor_verification_status stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_bid_validation_checks_investor_verification_status' (487358) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_bid_validation_checks_investor_verification_status" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_bid_validation_checks_investor_verification_status.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails' (487356) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_bid_exceeding_investment_limit_fails.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds' (487360) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_bid_within_investment_limit_succeeds.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_complete_investor_workflow stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_complete_investor_workflow' (487362) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_complete_investor_workflow" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_complete_investor_workflow.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_investment_limit_applies_across_all_bids stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_investment_limit_applies_across_all_bids' (487369) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 30000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 30000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investment_limit_applies_across_all_bids" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_investment_limit_applies_across_all_bids.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid' (487387) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_investor_without_kyc_cannot_bid.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_none stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_none' (487388) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_none" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_is_investor_verified_returns_false_for_none.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_pending stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_pending' (487389) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_pending" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_is_investor_verified_returns_false_for_pending.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_rejected stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_rejected' (487390) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_rejected" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_is_investor_verified_returns_false_for_rejected.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_true_for_verified stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_true_for_verified' (487391) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_true_for_verified" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_is_investor_verified_returns_true_for_verified.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only' (487394) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_limit_update_applies_to_new_bids_only.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_multiple_accepted_bids_create_multiple_investments stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_multiple_accepted_bids_create_multiple_investments' (487396) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_multiple_accepted_bids_create_multiple_investments" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_multiple_accepted_bids_create_multiple_investments.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_is_investor_verified_with_different_risk_levels stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_is_investor_verified_with_different_risk_levels' (487393) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 100000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_is_investor_verified_with_different_risk_levels" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_is_investor_verified_with_different_risk_levels.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_multiple_investors_different_limits stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_multiple_investors_different_limits' (487403) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 50000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, 50000, CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_multiple_investors_different_limits" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_multiple_investors_different_limits.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid' (487409) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_rejected_investor_cannot_bid.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_single_investor_bids_on_multiple_invoices stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_single_investor_bids_on_multiple_invoices' (487411) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 20000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_single_investor_bids_on_multiple_invoices" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_single_investor_bids_on_multiple_invoices.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding' (487399) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CDS3FDGQ4JA2V3F26Y4BMWWJEC5TT26RJBN7KIQKUMVO2MAOCMDTSZ7A, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, 100000, CDS3FDGQ4JA2V3F26Y4BMWWJEC5TT26RJBN7KIQKUMVO2MAOCMDTSZ7A, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_multiple_investors_competitive_bidding.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid' (487412) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_unverified_investor_cannot_bid.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_validate_investor_investment_at_limit_boundary stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_validate_investor_investment_at_limit_boundary' (487413) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 125000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 125000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_validate_investor_investment_at_limit_boundary" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_validate_investor_investment_at_limit_boundary.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_validate_investor_investment_pending_investor stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_validate_investor_investment_pending_investor' (487416) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_validate_investor_investment_pending_investor" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_validate_investor_investment_pending_investor.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_validate_investor_investment_unverified_investor stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_validate_investor_investment_unverified_investor' (487418) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_validate_investor_investment_unverified_investor" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_validate_investor_investment_unverified_investor.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_validate_investor_investment_rejected_investor stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_validate_investor_investment_rejected_investor' (487417) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_validate_investor_investment_rejected_investor" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_validate_investor_investment_rejected_investor.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_validate_investor_investment_over_limit stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_validate_investor_investment_over_limit' (487415) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 500000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 500000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_validate_investor_investment_over_limit" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_validate_investor_investment_over_limit.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_validate_investor_investment_multiple_bids_independent_validation stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_validate_investor_investment_multiple_bids_independent_validation' (487414) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_validate_investor_investment_multiple_bids_independent_validation" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_validate_investor_investment_multiple_bids_independent_validation.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_very_high_risk_investor_restrictions stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_very_high_risk_investor_restrictions' (487423) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 100000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_very_high_risk_investor_restrictions" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_very_high_risk_investor_restrictions.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_validate_investor_investment_within_limit stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_validate_investor_investment_within_limit' (487419) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 150000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 150000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_validate_investor_investment_within_limit" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_validate_investor_investment_within_limit.1.json".
+
+---- test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit stdout ----
+
+thread 'test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit' (487425) panicked at /Users/mac/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-25.0.1/src/host.rs:907:9:
+HostError: Error(Contract, #1600)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #1600)], data:["contract call failed", upload_invoice, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Contract, #1600)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[fn_return, upload_invoice], data:Error(Contract, #1600)
+   4: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, upload_invoice], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 50000, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 86400, "Test Invoice", [Services], []]
+
+Writing test snapshot file for test "test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit" to "test_snapshots/test_investor_kyc/test_investor_kyc/test_zero_amount_bid_fails_regardless_of_limit.1.json".
+
+
+failures:
+    test_investor_kyc::test_investor_kyc::test_bid_exceeding_investment_limit_fails
+    test_investor_kyc::test_investor_kyc::test_bid_validation_checks_investor_verification_status
+    test_investor_kyc::test_investor_kyc::test_bid_within_investment_limit_succeeds
+    test_investor_kyc::test_investor_kyc::test_complete_investor_workflow
+    test_investor_kyc::test_investor_kyc::test_investment_limit_applies_across_all_bids
+    test_investor_kyc::test_investor_kyc::test_investor_without_kyc_cannot_bid
+    test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_none
+    test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_pending
+    test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_false_for_rejected
+    test_investor_kyc::test_investor_kyc::test_is_investor_verified_returns_true_for_verified
+    test_investor_kyc::test_investor_kyc::test_is_investor_verified_with_different_risk_levels
+    test_investor_kyc::test_investor_kyc::test_limit_update_applies_to_new_bids_only
+    test_investor_kyc::test_investor_kyc::test_multiple_accepted_bids_create_multiple_investments
+    test_investor_kyc::test_investor_kyc::test_multiple_investors_competitive_bidding
+    test_investor_kyc::test_investor_kyc::test_multiple_investors_different_limits
+    test_investor_kyc::test_investor_kyc::test_rejected_investor_cannot_bid
+    test_investor_kyc::test_investor_kyc::test_single_investor_bids_on_multiple_invoices
+    test_investor_kyc::test_investor_kyc::test_unverified_investor_cannot_bid
+    test_investor_kyc::test_investor_kyc::test_validate_investor_investment_at_limit_boundary
+    test_investor_kyc::test_investor_kyc::test_validate_investor_investment_multiple_bids_independent_validation
+    test_investor_kyc::test_investor_kyc::test_validate_investor_investment_over_limit
+    test_investor_kyc::test_investor_kyc::test_validate_investor_investment_pending_investor
+    test_investor_kyc::test_investor_kyc::test_validate_investor_investment_rejected_investor
+    test_investor_kyc::test_investor_kyc::test_validate_investor_investment_unverified_investor
+    test_investor_kyc::test_investor_kyc::test_validate_investor_investment_within_limit
+    test_investor_kyc::test_investor_kyc::test_very_high_risk_investor_restrictions
+    test_investor_kyc::test_investor_kyc::test_zero_amount_bid_fails_regardless_of_limit
+
+test result: FAILED. 535 passed; 27 failed; 0 ignored; 0 measured; 0 filtered out; finished in 41.36s
+
+error: test failed, to rerun pass `--lib`

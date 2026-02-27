@@ -7,6 +7,9 @@ use crate::investment::{InvestmentStatus, InvestmentStorage};
 use crate::invoice::{
     Invoice, InvoiceStatus, InvoiceStorage, PaymentRecord as InvoicePaymentRecord,
 };
+// use crate::notifications::NotificationSystem;
+use crate::defaults::DEFAULT_GRACE_PERIOD;
+// use crate::events::TOPIC_INVOICE_SETTLED_FINAL;
 use crate::payments::transfer_funds;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String};
 
@@ -348,7 +351,7 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
 
     let previous_status = invoice.status.clone();
     let paid_at = env.ledger().timestamp();
-    invoice.mark_as_paid(env, business_address.clone());
+    invoice.mark_as_paid(env, business_address.clone(), env.ledger().timestamp());
     InvoiceStorage::update_invoice(env, &invoice);
 
     if previous_status != invoice.status {
