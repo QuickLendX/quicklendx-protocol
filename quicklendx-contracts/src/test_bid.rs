@@ -553,6 +553,73 @@ fn test_cleanup_expired_bids_returns_count() {
     assert_eq!(placed_bids.len(), 0, "No bids should be in Placed status");
 }
 
+/// Test: cleanup_expired_bids is idempotent when called multiple times
+#[test]
+fn test_cleanup_expired_bids_idempotent() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // Place 2 bids that will both expire
+    let bid_1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    let bid_2 = client.place_bid(&investor2, &invoice_id, &15_000, &18_000);
+
+    // Advance time past expiration
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 604800 + 1);
+
+    // First cleanup should expire both bids and return count 2
+    let removed_first = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(removed_first, 2, "First cleanup should remove 2 expired bids");
+
+    // Verify both bids are marked Expired and removed from invoice list
+    assert_eq!(
+        client.get_bid(&bid_1).unwrap().status,
+        BidStatus::Expired,
+        "Bid 1 should be expired after first cleanup"
+    );
+    assert_eq!(
+        client.get_bid(&bid_2).unwrap().status,
+        BidStatus::Expired,
+        "Bid 2 should be expired after first cleanup"
+    );
+    let bids_after_first = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(
+        bids_after_first.len(),
+        0,
+        "Invoice bid list should be empty after first cleanup"
+    );
+
+    // Second cleanup should be a no-op and return 0, with state unchanged
+    let removed_second = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(
+        removed_second, 0,
+        "Second cleanup should be idempotent and remove 0 bids"
+    );
+    assert_eq!(
+        client.get_bid(&bid_1).unwrap().status,
+        BidStatus::Expired,
+        "Bid 1 should remain expired after second cleanup"
+    );
+    assert_eq!(
+        client.get_bid(&bid_2).unwrap().status,
+        BidStatus::Expired,
+        "Bid 2 should remain expired after second cleanup"
+    );
+    let bids_after_second = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(
+        bids_after_second.len(),
+        0,
+        "Invoice bid list should remain empty after second cleanup"
+    );
+}
+
 /// Test: get_ranked_bids excludes expired bids
 #[test]
 fn test_get_ranked_bids_excludes_expired() {
