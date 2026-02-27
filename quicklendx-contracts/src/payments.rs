@@ -8,7 +8,8 @@ use soroban_sdk::token;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub enum EscrowStatus {
     Held,     // Funds are held in escrow
     Released, // Funds released to business
@@ -16,7 +17,8 @@ pub enum EscrowStatus {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct Escrow {
     pub escrow_id: BytesN<32>,
     pub invoice_id: BytesN<32>,

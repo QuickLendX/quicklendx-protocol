@@ -1,0 +1,604 @@
+warning: function `get_payment_count` is never used
+   --> src/settlement.rs:276:8
+    |
+276 | ...fn get_payment_count(en...
+    |       ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `get_payment_records` is never used
+   --> src/settlement.rs:295:8
+    |
+295 | ...fn get_payment_records(
+    |       ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `StorageKeys` is never constructed
+  --> src/storage.rs:27:12
+   |
+27 | ...ct StorageKeys;
+   |       ^^^^^^^^^^^
+
+warning: multiple associated functions are never used
+  --> src/storage.rs:31:12
+   |
+29 | impl StorageKeys {
+   | ---------------- associated functions in this implementation
+30 |     /// Key for storing invoic...
+31 |     pub fn invoice(invoice_id:...
+   |            ^^^^^^^
+...
+36 |     pub fn bid(bid_id: &BytesN...
+   |            ^^^
+...
+41 |     pub fn investment(investme...
+   |            ^^^^^^^^^^
+...
+46 |     pub fn platform_fees() -> ...
+   |            ^^^^^^^^^^^^^
+...
+51 |     pub fn invoice_count() -> ...
+   |            ^^^^^^^^^^^^^
+...
+56 |     pub fn bid_count() -> Symb...
+   |            ^^^^^^^^^
+...
+61 |     pub fn investment_count() ...
+   |            ^^^^^^^^^^^^^^^^
+
+warning: struct `Indexes` is never constructed
+  --> src/storage.rs:67:12
+   |
+67 | pub struct Indexes;
+   |            ^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src/storage.rs:71:12
+    |
+ 69 | impl Indexes {
+    | ------------ associated functions in this implementation
+ 70 |     /// Index: invoices by business a...
+ 71 |     pub fn invoices_by_business(busin...
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+ 76 |     pub fn invoices_by_status(status:...
+    |            ^^^^^^^^^^^^^^^^^^
+...
+ 90 |     pub fn bids_by_invoice(invoice_id...
+    |            ^^^^^^^^^^^^^^^
+...
+ 95 |     pub fn bids_by_investor(investor:...
+    |            ^^^^^^^^^^^^^^^^
+...
+100 |     pub fn bids_by_status(status: Bid...
+    |            ^^^^^^^^^^^^^^
+...
+112 |     pub fn investments_by_invoice(inv...
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+117 |     pub fn investments_by_investor(in...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+122 |     pub fn investments_by_status(stat...
+    |            ^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `InvoiceStorage` is never constructed
+   --> src/storage.rs:135:12
+    |
+135 | ...ct InvoiceStorage;
+    |       ^^^^^^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src/storage.rs:139:12
+    |
+137 | impl InvoiceStorage {
+    | ------------------- associated functions in this implementation
+138 |     /// Store an invoice
+139 |     pub fn store(env: &Env, invoic...
+    |            ^^^^^
+...
+148 |     pub fn get(env: &Env, invoice_...
+    |            ^^^
+...
+153 |     pub fn update(env: &Env, invoi...
+    |            ^^^^^^
+...
+166 |     pub fn get_by_business(env: &E...
+    |            ^^^^^^^^^^^^^^^
+...
+174 |     pub fn get_by_status(env: &Env...
+    |            ^^^^^^^^^^^^^
+...
+182 |     fn add_to_business_index(env: ...
+    |        ^^^^^^^^^^^^^^^^^^^^^
+...
+193 |     fn add_to_status_index(env: &E...
+    |        ^^^^^^^^^^^^^^^^^^^
+...
+204 |     fn remove_from_status_index(en...
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+215 |     pub fn next_count(env: &Env) -...
+    |            ^^^^^^^^^^
+
+warning: struct `BidStorage` is never constructed
+   --> src/storage.rs:230:12
+    |
+230 | ...ct BidStorage;
+    |       ^^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src/storage.rs:234:12
+    |
+232 | impl BidStorage {
+    | --------------- associated functions in this implementation
+233 |     /// Store a bid
+234 |     pub fn store(env: &Env, bid: &...
+    |            ^^^^^
+...
+244 |     pub fn get(env: &Env, bid_id: ...
+    |            ^^^
+...
+249 |     pub fn update(env: &Env, bid: ...
+    |            ^^^^^^
+...
+262 |     pub fn get_by_invoice(env: &En...
+    |            ^^^^^^^^^^^^^^
+...
+270 |     pub fn get_by_investor(env: &E...
+    |            ^^^^^^^^^^^^^^^
+...
+278 |     pub fn get_by_status(env: &Env...
+    |            ^^^^^^^^^^^^^
+...
+286 |     fn add_to_invoice_index(env: &...
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+297 |     fn add_to_investor_index(env: ...
+    |        ^^^^^^^^^^^^^^^^^^^^^
+...
+308 |     fn add_to_status_index(env: &E...
+    |        ^^^^^^^^^^^^^^^^^^^
+...
+319 |     fn remove_from_status_index(en...
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+330 |     pub fn next_count(env: &Env) -...
+    |            ^^^^^^^^^^
+
+warning: struct `InvestmentStorage` is never constructed
+   --> src/storage.rs:345:12
+    |
+345 | ...ct InvestmentStorage;
+    |       ^^^^^^^^^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src/storage.rs:349:12
+    |
+347 | impl InvestmentStorage {
+    | ---------------------- associated functions in this implementation
+348 |     /// Store an investment
+349 |     pub fn store(env: &Env, invest...
+    |            ^^^^^
+...
+361 |     pub fn get(env: &Env, investme...
+    |            ^^^
+...
+366 |     pub fn update(env: &Env, inves...
+    |            ^^^^^^
+...
+389 |     pub fn get_by_invoice(env: &En...
+    |            ^^^^^^^^^^^^^^
+...
+397 |     pub fn get_by_investor(env: &E...
+    |            ^^^^^^^^^^^^^^^
+...
+405 |     pub fn get_by_status(env: &Env...
+    |            ^^^^^^^^^^^^^
+...
+413 |     fn add_to_invoice_index(env: &...
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+424 |     fn add_to_investor_index(env: ...
+    |        ^^^^^^^^^^^^^^^^^^^^^
+...
+435 |     fn add_to_status_index(env: &E...
+    |        ^^^^^^^^^^^^^^^^^^^
+...
+446 |     fn remove_from_status_index(en...
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+457 |     pub fn next_count(env: &Env) -...
+    |            ^^^^^^^^^^
+
+warning: struct `ConfigStorage` is never constructed
+   --> src/storage.rs:472:12
+    |
+472 | ...ct ConfigStorage;
+    |       ^^^^^^^^^^^^^
+
+warning: associated functions `set_platform_fees` and `get_platform_fees` are never used
+   --> src/storage.rs:476:12
+    |
+474 | impl ConfigStorage {
+    | ------------------ associated functions in this implementation
+475 |     /// Store platform fee conf...
+476 |     pub fn set_platform_fees(en...
+    |            ^^^^^^^^^^^^^^^^^
+...
+483 |     pub fn get_platform_fees(en...
+    |            ^^^^^^^^^^^^^^^^^
+
+warning: `quicklendx-contracts` (lib) generated 14 warnings
+   Compiling quicklendx-contracts v0.1.0 (/Users/mac/QUICKLENDX/quicklendx-contracts)
+error[E0433]: failed to resolve: could not find `StellarAssetContractClient` in `token`
+  --> src/test_default.rs:69:37
+   |
+69 | ...n::StellarAssetContractClient::n...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |       |
+   |       could not find `StellarAssetContractClient` in `token`
+   |       help: a struct with a similar name exists: `StellarAssetClient`
+
+warning: unused import: `BytesN as _`
+  --> src/test_dispute.rs:15:31
+   |
+15 | ..._, BytesN as _},
+   |       ^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `PlatformFeeConfig` and `PlatformFee`
+  --> src/test_storage.rs:18:22
+   |
+18 | ...::{PlatformFee, PlatformFeeConfig};
+   |       ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ConfigStorage`
+  --> src/test_storage.rs:20:17
+   |
+20 | ...e, ConfigStorage, I...
+   |       ^^^^^^^^^^^^^
+
+warning: unused import: `crate::verification::BusinessVerificationStatus`
+  --> src/test/test_invoice.rs:11:5
+   |
+11 | use c...ationStatus;
+   |     ^...^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test/test_invoice.rs:13:31
+   |
+13 | ..._, Ledger},
+   |       ^^^^^^
+
+warning: unused imports: `AnalyticsStorage`, `FinancialMetrics`, and `PlatformMetrics`
+  --> src/test/test_analytics.rs:14:26
+   |
+14 | ...r, AnalyticsStorage, FinancialMetrics, PlatformMetrics, T...
+   |       ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::bid::BidStatus`
+ --> src/test_queries.rs:3:5
+  |
+3 | use crate::bid::BidStatus;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+ --> src/test_queries.rs:6:31
+  |
+6 | ... _, Ledger},
+  |        ^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test_investor_kyc.rs:17:35
+   |
+17 | ..._, Ledger},
+   |       ^^^^^^
+
+warning: unused import: `crate::errors::QuickLendXError`
+ --> src/test_limit.rs:3:5
+  |
+3 | use crate::errors::QuickLendXError;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BytesN`
+ --> src/test_fuzz.rs:7:102
+  |
+7 | ...ec, BytesN};
+  |        ^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:361:24
+    |
+361 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:932:24
+    |
+932 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:988:24
+    |
+988 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1040:24
+     |
+1040 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1097:24
+     |
+1097 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1179:24
+     |
+1179 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+  --> src/test_default.rs:67:24
+   |
+67 | ...nv.register_stellar_asset_contract(to...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test_audit.rs:10:31
+   |
+10 | ..._, Ledger},
+   |       ^^^^^^
+
+warning: unused import: `Ledger`
+ --> src/test_currency.rs:9:31
+  |
+9 | ... _, Ledger},
+  |        ^^^^^^
+
+warning: unused variable: `invoice_id_3`
+   --> src/test_dispute.rs:465:9
+    |
+465 | ...et invoice_id_3 = ...
+    |       ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_invoice_id_3`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:159:10
+    |
+159 | ...t (env, clie...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:290:9
+    |
+290 | ...et env = Env...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:338:10
+    |
+338 | ...t (env, clie...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `result`
+   --> src/test_cancel_refund.rs:552:9
+    |
+552 | ...et result = ...
+    |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `result`
+   --> src/test_cancel_refund.rs:575:9
+    |
+575 | ...et result = ...
+    |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `business`
+   --> src/test/test_invoice.rs:270:9
+    |
+270 | ...et business = ...
+    |       ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `other_user`
+   --> src/test/test_invoice.rs:775:9
+    |
+775 | ...et other_user = ...
+    |       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_other_user`
+
+warning: unused variable: `non_admin`
+   --> src/test/test_invoice.rs:807:9
+    |
+807 | ...et non_admin = ...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `token_client`
+   --> src/test.rs:362:9
+    |
+362 | ...et token_client = ...
+    |       ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_token_client`
+
+warning: unused variable: `admin`
+  --> src/test_fees.rs:21:65
+   |
+21 | ...t, admin: &Ad...
+   |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_fees.rs:73:9
+   |
+73 | ...et admin = se...
+   |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_fees.rs:103:9
+    |
+103 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_fees.rs:195:9
+    |
+195 | ...et non_admin = ...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `admin`
+  --> src/test_audit.rs:52:23
+   |
+52 | ...t, admin, bus...
+   |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_currency.rs:166:23
+    |
+166 | ...t, admin) = ...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `token_client`
+  --> src/test_events.rs:91:9
+   |
+91 | ...et token_client = ...
+   |       ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_token_client`
+
+warning: unused variable: `admin`
+  --> src/test_default.rs:46:5
+   |
+46 |     admin: &Addr...
+   |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `invoice2`
+   --> src/test_default.rs:430:9
+    |
+430 | ...et invoice2 = ...
+    |       ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_invoice2`
+
+warning: unused variable: `actor`
+   --> src/test_queries.rs:242:9
+    |
+242 | ...et actor = A...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `filter_inv1`
+   --> src/test_queries.rs:288:9
+    |
+288 | ...et filter_inv1 = ...
+    |       ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_filter_inv1`
+
+warning: unused variable: `filter_created`
+   --> src/test_queries.rs:311:9
+    |
+311 | ...et filter_created = ...
+    |       ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_filter_created`
+
+warning: unused variable: `contract_id`
+   --> src/test_insurance.rs:147:23
+    |
+147 | ...t, contract_id) =...
+    |       ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_contract_id`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:102:27
+    |
+102 | ...t, admin) = ...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_investor_kyc.rs:179:13
+    |
+179 | ...et non_admin = ...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `result`
+   --> src/test_investor_kyc.rs:192:13
+    |
+192 | ...et result = ...
+    |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:199:27
+    |
+199 | ...t, admin) = ...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `business`
+   --> src/test_investor_kyc.rs:482:13
+    |
+482 | ...et business = ...
+    |       ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `high_risk`
+   --> src/test_investor_kyc.rs:610:13
+    |
+610 | ...et high_risk = ...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_high_risk`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:752:27
+    |
+752 | ...t, admin) = ...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:40:65
+   |
+40 | ...t, admin: &Ad...
+   |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:80:9
+   |
+80 | ...et admin = se...
+   |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:103:9
+    |
+103 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:126:9
+    |
+126 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:301:9
+    |
+301 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:343:9
+    |
+343 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:374:9
+    |
+374 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:590:9
+    |
+590 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:604:9
+    |
+604 | ...et admin = s...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+For more information about this error, try `rustc --explain E0433`.
+warning: `quicklendx-contracts` (lib test) generated 59 warnings
+error: could not compile `quicklendx-contracts` (lib test) due to 1 previous error; 59 warnings emitted

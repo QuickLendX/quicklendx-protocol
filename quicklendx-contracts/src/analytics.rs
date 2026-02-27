@@ -392,7 +392,7 @@ impl AnalyticsCalculator {
 
         // Get platform fee rate
         let platform_fee_config = crate::profits::PlatformFee::get_config(env);
-        let platform_fee_rate = platform_fee_config.fee_bps;
+        let platform_fee_rate = platform_fee_config.fee_bps as i128;
 
         // Calculate default rate
         let _current_timestamp = env.ledger().timestamp();
@@ -755,7 +755,7 @@ impl AnalyticsCalculator {
             transaction_success_rate,
             error_rate,
             user_satisfaction_score,
-            platform_efficiency,
+            platform_efficiency: platform_efficiency as i128,
         })
     }
 

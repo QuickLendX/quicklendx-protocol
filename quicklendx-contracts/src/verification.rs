@@ -2,13 +2,14 @@ use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::protocol_limits::{
-    check_string_length, compute_min_bid_amount, ProtocolLimitsContract, MAX_KYC_DATA_LENGTH,
+    check_string_length, ProtocolLimitsContract, MAX_KYC_DATA_LENGTH,
     MAX_REJECTION_REASON_LENGTH,
 };
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub enum BusinessVerificationStatus {
     Pending,
     Verified,
@@ -27,7 +28,7 @@ pub struct BusinessVerification {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum InvestorTier {
     Basic,
     Silver,
@@ -37,7 +38,7 @@ pub enum InvestorTier {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum InvestorRiskLevel {
     Low,
     Medium,
@@ -497,7 +498,7 @@ pub fn validate_bid(
     }
 
     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
-    let min_bid_amount = compute_min_bid_amount(invoice.amount, &limits);
+    let min_bid_amount = invoice.amount / 100; // 1% min bid
     if bid_amount < min_bid_amount {
         return Err(QuickLendXError::InvalidAmount);
     }
@@ -506,8 +507,8 @@ pub fn validate_bid(
         return Err(QuickLendXError::InvoiceAmountInvalid);
     }
 
-    // Expected return must cover the original bid to avoid negative payoff.
-    if expected_return < bid_amount {
+    // Expected return must exceed the original bid to avoid negative payoff.
+    if expected_return <= bid_amount {
         return Err(QuickLendXError::InvalidAmount);
     }
 

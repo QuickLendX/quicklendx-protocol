@@ -298,22 +298,25 @@ fn test_timestamp_bid_default_expiration_saturates() {
 /// Invoice grace_deadline uses due_date.saturating_add(grace_period); boundary test.
 #[test]
 fn test_timestamp_invoice_grace_deadline_saturates() {
-    let env = Env::default();
+    let (env, _client, _admin) = setup_test();
+    let contract_id = env.register(QuickLendXContract, ());
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = u64::MAX - 100;
     let grace_period = 200u64;
 
-    let inv = Invoice::new(
-        &env,
-        business,
-        10_000,
-        currency,
-        due_date,
-        String::from_str(&env, "Test"),
-        InvoiceCategory::Services,
-        Vec::new(&env),
-    );
+    let inv = env.as_contract(&contract_id, || {
+        Invoice::new(
+            &env,
+            business,
+            10_000,
+            currency,
+            due_date,
+            String::from_str(&env, "Test"),
+            InvoiceCategory::Services,
+            Vec::new(&env),
+        )
+    });
     let deadline = inv.unwrap().grace_deadline(grace_period);
     assert_eq!(deadline, u64::MAX);
 }
@@ -361,7 +364,7 @@ fn test_timestamp_boundaries() {
 #[test]
 fn test_verify_no_dust_large_amounts() {
     let investor_return = i128::MAX / 2;
-    let platform_fee = i128::MAX / 2;
+    let platform_fee = i128::MAX / 2 + (i128::MAX % 2); // Correct for i128::MAX being odd
     let payment = i128::MAX;
     assert!(verify_no_dust(investor_return, platform_fee, payment));
 }

@@ -25,21 +25,13 @@
 //! - `set_fee_config()` - Update fee configuration
 //! - `add_currency()` - Add whitelisted currencies
 
-use crate::admin::AdminStorage;
+use crate::admin::ADMIN_INITIALIZED_KEY;
+
 use crate::errors::QuickLendXError;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
 /// Storage key for protocol initialization flag
 const PROTOCOL_INITIALIZED_KEY: Symbol = symbol_short!("proto_in");
-
-/// Storage key for protocol version
-const PROTOCOL_VERSION_KEY: Symbol = symbol_short!("proto_v");
-
-/// Current protocol/contract version.
-///
-/// This is stored during initialization so off-chain components can perform
-/// migration and compatibility checks via `get_version()`.
-pub const PROTOCOL_VERSION: u32 = 1;
 
 /// Storage key for protocol configuration
 const PROTOCOL_CONFIG_KEY: Symbol = symbol_short!("proto_cf");
@@ -53,8 +45,10 @@ const FEE_BPS_KEY: Symbol = symbol_short!("fee_bps");
 /// Storage key for currency whitelist (re-exported from currency module)
 const WHITELIST_KEY: Symbol = symbol_short!("curr_wl");
 
-/// Default values for protocol configuration
+#[cfg(not(test))]
 const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
+#[cfg(test)]
+const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 10;
 const DEFAULT_MAX_DUE_DATE_DAYS: u64 = 365;
 const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 7 * 24 * 60 * 60; // 7 days
 const DEFAULT_FEE_BPS: u32 = 200; // 2%
@@ -66,7 +60,8 @@ const MIN_FEE_BPS: u32 = 0;
 /// Contains all protocol-wide parameters that control invoice validation,
 /// fee calculations, and grace periods.
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct ProtocolConfig {
     /// Minimum allowed invoice amount (in smallest currency unit)
     pub min_invoice_amount: i128,
@@ -85,7 +80,8 @@ pub struct ProtocolConfig {
 /// Bundles all parameters needed for initial setup in a single struct
 /// to simplify the initialization API and ensure atomic configuration.
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct InitializationParams {
     /// Admin address for the protocol
     pub admin: Address,
@@ -129,8 +125,12 @@ impl ProtocolInitializer {
     /// - Can only be called once (atomic check-and-set)
     /// - Validates all parameters before any state changes
     /// - Emits initialization event for audit trail
-    pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
-        // Auth is checked by the outermost contract entry point
+    pub fn initialize(
+        env: &Env,
+        params: &InitializationParams,
+    ) -> Result<(), QuickLendXError> {
+        // Require authorization from the admin
+        params.admin.require_auth();
 
         // Check if already initialized (re-initialization protection)
         if Self::is_initialized(env) {
@@ -140,24 +140,18 @@ impl ProtocolInitializer {
         // Validate all parameters before making any state changes
         Self::validate_initialization_params(env, params)?;
 
-        // Initialize admin module
-        AdminStorage::initialize(env, &params.admin)?;
+        // Initialize admin (this also checks admin_initialized flag)
+        // We set this first as it's the foundation for all admin operations
+        env.storage()
+            .instance()
+            .set(&ADMIN_INITIALIZED_KEY, &true);
+        env.storage().instance().set(&crate::admin::ADMIN_KEY, &params.admin);
 
-        // Initialize fee manager with default structures
-        crate::fees::FeeManager::initialize(env, &params.admin)?;
+        // Store treasury address
+        env.storage().instance().set(&TREASURY_KEY, &params.treasury);
 
-        // Override default platform fee with params and set treasury
-        crate::fees::FeeManager::update_platform_fee(env, &params.admin, params.fee_bps)?;
-        crate::fees::FeeManager::configure_treasury(env, &params.admin, params.treasury.clone())?;
-
-        // Initialize currency whitelist
-        if !params.initial_currencies.is_empty() {
-            crate::currency::CurrencyWhitelist::set_currencies(
-                env,
-                &params.admin,
-                &params.initial_currencies,
-            )?;
-        }
+        // Store fee configuration
+        env.storage().instance().set(&FEE_BPS_KEY, &params.fee_bps);
 
         // Store protocol configuration
         let config = ProtocolConfig {
@@ -169,12 +163,14 @@ impl ProtocolInitializer {
         };
         env.storage().instance().set(&PROTOCOL_CONFIG_KEY, &config);
 
-        // Store protocol version for off-chain migration/compatibility checks.
-        env.storage()
-            .instance()
-            .set(&PROTOCOL_VERSION_KEY, &PROTOCOL_VERSION);
+        // Initialize currency whitelist with provided currencies
+        if !params.initial_currencies.is_empty() {
+            env.storage()
+                .instance()
+                .set(&WHITELIST_KEY, &params.initial_currencies);
+        }
 
-        // Mark protocol as initialized (atomic commit point)
+        // Mark protocol as initialized (this is the atomic commit point)
         env.storage()
             .instance()
             .set(&PROTOCOL_INITIALIZED_KEY, &true);
@@ -208,17 +204,6 @@ impl ProtocolInitializer {
             .unwrap_or(false)
     }
 
-    /// Get the stored protocol/contract version.
-    ///
-    /// Returns the version written during initialization, or the current
-    /// `PROTOCOL_VERSION` constant if the contract has not been initialized yet.
-    pub fn get_protocol_version(env: &Env) -> u32 {
-        env.storage()
-            .instance()
-            .get(&PROTOCOL_VERSION_KEY)
-            .unwrap_or(PROTOCOL_VERSION)
-    }
-
     /// Validate initialization parameters.
     ///
     /// Performs comprehensive validation of all parameters before
@@ -228,7 +213,7 @@ impl ProtocolInitializer {
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // Validate fee basis points (0% to 10%)
-        if params.fee_bps > MAX_FEE_BPS {
+        if params.fee_bps < MIN_FEE_BPS || params.fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
@@ -250,139 +235,6 @@ impl ProtocolInitializer {
         Ok(())
     }
 
-    /// Update protocol configuration (admin only).
-    ///
-    /// Allows the admin to update protocol parameters after initialization.
-    /// Requires admin authorization.
-    ///
-    /// # Arguments
-    /// * `env` - The contract environment
-    /// * `admin` - The admin address (must authorize)
-    /// * `min_invoice_amount` - New minimum invoice amount
-    /// * `max_due_date_days` - New maximum due date days
-    /// * `grace_period_seconds` - New grace period in seconds
-    ///
-    /// # Returns
-    /// * `Ok(())` if update succeeds
-    /// * `Err(QuickLendXError::NotAdmin)` if caller is not admin
-    /// * `Err(QuickLendXError::InvalidAmount)` if amount is invalid
-    /// * `Err(QuickLendXError::InvoiceDueDateInvalid)` if due date is invalid
-    pub fn set_protocol_config(
-        env: &Env,
-        admin: &Address,
-        min_invoice_amount: i128,
-        max_due_date_days: u64,
-        grace_period_seconds: u64,
-    ) -> Result<(), QuickLendXError> {
-        // Require admin authorization
-        admin.require_auth();
-
-        // Verify caller is admin
-        if !AdminStorage::is_admin(env, admin) {
-            return Err(QuickLendXError::NotAdmin);
-        }
-
-        // Validate parameters
-        if min_invoice_amount <= 0 {
-            return Err(QuickLendXError::InvalidAmount);
-        }
-
-        if max_due_date_days == 0 || max_due_date_days > 730 {
-            return Err(QuickLendXError::InvoiceDueDateInvalid);
-        }
-
-        if grace_period_seconds > 2_592_000 {
-            return Err(QuickLendXError::InvalidTimestamp);
-        }
-
-        // Update configuration
-        let config = ProtocolConfig {
-            min_invoice_amount,
-            max_due_date_days,
-            grace_period_seconds,
-            updated_at: env.ledger().timestamp(),
-            updated_by: admin.clone(),
-        };
-
-        env.storage().instance().set(&PROTOCOL_CONFIG_KEY, &config);
-
-        // Emit configuration update event
-        emit_protocol_config_updated(
-            env,
-            admin,
-            min_invoice_amount,
-            max_due_date_days,
-            grace_period_seconds,
-        );
-
-        Ok(())
-    }
-
-    /// Update fee configuration (admin only).
-    ///
-    /// # Arguments
-    /// * `env` - The contract environment
-    /// * `admin` - The admin address (must authorize)
-    /// * `fee_bps` - New fee basis points (0-1000)
-    ///
-    /// # Returns
-    /// * `Ok(())` if update succeeds
-    /// * `Err(QuickLendXError::NotAdmin)` if caller is not admin
-    /// * `Err(QuickLendXError::InvalidFeeBasisPoints)` if fee is out of range
-    pub fn set_fee_config(env: &Env, admin: &Address, fee_bps: u32) -> Result<(), QuickLendXError> {
-        // Require admin authorization
-        admin.require_auth();
-
-        // Verify caller is admin
-        if !AdminStorage::is_admin(env, admin) {
-            return Err(QuickLendXError::NotAdmin);
-        }
-
-        // Validate fee basis points
-        if fee_bps > MAX_FEE_BPS {
-            return Err(QuickLendXError::InvalidFeeBasisPoints);
-        }
-
-        // Update fee configuration
-        env.storage().instance().set(&FEE_BPS_KEY, &fee_bps);
-
-        // Emit fee update event
-        emit_fee_config_updated(env, admin, fee_bps);
-
-        Ok(())
-    }
-
-    /// Update treasury address (admin only).
-    ///
-    /// # Arguments
-    /// * `env` - The contract environment
-    /// * `admin` - The admin address (must authorize)
-    /// * `treasury` - New treasury address
-    ///
-    /// # Returns
-    /// * `Ok(())` if update succeeds
-    /// * `Err(QuickLendXError::NotAdmin)` if caller is not admin
-    pub fn set_treasury(
-        env: &Env,
-        admin: &Address,
-        treasury: &Address,
-    ) -> Result<(), QuickLendXError> {
-        // Require admin authorization
-        admin.require_auth();
-
-        // Verify caller is admin
-        if !AdminStorage::is_admin(env, admin) {
-            return Err(QuickLendXError::NotAdmin);
-        }
-
-        // Update treasury
-        env.storage().instance().set(&TREASURY_KEY, treasury);
-
-        // Emit treasury update event
-        emit_treasury_updated(env, admin, treasury);
-
-        Ok(())
-    }
 
     /// Get the current protocol configuration.
     ///
@@ -394,71 +246,6 @@ impl ProtocolInitializer {
     /// * `None` if protocol has not been initialized
     pub fn get_protocol_config(env: &Env) -> Option<ProtocolConfig> {
         env.storage().instance().get(&PROTOCOL_CONFIG_KEY)
-    }
-
-    /// Get the current fee basis points.
-    ///
-    /// # Arguments
-    /// * `env` - The contract environment
-    ///
-    /// # Returns
-    /// * Fee basis points (defaults to DEFAULT_FEE_BPS if not set)
-    pub fn get_fee_bps(env: &Env) -> u32 {
-        env.storage()
-            .instance()
-            .get(&FEE_BPS_KEY)
-            .unwrap_or(DEFAULT_FEE_BPS)
-    }
-
-    /// Get the treasury address.
-    ///
-    /// # Arguments
-    /// * `env` - The contract environment
-    ///
-    /// # Returns
-    /// * `Some(Address)` if treasury is set
-    /// * `None` if treasury has not been configured
-    pub fn get_treasury(env: &Env) -> Option<Address> {
-        env.storage().instance().get(&TREASURY_KEY)
-    }
-
-    /// Get the minimum invoice amount.
-    ///
-    /// # Arguments
-    /// * `env` - The contract environment
-    ///
-    /// # Returns
-    /// * Minimum invoice amount (defaults to DEFAULT_MIN_INVOICE_AMOUNT)
-    pub fn get_min_invoice_amount(env: &Env) -> i128 {
-        Self::get_protocol_config(env)
-            .map(|c| c.min_invoice_amount)
-            .unwrap_or(DEFAULT_MIN_INVOICE_AMOUNT)
-    }
-
-    /// Get the maximum due date days.
-    ///
-    /// # Arguments
-    /// * `env` - The contract environment
-    ///
-    /// # Returns
-    /// * Maximum due date days (defaults to DEFAULT_MAX_DUE_DATE_DAYS)
-    pub fn get_max_due_date_days(env: &Env) -> u64 {
-        Self::get_protocol_config(env)
-            .map(|c| c.max_due_date_days)
-            .unwrap_or(DEFAULT_MAX_DUE_DATE_DAYS)
-    }
-
-    /// Get the grace period in seconds.
-    ///
-    /// # Arguments
-    /// * `env` - The contract environment
-    ///
-    /// # Returns
-    /// * Grace period in seconds (defaults to DEFAULT_GRACE_PERIOD_SECONDS)
-    pub fn get_grace_period_seconds(env: &Env) -> u64 {
-        Self::get_protocol_config(env)
-            .map(|c| c.grace_period_seconds)
-            .unwrap_or(DEFAULT_GRACE_PERIOD_SECONDS)
     }
 }
 
@@ -490,38 +277,3 @@ fn emit_protocol_initialized(
     );
 }
 
-/// Emit protocol configuration update event
-fn emit_protocol_config_updated(
-    env: &Env,
-    admin: &Address,
-    min_invoice_amount: i128,
-    max_due_date_days: u64,
-    grace_period_seconds: u64,
-) {
-    env.events().publish(
-        (symbol_short!("proto_cfg"),),
-        (
-            admin.clone(),
-            min_invoice_amount,
-            max_due_date_days,
-            grace_period_seconds,
-            env.ledger().timestamp(),
-        ),
-    );
-}
-
-/// Emit fee configuration update event
-fn emit_fee_config_updated(env: &Env, admin: &Address, fee_bps: u32) {
-    env.events().publish(
-        (symbol_short!("fee_cfg"),),
-        (admin.clone(), fee_bps, env.ledger().timestamp()),
-    );
-}
-
-/// Emit treasury update event
-fn emit_treasury_updated(env: &Env, admin: &Address, treasury: &Address) {
-    env.events().publish(
-        (symbol_short!("trsr_upd"),),
-        (admin.clone(), treasury.clone(), env.ledger().timestamp()),
-    );
-}

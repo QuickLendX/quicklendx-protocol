@@ -14,7 +14,7 @@
 use super::*;
 use crate::bid::{Bid, BidStatus};
 use crate::invoice::{Invoice, InvoiceCategory, InvoiceStatus};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{testutils::Address as _, token, vec, Address, BytesN, Env, String, Vec};
 
 // ============================================================================
 // HELPER FUNCTIONS

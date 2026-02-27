@@ -63,13 +63,12 @@ pub const MIN_VALID_AMOUNT: i128 = 0;
 
 /// Platform fee configuration stored on-chain
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
 pub struct PlatformFeeConfig {
-    /// Fee in basis points (e.g., 200 = 2%)
-    pub fee_bps: i128,
-    /// Timestamp when config was last updated
+    pub fee_bps: u32,
+    pub treasury_address: Option<Address>,
     pub updated_at: u64,
-    /// Address that last updated the config
     pub updated_by: Address,
 }
 
@@ -82,7 +81,8 @@ pub struct PlatformFeeConfig {
 /// - Audit trail and verification
 /// - Testing and validation
 #[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct ProfitFeeBreakdown {
     /// Original investment amount (principal)
     pub investment_amount: i128,
@@ -110,12 +110,13 @@ pub struct PlatformFee;
 impl PlatformFee {
     /// Storage key for fee configuration
     /// Note: Uses "pf_cfg" to avoid conflict with fees.rs which uses "fee_cfg" for FeeStructure list
-    const STORAGE_KEY: soroban_sdk::Symbol = symbol_short!("pf_cfg");
+    const STORAGE_KEY: soroban_sdk::Symbol = symbol_short!("plt_fee");
 
     /// Creates the default fee configuration
     fn default_config(env: &Env) -> PlatformFeeConfig {
         PlatformFeeConfig {
-            fee_bps: DEFAULT_PLATFORM_FEE_BPS,
+            fee_bps: DEFAULT_PLATFORM_FEE_BPS as u32,
+            treasury_address: None,
             updated_at: 0,
             updated_by: env.current_contract_address(),
         }
@@ -162,7 +163,8 @@ impl PlatformFee {
         }
 
         let config = PlatformFeeConfig {
-            fee_bps: new_fee_bps,
+            fee_bps: new_fee_bps as u32,
+            treasury_address: None, // Will be updated via FeeManager if needed
             updated_at: env.ledger().timestamp(),
             updated_by: admin.clone(),
         };
@@ -212,7 +214,7 @@ impl PlatformFee {
     /// ```
     pub fn calculate(env: &Env, investment_amount: i128, payment_amount: i128) -> (i128, i128) {
         let config = Self::get_config(env);
-        Self::calculate_with_fee_bps(investment_amount, payment_amount, config.fee_bps)
+        Self::calculate_with_fee_bps(investment_amount, payment_amount, config.fee_bps as i128)
     }
 
     /// Calculate with explicit fee basis points (pure function)
@@ -295,7 +297,7 @@ impl PlatformFee {
         payment_amount: i128,
     ) -> ProfitFeeBreakdown {
         let config = Self::get_config(env);
-        Self::calculate_breakdown_with_fee_bps(investment_amount, payment_amount, config.fee_bps)
+        Self::calculate_breakdown_with_fee_bps(investment_amount, payment_amount, config.fee_bps as i128)
     }
 
     /// Calculate breakdown with explicit fee basis points (pure function)
@@ -644,7 +646,7 @@ mod tests {
         assert_eq!(breakdown.platform_fee, 2);
         assert_eq!(breakdown.investor_profit, 98);
         assert_eq!(breakdown.investor_return, 1098);
-        assert_eq!(breakdown.fee_bps_applied, 200);
+        assert_eq!(breakdown.fee_bps_applied, 200i128);
 
         // Verify no dust in breakdown
         assert_eq!(

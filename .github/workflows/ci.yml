@@ -32,10 +32,7 @@ jobs:
 
     - name: Build Cargo project
       run: |
-        source $HOME/.cargo/env
         cd quicklendx-contracts
-        rustc --version
-        cargo --version
         cargo build --verbose
 
     - name: Check code quality
@@ -54,16 +51,14 @@ jobs:
 
     # WASM size budget is also covered by integration test: cargo test wasm_release_build_fits_size_budget
 
-    # Note: Tests temporarily disabled due to known soroban-sdk 22.0.x compilation issue
-    # Uncomment when soroban-sdk test issue is resolved
-    # - name: Run Cargo tests
-    #   run: |
-    #     source $HOME/.cargo/env
-    #     cd quicklendx-contracts
-    #     cargo test --verbose
-    # - name: Test coverage (minimum 95%)
-    #   run: |
-    #     source $HOME/.cargo/env
-    #     cd quicklendx-contracts
-    #     cargo install cargo-llvm-cov
-    #     cargo llvm-cov --lib --fail-under 95
+    - name: Run Cargo tests
+      run: |
+        source $HOME/.cargo/env
+        cd quicklendx-contracts
+        cargo test --verbose
+    - name: Test coverage (minimum 95%)
+      run: |
+        source $HOME/.cargo/env
+        cd quicklendx-contracts
+        cargo install cargo-llvm-cov
+        cargo llvm-cov --lib --fail-under 95

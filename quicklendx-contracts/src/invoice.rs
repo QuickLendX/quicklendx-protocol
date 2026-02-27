@@ -1169,7 +1169,6 @@ impl InvoiceStorage {
             if let Some(md) = invoice.metadata() {
                 Self::remove_metadata_indexes(env, &md, invoice_id);
             }
-
             // Remove invoice itself
             env.storage().instance().remove(invoice_id);
         }
