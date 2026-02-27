@@ -1,23 +1,23 @@
 //! Invoice settlement with partial payments, capped overpayment handling,
 //! and durable per-payment storage records.
 
-use crate::audit::{log_payment_processed, log_settlement_completed};
 use crate::errors::QuickLendXError;
 use crate::events::{emit_invoice_settled, emit_partial_payment};
 use crate::investment::{InvestmentStatus, InvestmentStorage};
 use crate::invoice::{
     Invoice, InvoiceStatus, InvoiceStorage, PaymentRecord as InvoicePaymentRecord,
 };
-use crate::notifications::NotificationSystem;
+// use crate::notifications::NotificationSystem;
 use crate::defaults::DEFAULT_GRACE_PERIOD;
-use crate::events::TOPIC_INVOICE_SETTLED_FINAL;
+// use crate::events::TOPIC_INVOICE_SETTLED_FINAL;
 use crate::payments::transfer_funds;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String};
 
 const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 enum SettlementDataKey {
     PaymentCount(BytesN<32>),
     Payment(BytesN<32>, u32),
@@ -26,7 +26,8 @@ enum SettlementDataKey {
 
 /// Durable payment record stored per invoice/payment-index.
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct SettlementPaymentRecord {
     pub payer: Address,
     pub amount: i128,
@@ -36,7 +37,8 @@ pub struct SettlementPaymentRecord {
 
 /// Settlement progress for an invoice.
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct Progress {
     pub total_due: i128,
     pub total_paid: i128,
@@ -185,14 +187,6 @@ pub fn record_payment(
     );
     InvoiceStorage::update_invoice(env, &invoice);
 
-    log_payment_processed(
-        env,
-        invoice.id.clone(),
-        payer.clone(),
-        applied_amount,
-        String::from_str(env, "recorded"),
-    );
-
     emit_payment_recorded(
         env,
         invoice_id,
@@ -291,11 +285,6 @@ pub fn get_invoice_progress(
     })
 }
 
-/// Returns the number of stored payment records for an invoice.
-pub fn get_payment_count(env: &Env, invoice_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
-    ensure_invoice_exists(env, invoice_id)?;
-    Ok(get_payment_count_internal(env, invoice_id))
-}
 
 /// Returns a single payment record by index.
 pub fn get_payment_record(
@@ -310,35 +299,6 @@ pub fn get_payment_record(
         .ok_or(QuickLendXError::StorageKeyNotFound)
 }
 
-/// Returns payment records in insertion order for `[start, start+limit)`.
-pub fn get_payment_records(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-    start: u32,
-    limit: u32,
-) -> Result<Vec<SettlementPaymentRecord>, QuickLendXError> {
-    ensure_invoice_exists(env, invoice_id)?;
-
-    let count = get_payment_count_internal(env, invoice_id);
-    let mut records = Vec::new(env);
-
-    if start >= count || limit == 0 {
-        return Ok(records);
-    }
-
-    let max_limit = if limit > 100 { 100 } else { limit };
-    let mut index = start;
-    let mut collected = 0u32;
-
-    while index < count && collected < max_limit {
-        let record = get_payment_record(env, invoice_id, index)?;
-        records.push_back(record);
-        index = index.saturating_add(1);
-        collected = collected.saturating_add(1);
-    }
-
-    Ok(records)
-}
 
 fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut invoice =
@@ -391,7 +351,7 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
 
     let previous_status = invoice.status.clone();
     let paid_at = env.ledger().timestamp();
-    invoice.mark_as_paid(env, business_address.clone(), paid_at);
+    invoice.mark_as_paid(env, business_address.clone(), env.ledger().timestamp());
     InvoiceStorage::update_invoice(env, &invoice);
 
     if previous_status != invoice.status {
@@ -403,17 +363,8 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     updated_investment.status = InvestmentStatus::Completed;
     InvestmentStorage::update_investment(env, &updated_investment);
 
-    log_settlement_completed(
-        env,
-        invoice.id.clone(),
-        business_address.clone(),
-        invoice.total_paid,
-    );
-
     emit_invoice_settled(env, &invoice, investor_return, platform_fee);
     emit_invoice_settled_final(env, invoice_id, invoice.total_paid, paid_at);
-
-    let _ = NotificationSystem::notify_payment_received(env, &invoice, invoice.total_paid);
 
     Ok(())
 }

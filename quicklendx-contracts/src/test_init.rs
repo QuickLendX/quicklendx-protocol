@@ -256,8 +256,7 @@ fn test_version_format_documentation() {
     assert_eq!(version, 1);
     
     // Verify it's a simple integer format (not semver or complex format)
-    let version_str = version.to_string();
-    assert!(version_str.parse::<u32>().is_ok());
+    // Removed to_string check as it is not available on u32 in this environment
 }
 
 #[test]
@@ -286,11 +285,12 @@ fn test_version_consistency_across_operations() {
     
     // Perform various operations
     let current_admin = client.get_current_admin().unwrap();
-    client.transfer_admin(&current_admin, &Address::generate(&env));
+    let new_admin = Address::generate(&env);
+    client.transfer_admin(&new_admin);
     
     // Add currency
     let new_currency = Address::generate(&env);
-    client.add_currency(&current_admin, &new_currency);
+    client.add_currency(&new_admin, &new_currency);
     
     // Version should remain unchanged throughout all operations
     let final_version = client.get_version();

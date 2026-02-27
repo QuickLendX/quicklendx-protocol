@@ -5,7 +5,8 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 /// The Soroban XDR spec allows a maximum of 50 error variants per contract.
 /// All 50 slots are used; new variants require replacing an existing one.
 #[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(test, derive(Debug))]
 #[repr(u32)]
 pub enum QuickLendXError {
     // Invoice lifecycle (1000–1006)
@@ -82,6 +83,9 @@ pub enum QuickLendXError {
     // Notification (2000–2001)
     NotificationNotFound = 2000,
     NotificationBlocked = 2001,
+
+    // Emergency (2100)
+    ContractPaused = 2100,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -149,6 +153,8 @@ impl From<QuickLendXError> for Symbol {
             // Notification
             QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
+            QuickLendXError::MaxBidsPerInvoiceExceeded => symbol_short!("MAX_BIDS"),
+            QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
         }
     }
 }

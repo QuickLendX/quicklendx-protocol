@@ -14,6 +14,9 @@ const MAX_ACTIVE_BIDS_PER_INVESTOR_KEY: Symbol = symbol_short!("mx_actbd");
 const DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 20;
 const SECONDS_PER_DAY: u64 = 86400;
 
+/// Maximum number of bids allowed per invoice to prevent unbound storage growth
+pub const MAX_BIDS_PER_INVOICE: u32 = 50;
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BidStatus {
@@ -122,6 +125,7 @@ impl BidStorage {
             idx += 1;
         }
         active_count
+    }
 
     /// Get configured bid TTL in days (returns default if not set)
     pub fn get_bid_ttl_days(env: &Env) -> u64 {

@@ -1,0 +1,1845 @@
+warning: unused imports: `emit_dispute_created`, `emit_dispute_resolved`, and `emit_dispute_under_review`
+ --> src/defaults.rs:3:5
+  |
+3 |     emit_dispute_created, emit_dispute_resolved, emit_dispute_under_review, e...
+  |     ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Address`, `String`, and `Vec`
+ --> src/defaults.rs:9:19
+  |
+9 | ...::{Address, BytesN, Env, String, Vec};
+  |       ^^^^^^^               ^^^^^^  ^^^
+
+warning: unused import: `MAX_FEEDBACK_LENGTH`
+ --> src/invoice.rs:6:70
+  |
+6 | ...H, MAX_FEEDBACK_LENGTH,
+  |       ^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `emit_invoice_category_updated`, `emit_invoice_tag_added`, `emit_invoice_tag_removed`, `emit_platform_fee_config_updated`, and `emit_treasury_configured`
+  --> src/lib.rs:58:28
+   |
+58 |     emit_invoice_verified, emit_invoice_category_updated, emit_invoice_tag_added,
+   |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^
+59 |     emit_invoice_tag_removed, emit_treasury_configured, emit_platform_fee_config_updated,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `actor`
+   --> src/invoice.rs:276:47
+    |
+276 | ...v, actor: Ad...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `env`
+   --> src/invoice.rs:282:40
+    |
+282 | ...f, env: &Env...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `actor`
+   --> src/invoice.rs:282:51
+    |
+282 | ...v, actor: Ad...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `env`
+   --> src/invoice.rs:381:30
+    |
+381 | ...f, env: &Env...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `actor`
+   --> src/invoice.rs:381:41
+    |
+381 | ...v, actor: Ad...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `env`
+   --> src/invoice.rs:391:30
+    |
+391 | ...f, env: &Env...
+    |       ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `actor`
+   --> src/invoice.rs:391:41
+    |
+391 | ...v, actor: Ad...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `investment`
+   --> src/lib.rs:900:13
+    |
+900 | ...et investment = ...
+    |       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
+
+warning: unused variable: `investment`
+   --> src/lib.rs:977:13
+    |
+977 | ...et investment = ...
+    |       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
+
+warning: unused variable: `investment`
+    --> src/lib.rs:1011:13
+     |
+1011 | ...et investment = ...
+     |       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
+
+warning: function `emit_backup_created` is never used
+   --> src/events.rs:322:8
+    |
+322 | ...fn emit_backup_created(en...
+    |       ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `emit_backup_restored` is never used
+   --> src/events.rs:330:8
+    |
+330 | ...fn emit_backup_restored(en...
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_backup_validated` is never used
+   --> src/events.rs:338:8
+    |
+338 | ...fn emit_backup_validated(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_backup_archived` is never used
+   --> src/events.rs:346:8
+    |
+346 | ...fn emit_backup_archived(en...
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_audit_validation` is never used
+   --> src/events.rs:354:8
+    |
+354 | ...fn emit_audit_validation(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_audit_query` is never used
+   --> src/events.rs:362:8
+    |
+362 | ...fn emit_audit_query(en...
+    |       ^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_created` is never used
+   --> src/events.rs:413:8
+    |
+413 | ...fn emit_dispute_created(
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_under_review` is never used
+   --> src/events.rs:431:8
+    |
+431 | ...fn emit_dispute_under_review(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_resolved` is never used
+   --> src/events.rs:443:8
+    |
+443 | ...fn emit_dispute_resolved(
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MIN_INVOICE_AMOUNT` is never used
+  --> src/init.rs:49:7
+   |
+49 | const DEFAULT_MIN_INVOICE_AMOUNT: i...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MAX_DUE_DATE_DAYS` is never used
+  --> src/init.rs:52:7
+   |
+52 | const DEFAULT_MAX_DUE_DATE_DAYS: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_GRACE_PERIOD_SECONDS` is never used
+  --> src/init.rs:53:7
+   |
+53 | const DEFAULT_GRACE_PERIOD_SECONDS: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_FEE_BPS` is never used
+  --> src/init.rs:54:7
+   |
+54 | const DEFAULT_FEE_BPS: u...
+   |       ^^^^^^^^^^^^^^^
+
+warning: constant `MAX_TAG_LENGTH` is never used
+  --> src/protocol_limits.rs:32:11
+   |
+32 | ...st MAX_TAG_LENGTH: u...
+   |       ^^^^^^^^^^^^^^
+
+warning: constant `MAX_DISPUTE_REASON_LENGTH` is never used
+  --> src/protocol_limits.rs:34:11
+   |
+34 | ...st MAX_DISPUTE_REASON_LENGTH: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_DISPUTE_EVIDENCE_LENGTH` is never used
+  --> src/protocol_limits.rs:35:11
+   |
+35 | ...st MAX_DISPUTE_EVIDENCE_LENGTH: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_DISPUTE_RESOLUTION_LENGTH` is never used
+  --> src/protocol_limits.rs:36:11
+   |
+36 | ...st MAX_DISPUTE_RESOLUTION_LENGTH: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_NOTIFICATION_TITLE_LENGTH` is never used
+  --> src/protocol_limits.rs:37:11
+   |
+37 | ...st MAX_NOTIFICATION_TITLE_LENGTH: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_NOTIFICATION_MESSAGE_LENGTH` is never used
+  --> src/protocol_limits.rs:38:11
+   |
+38 | ...st MAX_NOTIFICATION_MESSAGE_LENGTH: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_FEEDBACK_LENGTH` is never used
+  --> src/protocol_limits.rs:41:11
+   |
+41 | ...st MAX_FEEDBACK_LENGTH: u...
+   |       ^^^^^^^^^^^^^^^^^^^
+
+warning: function `update_investor_analytics` is never used
+   --> src/verification.rs:924:8
+    |
+924 | ...fn update_investor_analytics(
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_investor_analytics` is never used
+   --> src/verification.rs:966:8
+    |
+966 | ...fn get_investor_analytics(
+    |       ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `quicklendx-contracts` (lib) generated 36 warnings (run `cargo fix --lib -p quicklendx-contracts` to apply 14 suggestions)
+   Compiling quicklendx-contracts v0.1.0 (/Users/mac/QUICKLENDX/quicklendx-contracts)
+error[E0432]: unresolved import `crate::notifications`
+ --> src/test_string_limits.rs:7:12
+  |
+7 | ...e::notifications::{No...
+  |       ^^^^^^^^^^^^^ could not find `notifications` in the crate root
+
+error[E0432]: unresolved import `crate::invoice::Dispute`
+  --> src/test_storage.rs:15:5
+   |
+15 |     Dispute, Invoice, I...
+   |     ^^^^^^^ no `Dispute` in `invoice`
+
+error[E0433]: failed to resolve: could not find `DisputeStatus` in `invoice`
+   --> src/test_storage.rs:866:41
+    |
+866 | ...e::DisputeStatus::N...
+    |       ^^^^^^^^^^^^^ could not find `DisputeStatus` in `invoice`
+
+warning: unused import: `BytesN`
+  --> src/test_string_limits.rs:11:14
+   |
+11 |     Address, BytesN, En...
+   |              ^^^^^^
+
+warning: unused import: `PlatformFeeConfig`
+  --> src/test_types.rs:11:35
+   |
+11 | ...e, PlatformFeeConfig};
+   |       ^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `PlatformFeeConfig` and `PlatformFee`
+  --> src/test_storage.rs:18:22
+   |
+18 | ...::{PlatformFee, PlatformFeeConfig};
+   |       ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ConfigStorage`
+  --> src/test_storage.rs:20:17
+   |
+20 | ...e, ConfigStorage, In...
+   |       ^^^^^^^^^^^^^
+
+warning: unused import: `crate::verification::BusinessVerificationStatus`
+  --> src/test/test_invoice.rs:11:5
+   |
+11 | use crate::verification::BusinessVerificationStatus;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `InvoiceStatus`
+ --> src/test/test_invoice_categories.rs:2:39
+  |
+2 | ...ry, InvoiceStatus};
+  |        ^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+ --> src/test/test_invoice_metadata.rs:5:31
+  |
+5 | ... as _, Ledger},
+  |           ^^^^^^
+
+warning: cannot test inner items
+   --> src/test_bid.rs:225:1
+    |
+225 | #[test]
+    | ^^^^^^^
+    |
+    = note: `#[warn(unnameable_test_items)]` on by default
+
+warning: cannot test inner items
+   --> src/test_bid.rs:244:1
+    |
+244 | #[test]
+    | ^^^^^^^
+
+warning: cannot test inner items
+   --> src/test_bid.rs:266:1
+    |
+266 | #[test]
+    | ^^^^^^^
+
+warning: unused import: `crate::bid::BidStatus`
+  --> src/test_bid_ranking.rs:10:5
+   |
+10 | use crate::bid::BidStatus;
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Ledger`
+  --> src/test_investor_kyc.rs:17:35
+   |
+17 | ... as _, Ledger},
+   |           ^^^^^^
+
+warning: unused import: `crate::errors::QuickLendXError`
+ --> src/test_limit.rs:3:5
+  |
+3 | use crate::errors::QuickLendXError;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `try_create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src/test_string_limits.rs:142:22
+    |
+142 | ...nt.try_create_dispute(&i...
+    |       ^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src/lib.rs:79:1
+    |
+ 79 | #[contract]
+    | ----------- method `try_create_dispute` not found for this struct
+
+error[E0599]: no method named `try_create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src/test_string_limits.rs:146:22
+    |
+146 | ...nt.try_create_dispute(&i...
+    |       ^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src/lib.rs:79:1
+    |
+ 79 | #[contract]
+    | ----------- method `try_create_dispute` not found for this struct
+
+error[E0599]: no method named `create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src/test_string_limits.rs:151:12
+    |
+151 | ...nt.create_dispute(&i...
+    |       ^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src/lib.rs:79:1
+    |
+ 79 | #[contract]
+    | ----------- method `create_dispute` not found for this struct
+
+error[E0599]: no method named `put_dispute_under_review` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src/test_string_limits.rs:152:12
+    |
+152 | ...nt.put_dispute_under_review(&i...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src/lib.rs:79:1
+    |
+ 79 | #[contract]
+    | ----------- method `put_dispute_under_review` not found for this struct
+
+error[E0599]: no method named `try_resolve_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src/test_string_limits.rs:155:22
+    |
+155 | ...nt.try_resolve_dispute(&i...
+    |       ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src/lib.rs:79:1
+    |
+ 79 | #[contract]
+    | ----------- method `try_resolve_dispute` not found for this struct
+
+error[E0560]: struct `profits::PlatformFee` has no field named `fee_bps`
+   --> src/test_types.rs:290:9
+    |
+290 |         fee_bps: 50, /...
+    |         ^^^^^^^ `profits::PlatformFee` does not have this field
+    |
+    = note: all struct fields are already assigned
+
+error[E0560]: struct `profits::PlatformFee` has no field named `recipient`
+   --> src/test_types.rs:291:9
+    |
+291 | ...   recipient: recip...
+    |       ^^^^^^^^^ `profits::PlatformFee` does not have this field
+    |
+    = note: all struct fields are already assigned
+
+error[E0560]: struct `profits::PlatformFee` has no field named `description`
+   --> src/test_types.rs:292:9
+    |
+292 | ...   description: des...
+    |       ^^^^^^^^^^^ `profits::PlatformFee` does not have this field
+    |
+    = note: all struct fields are already assigned
+
+error[E0609]: no field `fee_bps` on type `profits::PlatformFee`
+   --> src/test_types.rs:295:20
+    |
+295 | ...(fee.fee_bps, 50);
+    |         ^^^^^^^ unknown field
+
+error[E0609]: no field `recipient` on type `profits::PlatformFee`
+   --> src/test_types.rs:296:20
+    |
+296 | ...ee.recipient, recip...
+    |       ^^^^^^^^^ unknown field
+
+error[E0609]: no field `description` on type `profits::PlatformFee`
+   --> src/test_types.rs:297:20
+    |
+297 | ...ee.description, des...
+    |       ^^^^^^^^^^^ unknown field
+
+error[E0599]: no method named `clone` found for struct `profits::PlatformFee` in the current scope
+   --> src/test_types.rs:300:20
+    |
+300 | ... fee.clone();
+    |         ^^^^^ method not found in `profits::PlatformFee`
+    |
+   ::: src/profits.rs:110:1
+    |
+110 | pub struct PlatformFee;
+    | ---------------------- method `clone` not found for this struct
+    |
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `clone`, perhaps you need to implement it:
+            candidate #1: `Clone`
+
+error[E0560]: struct `Invoice` has no field named `average_rating`
+   --> src/test_storage.rs:863:9
+    |
+863 | ...   average_rating: N...
+    |       ^^^^^^^^^^^^^^ `Invoice` does not have this field
+    |
+    = note: all struct fields are already assigned
+
+error[E0560]: struct `Invoice` has no field named `total_ratings`
+   --> src/test_storage.rs:864:9
+    |
+864 |         total_ratings: 0,
+    |         ^^^^^^^^^^^^^ `Invoice` does not have this field
+    |
+    = note: all struct fields are already assigned
+
+error[E0560]: struct `Invoice` has no field named `ratings`
+   --> src/test_storage.rs:865:9
+    |
+865 |         ratings: Vec::...
+    |         ^^^^^^^ `Invoice` does not have this field
+    |
+    = note: all struct fields are already assigned
+
+error[E0560]: struct `Invoice` has no field named `dispute_status`
+   --> src/test_storage.rs:866:9
+    |
+866 | ...   dispute_status: c...
+    |       ^^^^^^^^^^^^^^ `Invoice` does not have this field
+    |
+    = note: all struct fields are already assigned
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:360:24
+    |
+360 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:931:24
+    |
+931 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+   --> src/test.rs:987:24
+    |
+987 | ...nv.register_stellar_asset_contract(to...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1039:24
+     |
+1039 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1096:24
+     |
+1096 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::Env::register_stellar_asset_contract`: use [Env::register_stellar_asset_contract_v2]
+    --> src/test.rs:1178:24
+     |
+1178 | ...nv.register_stellar_asset_contract(to...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `get_notification_preferences` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1588:30
+     |
+1588 | ...nt.get_notification_preferences(&u...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_notification_preferences` not found for this struct
+
+error[E0599]: no method named `get_notification_preferences` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1608:34
+     |
+1608 | ...nt.get_notification_preferences(&u...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_notification_preferences` not found for this struct
+
+error[E0599]: no method named `update_notification_preferences` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1615:12
+     |
+1615 | ...nt.update_notification_preferences(&u...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `update_notification_preferences` not found for this struct
+
+error[E0599]: no method named `get_notification_preferences` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1618:38
+     |
+1618 | ...nt.get_notification_preferences(&u...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_notification_preferences` not found for this struct
+
+error[E0599]: no method named `get_user_notifications` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1654:32
+     |
+1654 | ...nt.get_user_notifications(&b...
+     |       ^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_user_notifications` not found for this struct
+
+error[E0599]: no method named `get_user_notifications` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1694:41
+     |
+1694 | ...nt.get_user_notifications(&b...
+     |       ^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_user_notifications` not found for this struct
+
+error[E0599]: no method named `get_notification` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1701:31
+     |
+1701 | ...nt.get_notification(&n...
+     |       ^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_notification` not found for this struct
+
+error[E0599]: no method named `get_user_notifications` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1735:40
+     |
+1735 | ...nt.get_user_notifications(&b...
+     |       ^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_user_notifications` not found for this struct
+
+error[E0599]: no method named `get_user_notifications` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1742:40
+     |
+1742 | ...nt.get_user_notifications(&b...
+     |       ^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_user_notifications` not found for this struct
+
+error[E0599]: no method named `get_user_notifications` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1776:32
+     |
+1776 | ...nt.get_user_notifications(&b...
+     |       ^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_user_notifications` not found for this struct
+
+error[E0599]: no method named `update_notification_status` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1781:12
+     |
+1781 | ...nt.update_notification_status(&n...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `update_notification_status` not found for this struct
+     |
+help: there is a method `update_invoice_status` with a similar name
+     |
+1781 -     client.update_notification_status(&notification_id, &NotificationDeliveryStatus::Sent);
+1781 +     client.update_invoice_status(&notification_id, &NotificationDeliveryStatus::Sent);
+     |
+
+error[E0433]: failed to resolve: use of undeclared type `NotificationDeliveryStatus`
+    --> src/test.rs:1781:58
+     |
+1781 | ..., &NotificationDeliveryStatus::S...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^ use of undeclared type `NotificationDeliveryStatus`
+
+error[E0599]: no method named `get_notification` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1784:31
+     |
+1784 | ...nt.get_notification(&n...
+     |       ^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_notification` not found for this struct
+
+error[E0433]: failed to resolve: use of undeclared type `NotificationDeliveryStatus`
+    --> src/test.rs:1789:9
+     |
+1789 | ...   NotificationDeliveryStatus::Sent
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^ use of undeclared type `NotificationDeliveryStatus`
+
+error[E0599]: no method named `get_user_notification_stats` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1823:24
+     |
+1823 | ...nt.get_user_notification_stats(&b...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_user_notification_stats` not found for this struct
+     |
+help: there is a method `get_business_verification_status` with a similar name
+     |
+1823 -     let stats = client.get_user_notification_stats(&business);
+1823 +     let stats = client.get_business_verification_status(&business);
+     |
+
+error[E0599]: no method named `get_user_notifications` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1916:41
+     |
+1916 | ...nt.get_user_notifications(&b...
+     |       ^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_user_notifications` not found for this struct
+
+error[E0599]: no method named `get_user_notifications` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:1917:41
+     |
+1917 | ...nt.get_user_notifications(&i...
+     |       ^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_user_notifications` not found for this struct
+
+error[E0599]: no method named `create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2088:12
+     |
+2088 | ...nt.create_dispute(&i...
+     |       ^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `create_dispute` not found for this struct
+
+error[E0599]: no method named `get_invoice_dispute_status` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2091:33
+     |
+2091 | ...nt.get_invoice_dispute_status(&i...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_invoice_dispute_status` not found for this struct
+     |
+help: there is a method `get_invoices_by_status` with a similar name
+     |
+2091 -     let dispute_status = client.get_invoice_dispute_status(&invoice_id);
+2091 +     let dispute_status = client.get_invoices_by_status(&invoice_id);
+     |
+
+error[E0433]: failed to resolve: use of undeclared type `DisputeStatus`
+    --> src/test.rs:2092:32
+     |
+2092 | ...s, DisputeStatus::D...
+     |       ^^^^^^^^^^^^^ use of undeclared type `DisputeStatus`
+
+error[E0599]: no method named `get_dispute_details` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2094:34
+     |
+2094 | ...nt.get_dispute_details(&i...
+     |       ^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_dispute_details` not found for this struct
+     |
+help: there is a method `get_escrow_details` with a similar name
+     |
+2094 -     let dispute_details = client.get_dispute_details(&invoice_id);
+2094 +     let dispute_details = client.get_escrow_details(&invoice_id);
+     |
+
+error[E0599]: no method named `create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2138:12
+     |
+2138 | ...nt.create_dispute(&i...
+     |       ^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `create_dispute` not found for this struct
+
+error[E0599]: no method named `get_invoice_dispute_status` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2141:33
+     |
+2141 | ...nt.get_invoice_dispute_status(&i...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_invoice_dispute_status` not found for this struct
+     |
+help: there is a method `get_invoices_by_status` with a similar name
+     |
+2141 -     let dispute_status = client.get_invoice_dispute_status(&invoice_id);
+2141 +     let dispute_status = client.get_invoices_by_status(&invoice_id);
+     |
+
+error[E0433]: failed to resolve: use of undeclared type `DisputeStatus`
+    --> src/test.rs:2142:32
+     |
+2142 | ...s, DisputeStatus::D...
+     |       ^^^^^^^^^^^^^ use of undeclared type `DisputeStatus`
+
+error[E0599]: no method named `get_dispute_details` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2144:34
+     |
+2144 | ...nt.get_dispute_details(&i...
+     |       ^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_dispute_details` not found for this struct
+     |
+help: there is a method `get_escrow_details` with a similar name
+     |
+2144 -     let dispute_details = client.get_dispute_details(&invoice_id);
+2144 +     let dispute_details = client.get_escrow_details(&invoice_id);
+     |
+
+error[E0599]: no method named `try_create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2183:25
+     |
+2183 | ...nt.try_create_dispute(&i...
+     |       ^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `try_create_dispute` not found for this struct
+
+error[E0599]: no method named `create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2217:12
+     |
+2217 | ...nt.create_dispute(&i...
+     |       ^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `create_dispute` not found for this struct
+
+error[E0599]: no method named `try_create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2223:25
+     |
+2223 | ...nt.try_create_dispute(&i...
+     |       ^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `try_create_dispute` not found for this struct
+
+error[E0599]: no method named `create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2261:12
+     |
+2261 | ...nt.create_dispute(&i...
+     |       ^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `create_dispute` not found for this struct
+
+error[E0599]: no method named `put_dispute_under_review` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2264:12
+     |
+2264 | ...nt.put_dispute_under_review(&i...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `put_dispute_under_review` not found for this struct
+
+error[E0599]: no method named `get_invoice_dispute_status` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2267:33
+     |
+2267 | ...nt.get_invoice_dispute_status(&i...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_invoice_dispute_status` not found for this struct
+     |
+help: there is a method `get_invoices_by_status` with a similar name
+     |
+2267 -     let dispute_status = client.get_invoice_dispute_status(&invoice_id);
+2267 +     let dispute_status = client.get_invoices_by_status(&invoice_id);
+     |
+
+error[E0433]: failed to resolve: use of undeclared type `DisputeStatus`
+    --> src/test.rs:2268:32
+     |
+2268 | ...s, DisputeStatus::U...
+     |       ^^^^^^^^^^^^^ use of undeclared type `DisputeStatus`
+
+error[E0599]: no method named `create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2304:12
+     |
+2304 | ...nt.create_dispute(&i...
+     |       ^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `create_dispute` not found for this struct
+
+error[E0599]: no method named `put_dispute_under_review` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2307:12
+     |
+2307 | ...nt.put_dispute_under_review(&i...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `put_dispute_under_review` not found for this struct
+
+error[E0599]: no method named `resolve_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2314:12
+     |
+2314 | ...nt.resolve_dispute(&i...
+     |       ^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `resolve_dispute` not found for this struct
+
+error[E0599]: no method named `get_invoice_dispute_status` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2317:33
+     |
+2317 | ...nt.get_invoice_dispute_status(&i...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_invoice_dispute_status` not found for this struct
+     |
+help: there is a method `get_invoices_by_status` with a similar name
+     |
+2317 -     let dispute_status = client.get_invoice_dispute_status(&invoice_id);
+2317 +     let dispute_status = client.get_invoices_by_status(&invoice_id);
+     |
+
+error[E0433]: failed to resolve: use of undeclared type `DisputeStatus`
+    --> src/test.rs:2318:32
+     |
+2318 | ...s, DisputeStatus::R...
+     |       ^^^^^^^^^^^^^ use of undeclared type `DisputeStatus`
+
+error[E0599]: no method named `get_dispute_details` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2320:34
+     |
+2320 | ...nt.get_dispute_details(&i...
+     |       ^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_dispute_details` not found for this struct
+     |
+help: there is a method `get_escrow_details` with a similar name
+     |
+2320 -     let dispute_details = client.get_dispute_details(&invoice_id);
+2320 +     let dispute_details = client.get_escrow_details(&invoice_id);
+     |
+
+error[E0599]: no method named `create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2371:12
+     |
+2371 | ...nt.create_dispute(&i...
+     |       ^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `create_dispute` not found for this struct
+
+error[E0599]: no method named `create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2373:12
+     |
+2373 | ...nt.create_dispute(&i...
+     |       ^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `create_dispute` not found for this struct
+
+error[E0599]: no method named `get_invoices_with_disputes` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2376:36
+     |
+2376 | ...nt.get_invoices_with_disputes();
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_invoices_with_disputes` not found for this struct
+     |
+help: there is a method `get_invoices_by_status` with a similar name, but with different arguments
+    --> src/lib.rs:90:1
+     |
+  90 | #[contractimpl]
+     | ^^^^^^^^^^^^^^^
+     = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no method named `create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2416:12
+     |
+2416 | ...nt.create_dispute(&i...
+     |       ^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `create_dispute` not found for this struct
+
+error[E0599]: no method named `get_invoices_by_dispute_status` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2419:36
+     |
+2419 | ...nt.get_invoices_by_dispute_status(&D...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_invoices_by_dispute_status` not found for this struct
+     |
+help: there is a method `get_invoices_by_status` with a similar name
+     |
+2419 -     let disputed_invoices = client.get_invoices_by_dispute_status(&DisputeStatus::Disputed);
+2419 +     let disputed_invoices = client.get_invoices_by_status(&DisputeStatus::Disputed);
+     |
+
+error[E0433]: failed to resolve: use of undeclared type `DisputeStatus`
+    --> src/test.rs:2419:68
+     |
+2419 | ...s(&DisputeStatus::D...
+     |       ^^^^^^^^^^^^^ use of undeclared type `DisputeStatus`
+
+error[E0599]: no method named `put_dispute_under_review` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2424:12
+     |
+2424 | ...nt.put_dispute_under_review(&i...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `put_dispute_under_review` not found for this struct
+
+error[E0599]: no method named `get_invoices_by_dispute_status` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2427:40
+     |
+2427 | ...nt.get_invoices_by_dispute_status(&D...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_invoices_by_dispute_status` not found for this struct
+     |
+help: there is a method `get_invoices_by_status` with a similar name
+     |
+2427 -     let under_review_invoices = client.get_invoices_by_dispute_status(&DisputeStatus::UnderReview);
+2427 +     let under_review_invoices = client.get_invoices_by_status(&DisputeStatus::UnderReview);
+     |
+
+error[E0433]: failed to resolve: use of undeclared type `DisputeStatus`
+    --> src/test.rs:2427:72
+     |
+2427 | ...s(&DisputeStatus::U...
+     |       ^^^^^^^^^^^^^ use of undeclared type `DisputeStatus`
+
+error[E0599]: no method named `resolve_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2433:12
+     |
+2433 | ...nt.resolve_dispute(&i...
+     |       ^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `resolve_dispute` not found for this struct
+
+error[E0599]: no method named `get_invoices_by_dispute_status` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2436:36
+     |
+2436 | ...nt.get_invoices_by_dispute_status(&D...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_invoices_by_dispute_status` not found for this struct
+     |
+help: there is a method `get_invoices_by_status` with a similar name
+     |
+2436 -     let resolved_invoices = client.get_invoices_by_dispute_status(&DisputeStatus::Resolved);
+2436 +     let resolved_invoices = client.get_invoices_by_status(&DisputeStatus::Resolved);
+     |
+
+error[E0433]: failed to resolve: use of undeclared type `DisputeStatus`
+    --> src/test.rs:2436:68
+     |
+2436 | ...s(&DisputeStatus::R...
+     |       ^^^^^^^^^^^^^ use of undeclared type `DisputeStatus`
+
+error[E0599]: no method named `try_create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2470:25
+     |
+2470 | ...nt.try_create_dispute(&i...
+     |       ^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `try_create_dispute` not found for this struct
+
+error[E0599]: no method named `try_create_dispute` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2477:25
+     |
+2477 | ...nt.try_create_dispute(&i...
+     |       ^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `try_create_dispute` not found for this struct
+
+error[E0599]: no method named `get_platform_metrics` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2944:36
+     |
+2944 | ...nt.get_platform_metrics();
+     |       ^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_platform_metrics` not found for this struct
+     |
+help: there is a method `get_platform_fee` with a similar name
+     |
+2944 -     let _platform_metrics = client.get_platform_metrics();
+2944 +     let _platform_metrics = client.get_platform_fee();
+     |
+
+error[E0599]: no method named `get_performance_metrics` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2945:39
+     |
+2945 | ...nt.get_performance_metrics();
+     |       ^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_performance_metrics` not found for this struct
+
+error[E0599]: no method named `get_invoice_audit_trail` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2948:31
+     |
+2948 | ...nt.get_invoice_audit_trail(&i...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_invoice_audit_trail` not found for this struct
+     |
+help: there is a method `get_invoice_tags` with a similar name
+     |
+2948 -     let _audit_trail = client.get_invoice_audit_trail(&invoice_id);
+2948 +     let _audit_trail = client.get_invoice_tags(&invoice_id);
+     |
+
+error[E0599]: no method named `get_audit_stats` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2949:31
+     |
+2949 | ...nt.get_audit_stats();
+     |       ^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_audit_stats` not found for this struct
+     |
+help: there is a method `set_auths` with a similar name, but with different arguments
+    --> src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ^^^^^^^^^^^
+     = note: this error originates in the attribute macro `contract` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no method named `create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2953:28
+     |
+2953 | ...nt.create_backup(&a...
+     |       ^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `create_backup` not found for this struct
+
+error[E0599]: no method named `get_backup_details` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2954:34
+     |
+2954 | ...nt.get_backup_details(&b...
+     |       ^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_backup_details` not found for this struct
+     |
+help: there is a method `get_escrow_details` with a similar name
+     |
+2954 -     let _backup_details = client.get_backup_details(&backup_id);
+2954 +     let _backup_details = client.get_escrow_details(&backup_id);
+     |
+
+error[E0599]: no method named `get_backups` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2955:27
+     |
+2955 | ...nt.get_backups();
+     |       ^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_backups` not found for this struct
+
+error[E0599]: no method named `get_invoices_with_ratings_count` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2963:41
+     |
+2963 | ...nt.get_invoices_with_ratings_count();
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_invoices_with_ratings_count` not found for this struct
+     |
+help: there is a method `get_invoice_tags` with a similar name, but with different arguments
+    --> src/lib.rs:90:1
+     |
+  90 | #[contractimpl]
+     | ^^^^^^^^^^^^^^^
+     = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no method named `get_invoices_with_rating_above` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2964:39
+     |
+2964 | ...nt.get_invoices_with_rating_above(&4);
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_invoices_with_rating_above` not found for this struct
+     |
+help: there is a method `get_invoice_tags` with a similar name
+     |
+2964 -     let _high_rated_invoices = client.get_invoices_with_rating_above(&4);
+2964 +     let _high_rated_invoices = client.get_invoice_tags(&4);
+     |
+
+error[E0599]: no method named `get_user_notifications` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2967:38
+     |
+2967 | ...nt.get_user_notifications(&b...
+     |       ^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_user_notifications` not found for this struct
+
+error[E0599]: no method named `get_notification_preferences` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2968:31
+     |
+2968 | ...nt.get_notification_preferences(&b...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_notification_preferences` not found for this struct
+
+error[E0599]: no method named `get_user_notification_stats` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2969:38
+     |
+2969 | ...nt.get_user_notification_stats(&b...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_user_notification_stats` not found for this struct
+     |
+help: there is a method `get_business_verification_status` with a similar name
+     |
+2969 -     let _notification_stats = client.get_user_notification_stats(&business);
+2969 +     let _notification_stats = client.get_business_verification_status(&business);
+     |
+
+error[E0599]: no method named `get_financial_metrics` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2972:37
+     |
+2972 | ...nt.get_financial_metrics(&T...
+     |       ^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_financial_metrics` not found for this struct
+     |
+help: there is a method `get_fee_analytics` with a similar name
+     |
+2972 -     let _financial_metrics = client.get_financial_metrics(&TimePeriod::Monthly);
+2972 +     let _financial_metrics = client.get_fee_analytics(&TimePeriod::Monthly);
+     |
+
+error[E0433]: failed to resolve: use of undeclared type `TimePeriod`
+    --> src/test.rs:2972:60
+     |
+2972 | ...s(&TimePeriod::Mon...
+     |       ^^^^^^^^^^ use of undeclared type `TimePeriod`
+
+error[E0599]: no method named `get_user_behavior_metrics` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2973:41
+     |
+2973 | ...nt.get_user_behavior_metrics(&b...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_user_behavior_metrics` not found for this struct
+
+error[E0599]: no method named `get_analytics_summary` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2974:37
+     |
+2974 | ...nt.get_analytics_summary();
+     |       ^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `get_analytics_summary` not found for this struct
+
+error[E0599]: no method named `calculate_investor_analytics` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2979:38
+     |
+2979 | ...nt.calculate_investor_analytics(&i...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `calculate_investor_analytics` not found for this struct
+     |
+help: there is a method `calculate_investment_limit` with a similar name, but with different arguments
+    --> src/lib.rs:90:1
+     |
+  90 | #[contractimpl]
+     | ^^^^^^^^^^^^^^^
+     = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no method named `calc_investor_perf_metrics` found for struct `QuickLendXContractClient<'a>` in the current scope
+    --> src/test.rs:2980:48
+     |
+2980 | ...nt.calc_investor_perf_metrics();
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+     |
+    ::: src/lib.rs:79:1
+     |
+  79 | #[contract]
+     | ----------- method `calc_investor_perf_metrics` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:114:56
+    |
+114 | ..._id).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:153:60
+    |
+153 | ..._id).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:200:56
+    |
+200 | ..._id).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:227:56
+    |
+227 | ..._id).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:246:68
+    |
+246 | ...all).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:326:56
+    |
+326 | ..._id).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:375:57
+    |
+375 | ...t_a).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:384:57
+    |
+384 | ...t_b).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:389:63
+    |
+389 | ...t_a).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:390:63
+    |
+390 | ...t_b).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:431:55
+    |
+431 | ..._id).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:459:60
+    |
+459 | ..._id).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:467:60
+    |
+467 | ..._id).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:524:56
+    |
+524 | ..._id).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `Investment` in the current scope
+   --> src/test_insurance.rs:556:56
+    |
+556 | ..._id).unwrap();
+    |         ^^^^^^ method not found in `Investment`
+    |
+   ::: src/investment.rs:32:1
+    |
+ 32 | pub struct Investment {
+    | --------------------- method `unwrap` not found for this struct
+
+warning: unused variable: `actor`
+   --> src/invoice.rs:276:47
+    |
+276 | ...Env, actor: Address) {
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `env`
+   --> src/invoice.rs:282:40
+    |
+282 | ... self, env: &Env, a...
+    |           ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `actor`
+   --> src/invoice.rs:282:51
+    |
+282 | ...Env, actor: Address) {
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `env`
+   --> src/invoice.rs:381:30
+    |
+381 | ... self, env: &Env, a...
+    |           ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `actor`
+   --> src/invoice.rs:381:41
+    |
+381 | ...Env, actor: Address) {
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: unused variable: `env`
+   --> src/invoice.rs:391:30
+    |
+391 | ... self, env: &Env, a...
+    |           ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `actor`
+   --> src/invoice.rs:391:41
+    |
+391 | ...Env, actor: Address...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_actor`
+
+warning: variable does not need to be mutable
+   --> src/storage.rs:248:13
+    |
+248 | ... let mut ids: Vec<B...
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src/storage.rs:269:13
+    |
+269 | ... let mut ids: Vec<B...
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `env`
+    --> src/test_business_kyc.rs:1012:10
+     |
+1012 | ...let (env, client, ...
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+    --> src/test_business_kyc.rs:1020:10
+     |
+1020 | ...let (env, client, ...
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+    --> src/test_business_kyc.rs:1028:10
+     |
+1028 | ...let (env, client, ...
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `result`
+   --> src/test_cancel_refund.rs:552:9
+    |
+552 |     let result = clien...
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `result`
+   --> src/test_cancel_refund.rs:575:9
+    |
+575 |     let result = clien...
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:159:10
+    |
+159 |     let (env, client, ...
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:290:9
+    |
+290 |     let env = Env::def...
+    |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test_overflow.rs:338:10
+    |
+338 |     let (env, client, ...
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+  --> src/test_types.rs:15:9
+   |
+15 |     let env = Env::defa...
+   |         ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `investment`
+   --> src/lib.rs:900:13
+    |
+900 | ...et investment = Inv...
+    |       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
+
+warning: unused variable: `investment`
+   --> src/lib.rs:977:13
+    |
+977 | ...et investment = Inv...
+    |       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
+
+warning: unused variable: `investment`
+    --> src/lib.rs:1011:13
+     |
+1011 | ...et investment = In...
+     |       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
+
+warning: unused variable: `business`
+   --> src/test/test_invoice.rs:460:9
+    |
+460 |     let business = set...
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `other_user`
+    --> src/test/test_invoice.rs:1066:9
+     |
+1066 | ...et other_user = Ad...
+     |       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_other_user`
+
+warning: unused variable: `non_admin`
+    --> src/test/test_invoice.rs:1098:9
+     |
+1098 | ...et non_admin = Add...
+     |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `env`
+   --> src/test/test_invoice_categories.rs:149:10
+    |
+149 |     let (env, client, ...
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `env`
+   --> src/test/test_invoice_categories.rs:256:10
+    |
+256 |     let (env, client, ...
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `token_client`
+   --> src/test.rs:361:9
+    |
+361 | ...et token_client = t...
+    |       ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_token_client`
+
+warning: unused variable: `bid1`
+   --> src/test_bid_ranking.rs:172:9
+    |
+172 |     let bid1 = client....
+    |         ^^^^ help: if this is intentional, prefix it with an underscore: `_bid1`
+
+warning: unused variable: `bid3`
+   --> src/test_bid_ranking.rs:178:9
+    |
+178 |     let bid3 = client....
+    |         ^^^^ help: if this is intentional, prefix it with an underscore: `_bid3`
+
+warning: unused variable: `admin`
+  --> src/test_fees.rs:21:65
+   |
+21 | ...ent, admin: &Address...
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_fees.rs:147:9
+    |
+147 |     let admin = setup_...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_fees.rs:177:9
+    |
+177 |     let admin = setup_...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_fees.rs:269:9
+    |
+269 | ...et non_admin = Addr...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `contract`
+   --> src/test_escrow_refund.rs:329:10
+    |
+329 | ...for (contract, topi...
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_contract`
+
+warning: unused variable: `contract_id`
+   --> src/test_insurance.rs:160:23
+    |
+160 | ...t, contract_id) = s...
+    |       ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_contract_id`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:102:27
+    |
+102 | ...ent, admin) = setup();
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `non_admin`
+   --> src/test_investor_kyc.rs:179:13
+    |
+179 | ...et non_admin = Addr...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_non_admin`
+
+warning: unused variable: `result`
+   --> src/test_investor_kyc.rs:192:13
+    |
+192 | ... let result = clien...
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_result`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:199:27
+    |
+199 | ...ent, admin) = setup();
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `business`
+   --> src/test_investor_kyc.rs:482:13
+    |
+482 | ... let business = Add...
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `high_risk`
+   --> src/test_investor_kyc.rs:610:13
+    |
+610 | ...et high_risk = clie...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_high_risk`
+
+warning: unused variable: `admin`
+   --> src/test_investor_kyc.rs:752:27
+    |
+752 | ...ent, admin) = setup();
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:40:65
+   |
+40 | ...ent, admin: &Address...
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+  --> src/test_profit_fee_formula.rs:80:9
+   |
+80 |     let admin = setup_a...
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:103:9
+    |
+103 |     let admin = setup_...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:126:9
+    |
+126 |     let admin = setup_...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:301:9
+    |
+301 |     let admin = setup_...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:343:9
+    |
+343 |     let admin = setup_...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:374:9
+    |
+374 |     let admin = setup_...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:590:9
+    |
+590 |     let admin = setup_...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> src/test_profit_fee_formula.rs:604:9
+    |
+604 |     let admin = setup_...
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+Some errors have detailed explanations: E0432, E0433, E0560, E0599, E0609.
+For more information about an error, try `rustc --explain E0432`.
+warning: `quicklendx-contracts` (lib test) generated 74 warnings (4 duplicates)
+error: could not compile `quicklendx-contracts` (lib test) due to 104 previous errors; 74 warnings emitted

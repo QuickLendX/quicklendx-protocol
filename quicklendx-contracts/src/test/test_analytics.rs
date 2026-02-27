@@ -1449,6 +1449,8 @@ fn test_get_investor_report_nonexistent_after_valid() {
     // Create invalid ID and verify it returns None
     let invalid_id = soroban_sdk::BytesN::from_array(&env, &[255u8; 32]);
     assert!(client.get_investor_report(&invalid_id).is_none());
+}
+
 // INVESTOR ANALYTICS TESTS
 // ============================================================================
 

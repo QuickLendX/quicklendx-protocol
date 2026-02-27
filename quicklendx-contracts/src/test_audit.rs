@@ -726,6 +726,7 @@ fn test_audit_stats_incremental_updates() {
     let stats1 = client.get_audit_stats();
     assert_eq!(stats1.total_entries, initial + 1); // 1 entry per invoice
 
+
     let _ = client.store_invoice(
         &business,
         &2000i128,
@@ -1497,3 +1498,4 @@ fn test_get_audit_entries_by_actor_business_investor_admin_empty_and_multiple() 
     let unknown = Address::generate(&env);
     assert_eq!(client.get_audit_entries_by_actor(&unknown).len(), 0);
 }
+

@@ -216,7 +216,7 @@ fn test_create_dispute_reason_too_long() {
     let business = create_verified_business(&env, &client, &admin);
     let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
 
-    let long_reason_str = "a".repeat(501);
+    let long_reason_str = "a".repeat(1001);
     let reason = String::from_str(&env, long_reason_str.as_str());
     let evidence = String::from_str(&env, "Valid evidence");
 
@@ -251,7 +251,7 @@ fn test_create_dispute_evidence_too_long() {
     let business = create_verified_business(&env, &client, &admin);
     let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
 
-    let long_evidence_str = "x".repeat(1001);
+    let long_evidence_str = "x".repeat(2001);
     let reason = String::from_str(&env, "Valid reason");
     let evidence = String::from_str(&env, long_evidence_str.as_str());
 
@@ -399,7 +399,7 @@ fn test_resolve_dispute_resolution_too_long() {
     client.put_dispute_under_review(&invoice_id, &admin);
 
     // Attempt to resolve with overly long resolution
-    let long_resolution_str = "r".repeat(501);
+    let long_resolution_str = "r".repeat(2001);
     let resolution = String::from_str(&env, long_resolution_str.as_str());
     let result = client.try_resolve_dispute(&invoice_id, &admin, &resolution);
     assert!(result.is_err());
