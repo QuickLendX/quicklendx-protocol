@@ -538,19 +538,21 @@ fn test_ledger_time_consistent_within_transaction() {
 
     // Create multiple invoices in sequence without advancing time
     let due_date = fixed_ts + 1000;
-    let ids: Vec<_> = (0..3)
-        .map(|_| create_invoice(&env, &client, &business, 1000, &currency, due_date))
-        .collect();
+    let mut ids = soroban_sdk::Vec::new(&env);
+    for _ in 0..3 {
+        ids.push_back(create_invoice(&env, &client, &business, 1000, &currency, due_date));
+    }
 
     // All created_at values should be equal or within same second
-    let created_ats: Vec<_> = ids.iter()
-        .map(|id| client.get_invoice(id).created_at)
-        .collect();
+    let mut created_ats = soroban_sdk::Vec::new(&env);
+    for i in 0..ids.len() {
+        created_ats.push_back(client.get_invoice(&ids.get(i).unwrap()).created_at);
+    }
 
     // All should equal fixed_ts
-    for created_at in &created_ats {
+    for created_at in created_ats.iter() {
         assert!(
-            *created_at >= fixed_ts && *created_at <= fixed_ts + 1,
+            created_at >= fixed_ts && created_at <= fixed_ts + 1,
             "created_at should be consistent within transaction"
         );
     }
@@ -770,7 +772,7 @@ fn test_multiple_invoices_lifecycle_with_sequential_creations() {
 
     // Verify each invoice's grace deadline is consistent
     for invoice_id in invoice_ids.iter() {
-        let invoice = client.get_invoice(invoice_id);
+        let invoice = client.get_invoice(&invoice_id);
         let grace_deadline = invoice.grace_deadline(grace_period);
         assert!(grace_deadline >= invoice.due_date);
         assert_eq!(grace_deadline, invoice.due_date.saturating_add(grace_period));

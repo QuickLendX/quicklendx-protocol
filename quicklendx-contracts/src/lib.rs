@@ -2041,51 +2041,17 @@ impl QuickLendXContract {
         let schedule = vesting::Vesting::get_schedule(&env, id)?;
         vesting::Vesting::releasable_amount(&env, &schedule).ok()
     }
-}
-
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-mod test_bid;
-
-#[cfg(test)]
-mod test_fees;
-
-#[cfg(test)]
-mod test_escrow;
-
-#[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
-#[cfg(test)]
-mod test_insurance;
-#[cfg(test)]
-mod test_investor_kyc;
-#[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;
-#[cfg(test)]
-mod test_ledger_timestamp_consistency;
-#[cfg(test)]
-mod test_lifecycle;
-#[cfg(test)]
-mod test_min_invoice_amount;
 
     // ============================================================================
-    // Analytics Functions missing from exports
+    // Analytics Functions
     // ============================================================================
 
     pub fn get_user_behavior_metrics(env: Env, user: Address) -> analytics::UserBehaviorMetrics {
-        analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).unwrap()
+        analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).ok().unwrap()
     }
 
     pub fn get_financial_metrics(env: Env, period: analytics::TimePeriod) -> analytics::FinancialMetrics {
-        analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period).unwrap()
+        analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period).ok().unwrap()
     }
 
     pub fn generate_business_report(env: Env, business: Address, period: analytics::TimePeriod) -> Result<analytics::BusinessReport, QuickLendXError> {
@@ -2136,6 +2102,313 @@ mod test_min_invoice_amount;
         );
         (platform, performance)
     }
+
+    pub fn get_platform_metrics(env: Env) -> analytics::PlatformMetrics {
+        analytics::AnalyticsCalculator::calculate_platform_metrics(&env).ok().unwrap_or(
+            analytics::PlatformMetrics {
+                total_invoices: 0,
+                total_investments: 0,
+                total_volume: 0,
+                total_fees_collected: 0,
+                active_investors: 0,
+                verified_businesses: 0,
+                average_invoice_amount: 0,
+                average_investment_amount: 0,
+                platform_fee_rate: 0,
+                default_rate: 0,
+                success_rate: 0,
+                timestamp: env.ledger().timestamp(),
+            }
+        )
+    }
+
+    pub fn get_performance_metrics(env: Env) -> analytics::PerformanceMetrics {
+        analytics::AnalyticsCalculator::calculate_performance_metrics(&env).ok().unwrap_or(
+            analytics::PerformanceMetrics {
+                platform_uptime: env.ledger().timestamp(),
+                average_settlement_time: 0,
+                average_verification_time: 0,
+                dispute_resolution_time: 0,
+                system_response_time: 0,
+                transaction_success_rate: 0,
+                error_rate: 0,
+                user_satisfaction_score: 0,
+                platform_efficiency: 0,
+            }
+        )
+    }
+
+    pub fn calculate_investor_analytics(env: Env, investor: Address) -> Result<analytics::InvestorAnalytics, QuickLendXError> {
+        analytics::AnalyticsCalculator::calculate_investor_analytics(&env, &investor)
+    }
+
+    pub fn calc_investor_perf_metrics(env: Env) -> Result<analytics::InvestorPerformanceMetrics, QuickLendXError> {
+        analytics::AnalyticsCalculator::calc_investor_perf_metrics(&env)
+    }
+
+    // ── Audit Functions ──────────────────────────────────────────────────────
+
+    pub fn get_audit_entry(env: Env, audit_id: BytesN<32>) -> audit::AuditLogEntry {
+        audit::AuditStorage::get_audit_entry(&env, &audit_id).unwrap()
+    }
+
+    pub fn get_audit_stats(env: Env) -> audit::AuditStats {
+        audit::AuditStorage::get_audit_stats(&env)
+    }
+
+    pub fn get_invoice_audit_trail(env: Env, invoice_id: BytesN<32>) -> Vec<BytesN<32>> {
+        audit::AuditStorage::get_invoice_audit_trail(&env, &invoice_id)
+    }
+
+    pub fn query_audit_logs(env: Env, filter: audit::AuditQueryFilter, limit: u32) -> Vec<audit::AuditLogEntry> {
+        audit::AuditStorage::query_audit_logs(&env, &filter, limit)
+    }
+
+    pub fn validate_invoice_audit_integrity(env: Env, invoice_id: BytesN<32>) -> bool {
+        audit::AuditStorage::validate_invoice_audit_integrity(&env, &invoice_id).unwrap_or(false)
+    }
+
+    pub fn get_audit_entries_by_operation(env: Env, operation: audit::AuditOperation) -> Vec<BytesN<32>> {
+        audit::AuditStorage::get_audit_entries_by_operation(&env, &operation)
+    }
+
+    pub fn get_audit_entries_by_actor(env: Env, actor: Address) -> Vec<BytesN<32>> {
+        audit::AuditStorage::get_audit_entries_by_actor(&env, &actor)
+    }
+
+    // ── Backup Functions ─────────────────────────────────────────────────────
+
+    pub fn create_backup(env: Env, admin: Address) -> BytesN<32> {
+        admin.require_auth();
+        let backup_id = backup::BackupStorage::generate_backup_id(&env);
+        let invoices = backup::BackupStorage::get_all_invoices(&env);
+        let invoice_count = invoices.len() as u32;
+        let bkup = backup::Backup {
+            backup_id: backup_id.clone(),
+            timestamp: env.ledger().timestamp(),
+            description: soroban_sdk::String::from_str(&env, "Backup"),
+            invoice_count,
+            status: backup::BackupStatus::Active,
+        };
+        backup::BackupStorage::store_backup(&env, &bkup);
+        backup::BackupStorage::store_backup_data(&env, &backup_id, &invoices);
+        backup::BackupStorage::add_to_backup_list(&env, &backup_id);
+        backup_id
+    }
+
+    pub fn get_backups(env: Env) -> Vec<BytesN<32>> {
+        backup::BackupStorage::get_all_backups(&env)
+    }
+
+    pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<backup::Backup> {
+        backup::BackupStorage::get_backup(&env, &backup_id)
+    }
+
+    pub fn archive_backup(env: Env, admin: Address, backup_id: BytesN<32>) {
+        admin.require_auth();
+        if let Some(mut bkup) = backup::BackupStorage::get_backup(&env, &backup_id) {
+            bkup.status = backup::BackupStatus::Archived;
+            backup::BackupStorage::update_backup(&env, &bkup);
+            backup::BackupStorage::remove_from_backup_list(&env, &backup_id);
+        }
+    }
+
+    pub fn cleanup_backups(env: Env, admin: Address) -> u32 {
+        admin.require_auth();
+        backup::BackupStorage::cleanup_old_backups(&env).unwrap_or(0)
+    }
+
+    pub fn set_backup_retention_policy(env: Env, admin: Address, max_backups: u32, max_age_seconds: u64, auto_cleanup: bool) {
+        admin.require_auth();
+        let policy = backup::BackupRetentionPolicy {
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled: auto_cleanup,
+        };
+        backup::BackupStorage::set_retention_policy(&env, &policy);
+    }
+
+    pub fn get_backup_retention_policy(env: Env) -> backup::BackupRetentionPolicy {
+        backup::BackupStorage::get_retention_policy(&env)
+    }
+
+    pub fn validate_backup(env: Env, backup_id: BytesN<32>) -> bool {
+        backup::BackupStorage::validate_backup(&env, &backup_id).is_ok()
+    }
+
+    pub fn restore_backup(env: Env, admin: Address, backup_id: BytesN<32>) {
+        admin.require_auth();
+        if let Some(invoices) = backup::BackupStorage::get_backup_data(&env, &backup_id) {
+            for inv in invoices.iter() {
+                invoice::InvoiceStorage::store_invoice(&env, &inv);
+            }
+        }
+    }
+
+    // ── Dispute Functions ────────────────────────────────────────────────────
+
+    pub fn create_dispute(env: Env, invoice_id: BytesN<32>, creator: Address, reason: String, evidence: String) {
+        creator.require_auth();
+        if let Some(mut inv) = invoice::InvoiceStorage::get_invoice(&env, &invoice_id) {
+            inv.dispute_status = invoice::DisputeStatus::Disputed;
+            inv.dispute = invoice::Dispute {
+                created_by: creator,
+                created_at: env.ledger().timestamp(),
+                reason,
+                evidence,
+                resolution: soroban_sdk::String::from_str(&env, ""),
+                resolved_by: Address::from_str(
+                    &env,
+                    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+                ),
+                resolved_at: 0,
+            };
+            invoice::InvoiceStorage::update_invoice(&env, &inv);
+        }
+    }
+
+    pub fn get_dispute_details(env: Env, invoice_id: BytesN<32>) -> Option<invoice::Dispute> {
+        invoice::InvoiceStorage::get_invoice(&env, &invoice_id)
+            .map(|inv| inv.dispute)
+    }
+
+    pub fn get_invoice_dispute_status(env: Env, invoice_id: BytesN<32>) -> invoice::DisputeStatus {
+        invoice::InvoiceStorage::get_invoice(&env, &invoice_id)
+            .map(|inv| inv.dispute_status)
+            .unwrap_or(invoice::DisputeStatus::None)
+    }
+
+    pub fn put_dispute_under_review(env: Env, invoice_id: BytesN<32>, admin: Address) {
+        admin.require_auth();
+        if let Some(mut inv) = invoice::InvoiceStorage::get_invoice(&env, &invoice_id) {
+            inv.dispute_status = invoice::DisputeStatus::UnderReview;
+            invoice::InvoiceStorage::update_invoice(&env, &inv);
+        }
+    }
+
+    pub fn resolve_dispute(env: Env, invoice_id: BytesN<32>, admin: Address, resolution: String) {
+        admin.require_auth();
+        if let Some(mut inv) = invoice::InvoiceStorage::get_invoice(&env, &invoice_id) {
+            inv.dispute_status = invoice::DisputeStatus::Resolved;
+            inv.dispute.resolution = resolution;
+            inv.dispute.resolved_by = admin;
+            inv.dispute.resolved_at = env.ledger().timestamp();
+            invoice::InvoiceStorage::update_invoice(&env, &inv);
+        }
+    }
+
+    pub fn get_invoices_with_disputes(env: Env) -> Vec<BytesN<32>> {
+        let statuses = [
+            invoice::InvoiceStatus::Pending,
+            invoice::InvoiceStatus::Verified,
+            invoice::InvoiceStatus::Funded,
+            invoice::InvoiceStatus::Paid,
+            invoice::InvoiceStatus::Defaulted,
+        ];
+        let mut result = Vec::new(&env);
+        for status in statuses.iter() {
+            let ids = invoice::InvoiceStorage::get_invoices_by_status(&env, &status);
+            for id in ids.iter() {
+                if let Some(inv) = invoice::InvoiceStorage::get_invoice(&env, &id) {
+                    if inv.dispute_status != invoice::DisputeStatus::None {
+                        result.push_back(id);
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    pub fn get_invoices_by_dispute_status(env: Env, status: invoice::DisputeStatus) -> Vec<BytesN<32>> {
+        let invoice_statuses = [
+            invoice::InvoiceStatus::Pending,
+            invoice::InvoiceStatus::Verified,
+            invoice::InvoiceStatus::Funded,
+            invoice::InvoiceStatus::Paid,
+            invoice::InvoiceStatus::Defaulted,
+        ];
+        let mut result = Vec::new(&env);
+        for inv_status in invoice_statuses.iter() {
+            let ids = invoice::InvoiceStorage::get_invoices_by_status(&env, &inv_status);
+            for id in ids.iter() {
+                if let Some(inv) = invoice::InvoiceStorage::get_invoice(&env, &id) {
+                    if inv.dispute_status == status {
+                        result.push_back(id);
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    // ── Notification Functions ───────────────────────────────────────────────
+
+    pub fn get_notification(env: Env, notification_id: BytesN<32>) -> Option<notifications::Notification> {
+        notifications::NotificationSystem::get_notification(&env, &notification_id)
+    }
+
+    pub fn get_user_notifications(env: Env, user: Address) -> Vec<BytesN<32>> {
+        notifications::NotificationSystem::get_user_notifications(&env, &user)
+    }
+
+    pub fn update_notification_status(env: Env, notification_id: BytesN<32>, status: notifications::NotificationDeliveryStatus) -> Result<(), QuickLendXError> {
+        notifications::NotificationSystem::update_notification_status(&env, &notification_id, status)
+    }
+
+    pub fn get_user_notification_stats(env: Env, user: Address) -> notifications::NotificationStats {
+        notifications::NotificationSystem::get_user_notification_stats(&env, &user)
+    }
+
+    pub fn get_notification_preferences(env: Env, user: Address) -> notifications::NotificationPreferences {
+        notifications::NotificationSystem::get_user_preferences(&env, &user)
+    }
+
+    pub fn update_notification_preferences(env: Env, user: Address, preferences: notifications::NotificationPreferences) {
+        notifications::NotificationSystem::update_user_preferences(&env, &user, preferences)
+    }
+
+    // ── Rating Functions ─────────────────────────────────────────────────────
+
+    pub fn add_invoice_rating(env: Env, invoice_id: BytesN<32>, rating: u32, feedback: String, rated_by: Address) -> Result<(), QuickLendXError> {
+        rated_by.require_auth();
+        let mut inv = invoice::InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        let timestamp = env.ledger().timestamp();
+        inv.add_rating(rating, feedback, rated_by, timestamp)?;
+        invoice::InvoiceStorage::update_invoice(&env, &inv);
+        Ok(())
+    }
+
+    pub fn get_invoice_rating_stats(env: Env, invoice_id: BytesN<32>) -> (Option<u32>, u32, Option<u32>, Option<u32>) {
+        invoice::InvoiceStorage::get_invoice(&env, &invoice_id)
+            .map(|inv| (inv.average_rating, inv.total_ratings, inv.get_highest_rating(), inv.get_lowest_rating()))
+            .unwrap_or((None, 0, None, None))
+    }
+
+    pub fn get_invoices_with_rating_above(env: Env, threshold: u32) -> Vec<BytesN<32>> {
+        invoice::InvoiceStorage::get_invoices_with_rating_above(&env, threshold)
+    }
+
+    pub fn get_invoices_with_ratings_count(env: Env) -> u32 {
+        invoice::InvoiceStorage::get_invoices_with_ratings_count(&env)
+    }
+
+    // ── Batch Query Functions ────────────────────────────────────────────────
+
+    pub fn get_invoices_by_status_batch(env: Env, ids: Vec<BytesN<32>>) -> Vec<Option<InvoiceStatus>> {
+        let capped_len = (ids.len() as u32).min(MAX_QUERY_LIMIT);
+        let mut result = Vec::new(&env);
+        let mut idx: u32 = 0;
+        while idx < capped_len {
+            let id = ids.get(idx).unwrap();
+            let status = invoice::InvoiceStorage::get_invoice(&env, &id).map(|inv| inv.status);
+            result.push_back(status);
+            idx += 1;
+        }
+        result
+    }
+}
+
 #[cfg(test)]
 mod test;
 

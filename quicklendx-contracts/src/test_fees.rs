@@ -1,6 +1,6 @@
 use super::*;
 use crate::{errors::QuickLendXError, fees::FeeType};
-use soroban_sdk::{testutils::{Address as _, MockAuth, MockAuthInvoke}, Address, Env, Map, String};
+use soroban_sdk::{testutils::{Address as _, MockAuth, MockAuthInvoke}, Address, Env, IntoVal, Map, String};
 
 /// Helper function to set up admin for testing
 fn setup_admin(env: &Env, client: &QuickLendXContractClient) -> Address {
@@ -129,11 +129,11 @@ fn test_custom_platform_fee_bps() {
     let admin = setup_admin(&env, &client);
 
     // Test setting custom fee BPS
-    let new_fee_bps = 500; // 5%
+    let new_fee_bps = 500i128; // 5%
     client.set_platform_fee(&new_fee_bps);
 
     let updated_config = client.get_platform_fee();
-    assert_eq!(updated_config.fee_bps, new_fee_bps);
+    assert_eq!(updated_config.fee_bps, new_fee_bps as u32);
     assert_eq!(updated_config.updated_by, admin);
 }
 
@@ -154,7 +154,7 @@ fn test_only_admin_can_update_platform_fee() {
         invoke: &MockAuthInvoke {
             contract: &contract_id,
             fn_name: "set_platform_fee",
-            args: (300i128,).into_val(&env),
+            args: soroban_sdk::vec![&env, 300u32.into_val(&env)],
             sub_invokes: &[],
         },
     };
@@ -179,7 +179,7 @@ fn test_only_admin_can_update_platform_fee() {
         invoke: &MockAuthInvoke {
             contract: &contract_id,
             fn_name: "set_platform_fee",
-            args: (300i128,).into_val(&env),
+            args: soroban_sdk::vec![&env, 300u32.into_val(&env)],
             sub_invokes: &[],
         },
     };
@@ -308,7 +308,7 @@ fn test_only_admin_can_update_fee_structure() {
         invoke: &MockAuthInvoke {
             contract: &contract_id,
             fn_name: "initialize_fee_system",
-            args: (admin.clone(),).into_val(&env),
+            args: soroban_sdk::vec![&env, admin.clone().into_val(&env)],
             sub_invokes: &[],
         },
     };
@@ -322,15 +322,15 @@ fn test_only_admin_can_update_fee_structure() {
         invoke: &MockAuthInvoke {
             contract: &contract_id,
             fn_name: "update_fee_structure",
-            args: (
-                admin.clone(),
-                FeeType::Platform,
-                400u32,
-                50i128,
-                5_000i128,
-                true,
-            )
-                .into_val(&env),
+            args: soroban_sdk::vec![
+                &env,
+                admin.clone().into_val(&env),
+                FeeType::Platform.into_val(&env),
+                400u32.into_val(&env),
+                50i128.into_val(&env),
+                5_000i128.into_val(&env),
+                true.into_val(&env),
+            ],
             sub_invokes: &[],
         },
     };
@@ -351,15 +351,15 @@ fn test_only_admin_can_update_fee_structure() {
         invoke: &MockAuthInvoke {
             contract: &contract_id,
             fn_name: "update_fee_structure",
-            args: (
-                admin.clone(),
-                FeeType::Platform,
-                400u32,
-                50i128,
-                5_000i128,
-                true,
-            )
-                .into_val(&env),
+            args: soroban_sdk::vec![
+                &env,
+                admin.clone().into_val(&env),
+                FeeType::Platform.into_val(&env),
+                400u32.into_val(&env),
+                50i128.into_val(&env),
+                5_000i128.into_val(&env),
+                true.into_val(&env),
+            ],
             sub_invokes: &[],
         },
     };
@@ -806,7 +806,7 @@ fn test_configure_treasury() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin_init(&env, &client);
+    let admin = setup_admin(&env, &client);
     let treasury = Address::generate(&env);
 
     // Initialize fee system (creates platform fee config needed by configure_treasury)
@@ -853,7 +853,7 @@ fn test_get_treasury_address_before_config() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin_init(&env, &client);
+    let admin = setup_admin(&env, &client);
 
     client.initialize_fee_system(&admin);
 
@@ -895,4 +895,421 @@ fn test_calculate_transaction_fees_late_payment_flag() {
         late_fees > base_fees,
         "Late payment must increase total fees"
     );
+}
+
+// ============================================================================
+// get_fee_structure: each FeeType, and after update
+// ============================================================================
+
+/// get_fee_structure returns correct defaults for Platform after initialization
+#[test]
+fn test_get_fee_structure_platform_defaults() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let fee = client.get_fee_structure(&FeeType::Platform);
+    assert_eq!(fee.base_fee_bps, 200); // 2%
+    assert_eq!(fee.min_fee, 100);
+    assert_eq!(fee.max_fee, 1_000_000);
+    assert!(fee.is_active);
+    assert_eq!(fee.updated_by, admin);
+}
+
+/// get_fee_structure returns correct defaults for Processing after initialization
+#[test]
+fn test_get_fee_structure_processing_defaults() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let fee = client.get_fee_structure(&FeeType::Processing);
+    assert_eq!(fee.base_fee_bps, 50); // 0.5%
+    assert_eq!(fee.min_fee, 50);
+    assert_eq!(fee.max_fee, 500_000);
+    assert!(fee.is_active);
+    assert_eq!(fee.updated_by, admin);
+}
+
+/// get_fee_structure returns correct defaults for Verification after initialization
+#[test]
+fn test_get_fee_structure_verification_defaults() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let fee = client.get_fee_structure(&FeeType::Verification);
+    assert_eq!(fee.base_fee_bps, 100); // 1%
+    assert_eq!(fee.min_fee, 100);
+    assert_eq!(fee.max_fee, 100_000);
+    assert!(fee.is_active);
+    assert_eq!(fee.updated_by, admin);
+}
+
+/// get_fee_structure returns error for EarlyPayment (not initialized by default)
+#[test]
+fn test_get_fee_structure_early_payment_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let result = client.try_get_fee_structure(&FeeType::EarlyPayment);
+    assert!(result.is_err());
+    let err = result.err().expect("expected error");
+    let contract_err = err.expect("expected contract invoke error");
+    assert_eq!(contract_err, QuickLendXError::StorageKeyNotFound);
+}
+
+/// get_fee_structure returns error for LatePayment (not initialized by default)
+#[test]
+fn test_get_fee_structure_late_payment_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let result = client.try_get_fee_structure(&FeeType::LatePayment);
+    assert!(result.is_err());
+    let err = result.err().expect("expected error");
+    let contract_err = err.expect("expected contract invoke error");
+    assert_eq!(contract_err, QuickLendXError::StorageKeyNotFound);
+}
+
+/// get_fee_structure reflects updated Platform values after update_fee_structure
+#[test]
+fn test_get_fee_structure_platform_after_update() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Update Platform fee to new values
+    client.update_fee_structure(&admin, &FeeType::Platform, &350, &200, &800_000, &true);
+
+    let fee = client.get_fee_structure(&FeeType::Platform);
+    assert_eq!(fee.base_fee_bps, 350);
+    assert_eq!(fee.min_fee, 200);
+    assert_eq!(fee.max_fee, 800_000);
+    assert!(fee.is_active);
+    assert_eq!(fee.updated_by, admin);
+}
+
+/// get_fee_structure reflects updated Processing values after update_fee_structure
+#[test]
+fn test_get_fee_structure_processing_after_update() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    client.update_fee_structure(&admin, &FeeType::Processing, &75, &25, &250_000, &false);
+
+    let fee = client.get_fee_structure(&FeeType::Processing);
+    assert_eq!(fee.base_fee_bps, 75);
+    assert_eq!(fee.min_fee, 25);
+    assert_eq!(fee.max_fee, 250_000);
+    assert!(!fee.is_active);
+    assert_eq!(fee.updated_by, admin);
+}
+
+/// get_fee_structure reflects updated Verification values after update_fee_structure
+#[test]
+fn test_get_fee_structure_verification_after_update() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    client.update_fee_structure(&admin, &FeeType::Verification, &150, &50, &200_000, &true);
+
+    let fee = client.get_fee_structure(&FeeType::Verification);
+    assert_eq!(fee.base_fee_bps, 150);
+    assert_eq!(fee.min_fee, 50);
+    assert_eq!(fee.max_fee, 200_000);
+    assert!(fee.is_active);
+}
+
+/// get_fee_structure returns EarlyPayment after it is added via update_fee_structure
+#[test]
+fn test_get_fee_structure_early_payment_after_add() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // EarlyPayment is not initialized by default — add it
+    client.update_fee_structure(&admin, &FeeType::EarlyPayment, &80, &10, &50_000, &true);
+
+    let fee = client.get_fee_structure(&FeeType::EarlyPayment);
+    assert_eq!(fee.base_fee_bps, 80);
+    assert_eq!(fee.min_fee, 10);
+    assert_eq!(fee.max_fee, 50_000);
+    assert!(fee.is_active);
+    assert_eq!(fee.updated_by, admin);
+}
+
+/// get_fee_structure returns LatePayment after it is added via update_fee_structure
+#[test]
+fn test_get_fee_structure_late_payment_after_add() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    client.update_fee_structure(&admin, &FeeType::LatePayment, &120, &60, &75_000, &true);
+
+    let fee = client.get_fee_structure(&FeeType::LatePayment);
+    assert_eq!(fee.base_fee_bps, 120);
+    assert_eq!(fee.min_fee, 60);
+    assert_eq!(fee.max_fee, 75_000);
+    assert!(fee.is_active);
+    assert_eq!(fee.updated_by, admin);
+}
+
+// ============================================================================
+// get_user_volume_data: zero initial state and after update_user_transaction_volume
+// ============================================================================
+
+/// Fresh user has zero volume, zero transactions, and Standard tier
+#[test]
+fn test_get_user_volume_data_initial_zero() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    let volume = client.get_user_volume_data(&user);
+    assert_eq!(volume.total_volume, 0);
+    assert_eq!(volume.transaction_count, 0);
+    assert_eq!(volume.current_tier, crate::fees::VolumeTier::Standard);
+    assert_eq!(volume.user, user);
+}
+
+/// After one update_user_transaction_volume call, volume and count are correctly stored
+#[test]
+fn test_get_user_volume_data_after_single_update() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    let tx_amount = 5_000_i128;
+    client.update_user_transaction_volume(&user, &tx_amount);
+
+    let volume = client.get_user_volume_data(&user);
+    assert_eq!(volume.total_volume, tx_amount);
+    assert_eq!(volume.transaction_count, 1);
+    assert_eq!(volume.current_tier, crate::fees::VolumeTier::Standard);
+}
+
+/// Multiple update calls accumulate volume and transaction count
+#[test]
+fn test_get_user_volume_data_after_multiple_updates() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    let tx_amount = 1_000_i128;
+    for _ in 0..5 {
+        client.update_user_transaction_volume(&user, &tx_amount);
+    }
+
+    let volume = client.get_user_volume_data(&user);
+    assert_eq!(volume.total_volume, 5_000);
+    assert_eq!(volume.transaction_count, 5);
+    assert_eq!(volume.current_tier, crate::fees::VolumeTier::Standard);
+}
+
+// ============================================================================
+// Volume tier boundary tests
+// ============================================================================
+
+/// Volume just below Silver threshold (99_999_999_999) stays at Standard
+#[test]
+fn test_volume_tier_just_below_silver_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    // One below the silver threshold of 100_000_000_000
+    client.update_user_transaction_volume(&user, &99_999_999_999_i128);
+
+    let volume = client.get_user_volume_data(&user);
+    assert_eq!(volume.total_volume, 99_999_999_999);
+    assert_eq!(volume.current_tier, crate::fees::VolumeTier::Standard);
+}
+
+/// Volume exactly at Silver threshold (100_000_000_000) upgrades to Silver
+#[test]
+fn test_volume_tier_silver_exact_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.update_user_transaction_volume(&user, &100_000_000_000_i128);
+
+    let volume = client.get_user_volume_data(&user);
+    assert_eq!(volume.total_volume, 100_000_000_000);
+    assert_eq!(volume.current_tier, crate::fees::VolumeTier::Silver);
+}
+
+/// Volume just below Gold threshold (499_999_999_999) stays at Silver
+#[test]
+fn test_volume_tier_just_below_gold_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.update_user_transaction_volume(&user, &499_999_999_999_i128);
+
+    let volume = client.get_user_volume_data(&user);
+    assert_eq!(volume.current_tier, crate::fees::VolumeTier::Silver);
+}
+
+/// Volume exactly at Gold threshold (500_000_000_000) upgrades to Gold
+#[test]
+fn test_volume_tier_gold_exact_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.update_user_transaction_volume(&user, &500_000_000_000_i128);
+
+    let volume = client.get_user_volume_data(&user);
+    assert_eq!(volume.total_volume, 500_000_000_000);
+    assert_eq!(volume.current_tier, crate::fees::VolumeTier::Gold);
+}
+
+/// Volume just below Platinum threshold (999_999_999_999) stays at Gold
+#[test]
+fn test_volume_tier_just_below_platinum_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.update_user_transaction_volume(&user, &999_999_999_999_i128);
+
+    let volume = client.get_user_volume_data(&user);
+    assert_eq!(volume.current_tier, crate::fees::VolumeTier::Gold);
+}
+
+/// Volume exactly at Platinum threshold (1_000_000_000_000) upgrades to Platinum
+#[test]
+fn test_volume_tier_platinum_exact_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.update_user_transaction_volume(&user, &1_000_000_000_000_i128);
+
+    let volume = client.get_user_volume_data(&user);
+    assert_eq!(volume.total_volume, 1_000_000_000_000);
+    assert_eq!(volume.current_tier, crate::fees::VolumeTier::Platinum);
+}
+
+/// Volume well above Platinum threshold stays at Platinum
+#[test]
+fn test_volume_tier_platinum_above_threshold() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.update_user_transaction_volume(&user, &5_000_000_000_000_i128);
+
+    let volume = client.get_user_volume_data(&user);
+    assert_eq!(volume.current_tier, crate::fees::VolumeTier::Platinum);
+}
+
+/// Tier upgrades correctly as volume accumulates across multiple calls crossing Silver then Gold
+#[test]
+fn test_volume_tier_progression_across_calls() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    // Start at Standard
+    let vol = client.get_user_volume_data(&user);
+    assert_eq!(vol.current_tier, crate::fees::VolumeTier::Standard);
+
+    // Push into Silver
+    client.update_user_transaction_volume(&user, &100_000_000_000_i128);
+    let vol = client.get_user_volume_data(&user);
+    assert_eq!(vol.current_tier, crate::fees::VolumeTier::Silver);
+
+    // Push into Gold (additional 400_000_000_000)
+    client.update_user_transaction_volume(&user, &400_000_000_000_i128);
+    let vol = client.get_user_volume_data(&user);
+    assert_eq!(vol.current_tier, crate::fees::VolumeTier::Gold);
+
+    // Push into Platinum (additional 500_000_000_000)
+    client.update_user_transaction_volume(&user, &500_000_000_000_i128);
+    let vol = client.get_user_volume_data(&user);
+    assert_eq!(vol.current_tier, crate::fees::VolumeTier::Platinum);
+    assert_eq!(vol.transaction_count, 3);
+    assert_eq!(vol.total_volume, 1_000_000_000_000);
 }
