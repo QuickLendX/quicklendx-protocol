@@ -285,7 +285,6 @@ pub fn get_invoice_progress(
     })
 }
 
-
 /// Returns a single payment record by index.
 pub fn get_payment_record(
     env: &Env,
@@ -298,7 +297,6 @@ pub fn get_payment_record(
         .get(&SettlementDataKey::Payment(invoice_id.clone(), index))
         .ok_or(QuickLendXError::StorageKeyNotFound)
 }
-
 
 fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut invoice =

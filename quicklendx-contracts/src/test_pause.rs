@@ -8,15 +8,7 @@ use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env, String, Vec};
 
-fn setup(
-    env: &Env,
-) -> (
-    QuickLendXContractClient,
-    Address,
-    Address,
-    Address,
-    Address,
-) {
+fn setup(env: &Env) -> (QuickLendXContractClient, Address, Address, Address, Address) {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(env, &contract_id);

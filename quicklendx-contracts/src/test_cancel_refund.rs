@@ -451,7 +451,10 @@ fn test_refund_emits_event() {
     client.refund_escrow_funds(&invoice_id, &business);
 
     let events = env.events().all();
-    assert!(events.events().len() > 0, "Expected refund events to be emitted");
+    assert!(
+        events.events().len() > 0,
+        "Expected refund events to be emitted"
+    );
 }
 
 #[test]

@@ -725,4 +725,3 @@ fn test_dispute_resolved_state() {
     assert!(d.resolved_at > 0);
     assert_ne!(d.resolution, String::from_str(&env, ""));
 }
-

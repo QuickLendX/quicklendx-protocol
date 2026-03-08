@@ -1,9 +1,6 @@
 use super::*;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use soroban_sdk::{
-    testutils::Address as _,
-    token, Address, BytesN, Env, String, Vec,
-};
+use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Vec};
 
 fn setup_env_and_client() -> (Env, QuickLendXContractClient<'static>) {
     let env = Env::default();
@@ -43,7 +40,8 @@ fn assert_status_consistency(
         let list = client.get_invoices_by_status(status);
         let count = client.get_invoice_count_by_status(status);
         assert_eq!(
-            list.len() as u32, *expected,
+            list.len() as u32,
+            *expected,
             "status list length mismatch for {:?}",
             status
         );
@@ -53,18 +51,15 @@ fn assert_status_consistency(
             status
         );
         assert_eq!(
-            list.len() as u32, count,
+            list.len() as u32,
+            count,
             "list length != count for {:?}",
             status
         );
         // Verify no orphaned IDs
         for id in list.iter() {
             let invoice = client.get_invoice(&id);
-            assert_eq!(
-                invoice.status, *status,
-                "orphaned ID in {:?} list",
-                status
-            );
+            assert_eq!(invoice.status, *status, "orphaned ID in {:?} list", status);
         }
         sum += count;
     }
@@ -80,17 +75,19 @@ fn test_status_list_after_verify() {
 
     let id = create_invoice(&env, &client, &business, &currency, 1000);
 
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Pending, 1),
-        (InvoiceStatus::Verified, 0),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[(InvoiceStatus::Pending, 1), (InvoiceStatus::Verified, 0)],
+    );
 
     client.update_invoice_status(&id, &InvoiceStatus::Verified);
 
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Pending, 0),
-        (InvoiceStatus::Verified, 1),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[(InvoiceStatus::Pending, 0), (InvoiceStatus::Verified, 1)],
+    );
 }
 
 #[test]
@@ -104,11 +101,15 @@ fn test_status_list_after_cancel() {
 
     client.cancel_invoice(&id);
 
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Pending, 0),
-        (InvoiceStatus::Verified, 0),
-        (InvoiceStatus::Cancelled, 1),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[
+            (InvoiceStatus::Pending, 0),
+            (InvoiceStatus::Verified, 0),
+            (InvoiceStatus::Cancelled, 1),
+        ],
+    );
 }
 
 #[test]
@@ -121,11 +122,15 @@ fn test_status_list_after_update_invoice_status_funded() {
     client.update_invoice_status(&id, &InvoiceStatus::Verified);
     client.update_invoice_status(&id, &InvoiceStatus::Funded);
 
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Pending, 0),
-        (InvoiceStatus::Verified, 0),
-        (InvoiceStatus::Funded, 1),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[
+            (InvoiceStatus::Pending, 0),
+            (InvoiceStatus::Verified, 0),
+            (InvoiceStatus::Funded, 1),
+        ],
+    );
 }
 
 #[test]
@@ -138,24 +143,27 @@ fn test_status_list_through_full_lifecycle() {
 
     // Pending -> Verified
     client.update_invoice_status(&id, &InvoiceStatus::Verified);
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Pending, 0),
-        (InvoiceStatus::Verified, 1),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[(InvoiceStatus::Pending, 0), (InvoiceStatus::Verified, 1)],
+    );
 
     // Verified -> Funded
     client.update_invoice_status(&id, &InvoiceStatus::Funded);
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Verified, 0),
-        (InvoiceStatus::Funded, 1),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[(InvoiceStatus::Verified, 0), (InvoiceStatus::Funded, 1)],
+    );
 
     // Funded -> Paid
     client.update_invoice_status(&id, &InvoiceStatus::Paid);
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Funded, 0),
-        (InvoiceStatus::Paid, 1),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[(InvoiceStatus::Funded, 0), (InvoiceStatus::Paid, 1)],
+    );
 }
 
 #[test]
@@ -187,45 +195,62 @@ fn test_status_list_multiple_invoices_mixed_transitions() {
     let id3 = create_invoice(&env, &client, &business, &currency, 3000);
 
     // All start as Pending
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Pending, 3),
-        (InvoiceStatus::Verified, 0),
-        (InvoiceStatus::Funded, 0),
-        (InvoiceStatus::Cancelled, 0),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[
+            (InvoiceStatus::Pending, 3),
+            (InvoiceStatus::Verified, 0),
+            (InvoiceStatus::Funded, 0),
+            (InvoiceStatus::Cancelled, 0),
+        ],
+    );
 
     // Verify id1
     client.update_invoice_status(&id1, &InvoiceStatus::Verified);
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Pending, 2),
-        (InvoiceStatus::Verified, 1),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[(InvoiceStatus::Pending, 2), (InvoiceStatus::Verified, 1)],
+    );
 
     // Cancel id2
     client.cancel_invoice(&id2);
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Pending, 1),
-        (InvoiceStatus::Verified, 1),
-        (InvoiceStatus::Cancelled, 1),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[
+            (InvoiceStatus::Pending, 1),
+            (InvoiceStatus::Verified, 1),
+            (InvoiceStatus::Cancelled, 1),
+        ],
+    );
 
     // Fund id1
     client.update_invoice_status(&id1, &InvoiceStatus::Funded);
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Pending, 1),
-        (InvoiceStatus::Verified, 0),
-        (InvoiceStatus::Funded, 1),
-        (InvoiceStatus::Cancelled, 1),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[
+            (InvoiceStatus::Pending, 1),
+            (InvoiceStatus::Verified, 0),
+            (InvoiceStatus::Funded, 1),
+            (InvoiceStatus::Cancelled, 1),
+        ],
+    );
 
     // Default id1
     client.update_invoice_status(&id1, &InvoiceStatus::Defaulted);
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Pending, 1),
-        (InvoiceStatus::Funded, 0),
-        (InvoiceStatus::Defaulted, 1),
-        (InvoiceStatus::Cancelled, 1),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[
+            (InvoiceStatus::Pending, 1),
+            (InvoiceStatus::Funded, 0),
+            (InvoiceStatus::Defaulted, 1),
+            (InvoiceStatus::Cancelled, 1),
+        ],
+    );
 
     let total = client.get_total_invoice_count();
     assert_eq!(total, 3);
@@ -260,11 +285,15 @@ fn test_accept_bid_updates_status_list() {
 
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
 
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Pending, 0),
-        (InvoiceStatus::Verified, 1),
-        (InvoiceStatus::Funded, 0),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[
+            (InvoiceStatus::Pending, 0),
+            (InvoiceStatus::Verified, 1),
+            (InvoiceStatus::Funded, 0),
+        ],
+    );
 
     client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
     client.verify_investor(&investor, &10_000);
@@ -275,11 +304,15 @@ fn test_accept_bid_updates_status_list() {
     client.accept_bid(&invoice_id, &bid_id);
 
     // After bid acceptance: Verified -> Funded
-    assert_status_consistency(&env, &client, &[
-        (InvoiceStatus::Pending, 0),
-        (InvoiceStatus::Verified, 0),
-        (InvoiceStatus::Funded, 1),
-    ]);
+    assert_status_consistency(
+        &env,
+        &client,
+        &[
+            (InvoiceStatus::Pending, 0),
+            (InvoiceStatus::Verified, 0),
+            (InvoiceStatus::Funded, 1),
+        ],
+    );
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Funded);

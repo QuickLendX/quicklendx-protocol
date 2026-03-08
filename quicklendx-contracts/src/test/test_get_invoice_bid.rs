@@ -121,7 +121,10 @@ fn test_get_invoice_ok_with_correct_data() {
 
     // Test get_invoice - should return Ok with correct data
     let result = client.try_get_invoice(&invoice_id);
-    assert!(result.is_ok(), "get_invoice should succeed for valid invoice ID");
+    assert!(
+        result.is_ok(),
+        "get_invoice should succeed for valid invoice ID"
+    );
 
     let invoice = result.unwrap();
     assert_eq!(invoice.id, invoice_id, "Invoice ID should match");
@@ -129,10 +132,7 @@ fn test_get_invoice_ok_with_correct_data() {
     assert_eq!(invoice.amount, amount, "Amount should match");
     assert_eq!(invoice.currency, currency, "Currency should match");
     assert_eq!(invoice.due_date, due_date, "Due date should match");
-    assert_eq!(
-        invoice.description, description,
-        "Description should match"
-    );
+    assert_eq!(invoice.description, description, "Description should match");
     assert_eq!(
         invoice.status,
         InvoiceStatus::Pending,
@@ -185,7 +185,8 @@ fn test_get_invoice_ok_after_status_transitions() {
     let business = create_verified_business(&env, &client);
     let investor = create_verified_investor(&env, &client, 100_000);
 
-    let invoice_id = create_and_verify_invoice(&env, &client, &business, 5000, InvoiceCategory::Services);
+    let invoice_id =
+        create_and_verify_invoice(&env, &client, &business, 5000, InvoiceCategory::Services);
 
     // Check after verification
     let invoice = client.try_get_invoice(&invoice_id).unwrap();
@@ -270,12 +271,17 @@ fn test_get_invoice_ok_multiple_invoices() {
     // Create 5 invoices
     for i in 0..5 {
         let amount = 1000 + (i as i128) * 100;
-        let invoice_id = create_and_verify_invoice(&env, &client, &business, amount, InvoiceCategory::Services);
+        let invoice_id =
+            create_and_verify_invoice(&env, &client, &business, amount, InvoiceCategory::Services);
         invoice_ids.push_back(invoice_id.clone());
 
         // Verify each can be retrieved
         let invoice = client.try_get_invoice(&invoice_id).unwrap();
-        assert_eq!(invoice.amount, amount, "Amount should match for invoice {}", i);
+        assert_eq!(
+            invoice.amount, amount,
+            "Amount should match for invoice {}",
+            i
+        );
     }
 
     // Verify we can retrieve all of them
@@ -334,12 +340,20 @@ fn test_get_bid_some_with_correct_data() {
     let business = create_verified_business(&env, &client);
     let investor = create_verified_investor(&env, &client, 100_000);
 
-    let invoice_id = create_and_verify_invoice(&env, &client, &business, 5000, InvoiceCategory::Services);
+    let invoice_id =
+        create_and_verify_invoice(&env, &client, &business, 5000, InvoiceCategory::Services);
 
     // Place a bid
     let bid_amount = 4500i128;
     let expected_return = 5000i128;
-    let bid_id = place_bid(&env, &client, &investor, &invoice_id, bid_amount, expected_return);
+    let bid_id = place_bid(
+        &env,
+        &client,
+        &investor,
+        &invoice_id,
+        bid_amount,
+        expected_return,
+    );
 
     // Test get_bid - should return Some with correct data
     let result = client.try_get_bid(&bid_id);
@@ -368,7 +382,8 @@ fn test_get_bid_some_with_correct_data() {
 fn test_get_bid_some_multiple_bids_same_invoice() {
     let (env, client) = setup_contract();
     let business = create_verified_business(&env, &client);
-    let invoice_id = create_and_verify_invoice(&env, &client, &business, 10_000, InvoiceCategory::Services);
+    let invoice_id =
+        create_and_verify_invoice(&env, &client, &business, 10_000, InvoiceCategory::Services);
 
     let mut bid_ids = Vec::new(&env);
 
@@ -378,7 +393,14 @@ fn test_get_bid_some_multiple_bids_same_invoice() {
         let bid_amount = 9000i128 + (i as i128) * 100;
         let expected_return = 10_000i128 + (i as i128) * 100;
 
-        let bid_id = place_bid(&env, &client, &investor, &invoice_id, bid_amount, expected_return);
+        let bid_id = place_bid(
+            &env,
+            &client,
+            &investor,
+            &invoice_id,
+            bid_amount,
+            expected_return,
+        );
         bid_ids.push_back(bid_id);
     }
 
@@ -388,11 +410,7 @@ fn test_get_bid_some_multiple_bids_same_invoice() {
         assert!(result.is_ok(), "get_bid should succeed for bid {}", i);
 
         let bid_option = result.unwrap();
-        assert!(
-            bid_option.is_some(),
-            "Should return Some for bid {}",
-            i
-        );
+        assert!(bid_option.is_some(), "Should return Some for bid {}", i);
 
         let bid = bid_option.unwrap();
         assert_eq!(bid.bid_id, *bid_id);
@@ -407,7 +425,8 @@ fn test_get_bid_some_after_status_changes() {
     let business = create_verified_business(&env, &client);
     let investor = create_verified_investor(&env, &client, 100_000);
 
-    let invoice_id = create_and_verify_invoice(&env, &client, &business, 5000, InvoiceCategory::Services);
+    let invoice_id =
+        create_and_verify_invoice(&env, &client, &business, 5000, InvoiceCategory::Services);
     let bid_id = place_bid(&env, &client, &investor, &invoice_id, 4500, 5000);
 
     // Check initial status
@@ -476,11 +495,19 @@ fn test_get_bid_some_immediately_after_placement() {
     let business = create_verified_business(&env, &client);
     let investor = create_verified_investor(&env, &client, 100_000);
 
-    let invoice_id = create_and_verify_invoice(&env, &client, &business, 8000, InvoiceCategory::Services);
+    let invoice_id =
+        create_and_verify_invoice(&env, &client, &business, 8000, InvoiceCategory::Services);
 
     let bid_amount = 7500i128;
     let expected_return = 8000i128;
-    let bid_id = place_bid(&env, &client, &investor, &invoice_id, bid_amount, expected_return);
+    let bid_id = place_bid(
+        &env,
+        &client,
+        &investor,
+        &invoice_id,
+        bid_amount,
+        expected_return,
+    );
 
     // Immediately retrieve and validate all fields
     let bid = client.try_get_bid(&bid_id).unwrap().unwrap();
@@ -492,7 +519,10 @@ fn test_get_bid_some_immediately_after_placement() {
     assert_eq!(bid.expected_return, expected_return);
     assert_eq!(bid.status, BidStatus::Placed);
     assert!(bid.timestamp > 0, "Timestamp should be set");
-    assert!(bid.expiration_timestamp > bid.timestamp, "Expiration should be in future");
+    assert!(
+        bid.expiration_timestamp > bid.timestamp,
+        "Expiration should be in future"
+    );
 }
 
 /// Test 14: Get bid with different investors - validates correct isolation
@@ -500,7 +530,8 @@ fn test_get_bid_some_immediately_after_placement() {
 fn test_get_bid_some_different_investors() {
     let (env, client) = setup_contract();
     let business = create_verified_business(&env, &client);
-    let invoice_id = create_and_verify_invoice(&env, &client, &business, 10_000, InvoiceCategory::Services);
+    let invoice_id =
+        create_and_verify_invoice(&env, &client, &business, 10_000, InvoiceCategory::Services);
 
     let mut bid_ids = Vec::new(&env);
     let mut investors = Vec::new(&env);
@@ -535,7 +566,8 @@ fn test_get_bid_some_different_investors() {
 fn test_get_invoice_and_all_related_bids() {
     let (env, client) = setup_contract();
     let business = create_verified_business(&env, &client);
-    let invoice_id = create_and_verify_invoice(&env, &client, &business, 10_000, InvoiceCategory::Services);
+    let invoice_id =
+        create_and_verify_invoice(&env, &client, &business, 10_000, InvoiceCategory::Services);
 
     // Get invoice
     let invoice = client.try_get_invoice(&invoice_id).unwrap();
@@ -546,14 +578,24 @@ fn test_get_invoice_and_all_related_bids() {
     let mut bid_ids = Vec::new(&env);
     for i in 0..3 {
         let investor = create_verified_investor(&env, &client, 50_000);
-        let bid_id = place_bid(&env, &client, &investor, &invoice_id, 9000 + (i as i128) * 10, 10_000);
+        let bid_id = place_bid(
+            &env,
+            &client,
+            &investor,
+            &invoice_id,
+            9000 + (i as i128) * 10,
+            10_000,
+        );
         bid_ids.push_back(bid_id);
     }
 
     // Verify all bids are retrievable and relate to the invoice
     for bid_id in bid_ids.iter() {
         let bid = client.try_get_bid(&bid_id).unwrap().unwrap();
-        assert_eq!(bid.invoice_id, invoice_id, "Bid should reference correct invoice");
+        assert_eq!(
+            bid.invoice_id, invoice_id,
+            "Bid should reference correct invoice"
+        );
 
         // Verify the invoice is still retrievable
         let invoice_check = client.try_get_invoice(&invoice_id).unwrap();
@@ -568,7 +610,8 @@ fn test_get_bid_none_after_expiration() {
     let business = create_verified_business(&env, &client);
     let investor = create_verified_investor(&env, &client, 100_000);
 
-    let invoice_id = create_and_verify_invoice(&env, &client, &business, 5000, InvoiceCategory::Services);
+    let invoice_id =
+        create_and_verify_invoice(&env, &client, &business, 5000, InvoiceCategory::Services);
     let bid_id = place_bid(&env, &client, &investor, &invoice_id, 4500, 5000);
 
     // Verify bid exists
@@ -579,8 +622,9 @@ fn test_get_bid_none_after_expiration() {
     );
 
     // Advance time significantly to expire the bid
-    env.ledger()
-        .set(soroban_sdk::testutils::Ledger::default().with_timestamp(bid.expiration_timestamp + 1000));
+    env.ledger().set(
+        soroban_sdk::testutils::Ledger::default().with_timestamp(bid.expiration_timestamp + 1000),
+    );
 
     // Bid should still be retrievable (expired status is computed, not stored differently)
     let bid_after = client.try_get_bid(&bid_id).unwrap().unwrap();

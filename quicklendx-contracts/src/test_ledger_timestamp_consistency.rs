@@ -30,10 +30,7 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::{
-    invoice::InvoiceCategory,
-    QuickLendXContract, QuickLendXContractClient,
-};
+use crate::{invoice::InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, BytesN, Env, String, Vec,
@@ -64,11 +61,7 @@ fn create_verified_business(
     business
 }
 
-fn create_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    limit: i128,
-) -> Address {
+fn create_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i128) -> Address {
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &limit);
@@ -283,7 +276,10 @@ fn test_grace_deadline_boundary_exact_not_defaulted() {
 
     // At grace_deadline, defaulting should fail
     let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
-    assert!(result.is_err(), "Should not allow default at grace_deadline");
+    assert!(
+        result.is_err(),
+        "Should not allow default at grace_deadline"
+    );
 }
 
 #[test]
@@ -327,12 +323,17 @@ fn test_timestamp_incremental_advancement_accumulates() {
 
     env.ledger().set_timestamp(initial_ts + 300);
     let ts2 = env.ledger().timestamp();
-    assert_eq!(ts2, initial_ts + 300, "Second advance should be absolute, not relative");
+    assert_eq!(
+        ts2,
+        initial_ts + 300,
+        "Second advance should be absolute, not relative"
+    );
 
     env.ledger().set_timestamp(ts2 + 50);
     let ts3 = env.ledger().timestamp();
     assert_eq!(
-        ts3, initial_ts + 350,
+        ts3,
+        initial_ts + 350,
         "Relative advance from previous should accumulate"
     );
 }
@@ -365,7 +366,10 @@ fn test_grace_deadline_deterministic() {
     let deadline_2 = invoice.grace_deadline(grace_period);
 
     // Same invoice, same grace period should always give same deadline
-    assert_eq!(deadline_1, deadline_2, "grace_deadline must be deterministic");
+    assert_eq!(
+        deadline_1, deadline_2,
+        "grace_deadline must be deterministic"
+    );
 }
 
 #[test]
@@ -393,7 +397,10 @@ fn test_grace_period_override_per_invoice() {
 
     // Should allow default with per-invoice grace
     let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(per_invoice_grace));
-    assert!(result.is_ok(), "Per-invoice grace should override protocol default");
+    assert!(
+        result.is_ok(),
+        "Per-invoice grace should override protocol default"
+    );
 }
 
 #[test]
@@ -411,7 +418,13 @@ fn test_grace_calculation_saturation_safe() {
     let grace_period = 1000;
 
     let invoice_id = create_verified_and_funded_invoice(
-        &env, &client, &business, &investor, amount, &currency, extreme_due_date,
+        &env,
+        &client,
+        &business,
+        &investor,
+        amount,
+        &currency,
+        extreme_due_date,
     );
 
     let invoice = client.get_invoice(&invoice_id);
@@ -419,7 +432,8 @@ fn test_grace_calculation_saturation_safe() {
 
     // Must saturate to u64::MAX, not wrap around
     assert_eq!(
-        grace_deadline, u64::MAX,
+        grace_deadline,
+        u64::MAX,
         "grace_deadline must saturate to u64::MAX on overflow"
     );
 }
@@ -457,7 +471,10 @@ fn test_multiple_invoices_grace_independent() {
     // Different due dates should produce different grace deadlines
     assert_eq!(deadline_1, due_date_1 + grace_period);
     assert_eq!(deadline_2, due_date_2 + grace_period);
-    assert_ne!(deadline_1, deadline_2, "Different invoices should have different grace deadlines");
+    assert_ne!(
+        deadline_1, deadline_2,
+        "Different invoices should have different grace deadlines"
+    );
 }
 
 // ============================================================================
@@ -475,7 +492,10 @@ fn test_set_timestamp_advance_by_seconds() {
     env.ledger().set_timestamp(target_ts);
     let actual_ts = env.ledger().timestamp();
 
-    assert_eq!(actual_ts, target_ts, "set_timestamp should advance by exact amount");
+    assert_eq!(
+        actual_ts, target_ts,
+        "set_timestamp should advance by exact amount"
+    );
 }
 
 #[test]
@@ -543,7 +563,8 @@ fn test_ledger_time_consistent_within_transaction() {
         .collect();
 
     // All created_at values should be equal or within same second
-    let created_ats: Vec<_> = ids.iter()
+    let created_ats: Vec<_> = ids
+        .iter()
         .map(|id| client.get_invoice(id).created_at)
         .collect();
 
@@ -652,12 +673,26 @@ fn test_concurrent_creation_timestamps_ordered() {
 
     // Advance time and create second invoice
     env.ledger().set_timestamp(initial_ts + 100);
-    let invoice_id_2 = create_invoice(&env, &client, &business, 1000, &currency, initial_ts + 100 + 1000);
+    let invoice_id_2 = create_invoice(
+        &env,
+        &client,
+        &business,
+        1000,
+        &currency,
+        initial_ts + 100 + 1000,
+    );
     let created_at_2 = client.get_invoice(&invoice_id_2).created_at;
 
     // Advance time again and create third invoice
     env.ledger().set_timestamp(initial_ts + 200);
-    let invoice_id_3 = create_invoice(&env, &client, &business, 1000, &currency, initial_ts + 200 + 1000);
+    let invoice_id_3 = create_invoice(
+        &env,
+        &client,
+        &business,
+        1000,
+        &currency,
+        initial_ts + 200 + 1000,
+    );
     let created_at_3 = client.get_invoice(&invoice_id_3).created_at;
 
     // Verify ordering: created_at_1 < created_at_2 < created_at_3
@@ -712,7 +747,10 @@ fn test_real_world_invoice_lifecycle_with_time_advances() {
     let invoice = client.get_invoice(&invoice_id);
     let grace_deadline = invoice.grace_deadline(7 * 24 * 60 * 60);
     let current_ts = env.ledger().timestamp();
-    assert!(current_ts <= grace_deadline, "Should still be in grace period");
+    assert!(
+        current_ts <= grace_deadline,
+        "Should still be in grace period"
+    );
 
     // Day 8: Grace period expired, default allowed
     env.ledger().set_timestamp(grace_deadline + 1);
@@ -721,7 +759,10 @@ fn test_real_world_invoice_lifecycle_with_time_advances() {
 
     // Verify final state
     let final_invoice = client.get_invoice(&invoice_id);
-    assert_eq!(final_invoice.status, crate::invoice::InvoiceStatus::Defaulted);
+    assert_eq!(
+        final_invoice.status,
+        crate::invoice::InvoiceStatus::Defaulted
+    );
 }
 
 #[test]
@@ -773,7 +814,10 @@ fn test_multiple_invoices_lifecycle_with_sequential_creations() {
         let invoice = client.get_invoice(invoice_id);
         let grace_deadline = invoice.grace_deadline(grace_period);
         assert!(grace_deadline >= invoice.due_date);
-        assert_eq!(grace_deadline, invoice.due_date.saturating_add(grace_period));
+        assert_eq!(
+            grace_deadline,
+            invoice.due_date.saturating_add(grace_period)
+        );
     }
 }
 
@@ -801,33 +845,33 @@ fn test_boundary_stress_test_multiple_threshold_crossings() {
     env.ledger().set_timestamp(due_date - 1);
     let invoice = client.get_invoice(&invoice_id);
     assert!(!invoice.is_overdue(env.ledger().timestamp()));
-    assert!(
-        client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period)).is_err()
-    );
+    assert!(client
+        .try_mark_invoice_defaulted(&invoice_id, &Some(grace_period))
+        .is_err());
 
     // Test 2: At due_date
     env.ledger().set_timestamp(due_date);
     let invoice = client.get_invoice(&invoice_id);
     assert!(!invoice.is_overdue(env.ledger().timestamp()));
-    assert!(
-        client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period)).is_err()
-    );
+    assert!(client
+        .try_mark_invoice_defaulted(&invoice_id, &Some(grace_period))
+        .is_err());
 
     // Test 3: After due_date but before grace_deadline
     env.ledger().set_timestamp(due_date + 500);
     let invoice = client.get_invoice(&invoice_id);
     assert!(invoice.is_overdue(env.ledger().timestamp()));
-    assert!(
-        client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period)).is_err()
-    );
+    assert!(client
+        .try_mark_invoice_defaulted(&invoice_id, &Some(grace_period))
+        .is_err());
 
     // Test 4: At grace_deadline
     env.ledger().set_timestamp(grace_deadline);
     let invoice = client.get_invoice(&invoice_id);
     assert!(invoice.is_overdue(env.ledger().timestamp()));
-    assert!(
-        client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period)).is_err()
-    );
+    assert!(client
+        .try_mark_invoice_defaulted(&invoice_id, &Some(grace_period))
+        .is_err());
 
     // Test 5: After grace_deadline - now default is allowed
     env.ledger().set_timestamp(grace_deadline + 1);
@@ -835,5 +879,8 @@ fn test_boundary_stress_test_multiple_threshold_crossings() {
     assert!(result.is_ok());
 
     let final_invoice = client.get_invoice(&invoice_id);
-    assert_eq!(final_invoice.status, crate::invoice::InvoiceStatus::Defaulted);
+    assert_eq!(
+        final_invoice.status,
+        crate::invoice::InvoiceStatus::Defaulted
+    );
 }

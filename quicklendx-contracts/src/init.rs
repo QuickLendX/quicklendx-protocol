@@ -125,10 +125,7 @@ impl ProtocolInitializer {
     /// - Can only be called once (atomic check-and-set)
     /// - Validates all parameters before any state changes
     /// - Emits initialization event for audit trail
-    pub fn initialize(
-        env: &Env,
-        params: &InitializationParams,
-    ) -> Result<(), QuickLendXError> {
+    pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
         // Require authorization from the admin
         params.admin.require_auth();
 
@@ -142,13 +139,15 @@ impl ProtocolInitializer {
 
         // Initialize admin (this also checks admin_initialized flag)
         // We set this first as it's the foundation for all admin operations
+        env.storage().instance().set(&ADMIN_INITIALIZED_KEY, &true);
         env.storage()
             .instance()
-            .set(&ADMIN_INITIALIZED_KEY, &true);
-        env.storage().instance().set(&crate::admin::ADMIN_KEY, &params.admin);
+            .set(&crate::admin::ADMIN_KEY, &params.admin);
 
         // Store treasury address
-        env.storage().instance().set(&TREASURY_KEY, &params.treasury);
+        env.storage()
+            .instance()
+            .set(&TREASURY_KEY, &params.treasury);
 
         // Store fee configuration
         env.storage().instance().set(&FEE_BPS_KEY, &params.fee_bps);
@@ -235,7 +234,6 @@ impl ProtocolInitializer {
         Ok(())
     }
 
-
     /// Get the current protocol configuration.
     ///
     /// # Arguments
@@ -276,4 +274,3 @@ fn emit_protocol_initialized(
         ),
     );
 }
-
