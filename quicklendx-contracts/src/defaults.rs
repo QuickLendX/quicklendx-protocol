@@ -1,8 +1,5 @@
 use crate::errors::QuickLendXError;
-use crate::events::{
-    emit_dispute_created, emit_dispute_resolved, emit_dispute_under_review, emit_insurance_claimed,
-    emit_invoice_defaulted, emit_invoice_expired,
-};
+use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice_expired};
 use crate::init::ProtocolInitializer;
 use crate::investment::{InvestmentStatus, InvestmentStorage};
 use crate::invoice::{InvoiceStatus, InvoiceStorage};
