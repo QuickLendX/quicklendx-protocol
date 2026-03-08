@@ -1273,7 +1273,7 @@ impl QuickLendXContract {
     }
 
     /// Update protocol limits with max invoices per business (admin only).
-    pub fn update_protocol_limits_with_max_invoices(
+    pub fn update_limits_max_invoices(
         env: Env,
         admin: Address,
         min_invoice_amount: i128,

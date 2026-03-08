@@ -81,7 +81,7 @@ if limits.max_invoices_per_business > 0 {
 
 Added new admin function:
 ```rust
-pub fn update_protocol_limits_with_max_invoices(
+pub fn update_limits_max_invoices(
     env: Env,
     admin: Address,
     min_invoice_amount: i128,
@@ -118,7 +118,7 @@ pub fn update_protocol_limits_with_max_invoices(
 **Functions Covered**:
 - ✅ `count_active_business_invoices()` - 100%
 - ✅ `upload_invoice()` limit check - 100%
-- ✅ `update_protocol_limits_with_max_invoices()` - 100%
+- ✅ `update_limits_max_invoices()` - 100%
 - ✅ `MaxInvoicesPerBusinessExceeded` error handling - 100%
 - ✅ Protocol limits initialization with new field - 100%
 
@@ -205,7 +205,7 @@ All code formatted with `cargo fmt --all`
 ### Admin Usage
 ```rust
 // Set limit to 50 invoices per business
-client.update_protocol_limits_with_max_invoices(
+client.update_limits_max_invoices(
     &admin,
     &1_000_000,  // min_invoice_amount
     &365,        // max_due_date_days

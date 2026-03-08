@@ -10,7 +10,7 @@ The max invoices per business feature allows the protocol admin to configure a l
 
 ### Key Characteristics
 
-- **Configurable Limit**: Admin can set `max_invoices_per_business` via `update_protocol_limits_with_max_invoices()`
+- **Configurable Limit**: Admin can set `max_invoices_per_business` via `update_limits_max_invoices()`
 - **Active Invoice Counting**: Only counts invoices that are NOT in `Cancelled` or `Paid` status
 - **Per-Business Enforcement**: Each business has its own independent count
 - **Unlimited Option**: Setting limit to `0` disables the restriction
@@ -91,7 +91,7 @@ if limits.max_invoices_per_business > 0 {
 #### 5. Admin Configuration Function (`src/lib.rs`)
 
 ```rust
-pub fn update_protocol_limits_with_max_invoices(
+pub fn update_limits_max_invoices(
     env: Env,
     admin: Address,
     min_invoice_amount: i128,
@@ -311,7 +311,7 @@ cargo test test_max_invoices --lib -- --nocapture
 These tests achieve **>95% coverage** for:
 - `count_active_business_invoices` function
 - `max_invoices_per_business` limit enforcement in `upload_invoice`
-- `update_protocol_limits_with_max_invoices` function
+- `update_limits_max_invoices` function
 - `MaxInvoicesPerBusinessExceeded` error handling
 
 ## Integration Points
@@ -321,7 +321,7 @@ These tests achieve **>95% coverage** for:
 Admins can configure the limit using:
 
 ```rust
-client.update_protocol_limits_with_max_invoices(
+client.update_limits_max_invoices(
     &admin,
     &1_000_000,  // min_invoice_amount
     &365,        // max_due_date_days

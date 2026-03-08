@@ -57,7 +57,7 @@ fn test_create_invoices_up_to_limit_succeeds() {
 
     // Set limit to 5 invoices per business
     client
-        .update_protocol_limits_with_max_invoices(&admin, &10, &365, &86400, &5)
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &5)
         .unwrap();
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
@@ -90,7 +90,7 @@ fn test_next_invoice_after_limit_fails_with_clear_error() {
 
     // Set limit to 3 invoices per business
     client
-        .update_protocol_limits_with_max_invoices(&admin, &10, &365, &86400, &3)
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &3)
         .unwrap();
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
@@ -134,7 +134,7 @@ fn test_cancelled_invoices_free_slot() {
 
     // Set limit to 2 invoices per business
     client
-        .update_protocol_limits_with_max_invoices(&admin, &10, &365, &86400, &2)
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &2)
         .unwrap();
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
@@ -212,7 +212,7 @@ fn test_paid_invoices_free_slot() {
 
     // Set limit to 2 invoices per business
     client
-        .update_protocol_limits_with_max_invoices(&admin, &10, &365, &86400, &2)
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &2)
         .unwrap();
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
@@ -280,7 +280,7 @@ fn test_config_update_changes_limit() {
 
     // Start with limit of 2
     client
-        .update_protocol_limits_with_max_invoices(&admin, &10, &365, &86400, &2)
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &2)
         .unwrap();
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
@@ -323,7 +323,7 @@ fn test_config_update_changes_limit() {
 
     // Update limit to 5
     client
-        .update_protocol_limits_with_max_invoices(&admin, &10, &365, &86400, &5)
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &5)
         .unwrap();
 
     // Verify limit was updated
@@ -389,7 +389,7 @@ fn test_limit_zero_means_unlimited() {
 
     // Set limit to 0 (unlimited)
     client
-        .update_protocol_limits_with_max_invoices(&admin, &10, &365, &86400, &0)
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &0)
         .unwrap();
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
@@ -429,7 +429,7 @@ fn test_multiple_businesses_independent_limits() {
 
     // Set limit to 2 invoices per business
     client
-        .update_protocol_limits_with_max_invoices(&admin, &10, &365, &86400, &2)
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &2)
         .unwrap();
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
@@ -511,7 +511,7 @@ fn test_only_active_invoices_count_toward_limit() {
 
     // Set limit to 3
     client
-        .update_protocol_limits_with_max_invoices(&admin, &10, &365, &86400, &3)
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &3)
         .unwrap();
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
@@ -612,7 +612,7 @@ fn test_various_statuses_count_as_active() {
 
     // Set limit to 5
     client
-        .update_protocol_limits_with_max_invoices(&admin, &10, &365, &86400, &5)
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &5)
         .unwrap();
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
@@ -683,7 +683,7 @@ fn test_limit_of_one() {
 
     // Set limit to 1
     client
-        .update_protocol_limits_with_max_invoices(&admin, &10, &365, &86400, &1)
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &1)
         .unwrap();
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
