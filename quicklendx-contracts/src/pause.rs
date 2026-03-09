@@ -15,10 +15,7 @@ pub struct PauseControl;
 impl PauseControl {
     /// Returns true if the protocol is currently paused.
     pub fn is_paused(env: &Env) -> bool {
-        env.storage()
-            .instance()
-            .get(&PAUSED_KEY)
-            .unwrap_or(false)
+        env.storage().instance().get(&PAUSED_KEY).unwrap_or(false)
     }
 
     /// Set the pause flag (admin only).
@@ -42,4 +39,3 @@ impl PauseControl {
         Ok(())
     }
 }
-

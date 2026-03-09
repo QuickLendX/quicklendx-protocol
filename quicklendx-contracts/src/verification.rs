@@ -2,8 +2,7 @@ use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::protocol_limits::{
-    check_string_length, ProtocolLimitsContract, MAX_KYC_DATA_LENGTH,
-    MAX_REJECTION_REASON_LENGTH,
+    check_string_length, ProtocolLimitsContract, MAX_KYC_DATA_LENGTH, MAX_REJECTION_REASON_LENGTH,
 };
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 

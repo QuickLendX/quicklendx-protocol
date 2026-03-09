@@ -32,10 +32,18 @@ mod test_investor_kyc {
         let _ = client.try_initialize_admin(&admin);
 
         // Initialize protocol limits (max invoice amount, min bid amount, min bid bps, max due date, grace period)
-        let _ = client.try_initialize_protocol_limits(&admin, &1_000_000i128, &1i128, &100u32, &365u64, &86400u64);
+        let _ = client.try_initialize_protocol_limits(
+            &admin,
+            &1_000_000i128,
+            &1i128,
+            &100u32,
+            &365u64,
+            &86400u64,
+        );
         // Initialize protocol limits (min invoice: 1, min bid: 100, min bid bps: 100,
         // max due date: 365 days, grace period: 86400s)
-        let _ = client.try_initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
+        let _ = client
+            .try_initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
 
         (env, client, admin)
     }
@@ -835,6 +843,5 @@ mod test_investor_kyc {
         let bid1_amount = limit1 / 2; // Use 50% of actual limit
         let bid2_amount = limit2 / 2;
         let bid3_amount = limit3 / 2;
-
-}
+    }
 }

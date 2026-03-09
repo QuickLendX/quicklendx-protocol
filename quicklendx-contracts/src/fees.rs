@@ -222,9 +222,7 @@ impl FeeManager {
         let mut config = Self::get_platform_fee_config(env)?;
         config.fee_bps = fee_bps;
 
-        env.storage()
-            .instance()
-            .set(&PLATFORM_FEE_KEY, &config);
+        env.storage().instance().set(&PLATFORM_FEE_KEY, &config);
 
         env.events().publish((symbol_short!("fee_upd"),), fee_bps);
         Ok(())
