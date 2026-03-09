@@ -5,8 +5,7 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 /// The Soroban XDR spec allows a maximum of 50 error variants per contract.
 /// All 50 slots are used; new variants require replacing an existing one.
 #[contracterror]
-#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum QuickLendXError {
     // Invoice lifecycle (1000–1006)
