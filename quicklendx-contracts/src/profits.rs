@@ -297,7 +297,11 @@ impl PlatformFee {
         payment_amount: i128,
     ) -> ProfitFeeBreakdown {
         let config = Self::get_config(env);
-        Self::calculate_breakdown_with_fee_bps(investment_amount, payment_amount, config.fee_bps as i128)
+        Self::calculate_breakdown_with_fee_bps(
+            investment_amount,
+            payment_amount,
+            config.fee_bps as i128,
+        )
     }
 
     /// Calculate breakdown with explicit fee basis points (pure function)

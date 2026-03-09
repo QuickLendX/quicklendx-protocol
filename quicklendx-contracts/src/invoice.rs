@@ -815,6 +815,24 @@ impl InvoiceStorage {
             .unwrap_or_else(|| Vec::new(env))
     }
 
+    /// Count active invoices for a business (excludes Cancelled and Paid invoices)
+    pub fn count_active_business_invoices(env: &Env, business: &Address) -> u32 {
+        let business_invoices = Self::get_business_invoices(env, business);
+        let mut count = 0u32;
+        for invoice_id in business_invoices.iter() {
+            if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
+                // Only count active invoices (not Cancelled or Paid)
+                if !matches!(
+                    invoice.status,
+                    InvoiceStatus::Cancelled | InvoiceStatus::Paid
+                ) {
+                    count = count.saturating_add(1);
+                }
+            }
+        }
+        count
+    }
+
     /// Get all invoices by status
     pub fn get_invoices_by_status(env: &Env, status: &InvoiceStatus) -> Vec<BytesN<32>> {
         let key = match status {

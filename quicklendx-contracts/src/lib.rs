@@ -2,9 +2,13 @@
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 mod admin;
+mod analytics;
+mod audit;
+mod backup;
 mod bid;
 mod currency;
 mod defaults;
+mod dispute;
 mod emergency;
 mod errors;
 mod escrow;
@@ -13,24 +17,19 @@ mod fees;
 mod init;
 mod investment;
 mod invoice;
+mod notifications;
 mod pause;
 mod payments;
 mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
-mod verification;
-mod analytics;
-mod audit;
-mod backup;
-mod dispute;
-mod notifications;
 #[cfg(test)]
 mod storage;
 #[cfg(test)]
-mod test_string_limits;
-#[cfg(test)]
 mod test_admin;
+#[cfg(test)]
+mod test_bid_ranking;
 #[cfg(test)]
 mod test_business_kyc;
 #[cfg(test)]
@@ -40,6 +39,8 @@ mod test_emergency_withdraw;
 #[cfg(test)]
 mod test_init;
 #[cfg(test)]
+mod test_max_invoices_per_business;
+#[cfg(test)]
 mod test_overflow;
 #[cfg(test)]
 mod test_pause;
@@ -48,14 +49,15 @@ mod test_profit_fee;
 #[cfg(test)]
 mod test_refund;
 #[cfg(test)]
-mod test_types;
-#[cfg(test)]
 mod test_storage;
 #[cfg(test)]
-mod test_bid_ranking;
+mod test_string_limits;
+#[cfg(test)]
+mod test_types;
 #[cfg(test)]
 mod test_vesting;
 pub mod types;
+mod verification;
 mod vesting;
 use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
@@ -67,12 +69,12 @@ use escrow::{
     accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds,
 };
 use events::{
-    emit_bid_accepted, emit_bid_placed,
-    emit_bid_withdrawn, emit_escrow_created, emit_escrow_released, emit_insurance_added,
-    emit_insurance_premium_collected, emit_investor_verified, emit_invoice_cancelled,
-    emit_invoice_metadata_cleared, emit_invoice_metadata_updated, emit_invoice_uploaded,
-    emit_invoice_verified, emit_invoice_category_updated, emit_invoice_tag_added,
-    emit_invoice_tag_removed, emit_treasury_configured, emit_platform_fee_config_updated,
+    emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_escrow_created,
+    emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
+    emit_investor_verified, emit_invoice_cancelled, emit_invoice_category_updated,
+    emit_invoice_metadata_cleared, emit_invoice_metadata_updated, emit_invoice_tag_added,
+    emit_invoice_tag_removed, emit_invoice_uploaded, emit_invoice_verified,
+    emit_platform_fee_config_updated, emit_treasury_configured,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
@@ -85,12 +87,11 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
     get_investor_verification as do_get_investor_verification, reject_business,
     reject_investor as do_reject_investor, submit_investor_kyc as do_submit_investor_kyc,
-    submit_kyc_application, validate_bid, validate_investor_investment,
-    validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
-    verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
-    InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
+    submit_kyc_application, validate_bid, validate_investor_investment, validate_invoice_metadata,
+    verify_business, verify_investor as do_verify_investor, verify_invoice_data,
+    BusinessVerificationStatus, BusinessVerificationStorage, InvestorRiskLevel, InvestorTier,
+    InvestorVerification, InvestorVerificationStorage,
 };
-
 
 #[contract]
 pub struct QuickLendXContract;
@@ -110,10 +111,7 @@ impl QuickLendXContract {
     // ============================================================================
 
     /// Initialize the protocol with all required configuration (one-time setup)
-    pub fn initialize(
-        env: Env,
-        params: init::InitializationParams,
-    ) -> Result<(), QuickLendXError> {
+    pub fn initialize(env: Env, params: init::InitializationParams) -> Result<(), QuickLendXError> {
         params.admin.require_auth();
         init::ProtocolInitializer::initialize(&env, &params)
     }
@@ -397,6 +395,15 @@ impl QuickLendXContract {
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&tags)?;
 
+        // Check max invoices per business limit
+        let limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+        if limits.max_invoices_per_business > 0 {
+            let active_count = InvoiceStorage::count_active_business_invoices(&env, &business);
+            if active_count >= limits.max_invoices_per_business {
+                return Err(QuickLendXError::MaxInvoicesPerBusinessExceeded);
+            }
+        }
+
         // Create and store invoice
         let invoice = Invoice::new(
             &env,
@@ -410,7 +417,6 @@ impl QuickLendXContract {
         )?;
         InvoiceStorage::store_invoice(&env, &invoice);
         emit_invoice_uploaded(&env, &invoice);
-
 
         Ok(invoice.id)
     }
@@ -466,7 +472,6 @@ impl QuickLendXContract {
 
         emit_invoice_verified(&env, &invoice);
 
-
         // If invoice is funded (has escrow), release escrow funds to business
         if invoice.status == InvoiceStatus::Funded {
             Self::release_escrow_funds(env.clone(), invoice_id)?;
@@ -498,7 +503,6 @@ impl QuickLendXContract {
 
         // Emit event
         emit_invoice_cancelled(&env, &invoice);
-
 
         Ok(())
     }
@@ -598,7 +602,9 @@ impl QuickLendXContract {
         // Update status
         match new_status {
             InvoiceStatus::Verified => invoice.verify(&env, invoice.business.clone()),
-            InvoiceStatus::Paid => invoice.mark_as_paid(&env, invoice.business.clone(), env.ledger().timestamp()),
+            InvoiceStatus::Paid => {
+                invoice.mark_as_paid(&env, invoice.business.clone(), env.ledger().timestamp())
+            }
             InvoiceStatus::Defaulted => invoice.mark_as_defaulted(),
             InvoiceStatus::Funded => {
                 // For testing purposes - normally funding happens via accept_bid
@@ -794,7 +800,6 @@ impl QuickLendXContract {
         // Emit bid placed event
         emit_bid_placed(&env, &bid);
 
-
         Ok(bid_id)
     }
 
@@ -867,8 +872,6 @@ impl QuickLendXContract {
             .expect("Escrow should exist after creation");
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
-
-
 
         Ok(())
     }
@@ -953,7 +956,6 @@ impl QuickLendXContract {
 
         // Emit bid withdrawn event
         emit_bid_withdrawn(&env, &bid);
-
 
         Ok(())
     }
@@ -1103,7 +1105,6 @@ impl QuickLendXContract {
         Ok(())
     }
 
-
     // Business KYC/Verification Functions (from main)
 
     /// Submit KYC application (business only)
@@ -1224,7 +1225,7 @@ impl QuickLendXContract {
             env,
             admin,
             min_invoice_amount,
-            10, // min_bid_amount
+            10,  // min_bid_amount
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
@@ -1243,10 +1244,11 @@ impl QuickLendXContract {
             env,
             admin,
             min_invoice_amount,
-            10, // min_bid_amount
+            10,  // min_bid_amount
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            100, // max_invoices_per_business (default)
         )
     }
 
@@ -1262,10 +1264,32 @@ impl QuickLendXContract {
             env,
             admin,
             min_invoice_amount,
-            10, // min_bid_amount
+            10,  // min_bid_amount
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            100, // max_invoices_per_business (default)
+        )
+    }
+
+    /// Update protocol limits with max invoices per business (admin only).
+    pub fn update_limits_max_invoices(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+        max_invoices_per_business: u32,
+    ) -> Result<(), QuickLendXError> {
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+            env,
+            admin,
+            min_invoice_amount,
+            10,  // min_bid_amount
+            100, // min_bid_bps
+            max_due_date_days,
+            grace_period_seconds,
+            max_invoices_per_business,
         )
     }
 
@@ -1336,7 +1360,6 @@ impl QuickLendXContract {
         calculate_investment_limit(&tier, &risk_level, base_limit)
     }
 
-
     /// Validate investor investment
     pub fn validate_investor_investment(
         env: Env,
@@ -1404,7 +1427,6 @@ impl QuickLendXContract {
         reentrancy::with_payment_guard(&env, || do_refund_escrow_funds(&env, &invoice_id, &caller))
     }
 
-
     /// Check for overdue invoices and send notifications (admin or automated process)
     pub fn check_overdue_invoices(env: Env) -> Result<u32, QuickLendXError> {
         let grace_period = defaults::resolve_grace_period(&env, None);
@@ -1443,7 +1465,6 @@ impl QuickLendXContract {
         let grace = defaults::resolve_grace_period(&env, grace_period);
         invoice.check_and_handle_expiration(&env, grace)
     }
-
 
     // Category and Tag Management Functions
 
@@ -1600,7 +1621,6 @@ impl QuickLendXContract {
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         Ok(invoice.has_tag(tag))
     }
-
 
     // ========================================
     // Fee and Revenue Management Functions
@@ -2064,78 +2084,90 @@ mod test_insurance;
 #[cfg(test)]
 mod test_investor_kyc;
 #[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;
-#[cfg(test)]
 mod test_ledger_timestamp_consistency;
 #[cfg(test)]
 mod test_lifecycle;
 #[cfg(test)]
+mod test_limit;
+#[cfg(test)]
 mod test_min_invoice_amount;
+#[cfg(test)]
+mod test_profit_fee_formula;
+#[cfg(test)]
+mod test_revenue_split;
 
-    // ============================================================================
-    // Analytics Functions missing from exports
-    // ============================================================================
+// ============================================================================
+// Analytics Functions missing from exports
+// ============================================================================
 
-    pub fn get_user_behavior_metrics(env: Env, user: Address) -> analytics::UserBehaviorMetrics {
-        analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).unwrap()
-    }
+pub fn get_user_behavior_metrics(env: Env, user: Address) -> analytics::UserBehaviorMetrics {
+    analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).unwrap()
+}
 
-    pub fn get_financial_metrics(env: Env, period: analytics::TimePeriod) -> analytics::FinancialMetrics {
-        analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period).unwrap()
-    }
+pub fn get_financial_metrics(
+    env: Env,
+    period: analytics::TimePeriod,
+) -> analytics::FinancialMetrics {
+    analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period).unwrap()
+}
 
-    pub fn generate_business_report(env: Env, business: Address, period: analytics::TimePeriod) -> Result<analytics::BusinessReport, QuickLendXError> {
-        analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
-    }
+pub fn generate_business_report(
+    env: Env,
+    business: Address,
+    period: analytics::TimePeriod,
+) -> Result<analytics::BusinessReport, QuickLendXError> {
+    analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
+}
 
-    pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<analytics::BusinessReport> {
-        analytics::AnalyticsStorage::get_business_report(&env, &report_id)
-    }
+pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<analytics::BusinessReport> {
+    analytics::AnalyticsStorage::get_business_report(&env, &report_id)
+}
 
-    pub fn generate_investor_report(env: Env, investor: Address, period: analytics::TimePeriod) -> Result<analytics::InvestorReport, QuickLendXError> {
-        analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)
-    }
+pub fn generate_investor_report(
+    env: Env,
+    investor: Address,
+    period: analytics::TimePeriod,
+) -> Result<analytics::InvestorReport, QuickLendXError> {
+    analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)
+}
 
-    pub fn get_investor_report(env: Env, report_id: BytesN<32>) -> Option<analytics::InvestorReport> {
-        analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
-    }
+pub fn get_investor_report(env: Env, report_id: BytesN<32>) -> Option<analytics::InvestorReport> {
+    analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
+}
 
-    pub fn get_analytics_summary(env: Env) -> (analytics::PlatformMetrics, analytics::PerformanceMetrics) {
-        let platform = analytics::AnalyticsCalculator::calculate_platform_metrics(&env).unwrap_or(
-            analytics::PlatformMetrics {
-                total_invoices: 0,
-                total_investments: 0,
-                total_volume: 0,
-                total_fees_collected: 0,
-                active_investors: 0,
-                verified_businesses: 0,
-                average_invoice_amount: 0,
-                average_investment_amount: 0,
-                platform_fee_rate: 0,
-                default_rate: 0,
-                success_rate: 0,
-                timestamp: env.ledger().timestamp(),
-            }
-        );
-        let performance = analytics::AnalyticsCalculator::calculate_performance_metrics(&env).unwrap_or(
-            analytics::PerformanceMetrics {
-                platform_uptime: env.ledger().timestamp(),
-                average_settlement_time: 0,
-                average_verification_time: 0,
-                dispute_resolution_time: 0,
-                system_response_time: 0,
-                transaction_success_rate: 0,
-                error_rate: 0,
-                user_satisfaction_score: 0,
-                platform_efficiency: 0,
-            }
-        );
-        (platform, performance)
-    }
+pub fn get_analytics_summary(
+    env: Env,
+) -> (analytics::PlatformMetrics, analytics::PerformanceMetrics) {
+    let platform = analytics::AnalyticsCalculator::calculate_platform_metrics(&env).unwrap_or(
+        analytics::PlatformMetrics {
+            total_invoices: 0,
+            total_investments: 0,
+            total_volume: 0,
+            total_fees_collected: 0,
+            active_investors: 0,
+            verified_businesses: 0,
+            average_invoice_amount: 0,
+            average_investment_amount: 0,
+            platform_fee_rate: 0,
+            default_rate: 0,
+            success_rate: 0,
+            timestamp: env.ledger().timestamp(),
+        },
+    );
+    let performance = analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
+        .unwrap_or(analytics::PerformanceMetrics {
+            platform_uptime: env.ledger().timestamp(),
+            average_settlement_time: 0,
+            average_verification_time: 0,
+            dispute_resolution_time: 0,
+            system_response_time: 0,
+            transaction_success_rate: 0,
+            error_rate: 0,
+            user_satisfaction_score: 0,
+            platform_efficiency: 0,
+        });
+    (platform, performance)
+}
 #[cfg(test)]
 mod test;
 
@@ -2157,14 +2189,14 @@ mod test_insurance;
 #[cfg(test)]
 mod test_investor_kyc;
 #[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;
-#[cfg(test)]
 mod test_ledger_timestamp_consistency;
 #[cfg(test)]
 mod test_lifecycle;
 #[cfg(test)]
+mod test_limit;
+#[cfg(test)]
 mod test_min_invoice_amount;
+#[cfg(test)]
+mod test_profit_fee_formula;
+#[cfg(test)]
+mod test_revenue_split;

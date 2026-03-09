@@ -521,4 +521,5 @@ fn test_kyc_data_integrity() {
     client.submit_kyc_application(&business, &original_kyc_data);
 
     // Verify the data is stored correctly
-    let verification = client.get_business_verification_status(&business);;}
+    let verification = client.get_business_verification_status(&business);
+}

@@ -109,7 +109,7 @@ impl BidStorage {
             .get(&Self::invoice_key(invoice_id))
             .unwrap_or_else(|| Vec::new(env))
     }
-    
+
     pub fn get_active_bid_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let _ = Self::refresh_expired_bids(env, invoice_id);
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);

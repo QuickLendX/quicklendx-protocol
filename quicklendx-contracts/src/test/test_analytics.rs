@@ -979,7 +979,7 @@ fn test_get_business_report_returns_some_after_generate() {
 
     // Retrieve the report using get_business_report
     let retrieved = client.get_business_report(&report_id);
-    
+
     // Should return Some
     assert!(retrieved.is_some());
 }
@@ -995,7 +995,7 @@ fn test_get_business_report_returns_none_for_invalid_id() {
 
     // Attempt to retrieve with invalid ID
     let retrieved = client.get_business_report(&invalid_report_id);
-    
+
     // Should return None
     assert!(retrieved.is_none());
 }
@@ -1036,7 +1036,10 @@ fn test_get_business_report_fields_match_generated_data() {
     assert_eq!(retrieved.invoices_funded, 1);
     assert_eq!(retrieved.total_volume, generated.total_volume);
     assert_eq!(retrieved.total_volume, 15000);
-    assert_eq!(retrieved.average_funding_time, generated.average_funding_time);
+    assert_eq!(
+        retrieved.average_funding_time,
+        generated.average_funding_time
+    );
     assert_eq!(retrieved.success_rate, generated.success_rate);
     assert_eq!(retrieved.default_rate, generated.default_rate);
     assert_eq!(retrieved.rating_average, generated.rating_average);
@@ -1060,24 +1063,27 @@ fn test_get_business_report_category_breakdown_matches() {
     let retrieved = client.get_business_report(&generated.report_id).unwrap();
 
     // Verify category breakdown matches
-    assert_eq!(retrieved.category_breakdown.len(), generated.category_breakdown.len());
-    
+    assert_eq!(
+        retrieved.category_breakdown.len(),
+        generated.category_breakdown.len()
+    );
+
     // Find Services category count in both
     let mut gen_services_count = 0u32;
     let mut ret_services_count = 0u32;
-    
+
     for (cat, count) in generated.category_breakdown.iter() {
         if cat == InvoiceCategory::Services {
             gen_services_count = count;
         }
     }
-    
+
     for (cat, count) in retrieved.category_breakdown.iter() {
         if cat == InvoiceCategory::Services {
             ret_services_count = count;
         }
     }
-    
+
     assert_eq!(gen_services_count, 3);
     assert_eq!(ret_services_count, 3);
     assert_eq!(gen_services_count, ret_services_count);
@@ -1097,7 +1103,7 @@ fn test_get_business_report_multiple_reports_different_ids() {
 
     // Advance time slightly to get different report ID
     env.ledger().set_timestamp(1_000_001);
-    
+
     // Generate second report
     let report2 = client.generate_business_report(&business, &TimePeriod::Weekly);
     let report2_id = report2.report_id.clone();
@@ -1108,7 +1114,7 @@ fn test_get_business_report_multiple_reports_different_ids() {
 
     assert!(retrieved1.is_some());
     assert!(retrieved2.is_some());
-    
+
     // Verify they have different periods
     assert_eq!(retrieved1.unwrap().period, TimePeriod::Daily);
     assert_eq!(retrieved2.unwrap().period, TimePeriod::Weekly);
@@ -1176,7 +1182,7 @@ fn test_get_investor_report_returns_some_after_generate() {
 
     // Retrieve the report using get_investor_report
     let retrieved = client.get_investor_report(&report_id);
-    
+
     // Should return Some
     assert!(retrieved.is_some());
 }
@@ -1192,7 +1198,7 @@ fn test_get_investor_report_returns_none_for_invalid_id() {
 
     // Attempt to retrieve with invalid ID
     let retrieved = client.get_investor_report(&invalid_report_id);
-    
+
     // Should return None
     assert!(retrieved.is_none());
 }
@@ -1245,8 +1251,11 @@ fn test_get_investor_report_preferred_categories_match() {
     let retrieved = client.get_investor_report(&generated.report_id).unwrap();
 
     // Verify preferred categories length matches
-    assert_eq!(retrieved.preferred_categories.len(), generated.preferred_categories.len());
-    
+    assert_eq!(
+        retrieved.preferred_categories.len(),
+        generated.preferred_categories.len()
+    );
+
     // Verify each category matches
     for i in 0..generated.preferred_categories.len() {
         let (gen_cat, gen_count) = generated.preferred_categories.get(i).unwrap();
@@ -1270,7 +1279,7 @@ fn test_get_investor_report_multiple_reports_different_ids() {
 
     // Advance time slightly to get different report ID
     env.ledger().set_timestamp(1_000_001);
-    
+
     // Generate second report
     let report2 = client.generate_investor_report(&investor, &TimePeriod::Monthly);
     let report2_id = report2.report_id.clone();
@@ -1281,7 +1290,7 @@ fn test_get_investor_report_multiple_reports_different_ids() {
 
     assert!(retrieved1.is_some());
     assert!(retrieved2.is_some());
-    
+
     // Verify they have different periods
     assert_eq!(retrieved1.unwrap().period, TimePeriod::Daily);
     assert_eq!(retrieved2.unwrap().period, TimePeriod::Monthly);
@@ -1308,7 +1317,7 @@ fn test_get_investor_report_all_time_periods() {
     for period in periods.iter() {
         let generated = client.generate_investor_report(&investor, period);
         let retrieved = client.get_investor_report(&generated.report_id);
-        
+
         assert!(retrieved.is_some());
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.period, *period);
@@ -1350,14 +1359,16 @@ fn test_get_investor_report_period_dates_match() {
     // Test Daily period dates
     let daily_report = client.generate_investor_report(&investor, &TimePeriod::Daily);
     let retrieved_daily = client.get_investor_report(&daily_report.report_id).unwrap();
-    
+
     assert_eq!(retrieved_daily.end_date, current_timestamp);
     assert_eq!(retrieved_daily.start_date, current_timestamp - 86400);
 
     // Test Weekly period dates
     let weekly_report = client.generate_investor_report(&investor, &TimePeriod::Weekly);
-    let retrieved_weekly = client.get_investor_report(&weekly_report.report_id).unwrap();
-    
+    let retrieved_weekly = client
+        .get_investor_report(&weekly_report.report_id)
+        .unwrap();
+
     assert_eq!(retrieved_weekly.end_date, current_timestamp);
     assert_eq!(retrieved_weekly.start_date, current_timestamp - 7 * 86400);
 }
@@ -1371,7 +1382,7 @@ fn test_get_business_report_different_businesses_same_time() {
 
     // Create invoices for both businesses
     create_invoice(&env, &client, &business1, 5000, "Business 1 invoice");
-    
+
     // Generate reports for both
     let report1 = client.generate_business_report(&business1, &TimePeriod::AllTime);
     let report2 = client.generate_business_report(&business2, &TimePeriod::AllTime);
@@ -1383,7 +1394,7 @@ fn test_get_business_report_different_businesses_same_time() {
     // Verify different business addresses
     assert_eq!(retrieved1.business_address, business1);
     assert_eq!(retrieved2.business_address, business2);
-    
+
     // Verify different data
     assert_eq!(retrieved1.invoices_uploaded, 1);
     assert_eq!(retrieved1.total_volume, 5000);
@@ -1423,10 +1434,12 @@ fn test_get_business_report_nonexistent_after_valid() {
 
     // Generate a valid report
     let valid_report = client.generate_business_report(&business, &TimePeriod::AllTime);
-    
+
     // Verify valid report exists
-    assert!(client.get_business_report(&valid_report.report_id).is_some());
-    
+    assert!(client
+        .get_business_report(&valid_report.report_id)
+        .is_some());
+
     // Create invalid ID and verify it returns None
     let invalid_id = soroban_sdk::BytesN::from_array(&env, &[255u8; 32]);
     assert!(client.get_business_report(&invalid_id).is_none());
@@ -1442,10 +1455,12 @@ fn test_get_investor_report_nonexistent_after_valid() {
 
     // Generate a valid report
     let valid_report = client.generate_investor_report(&investor, &TimePeriod::AllTime);
-    
+
     // Verify valid report exists
-    assert!(client.get_investor_report(&valid_report.report_id).is_some());
-    
+    assert!(client
+        .get_investor_report(&valid_report.report_id)
+        .is_some());
+
     // Create invalid ID and verify it returns None
     let invalid_id = soroban_sdk::BytesN::from_array(&env, &[255u8; 32]);
     assert!(client.get_investor_report(&invalid_id).is_none());

@@ -42,6 +42,7 @@ pub enum QuickLendXError {
     PlatformAccountNotConfigured = 1404,
     InvalidCoveragePercentage = 1405,
     MaxBidsPerInvoiceExceeded = 1406,
+    MaxInvoicesPerBusinessExceeded = 1407,
 
     // Rating (1500–1503)
     InvalidRating = 1500,
@@ -153,6 +154,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
             QuickLendXError::MaxBidsPerInvoiceExceeded => symbol_short!("MAX_BIDS"),
+            QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
         }
     }

@@ -12,6 +12,7 @@ pub struct ProtocolLimits {
     pub min_bid_bps: u32,
     pub max_due_date_days: u64,
     pub grace_period_seconds: u64,
+    pub max_invoices_per_business: u32,
 }
 
 #[allow(dead_code)]
@@ -30,6 +31,8 @@ const DEFAULT_MIN_BID_BPS: u32 = 100; // 1%
 const DEFAULT_MAX_DUE_DAYS: u64 = 365;
 #[allow(dead_code)]
 const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days
+#[allow(dead_code)]
+const DEFAULT_MAX_INVOICES_PER_BUSINESS: u32 = 100; // 0 = unlimited
 
 // String length limits
 pub const MAX_DESCRIPTION_LENGTH: u32 = 1024;
@@ -71,6 +74,7 @@ impl ProtocolLimitsContract {
             min_bid_bps: DEFAULT_MIN_BID_BPS,
             max_due_date_days: DEFAULT_MAX_DUE_DAYS,
             grace_period_seconds: DEFAULT_GRACE_PERIOD,
+            max_invoices_per_business: DEFAULT_MAX_INVOICES_PER_BUSINESS,
         };
 
         env.storage().instance().set(&LIMITS_KEY, &limits);
@@ -86,6 +90,7 @@ impl ProtocolLimitsContract {
         min_bid_bps: u32,
         max_due_date_days: u64,
         grace_period_seconds: u64,
+        max_invoices_per_business: u32,
     ) -> Result<(), QuickLendXError> {
         admin.require_auth();
 
@@ -125,6 +130,7 @@ impl ProtocolLimitsContract {
             min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
+            max_invoices_per_business,
         };
 
         env.storage().instance().set(&LIMITS_KEY, &limits);
@@ -141,6 +147,7 @@ impl ProtocolLimitsContract {
                 min_bid_bps: DEFAULT_MIN_BID_BPS,
                 max_due_date_days: DEFAULT_MAX_DUE_DAYS,
                 grace_period_seconds: DEFAULT_GRACE_PERIOD,
+                max_invoices_per_business: DEFAULT_MAX_INVOICES_PER_BUSINESS,
             })
     }
 
@@ -152,7 +159,8 @@ impl ProtocolLimitsContract {
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        let max_due_date = current_time.saturating_add(limits.max_due_date_days.saturating_mul(86400));
+        let max_due_date =
+            current_time.saturating_add(limits.max_due_date_days.saturating_mul(86400));
         if due_date > max_due_date {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
         }

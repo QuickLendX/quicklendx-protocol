@@ -1,9 +1,10 @@
 mod test_analytics;
-mod test_invoice_categories;
-mod test_status_consistency;
-mod test_invoice_metadata;
 mod test_analytics_export_query;
+mod test_bid_placement_withdrawal;
 mod test_get_invoice_bid;
+mod test_invoice_categories;
+mod test_invoice_metadata;
+mod test_status_consistency;
 
 use super::*;
 use crate::analytics::TimePeriod;
@@ -887,17 +888,13 @@ fn test_bid_validation_rules() {
         .is_err());
 
     // Expected return must not be less than the bid amount
-    let invalid_expected_return =
-        client.try_place_bid(&investor, &invoice_id, &150, &140);
+    let invalid_expected_return = client.try_place_bid(&investor, &invoice_id, &150, &140);
     let invalid_err = invalid_expected_return
         .err()
         .expect("expected contract error for low expected_return");
     let invalid_contract_error =
         invalid_err.expect("expected invoke error for low expected_return");
-    assert_eq!(
-        invalid_contract_error,
-        QuickLendXError::InvalidAmount
-    );
+    assert_eq!(invalid_contract_error, QuickLendXError::InvalidAmount);
 
     // Break-even expected returns are allowed
     assert!(client
@@ -2307,10 +2304,10 @@ fn test_backup_retention_policy_by_age() {
     env.mock_all_auths();
     let backup1 = client.create_backup(&admin);
     env.ledger().with_mut(|li| li.timestamp += 50);
-    
+
     let backup2 = client.create_backup(&admin);
     env.ledger().with_mut(|li| li.timestamp += 60); // Total 110 seconds from backup1
-    
+
     let backup3 = client.create_backup(&admin);
 
     // All 3 should exist initially
@@ -2451,11 +2448,11 @@ fn test_backup_retention_policy_archived_not_cleaned() {
     env.mock_all_auths();
     let backup1 = client.create_backup(&admin);
     let backup2 = client.create_backup(&admin);
-    
+
     // Archive the first backup
     env.mock_all_auths();
     client.archive_backup(&admin, &backup1);
-    
+
     let backup3 = client.create_backup(&admin);
 
     // Should have 2 active backups (backup2 and backup3)
@@ -2463,7 +2460,7 @@ fn test_backup_retention_policy_archived_not_cleaned() {
     assert_eq!(backups.len(), 2);
     assert!(backups.contains(&backup2));
     assert!(backups.contains(&backup3));
-    
+
     // Archived backup should still exist but not in active list
     let archived = client.get_backup_details(&backup1);
     assert!(archived.is_some());
@@ -2488,7 +2485,7 @@ fn test_manual_cleanup_backups() {
     // Create 6 backups with auto-cleanup disabled temporarily
     env.mock_all_auths();
     client.set_backup_retention_policy(&admin, &3, &0, &false);
-    
+
     for _i in 0..6 {
         client.create_backup(&admin);
     }
@@ -2982,7 +2979,8 @@ fn test_update_notification_status_not_found() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let unknown_id = BytesN::from_array(&env, &[0u8; 32]);
-    let result = client.try_update_notification_status(&unknown_id, &NotificationDeliveryStatus::Sent);
+    let result =
+        client.try_update_notification_status(&unknown_id, &NotificationDeliveryStatus::Sent);
     let err = result.err().expect("expected contract error");
     let contract_error = err.expect("expected contract invoke error");
     assert_eq!(contract_error, QuickLendXError::NotificationNotFound);
@@ -3021,7 +3019,10 @@ fn test_get_notification_preferences_all_fields() {
     assert!(prefs.invoice_defaulted);
     assert!(prefs.system_alerts);
     assert!(!prefs.general);
-    assert_eq!(prefs.minimum_priority, crate::notifications::NotificationPriority::Medium);
+    assert_eq!(
+        prefs.minimum_priority,
+        crate::notifications::NotificationPriority::Medium
+    );
     // In test env the default ledger timestamp can be 0, so updated_at may be 0
     assert!(prefs.updated_at >= 0);
 }
@@ -3231,8 +3232,14 @@ fn test_check_overdue_invoices_triggers_notifications() {
                 .unwrap_or(false)
         })
     };
-    assert!(has_overdue(&business_after), "business should have PaymentOverdue notification");
-    assert!(has_overdue(&investor_after), "investor should have PaymentOverdue notification");
+    assert!(
+        has_overdue(&business_after),
+        "business should have PaymentOverdue notification"
+    );
+    assert!(
+        has_overdue(&investor_after),
+        "investor should have PaymentOverdue notification"
+    );
 }
 
 #[test]
@@ -4468,7 +4475,10 @@ fn test_invariants_after_full_lifecycle() {
     // --- Invariant assertions ---
 
     let total_invoice_count = client.get_total_invoice_count();
-    assert!(total_invoice_count >= 1, "total_invoice_count must be at least 1");
+    assert!(
+        total_invoice_count >= 1,
+        "total_invoice_count must be at least 1"
+    );
 
     let paid_count = client.get_invoice_count_by_status(&InvoiceStatus::Paid);
     let pending_count = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
@@ -4477,7 +4487,10 @@ fn test_invariants_after_full_lifecycle() {
     let defaulted_count = client.get_invoice_count_by_status(&InvoiceStatus::Defaulted);
     let cancelled_count = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
 
-    assert_eq!(paid_count, 1, "exactly one invoice must be Paid after full lifecycle");
+    assert_eq!(
+        paid_count, 1,
+        "exactly one invoice must be Paid after full lifecycle"
+    );
 
     let sum_status = pending_count
         + verified_count
@@ -4486,8 +4499,7 @@ fn test_invariants_after_full_lifecycle() {
         + defaulted_count
         + cancelled_count;
     assert_eq!(
-        sum_status,
-        total_invoice_count,
+        sum_status, total_invoice_count,
         "sum of status counts must equal total_invoice_count (no orphaned storage)"
     );
 
@@ -5387,7 +5399,7 @@ fn test_due_date_bounds_edge_cases() {
     // Test 3: Future timestamp (current time + 1 second) should still respect max due date
     let future_current = current_time + 1;
     env.ledger().set_timestamp(future_current);
-    
+
     let one_day_from_future = future_current + 86400;
     let invoice_id2 = client.store_invoice(
         &business,

@@ -76,11 +76,9 @@ fn set_insurance_inactive(env: &Env, contract_id: &Address, investment_id: &Byte
 // Authorization Tests
 // ============================================================================
 
-
 // ============================================================================
 // State Validation Tests
 // ============================================================================
-
 
 #[test]
 fn test_add_insurance_storage_key_not_found() {
@@ -96,11 +94,9 @@ fn test_add_insurance_storage_key_not_found() {
     assert_eq!(contract_error, QuickLendXError::StorageKeyNotFound);
 }
 
-
 // ============================================================================
 // Coverage / Premium Math Tests
 // ============================================================================
-
 
 #[test]
 fn test_zero_coverage_and_invalid_inputs() {
@@ -156,21 +152,17 @@ fn test_zero_coverage_and_invalid_inputs() {
     assert_eq!(contract_error, QuickLendXError::InvalidAmount);
 }
 
-
 // ============================================================================
 // Multiple Entries + Query Correctness
 // ============================================================================
-
 
 // ============================================================================
 // Security / Edge Scenarios
 // ============================================================================
 
-
 // ============================================================================
 // Multiple coverages, premium, query returns all, cannot add when not Active (#359)
 // ============================================================================
-
 
 #[test]
 fn test_query_investment_insurance_returns_all_entries() {
@@ -199,8 +191,6 @@ fn test_query_investment_insurance_returns_all_entries() {
     assert_eq!(all.get(0).unwrap().provider, provider_a);
     assert_eq!(all.get(1).unwrap().provider, provider_b);
 }
-
-
 
 #[test]
 fn test_investment_helpers_cover_branches() {

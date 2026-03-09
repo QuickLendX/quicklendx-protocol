@@ -325,5 +325,8 @@ fn test_refund_events_emitted_correctly() {
     // Search events for the escrow refund
     let events = env.events().all();
     let _ = escrow_details;
-    assert!(!events.events().is_empty(), "escrow_refunded event must be emitted");
+    assert!(
+        !events.events().is_empty(),
+        "escrow_refunded event must be emitted"
+    );
 }
