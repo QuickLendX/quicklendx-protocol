@@ -1,5 +1,6 @@
 mod test_analytics;
 mod test_analytics_export_query;
+mod test_bid_placement_withdrawal;
 mod test_get_invoice_bid;
 mod test_invoice_categories;
 mod test_invoice_metadata;
