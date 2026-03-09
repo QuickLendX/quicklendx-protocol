@@ -926,3 +926,132 @@ fn test_single_escrow_per_invoice_with_multiple_bids() {
         "Escrow investor unchanged"
     );
 }
+
+// ===============================
+// Escrow Query Coverage Tests
+// ===============================
+
+use soroban_sdk::{Env, Address};
+use crate::{
+    EscrowStatus,
+    QuickLendXError,
+};
+
+use super::create_test_contract; // adjust if your setup helper differs
+
+// --------------------------------------------------
+// get_escrow_details - SUCCESS
+// --------------------------------------------------
+#[test]
+fn test_get_escrow_details_success() {
+    let env = Env::default();
+    let contract = create_test_contract(&env);
+
+    let buyer = Address::generate(&env);
+    let seller = Address::generate(&env);
+    let escrow_id: u64 = 1;
+    let amount: u64 = 10_000;
+
+    // Create escrow
+    contract.create_escrow(&escrow_id, &buyer, &seller, &amount);
+
+    let escrow = contract.get_escrow_details(&escrow_id);
+
+    assert_eq!(escrow.id, escrow_id);
+    assert_eq!(escrow.buyer, buyer);
+    assert_eq!(escrow.seller, seller);
+    assert_eq!(escrow.amount, amount);
+    assert_eq!(escrow.status, EscrowStatus::Created);
+}
+
+// --------------------------------------------------
+// get_escrow_details - NOT FOUND
+// --------------------------------------------------
+#[test]
+#[should_panic(expected = "StorageKeyNotFound")]
+fn test_get_escrow_details_not_found() {
+    let env = Env::default();
+    let contract = create_test_contract(&env);
+
+    let invalid_id: u64 = 999;
+
+    contract.get_escrow_details(&invalid_id);
+}
+
+// --------------------------------------------------
+// get_escrow_status - AFTER CREATE
+// --------------------------------------------------
+#[test]
+fn test_get_escrow_status_after_create() {
+    let env = Env::default();
+    let contract = create_test_contract(&env);
+
+    let buyer = Address::generate(&env);
+    let seller = Address::generate(&env);
+    let escrow_id: u64 = 2;
+    let amount: u64 = 5_000;
+
+    contract.create_escrow(&escrow_id, &buyer, &seller, &amount);
+
+    let status = contract.get_escrow_status(&escrow_id);
+
+    assert_eq!(status, EscrowStatus::Created);
+}
+
+// --------------------------------------------------
+// get_escrow_status - AFTER RELEASE
+// --------------------------------------------------
+#[test]
+fn test_get_escrow_status_after_release() {
+    let env = Env::default();
+    let contract = create_test_contract(&env);
+
+    let buyer = Address::generate(&env);
+    let seller = Address::generate(&env);
+    let escrow_id: u64 = 3;
+    let amount: u64 = 7_000;
+
+    contract.create_escrow(&escrow_id, &buyer, &seller, &amount);
+
+    contract.release_escrow(&escrow_id);
+
+    let status = contract.get_escrow_status(&escrow_id);
+
+    assert_eq!(status, EscrowStatus::Released);
+}
+
+// --------------------------------------------------
+// get_escrow_status - AFTER REFUND
+// --------------------------------------------------
+#[test]
+fn test_get_escrow_status_after_refund() {
+    let env = Env::default();
+    let contract = create_test_contract(&env);
+
+    let buyer = Address::generate(&env);
+    let seller = Address::generate(&env);
+    let escrow_id: u64 = 4;
+    let amount: u64 = 8_000;
+
+    contract.create_escrow(&escrow_id, &buyer, &seller, &amount);
+
+    contract.refund_escrow(&escrow_id);
+
+    let status = contract.get_escrow_status(&escrow_id);
+
+    assert_eq!(status, EscrowStatus::Refunded);
+}
+
+// --------------------------------------------------
+// get_escrow_status - NOT FOUND
+// --------------------------------------------------
+#[test]
+#[should_panic(expected = "StorageKeyNotFound")]
+fn test_get_escrow_status_not_found() {
+    let env = Env::default();
+    let contract = create_test_contract(&env);
+
+    let invalid_id: u64 = 1000;
+
+    contract.get_escrow_status(&invalid_id);
+}
