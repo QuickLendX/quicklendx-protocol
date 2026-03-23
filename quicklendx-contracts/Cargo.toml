@@ -16,10 +16,6 @@ soroban-sdk = { version = "25.1.1" }
 soroban-sdk = { version = "25.1.1", features = ["testutils"] }
 proptest = "1.4"
 
-[features]
-# Enable fuzz tests (disabled by default to avoid blocking CI)
-fuzz-tests = []
-
 # Optimized for minimal WASM size and network deployment limits (see README size budget).
 [profile.release]
 opt-level = "z"
@@ -35,3 +31,9 @@ lto = true
 [profile.release-with-logs]
 inherits = "release"
 debug-assertions = true
+
+[features]
+# Enable fuzz tests (disabled by default to avoid blocking CI)
+fuzz-tests = []
+# Allow selectively compiling legacy test modules (kept off in CI)
+legacy-tests = []
