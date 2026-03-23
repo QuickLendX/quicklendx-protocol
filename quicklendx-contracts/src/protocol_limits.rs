@@ -94,15 +94,7 @@ impl ProtocolLimitsContract {
     ) -> Result<(), QuickLendXError> {
         admin.require_auth();
 
-        let stored_admin: Address = env
-            .storage()
-            .instance()
-            .get(&ADMIN_KEY)
-            .ok_or(QuickLendXError::NotAdmin)?;
-
-        if admin != stored_admin {
-            return Err(QuickLendXError::Unauthorized);
-        }
+        crate::admin::AdminStorage::require_admin(&env, &admin)?;
 
         if min_invoice_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);

@@ -115,7 +115,6 @@ impl QuickLendXContract {
 
     /// Initialize the protocol with all required configuration (one-time setup)
     pub fn initialize(env: Env, params: init::InitializationParams) -> Result<(), QuickLendXError> {
-        params.admin.require_auth();
         init::ProtocolInitializer::initialize(&env, &params)
     }
 
@@ -137,6 +136,11 @@ impl QuickLendXContract {
     /// Major versions indicate breaking changes that require migration.
     pub fn get_version(_env: Env) -> u32 {
         1u32
+    }
+
+    /// Get current protocol limits
+    pub fn get_protocol_limits(env: Env) -> protocol_limits::ProtocolLimits {
+        protocol_limits::ProtocolLimitsContract::get_protocol_limits(env)
     }
 
     /// Initialize the admin address (deprecated: use initialize)
@@ -446,6 +450,7 @@ impl QuickLendXContract {
 
     /// Verify an invoice (admin or automated process)
     pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
 
