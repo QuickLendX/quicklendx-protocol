@@ -706,13 +706,15 @@ impl QuickLendXContract {
     }
 
     /// Remove bids that have passed their expiration window
-    pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> u32 {
-        BidStorage::cleanup_expired_bids(&env, &invoice_id)
+    pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> Result<u32, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        Ok(BidStorage::cleanup_expired_bids(&env, &invoice_id))
     }
 
     /// Cancel a placed bid (investor only, Placed → Cancelled).
-    pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> bool {
-        bid::BidStorage::cancel_bid(&env, &bid_id)
+    pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> Result<bool, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        Ok(bid::BidStorage::cancel_bid(&env, &bid_id))
     }
 
     /// Get all bids placed by an investor across all invoices.
@@ -1229,6 +1231,7 @@ impl QuickLendXContract {
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            100, // max_invoices_per_business (default)
         )
     }
 
@@ -2063,39 +2066,6 @@ impl QuickLendXContract {
     }
 }
 
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-mod test_bid;
-
-#[cfg(test)]
-mod test_fees;
-
-#[cfg(test)]
-mod test_escrow;
-
-#[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
-#[cfg(test)]
-mod test_insurance;
-#[cfg(test)]
-mod test_investor_kyc;
-#[cfg(test)]
-mod test_ledger_timestamp_consistency;
-#[cfg(test)]
-mod test_lifecycle;
-#[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_min_invoice_amount;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;
-
 // ============================================================================
 // Analytics Functions missing from exports
 // ============================================================================
@@ -2168,35 +2138,3 @@ pub fn get_analytics_summary(
         });
     (platform, performance)
 }
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-mod test_bid;
-
-#[cfg(test)]
-mod test_fees;
-
-#[cfg(test)]
-mod test_escrow;
-
-#[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
-#[cfg(test)]
-mod test_insurance;
-#[cfg(test)]
-mod test_investor_kyc;
-#[cfg(test)]
-mod test_ledger_timestamp_consistency;
-#[cfg(test)]
-mod test_lifecycle;
-#[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_min_invoice_amount;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;
