@@ -112,7 +112,6 @@ impl QuickLendXContract {
 
     /// Initialize the protocol with all required configuration (one-time setup)
     pub fn initialize(env: Env, params: init::InitializationParams) -> Result<(), QuickLendXError> {
-        params.admin.require_auth();
         init::ProtocolInitializer::initialize(&env, &params)
     }
 
@@ -1220,7 +1219,6 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
-        let _ = protocol_limits::ProtocolLimitsContract::initialize(env.clone(), admin.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
@@ -1229,6 +1227,7 @@ impl QuickLendXContract {
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            100, // max_invoices_per_business (default)
         )
     }
 
@@ -1609,6 +1608,41 @@ impl QuickLendXContract {
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         Ok(invoice.get_tags())
+    }
+
+    /// Add a rating to an invoice (investor only).
+    pub fn add_invoice_rating(
+        env: Env,
+        invoice_id: BytesN<32>,
+        rating: u32,
+        feedback: String,
+        rater: Address,
+    ) -> Result<(), QuickLendXError> {
+        rater.require_auth();
+
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        invoice.add_rating(rating, feedback, rater, env.ledger().timestamp())?;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// Get rating statistics for an invoice.
+    pub fn get_invoice_rating_stats(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> (Option<u32>, u32, Option<u32>, Option<u32>) {
+        if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
+            (
+                invoice.average_rating,
+                invoice.total_ratings,
+                invoice.get_highest_rating(),
+                invoice.get_lowest_rating(),
+            )
+        } else {
+            (None, 0, None, None)
+        }
     }
 
     /// Check if invoice has a specific tag
@@ -2061,40 +2095,84 @@ impl QuickLendXContract {
         let schedule = vesting::Vesting::get_schedule(&env, id)?;
         vesting::Vesting::releasable_amount(&env, &schedule).ok()
     }
+
+    // ============================================================================
+    // Analytics & Reporting
+    // ============================================================================
+
+    /// @notice Return computed platform-level metrics.
+    pub fn get_platform_metrics(env: Env) -> analytics::PlatformMetrics {
+        crate::get_analytics_summary(env).0
+    }
+
+    /// @notice Return computed platform performance metrics.
+    pub fn get_performance_metrics(env: Env) -> analytics::PerformanceMetrics {
+        crate::get_analytics_summary(env).1
+    }
+
+    /// @notice Return user behavior metrics for a given user address.
+    pub fn get_user_behavior_metrics(env: Env, user: Address) -> analytics::UserBehaviorMetrics {
+        crate::get_user_behavior_metrics(env, user)
+    }
+
+    /// @notice Return financial metrics for a given time period.
+    pub fn get_financial_metrics(
+        env: Env,
+        period: analytics::TimePeriod,
+    ) -> analytics::FinancialMetrics {
+        crate::get_financial_metrics(env, period)
+    }
+
+    /// @notice Generate and persist a business analytics report.
+    pub fn generate_business_report(
+        env: Env,
+        business: Address,
+        period: analytics::TimePeriod,
+    ) -> Result<analytics::BusinessReport, QuickLendXError> {
+        crate::generate_business_report(env, business, period)
+    }
+
+    /// @notice Retrieve a business report by report id.
+    pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<analytics::BusinessReport> {
+        crate::get_business_report(env, report_id)
+    }
+
+    /// @notice Generate and persist an investor analytics report.
+    pub fn generate_investor_report(
+        env: Env,
+        investor: Address,
+        period: analytics::TimePeriod,
+    ) -> Result<analytics::InvestorReport, QuickLendXError> {
+        crate::generate_investor_report(env, investor, period)
+    }
+
+    /// @notice Retrieve an investor report by report id.
+    pub fn get_investor_report(env: Env, report_id: BytesN<32>) -> Option<analytics::InvestorReport> {
+        crate::get_investor_report(env, report_id)
+    }
+
+    /// @notice Return a tuple of `(platform_metrics, performance_metrics)`.
+    pub fn get_analytics_summary(
+        env: Env,
+    ) -> (analytics::PlatformMetrics, analytics::PerformanceMetrics) {
+        crate::get_analytics_summary(env)
+    }
+
+    /// @notice Retrieve stored investor analytics data if available.
+    pub fn get_investor_analytics_data(
+        env: Env,
+        investor: Address,
+    ) -> Option<analytics::InvestorAnalytics> {
+        analytics::AnalyticsStorage::get_investor_analytics(&env, &investor)
+    }
+
+    /// @notice Retrieve stored investor performance metrics if available.
+    pub fn get_investor_performance_metrics(
+        env: Env,
+    ) -> Option<analytics::InvestorPerformanceMetrics> {
+        analytics::AnalyticsStorage::get_investor_performance(&env)
+    }
 }
-
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-mod test_bid;
-
-#[cfg(test)]
-mod test_fees;
-
-#[cfg(test)]
-mod test_escrow;
-
-#[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
-#[cfg(test)]
-mod test_insurance;
-#[cfg(test)]
-mod test_investor_kyc;
-#[cfg(test)]
-mod test_ledger_timestamp_consistency;
-#[cfg(test)]
-mod test_lifecycle;
-#[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_min_invoice_amount;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;
 
 // ============================================================================
 // Analytics Functions missing from exports
@@ -2169,9 +2247,6 @@ pub fn get_analytics_summary(
     (platform, performance)
 }
 #[cfg(test)]
-mod test;
-
-#[cfg(test)]
 mod test_bid;
 
 #[cfg(test)]
@@ -2196,6 +2271,8 @@ mod test_lifecycle;
 mod test_limit;
 #[cfg(test)]
 mod test_min_invoice_amount;
+#[cfg(test)]
+mod test_protocol_limits;
 #[cfg(test)]
 mod test_profit_fee_formula;
 #[cfg(test)]

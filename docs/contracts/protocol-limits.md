@@ -1,232 +1,77 @@
 # Protocol Limits
 
-## Overview
-
-Configurable system-wide constraints for invoice validation and default handling. Admin-controlled parameters ensure consistent risk management across the platform.
-
-## Configuration Parameters
-
-| Parameter | Type | Description | Bounds |
-|-----------|------|-------------|--------|
-| `min_invoice_amount` | `i128` | Minimum acceptable invoice value | > 0 |
-| `max_due_date_days` | `u64` | Maximum days from now for due dates | 1 - 730 |
-| `grace_period_seconds` | `u64` | Default grace period after due date | 0 - 2,592,000 |
-
-## Default Values
-
-```rust
-min_invoice_amount: 1_000_000      // 1 token (6 decimals)
-max_due_date_days: 365             // 1 year maximum
-grace_period_seconds: 86400        // 24 hours
-```
-
-## Contract Interface
-
-### Administrative Functions
-
-#### `initialize(admin: Address) -> Result<(), QuickLendXError>`
-Initializes protocol limits with default values. One-time operation.
-
-**Errors:**
-- `OperationNotAllowed`: Already initialized
-
-#### `set_protocol_limits(admin: Address, min_invoice_amount: i128, max_due_date_days: u64, grace_period_seconds: u64) -> Result<(), QuickLendXError>`
-Updates protocol limits. Requires admin authorization.
-
-**Errors:**
-- `Unauthorized`: Caller not admin
-- `NotAdmin`: Admin not configured
-- `InvalidAmount`: Amount ≤ 0
-- `InvoiceDueDateInvalid`: Days outside 1-730 range
-- `InvalidTimestamp`: Grace period > 30 days
-
-### Query Functions
-
-#### `get_protocol_limits() -> ProtocolLimits`
-Returns current configuration. Always available, returns defaults if not initialized.
-
-#### `validate_invoice(amount: i128, due_date: u64) -> bool`
-Validates invoice against current limits.
-
-**Validation Logic:**
-- Amount must meet minimum threshold
-- Due date must not exceed maximum offset from current time
-
-#### `get_default_date(due_date: u64) -> u64`
-Calculates default date by adding grace period to due date.
-
-## Integration
-
-### Invoice Storage
-
-Protocol limits are enforced during invoice creation:
-
-```rust
-// Validation in store_invoice
-let limits = get_protocol_limits(&env);
-
-if amount < limits.min_invoice_amount {
-    return Err(QuickLendXError::InvoiceAmountInvalid);
-}
-
-let max_due_date = current_time + (limits.max_due_date_days * 86400);
-if due_date > max_due_date {
-    return Err(QuickLendXError::InvoiceDueDateInvalid);
-}
-
-let default_date = due_date + limits.grace_period_seconds;
-```
-
-
-## Error Handling
-
-All operations use `QuickLendXError` enum for consistent error reporting:
-
-| Error | Code | Condition |
-|-------|------|-----------|
-| `InvalidAmount` | 1002 | Amount validation failed |
-| `InvoiceDueDateInvalid` | 1013 | Due date validation failed |
-| `InvalidTimestamp` | 1017 | Grace period out of bounds |
-| `Unauthorized` | 1004 | Non-admin attempted update |
-| `NotAdmin` | 1005 | Admin not configured |
-| `OperationNotAllowed` | 1009 | Re-initialization attempted |
-
-## Usage Example
-
-```rust
-// Initialize protocol
-initialize(env.clone(), admin_address)?;
-
-// Update limits (admin only)
-set_protocol_limits(
-    env.clone(),
-    admin_address,
-    5_000_000,    // 5 tokens minimum
-    180,          // 6 months max
-    43200         // 12 hours grace
-)?;
-
-// Query current limits
-let limits = get_protocol_limits(env.clone());
-
-// Validate before storage
-if !validate_invoice(env.clone(), amount, due_date) {
-    return Err(QuickLendXError::InvoiceAmountInvalid);
-}
-```
-# Protocol Limits
+This document describes the protocol-wide boundary values enforced during invoice creation and related validation.
 
 ## Overview
 
-Configurable system-wide constraints for invoice validation and default handling. Admin-controlled parameters ensure consistent risk management across the platform.
+Protocol limits are stored in contract instance storage and are used to validate:
 
-## Configuration Parameters
+- Minimum invoice amount on `store_invoice` and `upload_invoice`
+- Maximum invoice due-date horizon (how far in the future `due_date` is allowed to be)
+- Default grace period used to compute default/overdue deadlines
+- (Related limits) minimum bid settings and max invoices per business
 
-| Parameter | Type | Description | Bounds |
-|-----------|------|-------------|--------|
-| `min_invoice_amount` | `i128` | Minimum acceptable invoice value | > 0 |
-| `max_due_date_days` | `u64` | Maximum days from now for due dates | 1 - 730 |
-| `grace_period_seconds` | `u64` | Default grace period after due date | 0 - 2,592,000 |
+## Limit Fields
 
-## Default Values
+The on-chain configuration is represented by `ProtocolLimits` in `quicklendx-contracts/src/protocol_limits.rs`:
 
-```rust
-min_invoice_amount: 1_000_000      // 1 token (6 decimals)
-max_due_date_days: 365             // 1 year maximum
-grace_period_seconds: 604800       // 7 days
-```
+- `min_invoice_amount` (`i128`): Minimum allowed invoice amount (smallest unit)
+- `min_bid_amount` (`i128`): Absolute minimum bid amount (smallest unit)
+- `min_bid_bps` (`u32`): Minimum bid amount as a percent of invoice amount (basis points, 10_000 = 100%)
+- `max_due_date_days` (`u64`): Maximum allowed future due-date horizon in days
+- `grace_period_seconds` (`u64`): Grace period added to `due_date` to compute default deadline
+- `max_invoices_per_business` (`u32`): Maximum active invoices allowed per business (`0` = unlimited)
 
-## Contract Interface
+## Defaults
 
-### Administrative Functions
+When limits are not explicitly configured, the contract falls back to defaults:
 
-#### `initialize(admin: Address) -> Result<(), QuickLendXError>`
-Initializes protocol limits with default values. One-time operation.
+- `min_invoice_amount`: `1_000_000` (1 token at 6 decimals; in tests this is `10`)
+- `min_bid_amount`: `10`
+- `min_bid_bps`: `100` (1%)
+- `max_due_date_days`: `365`
+- `grace_period_seconds`: `604_800` (7 days)
+- `max_invoices_per_business`: `100`
 
-**Errors:**
-- `OperationNotAllowed`: Already initialized
+## Enforcement Points
 
-#### `set_protocol_limits(admin: Address, min_invoice_amount: i128, max_due_date_days: u64, grace_period_seconds: u64) -> Result<(), QuickLendXError>`
-Updates protocol limits. Requires admin authorization.
+Invoice creation enforces these limits in the following flows:
 
-**Errors:**
-- `Unauthorized`: Caller not admin
-- `NotAdmin`: Admin not configured
-- `InvalidAmount`: Amount ≤ 0
-- `InvoiceDueDateInvalid`: Days outside 1-730 range
-- `InvalidTimestamp`: Grace period > 30 days
+- `QuickLendXContract::store_invoice` calls `protocol_limits::ProtocolLimitsContract::validate_invoice`
+- `QuickLendXContract::upload_invoice` calls `verification::verify_invoice_data`, which also calls `validate_invoice`
 
-### Query Functions
+Validation rules:
 
-#### `get_protocol_limits() -> ProtocolLimits`
-Returns current configuration. Always available, returns defaults if not initialized.
+1. Amount must be `>= min_invoice_amount`
+2. `due_date` must be **in the future** (`due_date > ledger.timestamp()`)
+3. `due_date` must be **no later than** `ledger.timestamp() + max_due_date_days * 86_400`
 
-#### `validate_invoice(amount: i128, due_date: u64) -> bool`
-Validates invoice against current limits.
+Boundary behavior is inclusive for the maximum due-date (exactly at the computed max is allowed).
 
-**Validation Logic:**
-- Amount must meet minimum threshold
-- Due date must not exceed maximum offset from current time
+## Updating Limits
 
-#### `get_default_date(due_date: u64) -> u64`
-Calculates default date by adding grace period to due date.
+Admin-only entrypoints exist on `QuickLendXContract`:
 
-## Integration
+- `initialize_protocol_limits(admin, min_invoice_amount, max_due_date_days, grace_period_seconds)`
+- `set_protocol_limits(admin, min_invoice_amount, max_due_date_days, grace_period_seconds)`
+- `update_protocol_limits(admin, min_invoice_amount, max_due_date_days, grace_period_seconds)`
+- `update_limits_max_invoices(admin, min_invoice_amount, max_due_date_days, grace_period_seconds, max_invoices_per_business)`
 
-### Invoice Storage
+Authorization is enforced via `admin::AdminStorage` (`admin.require_auth()` + admin check).
 
-Protocol limits are enforced during invoice creation:
+## Parameter Bounds
 
-```rust
-// Validation in store_invoice
-let limits = get_protocol_limits(&env);
+Updates are rejected unless:
 
-if amount < limits.min_invoice_amount {
-    return Err(QuickLendXError::InvoiceAmountInvalid);
-}
+- `min_invoice_amount > 0`
+- `min_bid_amount > 0`
+- `min_bid_bps <= 10_000`
+- `1 <= max_due_date_days <= 730`
+- `grace_period_seconds <= 2_592_000` (30 days)
 
-let max_due_date = current_time + (limits.max_due_date_days * 86400);
-if due_date > max_due_date {
-    return Err(QuickLendXError::InvoiceDueDateInvalid);
-}
+## Security Notes
 
-let default_date = due_date + limits.grace_period_seconds;
-```
+- **Admin authorization**: limit updates require admin authorization and are checked against the stored admin address.
+- **Timestamp trust**: validation uses `env.ledger().timestamp()`; it assumes ledger timestamps are monotonic and within normal network bounds.
+- **Overflow safety**: due-date computations use saturating arithmetic (`saturating_add` / `saturating_mul`) to prevent wrap-around.
 
-
-## Error Handling
-
-All operations use `QuickLendXError` enum for consistent error reporting:
-
-| Error | Code | Condition |
-|-------|------|-----------|
-| `InvalidAmount` | 1002 | Amount validation failed |
-| `InvoiceDueDateInvalid` | 1013 | Due date validation failed |
-| `InvalidTimestamp` | 1017 | Grace period out of bounds |
-| `Unauthorized` | 1004 | Non-admin attempted update |
-| `NotAdmin` | 1005 | Admin not configured |
-| `OperationNotAllowed` | 1009 | Re-initialization attempted |
-
-## Usage Example
-
-```rust
-// Initialize protocol
-initialize(env.clone(), admin_address)?;
-
-// Update limits (admin only)
-set_protocol_limits(
-    env.clone(),
-    admin_address,
-    5_000_000,    // 5 tokens minimum
-    180,          // 6 months max
-    43200         // 12 hours grace
-)?;
-
-// Query current limits
-let limits = get_protocol_limits(env.clone());
-
-// Validate before storage
-if !validate_invoice(env.clone(), amount, due_date) {
-    return Err(QuickLendXError::InvoiceAmountInvalid);
-}
-```
