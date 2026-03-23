@@ -139,7 +139,7 @@ pub fn get_dispute_details(
     env: &Env,
     invoice_id: &BytesN<32>,
 ) -> Result<Option<crate::invoice::Dispute>, QuickLendXError> {
-    let invoice =
+    let _invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     // In this implementation, the Dispute struct is part of the Invoice struct

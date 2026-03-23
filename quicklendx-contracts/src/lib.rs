@@ -513,7 +513,9 @@ impl QuickLendXContract {
     /// * `Ok(Invoice)` - The invoice data
     /// * `Err(InvoiceNotFound)` if the ID does not exist
     pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<Invoice, QuickLendXError> {
-        InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
+        let _invoice =
+            InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        Ok(_invoice)
     }
 
     /// Get all invoices for a business
@@ -966,7 +968,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         payment_amount: i128,
     ) -> Result<(), QuickLendXError> {
-        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+        let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = reentrancy::with_payment_guard(&env, || {
             do_settle_invoice(&env, &invoice_id, payment_amount)
@@ -1043,7 +1045,7 @@ impl QuickLendXContract {
         admin.require_auth();
 
         // Get the investment to track investor analytics
-        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+        let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = do_handle_default(&env, &invoice_id);
 
@@ -1077,7 +1079,7 @@ impl QuickLendXContract {
         admin.require_auth();
 
         // Get the investment to track investor analytics
-        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+        let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = do_mark_invoice_defaulted(&env, &invoice_id, grace_period);
 
@@ -1229,6 +1231,7 @@ impl QuickLendXContract {
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            100, // max_invoices_per_business (default)
         )
     }
 
