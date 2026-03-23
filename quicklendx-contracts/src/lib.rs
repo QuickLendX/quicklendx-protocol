@@ -2071,6 +2071,8 @@ mod test;
 mod test_bid;
 #[cfg(test)]
 mod test_overdue_expiration;
+#[cfg(test)]
+mod test_queries;
 
 #[cfg(test)]
 mod test_fees;
