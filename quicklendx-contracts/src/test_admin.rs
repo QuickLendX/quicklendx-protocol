@@ -50,24 +50,6 @@ mod test_admin {
         assert_eq!(invoke_err, soroban_sdk::InvokeError::Abort);
     }
 
-    fn admin_auth<'a>(
-        env: &'a Env,
-        contract_id: &'a Address,
-        admin: &'a Address,
-        fn_name: &'a str,
-        args: soroban_sdk::Val,
-    ) -> MockAuth<'a> {
-        MockAuth {
-            address: admin,
-            invoke: &MockAuthInvoke {
-                contract: contract_id,
-                fn_name,
-                args,
-                sub_invokes: &[],
-            },
-        }
-    }
-
     // ============================================================================
     // 1. Initialization Tests
     // ============================================================================
@@ -127,15 +109,18 @@ mod test_admin {
         let (env, contract_id, client) = setup_with_contract_id();
         let admin = Address::generate(&env);
         let attacker = Address::generate(&env);
+        let unauthorized_auth = MockAuth {
+            address: &attacker,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "initialize_admin",
+                args: (admin.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        };
 
         let result = client
-            .mock_auths(&[admin_auth(
-                &env,
-                &contract_id,
-                &attacker,
-                "initialize_admin",
-                (admin.clone(),).into_val(&env),
-            )])
+            .mock_auths(&[unauthorized_auth])
             .try_initialize_admin(&admin);
 
         assert_auth_abort(result);
@@ -272,17 +257,20 @@ mod test_admin {
         let admin = Address::generate(&env);
         let attacker = Address::generate(&env);
         let new_admin = Address::generate(&env);
+        let unauthorized_auth = MockAuth {
+            address: &attacker,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "transfer_admin",
+                args: (new_admin.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        };
 
         client.mock_all_auths().initialize_admin(&admin);
 
         let result = client
-            .mock_auths(&[admin_auth(
-                &env,
-                &contract_id,
-                &attacker,
-                "transfer_admin",
-                (new_admin.clone(),).into_val(&env),
-            )])
+            .mock_auths(&[unauthorized_auth])
             .try_transfer_admin(&new_admin);
 
         assert_auth_abort(result);
@@ -490,17 +478,20 @@ mod test_admin {
         let (env, contract_id, client) = setup_with_contract_id();
         let admin = Address::generate(&env);
         let attacker = Address::generate(&env);
+        let unauthorized_auth = MockAuth {
+            address: &attacker,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "set_bid_ttl_days",
+                args: (14u64,).into_val(&env),
+                sub_invokes: &[],
+            },
+        };
 
         client.mock_all_auths().initialize_admin(&admin);
 
         let result = client
-            .mock_auths(&[admin_auth(
-                &env,
-                &contract_id,
-                &attacker,
-                "set_bid_ttl_days",
-                (14u64,).into_val(&env),
-            )])
+            .mock_auths(&[unauthorized_auth])
             .try_set_bid_ttl_days(&14u64);
 
         assert_auth_abort(result);
@@ -513,17 +504,20 @@ mod test_admin {
         let admin = Address::generate(&env);
         let attacker = Address::generate(&env);
         let currency = Address::generate(&env);
+        let unauthorized_auth = MockAuth {
+            address: &attacker,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "add_currency",
+                args: (admin.clone(), currency.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        };
 
         client.mock_all_auths().initialize_admin(&admin);
 
         let result = client
-            .mock_auths(&[admin_auth(
-                &env,
-                &contract_id,
-                &attacker,
-                "add_currency",
-                (admin.clone(), currency.clone()).into_val(&env),
-            )])
+            .mock_auths(&[unauthorized_auth])
             .try_add_currency(&admin, &currency);
 
         assert_auth_abort(result);
@@ -541,17 +535,20 @@ mod test_admin {
         let mut currencies = Vec::new(&env);
         currencies.push_back(currency_a.clone());
         currencies.push_back(currency_b.clone());
+        let unauthorized_auth = MockAuth {
+            address: &attacker,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "set_currencies",
+                args: (admin.clone(), currencies.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        };
 
         client.mock_all_auths().initialize_admin(&admin);
 
         let result = client
-            .mock_auths(&[admin_auth(
-                &env,
-                &contract_id,
-                &attacker,
-                "set_currencies",
-                (admin.clone(), currencies.clone()).into_val(&env),
-            )])
+            .mock_auths(&[unauthorized_auth])
             .try_set_currencies(&admin, &currencies);
 
         assert_auth_abort(result);
@@ -564,17 +561,20 @@ mod test_admin {
         let (env, contract_id, client) = setup_with_contract_id();
         let admin = Address::generate(&env);
         let attacker = Address::generate(&env);
+        let unauthorized_auth = MockAuth {
+            address: &attacker,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "initialize_protocol_limits",
+                args: (admin.clone(), 250i128, 45u64, 86_400u64).into_val(&env),
+                sub_invokes: &[],
+            },
+        };
 
         client.mock_all_auths().initialize_admin(&admin);
 
         let result = client
-            .mock_auths(&[admin_auth(
-                &env,
-                &contract_id,
-                &attacker,
-                "initialize_protocol_limits",
-                (admin.clone(), 250i128, 45u64, 86_400u64).into_val(&env),
-            )])
+            .mock_auths(&[unauthorized_auth])
             .try_initialize_protocol_limits(&admin, &250i128, &45u64, &86_400u64);
 
         assert_auth_abort(result);
@@ -588,17 +588,20 @@ mod test_admin {
         let (env, contract_id, client) = setup_with_contract_id();
         let admin = Address::generate(&env);
         let attacker = Address::generate(&env);
+        let unauthorized_auth = MockAuth {
+            address: &attacker,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "initialize_fee_system",
+                args: (admin.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        };
 
         client.mock_all_auths().initialize_admin(&admin);
 
         let result = client
-            .mock_auths(&[admin_auth(
-                &env,
-                &contract_id,
-                &attacker,
-                "initialize_fee_system",
-                (admin.clone(),).into_val(&env),
-            )])
+            .mock_auths(&[unauthorized_auth])
             .try_initialize_fee_system(&admin);
 
         assert_auth_abort(result);
@@ -617,18 +620,21 @@ mod test_admin {
         let (env, contract_id, client) = setup_with_contract_id();
         let admin = Address::generate(&env);
         let attacker = Address::generate(&env);
+        let unauthorized_auth = MockAuth {
+            address: &attacker,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "update_platform_fee_bps",
+                args: (450u32,).into_val(&env),
+                sub_invokes: &[],
+            },
+        };
 
         client.mock_all_auths().initialize_admin(&admin);
         client.mock_all_auths().initialize_fee_system(&admin);
 
         let result = client
-            .mock_auths(&[admin_auth(
-                &env,
-                &contract_id,
-                &attacker,
-                "update_platform_fee_bps",
-                (450u32,).into_val(&env),
-            )])
+            .mock_auths(&[unauthorized_auth])
             .try_update_platform_fee_bps(&450u32);
 
         assert_auth_abort(result);
