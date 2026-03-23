@@ -29,6 +29,8 @@ mod storage;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
+mod test_admin_simple;
+#[cfg(test)]
 mod test_bid_ranking;
 #[cfg(test)]
 mod test_business_kyc;
@@ -46,6 +48,8 @@ mod test_overflow;
 mod test_pause;
 #[cfg(test)]
 mod test_profit_fee;
+#[cfg(test)]
+mod test_admin_standalone;
 #[cfg(test)]
 mod test_refund;
 #[cfg(test)]
@@ -155,7 +159,7 @@ impl QuickLendXContract {
     /// - Requires authorization from current admin
     pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), QuickLendXError> {
         let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        AdminStorage::set_admin(&env, &current_admin, &new_admin)
+        AdminStorage::transfer_admin(&env, &current_admin, &new_admin)
     }
 
     /// Get the current admin address
@@ -165,6 +169,58 @@ impl QuickLendXContract {
     /// * `None` if admin has not been initialized
     pub fn get_current_admin(env: Env) -> Option<Address> {
         AdminStorage::get_admin(&env)
+    }
+
+    /// Set protocol configuration (admin only)
+    pub fn set_protocol_config(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+    ) -> Result<(), QuickLendXError> {
+        init::ProtocolInitializer::set_protocol_config(
+            &env,
+            &admin,
+            min_invoice_amount,
+            max_due_date_days,
+            grace_period_seconds,
+        )
+    }
+
+    /// Set fee configuration (admin only)
+    pub fn set_fee_config(env: Env, admin: Address, fee_bps: u32) -> Result<(), QuickLendXError> {
+        init::ProtocolInitializer::set_fee_config(&env, &admin, fee_bps)
+    }
+
+    /// Set treasury address (admin only)
+    pub fn set_treasury(env: Env, admin: Address, treasury: Address) -> Result<(), QuickLendXError> {
+        init::ProtocolInitializer::set_treasury(&env, &admin, &treasury)
+    }
+
+    /// Get current fee in basis points
+    pub fn get_fee_bps(env: Env) -> u32 {
+        init::ProtocolInitializer::get_fee_bps(&env)
+    }
+
+    /// Get treasury address
+    pub fn get_treasury(env: Env) -> Option<Address> {
+        init::ProtocolInitializer::get_treasury(&env)
+    }
+
+    /// Get minimum invoice amount
+    pub fn get_min_invoice_amount(env: Env) -> i128 {
+        init::ProtocolInitializer::get_min_invoice_amount(&env)
+    }
+
+    /// Get maximum due date days
+    pub fn get_max_due_date_days(env: Env) -> u64 {
+        init::ProtocolInitializer::get_max_due_date_days(&env)
+    }
+
+    /// Get grace period in seconds
+    pub fn get_grace_period_seconds(env: Env) -> u64 {
+        init::ProtocolInitializer::get_grace_period_seconds(&env)
     }
 
     /// Admin-only: configure default bid TTL (days). Bounds: 1..=30.
@@ -1229,6 +1285,7 @@ impl QuickLendXContract {
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            100, // max_invoices_per_business - default value
         )
     }
 
