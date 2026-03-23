@@ -86,7 +86,8 @@ use settlement::{
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
     get_investor_verification as do_get_investor_verification, reject_business,
-    reject_investor as do_reject_investor, submit_investor_kyc as do_submit_investor_kyc,
+    reject_investor as do_reject_investor, require_business_not_pending,
+    require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_investor_investment, validate_invoice_metadata,
     verify_business, verify_investor as do_verify_investor, verify_invoice_data,
     BusinessVerificationStatus, BusinessVerificationStorage, InvestorRiskLevel, InvestorTier,
@@ -376,16 +377,9 @@ impl QuickLendXContract {
         // Only the business can upload their own invoice
         business.require_auth();
 
-        // Check if business is verified
-        let verification = verification::get_business_verification_status(&env, &business);
-        if verification.is_none()
-            || !matches!(
-                verification.unwrap().status,
-                verification::BusinessVerificationStatus::Verified
-            )
-        {
-            return Err(QuickLendXError::BusinessNotVerified);
-        }
+        // Enforce KYC: reject pending and unverified/rejected businesses with distinct errors.
+        // Pending businesses get KYCAlreadyPending; unverified/rejected get BusinessNotVerified.
+        require_business_not_pending(&env, &business)?;
 
         // Basic validation
         verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
@@ -488,6 +482,9 @@ impl QuickLendXContract {
 
         // Only the business owner can cancel their own invoice
         invoice.business.require_auth();
+
+        // Enforce KYC: a pending business must not cancel invoices.
+        require_business_not_pending(&env, &invoice.business)?;
 
         // Remove from old status list
         InvoiceStorage::remove_from_status_invoices(&env, &invoice.status, &invoice_id);
@@ -829,6 +826,10 @@ impl QuickLendXContract {
         let mut bid =
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         invoice.business.require_auth();
+
+        // Enforce KYC: a pending business must not accept bids.
+        require_business_not_pending(&env, &invoice.business)?;
+
         if invoice.status != InvoiceStatus::Verified || bid.status != BidStatus::Placed {
             return Err(QuickLendXError::InvalidStatus);
         }
@@ -945,6 +946,9 @@ impl QuickLendXContract {
 
         // Authorization check: Only the investor who owns the bid can withdraw it
         bid.investor.require_auth();
+
+        // Enforce KYC: a pending investor must not withdraw bids.
+        require_investor_not_pending(&env, &bid.investor)?;
 
         // Status validation: Only allow withdrawal if bid is placed
         // Prevents withdrawal of accepted, withdrawn, or expired bids
