@@ -2061,6 +2061,66 @@ impl QuickLendXContract {
         let schedule = vesting::Vesting::get_schedule(&env, id)?;
         vesting::Vesting::releasable_amount(&env, &schedule).ok()
     }
+
+    // ============================================================================
+    // Audit Trail Functions
+    // ============================================================================
+
+    /// Return the ordered list of audit entry IDs for a given invoice.
+    ///
+    /// Append-only: entries are never removed or reordered.
+    pub fn get_invoice_audit_trail(env: Env, invoice_id: BytesN<32>) -> Vec<BytesN<32>> {
+        audit::AuditStorage::get_invoice_audit_trail(&env, &invoice_id)
+    }
+
+    /// Fetch a single audit log entry by its ID.
+    pub fn get_audit_entry(
+        env: Env,
+        audit_id: BytesN<32>,
+    ) -> audit::AuditLogEntry {
+        audit::AuditStorage::get_audit_entry(&env, &audit_id)
+            .unwrap_or_else(|| panic!("audit entry not found"))
+    }
+
+    /// Query audit log entries with optional filters (invoice, actor, operation, time range).
+    /// Results are hard-capped at MAX_QUERY_LIMIT (100).
+    pub fn query_audit_logs(
+        env: Env,
+        filter: audit::AuditQueryFilter,
+        limit: u32,
+    ) -> Vec<audit::AuditLogEntry> {
+        audit::AuditStorage::query_audit_logs(&env, &filter, cap_query_limit(limit))
+    }
+
+    /// Return all audit entry IDs for a given operation type.
+    pub fn get_audit_entries_by_operation(
+        env: Env,
+        operation: audit::AuditOperation,
+    ) -> Vec<BytesN<32>> {
+        audit::AuditStorage::get_audit_entries_by_operation(&env, &operation)
+    }
+
+    /// Return all audit entry IDs for a given actor address.
+    pub fn get_audit_entries_by_actor(env: Env, actor: Address) -> Vec<BytesN<32>> {
+        audit::AuditStorage::get_audit_entries_by_actor(&env, &actor)
+    }
+
+    /// Validate that all audit entries for an invoice are present and internally consistent.
+    ///
+    /// Returns `true` if the trail is complete and every entry passes integrity checks.
+    /// Returns `false` if any entry is missing or fails validation.
+    pub fn validate_invoice_audit_integrity(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> bool {
+        audit::AuditStorage::validate_invoice_audit_integrity(&env, &invoice_id)
+            .unwrap_or(false)
+    }
+
+    /// Return aggregate audit statistics: total entries, unique actors, date range.
+    pub fn get_audit_stats(env: Env) -> audit::AuditStats {
+        audit::AuditStorage::get_audit_stats(&env)
+    }
 }
 
 #[cfg(test)]
@@ -2095,6 +2155,8 @@ mod test_min_invoice_amount;
 mod test_profit_fee_formula;
 #[cfg(test)]
 mod test_revenue_split;
+#[cfg(test)]
+mod test_audit;
 
 // ============================================================================
 // Analytics Functions missing from exports
