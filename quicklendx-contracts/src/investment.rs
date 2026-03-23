@@ -175,7 +175,9 @@ impl InvestmentStorage {
     pub fn get_investment_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Investment> {
         let index_key = Self::invoice_index_key(invoice_id);
         let investment_id: Option<BytesN<32>> = env.storage().instance().get(&index_key);
-        investment_id.and_then(|id| Self::get_investment(env, &id))
+        investment_id
+            .and_then(|id| Self::get_investment(env, &id))
+            .filter(|inv| inv.invoice_id == *invoice_id)
     }
     pub fn update_investment(env: &Env, investment: &Investment) {
         env.storage()
