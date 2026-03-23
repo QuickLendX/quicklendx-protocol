@@ -154,7 +154,7 @@ impl QuickLendXContract {
     /// # Security
     /// - Requires authorization from current admin
     pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), QuickLendXError> {
-        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let current_admin = AdminStorage::require_current_admin(&env)?;
         AdminStorage::set_admin(&env, &current_admin, &new_admin)
     }
 
@@ -167,9 +167,10 @@ impl QuickLendXContract {
         AdminStorage::get_admin(&env)
     }
 
-    /// Admin-only: configure default bid TTL (days). Bounds: 1..=30.
+    /// @notice Configure the default bid TTL in days.
+    /// @dev Requires an authenticated stored-admin signature. Bounds: 1..=30.
     pub fn set_bid_ttl_days(env: Env, days: u64) -> Result<u64, QuickLendXError> {
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = AdminStorage::require_current_admin(&env)?;
         bid::BidStorage::set_bid_ttl_days(&env, &admin, days)
     }
 
@@ -202,12 +203,14 @@ impl QuickLendXContract {
         emergency::EmergencyWithdraw::get_pending(&env)
     }
 
-    /// Add a token address to the currency whitelist (admin only).
+    /// @notice Add `currency` to the invoice whitelist.
+    /// @dev Rejects unauthorized callers even if they supply the stored admin address.
     pub fn add_currency(
         env: Env,
         admin: Address,
         currency: Address,
     ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_current_admin(&env)?;
         currency::CurrencyWhitelist::add_currency(&env, &admin, &currency)
     }
 
@@ -217,6 +220,7 @@ impl QuickLendXContract {
         admin: Address,
         currency: Address,
     ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_current_admin(&env)?;
         currency::CurrencyWhitelist::remove_currency(&env, &admin, &currency)
     }
 
@@ -230,18 +234,21 @@ impl QuickLendXContract {
         currency::CurrencyWhitelist::get_whitelisted_currencies(&env)
     }
 
-    /// Replace the entire currency whitelist atomically (admin only).
+    /// @notice Replace the entire currency whitelist atomically.
+    /// @dev Requires authenticated admin approval; no caller-address fallback is allowed.
     pub fn set_currencies(
         env: Env,
         admin: Address,
         currencies: Vec<Address>,
     ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_current_admin(&env)?;
         currency::CurrencyWhitelist::set_currencies(&env, &admin, &currencies)
     }
 
     /// Clear the entire currency whitelist (admin only).
     /// After this call all currencies are allowed (empty-list backward-compat rule).
     pub fn clear_currencies(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        AdminStorage::require_current_admin(&env)?;
         currency::CurrencyWhitelist::clear_currencies(&env, &admin)
     }
 
@@ -1212,7 +1219,8 @@ impl QuickLendXContract {
         BusinessVerificationStorage::get_admin(&env)
     }
 
-    /// Initialize protocol limits (admin only). Sets min amount, max due date days, grace period.
+    /// @notice Initialize protocol limits.
+    /// @dev Requires authenticated canonical admin approval before initializing or updating limits.
     pub fn initialize_protocol_limits(
         env: Env,
         admin: Address,
@@ -1220,6 +1228,10 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
+        let current_admin = AdminStorage::require_current_admin(&env)?;
+        if admin != current_admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
         let _ = protocol_limits::ProtocolLimitsContract::initialize(env.clone(), admin.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
@@ -1626,8 +1638,13 @@ impl QuickLendXContract {
     // Fee and Revenue Management Functions
     // ========================================
 
-    /// Initialize fee management system
+    /// @notice Initialize fee management storage.
+    /// @dev Requires authenticated canonical admin approval and rejects mismatched caller addresses.
     pub fn initialize_fee_system(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        let current_admin = AdminStorage::require_current_admin(&env)?;
+        if admin != current_admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
         fees::FeeManager::initialize(&env, &admin)
     }
 
@@ -1645,10 +1662,10 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    /// Update platform fee basis points (admin only)
+    /// @notice Update the platform fee basis points.
+    /// @dev Requires the stored admin to authenticate for the current invocation.
     pub fn update_platform_fee_bps(env: Env, new_fee_bps: u32) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = AdminStorage::require_current_admin(&env)?;
 
         let old_config = fees::FeeManager::get_platform_fee_config(&env)?;
         let old_fee_bps = old_config.fee_bps;

@@ -18,15 +18,20 @@ mod test_admin {
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use alloc::format;
     use soroban_sdk::{
-        testutils::{Address as _, Events},
-        Address, Env, String, Vec,
+        testutils::{Address as _, Events, MockAuth, MockAuthInvoke},
+        Address, Env, IntoVal, String, Vec,
     };
 
     fn setup() -> (Env, QuickLendXContractClient<'static>) {
+        let (env, _contract_id, client) = setup_with_contract_id();
+        (env, client)
+    }
+
+    fn setup_with_contract_id() -> (Env, Address, QuickLendXContractClient<'static>) {
         let env = Env::default();
         let contract_id = env.register(QuickLendXContract, ());
         let client = QuickLendXContractClient::new(&env, &contract_id);
-        (env, client)
+        (env, contract_id, client)
     }
 
     fn setup_with_admin() -> (Env, QuickLendXContractClient<'static>, Address) {
@@ -35,6 +40,32 @@ mod test_admin {
         let admin = Address::generate(&env);
         client.initialize_admin(&admin);
         (env, client, admin)
+    }
+
+    fn assert_auth_abort<T>(result: Result<T, Result<QuickLendXError, soroban_sdk::InvokeError>>) {
+        let err = result.err().expect("expected unauthorized call to fail");
+        let invoke_err = err
+            .err()
+            .expect("expected unauthorized call to abort during auth");
+        assert_eq!(invoke_err, soroban_sdk::InvokeError::Abort);
+    }
+
+    fn admin_auth<'a>(
+        env: &'a Env,
+        contract_id: &'a Address,
+        admin: &'a Address,
+        fn_name: &'a str,
+        args: soroban_sdk::Val,
+    ) -> MockAuth<'a> {
+        MockAuth {
+            address: admin,
+            invoke: &MockAuthInvoke {
+                contract: contract_id,
+                fn_name,
+                args,
+                sub_invokes: &[],
+            },
+        }
     }
 
     // ============================================================================
@@ -89,6 +120,26 @@ mod test_admin {
             again.is_err(),
             "Re-initializing with the same address must still fail"
         );
+    }
+
+    #[test]
+    fn test_initialize_admin_rejects_unauthorized_signer() {
+        let (env, contract_id, client) = setup_with_contract_id();
+        let admin = Address::generate(&env);
+        let attacker = Address::generate(&env);
+
+        let result = client
+            .mock_auths(&[admin_auth(
+                &env,
+                &contract_id,
+                &attacker,
+                "initialize_admin",
+                (admin.clone(),).into_val(&env),
+            )])
+            .try_initialize_admin(&admin);
+
+        assert_auth_abort(result);
+        assert_eq!(client.get_current_admin(), None);
     }
 
     // ============================================================================
@@ -212,6 +263,29 @@ mod test_admin {
             result.is_ok(),
             "Transferring admin to the same address is a valid no-op"
         );
+        assert_eq!(client.get_current_admin(), Some(admin));
+    }
+
+    #[test]
+    fn test_transfer_admin_rejects_unauthorized_signer() {
+        let (env, contract_id, client) = setup_with_contract_id();
+        let admin = Address::generate(&env);
+        let attacker = Address::generate(&env);
+        let new_admin = Address::generate(&env);
+
+        client.mock_all_auths().initialize_admin(&admin);
+
+        let result = client
+            .mock_auths(&[admin_auth(
+                &env,
+                &contract_id,
+                &attacker,
+                "transfer_admin",
+                (new_admin.clone(),).into_val(&env),
+            )])
+            .try_transfer_admin(&new_admin);
+
+        assert_auth_abort(result);
         assert_eq!(client.get_current_admin(), Some(admin));
     }
 
@@ -409,6 +483,156 @@ mod test_admin {
             result.is_err(),
             "Fee configuration must fail when no admin is set"
         );
+    }
+
+    #[test]
+    fn test_set_bid_ttl_days_rejects_unauthorized_signer() {
+        let (env, contract_id, client) = setup_with_contract_id();
+        let admin = Address::generate(&env);
+        let attacker = Address::generate(&env);
+
+        client.mock_all_auths().initialize_admin(&admin);
+
+        let result = client
+            .mock_auths(&[admin_auth(
+                &env,
+                &contract_id,
+                &attacker,
+                "set_bid_ttl_days",
+                (14u64,).into_val(&env),
+            )])
+            .try_set_bid_ttl_days(&14u64);
+
+        assert_auth_abort(result);
+        assert_eq!(client.get_bid_ttl_days(), 7);
+    }
+
+    #[test]
+    fn test_add_currency_rejects_unauthorized_signer_even_with_admin_address() {
+        let (env, contract_id, client) = setup_with_contract_id();
+        let admin = Address::generate(&env);
+        let attacker = Address::generate(&env);
+        let currency = Address::generate(&env);
+
+        client.mock_all_auths().initialize_admin(&admin);
+
+        let result = client
+            .mock_auths(&[admin_auth(
+                &env,
+                &contract_id,
+                &attacker,
+                "add_currency",
+                (admin.clone(), currency.clone()).into_val(&env),
+            )])
+            .try_add_currency(&admin, &currency);
+
+        assert_auth_abort(result);
+        assert!(!client.is_allowed_currency(&currency));
+        assert_eq!(client.currency_count(), 0);
+    }
+
+    #[test]
+    fn test_set_currencies_rejects_unauthorized_signer_even_with_admin_address() {
+        let (env, contract_id, client) = setup_with_contract_id();
+        let admin = Address::generate(&env);
+        let attacker = Address::generate(&env);
+        let currency_a = Address::generate(&env);
+        let currency_b = Address::generate(&env);
+        let mut currencies = Vec::new(&env);
+        currencies.push_back(currency_a.clone());
+        currencies.push_back(currency_b.clone());
+
+        client.mock_all_auths().initialize_admin(&admin);
+
+        let result = client
+            .mock_auths(&[admin_auth(
+                &env,
+                &contract_id,
+                &attacker,
+                "set_currencies",
+                (admin.clone(), currencies.clone()).into_val(&env),
+            )])
+            .try_set_currencies(&admin, &currencies);
+
+        assert_auth_abort(result);
+        assert_eq!(client.currency_count(), 0);
+        assert_eq!(client.get_whitelisted_currencies().len(), 0);
+    }
+
+    #[test]
+    fn test_initialize_protocol_limits_rejects_unauthorized_signer() {
+        let (env, contract_id, client) = setup_with_contract_id();
+        let admin = Address::generate(&env);
+        let attacker = Address::generate(&env);
+
+        client.mock_all_auths().initialize_admin(&admin);
+
+        let result = client
+            .mock_auths(&[admin_auth(
+                &env,
+                &contract_id,
+                &attacker,
+                "initialize_protocol_limits",
+                (admin.clone(), 250i128, 45u64, 86_400u64).into_val(&env),
+            )])
+            .try_initialize_protocol_limits(&admin, &250i128, &45u64, &86_400u64);
+
+        assert_auth_abort(result);
+        let limits = client.get_protocol_limits();
+        assert_eq!(limits.min_invoice_amount, 10);
+        assert_eq!(limits.max_due_date_days, 365);
+    }
+
+    #[test]
+    fn test_initialize_fee_system_rejects_unauthorized_signer() {
+        let (env, contract_id, client) = setup_with_contract_id();
+        let admin = Address::generate(&env);
+        let attacker = Address::generate(&env);
+
+        client.mock_all_auths().initialize_admin(&admin);
+
+        let result = client
+            .mock_auths(&[admin_auth(
+                &env,
+                &contract_id,
+                &attacker,
+                "initialize_fee_system",
+                (admin.clone(),).into_val(&env),
+            )])
+            .try_initialize_fee_system(&admin);
+
+        assert_auth_abort(result);
+        let err = client
+            .try_get_platform_fee_config()
+            .err()
+            .expect("fee config should stay uninitialized");
+        assert_eq!(
+            err.expect("expected contract invoke error"),
+            QuickLendXError::StorageKeyNotFound
+        );
+    }
+
+    #[test]
+    fn test_update_platform_fee_bps_rejects_unauthorized_signer() {
+        let (env, contract_id, client) = setup_with_contract_id();
+        let admin = Address::generate(&env);
+        let attacker = Address::generate(&env);
+
+        client.mock_all_auths().initialize_admin(&admin);
+        client.mock_all_auths().initialize_fee_system(&admin);
+
+        let result = client
+            .mock_auths(&[admin_auth(
+                &env,
+                &contract_id,
+                &attacker,
+                "update_platform_fee_bps",
+                (450u32,).into_val(&env),
+            )])
+            .try_update_platform_fee_bps(&450u32);
+
+        assert_auth_abort(result);
+        assert_eq!(client.get_platform_fee_config().fee_bps, 200);
     }
 
     // ============================================================================

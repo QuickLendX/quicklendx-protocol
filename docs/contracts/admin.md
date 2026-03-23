@@ -71,6 +71,9 @@ Behavior:
 ## Security Notes
 
 - Privileged wrappers no longer rely on caller-supplied addresses alone.
+- Admin-only wrappers now require an authenticated signature from the stored admin before mutating state.
+- Unauthorized attempts against `initialize_admin`, `transfer_admin`, `set_bid_ttl_days`, `add_currency`, `set_currencies`, `initialize_protocol_limits`, `initialize_fee_system`, and `update_platform_fee_bps` are covered by dedicated negative tests in `quicklendx-contracts/src/test_admin.rs`.
+- Unauthorized calls leave prior state unchanged: admin ownership, whitelist contents, protocol limits, and fee configuration are all asserted after rejection.
 - Anonymous admin initialization is blocked.
-- Admin-only comments now match actual runtime enforcement.
+- Admin-only comments now match actual runtime enforcement, with no silent fallback when a non-admin caller supplies the stored admin address.
 - Legacy compatibility path still preserves single-admin invariants.
