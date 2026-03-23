@@ -10,14 +10,14 @@
 
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Vec};
 
 use crate::bid::{Bid, BidStatus};
-use crate::escrow::{Escrow, EscrowStatus};
+use crate::payments::{Escrow, EscrowStatus};
 use crate::investment::{Investment, InvestmentStatus};
 use crate::invoice::{Invoice, InvoiceCategory, InvoiceStatus};
 use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
-use crate::{QuickLendXContract, QuickLendXContractClient};
+use crate::{QuickLendXContract, QuickLendXContractClient, QuickLendXError};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
@@ -758,10 +758,85 @@ fn test_invariants_after_full_lifecycle() {
     );
 
     // no orphaned storage: the one invoice we have is the one we created and is Paid
-    let invoice = client.get_invoice(&invoice_id);
+    let invoice = client.get_invoice(&invoice_id).expect("invoice must exist");
     assert_eq!(invoice.id, invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
     let paid_invoices = client.get_invoices_by_status(&InvoiceStatus::Paid);
     assert_eq!(paid_invoices.len(), 1);
     assert_eq!(paid_invoices.get(0).unwrap(), invoice_id);
+}
+
+#[test]
+fn invariant_at_most_one_active_escrow() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    // Setup parties
+    let (business, investor, currency) = setup_parties(&env, &client, &admin);
+
+    // Create 5 invoices
+    let mut invoice_ids = Vec::new(&env);
+    for i in 0..5 {
+        let amount = 1000 + (i as i128);
+        let due_date = env.ledger().timestamp() + 86400 * (i as u64 + 1);
+        let invoice_id = client.store_invoice(
+            &business,
+            &amount,
+            &currency,
+            &due_date,
+            &String::from_str(&env, "Invariant Test"),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
+        client.verify_invoice(&invoice_id);
+        invoice_ids.push_back(invoice_id);
+    }
+
+    // For each invoice, verify that we can only create ONE escrow
+    for invoice_id in invoice_ids.iter() {
+        // Place a bid
+        let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+        
+        // Accept and fund (creates first escrow)
+        assert!(client.try_accept_bid(&invoice_id, &bid_id).is_ok());
+
+        // Verify escrow exists in storage
+        env.as_contract(&contract_id, || {
+            use crate::payments::EscrowStorage;
+            let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id);
+            assert!(escrow.is_some(), "Escrow should exist after funding");
+        });
+
+        // Attempting to manually create another escrow via payments::create_escrow should fail
+        env.as_contract(&contract_id, || {
+            use crate::payments::create_escrow;
+            let result = create_escrow(
+                &env,
+                &invoice_id,
+                &investor,
+                &business,
+                1000,
+                &currency,
+            );
+            
+            assert!(result.is_err(), "Duplicate escrow creation should be rejected");
+            assert_eq!(result.unwrap_err(), QuickLendXError::InvoiceAlreadyFunded);
+        });
+    }
+}
+
+fn setup_parties(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> (Address, Address, Address) {
+    let business = Address::generate(env);
+    client.submit_kyc_application(&business, &String::from_str(env, "Business KYC"));
+    client.verify_business(admin, &business);
+
+    let investor = Address::generate(env);
+    client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
+    client.verify_investor(&investor, &20_000);
+
+    let currency = env.register_stellar_asset_contract(Address::generate(env));
+    let sac = soroban_sdk::token::StellarAssetClient::new(env, &currency);
+    sac.mint(&investor, &100_000);
+
+    (business, investor, currency)
 }
