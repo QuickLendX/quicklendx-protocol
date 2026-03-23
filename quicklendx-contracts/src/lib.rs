@@ -71,10 +71,9 @@ use escrow::{
 use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_escrow_created,
     emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_cancelled, emit_invoice_category_updated,
-    emit_invoice_metadata_cleared, emit_invoice_metadata_updated, emit_invoice_tag_added,
-    emit_invoice_tag_removed, emit_invoice_uploaded, emit_invoice_verified,
-    emit_platform_fee_config_updated, emit_treasury_configured,
+    emit_investor_verified, emit_invoice_cancelled,
+    emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
+    emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
@@ -966,7 +965,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         payment_amount: i128,
     ) -> Result<(), QuickLendXError> {
-        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+        let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = reentrancy::with_payment_guard(&env, || {
             do_settle_invoice(&env, &invoice_id, payment_amount)
@@ -1043,7 +1042,7 @@ impl QuickLendXContract {
         admin.require_auth();
 
         // Get the investment to track investor analytics
-        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+        let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = do_handle_default(&env, &invoice_id);
 
@@ -1077,7 +1076,7 @@ impl QuickLendXContract {
         admin.require_auth();
 
         // Get the investment to track investor analytics
-        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+        let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = do_mark_invoice_defaulted(&env, &invoice_id, grace_period);
 
@@ -1229,6 +1228,7 @@ impl QuickLendXContract {
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            100, // max_invoices_per_business
         )
     }
 
