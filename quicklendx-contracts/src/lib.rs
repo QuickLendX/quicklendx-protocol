@@ -1229,6 +1229,7 @@ impl QuickLendXContract {
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            100, // max_invoices_per_business (default)
         )
     }
 
@@ -2068,6 +2069,8 @@ mod test;
 
 #[cfg(test)]
 mod test_bid;
+#[cfg(test)]
+mod test_overdue_expiration;
 
 #[cfg(test)]
 mod test_fees;
