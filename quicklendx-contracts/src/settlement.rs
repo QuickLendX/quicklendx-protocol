@@ -477,7 +477,7 @@ fn emit_invoice_settled_final(
     paid_at: u64,
 ) {
     env.events().publish(
-        (symbol_short!("inv_stlf"),),
+        (crate::events::TOPIC_INVOICE_SETTLED_FINAL,),
         (invoice_id.clone(), final_amount, paid_at),
     );
 }

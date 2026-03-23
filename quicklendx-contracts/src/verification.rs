@@ -93,6 +93,29 @@ impl BusinessVerificationStorage {
         }
     }
 
+    pub fn set_verification_status(
+        env: &Env,
+        business: &Address,
+        status: BusinessVerificationStatus,
+    ) {
+        let verified_at = if matches!(status, BusinessVerificationStatus::Verified) {
+            Some(env.ledger().timestamp())
+        } else {
+            None
+        };
+
+        let verification = BusinessVerification {
+            business: business.clone(),
+            status,
+            verified_at,
+            verified_by: None,
+            kyc_data: String::from_str(env, "Mock KYC data"),
+            submitted_at: env.ledger().timestamp(),
+            rejection_reason: None,
+        };
+        Self::store_verification(env, &verification);
+    }
+
     pub fn get_verification(env: &Env, business: &Address) -> Option<BusinessVerification> {
         env.storage().instance().get(business)
     }
