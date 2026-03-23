@@ -2,7 +2,8 @@ use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::protocol_limits::{
-    check_string_length, ProtocolLimitsContract, MAX_KYC_DATA_LENGTH, MAX_REJECTION_REASON_LENGTH,
+    check_string_length, ProtocolLimitsContract, MAX_DESCRIPTION_LENGTH, MAX_KYC_DATA_LENGTH,
+    MAX_NAME_LENGTH, MAX_ADDRESS_LENGTH, MAX_TAX_ID_LENGTH, MAX_REJECTION_REASON_LENGTH,
 };
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
@@ -663,6 +664,7 @@ pub fn verify_invoice_data(
         amount,
         due_date,
     )?;
+    check_string_length(description, MAX_DESCRIPTION_LENGTH)?;
     if description.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }
@@ -1102,14 +1104,17 @@ pub fn validate_invoice_metadata(
     metadata: &InvoiceMetadata,
     invoice_amount: i128,
 ) -> Result<(), QuickLendXError> {
+    check_string_length(&metadata.customer_name, MAX_NAME_LENGTH)?;
     if metadata.customer_name.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }
 
+    check_string_length(&metadata.customer_address, MAX_ADDRESS_LENGTH)?;
     if metadata.customer_address.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }
 
+    check_string_length(&metadata.tax_id, MAX_TAX_ID_LENGTH)?;
     if metadata.tax_id.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }
@@ -1120,6 +1125,7 @@ pub fn validate_invoice_metadata(
 
     let mut computed_total = 0i128;
     for record in metadata.line_items.iter() {
+        check_string_length(&record.0, MAX_DESCRIPTION_LENGTH)?;
         if record.0.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
         }

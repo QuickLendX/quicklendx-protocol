@@ -10,7 +10,7 @@
 
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec, token};
 
 use crate::bid::{Bid, BidStatus};
 use crate::payments::{Escrow, EscrowStatus};
