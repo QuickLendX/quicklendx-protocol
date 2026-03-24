@@ -496,7 +496,7 @@ pub fn validate_bid(
         return Err(QuickLendXError::InvalidAmount);
     }
 
-    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    let _limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
     let min_bid_amount = invoice.amount / 100; // 1% min bid
     if bid_amount < min_bid_amount {
         return Err(QuickLendXError::InvalidAmount);
