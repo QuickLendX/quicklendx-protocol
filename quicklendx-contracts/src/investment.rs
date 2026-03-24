@@ -1,6 +1,9 @@
 use crate::errors::QuickLendXError;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
+// ─── Storage key for the global active-investment index ───────────────────────
+const ACTIVE_INDEX_KEY: Symbol = symbol_short!("act_inv");
+
 /// Premium rate applied to the covered amount expressed in basis points (1/10,000).
 pub const DEFAULT_INSURANCE_PREMIUM_BPS: i128 = 200; // 2% of the covered amount.
 
@@ -22,6 +25,45 @@ pub enum InvestmentStatus {
     Completed,
     Defaulted,
     Refunded,
+}
+
+impl InvestmentStatus {
+    /// Validate that a status transition is legal.
+    ///
+    /// ### Allowed transitions
+    /// | From      | To                              |
+    /// |-----------|----------------------------------|
+    /// | Active    | Completed, Defaulted, Refunded, Withdrawn |
+    /// | Withdrawn | (terminal – no further moves)   |
+    /// | Completed | (terminal)                      |
+    /// | Defaulted | (terminal)                      |
+    /// | Refunded  | (terminal)                      |
+    ///
+    /// ### Security
+    /// Calling code **must** invoke this before persisting a status change so
+    /// that no path (settlement, default, refund, or future code) can produce
+    /// an orphan `Active` investment or an impossible backward transition.
+    pub fn validate_transition(
+        from: &InvestmentStatus,
+        to: &InvestmentStatus,
+    ) -> Result<(), QuickLendXError> {
+        let allowed = match from {
+            InvestmentStatus::Active => matches!(
+                to,
+                InvestmentStatus::Completed
+                    | InvestmentStatus::Defaulted
+                    | InvestmentStatus::Refunded
+                    | InvestmentStatus::Withdrawn
+            ),
+            // All other states are terminal.
+            _ => false,
+        };
+        if allowed {
+            Ok(())
+        } else {
+            Err(QuickLendXError::InvalidStatus)
+        }
+    }
 }
 
 #[contracttype]
@@ -168,16 +210,49 @@ impl InvestmentStorage {
 
         // Add to investor index
         Self::add_to_investor_index(env, &investment.investor, &investment.investment_id);
+
+        // Track in active index (new investments always start Active)
+        if investment.status == InvestmentStatus::Active {
+            Self::add_to_active_index(env, &investment.investment_id);
+        }
     }
+
     pub fn get_investment(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
         env.storage().instance().get(investment_id)
     }
+
     pub fn get_investment_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Investment> {
         let index_key = Self::invoice_index_key(invoice_id);
         let investment_id: Option<BytesN<32>> = env.storage().instance().get(&index_key);
         investment_id.and_then(|id| Self::get_investment(env, &id))
     }
+
+    /// Update an investment, enforcing the transition guard and maintaining the
+    /// active-investment index so no orphan `Active` records can accumulate.
+    ///
+    /// ### Panics
+    /// Panics (contract error) if the transition `old_status → new_status` is
+    /// not in the allowed set defined by `InvestmentStatus::validate_transition`.
     pub fn update_investment(env: &Env, investment: &Investment) {
+        // Retrieve the previous status to validate the transition.
+        let previous_status = env
+            .storage()
+            .instance()
+            .get::<_, Investment>(&investment.investment_id)
+            .map(|i| i.status)
+            .unwrap_or(InvestmentStatus::Active); // safe default for new records
+
+        // Only validate when the status actually changes.
+        if previous_status != investment.status {
+            InvestmentStatus::validate_transition(&previous_status, &investment.status)
+                .expect("invalid investment status transition");
+
+            // Remove from active index when leaving Active state.
+            if previous_status == InvestmentStatus::Active {
+                Self::remove_from_active_index(env, &investment.investment_id);
+            }
+        }
+
         env.storage()
             .instance()
             .set(&investment.investment_id, investment);
@@ -186,6 +261,72 @@ impl InvestmentStorage {
             &Self::invoice_index_key(&investment.invoice_id),
             &investment.investment_id,
         );
+    }
+
+    // ── Active-investment index ───────────────────────────────────────────────
+
+    fn add_to_active_index(env: &Env, investment_id: &BytesN<32>) {
+        let mut ids: Vec<BytesN<32>> = env
+            .storage()
+            .instance()
+            .get(&ACTIVE_INDEX_KEY)
+            .unwrap_or_else(|| Vec::new(env));
+        // Deduplicate
+        for existing in ids.iter() {
+            if existing == *investment_id {
+                return;
+            }
+        }
+        ids.push_back(investment_id.clone());
+        env.storage().instance().set(&ACTIVE_INDEX_KEY, &ids);
+    }
+
+    fn remove_from_active_index(env: &Env, investment_id: &BytesN<32>) {
+        let ids: Vec<BytesN<32>> = env
+            .storage()
+            .instance()
+            .get(&ACTIVE_INDEX_KEY)
+            .unwrap_or_else(|| Vec::new(env));
+        let mut updated = Vec::new(env);
+        for id in ids.iter() {
+            if id != *investment_id {
+                updated.push_back(id);
+            }
+        }
+        env.storage().instance().set(&ACTIVE_INDEX_KEY, &updated);
+    }
+
+    /// Return all investment IDs currently in `Active` status.
+    ///
+    /// Used by `validate_no_orphan_investments` and off-chain monitoring.
+    pub fn get_active_investment_ids(env: &Env) -> Vec<BytesN<32>> {
+        env.storage()
+            .instance()
+            .get(&ACTIVE_INDEX_KEY)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    /// Scan the active index and verify every listed investment is still `Active`.
+    ///
+    /// Returns `true` when no orphans exist (all active-index entries have
+    /// `status == Active`).  Returns `false` if any entry has a terminal status
+    /// but was not removed from the index — indicating a bug in the transition
+    /// path.
+    ///
+    /// ### Security note
+    /// This is a read-only integrity check.  It does **not** mutate state.
+    /// Call it after settlement or default to assert correctness in tests and
+    /// off-chain monitoring.
+    pub fn validate_no_orphan_investments(env: &Env) -> bool {
+        let ids = Self::get_active_investment_ids(env);
+        for id in ids.iter() {
+            if let Some(inv) = Self::get_investment(env, &id) {
+                if inv.status != InvestmentStatus::Active {
+                    return false; // orphan detected
+                }
+            }
+        }
+        true
     }
 
     fn investor_index_key(investor: &Address) -> (Symbol, Address) {
