@@ -342,6 +342,34 @@ mod test_investor_kyc {
     }
 
     #[test]
+    fn test_bid_respects_aggregate_exposure_limit() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+        let investment_limit = 100_000i128;
+
+        // Setup verified investor
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &investment_limit);
+
+        // Create 3 invoices
+        let inv1 = create_verified_invoice(&env, &client, &business, 50_000);
+        let inv2 = create_verified_invoice(&env, &client, &business, 50_000);
+        let inv3 = create_verified_invoice(&env, &client, &business, 50_000);
+
+        // Bid 1: 40k (Total: 40k/100k) - Success
+        let _ = client.place_bid(&investor, &inv1, &40_000, &45_000);
+
+        // Bid 2: 40k (Total: 80k/100k) - Success
+        let _ = client.place_bid(&investor, &inv2, &40_000, &45_000);
+
+        // Bid 3: 30k (Total: 110k/100k) - Fail (Aggregate limit exceeded)
+        let result = client.try_place_bid(&investor, &inv3, &30_000, &35_000);
+        assert!(result.is_err(), "Aggregate exposure must be respected");
+    }
+
+    #[test]
     fn test_unverified_investor_cannot_bid() {
         let (env, client, _admin) = setup();
         let investor = Address::generate(&env);

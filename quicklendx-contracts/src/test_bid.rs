@@ -151,12 +151,63 @@ fn test_bid_placement_respects_investment_limit() {
     let _ = client.set_admin(&admin);
     let investor = add_verified_investor(&env, &client, 1_000); // Low limit
     let business = Address::generate(&env);
-
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
 
     // Bid exceeding limit should fail
     let result = client.try_place_bid(&investor, &invoice_id, &2_000, &3_000);
     assert!(result.is_err(), "Bid exceeding investment limit must fail");
+}
+
+/// Core Test: Bidding after invoice due date fails (stale-state protection)
+#[test]
+fn test_bid_placement_after_due_date_fails() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 1_000_000);
+    let business = Address::generate(&env);
+
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400; // Due in 24h
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Stale test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    // Advance time past due date
+    env.ledger().set_timestamp(due_date + 1);
+
+    // Attempt bid after due date should fail
+    let result = client.try_place_bid(&investor, &invoice_id, &5_000, &6_000);
+    assert!(result.is_err(), "Bid after due date must fail");
+}
+
+/// Core Test: Business owner cannot bid on their own invoice
+#[test]
+fn test_business_owner_cannot_bid_on_own_invoice() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    // Setup business as a verified investor too
+    let business = Address::generate(&env);
+    client.submit_investor_kyc(&business, &String::from_str(&env, "KYC"));
+    client.verify_investor(&business, &1_000_000);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
+
+    // Business attempting to bid on own invoice should fail
+    let result = client.try_place_bid(&business, &invoice_id, &5_000, &6_000);
+    assert!(result.is_err(), "Business cannot bid on own invoice");
 }
 
 // ============================================================================

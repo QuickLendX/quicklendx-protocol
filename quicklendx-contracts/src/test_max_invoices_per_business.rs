@@ -1,4 +1,5 @@
 #![cfg(test)]
+use std::format;
 
 use crate::{
     invoice::{Invoice, InvoiceCategory, InvoiceStatus, InvoiceStorage},
@@ -11,7 +12,7 @@ use soroban_sdk::{
     Address, Env, String, Vec,
 };
 
-fn setup() -> (Env, QuickLendXContractClient, Address, Address, Address) {
+fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -57,18 +58,17 @@ fn test_create_invoices_up_to_limit_succeeds() {
 
     // Set limit to 5 invoices per business
     client
-        .update_limits_max_invoices(&admin, &10, &365, &86400, &5)
-        .unwrap();
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &5);
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
 
     // Create 5 invoices - all should succeed
     for i in 0..5 {
-        let desc = String::from_str(&env, &format!("Invoice {}", i));
+        let desc = String::from_str(&env, "Invoice");
         let result = client.upload_invoice(
             &business, &amount, &currency, &due_date, &desc, &category, &tags,
         );
-        assert!(result.is_ok(), "Invoice {} should succeed", i);
+        assert!(result.is_ok() );
     }
 
     // Verify all 5 invoices were created
@@ -90,19 +90,17 @@ fn test_next_invoice_after_limit_fails_with_clear_error() {
 
     // Set limit to 3 invoices per business
     client
-        .update_limits_max_invoices(&admin, &10, &365, &86400, &3)
-        .unwrap();
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &3);
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
 
     // Create 3 invoices successfully
     for i in 0..3 {
-        let desc = String::from_str(&env, &format!("Invoice {}", i));
+        let desc = String::from_str(&env, "Invoice");
         client
             .upload_invoice(
                 &business, &amount, &currency, &due_date, &desc, &category, &tags,
-            )
-            .unwrap();
+            );
     }
 
     // 4th invoice should fail with MaxInvoicesPerBusinessExceeded error
@@ -134,8 +132,7 @@ fn test_cancelled_invoices_free_slot() {
 
     // Set limit to 2 invoices per business
     client
-        .update_limits_max_invoices(&admin, &10, &365, &86400, &2)
-        .unwrap();
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &2);
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
 
@@ -150,7 +147,7 @@ fn test_cancelled_invoices_free_slot() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
     let invoice2_id = client
         .upload_invoice(
             &business,
@@ -161,7 +158,7 @@ fn test_cancelled_invoices_free_slot() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
 
     // Verify limit is reached
     let result = client.upload_invoice(
@@ -176,10 +173,10 @@ fn test_cancelled_invoices_free_slot() {
     assert!(result.is_err(), "3rd invoice should fail");
 
     // Cancel first invoice
-    client.cancel_invoice(&business, &invoice1_id).unwrap();
+    client.cancel_invoice(&business, &invoice1_id);
 
     // Verify invoice is cancelled
-    let invoice1 = InvoiceStorage::get_invoice(&env, &invoice1_id).unwrap();
+    let invoice1 = InvoiceStorage::get_invoice(&env, &invoice1_id);
     assert_eq!(invoice1.status, InvoiceStatus::Cancelled);
 
     // Now should be able to create a new invoice
@@ -193,7 +190,7 @@ fn test_cancelled_invoices_free_slot() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
 
     assert!(invoice3_id != invoice1_id && invoice3_id != invoice2_id);
 
@@ -212,8 +209,7 @@ fn test_paid_invoices_free_slot() {
 
     // Set limit to 2 invoices per business
     client
-        .update_limits_max_invoices(&admin, &10, &365, &86400, &2)
-        .unwrap();
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &2);
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
 
@@ -227,8 +223,7 @@ fn test_paid_invoices_free_slot() {
             &description,
             &category,
             &tags,
-        )
-        .unwrap();
+        );
     client
         .upload_invoice(
             &business,
@@ -239,15 +234,15 @@ fn test_paid_invoices_free_slot() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
 
     // Mark first invoice as paid (simulate payment flow)
-    let mut invoice1 = InvoiceStorage::get_invoice(&env, &invoice1_id).unwrap();
+    let mut invoice1 = InvoiceStorage::get_invoice(&env, &invoice1_id);
     invoice1.mark_as_paid(&env, business.clone(), env.ledger().timestamp());
     InvoiceStorage::update_invoice(&env, &invoice1);
 
     // Verify invoice is paid
-    let invoice1 = InvoiceStorage::get_invoice(&env, &invoice1_id).unwrap();
+    let invoice1 = InvoiceStorage::get_invoice(&env, &invoice1_id);
     assert_eq!(invoice1.status, InvoiceStatus::Paid);
 
     // Now should be able to create a new invoice
@@ -281,7 +276,7 @@ fn test_config_update_changes_limit() {
     // Start with limit of 2
     client
         .update_limits_max_invoices(&admin, &10, &365, &86400, &2)
-        .unwrap();
+        ;
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
 
@@ -296,7 +291,7 @@ fn test_config_update_changes_limit() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
     client
         .upload_invoice(
             &business,
@@ -307,7 +302,7 @@ fn test_config_update_changes_limit() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
 
     // 3rd should fail
     let result = client.upload_invoice(
@@ -324,7 +319,7 @@ fn test_config_update_changes_limit() {
     // Update limit to 5
     client
         .update_limits_max_invoices(&admin, &10, &365, &86400, &5)
-        .unwrap();
+        ;
 
     // Verify limit was updated
     let limits = client.get_protocol_limits();
@@ -353,7 +348,7 @@ fn test_config_update_changes_limit() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
     client
         .upload_invoice(
             &business,
@@ -364,7 +359,7 @@ fn test_config_update_changes_limit() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
 
     // 6th should fail
     let result = client.upload_invoice(
@@ -390,13 +385,13 @@ fn test_limit_zero_means_unlimited() {
     // Set limit to 0 (unlimited)
     client
         .update_limits_max_invoices(&admin, &10, &365, &86400, &0)
-        .unwrap();
+        ;
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
 
     // Create 10 invoices - all should succeed
     for i in 0..10 {
-        let desc = String::from_str(&env, &format!("Invoice {}", i));
+        let desc = String::from_str(&env, "Invoice");
         let result = client.upload_invoice(
             &business, &amount, &currency, &due_date, &desc, &category, &tags,
         );
@@ -430,7 +425,7 @@ fn test_multiple_businesses_independent_limits() {
     // Set limit to 2 invoices per business
     client
         .update_limits_max_invoices(&admin, &10, &365, &86400, &2)
-        .unwrap();
+        ;
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
 
@@ -445,7 +440,7 @@ fn test_multiple_businesses_independent_limits() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
     client
         .upload_invoice(
             &business1,
@@ -456,7 +451,7 @@ fn test_multiple_businesses_independent_limits() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
 
     // Business1's 3rd invoice should fail
     let result = client.upload_invoice(
@@ -481,7 +476,7 @@ fn test_multiple_businesses_independent_limits() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
     client
         .upload_invoice(
             &business2,
@@ -492,7 +487,7 @@ fn test_multiple_businesses_independent_limits() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
 
     // Verify counts
     let business1_count = InvoiceStorage::count_active_business_invoices(&env, &business1);
@@ -512,7 +507,7 @@ fn test_only_active_invoices_count_toward_limit() {
     // Set limit to 3
     client
         .update_limits_max_invoices(&admin, &10, &365, &86400, &3)
-        .unwrap();
+        ;
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
 
@@ -527,7 +522,7 @@ fn test_only_active_invoices_count_toward_limit() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
     let invoice2_id = client
         .upload_invoice(
             &business,
@@ -538,7 +533,7 @@ fn test_only_active_invoices_count_toward_limit() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
     let invoice3_id = client
         .upload_invoice(
             &business,
@@ -549,11 +544,11 @@ fn test_only_active_invoices_count_toward_limit() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
 
     // Cancel one and mark one as paid
-    client.cancel_invoice(&business, &invoice1_id).unwrap();
-    let mut invoice2 = InvoiceStorage::get_invoice(&env, &invoice2_id).unwrap();
+    client.cancel_invoice(&business, &invoice1_id);
+    let mut invoice2 = InvoiceStorage::get_invoice(&env, &invoice2_id);
     invoice2.mark_as_paid(&env, business.clone(), env.ledger().timestamp());
     InvoiceStorage::update_invoice(&env, &invoice2);
 
@@ -572,7 +567,7 @@ fn test_only_active_invoices_count_toward_limit() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
     client
         .upload_invoice(
             &business,
@@ -582,8 +577,7 @@ fn test_only_active_invoices_count_toward_limit() {
             &description,
             &category,
             &tags,
-        )
-        .unwrap();
+        );
 
     // Active count should now be 3
     let active_count = InvoiceStorage::count_active_business_invoices(&env, &business);
@@ -613,7 +607,7 @@ fn test_various_statuses_count_as_active() {
     // Set limit to 5
     client
         .update_limits_max_invoices(&admin, &10, &365, &86400, &5)
-        .unwrap();
+        ;
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
 
@@ -630,29 +624,28 @@ fn test_various_statuses_count_as_active() {
                     &category,
                     &tags,
                 )
-                .unwrap()
         })
         .collect();
 
     // Set different statuses (all should count as active except Cancelled and Paid)
     // Invoice 0: Pending (default)
     // Invoice 1: Verified
-    let mut invoice1 = InvoiceStorage::get_invoice(&env, &ids[1]).unwrap();
+    let mut invoice1 = InvoiceStorage::get_invoice(&env, &ids[1]);
     invoice1.verify(&env, admin.clone());
     InvoiceStorage::update_invoice(&env, &invoice1);
 
     // Invoice 2: Funded
-    let mut invoice2 = InvoiceStorage::get_invoice(&env, &ids[2]).unwrap();
+    let mut invoice2 = InvoiceStorage::get_invoice(&env, &ids[2]);
     invoice2.mark_as_funded(&env, Address::generate(&env), amount);
     InvoiceStorage::update_invoice(&env, &invoice2);
 
     // Invoice 3: Defaulted
-    let mut invoice3 = InvoiceStorage::get_invoice(&env, &ids[3]).unwrap();
+    let mut invoice3 = InvoiceStorage::get_invoice(&env, &ids[3]);
     invoice3.mark_as_defaulted();
     InvoiceStorage::update_invoice(&env, &invoice3);
 
     // Invoice 4: Refunded
-    let mut invoice4 = InvoiceStorage::get_invoice(&env, &ids[4]).unwrap();
+    let mut invoice4 = InvoiceStorage::get_invoice(&env, &ids[4]);
     invoice4.mark_as_refunded(&env, admin.clone());
     InvoiceStorage::update_invoice(&env, &invoice4);
 
@@ -683,8 +676,7 @@ fn test_limit_of_one() {
 
     // Set limit to 1
     client
-        .update_limits_max_invoices(&admin, &10, &365, &86400, &1)
-        .unwrap();
+        .update_limits_max_invoices(&admin, &10, &365, &86400, &1);
 
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
 
@@ -699,7 +691,7 @@ fn test_limit_of_one() {
             &category,
             &tags,
         )
-        .unwrap();
+        ;
 
     // Second invoice fails
     let result = client.upload_invoice(
@@ -714,7 +706,7 @@ fn test_limit_of_one() {
     assert!(result.is_err(), "2nd invoice should fail with limit of 1");
 
     // Cancel first invoice
-    client.cancel_invoice(&business, &invoice1_id).unwrap();
+    client.cancel_invoice(&business, &invoice1_id);
 
     // Now can create another
     let result = client.upload_invoice(
