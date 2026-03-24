@@ -1029,3 +1029,326 @@ fn test_invoice_multiple_invoices_same_business() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
+
+    let invoice2_id = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 2"),
+        &InvoiceCategory::Products,
+        &Vec::new(&env),
+    );
+
+    let invoice3_id = client.store_invoice(
+        &business,
+        &3000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 3"),
+        &InvoiceCategory::Consulting,
+        &Vec::new(&env),
+    );
+
+    // Verify all invoices are retrievable
+    let inv1 = client.get_invoice(&invoice1_id);
+    let inv2 = client.get_invoice(&invoice2_id);
+    let inv3 = client.get_invoice(&invoice3_id);
+
+    assert_eq!(inv1.business, business);
+    assert_eq!(inv2.business, business);
+    assert_eq!(inv3.business, business);
+    assert_eq!(inv1.amount, 1000);
+    assert_eq!(inv2.amount, 2000);
+    assert_eq!(inv3.amount, 3000);
+}
+
+// ============================================================================
+// CATEGORY INDEX CONSISTENCY REGRESSION TESTS
+//
+// Security assumption: the category index must never contain stale entries.
+// After update_invoice_category the old bucket must not reference the invoice
+// and the new bucket must contain exactly one entry for it.
+// ============================================================================
+
+/// After a single category update the old index must not contain the invoice
+/// and the new index must contain it exactly once.
+#[test]
+fn test_category_index_no_stale_entry_after_update() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Index consistency test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    // Precondition: present in Services, absent from Products.
+    assert!(client.get_invoices_by_category(&InvoiceCategory::Services).contains(&id));
+    assert!(!client.get_invoices_by_category(&InvoiceCategory::Products).contains(&id));
+
+    client.update_invoice_category(&id, &InvoiceCategory::Products);
+
+    // Old bucket must be clean (no stale entry).
+    let services = client.get_invoices_by_category(&InvoiceCategory::Services);
+    assert!(
+        !services.contains(&id),
+        "stale entry found in old category index after update"
+    );
+
+    // New bucket must contain the invoice.
+    let products = client.get_invoices_by_category(&InvoiceCategory::Products);
+    assert!(
+        products.contains(&id),
+        "invoice missing from new category index after update"
+    );
+
+    // Exactly one occurrence in the new bucket.
+    let occurrences = products.iter().filter(|x| *x == id).count();
+    assert_eq!(occurrences, 1, "duplicate entry in new category index");
+}
+
+/// Multiple sequential category updates must leave no stale entries in any
+/// intermediate bucket and the final bucket must hold exactly one entry.
+#[test]
+fn test_category_index_no_stale_after_multiple_updates() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Multi-update consistency"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let chain = [
+        InvoiceCategory::Products,
+        InvoiceCategory::Consulting,
+        InvoiceCategory::Manufacturing,
+        InvoiceCategory::Technology,
+        InvoiceCategory::Healthcare,
+        InvoiceCategory::Other,
+    ];
+
+    let mut prev = InvoiceCategory::Services;
+    for next in chain {
+        client.update_invoice_category(&id, &next);
+
+        // Old bucket must not contain the invoice.
+        assert!(
+            !client.get_invoices_by_category(&prev).contains(&id),
+            "stale entry in {:?} after moving to {:?}",
+            prev,
+            next
+        );
+        // New bucket must contain it exactly once.
+        let bucket = client.get_invoices_by_category(&next);
+        assert!(bucket.contains(&id));
+        assert_eq!(bucket.iter().filter(|x| *x == id).count(), 1);
+
+        prev = next;
+    }
+}
+
+/// Updating a category to the same value must be idempotent: the index count
+/// must not grow and no duplicate must appear.
+#[test]
+fn test_category_index_idempotent_same_category_update() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Idempotent category update"),
+        &InvoiceCategory::Technology,
+        &Vec::new(&env),
+    );
+
+    let count_before = client.get_invoice_count_by_category(&InvoiceCategory::Technology);
+
+    // Update to the same category.
+    client.update_invoice_category(&id, &InvoiceCategory::Technology);
+
+    let bucket = client.get_invoices_by_category(&InvoiceCategory::Technology);
+    let count_after = client.get_invoice_count_by_category(&InvoiceCategory::Technology);
+
+    // Count must not grow.
+    assert_eq!(count_after, count_before, "duplicate inserted on same-category update");
+    // Exactly one occurrence.
+    assert_eq!(bucket.iter().filter(|x| *x == id).count(), 1);
+}
+
+/// Sibling invoices in the same category must not be affected when one invoice
+/// changes its category (no cross-invoice index pollution).
+#[test]
+fn test_category_index_sibling_unaffected_after_update() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let id_a = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Sibling A"),
+        &InvoiceCategory::Healthcare,
+        &Vec::new(&env),
+    );
+    let id_b = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Sibling B"),
+        &InvoiceCategory::Healthcare,
+        &Vec::new(&env),
+    );
+
+    // Move only id_a to Other.
+    client.update_invoice_category(&id_a, &InvoiceCategory::Other);
+
+    // id_b must still be in Healthcare.
+    let healthcare = client.get_invoices_by_category(&InvoiceCategory::Healthcare);
+    assert!(healthcare.contains(&id_b), "sibling removed from old category");
+    assert!(!healthcare.contains(&id_a), "moved invoice still in old category");
+
+    // id_a must be in Other.
+    let other = client.get_invoices_by_category(&InvoiceCategory::Other);
+    assert!(other.contains(&id_a));
+    assert!(!other.contains(&id_b), "sibling incorrectly added to new category");
+}
+
+/// get_invoice_count_by_category must always equal the length of
+/// get_invoices_by_category, both before and after updates.
+#[test]
+fn test_category_count_matches_list_length_after_updates() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let ids: Vec<_> = (0..3)
+        .map(|i| {
+            client.store_invoice(
+                &business,
+                &(1000 + i as i128),
+                &currency,
+                &due_date,
+                &String::from_str(&env, "Count consistency"),
+                &InvoiceCategory::Consulting,
+                &soroban_sdk::Vec::new(&env),
+            )
+        })
+        .collect();
+
+    // Move one invoice to Manufacturing.
+    client.update_invoice_category(&ids[0], &InvoiceCategory::Manufacturing);
+
+    for cat in [
+        InvoiceCategory::Consulting,
+        InvoiceCategory::Manufacturing,
+        InvoiceCategory::Services,
+    ] {
+        let list = client.get_invoices_by_category(&cat);
+        let count = client.get_invoice_count_by_category(&cat);
+        assert_eq!(
+            count,
+            list.len() as u32,
+            "count/list mismatch for category after update"
+        );
+    }
+}
+
+/// The full category list returned by get_all_categories must always contain
+/// exactly the 7 canonical variants with no duplicates, regardless of stored
+/// invoice state.
+#[test]
+fn test_get_all_categories_canonical_and_no_duplicates() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Store invoices across several categories to exercise storage paths.
+    for cat in [
+        InvoiceCategory::Services,
+        InvoiceCategory::Products,
+        InvoiceCategory::Technology,
+    ] {
+        client.store_invoice(
+            &business,
+            &1000,
+            &currency,
+            &due_date,
+            &String::from_str(&env, "Cat test"),
+            &cat,
+            &soroban_sdk::Vec::new(&env),
+        );
+    }
+
+    let all = client.get_all_categories();
+    assert_eq!(all.len(), 7, "expected exactly 7 canonical categories");
+
+    let expected = [
+        InvoiceCategory::Services,
+        InvoiceCategory::Products,
+        InvoiceCategory::Consulting,
+        InvoiceCategory::Manufacturing,
+        InvoiceCategory::Technology,
+        InvoiceCategory::Healthcare,
+        InvoiceCategory::Other,
+    ];
+    for cat in expected {
+        assert!(all.contains(&cat), "missing category {:?}", cat);
+        assert_eq!(
+            all.iter().filter(|c| c == cat).count(),
+            1,
+            "duplicate category {:?}",
+            cat
+        );
+    }
+}

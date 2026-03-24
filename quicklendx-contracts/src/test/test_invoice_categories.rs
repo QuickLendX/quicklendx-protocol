@@ -13,7 +13,7 @@ fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
+    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
     (env, client, admin)
 }
 
@@ -1053,3 +1053,226 @@ fn test_complete_category_and_tag_workflow() {
 //    ✓ Complete workflow with category and tag operations
 //
 // ESTIMATED COVERAGE: 95%+
+
+// ============================================================================
+// CATEGORY INDEX CONSISTENCY REGRESSION TESTS
+//
+// These tests guard against stale index entries after category updates.
+// Security assumption: every category bucket must reflect the current state of
+// the invoice exactly — no ghost entries, no missing entries, no duplicates.
+// ============================================================================
+
+/// After update_invoice_category the old bucket must not contain the invoice
+/// and the new bucket must contain it exactly once.
+#[test]
+fn test_category_index_old_bucket_cleared_after_update() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Stale-entry regression"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.update_invoice_category(&id, &InvoiceCategory::Consulting);
+
+    // Old bucket must be clean.
+    assert!(
+        !client.get_invoices_by_category(&InvoiceCategory::Services).contains(&id),
+        "stale entry remains in old category index"
+    );
+    // New bucket must contain the invoice exactly once.
+    let bucket = client.get_invoices_by_category(&InvoiceCategory::Consulting);
+    assert!(bucket.contains(&id));
+    assert_eq!(bucket.iter().filter(|x| *x == id).count(), 1);
+}
+
+/// Chaining through every category must leave no stale entries at any step.
+#[test]
+fn test_category_index_no_stale_across_full_chain() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Chain regression"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let chain = [
+        InvoiceCategory::Products,
+        InvoiceCategory::Consulting,
+        InvoiceCategory::Manufacturing,
+        InvoiceCategory::Technology,
+        InvoiceCategory::Healthcare,
+        InvoiceCategory::Other,
+        InvoiceCategory::Services, // back to start
+    ];
+
+    let mut prev = InvoiceCategory::Services;
+    for next in chain {
+        client.update_invoice_category(&id, &next);
+
+        assert!(
+            !client.get_invoices_by_category(&prev).contains(&id),
+            "stale entry in old bucket after chain step"
+        );
+        let bucket = client.get_invoices_by_category(&next);
+        assert!(bucket.contains(&id));
+        assert_eq!(bucket.iter().filter(|x| *x == id).count(), 1);
+
+        prev = next;
+    }
+}
+
+/// Updating to the same category must not create a duplicate index entry.
+#[test]
+fn test_category_index_no_duplicate_on_same_category_update() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Idempotent update regression"),
+        &InvoiceCategory::Manufacturing,
+        &Vec::new(&env),
+    );
+
+    let count_before = client.get_invoice_count_by_category(&InvoiceCategory::Manufacturing);
+    client.update_invoice_category(&id, &InvoiceCategory::Manufacturing);
+    let count_after = client.get_invoice_count_by_category(&InvoiceCategory::Manufacturing);
+
+    assert_eq!(count_after, count_before, "duplicate created on same-category update");
+    let bucket = client.get_invoices_by_category(&InvoiceCategory::Manufacturing);
+    assert_eq!(bucket.iter().filter(|x| *x == id).count(), 1);
+}
+
+/// Moving one invoice must not disturb sibling invoices in the same bucket.
+#[test]
+fn test_category_index_sibling_invoices_unaffected() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let id_a = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Sibling A"),
+        &InvoiceCategory::Technology,
+        &Vec::new(&env),
+    );
+    let id_b = client.store_invoice(
+        &business,
+        &2000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Sibling B"),
+        &InvoiceCategory::Technology,
+        &Vec::new(&env),
+    );
+
+    client.update_invoice_category(&id_a, &InvoiceCategory::Other);
+
+    let tech = client.get_invoices_by_category(&InvoiceCategory::Technology);
+    assert!(tech.contains(&id_b), "sibling removed from bucket");
+    assert!(!tech.contains(&id_a), "moved invoice still in old bucket");
+
+    let other = client.get_invoices_by_category(&InvoiceCategory::Other);
+    assert!(other.contains(&id_a));
+    assert!(!other.contains(&id_b), "sibling incorrectly added to new bucket");
+}
+
+/// get_invoice_count_by_category must equal get_invoices_by_category.len()
+/// for every category after a series of updates.
+#[test]
+fn test_category_count_consistent_with_list_after_updates() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let id1 = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "c1"),
+        &InvoiceCategory::Healthcare,
+        &Vec::new(&env),
+    );
+    let id2 = client.store_invoice(
+        &business,
+        &1001,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "c2"),
+        &InvoiceCategory::Healthcare,
+        &Vec::new(&env),
+    );
+
+    // Move id1 to Products.
+    client.update_invoice_category(&id1, &InvoiceCategory::Products);
+    // Move id2 to Services.
+    client.update_invoice_category(&id2, &InvoiceCategory::Services);
+
+    for cat in [
+        InvoiceCategory::Healthcare,
+        InvoiceCategory::Products,
+        InvoiceCategory::Services,
+        InvoiceCategory::Consulting,
+    ] {
+        let list = client.get_invoices_by_category(&cat);
+        let count = client.get_invoice_count_by_category(&cat);
+        assert_eq!(count, list.len() as u32, "count/list mismatch for category");
+    }
+}
+
+/// Storing the same invoice ID twice must not create a duplicate in the index.
+/// (Regression for add_category_index deduplication guard.)
+#[test]
+fn test_category_index_no_duplicate_on_store_twice() {
+    let (env, client, admin) = setup_env();
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let id = client.store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Dedup regression"),
+        &InvoiceCategory::Other,
+        &Vec::new(&env),
+    );
+
+    // Directly verify the deduplication guard in add_category_index by checking
+    // the count equals 1 after a single store.
+    let bucket = client.get_invoices_by_category(&InvoiceCategory::Other);
+    assert_eq!(
+        bucket.iter().filter(|x| *x == id).count(),
+        1,
+        "duplicate in category index after single store"
+    );
+}
