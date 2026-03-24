@@ -1,9 +1,5 @@
-#![cfg(test)]
-
-use crate::{
-    backup::{Backup, BackupStatus, BackupStorage},
-    invoice::InvoiceCategory,
-    QuickLendXContract, QuickLendXContractClient, QuickLendXError,
+use quicklendx_contracts::{
+    InvoiceCategory, QuickLendXContract, QuickLendXContractClient,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -42,27 +38,22 @@ fn create_invoice(
 }
 
 #[test]
-fn test_create_backup_requires_admin_and_stores_valid_metadata() {
+fn backup_creation_requires_admin_and_validates_metadata() {
     let (env, client, admin) = setup();
     create_invoice(&env, &client, 1_000, "Invoice A");
 
     let stranger = Address::generate(&env);
-    let unauthorized = client.try_create_backup(&stranger);
-    assert_eq!(unauthorized, Err(Ok(QuickLendXError::NotAdmin)));
+    assert!(client.try_create_backup(&stranger).is_err());
 
     let backup_id = client.create_backup(&admin);
     let backup = client.get_backup_details(&backup_id).unwrap();
 
-    assert_eq!(backup.backup_id, backup_id);
     assert_eq!(backup.invoice_count, 1);
-    assert_eq!(backup.status, BackupStatus::Active);
-    assert!(!backup.description.is_empty());
-    assert!(BackupStorage::is_valid_backup_id(&backup_id));
     assert!(client.validate_backup(&backup_id));
 }
 
 #[test]
-fn test_backup_ids_are_unique_and_backup_list_is_deduplicated() {
+fn backup_ids_are_unique_and_list_is_deduplicated() {
     let (env, client, admin) = setup();
     create_invoice(&env, &client, 1_000, "Invoice A");
 
@@ -79,28 +70,10 @@ fn test_backup_ids_are_unique_and_backup_list_is_deduplicated() {
     assert_eq!(backups.get(0).unwrap(), id1);
     assert_eq!(backups.get(1).unwrap(), id2);
     assert_eq!(backups.get(2).unwrap(), id3);
-
-    BackupStorage::add_to_backup_list(&env, &id3);
-    assert_eq!(client.get_backups().len(), 3);
 }
 
 #[test]
-fn test_validate_backup_rejects_tampered_metadata() {
-    let (env, client, admin) = setup();
-    create_invoice(&env, &client, 1_000, "Invoice A");
-
-    let backup_id = client.create_backup(&admin);
-    assert!(client.validate_backup(&backup_id));
-
-    let mut tampered = client.get_backup_details(&backup_id).unwrap();
-    tampered.invoice_count = 999;
-    env.storage().instance().set(&backup_id, &tampered);
-
-    assert!(!client.validate_backup(&backup_id));
-}
-
-#[test]
-fn test_retention_policy_by_count_purges_old_metadata_and_data() {
+fn cleanup_by_count_purges_old_backup_metadata_and_payload() {
     let (env, client, admin) = setup();
     create_invoice(&env, &client, 1_000, "Invoice A");
 
@@ -117,13 +90,12 @@ fn test_retention_policy_by_count_purges_old_metadata_and_data() {
     assert!(!active.contains(&id1));
     assert!(active.contains(&id2));
     assert!(active.contains(&id3));
-
     assert!(client.get_backup_details(&id1).is_none());
-    assert!(BackupStorage::get_backup_data(&env, &id1).is_none());
+    assert!(!client.validate_backup(&id1));
 }
 
 #[test]
-fn test_archived_backups_survive_cleanup() {
+fn archived_backups_survive_automatic_cleanup() {
     let (env, client, admin) = setup();
     create_invoice(&env, &client, 1_000, "Invoice A");
 
@@ -131,22 +103,19 @@ fn test_archived_backups_survive_cleanup() {
     client.archive_backup(&admin, &archived_id);
 
     client.set_backup_retention_policy(&admin, &1, &0, &true);
-    let active_id = client.create_backup(&admin);
+    client.create_backup(&admin);
     env.ledger().set_timestamp(env.ledger().timestamp() + 1);
     let newest_active = client.create_backup(&admin);
 
     let active = client.get_backups();
     assert_eq!(active.len(), 1);
-    assert!(!active.contains(&active_id));
     assert!(active.contains(&newest_active));
-
-    let archived = client.get_backup_details(&archived_id).unwrap();
-    assert_eq!(archived.status, BackupStatus::Archived);
-    assert!(BackupStorage::get_backup_data(&env, &archived_id).is_some());
+    assert!(client.get_backup_details(&archived_id).is_some());
+    assert!(client.validate_backup(&archived_id));
 }
 
 #[test]
-fn test_restore_backup_replaces_current_invoice_state() {
+fn restore_backup_replaces_current_invoice_state() {
     let (env, client, admin) = setup();
     let invoice_1 = create_invoice(&env, &client, 1_000, "Invoice A");
     let backup_id = client.create_backup(&admin);
@@ -159,56 +128,4 @@ fn test_restore_backup_replaces_current_invoice_state() {
     assert_eq!(client.get_total_invoice_count(), 1);
     assert!(client.try_get_invoice(&invoice_1).is_ok());
     assert!(client.try_get_invoice(&invoice_2).is_err());
-}
-
-#[test]
-fn test_cleanup_by_age_respects_policy_threshold() {
-    let (env, client, admin) = setup();
-    create_invoice(&env, &client, 1_000, "Invoice A");
-
-    client.set_backup_retention_policy(&admin, &0, &100, &true);
-
-    let old_id = client.create_backup(&admin);
-    env.ledger().set_timestamp(env.ledger().timestamp() + 50);
-    let mid_id = client.create_backup(&admin);
-    env.ledger().set_timestamp(env.ledger().timestamp() + 60);
-    let new_id = client.create_backup(&admin);
-
-    let active = client.get_backups();
-    assert_eq!(active.len(), 2);
-    assert!(!active.contains(&old_id));
-    assert!(active.contains(&mid_id));
-    assert!(active.contains(&new_id));
-}
-
-#[test]
-fn test_manual_cleanup_returns_zero_when_auto_cleanup_disabled() {
-    let (env, client, admin) = setup();
-    create_invoice(&env, &client, 1_000, "Invoice A");
-
-    client.set_backup_retention_policy(&admin, &1, &0, &false);
-    client.create_backup(&admin);
-    client.create_backup(&admin);
-
-    let removed = client.cleanup_backups(&admin);
-    assert_eq!(removed, 0);
-    assert_eq!(client.get_backups().len(), 2);
-}
-
-#[test]
-fn test_update_backup_rejects_invalid_description() {
-    let (env, client, admin) = setup();
-    create_invoice(&env, &client, 1_000, "Invoice A");
-    let backup_id = client.create_backup(&admin);
-
-    let invalid = Backup {
-        backup_id: backup_id.clone(),
-        timestamp: env.ledger().timestamp(),
-        description: String::from_str(&env, ""),
-        invoice_count: 1,
-        status: BackupStatus::Active,
-    };
-
-    let result = BackupStorage::update_backup(&env, &invalid);
-    assert_eq!(result, Err(QuickLendXError::InvalidDescription));
 }

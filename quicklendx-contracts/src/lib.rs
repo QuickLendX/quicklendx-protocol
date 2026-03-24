@@ -92,6 +92,7 @@ use verification::{
     BusinessVerificationStatus, BusinessVerificationStorage, InvestorRiskLevel, InvestorTier,
     InvestorVerification, InvestorVerificationStorage,
 };
+pub use invoice::InvoiceCategory;
 
 #[contract]
 pub struct QuickLendXContract;
@@ -673,6 +674,144 @@ impl QuickLendXContract {
         Ok(())
     }
 
+    // ============================================================================
+    // Backup Functions
+    // ============================================================================
+
+    /// @notice Create a point-in-time backup of all invoices.
+    /// @dev Requires admin authorization and applies the configured retention policy.
+    pub fn create_backup(env: Env, admin: Address) -> Result<BytesN<32>, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+
+        let invoices = backup::BackupStorage::get_all_invoices(&env);
+        let backup_id = backup::BackupStorage::generate_backup_id(&env);
+        let backup = backup::Backup {
+            backup_id: backup_id.clone(),
+            timestamp: env.ledger().timestamp(),
+            description: String::from_str(&env, "Protocol state backup"),
+            invoice_count: invoices.len(),
+            status: backup::BackupStatus::Active,
+        };
+
+        backup::BackupStorage::store_backup(&env, &backup, Some(&invoices))?;
+        backup::BackupStorage::store_backup_data(&env, &backup_id, &invoices);
+        backup::BackupStorage::add_to_backup_list(&env, &backup_id);
+        let removed = backup::BackupStorage::cleanup_old_backups(&env)?;
+
+        env.events().publish(
+            (symbol_short!("bkup_crt"),),
+            (backup_id.clone(), backup.invoice_count, removed),
+        );
+
+        Ok(backup_id)
+    }
+
+    /// @notice Validate a backup before recovery operations.
+    pub fn validate_backup(env: Env, backup_id: BytesN<32>) -> bool {
+        backup::BackupStorage::validate_backup(&env, &backup_id).is_ok()
+    }
+
+    /// @notice Restore invoice state from a backup.
+    /// @dev Existing invoices are removed first to avoid stale state/indexes.
+    pub fn restore_backup(
+        env: Env,
+        admin: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+
+        backup::BackupStorage::validate_backup(&env, &backup_id)?;
+        let invoices = backup::BackupStorage::get_backup_data(&env, &backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+        let existing = backup::BackupStorage::get_all_invoices(&env);
+        for invoice in existing.iter() {
+            InvoiceStorage::delete_invoice(&env, &invoice.id);
+        }
+
+        for invoice in invoices.iter() {
+            InvoiceStorage::store_invoice(&env, &invoice);
+            InvoiceStorage::add_metadata_indexes(&env, &invoice);
+        }
+
+        env.events()
+            .publish((symbol_short!("bkup_res"),), (backup_id, invoices.len()));
+
+        Ok(())
+    }
+
+    /// @notice Archive an existing backup without deleting its stored data.
+    pub fn archive_backup(
+        env: Env,
+        admin: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+
+        let mut backup = backup::BackupStorage::get_backup(&env, &backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        backup.status = backup::BackupStatus::Archived;
+        backup::BackupStorage::update_backup(&env, &backup)?;
+        backup::BackupStorage::remove_from_backup_list(&env, &backup_id);
+
+        env.events()
+            .publish((symbol_short!("bkup_ar"),), (backup_id.clone(),));
+        Ok(())
+    }
+
+    /// @notice Return active backup ids in creation order.
+    pub fn get_backups(env: Env) -> Vec<BytesN<32>> {
+        backup::BackupStorage::get_all_backups(&env)
+    }
+
+    /// @notice Return the stored metadata for a backup id.
+    pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<backup::Backup> {
+        backup::BackupStorage::get_backup(&env, &backup_id)
+    }
+
+    /// @notice Update backup retention settings.
+    pub fn set_backup_retention_policy(
+        env: Env,
+        admin: Address,
+        max_backups: u32,
+        max_age_seconds: u64,
+        auto_cleanup_enabled: bool,
+    ) -> Result<(), QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+
+        let policy = backup::BackupRetentionPolicy {
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+        };
+        backup::BackupStorage::set_retention_policy(&env, &policy);
+        env.events().publish(
+            (symbol_short!("ret_pol"),),
+            (max_backups, max_age_seconds, auto_cleanup_enabled),
+        );
+        Ok(())
+    }
+
+    /// @notice Return the current backup retention policy.
+    pub fn get_backup_retention_policy(env: Env) -> backup::BackupRetentionPolicy {
+        backup::BackupStorage::get_retention_policy(&env)
+    }
+
+    /// @notice Manually apply the active backup retention policy.
+    pub fn cleanup_backups(env: Env, admin: Address) -> Result<u32, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+
+        let removed = backup::BackupStorage::cleanup_old_backups(&env)?;
+        env.events()
+            .publish((symbol_short!("bkup_cln"),), (removed,));
+        Ok(removed)
+    }
+
     /// Get a bid by ID
     pub fn get_bid(env: Env, bid_id: BytesN<32>) -> Option<Bid> {
         BidStorage::get_bid(&env, &bid_id)
@@ -1229,6 +1368,7 @@ impl QuickLendXContract {
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            100, // max_invoices_per_business (default)
         )
     }
 
@@ -2068,6 +2208,8 @@ mod test;
 
 #[cfg(test)]
 mod test_bid;
+#[cfg(test)]
+mod test_backup;
 
 #[cfg(test)]
 mod test_fees;
@@ -2168,35 +2310,3 @@ pub fn get_analytics_summary(
         });
     (platform, performance)
 }
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-mod test_bid;
-
-#[cfg(test)]
-mod test_fees;
-
-#[cfg(test)]
-mod test_escrow;
-
-#[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
-#[cfg(test)]
-mod test_insurance;
-#[cfg(test)]
-mod test_investor_kyc;
-#[cfg(test)]
-mod test_ledger_timestamp_consistency;
-#[cfg(test)]
-mod test_lifecycle;
-#[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_min_invoice_amount;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;
