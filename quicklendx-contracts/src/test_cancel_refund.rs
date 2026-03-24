@@ -224,7 +224,7 @@ fn test_cancel_invoice_verified_emits_event() {
 // ============================================================================
 
 #[test]
-#[should_panic(expected = "Error(Contract, #1003)")]
+#[should_panic(expected = "Error(Contract, #1401)")]
 fn test_cancel_invoice_funded_fails() {
     let (env, client, admin) = setup_env();
     let contract_id = client.address.clone();
