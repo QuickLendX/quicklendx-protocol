@@ -29,6 +29,8 @@ mod storage;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
+mod test_backup;
+#[cfg(test)]
 mod test_bid_ranking;
 #[cfg(test)]
 mod test_business_kyc;
@@ -673,6 +675,136 @@ impl QuickLendXContract {
         Ok(())
     }
 
+    // ============================================================================
+    // Backup and Restore Functions
+    // ============================================================================
+
+    /// Create a point-in-time backup of all invoice data (admin only).
+    ///
+    /// # Security
+    /// - Requires admin authorization
+    /// - Triggers automatic cleanup based on retention policy
+    pub fn create_backup(env: Env, caller: Address) -> Result<BytesN<32>, QuickLendXError> {
+        caller.require_auth();
+        AdminStorage::require_admin(&env, &caller)?;
+
+        let invoices = backup::BackupStorage::get_all_invoices(&env);
+        let backup_id = backup::BackupStorage::generate_backup_id(&env);
+        let invoice_count = invoices.len() as u32;
+        let description = String::from_str(&env, "Backup");
+
+        let b = backup::Backup {
+            backup_id: backup_id.clone(),
+            timestamp: env.ledger().timestamp(),
+            description,
+            invoice_count,
+            status: backup::BackupStatus::Active,
+        };
+
+        backup::BackupStorage::store_backup(&env, &b);
+        backup::BackupStorage::store_backup_data(&env, &backup_id, &invoices);
+        backup::BackupStorage::add_to_backup_list(&env, &backup_id);
+        backup::BackupStorage::cleanup_old_backups(&env)?;
+
+        env.events().publish(
+            (symbol_short!("bkup_crt"),),
+            (backup_id.clone(), invoice_count, env.ledger().timestamp()),
+        );
+
+        Ok(backup_id)
+    }
+
+    /// Validate backup integrity. Returns true if valid, false if corrupted.
+    ///
+    /// Marks the backup status as Corrupted when validation fails.
+    pub fn validate_backup(env: Env, backup_id: BytesN<32>) -> bool {
+        match backup::BackupStorage::validate_backup(&env, &backup_id) {
+            Ok(()) => true,
+            Err(_) => {
+                if let Some(mut b) = backup::BackupStorage::get_backup(&env, &backup_id) {
+                    b.status = backup::BackupStatus::Corrupted;
+                    backup::BackupStorage::update_backup(&env, &b);
+                }
+                false
+            }
+        }
+    }
+
+    /// Restore invoice data from a backup (admin only).
+    ///
+    /// # Security
+    /// - Requires admin authorization
+    /// - Validates backup integrity before restoring; rejects corrupted backups
+    /// - Idempotent: repeated calls with the same backup ID yield the same state
+    ///
+    /// # Ordering guarantee
+    /// Validation runs before any state is cleared, preventing partial corruption.
+    pub fn restore_backup(
+        env: Env,
+        caller: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        caller.require_auth();
+        AdminStorage::require_admin(&env, &caller)?;
+
+        // Validate integrity before touching live state (ordering guarantee)
+        backup::BackupStorage::validate_backup(&env, &backup_id)?;
+
+        let invoices = backup::BackupStorage::get_backup_data(&env, &backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let invoice_count = invoices.len() as u32;
+
+        // Clear current invoice state then restore from backup atomically
+        InvoiceStorage::clear_all(&env);
+        for inv in invoices.iter() {
+            InvoiceStorage::store_invoice(&env, &inv);
+        }
+
+        env.events().publish(
+            (symbol_short!("bkup_rstr"),),
+            (backup_id, invoice_count, env.ledger().timestamp()),
+        );
+
+        Ok(())
+    }
+
+    /// Archive a backup, removing it from the active list (admin only).
+    ///
+    /// # Security
+    /// - Requires admin authorization
+    /// - Archived backups are protected from automatic cleanup
+    pub fn archive_backup(
+        env: Env,
+        caller: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        caller.require_auth();
+        AdminStorage::require_admin(&env, &caller)?;
+
+        let mut b = backup::BackupStorage::get_backup(&env, &backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        b.status = backup::BackupStatus::Archived;
+        backup::BackupStorage::update_backup(&env, &b);
+        backup::BackupStorage::remove_from_backup_list(&env, &backup_id);
+
+        env.events().publish(
+            (symbol_short!("bkup_ar"),),
+            (backup_id, env.ledger().timestamp()),
+        );
+
+        Ok(())
+    }
+
+    /// Return all active backup IDs in creation order.
+    pub fn get_backups(env: Env) -> Vec<BytesN<32>> {
+        backup::BackupStorage::get_all_backups(&env)
+    }
+
+    /// Return backup metadata for a given backup ID, or None if not found.
+    pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<backup::Backup> {
+        backup::BackupStorage::get_backup(&env, &backup_id)
+    }
+
     /// Get a bid by ID
     pub fn get_bid(env: Env, bid_id: BytesN<32>) -> Option<Bid> {
         BidStorage::get_bid(&env, &bid_id)
@@ -1217,6 +1349,8 @@ impl QuickLendXContract {
         env: Env,
         admin: Address,
         min_invoice_amount: i128,
+        min_bid_amount: i128,
+        max_invoices_per_business: u32,
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
@@ -1225,10 +1359,11 @@ impl QuickLendXContract {
             env,
             admin,
             min_invoice_amount,
-            10,  // min_bid_amount
+            min_bid_amount,
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            max_invoices_per_business,
         )
     }
 
@@ -2168,35 +2303,3 @@ pub fn get_analytics_summary(
         });
     (platform, performance)
 }
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-mod test_bid;
-
-#[cfg(test)]
-mod test_fees;
-
-#[cfg(test)]
-mod test_escrow;
-
-#[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
-#[cfg(test)]
-mod test_insurance;
-#[cfg(test)]
-mod test_investor_kyc;
-#[cfg(test)]
-mod test_ledger_timestamp_consistency;
-#[cfg(test)]
-mod test_lifecycle;
-#[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_min_invoice_amount;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;

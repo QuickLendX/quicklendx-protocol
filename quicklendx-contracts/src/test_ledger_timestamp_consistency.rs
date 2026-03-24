@@ -380,7 +380,7 @@ fn test_grace_period_override_per_invoice() {
     let investor = create_verified_investor(&env, &client, 50_000);
     let currency = setup_token(&env, &business, &investor, &client.address);
     client.add_currency(&admin, &currency);
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &(7 * 24 * 60 * 60));
+    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &(7 * 24 * 60 * 60));
 
     let amount = 10_000i128;
     let current_ts = env.ledger().timestamp();
@@ -719,7 +719,7 @@ fn test_real_world_invoice_lifecycle_with_time_advances() {
     let investor = create_verified_investor(&env, &client, 100_000);
     let currency = setup_token(&env, &business, &investor, &client.address);
     client.add_currency(&admin, &currency);
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &(7 * 24 * 60 * 60));
+    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &(7 * 24 * 60 * 60));
 
     let amount = 10_000i128;
     let ts_creation = env.ledger().timestamp();
