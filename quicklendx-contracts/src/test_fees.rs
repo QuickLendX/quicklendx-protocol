@@ -12,6 +12,13 @@ fn setup_admin(env: &Env, client: &QuickLendXContractClient) -> Address {
     admin
 }
 
+/// Helper: initialize admin via initialize_admin (first-time setup path)
+fn setup_admin_init(env: &Env, client: &QuickLendXContractClient) -> Address {
+    let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
+    admin
+}
+
 /// Helper function to create and verify a business
 fn setup_business(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
     let business = Address::generate(&env);
@@ -897,5 +904,162 @@ fn test_calculate_transaction_fees_late_payment_flag() {
     assert!(
         late_fees > base_fees,
         "Late payment must increase total fees"
+    );
+}
+
+// ============================================================================
+// HARDENING TESTS — Fee System Initialization & Treasury Configuration
+// ============================================================================
+
+/// initialize_fee_system must reject a second call (re-initialization guard).
+#[test]
+fn test_fee_system_double_init_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let result = client.try_initialize_fee_system(&admin);
+    let err = result.err().expect("second init must fail");
+    let contract_error = err.expect("expected contract error");
+    assert_eq!(contract_error, QuickLendXError::InvalidFeeConfiguration);
+}
+
+/// initialize_fee_system must require admin authorization.
+#[test]
+fn test_fee_system_init_requires_admin_auth() {
+    let env = Env::default();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+
+    client.mock_all_auths().set_admin(&admin);
+
+    // Attacker signs for their own address, not the admin address.
+    let bad_auth = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "initialize_fee_system",
+            args: (admin.clone(),).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+    let result = client
+        .mock_auths(&[bad_auth])
+        .try_initialize_fee_system(&admin);
+    assert!(
+        result.is_err(),
+        "initialize_fee_system must abort without admin authorization"
+    );
+}
+
+/// configure_treasury must reject the contract's own address as treasury.
+#[test]
+fn test_configure_treasury_rejects_contract_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Attempting to set the contract itself as treasury must be rejected.
+    let result = client.try_configure_treasury(&contract_id);
+    let err = result.err().expect("self-assignment must fail");
+    let contract_error = err.expect("expected contract error");
+    assert_eq!(contract_error, QuickLendXError::InvalidAddress);
+}
+
+/// configure_treasury must reject the same address when already configured (duplicate).
+#[test]
+fn test_configure_treasury_rejects_duplicate_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_treasury(&treasury);
+
+    // Setting the same treasury address a second time must be rejected.
+    let result = client.try_configure_treasury(&treasury);
+    let err = result.err().expect("duplicate treasury must fail");
+    let contract_error = err.expect("expected contract error");
+    assert_eq!(contract_error, QuickLendXError::InvalidFeeConfiguration);
+}
+
+/// configure_treasury must allow updating to a different (non-duplicate) address.
+#[test]
+fn test_configure_treasury_allows_update_to_different_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury1 = Address::generate(&env);
+    let treasury2 = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_treasury(&treasury1);
+    // Updating to a distinct address must succeed.
+    client.configure_treasury(&treasury2);
+
+    let stored = client.get_treasury_address();
+    assert_eq!(stored, Some(treasury2));
+}
+
+/// configure_treasury must fail if called before fee system initialization.
+#[test]
+fn test_configure_treasury_requires_prior_init() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let treasury = Address::generate(&env);
+
+    // No initialize_fee_system called — platform fee config doesn't exist yet.
+    let result = client.try_configure_treasury(&treasury);
+    assert!(
+        result.is_err(),
+        "configure_treasury must fail without prior fee system init"
+    );
+}
+
+/// update_platform_fee_bps must require explicit admin authorization.
+#[test]
+fn test_update_platform_fee_bps_requires_admin_auth() {
+    let env = Env::default();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+
+    client.mock_all_auths().set_admin(&admin);
+    client.mock_all_auths().initialize_fee_system(&admin);
+
+    // Attacker cannot authorize fee update for admin.
+    let bad_auth = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "update_platform_fee_bps",
+            args: (500u32,).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+    let result = client
+        .mock_auths(&[bad_auth])
+        .try_update_platform_fee_bps(&500);
+    assert!(
+        result.is_err(),
+        "update_platform_fee_bps must abort without admin authorization"
     );
 }

@@ -16,6 +16,8 @@ const VOLUME_KEY: Symbol = symbol_short!("volume");
 #[allow(dead_code)]
 const TREASURY_CONFIG_KEY: Symbol = symbol_short!("treasury");
 const PLATFORM_FEE_KEY: Symbol = symbol_short!("plt_fee");
+/// Guard key: set to `true` once `initialize` completes to prevent re-initialization.
+const FEES_INIT_KEY: Symbol = symbol_short!("fee_init");
 
 /// Fee types supported by the platform
 #[contracttype]
@@ -130,7 +132,13 @@ pub struct FeeManager;
 
 impl FeeManager {
     pub fn initialize(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
-        // Auth handled by ProtocolInitializer
+        // Explicit admin authorization: the caller must be the designated admin.
+        admin.require_auth();
+
+        // Guard: reject re-initialization to prevent overwriting live fee config.
+        if env.storage().instance().has(&FEES_INIT_KEY) {
+            return Err(QuickLendXError::InvalidFeeConfiguration);
+        }
 
         // Initialize default fee structures
         let default_fees = vec![
@@ -176,6 +184,9 @@ impl FeeManager {
             .instance()
             .set(&PLATFORM_FEE_KEY, &platform_fee_config);
 
+        // Mark the fee system as initialized.
+        env.storage().instance().set(&FEES_INIT_KEY, &true);
+
         Ok(())
     }
 
@@ -187,6 +198,19 @@ impl FeeManager {
     ) -> Result<TreasuryConfig, QuickLendXError> {
         admin.require_auth();
 
+        // Reject self-assignment: treasury must not be the contract itself.
+        if treasury_address == env.current_contract_address() {
+            return Err(QuickLendXError::InvalidAddress);
+        }
+
+        // Fetch existing config and reject duplicate treasury address.
+        let mut platform_config = Self::get_platform_fee_config(env)?;
+        if let Some(ref existing) = platform_config.treasury_address {
+            if *existing == treasury_address {
+                return Err(QuickLendXError::InvalidFeeConfiguration);
+            }
+        }
+
         let treasury_config = TreasuryConfig {
             treasury_address: treasury_address.clone(),
             is_active: true,
@@ -194,8 +218,6 @@ impl FeeManager {
             updated_by: admin.clone(),
         };
 
-        // Update platform fee config with treasury
-        let mut platform_config = Self::get_platform_fee_config(env)?;
         platform_config.treasury_address = Some(treasury_address.clone());
         platform_config.updated_at = env.ledger().timestamp();
         platform_config.updated_by = admin.clone();
@@ -210,10 +232,11 @@ impl FeeManager {
     /// Update platform fee basis points
     pub fn update_platform_fee(
         env: &Env,
-        _admin: &Address,
+        admin: &Address,
         fee_bps: u32,
     ) -> Result<(), QuickLendXError> {
-        // Auth is checked by the caller
+        // Explicit admin authorization.
+        admin.require_auth();
 
         if fee_bps > 1000 {
             return Err(QuickLendXError::InvalidFeeBasisPoints);

@@ -483,3 +483,78 @@ The fee system is designed for seamless upgrades:
 ## Conclusion
 
 The QuickLendX platform fee system provides a robust, secure, and transparent mechanism for collecting platform fees while maintaining flexibility for future enhancements. The integration with treasury routing ensures efficient fee management and supports the platform's economic model.
+
+---
+
+## Hardening: Initialization & Treasury Security
+
+This section documents the security hardening applied to the fee system initialization and treasury configuration flow.
+
+### Initialization Guard
+
+`FeeManager::initialize` is protected by a single-write guard using the `fee_init` storage key.
+
+```
+Storage key: "fee_init" (Symbol)
+Type:        bool (true)
+Scope:       instance storage
+```
+
+**Behavior:**
+- On first call: sets up fee structures and writes `fee_init = true`.
+- On any subsequent call: returns `InvalidFeeConfiguration` immediately, before any state mutation.
+
+This prevents an attacker (or misconfigured deployment script) from overwriting fee structures after the contract is live.
+
+### Explicit Admin Authorization
+
+All admin-gated fee functions call `admin.require_auth()` at the top of both the public API layer (`lib.rs`) and the module layer (`fees.rs`). This defense-in-depth ensures auth is enforced even if one layer is bypassed or refactored.
+
+| Function | `lib.rs` auth | `fees.rs` auth |
+|---|---|---|
+| `initialize_fee_system` | `admin.require_auth()` | `admin.require_auth()` |
+| `configure_treasury` | — (caller provides admin) | `admin.require_auth()` |
+| `update_platform_fee` / `update_platform_fee_bps` | `admin.require_auth()` | `admin.require_auth()` |
+
+### Treasury Address Validation
+
+`configure_treasury` rejects two classes of invalid addresses before persisting any state:
+
+#### Self-assignment (contract address)
+
+Setting the treasury to the contract's own address would route all fees back into the contract with no way to withdraw them.
+
+```
+if treasury_address == env.current_contract_address() {
+    return Err(QuickLendXError::InvalidAddress);
+}
+```
+
+#### Duplicate address
+
+Re-configuring the treasury to the address already stored is a no-op at best and masks operational errors at worst.
+
+```
+if let Some(ref existing) = platform_config.treasury_address {
+    if *existing == treasury_address {
+        return Err(QuickLendXError::InvalidFeeConfiguration);
+    }
+}
+```
+
+Both checks run before any write, so rejected calls leave storage unchanged.
+
+### Error Reference (Fee Hardening)
+
+| Error | Code | Trigger |
+|---|---|---|
+| `InvalidFeeConfiguration` | 1850 | Re-initialization attempt; duplicate treasury address |
+| `InvalidAddress` | 1201 | Treasury set to contract's own address |
+| `InvalidFeeBasisPoints` | 1852 | Fee BPS exceeds 1000 (10%) |
+| `TreasuryNotConfigured` | 1851 | Fee routing attempted before treasury is set |
+
+### Security Assumptions
+
+- **Admin key security**: The admin `Address` passed at initialization must be controlled by the platform operator. Loss of the admin key means no further fee configuration is possible; there is no recovery path.
+- **Single initialization window**: The init guard is permanent. If fee structures must change post-deployment, use `update_platform_fee` (for BPS) or `configure_treasury` (for routing), not re-initialization.
+- **Treasury address trust**: The contract does not validate that the treasury address is a live account or holds any minimum balance. Operators must verify the address is operational before configuring it.
