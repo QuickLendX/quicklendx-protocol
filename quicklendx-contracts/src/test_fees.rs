@@ -2,7 +2,7 @@ use super::*;
 use crate::{errors::QuickLendXError, fees::FeeType};
 use soroban_sdk::{
     testutils::{Address as _, MockAuth, MockAuthInvoke},
-    Address, Env, Map, String,
+    Address, Env, IntoVal, Map, String,
 };
 
 /// Helper function to set up admin for testing
@@ -132,11 +132,11 @@ fn test_custom_platform_fee_bps() {
     let admin = setup_admin(&env, &client);
 
     // Test setting custom fee BPS
-    let new_fee_bps = 500; // 5%
+    let new_fee_bps = 500i128; // 5%
     client.set_platform_fee(&new_fee_bps);
 
     let updated_config = client.get_platform_fee();
-    assert_eq!(updated_config.fee_bps, new_fee_bps);
+    assert_eq!(updated_config.fee_bps as i128, new_fee_bps);
     assert_eq!(updated_config.updated_by, admin);
 }
 
@@ -809,7 +809,7 @@ fn test_configure_treasury() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin_init(&env, &client);
+    let admin = setup_admin(&env, &client);
     let treasury = Address::generate(&env);
 
     // Initialize fee system (creates platform fee config needed by configure_treasury)
@@ -856,7 +856,7 @@ fn test_get_treasury_address_before_config() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin_init(&env, &client);
+    let admin = setup_admin(&env, &client);
 
     client.initialize_fee_system(&admin);
 

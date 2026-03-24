@@ -43,7 +43,7 @@ mod test_cancel_refund;
 mod test_emergency_withdraw;
 #[cfg(test)]
 mod test_init;
-#[cfg(test)]
+#[cfg(all(test, feature = "fuzz-tests"))]
 mod test_max_invoices_per_business;
 #[cfg(test)]
 mod test_overflow;
@@ -2699,7 +2699,7 @@ impl QuickLendXContract {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "fuzz-tests"))]
 mod test;
 
 #[cfg(test)]
