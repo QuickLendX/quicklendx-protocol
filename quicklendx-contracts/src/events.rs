@@ -596,3 +596,17 @@ pub fn emit_profit_fee_breakdown(
         ),
     );
 }
+
+/// Emit event when the admin updates the bid TTL configuration.
+///
+/// ### Fields
+/// - `old_days`: previous TTL value in days (0 = was using compile-time default)
+/// - `new_days`: newly configured TTL value in days
+/// - `admin`: address of the admin who made the change
+/// - `timestamp`: ledger timestamp of the change
+pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Address) {
+    env.events().publish(
+        (symbol_short!("ttl_upd"),),
+        (old_days, new_days, admin.clone(), env.ledger().timestamp()),
+    );
+}
