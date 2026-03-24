@@ -10,7 +10,7 @@
 
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Vec};
 
 use crate::bid::{Bid, BidStatus};
 use crate::escrow::{Escrow, EscrowStatus};
@@ -429,11 +429,9 @@ fn invariant_completed_investment_has_correct_status() {
             invoice_id,
             investor,
             amount: 1000,
-            funded_at: 0,
+            funded_at: 1000,
             status: InvestmentStatus::Completed,
             insurance: Vec::new(&env),
-            funded_at: 1000,
-            
         };
 
         // Invariant: Settled investment must have actual_return
@@ -748,7 +746,9 @@ fn test_invariants_after_full_lifecycle() {
 
     // investment completed
     let investment = env.as_contract(&contract_id, || {
-        InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
+        let investment_ids = InvestmentStorage::get_by_invoice(&env, &invoice_id);
+        let investment_id = investment_ids.get(0).unwrap();
+        InvestmentStorage::get(&env, &investment_id)
     });
     let investment = investment.expect("investment must exist for settled invoice");
     assert_eq!(

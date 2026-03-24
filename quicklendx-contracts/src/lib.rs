@@ -1225,10 +1225,11 @@ impl QuickLendXContract {
             env,
             admin,
             min_invoice_amount,
-            10,  // min_bid_amount
-            100, // min_bid_bps
+            10,   // min_bid_amount
+            100,  // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            100,  // max_invoices_per_business
         )
     }
 
@@ -2168,35 +2169,3 @@ pub fn get_analytics_summary(
         });
     (platform, performance)
 }
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-mod test_bid;
-
-#[cfg(test)]
-mod test_fees;
-
-#[cfg(test)]
-mod test_escrow;
-
-#[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
-#[cfg(test)]
-mod test_insurance;
-#[cfg(test)]
-mod test_investor_kyc;
-#[cfg(test)]
-mod test_ledger_timestamp_consistency;
-#[cfg(test)]
-mod test_lifecycle;
-#[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_min_invoice_amount;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;

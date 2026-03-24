@@ -43,7 +43,7 @@ mod test_investor_kyc {
         // Initialize protocol limits (min invoice: 1, min bid: 100, min bid bps: 100,
         // max due date: 365 days, grace period: 86400s)
         let _ = client
-            .try_initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
+            .try_initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
 
         (env, client, admin)
     }

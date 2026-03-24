@@ -811,7 +811,7 @@ fn test_multiple_invoices_lifecycle_with_sequential_creations() {
 
     // Verify each invoice's grace deadline is consistent
     for invoice_id in invoice_ids.iter() {
-        let invoice = client.get_invoice(invoice_id);
+        let invoice = client.get_invoice(&invoice_id);
         let grace_deadline = invoice.grace_deadline(grace_period);
         assert!(grace_deadline >= invoice.due_date);
         assert_eq!(
