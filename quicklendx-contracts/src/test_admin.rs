@@ -15,6 +15,7 @@ mod test_admin {
     extern crate alloc;
     use crate::admin::AdminStorage;
     use crate::errors::QuickLendXError;
+    use crate::protocol_limits::ProtocolLimitsContract;
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use alloc::format;
     use soroban_sdk::{
@@ -578,7 +579,7 @@ mod test_admin {
             .try_initialize_protocol_limits(&admin, &250i128, &45u64, &86_400u64);
 
         assert_auth_abort(result);
-        let limits = client.get_protocol_limits();
+        let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
         assert_eq!(limits.min_invoice_amount, 10);
         assert_eq!(limits.max_due_date_days, 365);
     }

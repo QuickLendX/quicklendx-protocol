@@ -2155,9 +2155,6 @@ pub fn get_analytics_summary(
     (platform, performance)
 }
 #[cfg(test)]
-mod test;
-
-#[cfg(test)]
 mod test_bid;
 
 #[cfg(test)]
