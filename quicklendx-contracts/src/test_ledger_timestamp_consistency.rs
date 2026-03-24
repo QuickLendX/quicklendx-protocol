@@ -558,15 +558,19 @@ fn test_ledger_time_consistent_within_transaction() {
 
     // Create multiple invoices in sequence without advancing time
     let due_date = fixed_ts + 1000;
-    let ids: Vec<_> = (0..3)
-        .map(|_| create_invoice(&env, &client, &business, 1000, &currency, due_date))
-        .collect();
+    let mut ids: Vec<soroban_sdk::BytesN<32>> = Vec::new(&env);
+    for _ in 0..3 {
+        let id = create_invoice(&env, &client, &business, 1000, &currency, due_date);
+        ids.push_back(id);
+    }
 
     // All created_at values should be equal or within same second
-    let created_ats: Vec<_> = ids
-        .iter()
-        .map(|id| client.get_invoice(id).created_at)
-        .collect();
+    let mut created_ats: Vec<u64> = Vec::new(&env);
+    for i in 0..ids.len() {
+        let id = ids.get(i).unwrap();
+        let invoice = client.get_invoice(&id);
+        created_ats.push_back(invoice.created_at);
+    }
 
     // All should equal fixed_ts
     for created_at in &created_ats {

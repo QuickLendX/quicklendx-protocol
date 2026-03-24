@@ -132,7 +132,7 @@ fn test_custom_platform_fee_bps() {
     let admin = setup_admin(&env, &client);
 
     // Test setting custom fee BPS
-    let new_fee_bps = 500u32; // 5%
+    let new_fee_bps = 500i128; // 5%
     client.set_platform_fee(&new_fee_bps);
 
     let updated_config = client.get_platform_fee();
