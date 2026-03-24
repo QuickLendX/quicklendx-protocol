@@ -1,5 +1,8 @@
 #![cfg(test)]
 
+extern crate std;
+use std::format;
+
 use crate::{
     invoice::{Invoice, InvoiceCategory, InvoiceStatus, InvoiceStorage},
     protocol_limits::ProtocolLimitsContract,
@@ -11,7 +14,7 @@ use soroban_sdk::{
     Address, Env, String, Vec,
 };
 
-fn setup() -> (Env, QuickLendXContractClient, Address, Address, Address) {
+fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
 
