@@ -11,7 +11,7 @@ use soroban_sdk::{
     Address, Env, String, Vec,
 };
 
-fn setup() -> (Env, QuickLendXContractClient, Address, Address, Address) {
+fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -64,7 +64,7 @@ fn test_create_invoices_up_to_limit_succeeds() {
 
     // Create 5 invoices - all should succeed
     for i in 0..5 {
-        let desc = String::from_str(&env, &format!("Invoice {}", i));
+        let desc = description.clone();
         let result = client.upload_invoice(
             &business, &amount, &currency, &due_date, &desc, &category, &tags,
         );
@@ -96,8 +96,8 @@ fn test_next_invoice_after_limit_fails_with_clear_error() {
     let (amount, due_date, description, category, tags) = create_invoice_params(&env);
 
     // Create 3 invoices successfully
-    for i in 0..3 {
-        let desc = String::from_str(&env, &format!("Invoice {}", i));
+    for _i in 0..3 {
+        let desc = description.clone();
         client
             .upload_invoice(
                 &business, &amount, &currency, &due_date, &desc, &category, &tags,
@@ -396,7 +396,7 @@ fn test_limit_zero_means_unlimited() {
 
     // Create 10 invoices - all should succeed
     for i in 0..10 {
-        let desc = String::from_str(&env, &format!("Invoice {}", i));
+        let desc = description.clone();
         let result = client.upload_invoice(
             &business, &amount, &currency, &due_date, &desc, &category, &tags,
         );
