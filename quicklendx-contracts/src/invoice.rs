@@ -682,6 +682,14 @@ impl InvoiceStorage {
         (symbol_short!("tag_idx"), tag.clone())
     }
 
+    /// @notice Adds an invoice to the category index.
+    /// @dev Deduplication guard: the invoice ID is appended only if not already
+    ///      present, preventing duplicate entries that would corrupt count queries.
+    /// @param env   The contract environment.
+    /// @param category   The category bucket to update.
+    /// @param invoice_id The invoice to register.
+    /// @security Caller must ensure `invoice_id` refers to a stored invoice with
+    ///           the matching category field to keep the index consistent.
     pub fn add_category_index(env: &Env, category: &InvoiceCategory, invoice_id: &BytesN<32>) {
         let key = Self::category_key(category);
         let mut invoices = env
@@ -703,6 +711,13 @@ impl InvoiceStorage {
         }
     }
 
+    /// @notice Removes an invoice from the category index.
+    /// @dev Rebuilds the bucket without the target ID. Safe to call even if the
+    ///      ID is absent (no-op). Must be called with the invoice's *old* category
+    ///      before calling `add_category_index` with the new one to avoid stale entries.
+    /// @param env   The contract environment.
+    /// @param category   The category bucket to update.
+    /// @param invoice_id The invoice to deregister.
     pub fn remove_category_index(env: &Env, category: &InvoiceCategory, invoice_id: &BytesN<32>) {
         let key = Self::category_key(category);
         if let Some(invoices) = env.storage().instance().get::<_, Vec<BytesN<32>>>(&key) {
@@ -969,7 +984,12 @@ impl InvoiceStorage {
         Self::get_invoice(env, invoice_id).map(|inv| inv.get_invoice_rating_stats())
     }
 
-    /// Get invoices by category
+    /// @notice Returns all invoice IDs registered under a category.
+    /// @dev Reads the `("cat_idx", category)` bucket. Returns an empty Vec when
+    ///      no invoices exist for the category — never panics.
+    /// @param env      The contract environment.
+    /// @param category The category to query.
+    /// @return Vec of invoice IDs. Length equals `get_invoice_count_by_category`.
     pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
         env.storage()
             .instance()
@@ -1043,7 +1063,12 @@ impl InvoiceStorage {
         result
     }
 
-    /// Get invoice count by category
+    /// @notice Returns the number of invoices in a category.
+    /// @dev Always consistent with `get_invoices_by_category(category).len()`.
+    ///      Invariant maintained by `add_category_index` / `remove_category_index`.
+    /// @param env      The contract environment.
+    /// @param category The category to count.
+    /// @return Count of invoice IDs in the category bucket.
     pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
         Self::get_invoices_by_category(env, category).len() as u32
     }
@@ -1053,7 +1078,10 @@ impl InvoiceStorage {
         Self::get_invoices_by_tag(env, tag).len() as u32
     }
 
-    /// Get all available categories
+    /// @notice Returns all 7 canonical invoice categories.
+    /// @dev Statically constructed — result is independent of stored invoice state.
+    ///      Always returns exactly 7 variants with no duplicates.
+    /// @return Vec containing every InvoiceCategory variant.
     pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
         vec![
             env,
