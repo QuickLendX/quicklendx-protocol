@@ -210,7 +210,7 @@ impl FeeManager {
     /// Update platform fee basis points
     pub fn update_platform_fee(
         env: &Env,
-        admin: &Address,
+        _admin: &Address,
         fee_bps: u32,
     ) -> Result<(), QuickLendXError> {
         // Auth is checked by the caller
