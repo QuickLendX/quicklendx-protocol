@@ -9,6 +9,55 @@ use crate::protocol_limits::{
 
 const DEFAULT_INVOICE_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days default grace period
 
+/// Normalize a tag: strip leading/trailing ASCII spaces, then ASCII-lowercase all letters.
+///
+/// Tags are always stored in their normalized form so that "Tech", " tech ", and "TECH"
+/// all collapse to the same canonical key "tech". This ensures consistent duplicate
+/// detection and index lookups regardless of the casing or padding the caller supplies.
+///
+/// # Errors
+/// Returns [`QuickLendXError::InvalidTag`] if:
+/// - The tag exceeds 50 bytes before normalization (prevents buffer overflow).
+/// - The normalized result is empty (e.g. a tag that is all spaces).
+/// - The bytes are not valid UTF-8.
+pub(crate) fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError> {
+    let len = tag.len() as usize;
+    // Guard against inputs that exceed the maximum tag length.
+    if len > 50 {
+        return Err(QuickLendXError::InvalidTag);
+    }
+
+    let mut buf = [0u8; 50];
+    tag.copy_into_slice(&mut buf[..len]);
+
+    // Trim leading ASCII spaces.
+    let mut start = 0usize;
+    while start < len && buf[start] == b' ' {
+        start += 1;
+    }
+    // Trim trailing ASCII spaces.
+    let mut end = len;
+    while end > start && buf[end - 1] == b' ' {
+        end -= 1;
+    }
+
+    if start >= end {
+        return Err(QuickLendXError::InvalidTag);
+    }
+
+    // ASCII lowercase: shift A-Z (0x41-0x5A) to a-z (0x61-0x7A).
+    for b in buf[start..end].iter_mut() {
+        if *b >= b'A' && *b <= b'Z' {
+            *b += 32;
+        }
+    }
+
+    let normalized =
+        core::str::from_utf8(&buf[start..end]).map_err(|_| QuickLendXError::InvalidTag)?;
+
+    Ok(String::from_str(env, normalized))
+}
+
 /// Invoice status enumeration
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -201,7 +250,11 @@ impl Invoice {
         Ok(())
     }
 
-    /// Create a new invoice with audit logging
+    /// Create a new invoice with audit logging.
+    ///
+    /// All supplied tags are normalized (trimmed, ASCII-lowercased) before storage.
+    /// `validate_invoice_tags` must be called by the caller before this function to
+    /// ensure the tag list is within limits and free of normalized duplicates.
     pub fn new(
         env: &Env,
         business: Address,
@@ -213,6 +266,14 @@ impl Invoice {
         tags: Vec<String>,
     ) -> Result<Self, QuickLendXError> {
         check_string_length(&description, MAX_DESCRIPTION_LENGTH)?;
+
+        // Normalize every tag before storage so the on-chain representation is always
+        // in canonical form regardless of how the caller formatted the input.
+        let mut normalized_tags = Vec::new(env);
+        for tag in tags.iter() {
+            normalized_tags.push_back(normalize_tag(env, &tag)?);
+        }
+
         let id = Self::generate_unique_invoice_id(env);
         let created_at = env.ledger().timestamp();
 
@@ -231,7 +292,7 @@ impl Invoice {
             metadata_notes: None,
             metadata_line_items: Vec::new(env),
             category,
-            tags,
+            tags: normalized_tags,
             funded_amount: 0,
             funded_at: None,
             investor: None,
@@ -601,40 +662,51 @@ impl Invoice {
         }
     }
 
-    /// Add a tag to the invoice
+    /// Add a tag to the invoice.
+    ///
+    /// The tag is normalized (trimmed, ASCII-lowercased) before storage so that
+    /// "Tech" and " tech " both resolve to "tech". Duplicate detection uses the
+    /// normalized form: adding an already-present normalized tag is a no-op.
     pub fn add_tag(
         &mut self,
-        _env: &Env,
+        env: &Env,
         tag: String,
     ) -> Result<(), crate::errors::QuickLendXError> {
-        // Validate tag length (1-50 characters)
-        if tag.len() < 1 || tag.len() > 50 {
+        let normalized = normalize_tag(env, &tag)?;
+
+        // Validate normalized tag length (1-50 bytes).
+        if normalized.len() < 1 || normalized.len() > 50 {
             return Err(crate::errors::QuickLendXError::InvalidTag);
         }
 
-        // Check tag limit (max 10 tags per invoice)
+        // Check tag limit (max 10 tags per invoice).
         if self.tags.len() >= 10 {
             return Err(crate::errors::QuickLendXError::TagLimitExceeded);
         }
 
-        // Check if tag already exists
+        // Idempotent: skip if the normalized tag already exists.
         for existing_tag in self.tags.iter() {
-            if existing_tag == tag {
-                return Ok(()); // Tag already exists, no need to add
+            if existing_tag == normalized {
+                return Ok(());
             }
         }
 
-        self.tags.push_back(tag);
+        self.tags.push_back(normalized);
         Ok(())
     }
 
-    /// Remove a tag from the invoice
+    /// Remove a tag from the invoice.
+    ///
+    /// The supplied tag is normalized before lookup so that removing "Tech" correctly
+    /// removes the stored "tech" entry. Returns `InvalidTag` if the tag is not present.
     pub fn remove_tag(&mut self, tag: String) -> Result<(), crate::errors::QuickLendXError> {
-        let mut new_tags = Vec::new(&self.tags.env());
+        let env = self.tags.env();
+        let normalized = normalize_tag(&env, &tag)?;
+        let mut new_tags = Vec::new(&env);
         let mut found = false;
 
         for existing_tag in self.tags.iter() {
-            if existing_tag != tag {
+            if existing_tag != normalized {
                 new_tags.push_back(existing_tag.clone());
             } else {
                 found = true;
@@ -649,10 +721,18 @@ impl Invoice {
         Ok(())
     }
 
-    /// Check if invoice has a specific tag
+    /// Check if invoice has a specific tag.
+    ///
+    /// The query tag is normalized before comparison, so `has_tag("Tech")` returns
+    /// `true` when the stored tag is "tech". Returns `false` for any input that
+    /// normalizes to an empty string.
     pub fn has_tag(&self, tag: String) -> bool {
+        let env = self.tags.env();
+        let Ok(normalized) = normalize_tag(&env, &tag) else {
+            return false;
+        };
         for existing_tag in self.tags.iter() {
-            if existing_tag == tag {
+            if existing_tag == normalized {
                 return true;
             }
         }

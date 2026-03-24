@@ -754,22 +754,39 @@ pub fn validate_invoice_category(
     }
 }
 
-/// Validate invoice tags
-pub fn validate_invoice_tags(tags: &Vec<String>) -> Result<(), QuickLendXError> {
-    // Check tag count limit (max 10 tags per invoice)
+/// Validate invoice tags.
+///
+/// Each tag is normalized (trimmed, ASCII-lowercased) before validation so that
+/// length checks and duplicate detection operate on the canonical stored form.
+///
+/// # Rules enforced
+/// - Tag count ≤ 10.
+/// - Each normalized tag must be 1–50 bytes.
+/// - No two tags may normalize to the same value (e.g. "Tech" and "tech" are duplicates).
+///
+/// # Errors
+/// - `TagLimitExceeded` (1801): more than 10 tags supplied.
+/// - `InvalidTag` (1800): a tag is empty/too long after normalization, or is a duplicate.
+pub fn validate_invoice_tags(env: &Env, tags: &Vec<String>) -> Result<(), QuickLendXError> {
     if tags.len() > 10 {
         return Err(QuickLendXError::TagLimitExceeded);
     }
 
-    // Validate each tag
+    let mut seen: Vec<String> = Vec::new(env);
     for tag in tags.iter() {
-        // Check tag length (1-50 characters)
-        if tag.len() < 1 || tag.len() > 50 {
+        let normalized = crate::invoice::normalize_tag(env, &tag)?;
+
+        if normalized.len() < 1 || normalized.len() > 50 {
             return Err(QuickLendXError::InvalidTag);
         }
 
-        // Check for empty tags (length 0 is already checked above)
-        // Note: Soroban String doesn't have trim() method
+        // Reject duplicates after normalization.
+        for s in seen.iter() {
+            if s == normalized {
+                return Err(QuickLendXError::InvalidTag);
+            }
+        }
+        seen.push_back(normalized);
     }
 
     Ok(())

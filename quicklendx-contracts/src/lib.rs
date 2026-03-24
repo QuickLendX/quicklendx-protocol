@@ -58,6 +58,8 @@ mod test_storage;
 #[cfg(test)]
 mod test_string_limits;
 #[cfg(test)]
+mod test_invoice_normalization;
+#[cfg(test)]
 mod test_types;
 #[cfg(test)]
 mod test_vesting;
@@ -339,7 +341,7 @@ impl QuickLendXContract {
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
-        verification::validate_invoice_tags(&tags)?;
+        verification::validate_invoice_tags(&env, &tags)?;
 
         // Create new invoice
         let invoice = Invoice::new(
@@ -390,7 +392,7 @@ impl QuickLendXContract {
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
-        verification::validate_invoice_tags(&tags)?;
+        verification::validate_invoice_tags(&env, &tags)?;
 
         // Check max invoices per business limit
         let limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
@@ -1498,14 +1500,25 @@ impl QuickLendXContract {
         InvoiceStorage::get_invoices_by_category_and_status(&env, &category, &status)
     }
 
-    /// Get invoices by tag
+    /// Get invoices by tag.
+    ///
+    /// The query tag is normalized before lookup so that `get_invoices_by_tag("Tech")`
+    /// returns the same result as `get_invoices_by_tag("tech")`.
     pub fn get_invoices_by_tag(env: Env, tag: String) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_invoices_by_tag(&env, &tag)
+        let normalized = invoice::normalize_tag(&env, &tag).unwrap_or_else(|_| tag);
+        InvoiceStorage::get_invoices_by_tag(&env, &normalized)
     }
 
-    /// Get invoices by multiple tags (AND logic)
+    /// Get invoices by multiple tags (AND logic).
+    ///
+    /// Each query tag is normalized before lookup.
     pub fn get_invoices_by_tags(env: Env, tags: Vec<String>) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_invoices_by_tags(&env, &tags)
+        let mut normalized_tags = Vec::new(&env);
+        for tag in tags.iter() {
+            let n = invoice::normalize_tag(&env, &tag).unwrap_or_else(|_| tag);
+            normalized_tags.push_back(n);
+        }
+        InvoiceStorage::get_invoices_by_tags(&env, &normalized_tags)
     }
 
     /// Get invoice count by category
@@ -1513,9 +1526,12 @@ impl QuickLendXContract {
         InvoiceStorage::get_invoice_count_by_category(&env, &category)
     }
 
-    /// Get invoice count by tag
+    /// Get invoice count by tag.
+    ///
+    /// The query tag is normalized before lookup.
     pub fn get_invoice_count_by_tag(env: Env, tag: String) -> u32 {
-        InvoiceStorage::get_invoice_count_by_tag(&env, &tag)
+        let normalized = invoice::normalize_tag(&env, &tag).unwrap_or_else(|_| tag);
+        InvoiceStorage::get_invoice_count_by_tag(&env, &normalized)
     }
 
     /// Get all available categories
@@ -1560,7 +1576,11 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    /// Add tag to invoice (business owner only)
+    /// Add tag to invoice (business owner only).
+    ///
+    /// The tag is normalized (trimmed, ASCII-lowercased) before storage. Adding a tag
+    /// that already exists after normalization is a no-op. Both the invoice record and
+    /// the tag index are updated with the normalized form.
     pub fn add_invoice_tag(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1569,25 +1589,23 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
-        // Only the business owner can add tags
         invoice.business.require_auth();
 
-        // Add the tag
-        invoice.add_tag(&env, tag.clone())?;
+        let normalized = invoice::normalize_tag(&env, &tag)?;
+        invoice.add_tag(&env, normalized.clone())?;
 
-        // Update the invoice
         InvoiceStorage::update_invoice(&env, &invoice);
-
-        // Emit event
-        events::emit_invoice_tag_added(&env, &invoice_id, &invoice.business, &tag);
-
-        // Update index
-        InvoiceStorage::add_tag_index(&env, &tag, &invoice_id);
+        events::emit_invoice_tag_added(&env, &invoice_id, &invoice.business, &normalized);
+        InvoiceStorage::add_tag_index(&env, &normalized, &invoice_id);
 
         Ok(())
     }
 
-    /// Remove tag from invoice (business owner only)
+    /// Remove tag from invoice (business owner only).
+    ///
+    /// The supplied tag is normalized before lookup so that removing "Tech" correctly
+    /// removes the stored "tech" entry. Both the invoice record and the tag index are
+    /// updated with the normalized form.
     pub fn remove_invoice_tag(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1596,25 +1614,21 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
-        // Only the business owner can remove tags
         invoice.business.require_auth();
 
-        // Remove the tag
-        invoice.remove_tag(tag.clone())?;
+        let normalized = invoice::normalize_tag(&env, &tag)?;
+        invoice.remove_tag(normalized.clone())?;
 
-        // Update the invoice
         InvoiceStorage::update_invoice(&env, &invoice);
-
-        // Emit event
-        events::emit_invoice_tag_removed(&env, &invoice_id, &invoice.business, &tag);
-
-        // Update index
-        InvoiceStorage::remove_tag_index(&env, &tag, &invoice_id);
+        events::emit_invoice_tag_removed(&env, &invoice_id, &invoice.business, &normalized);
+        InvoiceStorage::remove_tag_index(&env, &normalized, &invoice_id);
 
         Ok(())
     }
 
-    /// Get all tags for an invoice
+    /// Get all tags for an invoice.
+    ///
+    /// Tags are returned in their normalized (lowercase, trimmed) form as stored.
     pub fn get_invoice_tags(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1624,7 +1638,10 @@ impl QuickLendXContract {
         Ok(invoice.get_tags())
     }
 
-    /// Check if invoice has a specific tag
+    /// Check if invoice has a specific tag.
+    ///
+    /// The query tag is normalized before comparison so that `invoice_has_tag("Tech")`
+    /// returns `true` when the stored tag is "tech".
     pub fn invoice_has_tag(
         env: Env,
         invoice_id: BytesN<32>,
