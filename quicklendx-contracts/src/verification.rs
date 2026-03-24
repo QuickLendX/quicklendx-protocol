@@ -637,6 +637,52 @@ pub fn require_business_verification(env: &Env, business: &Address) -> Result<()
     Ok(())
 }
 
+/// Enforce that a business is not in KYC-pending state before allowing a sensitive operation.
+///
+/// Pending businesses have submitted KYC but have not yet been approved or rejected.
+/// They must not be allowed to perform privileged actions (e.g. upload invoices, cancel
+/// invoices, accept bids) until their identity has been confirmed by an admin.
+///
+/// # Errors
+/// - `KYCAlreadyPending` if the business has a pending KYC application
+/// - `BusinessNotVerified` if the business has no KYC record or is rejected
+pub fn require_business_not_pending(
+    env: &Env,
+    business: &Address,
+) -> Result<(), QuickLendXError> {
+    match BusinessVerificationStorage::get_verification(env, business) {
+        Some(v) => match v.status {
+            BusinessVerificationStatus::Pending => Err(QuickLendXError::KYCAlreadyPending),
+            BusinessVerificationStatus::Verified => Ok(()),
+            BusinessVerificationStatus::Rejected => Err(QuickLendXError::BusinessNotVerified),
+        },
+        None => Err(QuickLendXError::BusinessNotVerified),
+    }
+}
+
+/// Enforce that an investor is not in KYC-pending state before allowing a sensitive operation.
+///
+/// Pending investors have submitted KYC but have not yet been approved or rejected.
+/// They must not be allowed to place bids, withdraw bids, or perform any investment
+/// action until their identity has been confirmed by an admin.
+///
+/// # Errors
+/// - `KYCAlreadyPending` if the investor has a pending KYC application
+/// - `BusinessNotVerified` if the investor has no KYC record or is rejected
+pub fn require_investor_not_pending(
+    env: &Env,
+    investor: &Address,
+) -> Result<(), QuickLendXError> {
+    match InvestorVerificationStorage::get(env, investor) {
+        Some(v) => match v.status {
+            BusinessVerificationStatus::Pending => Err(QuickLendXError::KYCAlreadyPending),
+            BusinessVerificationStatus::Verified => Ok(()),
+            BusinessVerificationStatus::Rejected => Err(QuickLendXError::BusinessNotVerified),
+        },
+        None => Err(QuickLendXError::BusinessNotVerified),
+    }
+}
+
 // Keep the existing invoice verification function
 pub fn verify_invoice_data(
     env: &Env,

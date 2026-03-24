@@ -408,13 +408,19 @@ fn test_grace_calculation_saturation_safe() {
     // Verify that grace_deadline calculation saturates on overflow, not wraps
     // Tests: u64::MAX - 100 + 1000 should saturate to u64::MAX, not wrap
     let (env, client, admin) = setup();
+
+    // Set ledger timestamp so that extreme_due_date is within the allowed window
+    // (max_due_date_days = 730 days = 63_072_000 seconds)
+    let extreme_due_date = u64::MAX - 100;
+    let max_window: u64 = 730 * 86400;
+    env.ledger().set_timestamp(extreme_due_date.saturating_sub(max_window / 2));
+
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, 50_000);
     let currency = setup_token(&env, &business, &investor, &client.address);
     client.add_currency(&admin, &currency);
 
     let amount = 10_000i128;
-    let extreme_due_date = u64::MAX - 100;
     let grace_period = 1000;
 
     let invoice_id = create_verified_and_funded_invoice(
@@ -558,18 +564,18 @@ fn test_ledger_time_consistent_within_transaction() {
 
     // Create multiple invoices in sequence without advancing time
     let due_date = fixed_ts + 1000;
-    let ids: Vec<_> = (0..3)
-        .map(|_| create_invoice(&env, &client, &business, 1000, &currency, due_date))
-        .collect();
+    let mut ids = Vec::new(&env);
+    for _ in 0..3 {
+        ids.push_back(create_invoice(&env, &client, &business, 1000, &currency, due_date));
+    }
 
-    // All created_at values should be equal or within same second
-    let created_ats: Vec<_> = ids
-        .iter()
-        .map(|id| client.get_invoice(id).created_at)
-        .collect();
+    let mut created_ats = std::vec::Vec::new();
+    for i in 0..ids.len() {
+        created_ats.push(client.get_invoice(&ids.get(i).unwrap()).created_at);
+    }
 
     // All should equal fixed_ts
-    for created_at in &created_ats {
+    for created_at in created_ats.iter() {
         assert!(
             *created_at >= fixed_ts && *created_at <= fixed_ts + 1,
             "created_at should be consistent within transaction"
@@ -811,7 +817,7 @@ fn test_multiple_invoices_lifecycle_with_sequential_creations() {
 
     // Verify each invoice's grace deadline is consistent
     for invoice_id in invoice_ids.iter() {
-        let invoice = client.get_invoice(invoice_id);
+        let invoice = client.get_invoice(&invoice_id);
         let grace_deadline = invoice.grace_deadline(grace_period);
         assert!(grace_deadline >= invoice.due_date);
         assert_eq!(
