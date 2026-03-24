@@ -83,7 +83,7 @@ fn test_indexes() {
 
         // Test invoice by status indexes
         let (symbol, status_symbol) = Indexes::invoices_by_status(InvoiceStatus::Pending);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("invst_stat"));
+        assert_eq!(symbol, soroban_sdk::symbol_short!("inv_st"));
         assert_eq!(status_symbol, soroban_sdk::symbol_short!("pending"));
 
         let (_, status_symbol) = Indexes::invoices_by_status(InvoiceStatus::Verified);
@@ -148,7 +148,7 @@ fn test_indexes() {
         assert_ne!(addr, addr_2);
 
         let (symbol, status_symbol) = Indexes::investments_by_status(InvestmentStatus::Active);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("invst_stat"));
+        assert_eq!(symbol, soroban_sdk::symbol_short!("inv_st"));
         assert_eq!(status_symbol, soroban_sdk::symbol_short!("active"));
         let (_, status_symbol) = Indexes::investments_by_status(InvestmentStatus::Withdrawn);
         assert_eq!(status_symbol, soroban_sdk::symbol_short!("withdrawn"));

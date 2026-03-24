@@ -99,7 +99,7 @@ impl Indexes {
             InvoiceStatus::Cancelled => symbol_short!("cancelled"),
             InvoiceStatus::Refunded => symbol_short!("refunded"),
         };
-        (symbol_short!("invst_stat"), status_symbol)
+        (symbol_short!("inv_st"), status_symbol)
     }
 
     /// Index: bids by invoice
@@ -143,7 +143,7 @@ impl Indexes {
             InvestmentStatus::Defaulted => symbol_short!("defaulted"),
             InvestmentStatus::Refunded => symbol_short!("refunded"),
         };
-        (symbol_short!("invst_stat"), status_symbol)
+        (symbol_short!("inv_st"), status_symbol)
     }
 
     /// Index: invoices by customer name
