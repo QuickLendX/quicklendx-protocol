@@ -408,13 +408,19 @@ fn test_grace_calculation_saturation_safe() {
     // Verify that grace_deadline calculation saturates on overflow, not wraps
     // Tests: u64::MAX - 100 + 1000 should saturate to u64::MAX, not wrap
     let (env, client, admin) = setup();
+
+    // Set ledger timestamp so that extreme_due_date is within the allowed window
+    // (max_due_date_days = 730 days = 63_072_000 seconds)
+    let extreme_due_date = u64::MAX - 100;
+    let max_window: u64 = 730 * 86400;
+    env.ledger().set_timestamp(extreme_due_date.saturating_sub(max_window / 2));
+
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, 50_000);
     let currency = setup_token(&env, &business, &investor, &client.address);
     client.add_currency(&admin, &currency);
 
     let amount = 10_000i128;
-    let extreme_due_date = u64::MAX - 100;
     let grace_period = 1000;
 
     let invoice_id = create_verified_and_funded_invoice(
@@ -573,7 +579,7 @@ fn test_ledger_time_consistent_within_transaction() {
     }
 
     // All should equal fixed_ts
-    for created_at in &created_ats {
+    for created_at in created_ats.iter() {
         assert!(
             *created_at >= fixed_ts && *created_at <= fixed_ts + 1,
             "created_at should be consistent within transaction"
