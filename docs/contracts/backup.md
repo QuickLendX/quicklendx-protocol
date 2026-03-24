@@ -346,6 +346,52 @@ Emitted when backups are cleaned up.
 - `removed_count`: u32
 - `timestamp`: u64
 
+## Restore Workflow Ordering and Idempotency
+
+### Ordering guarantee
+
+`restore_backup` validates the backup's data integrity **before** clearing any live
+state. If validation fails (count mismatch, missing data, non-positive amounts) the
+function returns an error and the live invoice state is left completely unchanged,
+preventing partial-restore corruption.
+
+```
+1. caller.require_auth()           ← authorization check
+2. AdminStorage::require_admin()   ← role check
+3. BackupStorage::validate_backup() ← integrity check (BEFORE any state change)
+4. InvoiceStorage::clear_all()     ← clear only after validation passes
+5. InvoiceStorage::store_invoice() ← restore each invoice
+6. emit bkup_rstr event
+```
+
+### Idempotency guarantee
+
+`restore_backup` is **idempotent**: calling it multiple times with the same backup ID
+always produces the same invoice state. Each call:
+
+1. Clears all current invoices (via status-list clearing)
+2. Re-stores exactly the invoices from the backup
+
+The status-index layer (`add_to_status_invoices`) prevents duplicate entries in the
+count lists, so `get_total_invoice_count` always returns the backup's invoice count
+regardless of how many times restore is called.
+
+### Rejecting corrupted backups
+
+A backup is considered corrupted when:
+- The stored `invoice_count` does not match the actual number of invoice records
+- Any invoice in the backup has `amount ≤ 0`
+- The backup metadata or data is missing from storage
+
+`validate_backup` marks the backup status as `BackupStatus::Corrupted` when
+validation fails. `restore_backup` rejects corrupted backups via the same
+validation call, ensuring corrupt data is never written back to live state.
+
+### Non-destructive failure
+
+If `restore_backup` is called with a non-existent backup ID it returns
+`StorageKeyNotFound` immediately without touching live state.
+
 ## Security Considerations
 
 ### Access Control
