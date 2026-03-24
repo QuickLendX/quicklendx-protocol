@@ -109,6 +109,31 @@ fn cap_query_limit(limit: u32) -> u32 {
     limit.min(MAX_QUERY_LIMIT)
 }
 
+/// Validates monotonic timestamp assumptions shared by lifecycle transitions.
+///
+/// # Security
+/// Rejects temporal anomalies where current ledger time moves backward relative
+/// to immutable invoice timestamps (creation/funding).
+fn require_invoice_timestamp_consistency(
+    now: u64,
+    invoice: &Invoice,
+    require_funded_timestamp: bool,
+) -> Result<(), QuickLendXError> {
+    if now < invoice.created_at {
+        return Err(QuickLendXError::InvalidTimestamp);
+    }
+
+    if let Some(funded_at) = invoice.funded_at {
+        if funded_at < invoice.created_at || now < funded_at {
+            return Err(QuickLendXError::InvalidTimestamp);
+        }
+    } else if require_funded_timestamp {
+        return Err(QuickLendXError::InvalidTimestamp);
+    }
+
+    Ok(())
+}
+
 #[contractimpl]
 impl QuickLendXContract {
     // ============================================================================
@@ -435,6 +460,9 @@ impl QuickLendXContract {
         bid_id: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        require_invoice_timestamp_consistency(env.ledger().timestamp(), &invoice, false)?;
         reentrancy::with_payment_guard(&env, || do_accept_bid_and_fund(&env, &invoice_id, &bid_id))
     }
 
@@ -827,6 +855,7 @@ impl QuickLendXContract {
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+        require_invoice_timestamp_consistency(env.ledger().timestamp(), &invoice, false)?;
         let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         let invoice_id = bid.invoice_id.clone();
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
@@ -977,6 +1006,9 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         payment_amount: i128,
     ) -> Result<(), QuickLendXError> {
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        require_invoice_timestamp_consistency(env.ledger().timestamp(), &invoice, true)?;
         let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = reentrancy::with_payment_guard(&env, || {
@@ -1052,6 +1084,9 @@ impl QuickLendXContract {
     pub fn handle_default(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        require_invoice_timestamp_consistency(env.ledger().timestamp(), &invoice, true)?;
 
         // Get the investment to track investor analytics
         let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
@@ -1086,6 +1121,9 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        require_invoice_timestamp_consistency(env.ledger().timestamp(), &invoice, true)?;
 
         // Get the investment to track investor analytics
         let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
@@ -2144,6 +2182,7 @@ impl QuickLendXContract {
         investor.require_auth();
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+        require_invoice_timestamp_consistency(env.ledger().timestamp(), &invoice, false)?;
         if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
         }

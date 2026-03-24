@@ -31,6 +31,7 @@
 extern crate std;
 
 use crate::{invoice::InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
+use crate::errors::QuickLendXError;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, BytesN, Env, String, Vec,
@@ -889,4 +890,90 @@ fn test_boundary_stress_test_multiple_threshold_crossings() {
         final_invoice.status,
         crate::invoice::InvoiceStatus::Defaulted
     );
+}
+
+// ============================================================================
+// MODULE 7: NON-MONOTONIC TIMESTAMP GUARDS
+// ============================================================================
+
+#[test]
+fn test_accept_bid_rejects_timestamp_before_invoice_creation() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, 100_000);
+    let currency = setup_token(&env, &business, &investor, &client.address);
+    client.add_currency(&admin, &currency);
+
+    let start_ts = env.ledger().timestamp();
+    let due_date = start_ts + 3600;
+    let invoice_id = create_invoice(&env, &client, &business, 10_000, &currency, due_date);
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &10_000, &11_000);
+
+    // Force a non-monotonic ledger clock before creation time.
+    env.ledger().set_timestamp(start_ts.saturating_sub(1));
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidTimestamp)));
+}
+
+#[test]
+fn test_settle_rejects_timestamp_before_funding_time() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, 100_000);
+    let currency = setup_token(&env, &business, &investor, &client.address);
+    client.add_currency(&admin, &currency);
+
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_verified_and_funded_invoice(
+        &env, &client, &business, &investor, 10_000, &currency, due_date,
+    );
+    let funded_at = client
+        .get_invoice(&invoice_id)
+        .funded_at
+        .expect("funded invoice must have funded_at");
+
+    env.ledger().set_timestamp(funded_at.saturating_sub(1));
+    let result = client.try_settle_invoice(&invoice_id, &10_000);
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidTimestamp)));
+}
+
+#[test]
+fn test_default_rejects_timestamp_before_funding_time() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, 100_000);
+    let currency = setup_token(&env, &business, &investor, &client.address);
+    client.add_currency(&admin, &currency);
+
+    let due_date = env.ledger().timestamp() + 100;
+    let invoice_id = create_verified_and_funded_invoice(
+        &env, &client, &business, &investor, 10_000, &currency, due_date,
+    );
+    let funded_at = client
+        .get_invoice(&invoice_id)
+        .funded_at
+        .expect("funded invoice must have funded_at");
+
+    env.ledger().set_timestamp(funded_at.saturating_sub(1));
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(0));
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidTimestamp)));
+}
+
+#[test]
+fn test_fund_invoice_rejects_timestamp_before_creation_time() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, 100_000);
+    let currency = setup_token(&env, &business, &investor, &client.address);
+    client.add_currency(&admin, &currency);
+
+    let created_ts = env.ledger().timestamp();
+    let due_date = created_ts + 1000;
+    let invoice_id = create_invoice(&env, &client, &business, 5_000, &currency, due_date);
+    client.verify_invoice(&invoice_id);
+
+    env.ledger().set_timestamp(created_ts.saturating_sub(1));
+    let result = client.try_fund_invoice(&investor, &invoice_id, &5_000);
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidTimestamp)));
 }
