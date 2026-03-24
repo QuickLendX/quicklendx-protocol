@@ -19,11 +19,17 @@ use crate::profits::{PlatformFee, PlatformFeeConfig};
 use crate::storage::{
     BidStorage, ConfigStorage, Indexes, InvestmentStorage, InvoiceStorage, StorageKeys,
 };
+use crate::QuickLendXContract;
+
+fn with_registered_contract<F: FnOnce()>(env: &Env, f: F) {
+    let contract_id = env.register(QuickLendXContract, ());
+    env.as_contract(&contract_id, f);
+}
 
 #[test]
 fn test_storage_keys() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
         let bid_id = BytesN::from_array(&env, &[2; 32]);
         let investment_id = BytesN::from_array(&env, &[3; 32]);
@@ -76,7 +82,7 @@ fn test_storage_keys() {
 #[test]
 fn test_indexes() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let business = Address::generate(&env);
         let investor = Address::generate(&env);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
@@ -173,8 +179,8 @@ fn test_indexes() {
 #[test]
 fn test_invoice_storage() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
-        env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
+        with_registered_contract(&env, || {
             let invoice_id = BytesN::from_array(&env, &[1; 32]);
             let business = Address::generate(&env);
             let currency = Address::generate(&env);
@@ -293,7 +299,7 @@ fn test_invoice_storage() {
 #[test]
 fn test_bid_storage() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let bid_id = BytesN::from_array(&env, &[2; 32]);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
         let investor = Address::generate(&env);
@@ -382,7 +388,7 @@ fn test_bid_storage() {
 #[test]
 fn test_investment_storage() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let investment_id = BytesN::from_array(&env, &[3; 32]);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
         let investor = Address::generate(&env);
@@ -479,7 +485,7 @@ fn test_investment_storage() {
 #[test]
 fn test_config_storage() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         // Simple test to verify config storage works
         // Note: Actual PlatformFeeConfig structure may differ
         // This test focuses on storage mechanics rather than specific fields
@@ -493,7 +499,7 @@ fn test_config_storage() {
 #[test]
 fn test_storage_isolation() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         // Create different entities
         let invoice_id1 = BytesN::from_array(&env, &[1; 32]);
         let invoice_id2 = BytesN::from_array(&env, &[2; 32]);
@@ -574,7 +580,7 @@ fn create_test_invoice(env: &Env, id: BytesN<32>, business: Address) -> Invoice 
 #[test]
 fn test_storage_key_collision_detection() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         // Test that different entity types with same ID don't collide
         let id = BytesN::from_array(&env, &[1; 32]);
 
@@ -601,7 +607,7 @@ fn test_storage_key_collision_detection() {
 #[test]
 fn test_type_serialization_integrity() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         // Test complex invoice serialization
         let invoice = create_complex_invoice(&env);
         InvoiceStorage::store(&env, &invoice);
@@ -618,7 +624,7 @@ fn test_type_serialization_integrity() {
 #[test]
 fn test_index_consistency() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let business = Address::generate(&env);
         let invoice1 =
             create_test_invoice(&env, BytesN::from_array(&env, &[1; 32]), business.clone());
@@ -652,7 +658,7 @@ fn test_index_consistency() {
 #[test]
 fn test_storage_edge_cases() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         // Test empty collections
         let empty_business = Address::generate(&env);
         let empty_invoices = InvoiceStorage::get_by_business(&env, &empty_business);
@@ -674,7 +680,7 @@ fn test_deterministic_behavior() {
     // Run same operations multiple times to ensure deterministic results
     for _ in 0..5 {
         let env = Env::default();
-        env.as_contract(&Address::generate(&env), || {
+        with_registered_contract(&env, || {
             let invoice_id = BytesN::from_array(&env, &[42; 32]);
             let business = Address::generate(&env);
             let invoice = create_test_invoice(&env, invoice_id.clone(), business.clone());
@@ -696,7 +702,7 @@ fn test_deterministic_behavior() {
 #[test]
 fn test_concurrent_index_updates() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let business = Address::generate(&env);
         let mut invoices = Vec::new(&env);
 
@@ -935,7 +941,7 @@ fn test_escrow_storage_keys() {
 #[test]
 fn test_storage_counter_increments() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         // Test invoice counter
         let count1 = InvoiceStorage::next_count(&env);
         let count2 = InvoiceStorage::next_count(&env);
@@ -956,7 +962,7 @@ fn test_storage_counter_increments() {
 #[test]
 fn test_multiple_invoices_same_business() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let business = Address::generate(&env);
         let invoice_id_1 = BytesN::from_array(&env, &[1; 32]);
         let invoice_id_2 = BytesN::from_array(&env, &[2; 32]);
@@ -977,7 +983,7 @@ fn test_multiple_invoices_same_business() {
 #[test]
 fn test_storage_retrieval_consistency() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let business = Address::generate(&env);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
 
