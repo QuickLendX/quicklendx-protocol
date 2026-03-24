@@ -2,8 +2,10 @@
 extern crate alloc;
 
 use crate::invoice::InvoiceCategory;
+use crate::protocol_limits::MAX_REJECTION_REASON_LENGTH;
 use crate::verification::BusinessVerificationStatus;
 use crate::QuickLendXContract;
+use crate::QuickLendXError;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Address, Env, String, Vec,
@@ -34,6 +36,11 @@ fn create_test_kyc_data(env: &Env, business_name: &str) -> String {
         business_name.to_lowercase()
     );
     String::from_str(env, &kyc_json)
+}
+
+fn create_reason_with_len(env: &Env, len: u32) -> String {
+    let reason = "r".repeat(len as usize);
+    String::from_str(env, &reason)
 }
 
 // ============================================================================
@@ -217,6 +224,7 @@ fn test_only_admin_can_reject_business() {
     // Non-admin tries to reject - should fail
     let result = client.try_reject_business(&non_admin, &business, &rejection_reason);
     assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::NotAdmin);
 
     // Admin rejects - should succeed
     client.reject_business(&admin, &business, &rejection_reason);
@@ -230,6 +238,99 @@ fn test_only_admin_can_reject_business() {
         BusinessVerificationStatus::Rejected
     ));
     assert_eq!(verification.rejection_reason, Some(rejection_reason));
+}
+
+#[test]
+fn test_reject_business_requires_pending_status() {
+    let (env, client, admin) = setup();
+    let business = Address::generate(&env);
+    let kyc_data = create_test_kyc_data(&env, "StatusLockedBusiness");
+    let rejection_reason = String::from_str(&env, "Missing compliance docs");
+
+    client.submit_kyc_application(&business, &kyc_data);
+    client.verify_business(&admin, &business);
+
+    let reject_result = client.try_reject_business(&admin, &business, &rejection_reason);
+    assert!(reject_result.is_err());
+    assert_eq!(
+        reject_result.unwrap_err().unwrap(),
+        QuickLendXError::InvalidKYCStatus
+    );
+
+    let verification = client.get_business_verification_status(&business).unwrap();
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Verified
+    ));
+    assert!(verification.rejection_reason.is_none());
+}
+
+#[test]
+fn test_reject_business_reason_length_boundaries() {
+    let (env, client, admin) = setup();
+    let business = Address::generate(&env);
+    let kyc_data = create_test_kyc_data(&env, "ReasonBoundaryBusiness");
+
+    client.submit_kyc_application(&business, &kyc_data);
+
+    let max_reason = create_reason_with_len(&env, MAX_REJECTION_REASON_LENGTH);
+    client.reject_business(&admin, &business, &max_reason);
+
+    let rejected = client.get_business_verification_status(&business).unwrap();
+    assert!(matches!(
+        rejected.status,
+        BusinessVerificationStatus::Rejected
+    ));
+    assert_eq!(rejected.rejection_reason, Some(max_reason));
+
+    // Move back to pending to validate over-limit rejection on a valid transition.
+    let resubmitted_kyc = create_test_kyc_data(&env, "ReasonBoundaryBusinessResub");
+    client.submit_kyc_application(&business, &resubmitted_kyc);
+
+    let too_long_reason = create_reason_with_len(&env, MAX_REJECTION_REASON_LENGTH + 1);
+    let too_long_result = client.try_reject_business(&admin, &business, &too_long_reason);
+    assert!(too_long_result.is_err());
+    assert_eq!(
+        too_long_result.unwrap_err().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
+
+    let pending = client.get_business_verification_status(&business).unwrap();
+    assert!(matches!(
+        pending.status,
+        BusinessVerificationStatus::Pending
+    ));
+    assert!(pending.rejection_reason.is_none());
+}
+
+#[test]
+fn test_reject_business_repeated_attempt_keeps_indexes_clean() {
+    let (env, client, admin) = setup();
+    let business = Address::generate(&env);
+    let kyc_data = create_test_kyc_data(&env, "RepeatedRejectBusiness");
+    let first_reason = String::from_str(&env, "Initial rejection reason");
+    let second_reason = String::from_str(&env, "Second rejection should fail");
+
+    client.submit_kyc_application(&business, &kyc_data);
+    client.reject_business(&admin, &business, &first_reason);
+
+    let second_reject = client.try_reject_business(&admin, &business, &second_reason);
+    assert!(second_reject.is_err());
+    assert_eq!(
+        second_reject.unwrap_err().unwrap(),
+        QuickLendXError::InvalidKYCStatus
+    );
+
+    let rejected = client.get_rejected_businesses();
+    let pending = client.get_pending_businesses();
+    let verified = client.get_verified_businesses();
+    assert_eq!(rejected.len(), 1);
+    assert!(rejected.contains(&business));
+    assert!(!pending.contains(&business));
+    assert!(!verified.contains(&business));
+
+    let verification = client.get_business_verification_status(&business).unwrap();
+    assert_eq!(verification.rejection_reason, Some(first_reason));
 }
 
 // ============================================================================
