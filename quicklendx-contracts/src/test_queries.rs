@@ -1387,6 +1387,114 @@ fn test_currency_whitelist_pagination_security_access_control() {
     }
 }
 
+
+ #[test]
+fn test_bid_history_pagination_no_overlap() {
+    let (env, client, _admin) = setup();
+
+    let invoice_id = create_test_invoice(&env, &client);
+
+    // create multiple bids
+    for i in 0..10 {
+        create_test_bid(&env, &client, &invoice_id, i * 100);
+    }
+
+    let page1 = client.get_bid_history_paged(
+        &invoice_id,
+        &Option::<BidStatus>::None,
+        &0,
+        &5,
+    );
+
+    let page2 = client.get_bid_history_paged(
+        &invoice_id,
+        &Option::<BidStatus>::None,
+        &5,
+        &5,
+    );
+
+    // ensure no overlap
+    for b1 in page1.iter() {
+        for b2 in page2.iter() {
+            assert_ne!(b1.bid_id, b2.bid_id);
+        }
+    }
+}
+
+
+#[test]
+fn test_pagination_consistency_no_missing_or_duplicates() {
+    let (env, client, investor) = setup();
+
+    // create multiple bids (e.g. 10)
+    for _ in 0..10 {
+        create_test_bid(&env, &client, &investor);
+    }
+
+    let page1 = client.get_bid_history_paged(&investor, &None, &0, &5);
+    let page2 = client.get_bid_history_paged(&investor, &None, &5, &5);
+    let full = client.get_bid_history_paged(&investor, &None, &0, &20);
+
+    // combine pages
+    let mut combined = page1.clone();
+    combined.append(&page2);
+
+    // ✅ check no missing / no extra
+    assert_eq!(combined.len(), full.len());
+
+    // ✅ check no duplicates
+    for i in 0..combined.len() {
+        for j in (i + 1)..combined.len() {
+            assert_ne!(combined[i].bid_id, combined[j].bid_id);
+        }
+    }
+}
+
+#[test]
+fn test_pagination_consistency_no_missing_or_duplicates() {
+    let (env, client, investor) = setup();
+
+    for _ in 0..10 {
+        create_test_bid(&env, &client, &investor);
+    }
+
+    let page1 = client.get_bid_history_paged(&investor, &None, &0, &5);
+    let page2 = client.get_bid_history_paged(&investor, &None, &5, &5);
+    let full = client.get_bid_history_paged(&investor, &None, &0, &20);
+
+    let mut combined = page1.clone();
+    combined.append(&page2);
+
+    assert_eq!(combined.len(), full.len());
+
+    for i in 0..combined.len() {
+        for j in (i + 1)..combined.len() {
+            assert_ne!(combined[i].bid_id, combined[j].bid_id);
+        }
+    }
+}
+
+#[test]
+fn test_bid_history_filtering_consistency() {
+    let (env, client, _admin) = setup();
+
+    let invoice_id = create_test_invoice(&env, &client);
+
+    create_test_bid_with_status(&env, &client, &invoice_id, BidStatus::Active);
+    create_test_bid_with_status(&env, &client, &invoice_id, BidStatus::Closed);
+
+    let active_bids = client.get_bid_history_paged(
+        &invoice_id,
+        &Some(BidStatus::Active),
+        &0,
+        &10,
+    );
+
+    for bid in active_bids.iter() {
+        assert_eq!(bid.status, BidStatus::Active);
+    }
+}
+
 /// Test currency whitelist pagination with rapid concurrent-like modifications
 #[test]
 fn test_currency_whitelist_pagination_concurrent_modification_simulation() {
