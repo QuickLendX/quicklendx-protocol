@@ -74,6 +74,98 @@ impl BusinessVerificationStorage {
     const REJECTED_BUSINESSES_KEY: &'static str = "rejected_businesses";
     const ADMIN_KEY: &'static str = "admin_address";
 
+    /// Validates that a state transition is allowed according to KYC lifecycle rules
+    /// 
+    /// Valid transitions:
+    /// - None → Pending (new submission)
+    /// - Pending → Verified (admin approval)
+    /// - Pending → Rejected (admin rejection)
+    /// - Rejected → Pending (resubmission after rejection)
+    /// 
+    /// Invalid transitions:
+    /// - Verified → *any other state (verified is final)
+    /// - Pending → Pending (duplicate submission)
+    /// - Rejected → Rejected (duplicate rejection)
+    /// - Rejected → Verified (must go through Pending first)
+    pub fn validate_state_transition(
+        old_status: Option<BusinessVerificationStatus>,
+        new_status: BusinessVerificationStatus,
+    ) -> Result<(), QuickLendXError> {
+        match (old_status, new_status) {
+            // New submission (no previous status)
+            (None, BusinessVerificationStatus::Pending) => Ok(()),
+            
+            // Pending → Verified (admin approval)
+            (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Verified) => Ok(()),
+            
+            // Pending → Rejected (admin rejection)
+            (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Rejected) => Ok(()),
+            
+            // Rejected → Pending (resubmission after rejection)
+            (Some(BusinessVerificationStatus::Rejected), BusinessVerificationStatus::Pending) => Ok(()),
+            
+            // Invalid transitions
+            (Some(BusinessVerificationStatus::Verified), _) => {
+                Err(QuickLendXError::InvalidKYCStatus) // Verified is final
+            }
+            (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Pending) => {
+                Err(QuickLendXError::KYCAlreadyPending) // Duplicate submission
+            }
+            (Some(BusinessVerificationStatus::Rejected), BusinessVerificationStatus::Rejected) => {
+                Err(QuickLendXError::InvalidKYCStatus) // Duplicate rejection
+            }
+            (Some(BusinessVerificationStatus::Rejected), BusinessVerificationStatus::Verified) => {
+                Err(QuickLendXError::InvalidKYCStatus) // Must go through Pending first
+            }
+            (None, BusinessVerificationStatus::Verified) => {
+                Err(QuickLendXError::InvalidKYCStatus) // Cannot be verified without submission
+            }
+            (None, BusinessVerificationStatus::Rejected) => {
+                Err(QuickLendXError::InvalidKYCStatus) // Cannot be rejected without submission
+            }
+        }
+    }
+
+    /// Validates that rejection reason is immutable once set
+    /// Once a business has been rejected with a reason, that reason cannot be changed
+    pub fn validate_rejection_reason_immutability(
+        old_verification: &Option<BusinessVerification>,
+        new_rejection_reason: &Option<String>,
+    ) -> Result<(), QuickLendXError> {
+        if let Some(old_ver) = old_verification {
+            // If there was an old rejection reason, the new one must match exactly
+            if let Some(old_reason) = &old_ver.rejection_reason {
+                if let Some(new_reason) = new_rejection_reason {
+                    if old_reason != new_reason {
+                        return Err(QuickLendXError::InvalidKYCStatus); // Cannot change rejection reason
+                    }
+                } else {
+                    return Err(QuickLendXError::InvalidKYCStatus); // Cannot remove rejection reason
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Verifies index consistency by checking that a business appears in exactly one status list
+    pub fn verify_index_consistency(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+        let verified = Self::get_verified_businesses(env);
+        let pending = Self::get_pending_businesses(env);
+        let rejected = Self::get_rejected_businesses(env);
+        
+        let in_verified = verified.iter().any(|addr| addr == *business);
+        let in_pending = pending.iter().any(|addr| addr == *business);
+        let in_rejected = rejected.iter().any(|addr| addr == *business);
+        
+        // Business should be in exactly one list
+        let count = [in_verified, in_pending, in_rejected].iter().filter(|&&x| x).count();
+        if count != 1 {
+            return Err(QuickLendXError::InvalidKYCStatus);
+        }
+        
+        Ok(())
+    }
+
     pub fn store_verification(env: &Env, verification: &BusinessVerification) {
         env.storage()
             .instance()
@@ -97,8 +189,15 @@ impl BusinessVerificationStorage {
         env.storage().instance().get(business)
     }
 
-    pub fn update_verification(env: &Env, verification: &BusinessVerification) {
+    pub fn update_verification(env: &Env, verification: &BusinessVerification) -> Result<(), QuickLendXError> {
         let old_verification = Self::get_verification(env, &verification.business);
+        let old_status = old_verification.as_ref().map(|v| v.status.clone());
+
+        // Validate state transition
+        Self::validate_state_transition(old_status.clone(), verification.status.clone())?;
+
+        // Validate rejection reason immutability
+        Self::validate_rejection_reason_immutability(&old_verification, &verification.rejection_reason)?;
 
         // Remove from old status list
         if let Some(old_ver) = old_verification {
@@ -117,6 +216,11 @@ impl BusinessVerificationStorage {
 
         // Store new verification
         Self::store_verification(env, verification);
+
+        // Verify index consistency after update
+        Self::verify_index_consistency(env, &verification.business)?;
+
+        Ok(())
     }
 
     pub fn is_business_verified(env: &Env, business: &Address) -> bool {
@@ -536,22 +640,12 @@ pub fn submit_kyc_application(
     // Only the business can submit their own KYC
     business.require_auth();
 
-    // Check if business already has a verification record
-    if let Some(existing_verification) =
-        BusinessVerificationStorage::get_verification(env, business)
-    {
-        match existing_verification.status {
-            BusinessVerificationStatus::Pending => {
-                return Err(QuickLendXError::KYCAlreadyPending);
-            }
-            BusinessVerificationStatus::Verified => {
-                return Err(QuickLendXError::KYCAlreadyVerified);
-            }
-            BusinessVerificationStatus::Rejected => {
-                // Allow resubmission if previously rejected
-            }
-        }
-    }
+    // Get existing verification record
+    let existing_verification = BusinessVerificationStorage::get_verification(env, business);
+    let old_status = existing_verification.as_ref().map(|v| v.status.clone());
+
+    // Validate state transition to Pending
+    BusinessVerificationStorage::validate_state_transition(old_status.clone(), BusinessVerificationStatus::Pending)?;
 
     let verification = BusinessVerification {
         business: business.clone(),
@@ -560,11 +654,18 @@ pub fn submit_kyc_application(
         verified_by: None,
         kyc_data,
         submitted_at: env.ledger().timestamp(),
-        rejection_reason: None,
+        rejection_reason: None, // Clear rejection reason on resubmission
     };
 
-    BusinessVerificationStorage::store_verification(env, &verification);
-    emit_kyc_submitted(env, business);
+    BusinessVerificationStorage::update_verification(env, &verification)?;
+    
+    // Emit appropriate event based on whether this is a resubmission
+    if matches!(old_status, Some(BusinessVerificationStatus::Rejected)) {
+        emit_kyc_resubmitted(env, business);
+    } else {
+        emit_kyc_submitted(env, business);
+    }
+    
     Ok(())
 }
 
@@ -582,15 +683,19 @@ pub fn verify_business(
     let mut verification = BusinessVerificationStorage::get_verification(env, business)
         .ok_or(QuickLendXError::KYCNotFound)?;
 
-    if !matches!(verification.status, BusinessVerificationStatus::Pending) {
-        return Err(QuickLendXError::InvalidKYCStatus);
-    }
+    // Validate state transition to Verified
+    BusinessVerificationStorage::validate_state_transition(
+        Some(verification.status.clone()),
+        BusinessVerificationStatus::Verified,
+    )?;
 
     verification.status = BusinessVerificationStatus::Verified;
     verification.verified_at = Some(env.ledger().timestamp());
     verification.verified_by = Some(admin.clone());
+    // Clear rejection reason when verified
+    verification.rejection_reason = None;
 
-    BusinessVerificationStorage::update_verification(env, &verification);
+    BusinessVerificationStorage::update_verification(env, &verification)?;
     emit_business_verified(env, business, admin);
     Ok(())
 }
@@ -611,15 +716,17 @@ pub fn reject_business(
     let mut verification = BusinessVerificationStorage::get_verification(env, business)
         .ok_or(QuickLendXError::KYCNotFound)?;
 
-    if !matches!(verification.status, BusinessVerificationStatus::Pending) {
-        return Err(QuickLendXError::InvalidKYCStatus);
-    }
+    // Validate state transition to Rejected
+    BusinessVerificationStorage::validate_state_transition(
+        Some(verification.status.clone()),
+        BusinessVerificationStatus::Rejected,
+    )?;
 
     verification.status = BusinessVerificationStatus::Rejected;
-    verification.rejection_reason = Some(reason);
+    verification.rejection_reason = Some(reason.clone());
 
-    BusinessVerificationStorage::update_verification(env, &verification);
-    emit_business_rejected(env, business, admin);
+    BusinessVerificationStorage::update_verification(env, &verification)?;
+    emit_business_rejected(env, business, admin, &reason);
     Ok(())
 }
 
@@ -715,25 +822,50 @@ pub fn verify_invoice_data(
     Ok(())
 }
 
-// Event emission functions (from main)
+// Enhanced event emission functions for comprehensive audit trail
 fn emit_kyc_submitted(env: &Env, business: &Address) {
     env.events().publish(
         (symbol_short!("kyc_sub"),),
-        (business.clone(), env.ledger().timestamp()),
+        (
+            business.clone(),
+            env.ledger().timestamp(),
+            String::from_str(env, "submitted"),
+        ),
     );
 }
 
 fn emit_business_verified(env: &Env, business: &Address, admin: &Address) {
     env.events().publish(
         (symbol_short!("bus_ver"),),
-        (business.clone(), admin.clone(), env.ledger().timestamp()),
+        (
+            business.clone(),
+            admin.clone(),
+            env.ledger().timestamp(),
+            String::from_str(env, "verified"),
+        ),
     );
 }
 
-fn emit_business_rejected(env: &Env, business: &Address, admin: &Address) {
+fn emit_business_rejected(env: &Env, business: &Address, admin: &Address, reason: &String) {
     env.events().publish(
         (symbol_short!("bus_rej"),),
-        (business.clone(), admin.clone()),
+        (
+            business.clone(),
+            admin.clone(),
+            env.ledger().timestamp(),
+            reason.clone(),
+        ),
+    );
+}
+
+fn emit_kyc_resubmitted(env: &Env, business: &Address) {
+    env.events().publish(
+        (symbol_short!("kyc_resub"),),
+        (
+            business.clone(),
+            env.ledger().timestamp(),
+            String::from_str(env, "resubmitted"),
+        ),
     );
 }
 
