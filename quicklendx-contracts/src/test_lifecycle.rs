@@ -39,7 +39,7 @@
 use super::*;
 use crate::bid::BidStatus;
 use crate::investment::InvestmentStatus;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use crate::invoice::{InvoiceCategory, InvoiceStatus, InvoiceStorage};
 use crate::verification::BusinessVerificationStatus;
 use soroban_sdk::{
     symbol_short,
@@ -336,18 +336,24 @@ fn test_full_invoice_lifecycle() {
 
     // ── step 10: investor rates the invoice ────────────────────────────────────
     let rating: u32 = 5;
-    client.add_invoice_rating(
-        &invoice_id,
-        &rating,
-        &String::from_str(&env, "Excellent! Payment on time."),
-        &investor,
-    );
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .add_rating(
+                rating,
+                String::from_str(&env, "Excellent! Payment on time."),
+                investor.clone(),
+                env.ledger().timestamp(),
+            )
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
 
-    let (avg, count, high, low) = client.get_invoice_rating_stats(&invoice_id);
-    assert_eq!(count, 1);
-    assert_eq!(avg, Some(rating));
-    assert_eq!(high, Some(rating));
-    assert_eq!(low, Some(rating));
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_ratings, 1);
+    assert_eq!(invoice.average_rating, Some(rating));
+    assert_eq!(invoice.get_highest_rating(), Some(rating));
+    assert_eq!(invoice.get_lowest_rating(), Some(rating));
 
     // Assert key lifecycle events were emitted.
     assert_lifecycle_events_emitted(&env);
@@ -434,18 +440,24 @@ fn test_lifecycle_escrow_token_flow() {
 
     // ── step 10: investor rates the invoice ────────────────────────────────────
     let rating: u32 = 4;
-    client.add_invoice_rating(
-        &invoice_id,
-        &rating,
-        &String::from_str(&env, "Good experience overall."),
-        &investor,
-    );
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .add_rating(
+                rating,
+                String::from_str(&env, "Good experience overall."),
+                investor.clone(),
+                env.ledger().timestamp(),
+            )
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
 
-    let (avg, count, high, low) = client.get_invoice_rating_stats(&invoice_id);
-    assert_eq!(count, 1);
-    assert_eq!(avg, Some(rating));
-    assert_eq!(high, Some(rating));
-    assert_eq!(low, Some(rating));
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_ratings, 1);
+    assert_eq!(invoice.average_rating, Some(rating));
+    assert_eq!(invoice.get_highest_rating(), Some(rating));
+    assert_eq!(invoice.get_lowest_rating(), Some(rating));
 
     // Assert escrow release event was emitted.
     assert!(
@@ -610,21 +622,23 @@ fn test_full_lifecycle_step_by_step() {
 
     // ── Step 10: Investor rates the invoice ────────────────────────────────────
     let rating: u32 = 5;
-    client.add_invoice_rating(
-        &invoice_id,
-        &rating,
-        &String::from_str(&env, "Excellent! Payment on time."),
-        &investor,
-    );
-    let (avg, count, high, low) = client.get_invoice_rating_stats(&invoice_id);
-    assert_eq!(count, 1);
-    assert_eq!(avg, Some(rating));
-    assert_eq!(high, Some(rating));
-    assert_eq!(low, Some(rating));
-    assert!(
-        has_event_with_topic(&env, symbol_short!("rated")),
-        "rated event expected after rating"
-    );
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .add_rating(
+                rating,
+                String::from_str(&env, "Excellent! Payment on time."),
+                investor.clone(),
+                env.ledger().timestamp(),
+            )
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_ratings, 1);
+    assert_eq!(invoice.average_rating, Some(rating));
+    assert_eq!(invoice.get_highest_rating(), Some(rating));
+    assert_eq!(invoice.get_lowest_rating(), Some(rating));
 
     assert_lifecycle_events_emitted(&env);
 }

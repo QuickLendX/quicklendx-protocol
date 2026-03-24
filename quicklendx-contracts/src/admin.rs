@@ -34,6 +34,9 @@ pub const ADMIN_INITIALIZED_KEY: Symbol = symbol_short!("adm_init");
 pub struct AdminStorage;
 
 impl AdminStorage {
+    /// @notice Initialize the canonical admin address.
+    /// @dev Can only be called once and requires authorization from `admin`.
+    ///
     /// Initialize the admin address (can only be called once)
     ///
     /// # Arguments
@@ -75,6 +78,9 @@ impl AdminStorage {
         Ok(())
     }
 
+    /// @notice Transfer admin rights to `new_admin`.
+    /// @dev Requires authorization from `current_admin` and rejects non-admin callers.
+    ///
     /// Transfer admin role to a new address
     ///
     /// # Arguments
@@ -140,6 +146,9 @@ impl AdminStorage {
         }
     }
 
+    /// @notice Require that `address` is the current stored admin.
+    /// @dev This validates identity only. Call `require_current_admin` when signer auth is also needed.
+    ///
     /// Require that an address is the admin (authorization helper)
     ///
     /// # Arguments
@@ -160,6 +169,19 @@ impl AdminStorage {
             return Err(QuickLendXError::NotAdmin);
         }
         Ok(())
+    }
+
+    /// @notice Load the stored admin and require an authenticated admin signature.
+    /// @dev This is the safest helper for admin-only entrypoints that do not take an explicit caller.
+    ///
+    /// # Returns
+    /// * `Ok(Address)` with the verified admin signer
+    /// * `Err(QuickLendXError::NotAdmin)` if no admin is configured
+    pub fn require_current_admin(env: &Env) -> Result<Address, QuickLendXError> {
+        let admin = Self::get_admin(env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+        Self::require_admin(env, &admin)?;
+        Ok(admin)
     }
 }
 
