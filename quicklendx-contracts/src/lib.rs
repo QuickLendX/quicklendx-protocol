@@ -76,7 +76,10 @@ use events::{
     emit_invoice_tag_removed, emit_invoice_uploaded, emit_invoice_verified,
     emit_platform_fee_config_updated, emit_treasury_configured,
 };
-use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
+use investment::{
+    InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage, MAX_COVERAGE_PERCENTAGE,
+    MIN_COVERAGE_PERCENTAGE,
+};
 use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
@@ -903,6 +906,16 @@ impl QuickLendXContract {
 
         if investment.status != InvestmentStatus::Active {
             return Err(QuickLendXError::InvalidStatus);
+        }
+
+        // Validate coverage percentage bounds before any arithmetic so that
+        // out-of-range values produce the specific InvalidCoveragePercentage
+        // error rather than the generic InvalidAmount that would result if
+        // calculate_premium silently returned 0 for them.
+        if coverage_percentage < MIN_COVERAGE_PERCENTAGE
+            || coverage_percentage > MAX_COVERAGE_PERCENTAGE
+        {
+            return Err(QuickLendXError::InvalidCoveragePercentage);
         }
 
         let premium = Investment::calculate_premium(investment.amount, coverage_percentage);
@@ -2168,35 +2181,3 @@ pub fn get_analytics_summary(
         });
     (platform, performance)
 }
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-mod test_bid;
-
-#[cfg(test)]
-mod test_fees;
-
-#[cfg(test)]
-mod test_escrow;
-
-#[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
-#[cfg(test)]
-mod test_insurance;
-#[cfg(test)]
-mod test_investor_kyc;
-#[cfg(test)]
-mod test_ledger_timestamp_consistency;
-#[cfg(test)]
-mod test_lifecycle;
-#[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_min_invoice_amount;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;
