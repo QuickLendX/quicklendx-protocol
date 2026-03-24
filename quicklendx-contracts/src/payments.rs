@@ -12,8 +12,20 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
 #[cfg_attr(test, derive(Debug))]
 pub enum EscrowStatus {
     Held,     // Funds are held in escrow
-    Released, // Funds released to business
-    Refunded, // Funds refunded to investor
+    Released, // Funds released to business (terminal)
+    Refunded, // Funds refunded to investor (terminal)
+}
+
+impl EscrowStatus {
+    /// Returns `true` for any terminal state where funds have already moved.
+    ///
+    /// ### Security
+    /// Both `release_escrow` and `refund_escrow` **must** call this before
+    /// transferring tokens.  A terminal escrow can never be acted on again,
+    /// preventing double-spend, double-release, and release-after-refund.
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, EscrowStatus::Released | EscrowStatus::Refunded)
+    }
 }
 
 #[contracttype]
@@ -131,13 +143,19 @@ pub fn create_escrow(
 
 /// Release escrow funds to business (contract → business). Escrow must be Held.
 ///
+/// ### Mutual-exclusivity guarantee
+/// Once an escrow reaches `Released` or `Refunded` (terminal states) this
+/// function returns `InvalidStatus` immediately — no token transfer occurs.
+/// This prevents double-release and release-after-refund.
+///
 /// # Errors
 /// * `StorageKeyNotFound` if no escrow for invoice, `InvalidStatus` if not Held
 pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-    if escrow.status != EscrowStatus::Held {
+    // Reject any terminal state — covers Released AND Refunded.
+    if escrow.status.is_terminal() {
         return Err(QuickLendXError::InvalidStatus);
     }
 
@@ -160,13 +178,19 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
 /// Refund escrow funds to investor (contract → investor). Escrow must be Held.
 ///
+/// ### Mutual-exclusivity guarantee
+/// Once an escrow reaches `Released` or `Refunded` (terminal states) this
+/// function returns `InvalidStatus` immediately — no token transfer occurs.
+/// This prevents double-refund and refund-after-release.
+///
 /// # Errors
 /// * `StorageKeyNotFound` if no escrow for invoice, `InvalidStatus` if not Held
 pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-    if escrow.status != EscrowStatus::Held {
+    // Reject any terminal state — covers Released AND Refunded.
+    if escrow.status.is_terminal() {
         return Err(QuickLendXError::InvalidStatus);
     }
 

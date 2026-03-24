@@ -64,3 +64,69 @@ Every refund is recorded in the platform's audit trail with:
 - **Actor**: The address that initiated the refund.
 - **Invoice ID**: The associated invoice.
 - **Timestamp**: Ledger timestamp.
+
+---
+
+## Mutual Exclusivity Guarantees (Issue #610)
+
+### Overview
+
+`release_escrow` and `refund_escrow` are **mutually exclusive terminal operations**. Once either succeeds, the escrow enters a terminal state (`Released` or `Refunded`) and no further token movement is possible.
+
+### Terminal State Model
+
+```
+Held ──► Released  (terminal — funds sent to business)
+Held ──► Refunded  (terminal — funds returned to investor)
+
+Released ──► (any)  REJECTED — InvalidStatus
+Refunded ──► (any)  REJECTED — InvalidStatus
+```
+
+`EscrowStatus::is_terminal()` encodes this:
+
+```rust
+pub fn is_terminal(&self) -> bool {
+    matches!(self, EscrowStatus::Released | EscrowStatus::Refunded)
+}
+```
+
+Both `release_escrow` and `refund_escrow` call `is_terminal()` as their first guard — before any token transfer — so the check is impossible to bypass.
+
+### Blocked Scenarios
+
+| Attempt | Result |
+|---------|--------|
+| Release after release | `InvalidStatus` |
+| Refund after refund | `InvalidStatus` |
+| Release after refund | `InvalidStatus` |
+| Refund after release | `InvalidStatus` |
+| Release/refund with no escrow | `StorageKeyNotFound` |
+
+### Security Properties
+
+1. **No double-spend** — funds can only leave the contract once per escrow record.
+2. **No cross-path exploit** — a refund cannot be used to drain funds that were already released, and vice versa.
+3. **Reentrancy safe** — both public entry points (`release_escrow_funds`, `refund_escrow_funds`) are wrapped in `with_payment_guard` in `lib.rs`, preventing reentrant calls.
+4. **Isolated per invoice** — each invoice has its own escrow record; a terminal event on one invoice has no effect on any other.
+
+### Test Coverage (test_escrow_mutual_exclusivity.rs)
+
+| Test | Scenario |
+|------|----------|
+| `test_is_terminal_held_is_false` | `Held` is not terminal |
+| `test_is_terminal_released_is_true` | `Released` is terminal |
+| `test_is_terminal_refunded_is_true` | `Refunded` is terminal |
+| `test_escrow_held_after_funding` | Escrow is `Held` immediately after `accept_bid` |
+| `test_release_sets_status_released` | Settlement transitions escrow to `Released` |
+| `test_double_release_rejected` | Second release fails with `InvalidStatus` |
+| `test_refund_after_release_rejected` | Refund after release fails |
+| `test_release_balance_accounting` | Business balance correct after release |
+| `test_refund_sets_status_refunded` | Refund transitions escrow to `Refunded` |
+| `test_double_refund_rejected` | Second refund fails with `InvalidStatus` |
+| `test_release_after_refund_rejected` | Release after refund fails |
+| `test_refund_balance_accounting` | Investor balance restored after refund |
+| `test_release_no_escrow_returns_error` | Release on unfunded invoice returns error |
+| `test_refund_no_escrow_returns_error` | Refund on unfunded invoice returns error |
+| `test_independent_escrows_isolated` | Two invoices have isolated escrow state |
+| `test_contract_balance_integrity` | Contract balance decreases after terminal event |

@@ -178,6 +178,18 @@ impl QuickLendXContract {
         bid::BidStorage::get_bid_ttl_days(&env)
     }
 
+    /// Get full bid TTL configuration: current value, bounds, default, and
+    /// whether an admin override is active.
+    pub fn get_bid_ttl_config(env: Env) -> bid::BidTtlConfig {
+        bid::BidStorage::get_bid_ttl_config(&env)
+    }
+
+    /// Admin-only: reset bid TTL to the compile-time default (7 days).
+    pub fn reset_bid_ttl_to_default(env: Env) -> Result<u64, QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        bid::BidStorage::reset_bid_ttl_to_default(&env, &admin)
+    }
+
     /// Initiate emergency withdraw for stuck funds (admin only). Timelock applies before execute.
     /// See docs/contracts/emergency-recovery.md. Last-resort only.
     pub fn initiate_emergency_withdraw(
@@ -1229,6 +1241,7 @@ impl QuickLendXContract {
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            100, // max_invoices_per_business (default)
         )
     }
 
@@ -2076,6 +2089,10 @@ mod test_fees;
 mod test_escrow;
 
 #[cfg(test)]
+mod test_bid_ttl;
+#[cfg(test)]
+mod test_escrow_mutual_exclusivity;
+#[cfg(test)]
 mod test_escrow_refund;
 #[cfg(test)]
 mod test_fuzz;
@@ -2168,35 +2185,3 @@ pub fn get_analytics_summary(
         });
     (platform, performance)
 }
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-mod test_bid;
-
-#[cfg(test)]
-mod test_fees;
-
-#[cfg(test)]
-mod test_escrow;
-
-#[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
-#[cfg(test)]
-mod test_insurance;
-#[cfg(test)]
-mod test_investor_kyc;
-#[cfg(test)]
-mod test_ledger_timestamp_consistency;
-#[cfg(test)]
-mod test_lifecycle;
-#[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_min_invoice_amount;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;
