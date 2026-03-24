@@ -3,7 +3,7 @@ use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice
 use crate::init::ProtocolInitializer;
 use crate::investment::{InvestmentStatus, InvestmentStorage};
 use crate::invoice::{InvoiceStatus, InvoiceStorage};
-use soroban_sdk::{Address, BytesN, Env, String, Vec};
+use soroban_sdk::{BytesN, Env, Vec};
 
 /// Default grace period in seconds (7 days)
 pub const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60;
@@ -139,7 +139,7 @@ pub fn get_dispute_details(
     env: &Env,
     invoice_id: &BytesN<32>,
 ) -> Result<Option<crate::invoice::Dispute>, QuickLendXError> {
-    let invoice =
+    let _invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     // In this implementation, the Dispute struct is part of the Invoice struct

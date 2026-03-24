@@ -523,3 +523,229 @@ fn test_kyc_data_integrity() {
     // Verify the data is stored correctly
     let verification = client.get_business_verification_status(&business);
 }
+
+// ============================================================================
+// Pending-State Restriction Tests
+// ============================================================================
+
+/// A business with a pending KYC application must not be allowed to upload
+/// invoices. The contract must return `KYCAlreadyPending` (not the generic
+/// `BusinessNotVerified`) so callers can distinguish the two cases.
+#[test]
+fn test_pending_business_cannot_upload_invoice() {
+    let (env, client, _admin) = setup();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let kyc_data = create_test_kyc_data(&env, "PendingBusiness");
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    client.submit_kyc_application(&business, &kyc_data);
+
+    let result = client.try_upload_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Invoice from pending business"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert!(result.is_err(), "Pending business must not upload invoices");
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(
+        err,
+        crate::errors::QuickLendXError::KYCAlreadyPending,
+        "Expected KYCAlreadyPending, got {:?}",
+        err
+    );
+}
+
+/// A business with a pending KYC application must not be allowed to cancel
+/// an invoice that was uploaded before the KYC was re-submitted (e.g. after
+/// a rejection → resubmit flow where the invoice was created while verified).
+/// More directly: if the business is currently pending, cancel must fail.
+#[test]
+fn test_pending_business_cannot_cancel_invoice() {
+    let (env, client, admin) = setup();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let kyc_data = create_test_kyc_data(&env, "PendingCancelBusiness");
+    let rejection_reason = String::from_str(&env, "Needs more docs");
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+
+    // 1. Submit → verify → upload invoice
+    client.submit_kyc_application(&business, &kyc_data);
+    client.verify_business(&admin, &business);
+    let invoice_id = client.upload_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Invoice to cancel"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    // 2. Admin rejects → business resubmits (now pending again)
+    client.reject_business(&admin, &business, &rejection_reason);
+    let new_kyc = create_test_kyc_data(&env, "PendingCancelBusinessV2");
+    client.submit_kyc_application(&business, &new_kyc);
+
+    // 3. Cancel must fail while pending
+    let result = client.try_cancel_invoice(&invoice_id);
+    assert!(result.is_err(), "Pending business must not cancel invoices");
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(
+        err,
+        crate::errors::QuickLendXError::KYCAlreadyPending,
+        "Expected KYCAlreadyPending, got {:?}",
+        err
+    );
+}
+
+/// A business with a pending KYC application must not be allowed to accept
+/// a bid. The contract must return `KYCAlreadyPending`.
+#[test]
+fn test_pending_business_cannot_accept_bid() {
+    let (env, client, admin) = setup();
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let kyc_data = create_test_kyc_data(&env, "PendingAcceptBusiness");
+    let rejection_reason = String::from_str(&env, "Needs more docs");
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+
+    // 1. Verify business, verify investor, upload + verify invoice, place bid
+    client.submit_kyc_application(&business, &kyc_data);
+    client.verify_business(&admin, &business);
+
+    let inv_kyc = String::from_str(&env, "Investor KYC data sufficient for verification");
+    client.submit_investor_kyc(&investor, &inv_kyc);
+    client.verify_investor(&investor, &100_000i128);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &50_000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Invoice for bid acceptance test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &10_000i128, &12_000i128);
+
+    // 2. Admin rejects business → business resubmits (now pending again)
+    client.reject_business(&admin, &business, &rejection_reason);
+    let new_kyc = create_test_kyc_data(&env, "PendingAcceptBusinessV2");
+    client.submit_kyc_application(&business, &new_kyc);
+
+    // 3. Accept bid must fail while business is pending
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+    assert!(result.is_err(), "Pending business must not accept bids");
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(
+        err,
+        crate::errors::QuickLendXError::KYCAlreadyPending,
+        "Expected KYCAlreadyPending, got {:?}",
+        err
+    );
+}
+
+/// After a pending business is verified by admin, all privileged operations
+/// must succeed again (upload, cancel, accept bid).
+#[test]
+fn test_verified_business_can_act_after_pending_resolved() {
+    let (env, client, admin) = setup();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let kyc_data = create_test_kyc_data(&env, "ResolvedBusiness");
+    let rejection_reason = String::from_str(&env, "Needs more docs");
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+
+    // Reject → resubmit → verify cycle
+    client.submit_kyc_application(&business, &kyc_data);
+    client.reject_business(&admin, &business, &rejection_reason);
+    let new_kyc = create_test_kyc_data(&env, "ResolvedBusinessV2");
+    client.submit_kyc_application(&business, &new_kyc);
+    client.verify_business(&admin, &business);
+
+    // Now upload must succeed
+    let invoice_id = client.upload_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Invoice after re-verification"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.business, business);
+}
+
+/// A rejected business must still receive `BusinessNotVerified` (not
+/// `KYCAlreadyPending`) when attempting to upload an invoice.
+#[test]
+fn test_rejected_business_gets_business_not_verified_on_upload() {
+    let (env, client, admin) = setup();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let kyc_data = create_test_kyc_data(&env, "RejectedBusiness");
+    let rejection_reason = String::from_str(&env, "Fraudulent documents");
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    client.submit_kyc_application(&business, &kyc_data);
+    client.reject_business(&admin, &business, &rejection_reason);
+
+    let result = client.try_upload_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Invoice from rejected business"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(
+        err,
+        crate::errors::QuickLendXError::BusinessNotVerified,
+        "Rejected business must get BusinessNotVerified, got {:?}",
+        err
+    );
+}
+
+/// A business with no KYC record at all must receive `BusinessNotVerified`
+/// when attempting to upload an invoice.
+#[test]
+fn test_no_kyc_business_gets_business_not_verified_on_upload() {
+    let (env, client, _admin) = setup();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+
+    let result = client.try_upload_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Invoice from unknown business"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(
+        err,
+        crate::errors::QuickLendXError::BusinessNotVerified,
+        "Unknown business must get BusinessNotVerified, got {:?}",
+        err
+    );
+}
