@@ -25,7 +25,8 @@ quicklendx-contracts/src/
 ├── init.rs           # Core initialization module
 ├── admin.rs          # Admin role management
 ├── currency.rs       # Currency whitelist
-└── test_init.rs      # Comprehensive test suite
+├── test_init.rs      # Comprehensive test suite
+└── test_init_debug.rs # Initialization edge-case tests
 ```
 
 ### Key Components
@@ -83,6 +84,11 @@ While the current implementation uses single-shot initialization, the architectu
 - Uses Soroban's built-in `require_auth()` mechanism
 - Admin address is stored and used for all future admin operations
 
+### Address Sanity
+
+- Admin and treasury addresses must be distinct and must not be the contract address
+- Initial currency list must be unique and must not include admin/treasury/contract addresses
+
 ### Re-initialization Protection
 
 ```rust
@@ -102,6 +108,8 @@ All parameters are validated before any state changes:
 
 | Parameter | Validation | Error |
 |-----------|------------|-------|
+| `admin` / `treasury` | Distinct and not the contract address | `InvalidAddress` |
+| `initial_currencies` | No duplicates and must not include admin/treasury/contract | `InvalidCurrency` |
 | `fee_bps` | 0 ≤ fee ≤ 1000 | `InvalidFeeBasisPoints` |
 | `min_invoice_amount` | > 0 | `InvalidAmount` |
 | `max_due_date_days` | 1 ≤ days ≤ 730 | `InvoiceDueDateInvalid` |
@@ -167,6 +175,8 @@ Initializes the protocol with all configuration parameters.
 
 **Errors**:
 - `OperationNotAllowed` - Already initialized
+- `InvalidAddress` - Admin/treasury address conflict or contract self-reference
+- `InvalidCurrency` - Duplicate or conflicting currency address
 - `InvalidFeeBasisPoints` - Fee out of range
 - `InvalidAmount` - Min amount ≤ 0
 - `InvoiceDueDateInvalid` - Due date days out of range

@@ -109,6 +109,10 @@ impl ProtocolInitializer {
     /// setting up admin, treasury, fees, protocol limits, and currency whitelist.
     /// It can only be called once - subsequent calls will fail.
     ///
+    /// @notice Initializes the protocol in a single atomic operation.
+    /// @dev Requires admin authorization and validates all addresses/parameters
+    ///      before any state changes are committed.
+    ///
     /// # Arguments
     /// * `env` - The contract environment
     /// * `params` - Initialization parameters containing all configuration
@@ -126,9 +130,9 @@ impl ProtocolInitializer {
     /// - Validates all parameters before any state changes
     /// - Emits initialization event for audit trail
     pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
-
         // Check if already initialized (re-initialization protection with idempotency)
         if Self::is_initialized(env) {
+            params.admin.require_auth();
             // Check for idempotency: if initialized with exact same parameters, return Ok(())
             let current_admin: Address = env.storage().instance().get(&crate::admin::ADMIN_KEY).unwrap();
             let current_treasury: Address = env.storage().instance().get(&TREASURY_KEY).unwrap();
@@ -152,6 +156,7 @@ impl ProtocolInitializer {
 
         // Validate all parameters before making any state changes
         Self::validate_initialization_params(env, params)?;
+        params.admin.require_auth();
 
         // Initialize admin (this also checks admin_initialized flag)
         // We set this first as it's the foundation for all admin operations
@@ -226,6 +231,8 @@ impl ProtocolInitializer {
     /// # Returns
     /// * `true` if the protocol has been initialized
     /// * `false` otherwise
+    ///
+    /// @notice Returns true when the initialization flag is set.
     pub fn is_initialized(env: &Env) -> bool {
         env.storage()
             .instance()
@@ -237,10 +244,35 @@ impl ProtocolInitializer {
     ///
     /// Performs comprehensive validation of all parameters before
     /// any state changes are made.
+    ///
+    /// @notice Validates admin/treasury addresses, currency list, and protocol limits.
+    /// @dev Returns a typed error for any invalid input without mutating state.
     fn validate_initialization_params(
-        _env: &Env,
+        env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
+        let contract_address = env.current_contract_address();
+
+        // Validate admin/treasury addresses (must be distinct and not the contract).
+        if params.admin == params.treasury {
+            return Err(QuickLendXError::InvalidAddress);
+        }
+        if params.admin == contract_address || params.treasury == contract_address {
+            return Err(QuickLendXError::InvalidAddress);
+        }
+
+        // Validate initial currency list: no duplicates and no conflicting addresses.
+        let mut seen: Vec<Address> = Vec::new(env);
+        for currency in params.initial_currencies.iter() {
+            if currency == params.admin || currency == params.treasury || currency == contract_address {
+                return Err(QuickLendXError::InvalidCurrency);
+            }
+            if seen.iter().any(|existing| existing == currency) {
+                return Err(QuickLendXError::InvalidCurrency);
+            }
+            seen.push_back(currency.clone());
+        }
+
         // Validate fee basis points (0% to 10%)
         if params.fee_bps < MIN_FEE_BPS || params.fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
@@ -272,6 +304,8 @@ impl ProtocolInitializer {
     /// # Returns
     /// * `Some(ProtocolConfig)` if configuration exists
     /// * `None` if protocol has not been initialized
+    ///
+    /// @notice Returns the stored protocol configuration, if initialized.
     pub fn get_protocol_config(env: &Env) -> Option<ProtocolConfig> {
         env.storage().instance().get(&PROTOCOL_CONFIG_KEY)
     }
@@ -282,6 +316,7 @@ impl ProtocolInitializer {
 // ============================================================================
 
 /// Emit protocol initialization event
+/// @notice Emits a single initialization event with the configured parameters.
 fn emit_protocol_initialized(
     env: &Env,
     admin: &Address,
