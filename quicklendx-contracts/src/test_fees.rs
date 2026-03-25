@@ -2,13 +2,20 @@ use super::*;
 use crate::{errors::QuickLendXError, fees::FeeType};
 use soroban_sdk::{
     testutils::{Address as _, MockAuth, MockAuthInvoke},
-    Address, Env, Map, String,
+    Address, Env, IntoVal, Map, String,
 };
 
 /// Helper function to set up admin for testing
 fn setup_admin(env: &Env, client: &QuickLendXContractClient) -> Address {
     let admin = Address::generate(&env);
     client.set_admin(&admin);
+    admin
+}
+
+/// Helper: initialize admin via initialize_admin (first-time setup path)
+fn setup_admin_init(env: &Env, client: &QuickLendXContractClient) -> Address {
+    let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
     admin
 }
 
@@ -132,7 +139,7 @@ fn test_custom_platform_fee_bps() {
     let admin = setup_admin(&env, &client);
 
     // Test setting custom fee BPS
-    let new_fee_bps = 500; // 5%
+    let new_fee_bps = 500i128; // 5%
     client.set_platform_fee(&new_fee_bps);
 
     let updated_config = client.get_platform_fee();
@@ -668,7 +675,7 @@ fn test_update_fee_structure_rejects_invalid_values() {
         .err()
         .expect("base_fee_bps > 1000 must be rejected");
     let invalid_bps_contract_error = invalid_bps_err.expect("expected contract invoke error");
-    assert_eq!(invalid_bps_contract_error, QuickLendXError::InvalidAmount);
+    assert_eq!(invalid_bps_contract_error, QuickLendXError::InvalidFeeBasisPoints);
 
     let min_gt_max =
         client.try_update_fee_structure(&admin, &FeeType::Platform, &400, &5_001, &5_000, &true);
@@ -809,7 +816,7 @@ fn test_configure_treasury() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin_init(&env, &client);
+    let admin = setup_admin(&env, &client);
     let treasury = Address::generate(&env);
 
     // Initialize fee system (creates platform fee config needed by configure_treasury)
@@ -856,7 +863,7 @@ fn test_get_treasury_address_before_config() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin_init(&env, &client);
+    let admin = setup_admin(&env, &client);
 
     client.initialize_fee_system(&admin);
 
@@ -897,5 +904,121 @@ fn test_calculate_transaction_fees_late_payment_flag() {
     assert!(
         late_fees > base_fees,
         "Late payment must increase total fees"
+    );
+}
+
+#[test]
+fn test_update_platform_fee_bps_exceeds_max() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Attempt to set 11% (1100 BPS) - should return InvalidFeeBasisPoints (Contract Error 105)
+    let result = client.try_update_platform_fee_bps(&1100);
+    
+    assert!(result.is_err());
+    let err = result.err().expect("expected error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::InvalidFeeBasisPoints);
+}
+
+/// Test event integrity: verify event contains old and new BPS values
+#[test]
+fn test_update_platform_fee_event_integrity() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin); // Defaults to 200 BPS
+
+    // Update to 500 BPS
+    client.update_platform_fee_bps(&500);
+
+    // Verify Event Integrity: (old_bps, new_bps, updated_by, timestamp)
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(
+        last_event,
+        (
+            contract_id.clone(),
+            (soroban_sdk::symbol_short!("fee_cfg"),).into_val(&env),
+            (200u32, 500u32, admin.clone(), env.ledger().timestamp()).into_val(&env)
+        )
+    );
+}
+
+/// Test that updating to the same value (no-op) does not emit a duplicate event
+#[test]
+fn test_update_platform_fee_no_op_logic() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+    
+    let events_before = env.events().all().len();
+    
+    // Update to the same value (200 BPS)
+    client.update_platform_fee_bps(&200);
+    
+    let events_after = env.events().all().len();
+    assert_eq!(events_before, events_after, "No event should be emitted for no-op update");
+}
+
+/// Test that update_fee_structure emits the correct event with old/new values
+#[test]
+fn test_update_fee_structure_event_integrity() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin); // Sets Platform to 200
+
+    // Update Platform fee to 300
+    client.update_fee_structure(&admin, &FeeType::Platform, &300, &10, &1000, &true);
+
+    let last_event = env.events().all().last().unwrap();
+    // (FeeType::Platform, old_bps=200, new_bps=300, updated_by, timestamp)
+    assert_eq!(
+        last_event,
+        (
+            contract_id.clone(),
+            (soroban_sdk::symbol_short!("fee_str"),).into_val(&env),
+            (FeeType::Platform, 200u32, 300u32, admin.clone(), env.ledger().timestamp()).into_val(&env)
+        )
+    );
+}
+
+/// Test that configure_treasury emits correct event
+#[test]
+fn test_configure_treasury_event_integrity() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_treasury(&treasury);
+
+    let last_event = env.events().all().last().unwrap();
+    // (treasury_address, configured_by, timestamp)
+    assert_eq!(
+        last_event,
+        (
+            contract_id.clone(),
+            (soroban_sdk::symbol_short!("trs_cfg"),).into_val(&env),
+            (treasury.clone(), admin.clone(), env.ledger().timestamp()).into_val(&env)
+        )
     );
 }
