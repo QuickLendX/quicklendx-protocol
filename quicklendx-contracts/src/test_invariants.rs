@@ -12,11 +12,10 @@
 
 use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Vec};
 
-use crate::bid::{Bid, BidStatus};
+use crate::bid::{Bid, BidStatus, BidStorage};
 use crate::escrow::{Escrow, EscrowStatus};
-use crate::investment::{Investment, InvestmentStatus};
-use crate::invoice::{Invoice, InvoiceCategory, InvoiceStatus};
-use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
+use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
+use crate::invoice::{Invoice, InvoiceCategory, InvoiceStatus, InvoiceStorage};
 use crate::{QuickLendXContract, QuickLendXContractClient};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
@@ -674,18 +673,14 @@ fn test_invariants_after_full_lifecycle() {
     client.verify_invoice(&invoice_id);
 
     // 3. Bid and accept (creates escrow)
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500));
-    client.accept_bid(&invoice_id, &bid_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500)).unwrap();
+    client.accept_bid_and_fund(&invoice_id, &bid_id).unwrap();
 
     // 4. Release escrow (funds to business)
-    client.release_escrow_funds(&invoice_id);
+    client.release_escrow_funds(&invoice_id).unwrap();
 
     // 5. Settle: business pays full amount (triggers settlement and investment completed)
-    client.process_partial_payment(
-        &invoice_id,
-        &amount,
-        &String::from_str(&env, "lifecycle-tx-1"),
-    );
+    client.settle_invoice(&invoice_id, &amount).unwrap();
 
     // 6. Rate (allowed for Funded or Paid)
     client.add_invoice_rating(
@@ -693,7 +688,7 @@ fn test_invariants_after_full_lifecycle() {
         &5,
         &String::from_str(&env, "Smooth process"),
         &investor,
-    );
+    ).unwrap();
 
     // --- Invariant assertions ---
 
@@ -717,16 +712,19 @@ fn test_invariants_after_full_lifecycle() {
         "exactly one invoice must be Paid after full lifecycle"
     );
 
+    let refunded_count = client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+
     // status counts sum to total (global invariant: no orphaned storage)
     let sum_status = pending_count
         + verified_count
         + funded_count
         + paid_count
         + defaulted_count
-        + cancelled_count;
+        + cancelled_count
+        + refunded_count;
     assert_eq!(
         sum_status, total_invoice_count,
-        "sum of status counts must equal total_invoice_count (no orphaned status buckets)"
+        "sum of status counts must equal the global counter (no orphaned status buckets)"
     );
 
     // audit trail length: at least create, verify, funding, payment, settlement, rating
@@ -758,10 +756,71 @@ fn test_invariants_after_full_lifecycle() {
     );
 
     // no orphaned storage: the one invoice we have is the one we created and is Paid
-    let invoice = client.get_invoice(&invoice_id);
+    let invoice = client.get_invoice(&invoice_id).expect("invoice must exist");
     assert_eq!(invoice.id, invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
     let paid_invoices = client.get_invoices_by_status(&InvoiceStatus::Paid);
     assert_eq!(paid_invoices.len(), 1);
     assert_eq!(paid_invoices.get(0).unwrap(), invoice_id);
+}
+
+/// Stress test for invariants: Many invoices, many transitions, any status.
+#[test]
+fn test_invariants_multi_invoice_random_transitions() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+    
+    let b = Address::generate(&env);
+    let i = Address::generate(&env);
+    
+    // Whitelist token
+    let token_admin = Address::generate(&env);
+    let currency = env.register_stellar_asset_contract_v2(token_admin).address();
+    client.add_currency(&admin, &currency);
+    
+    // Verify business and investor
+    client.submit_kyc_application(&b, &String::from_str(&env, "B"));
+    client.verify_business(&admin, &b);
+    client.submit_investor_kyc(&i, &String::from_str(&env, "I"));
+    client.verify_investor(&i, &1_000_000);
+    
+    let mut ids = Vec::new(&env);
+    for j in 0..15 {
+        let id = client.store_invoice(&b, &1000, &currency, &(1000 + j as u64), &String::from_str(&env, "T"), &InvoiceCategory::Consulting, &Vec::new(&env));
+        ids.push_back(id);
+    }
+    
+    macro_rules! assert_total {
+        () => {
+            let total = client.get_total_invoice_count();
+            let sum = client.get_invoice_count_by_status(&InvoiceStatus::Pending)
+                + client.get_invoice_count_by_status(&InvoiceStatus::Verified)
+                + client.get_invoice_count_by_status(&InvoiceStatus::Funded)
+                + client.get_invoice_count_by_status(&InvoiceStatus::Paid)
+                + client.get_invoice_count_by_status(&InvoiceStatus::Defaulted)
+                + client.get_invoice_count_by_status(&InvoiceStatus::Cancelled)
+                + client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+            assert_eq!(total, 15, "Total should remian 15");
+            assert_eq!(total, sum, "Total should match sum of buckets during stress test");
+        };
+    }
+    
+    assert_total!();
+    
+    // Randomish transitions
+    for (idx, id) in ids.iter().enumerate() {
+        if idx % 2 == 0 { client.verify_invoice(&id); }
+        if idx % 3 == 0 { client.cancel_invoice(&b, &id); } // Can work if pending or verified
+        if idx % 4 == 0 {
+             // Use try_get_invoice to avoid panicking if not exist or other issues in stress test
+             let res = client.try_get_invoice(&id);
+             if let Ok(Ok(inv)) = res {
+                 if inv.status == InvoiceStatus::Verified {
+                     let bid_id = client.place_bid(&i, &id, &1000, &1100);
+                     client.accept_bid(&id, &bid_id);
+                 }
+             }
+        }
+        assert_total!();
+    }
 }
