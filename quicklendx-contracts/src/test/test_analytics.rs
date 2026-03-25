@@ -62,7 +62,7 @@ fn test_platform_metrics_empty_data() {
     let env = Env::default();
     let (client, _admin, _business) = setup_contract(&env);
 
-    let metrics = client.get_platform_metrics();
+    let metrics = client.get_platform_metrics().unwrap();
     assert_eq!(metrics.total_invoices, 0);
     assert_eq!(metrics.total_investments, 0);
     assert_eq!(metrics.total_volume, 0);
@@ -82,7 +82,7 @@ fn test_platform_metrics_with_invoices() {
     create_invoice(&env, &client, &business, 2000, "Invoice B");
     create_invoice(&env, &client, &business, 3000, "Invoice C");
 
-    let metrics = client.get_platform_metrics();
+    let metrics = client.get_platform_metrics().unwrap();
     assert_eq!(metrics.total_invoices, 3);
     assert_eq!(metrics.total_volume, 6000);
     assert_eq!(metrics.average_invoice_amount, 2000);
@@ -103,7 +103,7 @@ fn test_platform_metrics_after_status_changes() {
     // Mark inv2 as paid
     client.update_invoice_status(&inv2, &InvoiceStatus::Paid);
 
-    let metrics = client.get_platform_metrics();
+    let metrics = client.get_platform_metrics().unwrap();
     assert_eq!(metrics.total_invoices, 2);
     // Funded count = 1 (inv1 is Funded)
     assert_eq!(metrics.total_investments, 1);
@@ -118,7 +118,7 @@ fn test_performance_metrics_empty_data() {
     let env = Env::default();
     let (client, _admin, _business) = setup_contract(&env);
 
-    let metrics = client.get_performance_metrics();
+    let metrics = client.get_performance_metrics().unwrap();
     assert_eq!(metrics.average_settlement_time, 0);
     assert_eq!(metrics.average_verification_time, 0);
     assert_eq!(metrics.dispute_resolution_time, 0);
@@ -139,7 +139,7 @@ fn test_performance_metrics_with_invoices() {
     client.update_invoice_status(&inv1, &InvoiceStatus::Paid);
     client.update_invoice_status(&inv2, &InvoiceStatus::Defaulted);
 
-    let metrics = client.get_performance_metrics();
+    let metrics = client.get_performance_metrics().unwrap();
     // 1 paid out of 2 total = 50% = 5000 bps
     assert_eq!(metrics.transaction_success_rate, 5000);
     // 1 defaulted out of 2 total = 50% = 5000 bps
@@ -465,6 +465,124 @@ fn test_analytics_summary_returns_tuple() {
     assert_eq!(performance.average_settlement_time, 0);
 }
 
+
+
+// ============================================================================
+// PLATFORM METRICS
+// ============================================================================
+
+#[test]
+fn test_platform_metrics_empty_state() {
+    let env = Env::default();
+    let (client, _, _) = setup_contract(&env);
+
+    let metrics = client.get_platform_metrics().unwrap();
+
+    assert_eq!(metrics.total_invoices, 0);
+    assert_eq!(metrics.total_investments, 0);
+    assert_eq!(metrics.total_volume, 0);
+    assert_eq!(metrics.total_fees_collected, 0);
+    assert_eq!(metrics.average_invoice_amount, 0);
+    assert_eq!(metrics.average_investment_amount, 0);
+    assert_eq!(metrics.success_rate, 0);
+    assert_eq!(metrics.default_rate, 0);
+}
+
+#[test]
+fn test_platform_metrics_update() {
+    let env = Env::default();
+    let (client, admin, _) = setup_contract(&env);
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    client.update_platform_metrics();
+
+    let metrics = client.get_platform_metrics().unwrap();
+
+    assert!(metrics.total_invoices >= 0);
+    assert!(metrics.total_volume >= 0);
+}
+
+// ============================================================================
+// PERFORMANCE METRICS
+// ============================================================================
+
+#[test]
+fn test_performance_metrics_empty_state() {
+    let env = Env::default();
+    let (client, _, _) = setup_contract(&env);
+
+    let metrics = client.get_performance_metrics().unwrap();
+
+    assert_eq!(metrics.average_settlement_time, 0);
+    assert_eq!(metrics.average_verification_time, 0);
+    assert_eq!(metrics.dispute_resolution_time, 0);
+    assert_eq!(metrics.transaction_success_rate, 0);
+    assert_eq!(metrics.error_rate, 0);
+    assert_eq!(metrics.user_satisfaction_score, 0);
+}
+
+#[test]
+fn test_performance_metrics_update() {
+    let env = Env::default();
+    let (client, admin, _) = setup_contract(&env);
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    client.update_performance_metrics();
+
+    let metrics = client.get_performance_metrics().unwrap();
+
+    assert!(metrics.transaction_success_rate >= 0);
+    assert!(metrics.error_rate >= 0);
+}
+
+// ============================================================================
+// ANALYTICS SUMMARY (ISSUE#600)
+// ============================================================================
+
+#[test]
+fn test_analytics_summary_empty_state_fallback() {
+    let env = Env::default();
+    let (client, _, _) = setup_contract(&env);
+
+    let (platform, performance) = client.get_analytics_summary();
+
+    assert_eq!(platform.total_invoices, 0);
+    assert_eq!(platform.total_investments, 0);
+    assert_eq!(platform.total_volume, 0);
+    assert_eq!(platform.total_fees_collected, 0);
+    assert_eq!(platform.average_invoice_amount, 0);
+    assert_eq!(platform.average_investment_amount, 0);
+    assert_eq!(platform.success_rate, 0);
+    assert_eq!(platform.default_rate, 0);
+
+    assert_eq!(performance.average_settlement_time, 0);
+    assert_eq!(performance.average_verification_time, 0);
+    assert_eq!(performance.dispute_resolution_time, 0);
+    assert_eq!(performance.transaction_success_rate, 0);
+    assert_eq!(performance.error_rate, 0);
+    assert_eq!(performance.user_satisfaction_score, 0);
+}
+
+#[test]
+fn test_analytics_summary_after_updates() {
+    let env = Env::default();
+    let (client, admin, _) = setup_contract(&env);
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    client.update_platform_metrics();
+    client.update_performance_metrics();
+
+    let (platform, performance) = client.get_analytics_summary();
+
+    assert!(platform.total_invoices >= 0);
+    assert!(performance.transaction_success_rate >= 0);
+}
 // ============================================================================
 // USER BEHAVIOR UPDATE AND STORAGE TEST
 // ============================================================================
