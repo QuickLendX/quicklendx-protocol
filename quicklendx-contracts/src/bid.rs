@@ -3,12 +3,19 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use crate::events::emit_bid_expired;
+use crate::events::{emit_bid_expired, emit_bid_ttl_updated};
 
-// TTL stored in days (admin configurable). Defaults to 7 days. Bounds: 1..=30
-const DEFAULT_BID_TTL_DAYS: u64 = 7;
-const MIN_BID_TTL_DAYS: u64 = 1;
-const MAX_BID_TTL_DAYS: u64 = 30;
+// ─── Bid TTL configuration ────────────────────────────────────────────────────
+//
+// TTL is stored in whole days and is admin-configurable within [MIN, MAX].
+// A zero TTL is explicitly rejected to prevent bids that expire immediately.
+// An extreme TTL (> MAX_BID_TTL_DAYS) is rejected to prevent bids that
+// effectively never expire, which would lock investor funds indefinitely.
+//
+// Default: 7 days  |  Min: 1 day  |  Max: 30 days
+pub const DEFAULT_BID_TTL_DAYS: u64 = 7;
+pub const MIN_BID_TTL_DAYS: u64 = 1;
+pub const MAX_BID_TTL_DAYS: u64 = 30;
 const BID_TTL_KEY: Symbol = symbol_short!("bid_ttl");
 const MAX_ACTIVE_BIDS_PER_INVESTOR_KEY: Symbol = symbol_short!("mx_actbd");
 const DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 20;
@@ -16,6 +23,26 @@ const SECONDS_PER_DAY: u64 = 86400;
 
 /// Maximum number of bids allowed per invoice to prevent unbound storage growth
 pub const MAX_BIDS_PER_INVOICE: u32 = 50;
+
+/// Snapshot of the current bid TTL configuration returned by `get_bid_ttl_config`.
+///
+/// Provides all bounds and the active value in a single call so off-chain
+/// clients and tests can assert the full configuration without multiple queries.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BidTtlConfig {
+    /// Currently active TTL in days (admin-set or compile-time default).
+    pub current_days: u64,
+    /// Minimum allowed TTL in days (compile-time constant: 1).
+    pub min_days: u64,
+    /// Maximum allowed TTL in days (compile-time constant: 30).
+    pub max_days: u64,
+    /// Compile-time default TTL in days (7).
+    pub default_days: u64,
+    /// `true` when the admin has explicitly set a TTL; `false` when the
+    /// compile-time default is in use.
+    pub is_custom: bool,
+}
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -127,7 +154,10 @@ impl BidStorage {
         active_count
     }
 
-    /// Get configured bid TTL in days (returns default if not set)
+    /// Return the currently active bid TTL in days.
+    ///
+    /// Falls back to `DEFAULT_BID_TTL_DAYS` (7) when no admin override has
+    /// been stored, ensuring deterministic behaviour even on a fresh contract.
     pub fn get_bid_ttl_days(env: &Env) -> u64 {
         env.storage()
             .instance()
@@ -135,17 +165,70 @@ impl BidStorage {
             .unwrap_or(DEFAULT_BID_TTL_DAYS)
     }
 
-    /// Admin-only: set bid TTL in days. Enforces bounds.
+    /// Return the full TTL configuration snapshot.
+    ///
+    /// Includes the active value, compile-time bounds, the default, and a flag
+    /// indicating whether the admin has overridden the default.
+    pub fn get_bid_ttl_config(env: &Env) -> BidTtlConfig {
+        let stored: Option<u64> = env.storage().instance().get(&BID_TTL_KEY);
+        BidTtlConfig {
+            current_days: stored.unwrap_or(DEFAULT_BID_TTL_DAYS),
+            min_days: MIN_BID_TTL_DAYS,
+            max_days: MAX_BID_TTL_DAYS,
+            default_days: DEFAULT_BID_TTL_DAYS,
+            is_custom: stored.is_some(),
+        }
+    }
+
+    /// Admin-only: set bid TTL in days.
+    ///
+    /// ### Bounds
+    /// - Minimum: `MIN_BID_TTL_DAYS` (1) — prevents zero-TTL bids that expire
+    ///   immediately and can never be accepted.
+    /// - Maximum: `MAX_BID_TTL_DAYS` (30) — prevents extreme windows that
+    ///   would lock investor funds for unreasonably long periods.
+    ///
+    /// ### Errors
+    /// Returns `InvalidBidTtl` (not `InvalidAmount`) for a clear, auditable
+    /// error signal distinct from monetary validation failures.
+    ///
+    /// ### Events
+    /// Emits `ttl_upd` with the old value, new value, admin address, and
+    /// ledger timestamp so off-chain monitors can track every config change.
     pub fn set_bid_ttl_days(env: &Env, admin: &Address, days: u64) -> Result<u64, QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(env, admin)?;
 
+        // Explicit zero check first for a clear error message.
+        if days == 0 {
+            return Err(QuickLendXError::InvalidBidTtl);
+        }
         if days < MIN_BID_TTL_DAYS || days > MAX_BID_TTL_DAYS {
-            return Err(QuickLendXError::InvalidAmount);
+            return Err(QuickLendXError::InvalidBidTtl);
         }
 
+        let old_days = Self::get_bid_ttl_days(env);
         env.storage().instance().set(&BID_TTL_KEY, &days);
+        emit_bid_ttl_updated(env, old_days, days, admin);
         Ok(days)
+    }
+
+    /// Admin-only: reset bid TTL to the compile-time default (7 days).
+    ///
+    /// Removes the stored override so `get_bid_ttl_days` returns the default
+    /// and `get_bid_ttl_config` reports `is_custom = false`.
+    ///
+    /// ### Events
+    /// Emits `ttl_upd` with the old value and `DEFAULT_BID_TTL_DAYS` as the
+    /// new value so the reset is fully auditable.
+    pub fn reset_bid_ttl_to_default(env: &Env, admin: &Address) -> Result<u64, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(env, admin)?;
+
+        let old_days = Self::get_bid_ttl_days(env);
+        env.storage().instance().remove(&BID_TTL_KEY);
+        emit_bid_ttl_updated(env, old_days, DEFAULT_BID_TTL_DAYS, admin);
+        Ok(DEFAULT_BID_TTL_DAYS)
     }
 
     /// Get configured max number of active (Placed) bids per investor across all invoices.
@@ -223,22 +306,32 @@ impl BidStorage {
         while idx < bid_ids.len() {
             let bid_id = bid_ids.get(idx).unwrap();
             if let Some(mut bid) = Self::get_bid(env, &bid_id) {
-                if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
+                // Invariant 1: Preservation — terminal bids are NEVER touched by cleanup.
+                // Accepted, Withdrawn, and Cancelled are immutable terminal states.
+                let is_terminal = bid.status == BidStatus::Accepted
+                    || bid.status == BidStatus::Withdrawn
+                    || bid.status == BidStatus::Cancelled;
+                if is_terminal {
+                    active.push_back(bid_id);
+                // Invariant 2: Idempotency — already-Expired bids are silently skipped.
+                } else if bid.status == BidStatus::Expired {
+                    // drop from active list; do not re-process
+                // Invariant 3: Deadline — only expire Placed bids past their deadline.
+                } else if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
                     bid.status = BidStatus::Expired;
                     Self::update_bid(env, &bid);
                     emit_bid_expired(env, &bid);
                     expired += 1;
                 } else {
+                    // Placed but deadline not yet reached — keep active
                     active.push_back(bid_id);
                 }
             }
             idx += 1;
         }
-
         env.storage()
             .instance()
             .set(&Self::invoice_key(invoice_id), &active);
-
         expired
     }
 
@@ -411,6 +504,23 @@ impl BidStorage {
         }
         count
     }
+
+    /// Calculate the sum of all currently active (Placed) bid amounts for a given investor.
+    /// Used for checking against the investor's total investment limit.
+    pub fn get_active_bid_amount_sum_for_investor(env: &Env, investor: &Address) -> i128 {
+        let all_bids = Self::get_all_bids_by_investor(env, investor);
+        let current_timestamp = env.ledger().timestamp();
+        let mut total_amount: i128 = 0;
+        let mut idx: u32 = 0;
+        while idx < all_bids.len() {
+            let bid = all_bids.get(idx).unwrap();
+            if bid.status == BidStatus::Placed && !bid.is_expired(current_timestamp) {
+                total_amount = total_amount.saturating_add(bid.bid_amount);
+            }
+            idx = idx.saturating_add(1);
+        }
+        total_amount
+    }
     /// Generates a unique 32-byte bid ID using timestamp and a simple counter.
     /// This approach avoids potential serialization issues with large counters.
     pub fn generate_unique_bid_id(env: &Env) -> BytesN<32> {
@@ -436,5 +546,62 @@ impl BidStorage {
             bytes[i] = (mix % 256) as u8;
         }
         BytesN::from_array(env, &bytes)
+    }
+
+    /// Validates cleanup invariants for all bids on an invoice.
+    ///
+    /// Returns `true` if all invariants hold:
+    /// - Every `Expired` bid has a deadline strictly in the past.
+    /// - No `Placed` bid has a deadline that has already passed (cleanup was run).
+    pub fn assert_bid_invariants(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        current_timestamp: u64,
+    ) -> bool {
+        let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
+        let mut idx: u32 = 0;
+        while idx < bid_ids.len() {
+            let bid_id = bid_ids.get(idx).unwrap();
+            if let Some(bid) = Self::get_bid(env, &bid_id) {
+                // Every Expired bid must have a past deadline
+                if bid.status == BidStatus::Expired {
+                    if bid.expiration_timestamp >= current_timestamp {
+                        return false;
+                    }
+                }
+                // No Placed bid should remain past its deadline
+                if bid.status == BidStatus::Placed {
+                    if bid.is_expired(current_timestamp) {
+                        return false;
+                    }
+                }
+            }
+            idx += 1;
+        }
+        true
+    }
+
+    /// Returns bid counts by status as `(placed, accepted, withdrawn, expired, cancelled)`.
+    /// Useful for assertions in tests and analytics.
+    pub fn count_bids_by_status(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> (u32, u32, u32, u32, u32) {
+        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+        let (mut placed, mut accepted, mut withdrawn, mut expired, mut cancelled) =
+            (0u32, 0u32, 0u32, 0u32, 0u32);
+        let mut idx: u32 = 0;
+        while idx < records.len() {
+            let bid = records.get(idx).unwrap();
+            match bid.status {
+                BidStatus::Placed => placed += 1,
+                BidStatus::Accepted => accepted += 1,
+                BidStatus::Withdrawn => withdrawn += 1,
+                BidStatus::Expired => expired += 1,
+                BidStatus::Cancelled => cancelled += 1,
+            }
+            idx += 1;
+        }
+        (placed, accepted, withdrawn, expired, cancelled)
     }
 }

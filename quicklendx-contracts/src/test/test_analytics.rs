@@ -62,7 +62,7 @@ fn test_platform_metrics_empty_data() {
     let env = Env::default();
     let (client, _admin, _business) = setup_contract(&env);
 
-    let metrics = client.get_platform_metrics();
+    let metrics = client.get_platform_metrics().unwrap();
     assert_eq!(metrics.total_invoices, 0);
     assert_eq!(metrics.total_investments, 0);
     assert_eq!(metrics.total_volume, 0);
@@ -82,7 +82,7 @@ fn test_platform_metrics_with_invoices() {
     create_invoice(&env, &client, &business, 2000, "Invoice B");
     create_invoice(&env, &client, &business, 3000, "Invoice C");
 
-    let metrics = client.get_platform_metrics();
+    let metrics = client.get_platform_metrics().unwrap();
     assert_eq!(metrics.total_invoices, 3);
     assert_eq!(metrics.total_volume, 6000);
     assert_eq!(metrics.average_invoice_amount, 2000);
@@ -103,7 +103,7 @@ fn test_platform_metrics_after_status_changes() {
     // Mark inv2 as paid
     client.update_invoice_status(&inv2, &InvoiceStatus::Paid);
 
-    let metrics = client.get_platform_metrics();
+    let metrics = client.get_platform_metrics().unwrap();
     assert_eq!(metrics.total_invoices, 2);
     // Funded count = 1 (inv1 is Funded)
     assert_eq!(metrics.total_investments, 1);
@@ -118,7 +118,7 @@ fn test_performance_metrics_empty_data() {
     let env = Env::default();
     let (client, _admin, _business) = setup_contract(&env);
 
-    let metrics = client.get_performance_metrics();
+    let metrics = client.get_performance_metrics().unwrap();
     assert_eq!(metrics.average_settlement_time, 0);
     assert_eq!(metrics.average_verification_time, 0);
     assert_eq!(metrics.dispute_resolution_time, 0);
@@ -139,7 +139,7 @@ fn test_performance_metrics_with_invoices() {
     client.update_invoice_status(&inv1, &InvoiceStatus::Paid);
     client.update_invoice_status(&inv2, &InvoiceStatus::Defaulted);
 
-    let metrics = client.get_performance_metrics();
+    let metrics = client.get_performance_metrics().unwrap();
     // 1 paid out of 2 total = 50% = 5000 bps
     assert_eq!(metrics.transaction_success_rate, 5000);
     // 1 defaulted out of 2 total = 50% = 5000 bps
