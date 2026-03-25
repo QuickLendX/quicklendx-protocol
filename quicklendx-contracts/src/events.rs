@@ -596,3 +596,51 @@ pub fn emit_profit_fee_breakdown(
         ),
     );
 }
+
+pub fn emit_rotation_initiated(
+    env: &Env,
+    new_address: &Address,
+    initiated_by: &Address,
+    confirmation_deadline: u64,
+) {
+    env.events().publish(
+        (symbol_short!("rot_init"),),
+        (
+            new_address.clone(),
+            initiated_by.clone(),
+            confirmation_deadline,
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+pub fn emit_rotation_confirmed(
+    env: &Env,
+    old_address: Option<Address>,
+    new_address: &Address,
+    confirmed_at: u64,
+) {
+    env.events().publish(
+        (symbol_short!("rot_conf"),),
+        (
+            old_address,
+            new_address.clone(),
+            confirmed_at,
+        ),
+    );
+}
+
+pub fn emit_rotation_cancelled(
+    env: &Env,
+    cancelled_address: &Address,
+    cancelled_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("rot_canc"),),
+        (
+            cancelled_address.clone(),
+            cancelled_by.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
