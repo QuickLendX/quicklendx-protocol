@@ -8,6 +8,53 @@ use soroban_sdk::{BytesN, Env, Vec};
 /// Default grace period in seconds (7 days)
 pub const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60;
 
+/// Maximum allowed grace period in seconds (30 days)
+/// This prevents excessively long grace periods that could lock funds indefinitely
+const MAX_GRACE_PERIOD: u64 = 30 * 24 * 60 * 60;
+
+/// Resolve grace period using per-call override, protocol config, or default.
+///
+/// # Fallback Resolution Order
+/// 1. If `grace_period` is provided and valid → use it (after validation)
+/// 2. If `grace_period` is None → try protocol config
+/// 3. If protocol config not available → use hardcoded DEFAULT_GRACE_PERIOD
+///
+/// # Validation Rules
+/// - Override values must be <= MAX_GRACE_PERIOD (30 days)
+/// - Invalid overrides are rejected with QuickLendXError::InvalidTimestamp
+/// - Zero grace period is allowed (immediate default after due date)
+///
+/// # Security Considerations
+/// - Prevents denial-of-service via extremely large grace periods
+/// - Ensures deterministic behavior across all code paths
+/// - Maintains consistency with protocol-limits configuration
+///
+/// # Arguments
+/// * `env` - The Soroban environment
+/// * `grace_period` - Optional grace period override in seconds
+///
+/// # Returns
+/// * `Ok(u64)` - Resolved grace period value
+/// * `Err(QuickLendXError::InvalidTimestamp)` - If override exceeds maximum allowed value
+pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64, QuickLendXError> {
+    match grace_period {
+        Some(value) => {
+            // Validate override value
+            // Allow zero (immediate default) but reject excessively large values
+            if value > MAX_GRACE_PERIOD {
+                return Err(QuickLendXError::InvalidTimestamp);
+            }
+            Ok(value)
+        }
+        None => {
+            // Fallback to protocol config or hardcoded default
+            Ok(ProtocolInitializer::get_protocol_config(env)
+                .map(|config| config.grace_period_seconds)
+                .unwrap_or(DEFAULT_GRACE_PERIOD))
+        }
+    }
+}
+
 /// Mark an invoice as defaulted (admin or automated process)
 /// Checks due date + grace period before marking as defaulted
 ///
@@ -39,7 +86,7 @@ pub fn mark_invoice_defaulted(
     }
 
     let current_timestamp = env.ledger().timestamp();
-    let grace = resolve_grace_period(env, grace_period);
+    let grace = resolve_grace_period(env, grace_period)?;
     let grace_deadline = invoice.grace_deadline(grace);
 
     // Check if grace period has passed
@@ -51,15 +98,6 @@ pub fn mark_invoice_defaulted(
     handle_default(env, invoice_id)
 }
 
-/// Resolve grace period using per-call override, protocol config, or default.
-pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> u64 {
-    match grace_period {
-        Some(value) => value,
-        None => ProtocolInitializer::get_protocol_config(env)
-            .map(|config| config.grace_period_seconds)
-            .unwrap_or(DEFAULT_GRACE_PERIOD),
-    }
-}
 
 /// Handle invoice default - internal function that performs the actual defaulting
 /// This function assumes all validations have been done (grace period, status, etc.)

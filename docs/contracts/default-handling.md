@@ -211,6 +211,85 @@ pub const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days
 
 This can be overridden per invoice when calling `mark_invoice_defaulted`.
 
+### Grace Period Fallback Resolution
+
+The protocol uses a three-tier fallback system to resolve the grace period:
+
+1. **Per-Invoice Override**: If provided and valid, this value takes precedence
+2. **Protocol Configuration**: If no override, uses the protocol-configured value
+3. **Hardcoded Default**: Falls back to `DEFAULT_GRACE_PERIOD` (7 days) if no configuration exists
+
+**Resolution Logic:**
+```rust
+match grace_period {
+    Some(value) if value <= MAX_GRACE_PERIOD => use(value),
+    Some(value) if value > MAX_GRACE_PERIOD => reject(InvalidTimestamp),
+    None => use(protocol_config.grace_period_seconds || DEFAULT_GRACE_PERIOD),
+}
+```
+
+### Validation Constraints
+
+**Maximum Grace Period**: 30 days (2,592,000 seconds)
+- Prevents denial-of-service attacks via excessively long grace periods
+- Ensures funds are not locked indefinitely
+- Consistent with protocol-limits configuration
+
+**Minimum Grace Period**: 0 seconds (immediate default after due date)
+- Allows immediate default if desired
+- Zero is a valid value
+
+**Invalid Values**:
+- Values exceeding 30 days are rejected with `QuickLendXError::InvalidTimestamp`
+- Invalid overrides do not affect other invoices or operations
+- Failed validation leaves invoice state unchanged
+
+### Security Considerations
+
+1. **Input Validation**: All grace period overrides are validated before use
+   - Rejects values > 30 days (MAX_GRACE_PERIOD constant)
+   - Allows zero (immediate default after due date)
+   
+2. **Fallback Safety**: 
+   - Protocol config provides consistent defaults
+   - Hardcoded fallback ensures deterministic behavior
+   - No silent failures or ambiguous states
+
+3. **State Protection**:
+   - Invalid grace period values do not modify invoice state
+   - Error propagation prevents partial execution
+   - Each invoice's default operation is independent
+
+4. **Consistency**:
+   - Validation aligns with protocol-limits module
+   - Same maximum (30 days) enforced across all entry points
+   - Deterministic resolution across repeated calls
+
+### Edge Cases and Expected Behavior
+
+| Scenario | Behavior | Result |
+|----------|----------|--------|
+| Override = 0 | Allowed | Immediate default after due date |
+| Override = 30 days | Allowed | Maximum valid grace period |
+| Override > 30 days | Rejected | Returns `InvalidTimestamp` error |
+| Override = None, Config exists | Uses config | Protocol default applied |
+| Override = None, No config | Uses hardcoded | 7-day default applied |
+| Multiple invoices, one invalid | Independent handling | Valid invoices processed normally |
+| Exactly at deadline | Not yet defaulted | Must be > deadline (strict inequality) |
+
+### Error Handling
+
+**Error Type**: `QuickLendXError::InvalidTimestamp`
+
+**When Raised**:
+- Grace period override exceeds 30 days (2,592,000 seconds)
+- Propagated through all public functions that accept grace period parameters
+
+**Recovery**:
+- Retry with valid grace period value (≤ 30 days)
+- Use `None` to fall back to protocol configuration
+- Invoice state remains unchanged on validation failure
+
 ## Events
 
 ### `invoice_defaulted`
