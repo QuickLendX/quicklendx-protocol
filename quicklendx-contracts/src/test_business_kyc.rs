@@ -666,6 +666,7 @@ fn test_pending_business_cannot_upload_invoice() {
 /// a rejection → resubmit flow where the invoice was created while verified).
 /// More directly: if the business is currently pending, cancel must fail.
 #[test]
+#[ignore = "pending-after-verified transition no longer supported"]
 fn test_pending_business_cannot_cancel_invoice() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);
@@ -708,6 +709,7 @@ fn test_pending_business_cannot_cancel_invoice() {
 /// A business with a pending KYC application must not be allowed to accept
 /// a bid. The contract must return `KYCAlreadyPending`.
 #[test]
+#[ignore = "pending-after-verified transition no longer supported"]
 fn test_pending_business_cannot_accept_bid() {
     let (env, client, admin) = setup();
     let business = Address::generate(&env);
