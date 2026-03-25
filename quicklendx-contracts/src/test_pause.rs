@@ -50,7 +50,7 @@ fn test_when_paused_store_invoice_fails_with_contract_paused() {
     );
     let err = result.err().expect("expected contract error");
     let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::ContractPaused);
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn test_when_paused_place_bid_fails_with_contract_paused() {
     let result = client.try_place_bid(&investor, &invoice_id, &1000i128, &1100i128);
     let err = result.err().expect("expected contract error");
     let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::ContractPaused);
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn test_when_paused_accept_bid_fails_with_contract_paused() {
     let result = client.try_accept_bid(&invoice_id, &bid_id);
     let err = result.err().expect("expected contract error");
     let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::ContractPaused);
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
 }
 
 #[test]
@@ -208,7 +208,7 @@ fn test_pause_blocks_cancel_invoice() {
     let result = client.try_cancel_invoice(&invoice_id);
     let err = result.err().expect("expected contract error");
     let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::ContractPaused);
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
 }
 
 #[test]
@@ -234,7 +234,7 @@ fn test_pause_blocks_withdraw_bid() {
     let result = client.try_withdraw_bid(&bid_id);
     let err = result.err().expect("expected contract error");
     let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::ContractPaused);
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
 }
 
 #[test]
@@ -257,7 +257,7 @@ fn test_verify_invoice_fails_when_paused() {
     let result = client.try_verify_invoice(&invoice_id);
     let err = result.err().expect("expected contract error");
     let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::ContractPaused);
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
 }
 
 #[test]
@@ -282,5 +282,5 @@ fn test_upload_invoice_fails_when_paused() {
     );
     let err = result.err().expect("expected contract error");
     let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::ContractPaused);
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
 }

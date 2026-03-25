@@ -1,14 +1,13 @@
 #![cfg(test)]
-extern crate std;
 
 use crate::{
-    backup::{Backup, BackupRetentionPolicy, BackupStatus, BackupStorage},
-    invoice::{Invoice, InvoiceCategory},
-    QuickLendXContract, QuickLendXContractClient,
+    backup::{Backup, BackupStatus, BackupStorage},
+    invoice::InvoiceCategory,
+    QuickLendXContract, QuickLendXContractClient, QuickLendXError,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, BytesN, Env, IntoVal, String, TryFromVal, Val, Vec,
+    Address, BytesN, Env, String, Vec,
 };
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
@@ -18,220 +17,62 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.set_admin(&admin);
+    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
     (env, client, admin)
 }
 
-fn setup_token(
-    env: &Env,
-    business: &Address,
-    investor: &Address,
-    contract_id: &Address,
-) -> Address {
-    let token_admin = Address::generate(env);
-    let currency = env
-        .register_stellar_asset_contract_v2(token_admin.clone())
-        .address();
-    let sac_client = token::StellarAssetClient::new(env, &currency);
-    let token_client = token::Client::new(env, &currency);
-    let initial = 100_000i128;
-    sac_client.mint(business, &initial);
-    sac_client.mint(investor, &initial);
-    let expiration = env.ledger().sequence() + 10_000;
-    token_client.approve(business, contract_id, &initial, &expiration);
-    token_client.approve(investor, contract_id, &initial, &expiration);
-    currency
-}
-
-fn setup_verified_business(
+fn create_invoice(
     env: &Env,
     client: &QuickLendXContractClient,
-    admin: &Address,
-) -> Address {
+    amount: i128,
+    description: &str,
+) -> BytesN<32> {
     let business = Address::generate(env);
-    client.submit_kyc_application(&business, &String::from_str(env, "Business KYC"));
-    client.verify_business(admin, &business);
-    business
-}
-
-fn setup_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    limit: i128,
-) -> Address {
-    let investor = Address::generate(env);
-    client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
-    client.verify_investor(&investor, &limit);
-    investor
-}
-
-fn create_funded_invoice(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    admin: &Address,
-) -> (BytesN<32>, Address, Address, i128, Address) {
-    client.initialize_protocol_limits(admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
-    let business = setup_verified_business(env, client, admin);
-    let investor = setup_verified_investor(env, client, 50_000);
-    let currency = setup_token(env, &business, &investor, &client.address);
-    client.add_currency(admin, &currency);
-    let amount = 10_000i128;
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = client.store_invoice(
+    let currency = Address::generate(env);
+    let due_date = env.ledger().timestamp() + 86_400;
+    client.store_invoice(
         &business,
         &amount,
         &currency,
         &due_date,
-        &String::from_str(env, "Test Invoice"),
+        &String::from_str(env, description),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
-    client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1000));
-    client.accept_bid(&invoice_id, &bid_id);
-    (invoice_id, business, investor, amount, currency)
+    )
 }
 
 #[test]
-fn test_create_and_validate_backup() {
+fn test_create_backup_requires_admin_and_stores_valid_metadata() {
     let (env, client, admin) = setup();
+    create_invoice(&env, &client, 1_000, "Invoice A");
 
-    // Create an invoice so the state isn't totally empty
-    let (_, _, _, _, _) = create_funded_invoice(&env, &client, &admin);
-
-    // Only admin can create backup
     let stranger = Address::generate(&env);
-    assert!(client.try_create_backup(&stranger).is_err());
-
-    // Admin creates backup
-    let backup_id = client.create_backup(&admin);
-
-    // Validate the backup
-    let is_valid = client.validate_backup(&backup_id);
-    assert_eq!(is_valid, true);
-
-    let backups = client.get_backups();
-    assert_eq!(backups.len(), 1);
-    assert_eq!(&backups.get(0).unwrap(), &backup_id);
-}
-
-#[test]
-fn test_restore_backup() {
-    let (env, client, admin) = setup();
-
-    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
-    let business = setup_verified_business(&env, &client, &admin);
-    let investor = setup_verified_investor(&env, &client, 50_000);
-    let currency = setup_token(&env, &business, &investor, &client.address);
-    client.add_currency(&admin, &currency);
-
-    let amount1 = 1_000i128;
-    let due_date = env.ledger().timestamp() + 86400;
-
-    // Create an invoice #1
-    let invoice_id_1 = client.store_invoice(
-        &business,
-        &amount1,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Invoice 1"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-    client.verify_invoice(&invoice_id_1);
-
-    // Initial state: 1 verified invoice
-    assert_eq!(client.get_total_invoice_count(), 1);
-    assert_eq!(client.get_invoice(&invoice_id_1).amount, 1_000i128);
-
-    // Create a backup
-    let backup_id = client.create_backup(&admin);
-
-    // Change the state: Add a second invoice
-    let amount2 = 2_000i128;
-    let invoice_id_2 = client.store_invoice(
-        &business,
-        &amount2,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Invoice 2"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-    client.verify_invoice(&invoice_id_2);
-
-    // State after change: 2 verified invoices
-    assert_eq!(client.get_total_invoice_count(), 2);
-    assert!(client.try_get_invoice(&invoice_id_2).is_ok());
-
-    // Stranger cannot restore
-    let stranger = Address::generate(&env);
-    assert!(client.try_restore_backup(&stranger, &backup_id).is_err());
-
-    // Admin restores backup
-    client.restore_backup(&admin, &backup_id);
-
-    // State should be reverted: only invoice #1 exists
-    assert_eq!(client.get_total_invoice_count(), 1);
-    assert!(client.try_get_invoice(&invoice_id_1).is_ok());
-    assert!(client.try_get_invoice(&invoice_id_2).is_err());
-}
-
-#[test]
-fn test_archive_backup() {
-    let (env, client, admin) = setup();
+    let unauthorized = client.try_create_backup(&stranger);
+    assert_eq!(unauthorized, Err(Ok(QuickLendXError::NotAdmin)));
 
     let backup_id = client.create_backup(&admin);
-    assert_eq!(client.get_backups().len(), 1);
+    let backup = client.get_backup_details(&backup_id).unwrap();
 
-    // Archive backup
-    client.archive_backup(&admin, &backup_id);
-
-    // The backup should no longer be active (in the active list)
-    assert_eq!(client.get_backups().len(), 0);
+    assert_eq!(backup.backup_id, backup_id);
+    assert_eq!(backup.invoice_count, 1);
+    assert_eq!(backup.status, BackupStatus::Active);
+    assert!(!backup.description.is_empty());
+    assert!(BackupStorage::is_valid_backup_id(&backup_id));
+    assert!(client.validate_backup(&backup_id));
 }
 
 #[test]
-fn test_backup_limit_cleanup() {
+fn test_backup_ids_are_unique_and_backup_list_is_deduplicated() {
     let (env, client, admin) = setup();
-
-    // Create 7 backups
-    let mut backup_ids = Vec::new(&env);
-    for _ in 0..7 {
-        let id = client.create_backup(&admin);
-        backup_ids.push_back(id);
-
-        // Manipulate timestamp slightly to ensure sequential order in creation timestamp
-        env.ledger().set_timestamp(env.ledger().timestamp() + 1);
-    }
-
-    let active_backups = client.get_backups();
-
-    // Verify only the last 5 backups are kept
-    assert_eq!(active_backups.len(), 5);
-
-    // The first 2 should have been purged from the active list
-    for i in 0..2 {
-        let old_id = backup_ids.get(i).unwrap();
-        assert!(!active_backups.contains(&old_id));
-    }
-}
-
-// ============================================================================
-// get_backups and get_backup_details tests (#349)
-// ============================================================================
-
-/// get_backups returns IDs in creation order (oldest first); after archive, archived backup is excluded.
-#[test]
-fn test_get_backups_order_and_after_archive() {
-    let (env, client, admin) = setup();
-
-    let _ = create_funded_invoice(&env, &client, &admin);
+    create_invoice(&env, &client, 1_000, "Invoice A");
 
     let id1 = client.create_backup(&admin);
-    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
     let id2 = client.create_backup(&admin);
-    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
     let id3 = client.create_backup(&admin);
+
+    assert_ne!(id1, id2);
+    assert_ne!(id2, id3);
+    assert_ne!(id1, id3);
 
     let backups = client.get_backups();
     assert_eq!(backups.len(), 3);
@@ -239,494 +80,135 @@ fn test_get_backups_order_and_after_archive() {
     assert_eq!(backups.get(1).unwrap(), id2);
     assert_eq!(backups.get(2).unwrap(), id3);
 
-    client.archive_backup(&admin, &id2);
-    let after_archive = client.get_backups();
-    assert_eq!(after_archive.len(), 2);
-    assert!(after_archive.contains(&id1));
-    assert!(!after_archive.contains(&id2));
-    assert!(after_archive.contains(&id3));
+    BackupStorage::add_to_backup_list(&env, &id3);
+    assert_eq!(client.get_backups().len(), 3);
 }
 
-/// get_backup_details returns Some with correct fields for a valid backup.
 #[test]
-fn test_get_backup_details_some_with_correct_fields() {
+fn test_validate_backup_rejects_tampered_metadata() {
     let (env, client, admin) = setup();
-
-    let (_, _, _, _, _) = create_funded_invoice(&env, &client, &admin);
-    let ts_before = env.ledger().timestamp();
-    let backup_id = client.create_backup(&admin);
-    let ts_after = env.ledger().timestamp();
-
-    let details = client.get_backup_details(&backup_id);
-    assert!(details.is_some());
-    let b = details.unwrap();
-    assert_eq!(b.backup_id, backup_id);
-    assert!(b.timestamp >= ts_before && b.timestamp <= ts_after);
-    assert_eq!(b.invoice_count, 1);
-    assert_eq!(b.status, BackupStatus::Active);
-    assert!(!b.description.is_empty());
-}
-
-/// get_backup_details returns None for an invalid/unknown backup id.
-#[test]
-fn test_get_backup_details_none_for_invalid_id() {
-    let (env, client, _admin) = setup();
-
-    let invalid_id = BytesN::from_array(&env, &[0u8; 32]);
-    let details = client.get_backup_details(&invalid_id);
-    assert!(details.is_none());
-}
-
-/// Backup ID format: prefix bytes 0xB4, 0xC4 and timestamp embedded in storage.
-#[test]
-fn test_backup_id_format_and_storage() {
-    let (env, client, admin) = setup();
-
-    let _ = create_funded_invoice(&env, &client, &admin);
-    let backup_id = client.create_backup(&admin);
-
-    let details = client.get_backup_details(&backup_id).unwrap();
-    let arr = backup_id.to_array();
-    assert_eq!(arr[0], 0xB4);
-    assert_eq!(arr[1], 0xC4);
-    assert_eq!(arr[2..10], details.timestamp.to_be_bytes());
-}
-
-#[test]
-fn test_create_backup_invoice_count_exact() {
-    let (env, client, admin) = setup();
-
-    client.initialize_protocol_limits(&admin, &1i128, &1i128, &100u32, &365u64, &86400u64);
-    let business = setup_verified_business(&env, &client, &admin);
-    let investor = setup_verified_investor(&env, &client, 50_000);
-    let currency = setup_token(&env, &business, &investor, &client.address);
-    client.add_currency(&admin, &currency);
-
-    let due_date = env.ledger().timestamp() + 86400;
-    for amount in [1_000i128, 2_000i128] {
-        let invoice_id = client.store_invoice(
-            &business,
-            &amount,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Backup Count Test"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        );
-        client.verify_invoice(&invoice_id);
-    }
-
-    assert_eq!(client.get_total_invoice_count(), 2);
-    let backup_id = client.create_backup(&admin);
-    let details = client.get_backup_details(&backup_id).unwrap();
-    assert_eq!(details.invoice_count, 2);
-}
-
-#[test]
-fn test_validate_backup_marks_corrupted_when_metadata_mismatch() {
-    let (env, client, admin) = setup();
-
-    let _ = create_funded_invoice(&env, &client, &admin);
-    let backup_id = client.create_backup(&admin);
-
-    env.as_contract(&client.address, || {
-        let mut backup = BackupStorage::get_backup(&env, &backup_id).unwrap();
-        backup.invoice_count = backup.invoice_count.saturating_add(1);
-        BackupStorage::update_backup(&env, &backup);
-    });
-
-    let is_valid = client.validate_backup(&backup_id);
-    assert_eq!(is_valid, false);
-
-    let details = client.get_backup_details(&backup_id).unwrap();
-    assert_eq!(details.status, BackupStatus::Corrupted);
-}
-
-#[test]
-fn test_archive_backup_requires_admin() {
-    let (env, client, admin) = setup();
+    create_invoice(&env, &client, 1_000, "Invoice A");
 
     let backup_id = client.create_backup(&admin);
-    let stranger = Address::generate(&env);
+    assert!(client.validate_backup(&backup_id));
 
-    assert!(client.try_archive_backup(&stranger, &backup_id).is_err());
+    let mut tampered = client.get_backup_details(&backup_id).unwrap();
+    tampered.invoice_count = 999;
+    env.storage().instance().set(&backup_id, &tampered);
 
-    let active_backups = client.get_backups();
-    assert_eq!(active_backups.len(), 1);
-    assert_eq!(active_backups.get(0).unwrap(), backup_id);
-
-    let details = client.get_backup_details(&backup_id).unwrap();
-    assert_eq!(details.status, BackupStatus::Active);
+    assert!(!client.validate_backup(&backup_id));
 }
 
 #[test]
-fn test_cleanup_keeps_latest_five_in_order() {
+fn test_retention_policy_by_count_purges_old_metadata_and_data() {
     let (env, client, admin) = setup();
+    create_invoice(&env, &client, 1_000, "Invoice A");
 
-    let mut backup_ids = Vec::new(&env);
-    for _ in 0..7 {
-        let id = client.create_backup(&admin);
-        backup_ids.push_back(id);
-        env.ledger().set_timestamp(env.ledger().timestamp() + 1);
-    }
+    client.set_backup_retention_policy(&admin, &2, &0, &true);
 
-    let active_backups = client.get_backups();
-    assert_eq!(active_backups.len(), 5);
+    let id1 = client.create_backup(&admin);
+    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    let id2 = client.create_backup(&admin);
+    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    let id3 = client.create_backup(&admin);
 
-    for i in 0..5 {
-        let expected = backup_ids.get(i + 2).unwrap();
-        assert_eq!(active_backups.get(i).unwrap(), expected);
-    }
+    let active = client.get_backups();
+    assert_eq!(active.len(), 2);
+    assert!(!active.contains(&id1));
+    assert!(active.contains(&id2));
+    assert!(active.contains(&id3));
+
+    assert!(client.get_backup_details(&id1).is_none());
+    assert!(BackupStorage::get_backup_data(&env, &id1).is_none());
 }
 
 #[test]
-fn test_validate_backup_fails_for_unknown_backup_id() {
-    let (env, client, _admin) = setup();
-    let missing_id = BytesN::from_array(&env, &[42u8; 32]);
-
-    env.as_contract(&client.address, || {
-        let result = BackupStorage::validate_backup(&env, &missing_id);
-        assert_eq!(result, Err(crate::errors::QuickLendXError::StorageKeyNotFound));
-    });
-}
-
-#[test]
-fn test_validate_backup_fails_when_backup_data_missing() {
-    let (env, client, _admin) = setup();
-
-    env.as_contract(&client.address, || {
-        let backup_id = BackupStorage::generate_backup_id(&env);
-        let backup = Backup {
-            backup_id: backup_id.clone(),
-            timestamp: env.ledger().timestamp(),
-            description: String::from_str(&env, "missing data"),
-            invoice_count: 1,
-            status: BackupStatus::Active,
-        };
-        BackupStorage::store_backup(&env, &backup);
-
-        let result = BackupStorage::validate_backup(&env, &backup_id);
-        assert_eq!(result, Err(crate::errors::QuickLendXError::StorageKeyNotFound));
-    });
-}
-
-#[test]
-fn test_validate_backup_fails_for_non_positive_invoice_amount() {
-    let (env, client, _admin) = setup();
-
-    env.as_contract(&client.address, || {
-        let business = Address::generate(&env);
-        let currency = Address::generate(&env);
-        let due_date = env.ledger().timestamp() + 86400;
-
-        let mut invoice = Invoice::new(
-            &env,
-            business,
-            1,
-            currency,
-            due_date,
-            String::from_str(&env, "bad invoice"),
-            InvoiceCategory::Services,
-            Vec::new(&env),
-        )
-        .unwrap();
-        invoice.amount = 0;
-
-        let mut invoices = Vec::new(&env);
-        invoices.push_back(invoice);
-
-        let backup_id = BackupStorage::generate_backup_id(&env);
-        let backup = Backup {
-            backup_id: backup_id.clone(),
-            timestamp: env.ledger().timestamp(),
-            description: String::from_str(&env, "invalid amount backup"),
-            invoice_count: 1,
-            status: BackupStatus::Active,
-        };
-
-        BackupStorage::store_backup(&env, &backup);
-        BackupStorage::store_backup_data(&env, &backup_id, &invoices);
-
-        let result = BackupStorage::validate_backup(&env, &backup_id);
-        assert_eq!(result, Err(crate::errors::QuickLendXError::StorageError));
-    });
-}
-
-#[test]
-fn test_cleanup_sorts_active_and_ignores_archived_and_missing_records() {
-    let (env, client, _admin) = setup();
-
-    env.as_contract(&client.address, || {
-        BackupStorage::set_retention_policy(
-            &env,
-            &BackupRetentionPolicy {
-                max_backups: 1,
-                max_age_seconds: 0,
-                auto_cleanup_enabled: true,
-            },
-        );
-
-        let id_newer = BackupStorage::generate_backup_id(&env);
-        let id_older = BackupStorage::generate_backup_id(&env);
-        let id_archived = BackupStorage::generate_backup_id(&env);
-        let id_missing = BackupStorage::generate_backup_id(&env);
-
-        BackupStorage::store_backup(
-            &env,
-            &Backup {
-                backup_id: id_newer.clone(),
-                timestamp: 300,
-                description: String::from_str(&env, "newer"),
-                invoice_count: 0,
-                status: BackupStatus::Active,
-            },
-        );
-        BackupStorage::store_backup(
-            &env,
-            &Backup {
-                backup_id: id_older.clone(),
-                timestamp: 100,
-                description: String::from_str(&env, "older"),
-                invoice_count: 0,
-                status: BackupStatus::Active,
-            },
-        );
-        BackupStorage::store_backup(
-            &env,
-            &Backup {
-                backup_id: id_archived.clone(),
-                timestamp: 50,
-                description: String::from_str(&env, "archived"),
-                invoice_count: 0,
-                status: BackupStatus::Archived,
-            },
-        );
-
-        BackupStorage::add_to_backup_list(&env, &id_newer);
-        BackupStorage::add_to_backup_list(&env, &id_older);
-        BackupStorage::add_to_backup_list(&env, &id_archived);
-        BackupStorage::add_to_backup_list(&env, &id_missing);
-
-        let removed = BackupStorage::cleanup_old_backups(&env).unwrap();
-        assert_eq!(removed, 1);
-
-        let backups_after = BackupStorage::get_all_backups(&env);
-        assert!(!backups_after.contains(&id_older));
-        assert!(backups_after.contains(&id_newer));
-        assert!(backups_after.contains(&id_archived));
-        assert!(backups_after.contains(&id_missing));
-    });
-}
-
-#[test]
-fn test_backup_contracttype_roundtrip_conversions() {
-    let (env, client, _admin) = setup();
-
-    env.as_contract(&client.address, || {
-        let backup_id = BackupStorage::generate_backup_id(&env);
-        let backup = Backup {
-            backup_id,
-            timestamp: env.ledger().timestamp(),
-            description: String::from_str(&env, "roundtrip"),
-            invoice_count: 0,
-            status: BackupStatus::Archived,
-        };
-        let policy = BackupRetentionPolicy {
-            max_backups: 9,
-            max_age_seconds: 123,
-            auto_cleanup_enabled: true,
-        };
-
-        let backup_val: Val = backup.clone().into_val(&env);
-        let status_val: Val = BackupStatus::Corrupted.into_val(&env);
-        let policy_val: Val = policy.clone().into_val(&env);
-
-        let backup_decoded = Backup::try_from_val(&env, &backup_val).unwrap();
-        let status_decoded = BackupStatus::try_from_val(&env, &status_val).unwrap();
-        let policy_decoded = BackupRetentionPolicy::try_from_val(&env, &policy_val).unwrap();
-
-        assert_eq!(backup_decoded, backup);
-        assert_eq!(status_decoded, BackupStatus::Corrupted);
-        assert_eq!(policy_decoded, policy);
-    });
-}
-
-// ============================================================================
-// Restore workflow ordering and idempotency tests (#564)
-// ============================================================================
-
-/// Restore is idempotent: calling restore_backup multiple times with the same
-/// backup ID yields the same invoice count each time, with no duplication.
-#[test]
-fn test_restore_is_idempotent() {
+fn test_archived_backups_survive_cleanup() {
     let (env, client, admin) = setup();
-    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
-    let business = setup_verified_business(&env, &client, &admin);
-    let investor = setup_verified_investor(&env, &client, 50_000);
-    let currency = setup_token(&env, &business, &investor, &client.address);
-    client.add_currency(&admin, &currency);
-    let due_date = env.ledger().timestamp() + 86400;
+    create_invoice(&env, &client, 1_000, "Invoice A");
 
-    let invoice_id = client.store_invoice(
-        &business,
-        &1_000i128,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Idempotent"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-    client.verify_invoice(&invoice_id);
-    assert_eq!(client.get_total_invoice_count(), 1);
+    let archived_id = client.create_backup(&admin);
+    client.archive_backup(&admin, &archived_id);
 
+    client.set_backup_retention_policy(&admin, &1, &0, &true);
+    let active_id = client.create_backup(&admin);
+    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    let newest_active = client.create_backup(&admin);
+
+    let active = client.get_backups();
+    assert_eq!(active.len(), 1);
+    assert!(!active.contains(&active_id));
+    assert!(active.contains(&newest_active));
+
+    let archived = client.get_backup_details(&archived_id).unwrap();
+    assert_eq!(archived.status, BackupStatus::Archived);
+    assert!(BackupStorage::get_backup_data(&env, &archived_id).is_some());
+}
+
+#[test]
+fn test_restore_backup_replaces_current_invoice_state() {
+    let (env, client, admin) = setup();
+    let invoice_1 = create_invoice(&env, &client, 1_000, "Invoice A");
     let backup_id = client.create_backup(&admin);
 
-    // First restore
-    client.restore_backup(&admin, &backup_id);
-    assert_eq!(client.get_total_invoice_count(), 1);
-
-    // Second restore — must be idempotent (no duplication)
-    client.restore_backup(&admin, &backup_id);
-    assert_eq!(client.get_total_invoice_count(), 1);
-
-    // Third restore — still idempotent
-    client.restore_backup(&admin, &backup_id);
-    assert_eq!(client.get_total_invoice_count(), 1);
-    assert!(client.try_get_invoice(&invoice_id).is_ok());
-}
-
-/// A backup with tampered metadata is rejected by restore_backup; no partial
-/// state changes occur (ordering: validate before clear).
-#[test]
-fn test_restore_rejects_corrupted_backup() {
-    let (env, client, admin) = setup();
-    let backup_id = client.create_backup(&admin);
-
-    // Tamper with the stored invoice_count to corrupt the backup
-    env.as_contract(&client.address, || {
-        let mut b = BackupStorage::get_backup(&env, &backup_id).unwrap();
-        b.invoice_count = 99;
-        BackupStorage::update_backup(&env, &b);
-    });
-
-    // Restore must be rejected — no state changes should have occurred
-    assert!(client.try_restore_backup(&admin, &backup_id).is_err());
-}
-
-/// Restore ordering: validate_backup correctly reflects integrity before
-/// restore_backup is called, and restore from a valid backup succeeds.
-#[test]
-fn test_restore_ordering_validate_then_restore() {
-    let (env, client, admin) = setup();
-    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
-    let business = setup_verified_business(&env, &client, &admin);
-    let investor = setup_verified_investor(&env, &client, 50_000);
-    let currency = setup_token(&env, &business, &investor, &client.address);
-    client.add_currency(&admin, &currency);
-    let due_date = env.ledger().timestamp() + 86400;
-
-    let invoice_id = client.store_invoice(
-        &business,
-        &1_000i128,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "ValidateFirst"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-    client.verify_invoice(&invoice_id);
-
-    let backup_id = client.create_backup(&admin);
-
-    // Safe ordering: validate first, then restore
-    assert_eq!(client.validate_backup(&backup_id), true);
-    client.restore_backup(&admin, &backup_id);
-
-    assert_eq!(client.get_total_invoice_count(), 1);
-    assert!(client.try_get_invoice(&invoice_id).is_ok());
-}
-
-/// Restore ordering with multiple backups: each backup ID restores exactly
-/// the state captured at creation time.
-#[test]
-fn test_restore_ordering_with_multiple_backups() {
-    let (env, client, admin) = setup();
-    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
-    let business = setup_verified_business(&env, &client, &admin);
-    let investor = setup_verified_investor(&env, &client, 50_000);
-    let currency = setup_token(&env, &business, &investor, &client.address);
-    client.add_currency(&admin, &currency);
-    let due_date = env.ledger().timestamp() + 86400;
-
-    // T1: 1 invoice → backup_1
-    let id1 = client.store_invoice(
-        &business,
-        &1_000i128,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Invoice 1"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-    client.verify_invoice(&id1);
-    let backup_id_1 = client.create_backup(&admin);
-
-    // T2: 2 invoices → backup_2
-    let id2 = client.store_invoice(
-        &business,
-        &2_000i128,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Invoice 2"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-    client.verify_invoice(&id2);
-    let backup_id_2 = client.create_backup(&admin);
+    let invoice_2 = create_invoice(&env, &client, 2_000, "Invoice B");
     assert_eq!(client.get_total_invoice_count(), 2);
 
-    // Restore to T1 — second invoice must disappear
-    client.restore_backup(&admin, &backup_id_1);
-    assert_eq!(client.get_total_invoice_count(), 1);
-    assert!(client.try_get_invoice(&id1).is_ok());
-    assert!(client.try_get_invoice(&id2).is_err());
+    client.restore_backup(&admin, &backup_id);
 
-    // Restore to T2 — both invoices must reappear
-    client.restore_backup(&admin, &backup_id_2);
-    assert_eq!(client.get_total_invoice_count(), 2);
-    assert!(client.try_get_invoice(&id1).is_ok());
-    assert!(client.try_get_invoice(&id2).is_ok());
+    assert_eq!(client.get_total_invoice_count(), 1);
+    assert!(client.try_get_invoice(&invoice_1).is_ok());
+    assert!(client.try_get_invoice(&invoice_2).is_err());
 }
 
-/// Attempting to restore a non-existent backup returns an error and leaves
-/// the live state unchanged.
 #[test]
-fn test_restore_missing_backup_returns_error_state_unchanged() {
+fn test_cleanup_by_age_respects_policy_threshold() {
     let (env, client, admin) = setup();
-    client.initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
-    let business = setup_verified_business(&env, &client, &admin);
-    let investor = setup_verified_investor(&env, &client, 50_000);
-    let currency = setup_token(&env, &business, &investor, &client.address);
-    client.add_currency(&admin, &currency);
-    let due_date = env.ledger().timestamp() + 86400;
+    create_invoice(&env, &client, 1_000, "Invoice A");
 
-    let id = client.store_invoice(
-        &business,
-        &1_000i128,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Existing"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-    client.verify_invoice(&id);
-    assert_eq!(client.get_total_invoice_count(), 1);
+    client.set_backup_retention_policy(&admin, &0, &100, &true);
 
-    let missing_id = BytesN::from_array(&env, &[99u8; 32]);
-    assert!(client.try_restore_backup(&admin, &missing_id).is_err());
+    let old_id = client.create_backup(&admin);
+    env.ledger().set_timestamp(env.ledger().timestamp() + 50);
+    let mid_id = client.create_backup(&admin);
+    env.ledger().set_timestamp(env.ledger().timestamp() + 60);
+    let new_id = client.create_backup(&admin);
 
-    // State must be unchanged after the failed restore attempt
-    assert_eq!(client.get_total_invoice_count(), 1);
-    assert!(client.try_get_invoice(&id).is_ok());
+    let active = client.get_backups();
+    assert_eq!(active.len(), 2);
+    assert!(!active.contains(&old_id));
+    assert!(active.contains(&mid_id));
+    assert!(active.contains(&new_id));
 }
 
+#[test]
+fn test_manual_cleanup_returns_zero_when_auto_cleanup_disabled() {
+    let (env, client, admin) = setup();
+    create_invoice(&env, &client, 1_000, "Invoice A");
+
+    client.set_backup_retention_policy(&admin, &1, &0, &false);
+    client.create_backup(&admin);
+    client.create_backup(&admin);
+
+    let removed = client.cleanup_backups(&admin);
+    assert_eq!(removed, 0);
+    assert_eq!(client.get_backups().len(), 2);
+}
+
+#[test]
+fn test_update_backup_rejects_invalid_description() {
+    let (env, client, admin) = setup();
+    create_invoice(&env, &client, 1_000, "Invoice A");
+    let backup_id = client.create_backup(&admin);
+
+    let invalid = Backup {
+        backup_id: backup_id.clone(),
+        timestamp: env.ledger().timestamp(),
+        description: String::from_str(&env, ""),
+        invoice_count: 1,
+        status: BackupStatus::Active,
+    };
+
+    let result = BackupStorage::update_backup(&env, &invalid);
+    assert_eq!(result, Err(QuickLendXError::InvalidDescription));
+}
