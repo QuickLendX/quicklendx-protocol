@@ -1170,6 +1170,28 @@ impl QuickLendXContract {
             .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
+    /// Return all investment IDs currently in `Active` status.
+    ///
+    /// Used by off-chain monitors and the `validate_no_orphan_investments`
+    /// integrity check to ensure every funded invoice has a matching active
+    /// investment that will be resolved on settlement or default.
+    pub fn get_active_investment_ids(env: Env) -> Vec<BytesN<32>> {
+        InvestmentStorage::get_active_investment_ids(&env)
+    }
+
+    /// Verify that no `Active` investments remain after all lifecycle events
+    /// have been processed.
+    ///
+    /// Returns `true` when the active-investment index is clean (every entry
+    /// still has `status == Active`).  Returns `false` if any entry has a
+    /// terminal status but was not removed — indicating an orphan investment.
+    ///
+    /// ### Security
+    /// Read-only; does not mutate state.  Safe to call at any time.
+    pub fn validate_no_orphan_investments(env: Env) -> bool {
+        InvestmentStorage::validate_no_orphan_investments(&env)
+    }
+
     /// Query insurance coverage for an investment.
     ///
     /// # Arguments
@@ -2972,7 +2994,9 @@ mod test_escrow;
 #[cfg(test)]
 // mod test_insurance;
 #[cfg(test)]
-// mod test_investor_kyc;
+mod test_investment_lifecycle;
+#[cfg(test)]
+mod test_investor_kyc;
 #[cfg(test)]
 // mod test_ledger_timestamp_consistency;
 #[cfg(test)]
