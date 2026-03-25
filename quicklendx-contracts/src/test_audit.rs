@@ -726,3 +726,187 @@ fn test_audit_stats_incremental_updates() {
     let stats1 = client.get_audit_stats();
     assert_eq!(stats1.total_entries, initial + 1); // 1 entry per invoice
 
+
+    let _ = client.store_invoice(
+        &business,
+        &2000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 2"),
+        &InvoiceCategory::Products,
+        &Vec::new(&env),
+    );
+    let stats2 = client.get_audit_stats();
+    assert_eq!(stats2.total_entries, initial + 2);
+
+    let _ = client.store_invoice(
+        &business,
+        &3000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 3"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let stats3 = client.get_audit_stats();
+    assert_eq!(stats3.total_entries, initial + 3);
+}
+
+/// Append-only guarantee: the audit trail for an invoice only grows, never shrinks.
+#[test]
+fn test_audit_trail_is_append_only() {
+    let (env, client, _admin, business) = setup();
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Append-only test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let trail_after_create = client.get_invoice_audit_trail(&invoice_id);
+    let len_after_create = trail_after_create.len();
+    assert!(len_after_create >= 1, "trail must have at least 1 entry after create");
+
+    let _ = client.verify_invoice(&invoice_id);
+    let trail_after_verify = client.get_invoice_audit_trail(&invoice_id);
+    assert!(
+        trail_after_verify.len() > len_after_create,
+        "trail must grow after verify, never shrink"
+    );
+
+    // Confirm earlier entries are still present (append-only: no removal)
+    for id in trail_after_create.iter() {
+        assert!(
+            trail_after_verify.iter().any(|x| x == id),
+            "previously appended entry must still be present"
+        );
+    }
+}
+
+/// Mutation guard: stored audit entries cannot be overwritten.
+#[test]
+fn test_audit_entry_immutable_after_store() {
+    let (env, client, _admin, business) = setup();
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Immutability test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let trail = client.get_invoice_audit_trail(&invoice_id);
+    let first_id = trail.get(0).unwrap();
+    let entry_before = client.get_audit_entry(&first_id);
+
+    // Perform another operation that writes new entries
+    let _ = client.verify_invoice(&invoice_id);
+
+    // The original entry must be unchanged
+    let entry_after = client.get_audit_entry(&first_id);
+    assert_eq!(entry_before.audit_id, entry_after.audit_id);
+    assert_eq!(entry_before.operation, entry_after.operation);
+    assert_eq!(entry_before.actor, entry_after.actor);
+    assert_eq!(entry_before.timestamp, entry_after.timestamp);
+    assert_eq!(entry_before.amount, entry_after.amount);
+}
+
+/// Filter correctness: combined actor + operation filter returns only matching entries.
+#[test]
+fn test_audit_query_combined_actor_and_operation_filter() {
+    let (env, client, admin, business) = setup();
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Filter test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let _ = client.verify_invoice(&invoice_id);
+
+    // Query: admin + InvoiceVerified
+    let filter = AuditQueryFilter {
+        invoice_id: None,
+        operation: AuditOperationFilter::Specific(AuditOperation::InvoiceVerified),
+        actor: Some(admin.clone()),
+        start_timestamp: None,
+        end_timestamp: None,
+    };
+    let results = client.query_audit_logs(&filter, &100u32);
+    assert!(!results.is_empty(), "should find admin InvoiceVerified entries");
+    for e in results.iter() {
+        assert_eq!(e.operation, AuditOperation::InvoiceVerified);
+        assert_eq!(e.actor, admin);
+    }
+}
+
+/// Filter correctness: time range with no matching entries returns empty.
+#[test]
+fn test_audit_query_time_range_no_match_returns_empty() {
+    let (env, client, _admin, business) = setup();
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let _ = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Time filter test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    // Query a time range in the far future — no entries should match
+    let far_future = env.ledger().timestamp() + 1_000_000;
+    let filter = AuditQueryFilter {
+        invoice_id: None,
+        operation: AuditOperationFilter::Any,
+        actor: None,
+        start_timestamp: Some(far_future),
+        end_timestamp: Some(far_future + 3600),
+    };
+    let results = client.query_audit_logs(&filter, &100u32);
+    assert!(results.is_empty(), "future time range should return no entries");
+}
+
+/// Integrity check passes for a full invoice lifecycle.
+#[test]
+fn test_audit_integrity_full_lifecycle() {
+    let (env, client, _admin, business) = setup();
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let investor = Address::generate(&env);
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Lifecycle integrity"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let _ = client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128);
+    let _ = client.accept_bid(&invoice_id, &bid_id);
+
+    let valid = client.validate_invoice_audit_integrity(&invoice_id);
+    assert!(valid, "full lifecycle audit trail must pass integrity check");
+}

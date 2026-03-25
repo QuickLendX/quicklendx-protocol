@@ -1,13 +1,15 @@
 use crate::errors::QuickLendXError;
+use crate::events;
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, Symbol, Vec};
 
 // Constants
-const MAX_FEE_BPS: u32 = 1000;
+const MAX_FEE_BPS: u32 = 1000; // 10% hard cap for all fees
 #[allow(dead_code)]
 const MIN_FEE_BPS: u32 = 0;
 const BPS_DENOMINATOR: i128 = 10_000;
 const DEFAULT_PLATFORM_FEE_BPS: u32 = 200; // 2%
 const MAX_PLATFORM_FEE_BPS: u32 = 1000; // 10%
+const ROTATION_TTL_SECONDS: u64 = 604_800; // 7 days
 
 // Storage keys
 const FEE_CONFIG_KEY: Symbol = symbol_short!("fee_cfg");
@@ -16,6 +18,9 @@ const VOLUME_KEY: Symbol = symbol_short!("volume");
 #[allow(dead_code)]
 const TREASURY_CONFIG_KEY: Symbol = symbol_short!("treasury");
 const PLATFORM_FEE_KEY: Symbol = symbol_short!("plt_fee");
+const ROTATION_KEY: Symbol = symbol_short!("rotate");
+/// Guard key: set to `true` once `initialize` completes to prevent re-initialization.
+const FEES_INIT_KEY: Symbol = symbol_short!("fee_init");
 
 /// Fee types supported by the platform
 #[contracttype]
@@ -101,6 +106,21 @@ pub struct RevenueConfig {
     pub min_distribution_amount: i128,
 }
 
+/// Pending two-step treasury/fee-recipient rotation request.
+///
+/// Admin initiates the rotation; the new address must confirm by calling
+/// `confirm_treasury_rotation`, proving ownership before the deadline.
+/// This prevents accidental misrouting to addresses the team does not control.
+#[contracttype]
+#[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
+pub struct RecipientRotationRequest {
+    pub new_address: Address,
+    pub initiated_by: Address,
+    pub initiated_at: u64,
+    pub confirmation_deadline: u64,
+}
+
 /// Revenue tracking
 #[contracttype]
 #[derive(Clone)]
@@ -130,7 +150,13 @@ pub struct FeeManager;
 
 impl FeeManager {
     pub fn initialize(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
-        // Auth handled by ProtocolInitializer
+        // Explicit admin authorization: the caller must be the designated admin.
+        admin.require_auth();
+
+        // Guard: reject re-initialization to prevent overwriting live fee config.
+        if env.storage().instance().has(&FEES_INIT_KEY) {
+            return Err(QuickLendXError::InvalidFeeConfiguration);
+        }
 
         // Initialize default fee structures
         let default_fees = vec![
@@ -176,6 +202,9 @@ impl FeeManager {
             .instance()
             .set(&PLATFORM_FEE_KEY, &platform_fee_config);
 
+        // Mark the fee system as initialized.
+        env.storage().instance().set(&FEES_INIT_KEY, &true);
+
         Ok(())
     }
 
@@ -187,6 +216,19 @@ impl FeeManager {
     ) -> Result<TreasuryConfig, QuickLendXError> {
         admin.require_auth();
 
+        // Reject self-assignment: treasury must not be the contract itself.
+        if treasury_address == env.current_contract_address() {
+            return Err(QuickLendXError::InvalidAddress);
+        }
+
+        // Fetch existing config and reject duplicate treasury address.
+        let mut platform_config = Self::get_platform_fee_config(env)?;
+        if let Some(ref existing) = platform_config.treasury_address {
+            if *existing == treasury_address {
+                return Err(QuickLendXError::InvalidFeeConfiguration);
+            }
+        }
+
         let treasury_config = TreasuryConfig {
             treasury_address: treasury_address.clone(),
             is_active: true,
@@ -194,8 +236,6 @@ impl FeeManager {
             updated_by: admin.clone(),
         };
 
-        // Update platform fee config with treasury
-        let mut platform_config = Self::get_platform_fee_config(env)?;
         platform_config.treasury_address = Some(treasury_address.clone());
         platform_config.updated_at = env.ledger().timestamp();
         platform_config.updated_by = admin.clone();
@@ -204,27 +244,39 @@ impl FeeManager {
             .instance()
             .set(&PLATFORM_FEE_KEY, &platform_config);
 
+        events::emit_treasury_configured(env, &treasury_address, admin);
+
         Ok(treasury_config)
     }
 
     /// Update platform fee basis points
     pub fn update_platform_fee(
         env: &Env,
-        _admin: &Address,
+        admin: &Address,
         fee_bps: u32,
     ) -> Result<(), QuickLendXError> {
         // Auth is checked by the caller
+        admin.require_auth();
 
-        if fee_bps > 1000 {
+        if fee_bps > MAX_PLATFORM_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
         let mut config = Self::get_platform_fee_config(env)?;
+
+        if config.fee_bps == fee_bps {
+            return Ok(());
+        }
+
+       let old_fee_bps = config.fee_bps;
         config.fee_bps = fee_bps;
+        config.updated_at = env.ledger().timestamp();
+        config.updated_by = admin.clone();
 
         env.storage().instance().set(&PLATFORM_FEE_KEY, &config);
 
-        env.events().publish((symbol_short!("fee_upd"),), fee_bps);
+        events::emit_platform_fee_config_updated(env, old_fee_bps, fee_bps, admin);
+
         Ok(())
     }
 
@@ -293,7 +345,7 @@ impl FeeManager {
     ) -> Result<FeeStructure, QuickLendXError> {
         admin.require_auth();
         if base_fee_bps > MAX_FEE_BPS {
-            return Err(QuickLendXError::InvalidAmount);
+            return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
         if min_fee < 0 || max_fee < min_fee {
             return Err(QuickLendXError::InvalidAmount);
@@ -304,6 +356,7 @@ impl FeeManager {
             .get(&FEE_CONFIG_KEY)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
         let mut found = false;
+        let mut old_bps = 0;
         let updated_structure = FeeStructure {
             fee_type: fee_type.clone(),
             base_fee_bps,
@@ -316,6 +369,7 @@ impl FeeManager {
         for i in 0..fee_structures.len() {
             let structure = fee_structures.get(i).unwrap();
             if structure.fee_type == fee_type {
+                old_bps = structure.base_fee_bps;
                 fee_structures.set(i, updated_structure.clone());
                 found = true;
                 break;
@@ -327,6 +381,9 @@ impl FeeManager {
         env.storage()
             .instance()
             .set(&FEE_CONFIG_KEY, &fee_structures);
+            
+        events::emit_fee_structure_updated(env, &fee_type, old_bps, base_fee_bps, admin);
+        
         Ok(updated_structure)
     }
 
@@ -466,21 +523,79 @@ impl FeeManager {
         env.ledger().timestamp() / 2_592_000
     }
 
+    /// Configure revenue distribution with comprehensive share validation.
+    ///
+    /// # Safety invariants
+    /// - Each individual share must be in [0, 10_000] bps.
+    /// - The sum of all shares must equal exactly 10_000 bps (100%).
+    /// - `min_distribution_amount` must be non-negative.
+    ///
+    /// # Errors
+    /// - `InvalidFeeConfiguration` if any individual share exceeds 10_000 bps.
+    /// - `InvalidAmount` if shares do not sum to 10_000 or min_distribution_amount < 0.
     pub fn configure_revenue_distribution(
         env: &Env,
         admin: &Address,
         config: RevenueConfig,
     ) -> Result<(), QuickLendXError> {
         admin.require_auth();
-        let total_shares = config
-            .treasury_share_bps
-            .saturating_add(config.developer_share_bps)
-            .saturating_add(config.platform_share_bps);
+
+        // Validate individual share bounds
+        Self::validate_revenue_shares(
+            config.treasury_share_bps,
+            config.developer_share_bps,
+            config.platform_share_bps,
+        )?;
+
+        // Validate min distribution amount is non-negative
+        if config.min_distribution_amount < 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let key = symbol_short!("rev_cfg");
+        env.storage().instance().set(&key, &config);
+
+        // Emit configuration event for audit trail
+        env.events().publish(
+            (symbol_short!("rev_cfg"),),
+            (
+                config.treasury_share_bps,
+                config.developer_share_bps,
+                config.platform_share_bps,
+            ),
+        );
+
+        Ok(())
+    }
+
+    /// Validate that revenue shares are individually bounded and sum to 10_000 bps.
+    ///
+    /// # Invariants enforced
+    /// - `0 <= each_share <= 10_000`
+    /// - `treasury + developer + platform == 10_000`
+    pub fn validate_revenue_shares(
+        treasury_share_bps: u32,
+        developer_share_bps: u32,
+        platform_share_bps: u32,
+    ) -> Result<(), QuickLendXError> {
+        // Individual share bounds check
+        if treasury_share_bps > 10_000
+            || developer_share_bps > 10_000
+            || platform_share_bps > 10_000
+        {
+            return Err(QuickLendXError::InvalidFeeConfiguration);
+        }
+
+        // Sum must equal exactly 10_000 bps (use checked arithmetic to prevent overflow)
+        let total_shares = treasury_share_bps
+            .checked_add(developer_share_bps)
+            .and_then(|s| s.checked_add(platform_share_bps))
+            .ok_or(QuickLendXError::InvalidFeeConfiguration)?;
+
         if total_shares != 10_000 {
             return Err(QuickLendXError::InvalidAmount);
         }
-        let key = symbol_short!("rev_cfg");
-        env.storage().instance().set(&key, &config);
+
         Ok(())
     }
 
@@ -493,6 +608,19 @@ impl FeeManager {
             .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
+    /// Distribute accumulated revenue for a period according to the configured split.
+    ///
+    /// # Distribution algorithm
+    /// 1. Treasury and developer amounts are calculated via `floor(pending * share_bps / 10_000)`.
+    /// 2. Platform receives the remainder: `pending - treasury - developer`.
+    /// 3. This guarantees `treasury + developer + platform == pending` (no dust loss).
+    ///
+    /// # Safety invariants enforced
+    /// - Revenue config must exist and shares must sum to 10_000 bps.
+    /// - Pending distribution must meet the minimum threshold.
+    /// - Post-distribution sum must equal the original pending amount (accounting invariant).
+    /// - Each distributed amount must be non-negative.
+    /// - Double-distribution is prevented (pending set to 0 after distribution).
     pub fn distribute_revenue(
         env: &Env,
         admin: &Address,
@@ -504,16 +632,28 @@ impl FeeManager {
             .instance()
             .get(&symbol_short!("rev_cfg"))
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+        // Re-validate shares at distribution time (defense in depth)
+        Self::validate_revenue_shares(
+            config.treasury_share_bps,
+            config.developer_share_bps,
+            config.platform_share_bps,
+        )?;
+
         let revenue_key = (REVENUE_KEY, period);
         let mut revenue_data: RevenueData = env
             .storage()
             .instance()
             .get(&revenue_key)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
         if revenue_data.pending_distribution < config.min_distribution_amount {
             return Err(QuickLendXError::InvalidAmount);
         }
+
         let amount = revenue_data.pending_distribution;
+
+        // Calculate shares: treasury and developer via floor division, platform gets remainder
         let treasury_amount =
             amount.saturating_mul(config.treasury_share_bps as i128) / BPS_DENOMINATOR;
         let developer_amount =
@@ -521,9 +661,32 @@ impl FeeManager {
         let platform_amount = amount
             .saturating_sub(treasury_amount)
             .saturating_sub(developer_amount);
+
+        // Safety: each amount must be non-negative
+        if treasury_amount < 0 || developer_amount < 0 || platform_amount < 0 {
+            return Err(QuickLendXError::InvalidFeeConfiguration);
+        }
+
+        // Accounting invariant: distributed amounts must exactly equal the pending amount
+        let distributed_total = treasury_amount
+            .checked_add(developer_amount)
+            .and_then(|s| s.checked_add(platform_amount))
+            .ok_or(QuickLendXError::InvalidFeeConfiguration)?;
+
+        if distributed_total != amount {
+            return Err(QuickLendXError::InvalidFeeConfiguration);
+        }
+
         revenue_data.total_distributed = revenue_data.total_distributed.saturating_add(amount);
         revenue_data.pending_distribution = 0;
         env.storage().instance().set(&revenue_key, &revenue_data);
+
+        // Emit distribution event for transparency and auditing
+        env.events().publish(
+            (symbol_short!("rev_dst"),),
+            (period, treasury_amount, developer_amount, platform_amount),
+        );
+
         Ok((treasury_amount, developer_amount, platform_amount))
     }
 
@@ -567,7 +730,7 @@ impl FeeManager {
         max_fee: i128,
     ) -> Result<(), QuickLendXError> {
         if base_fee_bps > MAX_FEE_BPS {
-            return Err(QuickLendXError::InvalidAmount);
+            return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
         if min_fee < 0 || max_fee < 0 || max_fee < min_fee {
             return Err(QuickLendXError::InvalidAmount);
@@ -596,5 +759,112 @@ impl FeeManager {
             crate::payments::transfer_funds(env, currency, from, &contract_address, fee_amount)?;
             Ok(contract_address)
         }
+    }
+
+    /// Initiate a two-step treasury address rotation.
+    ///
+    /// Only the admin can call this. A `RecipientRotationRequest` is stored
+    /// with a 7-day confirmation window. The new address must call
+    /// `confirm_treasury_rotation` before the deadline to prove ownership.
+    /// Only one pending rotation is allowed at a time.
+    pub fn initiate_treasury_rotation(
+        env: &Env,
+        admin: &Address,
+        new_address: Address,
+    ) -> Result<RecipientRotationRequest, QuickLendXError> {
+        admin.require_auth();
+
+        if env
+            .storage()
+            .instance()
+            .get::<_, RecipientRotationRequest>(&ROTATION_KEY)
+            .is_some()
+        {
+            return Err(QuickLendXError::RotationAlreadyPending);
+        }
+
+        let current_treasury = Self::get_treasury_address(env);
+        if let Some(ref existing) = current_treasury {
+            if existing == &new_address {
+                return Err(QuickLendXError::InvalidAddress);
+            }
+        }
+
+        let now = env.ledger().timestamp();
+        let request = RecipientRotationRequest {
+            new_address,
+            initiated_by: admin.clone(),
+            initiated_at: now,
+            confirmation_deadline: now.saturating_add(ROTATION_TTL_SECONDS),
+        };
+
+        env.storage().instance().set(&ROTATION_KEY, &request);
+        Ok(request)
+    }
+
+    /// Confirm the pending treasury rotation.
+    ///
+    /// The new_address from the pending request must authorize this call,
+    /// proving they control the destination before funds are ever routed there.
+    /// Clears the rotation request and writes the new treasury address.
+    pub fn confirm_treasury_rotation(
+        env: &Env,
+        new_address: &Address,
+    ) -> Result<Address, QuickLendXError> {
+        let request: RecipientRotationRequest = env
+            .storage()
+            .instance()
+            .get(&ROTATION_KEY)
+            .ok_or(QuickLendXError::RotationNotFound)?;
+
+        if &request.new_address != new_address {
+            return Err(QuickLendXError::Unauthorized);
+        }
+
+        new_address.require_auth();
+
+        if env.ledger().timestamp() > request.confirmation_deadline {
+            env.storage().instance().remove(&ROTATION_KEY);
+            return Err(QuickLendXError::RotationExpired);
+        }
+
+        let mut platform_config = Self::get_platform_fee_config(env)?;
+        platform_config.treasury_address = Some(new_address.clone());
+        platform_config.updated_at = env.ledger().timestamp();
+        platform_config.updated_by = new_address.clone();
+        env.storage()
+            .instance()
+            .set(&PLATFORM_FEE_KEY, &platform_config);
+
+        env.storage().instance().remove(&ROTATION_KEY);
+
+        Ok(new_address.clone())
+    }
+
+    /// Cancel the pending treasury rotation (admin only).
+    ///
+    /// Can be called at any time before confirmation to abort the rotation.
+    pub fn cancel_treasury_rotation(
+        env: &Env,
+        admin: &Address,
+    ) -> Result<(), QuickLendXError> {
+        admin.require_auth();
+
+        if env
+            .storage()
+            .instance()
+            .get::<_, RecipientRotationRequest>(&ROTATION_KEY)
+            .is_none()
+        {
+            return Err(QuickLendXError::RotationNotFound);
+        }
+
+        env.storage().instance().remove(&ROTATION_KEY);
+        Ok(())
+    }
+
+    /// Query any pending treasury rotation request.
+    pub fn get_pending_rotation(env: &Env) -> Option<RecipientRotationRequest> {
+        env.storage().instance().get(&ROTATION_KEY)
     }
 }
