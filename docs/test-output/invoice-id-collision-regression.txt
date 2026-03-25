@@ -1,0 +1,19 @@
+Command:
+cd quicklendx-contracts && cargo test --test invoice_id_collision_regression
+
+Output summary:
+Finished `test` profile [unoptimized + debuginfo] target(s) in 0.38s
+Running tests/invoice_id_collision_regression.rs
+
+running 2 tests
+test counter_rewind_collision_skips_the_existing_invoice_key ... ok
+test invoice_ids_are_unique_and_monotonic_within_a_single_ledger_slot ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+Notes:
+- The high-throughput same-slot regression uses 24 invoice creations because the current
+  contract stores invoice indexes in instance storage and larger bursts exceed the Soroban
+  64 KB contract-instance entry size limit during tests.
+- The broader `cargo test` unit suite is currently blocked by unrelated pre-existing
+  compile failures in other test modules on this branch.

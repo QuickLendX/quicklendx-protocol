@@ -10,7 +10,13 @@
 
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
+use core::convert::TryInto;
+
+use soroban_sdk::{
+    symbol_short,
+    testutils::{Address as _, Ledger},
+    Address, BytesN, Env, String, Vec,
+};
 
 use crate::bid::{Bid, BidStatus};
 use crate::escrow::{Escrow, EscrowStatus};
@@ -18,6 +24,8 @@ use crate::investment::{Investment, InvestmentStatus};
 use crate::invoice::{Invoice, InvoiceCategory, InvoiceStatus};
 use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
 use crate::{QuickLendXContract, QuickLendXContractClient};
+
+const COLLISION_INVARIANT_AMOUNT: i128 = 1_000_000;
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
@@ -27,6 +35,52 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let admin = Address::generate(&env);
     let _ = client.initialize_admin(&admin);
     (env, client, admin)
+}
+
+fn pin_collision_invariant_ledger_slot(env: &Env, timestamp: u64, sequence: u32) {
+    env.ledger().set_timestamp(timestamp);
+    env.ledger().set_sequence_number(sequence);
+}
+
+fn invoice_counter_segment(invoice_id: &BytesN<32>) -> u32 {
+    let bytes = invoice_id.to_array();
+    u32::from_be_bytes(bytes[12..16].try_into().unwrap())
+}
+
+fn set_collision_invariant_counter(env: &Env, contract_id: &Address, counter: u32) {
+    env.as_contract(contract_id, || {
+        env.storage()
+            .instance()
+            .set(&symbol_short!("inv_cnt"), &counter);
+    });
+}
+
+fn read_collision_invariant_counter(env: &Env, contract_id: &Address) -> u32 {
+    env.as_contract(contract_id, || {
+        env.storage()
+            .instance()
+            .get(&symbol_short!("inv_cnt"))
+            .unwrap_or(0)
+    })
+}
+
+fn store_collision_invariant_invoice(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    business: &Address,
+    currency: &Address,
+    description: &str,
+) -> BytesN<32> {
+    let due_date = env.ledger().timestamp() + 86_400;
+    client.store_invoice(
+        business,
+        &COLLISION_INVARIANT_AMOUNT,
+        currency,
+        &due_date,
+        &String::from_str(env, description),
+        &InvoiceCategory::Services,
+        &Vec::new(env),
+    )
 }
 
 fn create_test_invoice(env: &Env, id: BytesN<32>, business: Address) -> Invoice {
@@ -764,4 +818,54 @@ fn test_invariants_after_full_lifecycle() {
     let paid_invoices = client.get_invoices_by_status(&InvoiceStatus::Paid);
     assert_eq!(paid_invoices.len(), 1);
     assert_eq!(paid_invoices.get(0).unwrap(), invoice_id);
+}
+
+#[test]
+fn invariant_invoice_id_collision_skip_preserves_existing_invoice() {
+    let (env, client, _admin) = setup();
+    let contract_id = client.address.clone();
+    pin_collision_invariant_ledger_slot(&env, 1_700_300_000, 61);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    let original_id = store_collision_invariant_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        "invariant-original",
+    );
+
+    set_collision_invariant_counter(&env, &contract_id, 0);
+
+    let retried_id = store_collision_invariant_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        "invariant-retried",
+    );
+
+    assert_ne!(
+        original_id, retried_id,
+        "allocator must not reuse an occupied invoice key after counter rewind"
+    );
+    assert_eq!(invoice_counter_segment(&original_id), 0);
+    assert_eq!(invoice_counter_segment(&retried_id), 1);
+    assert_eq!(
+        client.get_invoice(&original_id).description,
+        String::from_str(&env, "invariant-original"),
+        "original invoice payload must remain unchanged after collision skip"
+    );
+    assert_eq!(
+        client.get_invoice(&retried_id).description,
+        String::from_str(&env, "invariant-retried"),
+        "new invoice must be written to the next free deterministic ID"
+    );
+    assert_eq!(
+        read_collision_invariant_counter(&env, &contract_id),
+        2,
+        "counter must advance beyond both the collided and newly allocated invoice IDs"
+    );
 }

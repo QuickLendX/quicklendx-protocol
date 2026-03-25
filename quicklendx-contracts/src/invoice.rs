@@ -213,7 +213,7 @@ impl Invoice {
         tags: Vec<String>,
     ) -> Result<Self, QuickLendXError> {
         check_string_length(&description, MAX_DESCRIPTION_LENGTH)?;
-        let id = Self::generate_unique_invoice_id(env);
+        let id = Self::generate_unique_invoice_id(env)?;
         let created_at = env.ledger().timestamp();
 
         let invoice = Self {
@@ -265,23 +265,50 @@ impl Invoice {
         Ok(invoice)
     }
 
-    /// Generate a unique invoice ID
-    fn generate_unique_invoice_id(env: &Env) -> BytesN<32> {
-        let timestamp = env.ledger().timestamp();
-        let sequence = env.ledger().sequence();
-        let counter_key = symbol_short!("inv_cnt");
-        let counter: u32 = env.storage().instance().get(&counter_key).unwrap_or(0);
-        env.storage()
-            .instance()
-            .set(&counter_key, &counter.saturating_add(1));
-
-        // Create a unique ID from timestamp, sequence, and counter
+    /// @notice Derives a deterministic invoice ID candidate from a ledger slot and counter.
+    /// @dev The candidate format is `timestamp || sequence || counter || 16 zero bytes`.
+    /// @param timestamp Current ledger timestamp used for allocation.
+    /// @param sequence Current ledger sequence used for allocation.
+    /// @param counter Monotonic invoice counter for the contract instance.
+    /// @return A deterministic `BytesN<32>` candidate that can be checked for collisions.
+    pub(crate) fn derive_invoice_id(
+        env: &Env,
+        timestamp: u64,
+        sequence: u32,
+        counter: u32,
+    ) -> BytesN<32> {
         let mut id_bytes = [0u8; 32];
         id_bytes[0..8].copy_from_slice(&timestamp.to_be_bytes());
         id_bytes[8..12].copy_from_slice(&sequence.to_be_bytes());
         id_bytes[12..16].copy_from_slice(&counter.to_be_bytes());
-
         BytesN::from_array(env, &id_bytes)
+    }
+
+    /// @notice Allocates a unique deterministic invoice ID for the current ledger slot.
+    /// @dev Probes forward on the monotonic counter until it finds an unused invoice key in
+    /// instance storage, so an existing invoice cannot be silently overwritten if a candidate
+    /// collides. Counter overflow aborts with `StorageError`.
+    /// @return A storage-safe invoice ID for the new invoice.
+    fn generate_unique_invoice_id(env: &Env) -> Result<BytesN<32>, QuickLendXError> {
+        let timestamp = env.ledger().timestamp();
+        let sequence = env.ledger().sequence();
+        let counter_key = symbol_short!("inv_cnt");
+        let mut counter: u32 = env.storage().instance().get(&counter_key).unwrap_or(0);
+
+        loop {
+            let candidate = Self::derive_invoice_id(env, timestamp, sequence, counter);
+            if InvoiceStorage::get_invoice(env, &candidate).is_none() {
+                let next_counter = counter
+                    .checked_add(1)
+                    .ok_or(QuickLendXError::StorageError)?;
+                env.storage().instance().set(&counter_key, &next_counter);
+                return Ok(candidate);
+            }
+
+            counter = counter
+                .checked_add(1)
+                .ok_or(QuickLendXError::StorageError)?;
+        }
     }
 
     /// Check if invoice is available for funding

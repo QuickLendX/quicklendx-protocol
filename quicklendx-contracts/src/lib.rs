@@ -39,6 +39,8 @@ mod test_emergency_withdraw;
 #[cfg(test)]
 mod test_init;
 #[cfg(test)]
+mod test_invoice_id_collision;
+#[cfg(test)]
 mod test_max_invoices_per_business;
 #[cfg(test)]
 mod test_overflow;
@@ -77,7 +79,11 @@ use events::{
     emit_platform_fee_config_updated, emit_treasury_configured,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
-use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
+use invoice::InvoiceStorage;
+pub use invoice::{
+    Dispute, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceRating,
+    InvoiceRatingStats, InvoiceStatus, LineItemRecord, PaymentRecord,
+};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
@@ -1229,6 +1235,7 @@ impl QuickLendXContract {
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
+            100, // max_invoices_per_business (default)
         )
     }
 
@@ -2066,36 +2073,6 @@ impl QuickLendXContract {
 #[cfg(test)]
 mod test;
 
-#[cfg(test)]
-mod test_bid;
-
-#[cfg(test)]
-mod test_fees;
-
-#[cfg(test)]
-mod test_escrow;
-
-#[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
-#[cfg(test)]
-mod test_insurance;
-#[cfg(test)]
-mod test_investor_kyc;
-#[cfg(test)]
-mod test_ledger_timestamp_consistency;
-#[cfg(test)]
-mod test_lifecycle;
-#[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_min_invoice_amount;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;
-
 // ============================================================================
 // Analytics Functions missing from exports
 // ============================================================================
@@ -2168,8 +2145,6 @@ pub fn get_analytics_summary(
         });
     (platform, performance)
 }
-#[cfg(test)]
-mod test;
 
 #[cfg(test)]
 mod test_bid;
