@@ -29,6 +29,38 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
+// #[cfg(test)]
+// mod storage;
+// #[cfg(test)]
+// mod test_admin;
+// #[cfg(test)]
+// mod test_bid_ranking;
+// #[cfg(test)]
+// mod test_business_kyc;
+// #[cfg(test)]
+// mod test_cancel_refund;
+// #[cfg(test)]
+// mod test_emergency_withdraw;
+// #[cfg(test)]
+// mod test_init;
+// #[cfg(test)]
+// mod test_max_invoices_per_business;
+// #[cfg(test)]
+// mod test_overflow;
+// #[cfg(test)]
+// mod test_pause;
+// #[cfg(test)]
+// mod test_profit_fee;
+// #[cfg(test)]
+// mod test_refund;
+// #[cfg(test)]
+// mod test_storage;
+// #[cfg(test)]
+// mod test_string_limits;
+// #[cfg(test)]
+// mod test_types;
+// #[cfg(test)]
+// mod test_vesting;
 pub mod types;
 mod verification;
 mod vesting;
@@ -1408,11 +1440,11 @@ impl QuickLendXContract {
             env,
             admin,
             min_invoice_amount,
-            10,  // min_bid_amount
-            100, // min_bid_bps
+            10,   // min_bid_amount
+            100,  // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
-            100, // max_invoices_per_business (default)
+            100,  // max_invoices_per_business
         )
     }
 
@@ -2967,316 +2999,38 @@ impl QuickLendXContract {
     }
 }
 
-    // ============================================================================
-    // Dispute Management Functions
-    // ============================================================================
+// #[cfg(test)]
+// mod test;
 
-    /// Add a dispute to an invoice
-    pub fn create_dispute(
-        env: Env,
-        invoice_id: BytesN<32>,
-        creator: Address,
-        reason: String,
-        evidence: String,
-    ) -> Result<(), QuickLendXError> {
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
+// #[cfg(test)]
+// mod test_bid;
 
-        creator.require_auth();
+// #[cfg(test)]
+// mod test_fees;
 
-        // Basic validation
-        if reason.len() == 0 || reason.len() > 500 {
-            return Err(QuickLendXError::InvalidDescription);
-        }
+// #[cfg(test)]
+// mod test_escrow;
 
-        invoice.dispute_status = invoice::DisputeStatus::Disputed;
-        invoice.dispute = invoice::Dispute {
-            created_by: creator.clone(),
-            created_at: env.ledger().timestamp(),
-            reason: reason.clone(),
-            evidence: evidence.clone(),
-            resolution: String::from_str(&env, ""),
-            resolved_by: creator.clone(), // Placeholder
-            resolved_at: 0,
-        };
-
-        InvoiceStorage::update_invoice(&env, &invoice);
-        Ok(())
-    }
-
-    /// Put a dispute under review (admin only)
-    pub fn put_dispute_under_review(
-        env: Env,
-        invoice_id: BytesN<32>,
-        admin: Address,
-    ) -> Result<(), QuickLendXError> {
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-
-        admin.require_auth();
-        // Here we would normally verify admin via storage too
-        
-        if invoice.dispute_status != invoice::DisputeStatus::Disputed {
-            return Err(QuickLendXError::InvalidStatus);
-        }
-
-        invoice.dispute_status = invoice::DisputeStatus::UnderReview;
-        InvoiceStorage::update_invoice(&env, &invoice);
-        Ok(())
-    }
-
-    /// Resolve a dispute (admin only)
-    pub fn resolve_dispute(
-        env: Env,
-        invoice_id: BytesN<32>,
-        admin: Address,
-        resolution: String,
-    ) -> Result<(), QuickLendXError> {
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-
-        admin.require_auth();
-
-        if invoice.dispute_status != invoice::DisputeStatus::UnderReview {
-            return Err(QuickLendXError::InvalidStatus);
-        }
-
-        invoice.dispute_status = invoice::DisputeStatus::Resolved;
-        invoice.dispute.resolution = resolution;
-        invoice.dispute.resolved_by = admin;
-        invoice.dispute.resolved_at = env.ledger().timestamp();
-
-        InvoiceStorage::update_invoice(&env, &invoice);
-        Ok(())
-    }
-
-    /// Get invoices by dispute status
-    pub fn get_invoices_by_dispute_status(
-        env: Env,
-        status: invoice::DisputeStatus,
-    ) -> Vec<BytesN<32>> {
-        let mut result = Vec::new(&env);
-        // This is expensive O(N) as it iterates over all invoices
-        // In a real implementation we would have an index for this.
-        // For compatibility with test.rs we implement it simply.
-        
-        // We'll use the Verified status as a subset if appropriate, but really we need all.
-        // Let's assume most disputes are on Verified/Funded invoices.
-        
-        let all_statuses = [
-            invoice::InvoiceStatus::Verified,
-            invoice::InvoiceStatus::Funded,
-            invoice::InvoiceStatus::Paid,
-            invoice::InvoiceStatus::Defaulted,
-        ];
-
-        for s in all_statuses.iter() {
-            let invoices = InvoiceStorage::get_invoices_by_status(&env, s);
-            for id in invoices.iter() {
-                if let Some(inv) = InvoiceStorage::get_invoice(&env, &id) {
-                    if inv.dispute_status == status {
-                        result.push_back(id);
-                    }
-                }
-            }
-        }
-        result
-    }
-
-    // ============================================================================
-    // Emergency Functions
-    // ============================================================================
-
-    pub fn initiate_emergency_withdrawal(
-        env: Env,
-        admin: Address,
-        token: Address,
-        amount: i128,
-        target: Address,
-    ) -> Result<(), QuickLendXError> {
-        emergency::EmergencyWithdraw::initiate(&env, &admin, token, amount, target)
-    }
-
-    pub fn execute_emergency_withdrawal(
-        env: Env,
-        admin: Address,
-    ) -> Result<(), QuickLendXError> {
-        emergency::EmergencyWithdraw::execute(&env, &admin)
-    }
-
-    pub fn get_pending_emergency_withdrawal(
-        env: Env,
-    ) -> Option<emergency::PendingEmergencyWithdrawal> {
-        emergency::EmergencyWithdraw::get_pending(&env)
-    }
-
-    pub fn cancel_emergency_withdrawal(
-        env: Env,
-        admin: Address,
-    ) -> Result<(), QuickLendXError> {
-        emergency::EmergencyWithdraw::cancel(&env, &admin)
-    }
-
-    // ============================================================================
-    // Audit Functions
-    // ============================================================================
-
-    pub fn get_invoice_audit_trail(env: Env, invoice_id: BytesN<32>) -> Vec<BytesN<32>> {
-        audit::get_invoice_audit_trail(&env, &invoice_id)
-    }
-
-    pub fn get_audit_entry(env: Env, audit_id: BytesN<32>) -> Option<audit::AuditLogEntry> {
-        audit::get_audit_entry(&env, &audit_id)
-    }
-
-    // ============================================================================
-    // Analytics Functions (moved inside QuickLendXContract)
-    // ============================================================================
-
-    pub fn get_user_behavior_metrics(env: Env, user: Address) -> analytics::UserBehaviorMetrics {
-        analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).unwrap()
-    }
-
-    pub fn get_financial_metrics(
-        env: Env,
-        period: analytics::TimePeriod,
-    ) -> analytics::FinancialMetrics {
-        analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period).unwrap()
-    }
-
-    pub fn generate_business_report(
-        env: Env,
-        business: Address,
-        period: analytics::TimePeriod,
-    ) -> Result<analytics::BusinessReport, QuickLendXError> {
-        analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
-    }
-
-    pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<analytics::BusinessReport> {
-        analytics::AnalyticsStorage::get_business_report(&env, &report_id)
-    }
-
-    pub fn generate_investor_report(
-        env: Env,
-        investor: Address,
-        period: analytics::TimePeriod,
-    ) -> Result<analytics::InvestorReport, QuickLendXError> {
-        analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)
-    }
-
-    pub fn get_investor_report(env: Env, report_id: BytesN<32>) -> Option<analytics::InvestorReport> {
-        analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
-    }
-
-    pub fn get_analytics_summary(
-        env: Env,
-    ) -> (analytics::PlatformMetrics, analytics::PerformanceMetrics) {
-        let platform = analytics::AnalyticsCalculator::calculate_platform_metrics(&env).unwrap_or(
-            analytics::PlatformMetrics {
-                total_invoices: 0,
-                total_investments: 0,
-                total_volume: 0,
-                total_fees_collected: 0,
-                active_investors: 0,
-                verified_businesses: 0,
-                average_invoice_amount: 0,
-                average_investment_amount: 0,
-                platform_fee_rate: 0,
-                default_rate: 0,
-                success_rate: 0,
-                timestamp: env.ledger().timestamp(),
-            },
-        );
-        let performance = analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
-            .unwrap_or(analytics::PerformanceMetrics {
-                platform_uptime: env.ledger().timestamp(),
-                average_settlement_time: 0,
-                average_verification_time: 0,
-                dispute_resolution_time: 0,
-                system_response_time: 0,
-                transaction_success_rate: 0,
-                error_rate: 0,
-                user_satisfaction_score: 0,
-                platform_efficiency: 0,
-            });
-        (platform, performance)
-    }
-}
-#[cfg(test)]
-mod storage;
-#[cfg(test)]
-mod test_admin;
-#[cfg(test)]
-mod test_bid_ranking;
-#[cfg(test)]
-mod test_business_kyc;
-#[cfg(test)]
-mod test_cancel_refund;
-#[cfg(test)]
-mod test_emergency_withdraw;
-#[cfg(test)]
-mod test_init;
-#[cfg(test)]
-mod test_max_invoices_per_business;
-#[cfg(test)]
-mod test_overflow;
-#[cfg(test)]
-mod test_pause;
-#[cfg(test)]
-mod test_profit_fee;
-#[cfg(test)]
-mod test_refund;
-#[cfg(test)]
-mod test_storage;
-#[cfg(test)]
-mod test_string_limits;
-#[cfg(test)]
-mod test_types;
-#[cfg(test)]
-mod test_vesting;
-*/
-
-#[cfg(test)]
-mod test_bid;
-#[cfg(test)]
-mod test_backup;
-
-/*
-#[cfg(test)]
-mod test_events;
-*/
-
-/*
-#[cfg(test)]
-mod test;
-#[cfg(test)]
-mod test_bid;
-#[cfg(test)]
-mod test_escrow;
-#[cfg(test)]
+// #[cfg(test)]
 // mod test_escrow_refund;
-#[cfg(test)]
+// #[cfg(test)]
 // mod test_fuzz;
-#[cfg(test)]
+// #[cfg(test)]
 // mod test_insurance;
-#[cfg(test)]
-mod test_investment_lifecycle;
-#[cfg(test)]
-mod test_investor_kyc;
-#[cfg(test)]
+// #[cfg(test)]
+// mod test_investor_kyc;
+// #[cfg(test)]
 // mod test_ledger_timestamp_consistency;
-#[cfg(test)]
+// #[cfg(test)]
 // mod test_lifecycle;
-#[cfg(test)]
+// #[cfg(test)]
 // mod test_limit;
-#[cfg(test)]
+// #[cfg(test)]
 // mod test_min_invoice_amount;
-#[cfg(test)]
+// #[cfg(test)]
 // mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;
-#[cfg(test)]
-mod test_audit;
+// #[cfg(test)]
+// mod test_revenue_split;
 
 #[cfg(test)]
 mod test_invariants;

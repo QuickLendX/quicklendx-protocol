@@ -428,7 +428,6 @@ fn invariant_completed_investment_has_correct_status() {
             invoice_id,
             investor,
             amount: 1000,
-            expected_return: 1100,
             funded_at: 1000,
             status: InvestmentStatus::Completed,
             insurance: Vec::new(&env),
@@ -744,7 +743,12 @@ fn test_invariants_after_full_lifecycle() {
     );
 
     // investment completed
-    let investment = client.get_invoice_investment(&invoice_id);
+    let investment = env.as_contract(&contract_id, || {
+        let investment_ids = InvestmentStorage::get_by_invoice(&env, &invoice_id);
+        let investment_id = investment_ids.get(0).unwrap();
+        InvestmentStorage::get(&env, &investment_id)
+    });
+    let investment = investment.expect("investment must exist for settled invoice");
     assert_eq!(
         investment.status,
         InvestmentStatus::Completed,
