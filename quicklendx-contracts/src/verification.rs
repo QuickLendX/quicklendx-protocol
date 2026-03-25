@@ -2,7 +2,8 @@ use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::protocol_limits::{
-    check_string_length, ProtocolLimitsContract, MAX_KYC_DATA_LENGTH, MAX_REJECTION_REASON_LENGTH,
+    check_string_length, ProtocolLimitsContract, MAX_DESCRIPTION_LENGTH, MAX_KYC_DATA_LENGTH,
+    MAX_NAME_LENGTH, MAX_ADDRESS_LENGTH, MAX_TAX_ID_LENGTH, MAX_REJECTION_REASON_LENGTH,
 };
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
@@ -496,7 +497,7 @@ pub fn validate_bid(
         return Err(QuickLendXError::InvalidAmount);
     }
 
-    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    let _limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
     let min_bid_amount = invoice.amount / 100; // 1% min bid
     if bid_amount < min_bid_amount {
         return Err(QuickLendXError::InvalidAmount);
@@ -637,6 +638,52 @@ pub fn require_business_verification(env: &Env, business: &Address) -> Result<()
     Ok(())
 }
 
+/// Enforce that a business is not in KYC-pending state before allowing a sensitive operation.
+///
+/// Pending businesses have submitted KYC but have not yet been approved or rejected.
+/// They must not be allowed to perform privileged actions (e.g. upload invoices, cancel
+/// invoices, accept bids) until their identity has been confirmed by an admin.
+///
+/// # Errors
+/// - `KYCAlreadyPending` if the business has a pending KYC application
+/// - `BusinessNotVerified` if the business has no KYC record or is rejected
+pub fn require_business_not_pending(
+    env: &Env,
+    business: &Address,
+) -> Result<(), QuickLendXError> {
+    match BusinessVerificationStorage::get_verification(env, business) {
+        Some(v) => match v.status {
+            BusinessVerificationStatus::Pending => Err(QuickLendXError::KYCAlreadyPending),
+            BusinessVerificationStatus::Verified => Ok(()),
+            BusinessVerificationStatus::Rejected => Err(QuickLendXError::BusinessNotVerified),
+        },
+        None => Err(QuickLendXError::BusinessNotVerified),
+    }
+}
+
+/// Enforce that an investor is not in KYC-pending state before allowing a sensitive operation.
+///
+/// Pending investors have submitted KYC but have not yet been approved or rejected.
+/// They must not be allowed to place bids, withdraw bids, or perform any investment
+/// action until their identity has been confirmed by an admin.
+///
+/// # Errors
+/// - `KYCAlreadyPending` if the investor has a pending KYC application
+/// - `BusinessNotVerified` if the investor has no KYC record or is rejected
+pub fn require_investor_not_pending(
+    env: &Env,
+    investor: &Address,
+) -> Result<(), QuickLendXError> {
+    match InvestorVerificationStorage::get(env, investor) {
+        Some(v) => match v.status {
+            BusinessVerificationStatus::Pending => Err(QuickLendXError::KYCAlreadyPending),
+            BusinessVerificationStatus::Verified => Ok(()),
+            BusinessVerificationStatus::Rejected => Err(QuickLendXError::BusinessNotVerified),
+        },
+        None => Err(QuickLendXError::BusinessNotVerified),
+    }
+}
+
 // Keep the existing invoice verification function
 pub fn verify_invoice_data(
     env: &Env,
@@ -663,6 +710,7 @@ pub fn verify_invoice_data(
         amount,
         due_date,
     )?;
+    check_string_length(description, MAX_DESCRIPTION_LENGTH)?;
     if description.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }
@@ -1102,14 +1150,17 @@ pub fn validate_invoice_metadata(
     metadata: &InvoiceMetadata,
     invoice_amount: i128,
 ) -> Result<(), QuickLendXError> {
+    check_string_length(&metadata.customer_name, MAX_NAME_LENGTH)?;
     if metadata.customer_name.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }
 
+    check_string_length(&metadata.customer_address, MAX_ADDRESS_LENGTH)?;
     if metadata.customer_address.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }
 
+    check_string_length(&metadata.tax_id, MAX_TAX_ID_LENGTH)?;
     if metadata.tax_id.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }
@@ -1120,6 +1171,7 @@ pub fn validate_invoice_metadata(
 
     let mut computed_total = 0i128;
     for record in metadata.line_items.iter() {
+        check_string_length(&record.0, MAX_DESCRIPTION_LENGTH)?;
         if record.0.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
         }
