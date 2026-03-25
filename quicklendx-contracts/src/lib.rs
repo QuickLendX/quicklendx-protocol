@@ -2845,7 +2845,48 @@ mod test_escrow;
 // mod test_profit_fee_formula;
 #[cfg(test)]
 mod test_revenue_split;
-*/
+#[cfg(test)]
+mod test_audit;
+
+// ============================================================================
+// Analytics Functions missing from exports
+// ============================================================================
+
+pub fn get_user_behavior_metrics(env: Env, user: Address) -> analytics::UserBehaviorMetrics {
+    analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).unwrap()
+}
+
+pub fn get_financial_metrics(
+    env: Env,
+    period: analytics::TimePeriod,
+) -> analytics::FinancialMetrics {
+    analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period).unwrap()
+}
+
+pub fn generate_business_report(
+    env: Env,
+    business: Address,
+    period: analytics::TimePeriod,
+) -> Result<analytics::BusinessReport, QuickLendXError> {
+    analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
+}
+
+pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<analytics::BusinessReport> {
+    analytics::AnalyticsStorage::get_business_report(&env, &report_id)
+}
+
+pub fn generate_investor_report(
+    env: Env,
+    investor: Address,
+    period: analytics::TimePeriod,
+) -> Result<analytics::InvestorReport, QuickLendXError> {
+    analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)
+}
+
+pub fn get_investor_report(env: Env, report_id: BytesN<32>) -> Option<analytics::InvestorReport> {
+    analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
+}
+
 pub fn get_analytics_summary(
     env: Env,
 ) -> (analytics::PlatformMetrics, analytics::PerformanceMetrics) {
