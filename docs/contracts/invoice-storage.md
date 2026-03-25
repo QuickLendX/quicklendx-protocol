@@ -35,10 +35,27 @@ Multiple indexes are maintained for efficient querying:
 5. **Rating Index**: Tracks invoices with ratings
    - Key: `Symbol("inv_ratings")`
    - Value: `Vec<BytesN<32>>`
+   - Customer Index: `(symbol_short("meta_c"), customer_name: String)`
+   - Tax ID Index: `(symbol_short("meta_t"), tax_id: String)`
+- **Global Counter**:
+   - Total Invoices: `TOTAL_INVOICE_COUNT_KEY` (symbol_short("total_iv")) -> `u32`
 
-6. **Metadata Indexes**:
-   - Customer Index: `(Symbol("meta_cust"), customer_name: String)`
-   - Tax ID Index: `(Symbol("meta_tax"), tax_id: String)`
+## Status-Bucket Invariants
+
+The protocol enforces a strict invariant between the global invoice counter and the aggregate length of all status-specific buckets. This ensures no invoices are "orphaned" during status transitions or incorrectly indexed.
+
+### The Invariant
+`get_total_invoice_count() == sum(len(get_invoices_by_status(status)))` for all `status` in `InvoiceStatus`.
+
+### Enforcement Mechanism
+- **Creation**: When `store_invoice` is called for a new ID, the global counter is incremented.
+- **Transitions**: Every status transition (e.g., `verify_invoice`, `accept_bid_and_fund`, `settle_invoice`) must atomically remove the invoice ID from the old status bucket and add it to the new one.
+- **Deletion**: If `delete_invoice` is called, the global counter is decremented.
+
+### Verification
+Developers can verify this invariant using the following public contract methods:
+1. `get_total_invoice_count()`: Returns the O(1) global counter.
+2. `get_invoice_count_by_status(status)`: Returns the length of a specific status bucket.
 
 ## Data Structures
 

@@ -4,7 +4,7 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String,
 use crate::errors::QuickLendXError;
 use crate::protocol_limits::{
     check_string_length, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FEEDBACK_LENGTH,
-    MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
+    MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
 };
 
 const DEFAULT_INVOICE_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days default grace period
@@ -145,24 +145,24 @@ pub struct InvoiceMetadata {
 
 impl InvoiceMetadata {
     pub fn validate(&self) -> Result<(), QuickLendXError> {
-        if self.customer_name.len() == 0 || self.customer_name.len() > 100 {
+        if self.customer_name.len() == 0 || self.customer_name.len() > MAX_NAME_LENGTH {
             return Err(QuickLendXError::InvalidDescription);
         }
-        if self.customer_address.len() > 200 {
+        if self.customer_address.len() > MAX_ADDRESS_LENGTH {
             return Err(QuickLendXError::InvalidDescription);
         }
-        if self.tax_id.len() > 40 {
+        if self.tax_id.len() > MAX_TAX_ID_LENGTH {
             return Err(QuickLendXError::InvalidDescription);
         }
         if self.line_items.len() > 50 {
             return Err(QuickLendXError::TagLimitExceeded);
         }
         for item in self.line_items.iter() {
-            if item.0.len() == 0 || item.0.len() > 100 {
+            if item.0.len() == 0 || item.0.len() > MAX_DESCRIPTION_LENGTH {
                 return Err(QuickLendXError::InvalidDescription);
             }
         }
-        if self.notes.len() > 500 {
+        if self.notes.len() > MAX_NOTES_LENGTH {
             return Err(QuickLendXError::InvalidDescription);
         }
         Ok(())
@@ -318,6 +318,8 @@ impl Invoice {
             },
             total_paid: 0,
             payment_history: vec![env],
+            reserved_v1: 0,
+            reserved_v2: 0,
         };
 
         // Log invoice creation
@@ -750,6 +752,8 @@ impl Invoice {
     }
 }
 
+pub(crate) const TOTAL_INVOICE_COUNT_KEY: soroban_sdk::Symbol = symbol_short!("total_iv");
+
 /// Storage keys for invoice data
 pub struct InvoiceStorage;
 
@@ -846,7 +850,15 @@ impl InvoiceStorage {
 
     /// Store an invoice
     pub fn store_invoice(env: &Env, invoice: &Invoice) {
+        let is_new = !env.storage().instance().has(&invoice.id);
         env.storage().instance().set(&invoice.id, invoice);
+
+        // Update total count if this is a new invoice
+        if is_new {
+            let mut count: u32 = env.storage().instance().get(&TOTAL_INVOICE_COUNT_KEY).unwrap_or(0);
+            count = count.saturating_add(1);
+            env.storage().instance().set(&TOTAL_INVOICE_COUNT_KEY, &count);
+        }
 
         // Add to business invoices list
         Self::add_to_business_invoices(env, &invoice.business, &invoice.id);
@@ -1295,8 +1307,21 @@ impl InvoiceStorage {
             if let Some(md) = invoice.metadata() {
                 Self::remove_metadata_indexes(env, &md, invoice_id);
             }
+
+            // Decrement total count
+            let mut count: u32 = env.storage().instance().get(&TOTAL_INVOICE_COUNT_KEY).unwrap_or(0);
+            if count > 0 {
+                count -= 1;
+                env.storage().instance().set(&TOTAL_INVOICE_COUNT_KEY, &count);
+            }
+
             // Remove invoice itself
             env.storage().instance().remove(invoice_id);
         }
+    }
+
+    /// Get total count of active invoices in the system
+    pub fn get_total_invoice_count(env: &Env) -> u32 {
+        env.storage().instance().get(&TOTAL_INVOICE_COUNT_KEY).unwrap_or(0)
     }
 }

@@ -43,6 +43,8 @@ pub enum QuickLendXError {
     InvalidCoveragePercentage = 1405,
     MaxBidsPerInvoiceExceeded = 1406,
     MaxInvoicesPerBusinessExceeded = 1407,
+    /// Bid TTL value is outside the allowed bounds (1..=30 days) or is zero.
+    InvalidBidTtl = 1408,
 
     // Rating (1500–1503)
     InvalidRating = 1500,
@@ -155,6 +157,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
             QuickLendXError::MaxBidsPerInvoiceExceeded => symbol_short!("MAX_BIDS"),
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
+            QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
         }
     }

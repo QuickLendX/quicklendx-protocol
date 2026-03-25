@@ -2,6 +2,12 @@ use crate::errors::QuickLendXError;
 use crate::invoice::Invoice;
 use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, Vec};
 
+const RETENTION_POLICY_KEY: soroban_sdk::Symbol = symbol_short!("bkup_pol");
+const BACKUP_COUNTER_KEY: soroban_sdk::Symbol = symbol_short!("bkup_cnt");
+const BACKUP_LIST_KEY: soroban_sdk::Symbol = symbol_short!("backups");
+const BACKUP_DATA_KEY: soroban_sdk::Symbol = symbol_short!("bkup_data");
+const MAX_BACKUP_DESCRIPTION_LENGTH: u32 = 128;
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Backup {
@@ -45,28 +51,53 @@ impl Default for BackupRetentionPolicy {
 pub struct BackupStorage;
 
 impl BackupStorage {
+    /// @notice Validate backup metadata before persisting it.
+    fn validate_backup_metadata(
+        backup: &Backup,
+        invoices: Option<&Vec<Invoice>>,
+    ) -> Result<(), QuickLendXError> {
+        if !Self::is_valid_backup_id(&backup.backup_id) {
+            return Err(QuickLendXError::StorageError);
+        }
+
+        if backup.description.len() == 0 || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH {
+            return Err(QuickLendXError::InvalidDescription);
+        }
+
+        if let Some(invoices) = invoices {
+            if invoices.len() != backup.invoice_count {
+                return Err(QuickLendXError::StorageError);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// @notice Validate the backup identifier prefix format.
+    pub fn is_valid_backup_id(backup_id: &BytesN<32>) -> bool {
+        let bytes = backup_id.to_array();
+        bytes[0] == 0xB4 && bytes[1] == 0xC4
+    }
+
     /// Get the backup retention policy
     pub fn get_retention_policy(env: &Env) -> BackupRetentionPolicy {
-        let key = symbol_short!("bkup_pol");
         env.storage()
             .instance()
-            .get(&key)
+            .get(&RETENTION_POLICY_KEY)
             .unwrap_or_else(|| BackupRetentionPolicy::default())
     }
 
     /// Set the backup retention policy (admin only)
     pub fn set_retention_policy(env: &Env, policy: &BackupRetentionPolicy) {
-        let key = symbol_short!("bkup_pol");
-        env.storage().instance().set(&key, policy);
+        env.storage().instance().set(&RETENTION_POLICY_KEY, policy);
     }
 
     /// Generate a unique backup ID
     pub fn generate_backup_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
-        let counter_key = symbol_short!("bkup_cnt");
-        let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0);
+        let counter: u64 = env.storage().instance().get(&BACKUP_COUNTER_KEY).unwrap_or(0);
         let next_counter = counter.saturating_add(1);
-        env.storage().instance().set(&counter_key, &next_counter);
+        env.storage().instance().set(&BACKUP_COUNTER_KEY, &next_counter);
 
         let mut id_bytes = [0u8; 32];
         // Add backup prefix
@@ -88,8 +119,19 @@ impl BackupStorage {
     }
 
     /// Store a backup record
-    pub fn store_backup(env: &Env, backup: &Backup) {
+    pub fn store_backup(
+        env: &Env,
+        backup: &Backup,
+        invoices: Option<&Vec<Invoice>>,
+    ) -> Result<(), QuickLendXError> {
+        Self::validate_backup_metadata(backup, invoices)?;
+
+        if Self::get_backup(env, &backup.backup_id).is_some() {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
         env.storage().instance().set(&backup.backup_id, backup);
+        Ok(())
     }
 
     /// Get a backup by ID
@@ -98,26 +140,30 @@ impl BackupStorage {
     }
 
     /// Update a backup record
-    pub fn update_backup(env: &Env, backup: &Backup) {
+    pub fn update_backup(env: &Env, backup: &Backup) -> Result<(), QuickLendXError> {
+        Self::validate_backup_metadata(backup, None)?;
         env.storage().instance().set(&backup.backup_id, backup);
+        Ok(())
     }
 
     /// Get all backup IDs
     pub fn get_all_backups(env: &Env) -> Vec<BytesN<32>> {
-        let key = symbol_short!("backups");
         env.storage()
             .instance()
-            .get(&key)
+            .get(&BACKUP_LIST_KEY)
             .unwrap_or_else(|| Vec::new(env))
     }
 
     /// Add backup to the list of all backups
     pub fn add_to_backup_list(env: &Env, backup_id: &BytesN<32>) {
         let mut backups = Self::get_all_backups(env);
+        for existing in backups.iter() {
+            if existing == *backup_id {
+                return;
+            }
+        }
         backups.push_back(backup_id.clone());
-        env.storage()
-            .instance()
-            .set(&symbol_short!("backups"), &backups);
+        env.storage().instance().set(&BACKUP_LIST_KEY, &backups);
     }
 
     /// Remove backup from the list (when archived or corrupted)
@@ -129,29 +175,38 @@ impl BackupStorage {
                 new_backups.push_back(id);
             }
         }
-        env.storage()
-            .instance()
-            .set(&symbol_short!("backups"), &new_backups);
+        env.storage().instance().set(&BACKUP_LIST_KEY, &new_backups);
     }
 
     /// Store invoice data for a backup
     pub fn store_backup_data(env: &Env, backup_id: &BytesN<32>, invoices: &Vec<Invoice>) {
-        let key = (symbol_short!("bkup_data"), backup_id.clone());
+        let key = (BACKUP_DATA_KEY, backup_id.clone());
         env.storage().instance().set(&key, invoices);
     }
 
     /// Get invoice data from a backup
     pub fn get_backup_data(env: &Env, backup_id: &BytesN<32>) -> Option<Vec<Invoice>> {
-        let key = (symbol_short!("bkup_data"), backup_id.clone());
+        let key = (BACKUP_DATA_KEY, backup_id.clone());
         env.storage().instance().get(&key)
+    }
+
+    /// @notice Delete a backup record and its stored data.
+    pub fn purge_backup(env: &Env, backup_id: &BytesN<32>) {
+        Self::remove_from_backup_list(env, backup_id);
+        env.storage().instance().remove(backup_id);
+        let data_key = (BACKUP_DATA_KEY, backup_id.clone());
+        env.storage().instance().remove(&data_key);
     }
 
     /// Validate backup data integrity
     pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
         let backup = Self::get_backup(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Self::validate_backup_metadata(&backup, None)?;
 
         let data =
             Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+        Self::validate_backup_metadata(&backup, Some(&data))?;
 
         // Check if count matches
         if data.len() as u32 != backup.invoice_count {
@@ -212,7 +267,7 @@ impl BackupStorage {
                 let age = current_time.saturating_sub(timestamp);
 
                 if age > policy.max_age_seconds {
-                    Self::remove_from_backup_list(env, &backup_id);
+                    Self::purge_backup(env, &backup_id);
                     backup_timestamps.remove(i);
                     removed_count = removed_count.saturating_add(1);
                 } else {
@@ -225,7 +280,7 @@ impl BackupStorage {
         if policy.max_backups > 0 {
             while backup_timestamps.len() > policy.max_backups {
                 if let Some((oldest_id, _)) = backup_timestamps.first() {
-                    Self::remove_from_backup_list(env, &oldest_id);
+                    Self::purge_backup(env, &oldest_id);
                     backup_timestamps.remove(0);
                     removed_count = removed_count.saturating_add(1);
                 }
