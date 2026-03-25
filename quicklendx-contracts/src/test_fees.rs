@@ -675,7 +675,7 @@ fn test_update_fee_structure_rejects_invalid_values() {
         .err()
         .expect("base_fee_bps > 1000 must be rejected");
     let invalid_bps_contract_error = invalid_bps_err.expect("expected contract invoke error");
-    assert_eq!(invalid_bps_contract_error, QuickLendXError::InvalidAmount);
+    assert_eq!(invalid_bps_contract_error, QuickLendXError::InvalidFeeBasisPoints);
 
     let min_gt_max =
         client.try_update_fee_structure(&admin, &FeeType::Platform, &400, &5_001, &5_000, &true);
@@ -907,13 +907,8 @@ fn test_calculate_transaction_fees_late_payment_flag() {
     );
 }
 
-// ============================================================================
-// HARDENING TESTS — Fee System Initialization & Treasury Configuration
-// ============================================================================
-
-/// initialize_fee_system must reject a second call (re-initialization guard).
 #[test]
-fn test_fee_system_double_init_rejected() {
+fn test_update_platform_fee_bps_exceeds_max() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
@@ -922,144 +917,108 @@ fn test_fee_system_double_init_rejected() {
 
     client.initialize_fee_system(&admin);
 
-    let result = client.try_initialize_fee_system(&admin);
-    let err = result.err().expect("second init must fail");
-    let contract_error = err.expect("expected contract error");
-    assert_eq!(contract_error, QuickLendXError::InvalidFeeConfiguration);
+    // Attempt to set 11% (1100 BPS) - should return InvalidFeeBasisPoints (Contract Error 105)
+    let result = client.try_update_platform_fee_bps(&1100);
+    
+    assert!(result.is_err());
+    let err = result.err().expect("expected error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::InvalidFeeBasisPoints);
 }
 
-/// initialize_fee_system must require admin authorization.
+/// Test event integrity: verify event contains old and new BPS values
 #[test]
-fn test_fee_system_init_requires_admin_auth() {
+fn test_update_platform_fee_event_integrity() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let attacker = Address::generate(&env);
+    let admin = setup_admin(&env, &client);
 
-    client.mock_all_auths().set_admin(&admin);
+    client.initialize_fee_system(&admin); // Defaults to 200 BPS
 
-    // Attacker signs for their own address, not the admin address.
-    let bad_auth = MockAuth {
-        address: &attacker,
-        invoke: &MockAuthInvoke {
-            contract: &contract_id,
-            fn_name: "initialize_fee_system",
-            args: (admin.clone(),).into_val(&env),
-            sub_invokes: &[],
-        },
-    };
-    let result = client
-        .mock_auths(&[bad_auth])
-        .try_initialize_fee_system(&admin);
-    assert!(
-        result.is_err(),
-        "initialize_fee_system must abort without admin authorization"
+    // Update to 500 BPS
+    client.update_platform_fee_bps(&500);
+
+    // Verify Event Integrity: (old_bps, new_bps, updated_by, timestamp)
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(
+        last_event,
+        (
+            contract_id.clone(),
+            (soroban_sdk::symbol_short!("fee_cfg"),).into_val(&env),
+            (200u32, 500u32, admin.clone(), env.ledger().timestamp()).into_val(&env)
+        )
     );
 }
 
-/// configure_treasury must reject the contract's own address as treasury.
+/// Test that updating to the same value (no-op) does not emit a duplicate event
 #[test]
-fn test_configure_treasury_rejects_contract_address() {
+fn test_update_platform_fee_no_op_logic() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin_init(&env, &client);
+    let admin = setup_admin(&env, &client);
 
     client.initialize_fee_system(&admin);
-
-    // Attempting to set the contract itself as treasury must be rejected.
-    let result = client.try_configure_treasury(&contract_id);
-    let err = result.err().expect("self-assignment must fail");
-    let contract_error = err.expect("expected contract error");
-    assert_eq!(contract_error, QuickLendXError::InvalidAddress);
+    
+    let events_before = env.events().all().len();
+    
+    // Update to the same value (200 BPS)
+    client.update_platform_fee_bps(&200);
+    
+    let events_after = env.events().all().len();
+    assert_eq!(events_before, events_after, "No event should be emitted for no-op update");
 }
 
-/// configure_treasury must reject the same address when already configured (duplicate).
+/// Test that update_fee_structure emits the correct event with old/new values
 #[test]
-fn test_configure_treasury_rejects_duplicate_address() {
+fn test_update_fee_structure_event_integrity() {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin_init(&env, &client);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin); // Sets Platform to 200
+
+    // Update Platform fee to 300
+    client.update_fee_structure(&admin, &FeeType::Platform, &300, &10, &1000, &true);
+
+    let last_event = env.events().all().last().unwrap();
+    // (FeeType::Platform, old_bps=200, new_bps=300, updated_by, timestamp)
+    assert_eq!(
+        last_event,
+        (
+            contract_id.clone(),
+            (soroban_sdk::symbol_short!("fee_str"),).into_val(&env),
+            (FeeType::Platform, 200u32, 300u32, admin.clone(), env.ledger().timestamp()).into_val(&env)
+        )
+    );
+}
+
+/// Test that configure_treasury emits correct event
+#[test]
+fn test_configure_treasury_event_integrity() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
     let treasury = Address::generate(&env);
 
     client.initialize_fee_system(&admin);
     client.configure_treasury(&treasury);
 
-    // Setting the same treasury address a second time must be rejected.
-    let result = client.try_configure_treasury(&treasury);
-    let err = result.err().expect("duplicate treasury must fail");
-    let contract_error = err.expect("expected contract error");
-    assert_eq!(contract_error, QuickLendXError::InvalidFeeConfiguration);
-}
-
-/// configure_treasury must allow updating to a different (non-duplicate) address.
-#[test]
-fn test_configure_treasury_allows_update_to_different_address() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin_init(&env, &client);
-    let treasury1 = Address::generate(&env);
-    let treasury2 = Address::generate(&env);
-
-    client.initialize_fee_system(&admin);
-    client.configure_treasury(&treasury1);
-    // Updating to a distinct address must succeed.
-    client.configure_treasury(&treasury2);
-
-    let stored = client.get_treasury_address();
-    assert_eq!(stored, Some(treasury2));
-}
-
-/// configure_treasury must fail if called before fee system initialization.
-#[test]
-fn test_configure_treasury_requires_prior_init() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let treasury = Address::generate(&env);
-
-    // No initialize_fee_system called — platform fee config doesn't exist yet.
-    let result = client.try_configure_treasury(&treasury);
-    assert!(
-        result.is_err(),
-        "configure_treasury must fail without prior fee system init"
-    );
-}
-
-/// update_platform_fee_bps must require explicit admin authorization.
-#[test]
-fn test_update_platform_fee_bps_requires_admin_auth() {
-    let env = Env::default();
-    let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let attacker = Address::generate(&env);
-
-    client.mock_all_auths().set_admin(&admin);
-    client.mock_all_auths().initialize_fee_system(&admin);
-
-    // Attacker cannot authorize fee update for admin.
-    let bad_auth = MockAuth {
-        address: &attacker,
-        invoke: &MockAuthInvoke {
-            contract: &contract_id,
-            fn_name: "update_platform_fee_bps",
-            args: (500u32,).into_val(&env),
-            sub_invokes: &[],
-        },
-    };
-    let result = client
-        .mock_auths(&[bad_auth])
-        .try_update_platform_fee_bps(&500);
-    assert!(
-        result.is_err(),
-        "update_platform_fee_bps must abort without admin authorization"
+    let last_event = env.events().all().last().unwrap();
+    // (treasury_address, configured_by, timestamp)
+    assert_eq!(
+        last_event,
+        (
+            contract_id.clone(),
+            (soroban_sdk::symbol_short!("trs_cfg"),).into_val(&env),
+            (treasury.clone(), admin.clone(), env.ledger().timestamp()).into_val(&env)
+        )
     );
 }

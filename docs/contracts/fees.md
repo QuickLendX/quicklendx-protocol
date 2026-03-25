@@ -13,548 +13,119 @@ The QuickLendX platform implements a configurable fee system with treasury routi
 - **Admin-only Configuration**: Only platform administrators can modify fee rates
 - **Real-time Updates**: Fee changes take effect immediately for new transactions
 
-### 2. Treasury Routing
-
-- **Automatic Routing**: Platform fees are automatically routed to the configured treasury address
-- **Fallback Mechanism**: If no treasury is configured, fees are sent to the contract address
-- **Secure Configuration**: Only administrators can set or update the treasury address
-- **Event Tracking**: All fee routing activities are logged via blockchain events
-
-### 3. Settlement Integration
-
-- **Applied at Settlement**: Fees are calculated and collected during invoice settlement
-- **Profit-based Calculation**: Fees are only applied to the profit portion (payment amount - investment amount)
-- **Transparent Calculation**: Clear separation between investor returns and platform fees
-
-### 4. Volume Tiers
-
-- **Tiered Discounts**: User transaction volume determines a discount (basis points) applied to fee calculation: Standard (0), Silver (5%), Gold (10%), Platinum (15%).
-- **Tier Thresholds**: Volume is accumulated via `update_user_transaction_volume`; tiers are derived from `total_volume` (e.g. Platinum at 1e12+).
-- **Usage**: `calculate_total_fees` and `calculate_transaction_fees` use `get_tier_discount` for volume-based fee reduction.
-
-### 5. Fee Bounds Validation
-
-- **Admin-only Config**: Fee structures (base_fee_bps, min_fee, max_fee) and platform fee BPS are updated only by admin; all such functions require admin auth and validate bounds.
-- **Validate Fee Parameters**: `validate_fee_parameters(base_fee_bps, min_fee, max_fee)` enforces: `base_fee_bps <= 1000` (10% max), `min_fee >= 0`, `max_fee >= min_fee`. Used before updating fee structures.
-- **Zero Fee**: Supported; when fee_bps is 0 or profit is zero, platform fee is 0 and investor receives full payment. Overflow-safe math uses `saturating_mul` / `saturating_sub` in fee and revenue calculations.
-
-## Technical Implementation
-
-### Core Components
-
-#### 1. Fee Configuration Structure
-
-```rust
-pub struct PlatformFeeConfig {
-    pub fee_bps: u32,                          // Fee in basis points (e.g., 200 = 2%)
-    pub treasury_config: Option<TreasuryConfig>, // Optional treasury configuration
-    pub updated_at: u64,                        // Last update timestamp
-    pub updated_by: Address,                    // Admin who made the update
-}
-```
-
-#### 2. Treasury Configuration
-
-```rust
-pub struct TreasuryConfig {
-    pub treasury_address: Address,  // Address to receive platform fees
-    pub is_active: bool,           // Whether treasury routing is active
-    pub updated_at: u64,           // Configuration timestamp
-    pub updated_by: Address,       // Admin who configured it
-}
-```
-
-### Key Functions
-
-#### Administrative Functions
-
-1. **`configure_treasury(treasury_address: Address)`**
-   - Sets the treasury address for fee routing
-   - Requires admin authorization
-   - Emits `treasury_configured` event
-
-2. **`update_platform_fee_bps(new_fee_bps: u32)`**
-   - Updates the platform fee rate
-   - Validates fee is within acceptable range (0-10%)
-   - Requires admin authorization
-   - Emits `platform_fee_config_updated` event
-
-#### Query Functions
-
-1. **`get_platform_fee_config()`**
-   - Returns current platform fee configuration
-   - Includes treasury settings if configured
-
-2. **`get_treasury_address()`**
-   - Returns the configured treasury address
-   - Returns `None` if no treasury is configured
-
-### Settlement Process
-
-The fee system integrates seamlessly with the invoice settlement process:
-
-1. **Invoice Settlement Initiated**: Business or automated process calls `settle_invoice`
-2. **Fee Calculation**: System calculates platform fee based on profit (payment - investment)
-3. **Fund Distribution**:
-   - Investor receives: `payment_amount - platform_fee`
-   - Treasury receives: `platform_fee` (if configured)
-   - Contract receives: `platform_fee` (if no treasury configured)
-4. **Event Emission**: `platform_fee_routed` event is emitted with routing details
-
-### Revenue Distribution (Treasury / Developer / Platform)
-
-- **Configuration**: `configure_revenue_distribution` (admin only) sets `treasury_share_bps`, `developer_share_bps`, `platform_share_bps` (must sum to 10_000), plus `min_distribution_amount` and `auto_distribution`.
-- **Distribution**: `distribute_revenue(admin, period)` splits collected fees for the period according to the configured BPS; returns `(treasury_amount, developer_amount, platform_amount)`. Tests cover rounding and zero-fee cases (`test_fees.rs`, `test_revenue_split.rs`).
-
-## Security Considerations
-
-### Access Control
-
-- **Admin-only Configuration**: All fee and treasury configuration functions require admin authorization
-- **Authorization Validation**: Each administrative function validates caller permissions
-- **Immutable During Settlement**: Fee rates cannot be changed mid-settlement
-
-### Validation
-
-- **Fee Range Validation**: Platform fees are capped at 10% maximum
-- **Address Validation**: Treasury addresses are validated before configuration
-- **Amount Validation**: Fee calculations include overflow protection
-
-### Audit Trail
-
-- **Complete Event Logging**: All fee-related activities are logged via blockchain events
-- **Configuration History**: Updates include timestamps and admin addresses
-- **Settlement Tracking**: Each fee routing is recorded with invoice and recipient details
-
-## Events
-
-The system emits the following events for transparency and monitoring:
-
-### 1. `platform_fee_routed`
-
-```rust
-(invoice_id, recipient_address, fee_amount, timestamp)
-```
-
-Emitted when platform fees are routed during settlement.
-
-### 2. `treasury_configured`
-
-```rust
-(treasury_address, configured_by, timestamp)
-```
-
-Emitted when treasury address is set or updated.
-
-### 3. `platform_fee_config_updated`
-
-```rust
-(old_fee_bps, new_fee_bps, updated_by, timestamp)
-```
-
-Emitted when platform fee rate is modified.
-
-## Usage Examples
-
-### Initial Setup
-
-```rust
-// Initialize the fee system (admin only)
-contract.initialize_fee_system(admin_address)?;
-
-// Configure treasury address
-contract.configure_treasury(treasury_address)?;
-```
-
-### Fee Management
-
-```rust
-// Update platform fee to 2.5%
-contract.update_platform_fee_bps(250)?;
-
-// Query current configuration
-let config = contract.get_platform_fee_config()?;
-println!("Current fee: {}%", config.fee_bps as f64 / 100.0);
-```
-
-### Settlement with Fees
-
-```rust
-// Settle invoice (fees automatically calculated and routed)
-contract.settle_invoice(invoice_id, payment_amount)?;
-
-// Check where fees were routed
-if let Some(treasury) = contract.get_treasury_address() {
-    println!("Fees routed to treasury: {}", treasury);
-} else {
-    println!("Fees routed to contract");
-}
-```
-
-## Error Handling
-
-The system includes comprehensive error handling:
-
-- `InvalidFeeConfiguration`: Invalid fee configuration parameters
-- `TreasuryNotConfigured`: Treasury-related operation when not configured
-- `InvalidFeeBasisPoints`: Fee rate outside acceptable range (0-1000 bps)
-- `NotAdmin`: Unauthorized access to administrative functions
-- `InvalidAmount`: Invalid fee amounts or calculations
-
-## Best Practices
-
-### For Platform Administrators
-
-1. **Regular Monitoring**: Monitor fee collection and routing through events
-2. **Treasury Security**: Ensure treasury address is secure and properly managed
-3. **Fee Optimization**: Regularly review fee rates for competitiveness
-4. **Backup Configuration**: Maintain backup treasury addresses if needed
-
-### For Integration
-
-1. **Event Monitoring**: Subscribe to fee-related events for real-time tracking
-2. **Error Handling**: Implement proper error handling for fee-related operations
-3. **Testing**: Thoroughly test fee calculations in various scenarios
-4. **Documentation**: Keep integration documentation updated with fee changes
-
-## Migration and Upgrades
-
-The fee system is designed for seamless upgrades:
-
-- **Backward Compatibility**: New features maintain compatibility with existing functionality
-- **Gradual Migration**: Treasury configuration is optional, allowing gradual adoption
-- **Event Continuity**: Event schemas are versioned to maintain monitoring compatibility
-
-## Conclusion
-
-The QuickLendX platform fee system provides a robust, secure, and transparent mechanism for collecting platform fees while maintaining flexibility for future enhancements. The integration with treasury routing ensures efficient fee management and supports the platform's economic model.
-# Platform Fee System Documentation
-
-## Overview
-
-The QuickLendX platform implements a configurable fee system with treasury routing capabilities. The system applies a default 2% platform fee on invoice transactions during settlement, with fees automatically routed to a configured treasury address.
-
-## Key Features
-
-### 1. Configurable Platform Fee
-
-- **Default Rate**: 2% (200 basis points)
-- **Maximum Rate**: 10% (1000 basis points)
-- **Admin-only Configuration**: Only platform administrators can modify fee rates
-- **Real-time Updates**: Fee changes take effect immediately for new transactions
+#### Platform Fee Boundaries
+To prevent protocol misconfiguration or malicious fee hikes, the platform fee is strictly capped at the contract level.
+- **Hard Cap**: Any update attempt exceeding 1000 BPS (10%) will result in an `InvalidFeeBasisPoints` error.
+- **Integrity**: Every update emits a `platform_fee_config_updated` (topic: `fee_cfg`) event containing both `old_fee_bps` and `new_fee_bps` to ensure off-chain auditability.
+- **Optimization**: If the proposed new fee is identical to the current fee, the system performs a "no-op," meaning no storage is updated and no event is emitted.
 
 ### 2. Treasury Routing
 
 - **Automatic Routing**: Platform fees are automatically routed to the configured treasury address
 - **Fallback Mechanism**: If no treasury is configured, fees are sent to the contract address
 - **Secure Configuration**: Only administrators can set or update the treasury address
-- **Event Tracking**: All fee routing activities are logged via blockchain events
+- **Event Tracking**: All treasury configuration changes are logged via `treasury_configured` (topic: `trs_cfg`) events.
 
-### 3. Settlement Integration
+### 3. Fee Structure Management
 
-- **Applied at Settlement**: Fees are calculated and collected during invoice settlement
-- **Profit-based Calculation**: Fees are only applied to the profit portion (payment amount - investment amount)
-- **Transparent Calculation**: Clear separation between investor returns and platform fees
+The protocol supports various types of fees (Platform, Processing, Verification, LatePayment, etc.) through configurable fee structures.
+- **Strict Validation**: All fee structures must respect a hard cap of 1000 BPS for the base fee.
+- **Event Audit**: Updates to any fee structure emit a `fee_structure_updated` (topic: `fee_str`) event including the `FeeType`, the old BPS, and the new BPS.
 
 ### 4. Volume Tiers
 
-- **Tiered Discounts**: User transaction volume determines a discount (basis points) applied to fee calculation: Standard (0), Silver (5%), Gold (10%), Platinum (15%).
-- **Tier Thresholds**: Volume is accumulated via `update_user_transaction_volume`; tiers are derived from `total_volume` (e.g. Platinum at 1e12+).
-- **Usage**: `calculate_total_fees` and `calculate_transaction_fees` use `get_tier_discount` for volume-based fee reduction.
+- **Tiered Discounts**: User transaction volume determines a discount applied to fee calculations: Standard (0), Silver (5%), Gold (10%), Platinum (15%).
+- **Tier Thresholds**: Volume is accumulated via `update_user_transaction_volume`.
 
 ### 5. Fee Bounds Validation
 
-- **Admin-only Config**: Fee structures (base_fee_bps, min_fee, max_fee) and platform fee BPS are updated only by admin; all such functions require admin auth and validate bounds.
-- **Validate Fee Parameters**: `validate_fee_parameters(base_fee_bps, min_fee, max_fee)` enforces: `base_fee_bps <= 1000` (10% max), `min_fee >= 0`, `max_fee >= min_fee`. Used before updating fee structures.
-- **Zero Fee**: Supported; when fee_bps is 0 or profit is zero, platform fee is 0 and investor receives full payment. Overflow-safe math uses `saturating_mul` / `saturating_sub` in fee and revenue calculations.
+- **Admin-only Config**: Fee structures and platform fee BPS are updated only by admin.
+- **Internal Validation**: `validate_fee_params(base_fee_bps, min_fee, max_fee)` enforces:
+  - `base_fee_bps <= 1000` (10% max)
+  - `min_fee >= 0`
+  - `max_fee >= min_fee`
+- **Error Codes**: Rejection of invalid BPS returns `InvalidFeeBasisPoints` (Contract Error 105).
 
 ## Technical Implementation
 
 ### Core Components
 
-#### 1. Fee Configuration Structure
+#### 1. Platform Fee Configuration Structure
 
 ```rust
 pub struct PlatformFeeConfig {
-    pub fee_bps: u32,                          // Fee in basis points (e.g., 200 = 2%)
-    pub treasury_config: Option<TreasuryConfig>, // Optional treasury configuration
-    pub updated_at: u64,                        // Last update timestamp
-    pub updated_by: Address,                    // Admin who made the update
+    pub fee_bps: u32,
+    pub treasury_address: Option<Address>,
+    pub updated_at: u64,
+    pub updated_by: Address,
 }
 ```
 
-#### 2. Treasury Configuration
+#### 2. Fee Structure
 
 ```rust
-pub struct TreasuryConfig {
-    pub treasury_address: Address,  // Address to receive platform fees
-    pub is_active: bool,           // Whether treasury routing is active
-    pub updated_at: u64,           // Configuration timestamp
-    pub updated_by: Address,       // Admin who configured it
+pub struct FeeStructure {
+    pub fee_type: FeeType,
+    pub base_fee_bps: u32,
+    pub min_fee: i128,
+    pub max_fee: i128,
+    pub is_active: bool,
+    pub updated_at: u64,
+    pub updated_by: Address,
 }
 ```
 
-### Key Functions
-
-#### Administrative Functions
+### Key Functions (Administrative)
 
 1. **`configure_treasury(treasury_address: Address)`**
-   - Sets the treasury address for fee routing
-   - Requires admin authorization
-   - Emits `treasury_configured` event
+   - Sets the treasury address for fee routing.
+   - Emits `trs_cfg` event.
 
 2. **`update_platform_fee_bps(new_fee_bps: u32)`**
-   - Updates the platform fee rate
-   - Validates fee is within acceptable range (0-10%)
-   - Requires admin authorization
-   - Emits `platform_fee_config_updated` event
+   - Updates the platform fee rate.
+   - Enforces 10% hard cap.
+   - Emits `fee_cfg` event with transition details.
 
-#### Query Functions
-
-1. **`get_platform_fee_config()`**
-   - Returns current platform fee configuration
-   - Includes treasury settings if configured
-
-2. **`get_treasury_address()`**
-   - Returns the configured treasury address
-   - Returns `None` if no treasury is configured
+3. **`update_fee_structure(fee_type, base_fee_bps, min_fee, max_fee, is_active)`**
+   - Updates specific fee mechanics.
+   - Enforces 10% hard cap on `base_fee_bps`.
+   - Emits `fee_str` event.
 
 ### Settlement Process
 
-The fee system integrates seamlessly with the invoice settlement process:
+1. **Fee Calculation**: System calculates platform fee based on profit.
+2. **Fund Distribution**: Investor receives `payment_amount - platform_fee`. Treasury receives `platform_fee`.
 
-1. **Invoice Settlement Initiated**: Business or automated process calls `settle_invoice`
-2. **Fee Calculation**: System calculates platform fee based on profit (payment - investment)
-3. **Fund Distribution**:
-   - Investor receives: `payment_amount - platform_fee`
-   - Treasury receives: `platform_fee` (if configured)
-   - Contract receives: `platform_fee` (if no treasury configured)
-4. **Event Emission**: `platform_fee_routed` event is emitted with routing details
+### Deterministic Profit/Fee Formula
 
-### Deterministic Profit/Fee Formula (Soroban)
+Core logic in `profits.rs` ensures:
+- **No dust**: `investor_return + platform_fee == safe_payment`.
+- **Overflow-safe arithmetic**: Uses saturating i128 math.
+- **Investor-favored rounding**: Integer floor division.
 
-Core formula implemented in `quicklendx-contracts/src/profits.rs`:
-
-```text
-safe_investment = max(0, investment_amount)
-safe_payment    = max(0, payment_amount)
-safe_fee_bps    = clamp(fee_bps, 0, 10_000)
-
-if safe_payment <= safe_investment:
-    platform_fee    = 0
-    investor_return = safe_payment
-else:
-    gross_profit    = safe_payment - safe_investment
-    platform_fee    = floor(gross_profit * safe_fee_bps / 10_000)
-    investor_return = safe_payment - platform_fee
-```
-
-Security and correctness properties:
-
-- **No dust**: `investor_return + platform_fee == safe_payment`
-- **Overflow-safe i128 math**: uses saturating arithmetic for multiply/subtract paths
-- **Deterministic rounding**: integer floor division (round down) favors investors
-- **Input hardening**: negative amounts are normalized to `0`, and fee bps is clamped to `[0, 10_000]`
-
-### Revenue Distribution (Treasury / Developer / Platform)
-
-- **Configuration**: `configure_revenue_distribution` (admin only) sets `treasury_share_bps`, `developer_share_bps`, `platform_share_bps` (must sum to 10_000), plus `min_distribution_amount` and `auto_distribution`.
-- **Distribution**: `distribute_revenue(admin, period)` splits collected fees for the period according to the configured BPS; returns `(treasury_amount, developer_amount, platform_amount)`. Tests cover rounding and zero-fee cases (`test_fees.rs`, `test_revenue_split.rs`).
-
-## Security Considerations
+## Security and Auditability
 
 ### Access Control
-
-- **Admin-only Configuration**: All fee and treasury configuration functions require admin authorization
-- **Authorization Validation**: Each administrative function validates caller permissions
-- **Immutable During Settlement**: Fee rates cannot be changed mid-settlement
+All administrative functions require `admin.require_auth()`.
 
 ### Validation
+Strict boundary checks prevent "silent misconfiguration" where a typo could lead to excessive fees.
 
-- **Fee Range Validation**: Platform fees are capped at 10% maximum
-- **Address Validation**: Treasury addresses are validated before configuration
-- **Amount Validation**: Fee calculations include overflow protection
+### Events Registry
 
-### Audit Trail
-
-- **Complete Event Logging**: All fee-related activities are logged via blockchain events
-- **Configuration History**: Updates include timestamps and admin addresses
-- **Settlement Tracking**: Each fee routing is recorded with invoice and recipient details
-
-## Events
-
-The system emits the following events for transparency and monitoring:
-
-### 1. `platform_fee_routed`
-
-```rust
-(invoice_id, recipient_address, fee_amount, timestamp)
-```
-
-Emitted when platform fees are routed during settlement.
-
-### 2. `treasury_configured`
-
-```rust
-(treasury_address, configured_by, timestamp)
-```
-
-Emitted when treasury address is set or updated.
-
-### 3. `platform_fee_config_updated`
-
-```rust
-(old_fee_bps, new_fee_bps, updated_by, timestamp)
-```
-
-Emitted when platform fee rate is modified.
-
-## Usage Examples
-
-### Initial Setup
-
-```rust
-// Initialize the fee system (admin only)
-contract.initialize_fee_system(admin_address)?;
-
-// Configure treasury address
-contract.configure_treasury(treasury_address)?;
-```
-
-### Fee Management
-
-```rust
-// Update platform fee to 2.5%
-contract.update_platform_fee_bps(250)?;
-
-// Query current configuration
-let config = contract.get_platform_fee_config()?;
-println!("Current fee: {}%", config.fee_bps as f64 / 100.0);
-```
-
-### Settlement with Fees
-
-```rust
-// Settle invoice (fees automatically calculated and routed)
-contract.settle_invoice(invoice_id, payment_amount)?;
-
-// Check where fees were routed
-if let Some(treasury) = contract.get_treasury_address() {
-    println!("Fees routed to treasury: {}", treasury);
-} else {
-    println!("Fees routed to contract");
-}
-```
+| Topic | Event Name | Payload | Rationale |
+| :--- | :--- | :--- | :--- |
+| `fee_cfg` | Platform Fee Updated | `(old_bps, new_bps, admin, ts)` | Tracks platform-wide fee changes |
+| `fee_str` | Fee Structure Updated | `(fee_type, old_bps, new_bps, admin, ts)` | Tracks specific structural changes |
+| `trs_cfg` | Treasury Configured | `(treasury_addr, admin, ts)` | Tracks where funds are routed |
+| `fee_upd` | Legacy Profit Fee | `(bps, ts, admin)` | (Used in profits.rs module) |
 
 ## Error Handling
 
-The system includes comprehensive error handling:
-
-- `InvalidFeeConfiguration`: Invalid fee configuration parameters
-- `TreasuryNotConfigured`: Treasury-related operation when not configured
-- `InvalidFeeBasisPoints`: Fee rate outside acceptable range (0-1000 bps)
-- `NotAdmin`: Unauthorized access to administrative functions
-- `InvalidAmount`: Invalid fee amounts or calculations
-
-## Best Practices
-
-### For Platform Administrators
-
-1. **Regular Monitoring**: Monitor fee collection and routing through events
-2. **Treasury Security**: Ensure treasury address is secure and properly managed
-3. **Fee Optimization**: Regularly review fee rates for competitiveness
-4. **Backup Configuration**: Maintain backup treasury addresses if needed
-
-### For Integration
-
-1. **Event Monitoring**: Subscribe to fee-related events for real-time tracking
-2. **Error Handling**: Implement proper error handling for fee-related operations
-3. **Testing**: Thoroughly test fee calculations in various scenarios
-4. **Documentation**: Keep integration documentation updated with fee changes
+- **`InvalidFeeBasisPoints`**: Rejection of BPS > 1000.
+- **`InvalidAmount`**: Rejection of negative amounts or inconsistent min/max bounds.
+- **`NotAdmin`**: Unauthorized modification attempt.
 
 ## Migration and Upgrades
 
-The fee system is designed for seamless upgrades:
-
-- **Backward Compatibility**: New features maintain compatibility with existing functionality
-- **Gradual Migration**: Treasury configuration is optional, allowing gradual adoption
-- **Event Continuity**: Event schemas are versioned to maintain monitoring compatibility
-
-## Conclusion
-
-The QuickLendX platform fee system provides a robust, secure, and transparent mechanism for collecting platform fees while maintaining flexibility for future enhancements. The integration with treasury routing ensures efficient fee management and supports the platform's economic model.
-
----
-
-## Hardening: Initialization & Treasury Security
-
-This section documents the security hardening applied to the fee system initialization and treasury configuration flow.
-
-### Initialization Guard
-
-`FeeManager::initialize` is protected by a single-write guard using the `fee_init` storage key.
-
-```
-Storage key: "fee_init" (Symbol)
-Type:        bool (true)
-Scope:       instance storage
-```
-
-**Behavior:**
-- On first call: sets up fee structures and writes `fee_init = true`.
-- On any subsequent call: returns `InvalidFeeConfiguration` immediately, before any state mutation.
-
-This prevents an attacker (or misconfigured deployment script) from overwriting fee structures after the contract is live.
-
-### Explicit Admin Authorization
-
-All admin-gated fee functions call `admin.require_auth()` at the top of both the public API layer (`lib.rs`) and the module layer (`fees.rs`). This defense-in-depth ensures auth is enforced even if one layer is bypassed or refactored.
-
-| Function | `lib.rs` auth | `fees.rs` auth |
-|---|---|---|
-| `initialize_fee_system` | `admin.require_auth()` | `admin.require_auth()` |
-| `configure_treasury` | — (caller provides admin) | `admin.require_auth()` |
-| `update_platform_fee` / `update_platform_fee_bps` | `admin.require_auth()` | `admin.require_auth()` |
-
-### Treasury Address Validation
-
-`configure_treasury` rejects two classes of invalid addresses before persisting any state:
-
-#### Self-assignment (contract address)
-
-Setting the treasury to the contract's own address would route all fees back into the contract with no way to withdraw them.
-
-```
-if treasury_address == env.current_contract_address() {
-    return Err(QuickLendXError::InvalidAddress);
-}
-```
-
-#### Duplicate address
-
-Re-configuring the treasury to the address already stored is a no-op at best and masks operational errors at worst.
-
-```
-if let Some(ref existing) = platform_config.treasury_address {
-    if *existing == treasury_address {
-        return Err(QuickLendXError::InvalidFeeConfiguration);
-    }
-}
-```
-
-Both checks run before any write, so rejected calls leave storage unchanged.
-
-### Error Reference (Fee Hardening)
-
-| Error | Code | Trigger |
-|---|---|---|
-| `InvalidFeeConfiguration` | 1850 | Re-initialization attempt; duplicate treasury address |
-| `InvalidAddress` | 1201 | Treasury set to contract's own address |
-| `InvalidFeeBasisPoints` | 1852 | Fee BPS exceeds 1000 (10%) |
-| `TreasuryNotConfigured` | 1851 | Fee routing attempted before treasury is set |
-
-### Security Assumptions
-
-- **Admin key security**: The admin `Address` passed at initialization must be controlled by the platform operator. Loss of the admin key means no further fee configuration is possible; there is no recovery path.
-- **Single initialization window**: The init guard is permanent. If fee structures must change post-deployment, use `update_platform_fee` (for BPS) or `configure_treasury` (for routing), not re-initialization.
-- **Treasury address trust**: The contract does not validate that the treasury address is a live account or holds any minimum balance. Operators must verify the address is operational before configuring it.
+The system is designed for backward compatibility, with new event structures providing more detail than legacy versions without breaking core settlement logic.
