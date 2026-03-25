@@ -504,6 +504,23 @@ impl BidStorage {
         }
         count
     }
+
+    /// Calculate the sum of all currently active (Placed) bid amounts for a given investor.
+    /// Used for checking against the investor's total investment limit.
+    pub fn get_active_bid_amount_sum_for_investor(env: &Env, investor: &Address) -> i128 {
+        let all_bids = Self::get_all_bids_by_investor(env, investor);
+        let current_timestamp = env.ledger().timestamp();
+        let mut total_amount: i128 = 0;
+        let mut idx: u32 = 0;
+        while idx < all_bids.len() {
+            let bid = all_bids.get(idx).unwrap();
+            if bid.status == BidStatus::Placed && !bid.is_expired(current_timestamp) {
+                total_amount = total_amount.saturating_add(bid.bid_amount);
+            }
+            idx = idx.saturating_add(1);
+        }
+        total_amount
+    }
     /// Generates a unique 32-byte bid ID using timestamp and a simple counter.
     /// This approach avoids potential serialization issues with large counters.
     pub fn generate_unique_bid_id(env: &Env) -> BytesN<32> {

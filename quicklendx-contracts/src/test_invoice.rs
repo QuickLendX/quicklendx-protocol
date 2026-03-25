@@ -6,11 +6,14 @@
 /// - Status transitions and state management
 /// - Edge cases and error handling
 /// - Security considerations
+use core::convert::TryInto;
+
 use super::*;
 use crate::invoice::{InvoiceCategory, InvoiceMetadata, InvoiceStatus, LineItemRecord};
 use crate::verification::BusinessVerificationStatus;
 use soroban_sdk::{
-    testutils::{Address as _, Events, MockAuth, MockAuthInvoke},
+    symbol_short,
+    testutils::{Address as _, Events, Ledger, MockAuth, MockAuthInvoke},
     Address, BytesN, Env, IntoVal, String, Vec,
 };
 
@@ -68,6 +71,56 @@ fn create_test_invoice(
         &currency,
         &due_date,
         &String::from_str(env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(env),
+    )
+}
+
+const COLLISION_TEST_AMOUNT: i128 = 1_000_000;
+// Keep the burst below the current Soroban instance-storage entry size ceiling.
+const COLLISION_HIGH_THROUGHPUT_SAMPLE: u32 = 24;
+
+fn pin_invoice_collision_ledger_slot(env: &Env, timestamp: u64, sequence: u32) {
+    env.ledger().set_timestamp(timestamp);
+    env.ledger().set_sequence_number(sequence);
+}
+
+fn invoice_id_counter_segment(invoice_id: &BytesN<32>) -> u32 {
+    let bytes = invoice_id.to_array();
+    u32::from_be_bytes(bytes[12..16].try_into().unwrap())
+}
+
+fn set_invoice_collision_counter(env: &Env, contract_id: &Address, counter: u32) {
+    env.as_contract(contract_id, || {
+        env.storage()
+            .instance()
+            .set(&symbol_short!("inv_cnt"), &counter);
+    });
+}
+
+fn read_invoice_collision_counter(env: &Env, contract_id: &Address) -> u32 {
+    env.as_contract(contract_id, || {
+        env.storage()
+            .instance()
+            .get(&symbol_short!("inv_cnt"))
+            .unwrap_or(0)
+    })
+}
+
+fn store_collision_test_invoice(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    business: &Address,
+    currency: &Address,
+    description: &str,
+) -> BytesN<32> {
+    let due_date = env.ledger().timestamp() + 86400;
+    client.store_invoice(
+        business,
+        &COLLISION_TEST_AMOUNT,
+        currency,
+        &due_date,
+        &String::from_str(env, description),
         &InvoiceCategory::Services,
         &Vec::new(env),
     )
@@ -1029,7 +1082,6 @@ fn test_invoice_multiple_invoices_same_business() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-
     let invoice2_id = client.store_invoice(
         &business,
         &2000,
@@ -1095,8 +1147,12 @@ fn test_category_index_no_stale_entry_after_update() {
     );
 
     // Precondition: present in Services, absent from Products.
-    assert!(client.get_invoices_by_category(&InvoiceCategory::Services).contains(&id));
-    assert!(!client.get_invoices_by_category(&InvoiceCategory::Products).contains(&id));
+    assert!(client
+        .get_invoices_by_category(&InvoiceCategory::Services)
+        .contains(&id));
+    assert!(!client
+        .get_invoices_by_category(&InvoiceCategory::Products)
+        .contains(&id));
 
     client.update_invoice_category(&id, &InvoiceCategory::Products);
 
@@ -1203,7 +1259,10 @@ fn test_category_index_idempotent_same_category_update() {
     let count_after = client.get_invoice_count_by_category(&InvoiceCategory::Technology);
 
     // Count must not grow.
-    assert_eq!(count_after, count_before, "duplicate inserted on same-category update");
+    assert_eq!(
+        count_after, count_before,
+        "duplicate inserted on same-category update"
+    );
     // Exactly one occurrence.
     assert_eq!(bucket.iter().filter(|x| *x == id).count(), 1);
 }
@@ -1245,13 +1304,22 @@ fn test_category_index_sibling_unaffected_after_update() {
 
     // id_b must still be in Healthcare.
     let healthcare = client.get_invoices_by_category(&InvoiceCategory::Healthcare);
-    assert!(healthcare.contains(&id_b), "sibling removed from old category");
-    assert!(!healthcare.contains(&id_a), "moved invoice still in old category");
+    assert!(
+        healthcare.contains(&id_b),
+        "sibling removed from old category"
+    );
+    assert!(
+        !healthcare.contains(&id_a),
+        "moved invoice still in old category"
+    );
 
     // id_a must be in Other.
     let other = client.get_invoices_by_category(&InvoiceCategory::Other);
     assert!(other.contains(&id_a));
-    assert!(!other.contains(&id_b), "sibling incorrectly added to new category");
+    assert!(
+        !other.contains(&id_b),
+        "sibling incorrectly added to new category"
+    );
 }
 
 /// get_invoice_count_by_category must always equal the length of
@@ -1351,4 +1419,71 @@ fn test_get_all_categories_canonical_and_no_duplicates() {
             cat
         );
     }
+}
+
+#[test]
+fn test_invoice_ids_unique_under_same_ledger_slot_collision_regression() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    pin_invoice_collision_ledger_slot(&env, 1_700_200_000, 51);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let mut ids = Vec::new(&env);
+
+    for expected_counter in 0..COLLISION_HIGH_THROUGHPUT_SAMPLE {
+        let invoice_id = store_collision_test_invoice(
+            &env,
+            &client,
+            &business,
+            &currency,
+            "same-slot-collision-regression",
+        );
+
+        for existing_id in ids.iter() {
+            assert_ne!(invoice_id, existing_id);
+        }
+
+        assert_eq!(invoice_id_counter_segment(&invoice_id), expected_counter);
+        ids.push_back(invoice_id);
+    }
+
+    assert_eq!(
+        read_invoice_collision_counter(&env, &contract_id),
+        COLLISION_HIGH_THROUGHPUT_SAMPLE
+    );
+}
+
+#[test]
+fn test_invoice_counter_rewind_skips_collision_without_overwrite() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    pin_invoice_collision_ledger_slot(&env, 1_700_200_001, 52);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    let original_id =
+        store_collision_test_invoice(&env, &client, &business, &currency, "collision-original");
+    set_invoice_collision_counter(&env, &contract_id, 0);
+
+    let retried_id =
+        store_collision_test_invoice(&env, &client, &business, &currency, "collision-retried");
+
+    assert_ne!(original_id, retried_id);
+    assert_eq!(invoice_id_counter_segment(&original_id), 0);
+    assert_eq!(invoice_id_counter_segment(&retried_id), 1);
+    assert_eq!(
+        client.get_invoice(&original_id).description,
+        String::from_str(&env, "collision-original")
+    );
+    assert_eq!(
+        client.get_invoice(&retried_id).description,
+        String::from_str(&env, "collision-retried")
+    );
+    assert_eq!(read_invoice_collision_counter(&env, &contract_id), 2);
 }

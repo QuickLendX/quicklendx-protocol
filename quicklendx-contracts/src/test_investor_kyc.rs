@@ -32,17 +32,8 @@ mod test_investor_kyc {
         env.mock_all_auths();
         let _ = client.try_initialize_admin(&admin);
 
-        // Initialize protocol limits (min invoice amount, max due date days, grace period seconds)
-        let _ = client.try_initialize_protocol_limits(
-            &admin,
-            &1_000_000i128,
-            &365u64,
-            &86400u64,
-        );
-        // Initialize protocol limits (min invoice: 1, min bid: 100, min bid bps: 100,
-        // max due date: 365 days, grace period: 86400s)
-        let _ = client
-            .try_initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
+        // Initialize protocol limits (min invoice amount, max due date days, grace period seconds).
+        let _ = client.try_initialize_protocol_limits(&admin, &1_000_000i128, &365u64, &86400u64);
 
         (env, client, admin)
     }
@@ -430,6 +421,34 @@ mod test_investor_kyc {
 
         let error = result.unwrap_err().unwrap();
         assert_eq!(error, QuickLendXError::InvalidAmount);
+    }
+
+    #[test]
+    fn test_bid_respects_aggregate_exposure_limit() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+        let investment_limit = 100_000i128;
+
+        // Setup verified investor
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &investment_limit);
+
+        // Create 3 invoices
+        let inv1 = create_verified_invoice(&env, &client, &business, 50_000);
+        let inv2 = create_verified_invoice(&env, &client, &business, 50_000);
+        let inv3 = create_verified_invoice(&env, &client, &business, 50_000);
+
+        // Bid 1: 40k (Total: 40k/100k) - Success
+        let _ = client.place_bid(&investor, &inv1, &40_000, &45_000);
+
+        // Bid 2: 40k (Total: 80k/100k) - Success
+        let _ = client.place_bid(&investor, &inv2, &40_000, &45_000);
+
+        // Bid 3: 30k (Total: 110k/100k) - Fail (Aggregate limit exceeded)
+        let result = client.try_place_bid(&investor, &inv3, &30_000, &35_000);
+        assert!(result.is_err(), "Aggregate exposure must be respected");
     }
 
     #[test]

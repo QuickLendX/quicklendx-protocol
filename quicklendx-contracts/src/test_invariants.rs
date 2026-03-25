@@ -18,6 +18,8 @@ use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
 use crate::invoice::{Invoice, InvoiceCategory, InvoiceStatus, InvoiceStorage};
 use crate::{QuickLendXContract, QuickLendXContractClient};
 
+const COLLISION_INVARIANT_AMOUNT: i128 = 1_000_000;
+
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
@@ -26,6 +28,52 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let admin = Address::generate(&env);
     let _ = client.initialize_admin(&admin);
     (env, client, admin)
+}
+
+fn pin_collision_invariant_ledger_slot(env: &Env, timestamp: u64, sequence: u32) {
+    env.ledger().set_timestamp(timestamp);
+    env.ledger().set_sequence_number(sequence);
+}
+
+fn invoice_counter_segment(invoice_id: &BytesN<32>) -> u32 {
+    let bytes = invoice_id.to_array();
+    u32::from_be_bytes(bytes[12..16].try_into().unwrap())
+}
+
+fn set_collision_invariant_counter(env: &Env, contract_id: &Address, counter: u32) {
+    env.as_contract(contract_id, || {
+        env.storage()
+            .instance()
+            .set(&symbol_short!("inv_cnt"), &counter);
+    });
+}
+
+fn read_collision_invariant_counter(env: &Env, contract_id: &Address) -> u32 {
+    env.as_contract(contract_id, || {
+        env.storage()
+            .instance()
+            .get(&symbol_short!("inv_cnt"))
+            .unwrap_or(0)
+    })
+}
+
+fn store_collision_invariant_invoice(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    business: &Address,
+    currency: &Address,
+    description: &str,
+) -> BytesN<32> {
+    let due_date = env.ledger().timestamp() + 86_400;
+    client.store_invoice(
+        business,
+        &COLLISION_INVARIANT_AMOUNT,
+        currency,
+        &due_date,
+        &String::from_str(env, description),
+        &InvoiceCategory::Services,
+        &Vec::new(env),
+    )
 }
 
 fn create_test_invoice(env: &Env, id: BytesN<32>, business: Address) -> Invoice {

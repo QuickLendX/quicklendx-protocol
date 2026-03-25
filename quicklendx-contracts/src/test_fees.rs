@@ -143,7 +143,7 @@ fn test_custom_platform_fee_bps() {
     client.set_platform_fee(&new_fee_bps);
 
     let updated_config = client.get_platform_fee();
-    assert_eq!(updated_config.fee_bps, new_fee_bps);
+    assert_eq!(updated_config.fee_bps as i128, new_fee_bps);
     assert_eq!(updated_config.updated_by, admin);
 }
 

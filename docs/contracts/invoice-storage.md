@@ -8,54 +8,62 @@ The Invoice Storage module provides comprehensive storage, indexing, and retriev
 
 ### Primary Storage
 
-Invoices are stored using a key-value pattern:
-- **Key**: `(Symbol("invoice"), invoice_id: BytesN<32>)`
+Invoices are stored in contract instance storage directly under their invoice ID:
+- **Storage class**: instance storage
+- **Key**: `invoice_id: BytesN<32>`
 - **Value**: `Invoice` struct
+
+### Deterministic Invoice ID Allocation
+
+Invoice IDs are allocated deterministically from the current ledger slot plus a
+monotonic instance-storage counter:
+
+- **Timestamp bytes**: `invoice_id[0..8]`
+- **Ledger sequence bytes**: `invoice_id[8..12]`
+- **Invoice counter bytes**: `invoice_id[12..16]`
+- **Reserved bytes**: `invoice_id[16..32]` are currently zero-filled
+
+The counter is stored in instance storage under `symbol_short!("inv_cnt")`.
+
+#### Collision Safety
+
+The allocator does not assume the first deterministic candidate is always free.
+Before minting an ID, the contract checks whether the candidate invoice key
+already exists in instance storage. If it does, the allocator probes the next
+counter value until it finds an unused key, then persists the next counter
+value.
+
+This protects against accidental invoice overwrite if:
+- a future refactor reuses a previously allocated counter
+- backup or restore logic rehydrates an older invoice key
+- tests or migrations seed invoice records before normal creation flow runs
+
+Security assumption: the normal invoice creation path must continue to use the
+allocator in `Invoice::new` rather than writing arbitrary invoice IDs directly.
 
 ### Indexes
 
 Multiple indexes are maintained for efficient querying:
 
 1. **Business Index**: Maps business address to their invoice IDs
-   - Key: `(Symbol("bus_inv"), business: Address)`
+   - Key: `(Symbol("business"), business: Address)`
    - Value: `Vec<BytesN<32>>`
 
 2. **Status Index**: Maps invoice status to invoice IDs
-   - Key: `(Symbol("stat_inv"), status: InvoiceStatus)`
+   - Key: `Symbol("pending" | "verified" | "funded" | "paid" | "default" | "canceld" | "refundd")`
    - Value: `Vec<BytesN<32>>`
+   - Note: cancelled/refunded keys are shortened to fit `symbol_short!`
 
 3. **Category Index**: Maps category to invoice IDs
-   - Key: `(Symbol("cat_inv"), category: InvoiceCategory)`
+   - Key: `(Symbol("cat_idx"), category: InvoiceCategory)`
    - Value: `Vec<BytesN<32>>`
 
 4. **Tag Index**: Maps tags to invoice IDs
-   - Key: `(Symbol("tag_inv"), tag: String)`
+   - Key: `(Symbol("tag_idx"), tag: String)`
    - Value: `Vec<BytesN<32>>`
 
-5. **Rating Index**: Tracks invoices with ratings
-   - Key: `Symbol("inv_ratings")`
-   - Value: `Vec<BytesN<32>>`
-   - Customer Index: `(symbol_short("meta_c"), customer_name: String)`
-   - Tax ID Index: `(symbol_short("meta_t"), tax_id: String)`
-- **Global Counter**:
-   - Total Invoices: `TOTAL_INVOICE_COUNT_KEY` (symbol_short("total_iv")) -> `u32`
-
-## Status-Bucket Invariants
-
-The protocol enforces a strict invariant between the global invoice counter and the aggregate length of all status-specific buckets. This ensures no invoices are "orphaned" during status transitions or incorrectly indexed.
-
-### The Invariant
-`get_total_invoice_count() == sum(len(get_invoices_by_status(status)))` for all `status` in `InvoiceStatus`.
-
-### Enforcement Mechanism
-- **Creation**: When `store_invoice` is called for a new ID, the global counter is incremented.
-- **Transitions**: Every status transition (e.g., `verify_invoice`, `accept_bid_and_fund`, `settle_invoice`) must atomically remove the invoice ID from the old status bucket and add it to the new one.
-- **Deletion**: If `delete_invoice` is called, the global counter is decremented.
-
-### Verification
-Developers can verify this invariant using the following public contract methods:
-1. `get_total_invoice_count()`: Returns the O(1) global counter.
-2. `get_invoice_count_by_status(status)`: Returns the length of a specific status bucket.
+5. **Metadata Fields**: Customer/tax data is stored inline on the `Invoice`
+   record and updated together with the invoice payload.
 
 ## Data Structures
 
@@ -133,13 +141,13 @@ Stores a new invoice and creates all necessary indexes.
 pub fn store_invoice(env: &Env, invoice: &Invoice)
 ```
 
-**Operations:**
-1. Stores invoice in primary storage
-2. Adds to business index
-3. Adds to status index
-4. Adds to category index
-5. Adds to tag indexes (for each tag)
-6. Adds to metadata indexes (if metadata exists)
+**Operations in the normal create flow:**
+1. `Invoice::new` allocates a deterministic invoice ID and probes forward on collision
+2. `InvoiceStorage::store_invoice` stores the invoice in primary storage
+3. The invoice ID is appended to the business index
+4. The invoice ID is appended to the status index
+5. The invoice ID is appended to the category index
+6. The invoice ID is appended to each tag index
 
 **Example:**
 ```rust
@@ -156,6 +164,23 @@ let invoice = Invoice::new(
 
 InvoiceStorage::store_invoice(&env, &invoice);
 ```
+
+## Security Notes
+
+- Collision handling is storage-backed, not counter-trust-based: rewinding `inv_cnt`
+  cannot overwrite an existing invoice because the allocator checks the target key first.
+- Counter overflow returns `StorageError` instead of wrapping to zero.
+- This guarantee only holds if invoice creation continues to use `Invoice::new`
+  before `InvoiceStorage::store_invoice`. Direct raw writes to an existing invoice
+  key can still overwrite data.
+
+## Regression Coverage
+
+The invoice collision regression suite covers:
+
+1. High-throughput creation in a pinned ledger slot to confirm deterministic uniqueness.
+2. Counter rewind collisions to confirm the allocator skips the occupied key.
+3. Post-collision creation to confirm monotonic counter progression resumes at the next free ID.
 
 ### get_invoice
 
