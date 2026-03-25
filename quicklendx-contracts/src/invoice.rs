@@ -4,7 +4,7 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String,
 use crate::errors::QuickLendXError;
 use crate::protocol_limits::{
     check_string_length, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FEEDBACK_LENGTH,
-    MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
+    MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
 };
 
 const DEFAULT_INVOICE_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days default grace period
@@ -96,24 +96,24 @@ pub struct InvoiceMetadata {
 
 impl InvoiceMetadata {
     pub fn validate(&self) -> Result<(), QuickLendXError> {
-        if self.customer_name.len() == 0 || self.customer_name.len() > 100 {
+        if self.customer_name.len() == 0 || self.customer_name.len() > MAX_NAME_LENGTH {
             return Err(QuickLendXError::InvalidDescription);
         }
-        if self.customer_address.len() > 200 {
+        if self.customer_address.len() > MAX_ADDRESS_LENGTH {
             return Err(QuickLendXError::InvalidDescription);
         }
-        if self.tax_id.len() > 40 {
+        if self.tax_id.len() > MAX_TAX_ID_LENGTH {
             return Err(QuickLendXError::InvalidDescription);
         }
         if self.line_items.len() > 50 {
             return Err(QuickLendXError::TagLimitExceeded);
         }
         for item in self.line_items.iter() {
-            if item.0.len() == 0 || item.0.len() > 100 {
+            if item.0.len() == 0 || item.0.len() > MAX_DESCRIPTION_LENGTH {
                 return Err(QuickLendXError::InvalidDescription);
             }
         }
-        if self.notes.len() > 500 {
+        if self.notes.len() > MAX_NOTES_LENGTH {
             return Err(QuickLendXError::InvalidDescription);
         }
         Ok(())

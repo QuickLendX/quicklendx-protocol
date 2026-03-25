@@ -1,122 +1,93 @@
-# verification.rs — KYC & Pending-State Restrictions
+# verification.rs - KYC and Rejection Workflow
 
 ## Overview
 
-`verification.rs` implements identity verification for both businesses and investors.
-It enforces that partially-verified (pending) accounts cannot perform privileged
-actions, preventing a window of abuse between KYC submission and admin approval.
+`verification.rs` controls business and investor KYC lifecycle state, including:
+- submission and resubmission,
+- admin approval/rejection,
+- enforcement of pending/rejected restrictions,
+- queryable reason data for audit trails.
 
----
+Both business and investor records use `BusinessVerificationStatus`:
+- `Pending`
+- `Verified`
+- `Rejected`
 
-## State Machine
+## Rejection Workflow
 
-Both `BusinessVerification` and `InvestorVerification` share the same status enum:
+### Business rejection
 
-```
-None ──► Pending ──► Verified
-                └──► Rejected ──► Pending (resubmission)
-```
+`reject_business(env, admin, business, reason)`:
+- requires authenticated admin,
+- requires existing KYC record,
+- allows transition only from `Pending -> Rejected`,
+- persists `rejection_reason` for query and audit,
+- updates status indexes (`pending`, `verified`, `rejected`) atomically through storage update helpers.
 
-| State    | Meaning                                |
-| -------- | -------------------------------------- |
-| None     | No KYC record exists                   |
-| Pending  | KYC submitted, awaiting admin decision |
-| Verified | Admin approved; full access granted    |
-| Rejected | Admin rejected; resubmission allowed   |
+### Investor rejection
 
----
+`reject_investor(env, admin, investor, reason)`:
+- requires authenticated admin,
+- requires existing KYC record,
+- allows transition only from `Pending -> Rejected`,
+- persists `rejection_reason` and compliance metadata,
+- updates status indexes (`pending`, `verified`, `rejected`) atomically through storage update helpers.
 
-## Pending-State Restrictions
+## Reason Data Lifecycle
 
-### Security Assumption
+- Rejection reason is validated against `MAX_REJECTION_REASON_LENGTH`.
+- On successful rejection, reason is stored in `rejection_reason`.
+- On valid resubmission from `Rejected -> Pending`, reason is cleared (`None`).
+- Reason is always queryable via:
+  - `get_business_verification_status`
+  - `get_investor_verification`
 
-A `Pending` account has self-reported identity data that has **not** been
-validated by an admin. Allowing privileged actions before approval would let
-an attacker submit fraudulent KYC, act immediately, then be rejected — with
-no recourse.
+This preserves historical rejection context while preventing stale reasons from being shown after a new pending submission.
 
-### Enforced Call Sites
+## Transition Matrix
 
-| Function         | Guard applied                  | Error on pending    |
-| ---------------- | ------------------------------ | ------------------- |
-| `upload_invoice` | `require_business_not_pending` | `KYCAlreadyPending` |
-| `cancel_invoice` | `require_business_not_pending` | `KYCAlreadyPending` |
-| `accept_bid`     | `require_business_not_pending` | `KYCAlreadyPending` |
-| `place_bid`      | inline status check            | `KYCAlreadyPending` |
-| `withdraw_bid`   | `require_investor_not_pending` | `KYCAlreadyPending` |
+| Entity | From | To | Allowed | Error if disallowed |
+| --- | --- | --- | --- | --- |
+| Business | Pending | Verified | Yes | `InvalidKYCStatus` |
+| Business | Pending | Rejected | Yes | `InvalidKYCStatus` |
+| Business | Rejected | Pending (resubmit) | Yes | `KYCAlreadyVerified` / `KYCAlreadyPending` |
+| Investor | Pending | Verified | Yes | `InvalidKYCStatus` |
+| Investor | Pending | Rejected | Yes | `InvalidKYCStatus` |
+| Investor | Rejected | Pending (resubmit) | Yes | `KYCAlreadyVerified` / `KYCAlreadyPending` |
 
-### Error Distinction
+## Index Update Guarantees
 
-Callers receive distinct errors depending on KYC state:
+Verification storage keeps three query indexes for both businesses and investors:
+- pending list,
+- verified list,
+- rejected list.
 
-| KYC State | Error returned        |
-| --------- | --------------------- |
-| None      | `BusinessNotVerified` |
-| Pending   | `KYCAlreadyPending`   |
-| Rejected  | `BusinessNotVerified` |
-| Verified  | _(no error)_          |
+During status updates the contract:
+1. removes the address from the old status list,
+2. stores the updated verification record,
+3. adds the address to the new status list.
 
-This allows frontends and integrators to show actionable messages
-("your KYC is under review" vs "you must submit KYC first").
+Expected guarantees:
+- no stale membership in old status lists,
+- no duplicate presence across status lists for a single account,
+- query functions return state-consistent buckets.
 
----
+## Security Assumptions and Controls
 
-## Key Functions
+- Only admin addresses can verify/reject KYC records.
+- All state-changing endpoints require authentication before writes.
+- String length limits prevent oversized reason/KYC payload abuse.
+- Pending and rejected users are blocked from privileged operations.
+- Rejection reason persistence supports compliance and forensic review.
 
-### `require_business_not_pending(env, business) → Result<(), QuickLendXError>`
+## Related Tests
 
-Checks the business KYC record and returns:
+Rejection workflow coverage is implemented in:
+- `src/test_business_kyc.rs`
+- `src/test_investor_kyc.rs`
 
-- `Ok(())` if `Verified`
-- `Err(KYCAlreadyPending)` if `Pending`
-- `Err(BusinessNotVerified)` if `Rejected` or no record
-
-### `require_investor_not_pending(env, investor) → Result<(), QuickLendXError>`
-
-Same semantics as above, applied to investor records.
-
-### `submit_kyc_application(env, business, kyc_data)`
-
-- Requires auth from `business`
-- Idempotent for `Rejected` state (allows resubmission)
-- Fails with `KYCAlreadyPending` if already pending
-- Fails with `KYCAlreadyVerified` if already verified
-
-### `verify_business(env, admin, business)` / `verify_investor(env, admin, investor, limit)`
-
-- Admin-only (requires auth + `is_admin` check)
-- Transitions status from `Pending` → `Verified`
-- For investors: calculates risk score, tier, and investment limit
-
-### `reject_business(env, admin, business, reason)` / `reject_investor(env, admin, investor, reason)`
-
-- Admin-only
-- Transitions status from `Pending` → `Rejected`
-- Stores rejection reason for auditability
-
----
-
-## Risk & Tier System (Investors)
-
-Investor verification computes a `risk_score` (0–100) from KYC data completeness
-and historical default rate. The score maps to:
-
-| Score  | Risk Level | Tier eligibility |
-| ------ | ---------- | ---------------- |
-| 0–25   | Low        | up to VIP        |
-| 26–50  | Medium     | up to Platinum   |
-| 51–75  | High       | up to Silver     |
-| 76–100 | VeryHigh   | Basic only       |
-
-The final `investment_limit` is `base_limit × tier_multiplier × risk_multiplier / 100`.
-`VeryHigh` risk investors are additionally capped at 10 000 per bid regardless of limit.
-
----
-
-## Security Notes
-
-- KYC data is stored as an opaque string; encryption is the caller's responsibility.
-- String lengths are validated against `MAX_KYC_DATA_LENGTH` and `MAX_REJECTION_REASON_LENGTH`.
-- Admin address is managed by `admin::AdminStorage`; `BusinessVerificationStorage::set_admin`
-  is kept only for backward compatibility with existing tests.
-- All state-mutating functions require explicit `require_auth()` calls before any storage writes.
+Focus areas:
+- reason persistence and reset behavior,
+- status-transition enforcement,
+- status index integrity,
+- authorization and boundary checks.

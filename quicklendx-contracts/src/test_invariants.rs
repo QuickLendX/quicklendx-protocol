@@ -752,7 +752,7 @@ fn test_invariants_after_full_lifecycle() {
     );
 
     // no orphaned storage: the one invoice we have is the one we created and is Paid
-    let invoice = client.get_invoice(&invoice_id);
+    let invoice = client.get_invoice(&invoice_id).expect("invoice must exist");
     assert_eq!(invoice.id, invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
     let paid_invoices = client.get_invoices_by_status(&InvoiceStatus::Paid);
