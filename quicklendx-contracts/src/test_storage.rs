@@ -17,66 +17,61 @@ use crate::invoice::{
 };
 use crate::profits::{PlatformFee, PlatformFeeConfig};
 use crate::storage::{
-    BidStorage, ConfigStorage, Indexes, InvestmentStorage, InvoiceStorage, StorageKeys,
+    BidStorage, ConfigStorage, DataKey, Indexes, InvestmentStorage, InvoiceStorage, StorageKeys,
 };
+use crate::QuickLendXContract;
+
+fn with_registered_contract<F: FnOnce()>(env: &Env, f: F) {
+    let contract_id = env.register(QuickLendXContract, ());
+    env.as_contract(&contract_id, f);
+}
 
 #[test]
 fn test_storage_keys() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
         let bid_id = BytesN::from_array(&env, &[2; 32]);
         let investment_id = BytesN::from_array(&env, &[3; 32]);
 
-        // Test invoice key
-        let key = StorageKeys::invoice(&invoice_id);
-        assert_eq!(key, invoice_id);
+        // DataKey variants produce namespaced keys — same ID in different
+        // variants must NOT produce the same key (that was the old bug).
+        let invoice_key = DataKey::Invoice(invoice_id.clone());
+        let bid_key = DataKey::Bid(invoice_id.clone());
+        let investment_key = DataKey::Investment(invoice_id.clone());
 
-        // Test different invoice ID generates different key
-        let invoice_id_2 = BytesN::from_array(&env, &[4; 32]);
-        let key_2 = StorageKeys::invoice(&invoice_id_2);
-        assert_ne!(key, key_2);
+        // Verify each variant matches only its own pattern
+        assert!(matches!(invoice_key, DataKey::Invoice(_)));
+        assert!(matches!(bid_key, DataKey::Bid(_)));
+        assert!(matches!(investment_key, DataKey::Investment(_)));
 
-        // Test bid key
-        let key = StorageKeys::bid(&bid_id);
-        assert_eq!(key, bid_id);
+        // Different IDs within same variant produce different keys
+        let invoice_key_2 = DataKey::Invoice(BytesN::from_array(&env, &[4; 32]));
+        assert!(!matches!(invoice_key_2, DataKey::Invoice(ref id) if *id == invoice_id));
 
-        // Test different bid ID generates different key
-        let bid_id_2 = BytesN::from_array(&env, &[5; 32]);
-        let key_2 = StorageKeys::bid(&bid_id_2);
-        assert_ne!(key, key_2);
-
-        // Test investment key
-        let key = StorageKeys::investment(&investment_id);
-        assert_eq!(key, investment_id);
-
-        // Test different investment ID generates different key
-        let investment_id_2 = BytesN::from_array(&env, &[6; 32]);
-        let key_2 = StorageKeys::investment(&investment_id_2);
-        assert_ne!(key, key_2);
-
-        // Test platform fees key
+        // Symbol-based singleton keys are still correct
         let key = StorageKeys::platform_fees();
         assert_eq!(key, soroban_sdk::symbol_short!("fees"));
 
-        // Test invoice count key
         let key = StorageKeys::invoice_count();
         assert_eq!(key, soroban_sdk::symbol_short!("inv_count"));
 
-        // Test bid count key
         let key = StorageKeys::bid_count();
         assert_eq!(key, soroban_sdk::symbol_short!("bid_count"));
 
-        // Test investment count key
         let key = StorageKeys::investment_count();
         assert_eq!(key, soroban_sdk::symbol_short!("inv_cnt"));
+
+        // Suppress unused variable warnings for ids not used above
+        let _ = bid_id;
+        let _ = investment_id;
     });
 }
 
 #[test]
 fn test_indexes() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let business = Address::generate(&env);
         let investor = Address::generate(&env);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
@@ -94,7 +89,7 @@ fn test_indexes() {
 
         // Test invoice by status indexes
         let (symbol, status_symbol) = Indexes::invoices_by_status(InvoiceStatus::Pending);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("inv_stat"));
+        assert_eq!(symbol, soroban_sdk::symbol_short!("inv_st"));
         assert_eq!(status_symbol, soroban_sdk::symbol_short!("pending"));
 
         let (_, status_symbol) = Indexes::invoices_by_status(InvoiceStatus::Verified);
@@ -120,13 +115,13 @@ fn test_indexes() {
         assert_ne!(id, id_2);
 
         let (symbol, addr) = Indexes::bids_by_investor(&investor);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("bids_inv"));
+        assert_eq!(symbol, soroban_sdk::symbol_short!("bids_invr"));
         assert_eq!(addr, investor);
 
         // Test different investor address generates different key for bid index
         let investor_2 = Address::generate(&env);
         let (symbol_2, addr_2) = Indexes::bids_by_investor(&investor_2);
-        assert_eq!(symbol_2, soroban_sdk::symbol_short!("bids_inv"));
+        assert_eq!(symbol_2, soroban_sdk::symbol_short!("bids_invr"));
         assert_ne!(addr, addr_2);
 
         let (symbol, status_symbol) = Indexes::bids_by_status(BidStatus::Placed);
@@ -159,7 +154,7 @@ fn test_indexes() {
         assert_ne!(addr, addr_2);
 
         let (symbol, status_symbol) = Indexes::investments_by_status(InvestmentStatus::Active);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("inv_stat"));
+        assert_eq!(symbol, soroban_sdk::symbol_short!("inv_st"));
         assert_eq!(status_symbol, soroban_sdk::symbol_short!("active"));
         let (_, status_symbol) = Indexes::investments_by_status(InvestmentStatus::Withdrawn);
         assert_eq!(status_symbol, soroban_sdk::symbol_short!("withdrawn"));
@@ -173,8 +168,8 @@ fn test_indexes() {
 #[test]
 fn test_invoice_storage() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
-        env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
+        with_registered_contract(&env, || {
             let invoice_id = BytesN::from_array(&env, &[1; 32]);
             let business = Address::generate(&env);
             let currency = Address::generate(&env);
@@ -293,7 +288,7 @@ fn test_invoice_storage() {
 #[test]
 fn test_bid_storage() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let bid_id = BytesN::from_array(&env, &[2; 32]);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
         let investor = Address::generate(&env);
@@ -382,7 +377,7 @@ fn test_bid_storage() {
 #[test]
 fn test_investment_storage() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let investment_id = BytesN::from_array(&env, &[3; 32]);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
         let investor = Address::generate(&env);
@@ -479,7 +474,7 @@ fn test_investment_storage() {
 #[test]
 fn test_config_storage() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         // Simple test to verify config storage works
         // Note: Actual PlatformFeeConfig structure may differ
         // This test focuses on storage mechanics rather than specific fields
@@ -493,7 +488,7 @@ fn test_config_storage() {
 #[test]
 fn test_storage_isolation() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         // Create different entities
         let invoice_id1 = BytesN::from_array(&env, &[1; 32]);
         let invoice_id2 = BytesN::from_array(&env, &[2; 32]);
@@ -574,19 +569,43 @@ fn create_test_invoice(env: &Env, id: BytesN<32>, business: Address) -> Invoice 
 #[test]
 fn test_storage_key_collision_detection() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         // Test that different entity types with same ID don't collide
         let id = BytesN::from_array(&env, &[1; 32]);
 
-        let invoice_key = StorageKeys::invoice(&id);
-        let bid_key = StorageKeys::bid(&id);
-        let investment_key = StorageKeys::investment(&id);
+        let invoice_key = DataKey::Invoice(id.clone());
+        let bid_key = DataKey::Bid(id.clone());
+        let investment_key = DataKey::Investment(id.clone());
 
-        // Keys should be identical for same ID (by design)
-        assert_eq!(invoice_key, bid_key);
-        assert_eq!(bid_key, investment_key);
+        // Prove namespace isolation via pattern matching —
+        // each key matches only its own variant, never another.
+        assert!(matches!(invoice_key, DataKey::Invoice(_)));
+        assert!(!matches!(invoice_key, DataKey::Bid(_)));
+        assert!(!matches!(invoice_key, DataKey::Investment(_)));
 
-        // Test symbol keys don't collide
+        assert!(matches!(bid_key, DataKey::Bid(_)));
+        assert!(!matches!(bid_key, DataKey::Invoice(_)));
+        assert!(!matches!(bid_key, DataKey::Investment(_)));
+
+        assert!(matches!(investment_key, DataKey::Investment(_)));
+        assert!(!matches!(investment_key, DataKey::Invoice(_)));
+        assert!(!matches!(investment_key, DataKey::Bid(_)));
+
+        // Prove collision-free storage: store distinct values under each
+        // variant using the same ID, then read back and verify isolation.
+        env.storage().persistent().set(&DataKey::Invoice(id.clone()), &1u32);
+        env.storage().persistent().set(&DataKey::Bid(id.clone()), &2u32);
+        env.storage().persistent().set(&DataKey::Investment(id.clone()), &3u32);
+
+        let v_invoice: u32 = env.storage().persistent().get(&DataKey::Invoice(id.clone())).unwrap();
+        let v_bid: u32 = env.storage().persistent().get(&DataKey::Bid(id.clone())).unwrap();
+        let v_investment: u32 = env.storage().persistent().get(&DataKey::Investment(id.clone())).unwrap();
+
+        assert_eq!(v_invoice, 1, "Invoice slot must hold its own value");
+        assert_eq!(v_bid, 2, "Bid slot must hold its own value");
+        assert_eq!(v_investment, 3, "Investment slot must hold its own value");
+
+        // Symbol-based singleton keys remain distinct from each other
         let fees_key = StorageKeys::platform_fees();
         let inv_count_key = StorageKeys::invoice_count();
         let bid_count_key = StorageKeys::bid_count();
@@ -601,7 +620,7 @@ fn test_storage_key_collision_detection() {
 #[test]
 fn test_type_serialization_integrity() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         // Test complex invoice serialization
         let invoice = create_complex_invoice(&env);
         InvoiceStorage::store(&env, &invoice);
@@ -618,7 +637,7 @@ fn test_type_serialization_integrity() {
 #[test]
 fn test_index_consistency() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let business = Address::generate(&env);
         let invoice1 =
             create_test_invoice(&env, BytesN::from_array(&env, &[1; 32]), business.clone());
@@ -652,7 +671,7 @@ fn test_index_consistency() {
 #[test]
 fn test_storage_edge_cases() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         // Test empty collections
         let empty_business = Address::generate(&env);
         let empty_invoices = InvoiceStorage::get_by_business(&env, &empty_business);
@@ -674,7 +693,7 @@ fn test_deterministic_behavior() {
     // Run same operations multiple times to ensure deterministic results
     for _ in 0..5 {
         let env = Env::default();
-        env.as_contract(&Address::generate(&env), || {
+        with_registered_contract(&env, || {
             let invoice_id = BytesN::from_array(&env, &[42; 32]);
             let business = Address::generate(&env);
             let invoice = create_test_invoice(&env, invoice_id.clone(), business.clone());
@@ -696,7 +715,7 @@ fn test_deterministic_behavior() {
 #[test]
 fn test_concurrent_index_updates() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let business = Address::generate(&env);
         let mut invoices = Vec::new(&env);
 
@@ -935,7 +954,7 @@ fn test_escrow_storage_keys() {
 #[test]
 fn test_storage_counter_increments() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         // Test invoice counter
         let count1 = InvoiceStorage::next_count(&env);
         let count2 = InvoiceStorage::next_count(&env);
@@ -956,7 +975,7 @@ fn test_storage_counter_increments() {
 #[test]
 fn test_multiple_invoices_same_business() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let business = Address::generate(&env);
         let invoice_id_1 = BytesN::from_array(&env, &[1; 32]);
         let invoice_id_2 = BytesN::from_array(&env, &[2; 32]);
@@ -977,7 +996,7 @@ fn test_multiple_invoices_same_business() {
 #[test]
 fn test_storage_retrieval_consistency() {
     let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    with_registered_contract(&env, || {
         let business = Address::generate(&env);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
 

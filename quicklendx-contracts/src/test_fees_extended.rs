@@ -393,3 +393,126 @@ fn test_treasury_persists_across_updates() {
     assert!(treasury_addr.is_some());
     assert_eq!(treasury_addr.unwrap(), treasury);
 }
+
+// ============================================================================
+// HARDENING EXTENDED TESTS — Initialization Guard & Treasury Validation
+// ============================================================================
+
+/// Second initialize_fee_system call returns InvalidFeeConfiguration.
+#[test]
+fn test_double_init_returns_invalid_fee_configuration() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let result = client.try_initialize_fee_system(&admin);
+    let err = result.err().expect("re-init must return error");
+    let contract_error = err.expect("expected typed contract error");
+    assert_eq!(contract_error, QuickLendXError::InvalidFeeConfiguration);
+}
+
+/// Fee structures initialized in first call survive a rejected second call.
+#[test]
+fn test_fee_structures_unchanged_after_rejected_reinit() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // A custom update after first init.
+    client.update_fee_structure(&admin, &crate::fees::FeeType::Platform, &300, &50, &5_000, &true);
+    assert_eq!(client.get_fee_structure(&crate::fees::FeeType::Platform).base_fee_bps, 300);
+
+    // Re-init attempt is rejected — custom update must be preserved.
+    let _ = client.try_initialize_fee_system(&admin);
+    assert_eq!(client.get_fee_structure(&crate::fees::FeeType::Platform).base_fee_bps, 300);
+}
+
+/// configure_treasury rejects the contract address as InvalidAddress.
+#[test]
+fn test_treasury_self_assignment_returns_invalid_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    let result = client.try_configure_treasury(&contract_id);
+    let err = result.err().expect("self-assignment must fail");
+    let contract_error = err.expect("expected typed contract error");
+    assert_eq!(contract_error, QuickLendXError::InvalidAddress);
+}
+
+/// Duplicate treasury configuration returns InvalidFeeConfiguration.
+#[test]
+fn test_duplicate_treasury_returns_invalid_fee_configuration() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_treasury(&treasury);
+
+    let result = client.try_configure_treasury(&treasury);
+    let err = result.err().expect("duplicate must fail");
+    let contract_error = err.expect("expected typed contract error");
+    assert_eq!(contract_error, QuickLendXError::InvalidFeeConfiguration);
+}
+
+/// Treasury address can be updated to a new distinct address after initial set.
+#[test]
+fn test_treasury_update_to_new_address_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin_init(&env, &client);
+    let treasury_a = Address::generate(&env);
+    let treasury_b = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_treasury(&treasury_a);
+    client.configure_treasury(&treasury_b);
+
+    assert_eq!(client.get_treasury_address(), Some(treasury_b));
+}
+
+/// Revenue distribution config uses the treasury address that was last set.
+#[test]
+fn test_revenue_distribution_uses_updated_treasury() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+    let treasury_a = Address::generate(&env);
+    let treasury_b = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_treasury(&treasury_a);
+    // Update to a different treasury before configuring revenue distribution.
+    client.configure_treasury(&treasury_b);
+
+    client.configure_revenue_distribution(&admin, &treasury_b, &10000, &0, &0, &false, &1);
+
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(crate::fees::FeeType::Platform, 500);
+    client.collect_transaction_fees(&user, &fees_by_type, &500);
+
+    let period = env.ledger().timestamp() / 2_592_000;
+    let (treasury_amount, _, _) = client.distribute_revenue(&admin, &period);
+    assert_eq!(treasury_amount, 500);
+}
