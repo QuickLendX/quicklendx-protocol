@@ -1658,6 +1658,66 @@ impl QuickLendXContract {
         Ok(())
     }
 
+    /// Begin a two-step treasury rotation (admin only).
+    ///
+    /// Stores a pending `RecipientRotationRequest`. The new address has 7 days
+    /// to call `confirm_treasury_rotation` to prove ownership. Only one pending
+    /// rotation is allowed at a time.
+    pub fn initiate_treasury_rotation(
+        env: Env,
+        new_address: Address,
+    ) -> Result<fees::RecipientRotationRequest, QuickLendXError> {
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+
+        let req = fees::FeeManager::initiate_treasury_rotation(&env, &admin, new_address.clone())?;
+
+        events::emit_rotation_initiated(&env, &new_address, &admin, req.confirmation_deadline);
+
+        Ok(req)
+    }
+
+    /// Complete the pending treasury rotation.
+    ///
+    /// The `new_address` specified during initiation must call this function,
+    /// authorizing the transaction, to prove they control the address before
+    /// it becomes the live treasury destination.
+    pub fn confirm_treasury_rotation(
+        env: Env,
+        new_address: Address,
+    ) -> Result<Address, QuickLendXError> {
+        let old_treasury = fees::FeeManager::get_treasury_address(&env);
+
+        let confirmed = fees::FeeManager::confirm_treasury_rotation(&env, &new_address)?;
+
+        events::emit_rotation_confirmed(&env, old_treasury, &confirmed, env.ledger().timestamp());
+
+        Ok(confirmed)
+    }
+
+    /// Cancel the pending treasury rotation (admin only).
+    pub fn cancel_treasury_rotation(env: Env) -> Result<(), QuickLendXError> {
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+
+        let pending = fees::FeeManager::get_pending_rotation(&env)
+            .ok_or(QuickLendXError::RotationNotFound)?;
+        let cancelled_addr = pending.new_address.clone();
+
+        fees::FeeManager::cancel_treasury_rotation(&env, &admin)?;
+
+        events::emit_rotation_cancelled(&env, &cancelled_addr, &admin);
+
+        Ok(())
+    }
+
+    /// Return the pending treasury rotation request, if any.
+    pub fn get_pending_treasury_rotation(
+        env: Env,
+    ) -> Option<fees::RecipientRotationRequest> {
+        fees::FeeManager::get_pending_rotation(&env)
+    }
+
     /// Update platform fee basis points (admin only)
     pub fn update_platform_fee_bps(env: Env, new_fee_bps: u32) -> Result<(), QuickLendXError> {
         let admin =
@@ -2731,6 +2791,9 @@ mod test_min_invoice_amount;
 mod test_profit_fee_formula;
 #[cfg(test)]
 mod test_revenue_split;
+
+#[cfg(test)]
+mod test_treasury_rotation;
 
 // ============================================================================
 // Analytics Functions missing from exports
