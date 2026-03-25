@@ -8,6 +8,7 @@ const MIN_FEE_BPS: u32 = 0;
 const BPS_DENOMINATOR: i128 = 10_000;
 const DEFAULT_PLATFORM_FEE_BPS: u32 = 200; // 2%
 const MAX_PLATFORM_FEE_BPS: u32 = 1000; // 10%
+const ROTATION_TTL_SECONDS: u64 = 604_800; // 7 days
 
 // Storage keys
 const FEE_CONFIG_KEY: Symbol = symbol_short!("fee_cfg");
@@ -16,6 +17,7 @@ const VOLUME_KEY: Symbol = symbol_short!("volume");
 #[allow(dead_code)]
 const TREASURY_CONFIG_KEY: Symbol = symbol_short!("treasury");
 const PLATFORM_FEE_KEY: Symbol = symbol_short!("plt_fee");
+const ROTATION_KEY: Symbol = symbol_short!("rot_req");
 
 /// Fee types supported by the platform
 #[contracttype]
@@ -99,6 +101,21 @@ pub struct RevenueConfig {
     pub platform_share_bps: u32,
     pub auto_distribution: bool,
     pub min_distribution_amount: i128,
+}
+
+/// Pending two-step treasury/fee-recipient rotation request.
+///
+/// Admin initiates the rotation; the new address must confirm by calling
+/// `confirm_treasury_rotation`, proving ownership before the deadline.
+/// This prevents accidental misrouting to addresses the team does not control.
+#[contracttype]
+#[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
+pub struct RecipientRotationRequest {
+    pub new_address: Address,
+    pub initiated_by: Address,
+    pub initiated_at: u64,
+    pub confirmation_deadline: u64,
 }
 
 /// Revenue tracking
@@ -596,5 +613,112 @@ impl FeeManager {
             crate::payments::transfer_funds(env, currency, from, &contract_address, fee_amount)?;
             Ok(contract_address)
         }
+    }
+
+    /// Initiate a two-step treasury address rotation.
+    ///
+    /// Only the admin can call this. A `RecipientRotationRequest` is stored
+    /// with a 7-day confirmation window. The new address must call
+    /// `confirm_treasury_rotation` before the deadline to prove ownership.
+    /// Only one pending rotation is allowed at a time.
+    pub fn initiate_treasury_rotation(
+        env: &Env,
+        admin: &Address,
+        new_address: Address,
+    ) -> Result<RecipientRotationRequest, QuickLendXError> {
+        admin.require_auth();
+
+        if env
+            .storage()
+            .instance()
+            .get::<_, RecipientRotationRequest>(&ROTATION_KEY)
+            .is_some()
+        {
+            return Err(QuickLendXError::RotationAlreadyPending);
+        }
+
+        let current_treasury = Self::get_treasury_address(env);
+        if let Some(ref existing) = current_treasury {
+            if existing == &new_address {
+                return Err(QuickLendXError::InvalidAddress);
+            }
+        }
+
+        let now = env.ledger().timestamp();
+        let request = RecipientRotationRequest {
+            new_address,
+            initiated_by: admin.clone(),
+            initiated_at: now,
+            confirmation_deadline: now.saturating_add(ROTATION_TTL_SECONDS),
+        };
+
+        env.storage().instance().set(&ROTATION_KEY, &request);
+        Ok(request)
+    }
+
+    /// Confirm the pending treasury rotation.
+    ///
+    /// The new_address from the pending request must authorize this call,
+    /// proving they control the destination before funds are ever routed there.
+    /// Clears the rotation request and writes the new treasury address.
+    pub fn confirm_treasury_rotation(
+        env: &Env,
+        new_address: &Address,
+    ) -> Result<Address, QuickLendXError> {
+        let request: RecipientRotationRequest = env
+            .storage()
+            .instance()
+            .get(&ROTATION_KEY)
+            .ok_or(QuickLendXError::RotationNotFound)?;
+
+        if &request.new_address != new_address {
+            return Err(QuickLendXError::Unauthorized);
+        }
+
+        new_address.require_auth();
+
+        if env.ledger().timestamp() > request.confirmation_deadline {
+            env.storage().instance().remove(&ROTATION_KEY);
+            return Err(QuickLendXError::RotationExpired);
+        }
+
+        let mut platform_config = Self::get_platform_fee_config(env)?;
+        platform_config.treasury_address = Some(new_address.clone());
+        platform_config.updated_at = env.ledger().timestamp();
+        platform_config.updated_by = new_address.clone();
+        env.storage()
+            .instance()
+            .set(&PLATFORM_FEE_KEY, &platform_config);
+
+        env.storage().instance().remove(&ROTATION_KEY);
+
+        Ok(new_address.clone())
+    }
+
+    /// Cancel the pending treasury rotation (admin only).
+    ///
+    /// Can be called at any time before confirmation to abort the rotation.
+    pub fn cancel_treasury_rotation(
+        env: &Env,
+        admin: &Address,
+    ) -> Result<(), QuickLendXError> {
+        admin.require_auth();
+
+        if env
+            .storage()
+            .instance()
+            .get::<_, RecipientRotationRequest>(&ROTATION_KEY)
+            .is_none()
+        {
+            return Err(QuickLendXError::RotationNotFound);
+        }
+
+        env.storage().instance().remove(&ROTATION_KEY);
+        Ok(())
+    }
+
+    /// Query any pending treasury rotation request.
+    pub fn get_pending_rotation(env: &Env) -> Option<RecipientRotationRequest> {
+        env.storage().instance().get(&ROTATION_KEY)
     }
 }
