@@ -487,7 +487,7 @@ pub fn emit_insurance_claimed(
 /// Emit a `fee_upd` event when the platform fee configuration changes.
 ///
 /// # Payload (positional, frozen)
-/// | 0 | `fee_bps`    | `i128`   | New fee in basis points  |
+/// | 0 | `fee_bps`    | `u32`    | New fee in basis points  |
 /// | 1 | `updated_at` | `u64`    | Ledger time of update    |
 /// | 2 | `updated_by` | `Address`| Admin who made the change|
 ///
@@ -497,8 +497,34 @@ pub fn emit_platform_fee_updated(env: &Env, config: &PlatformFeeConfig) {
     env.events().publish(
         (symbol_short!("fee_upd"),),
         (
-            old_bps,
-            new_bps,
+            config.fee_bps,
+            config.updated_at,
+            config.updated_by.clone(),
+        ),
+    );
+}
+
+/// Emit a `fee_str` event when an individual fee structure changes.
+///
+/// # Payload (positional, frozen)
+/// | 0 | `fee_type`    | `FeeType` | Fee category being updated |
+/// | 1 | `old_fee_bps` | `u32`     | Previous fee in bps        |
+/// | 2 | `new_fee_bps` | `u32`     | New fee in bps             |
+/// | 3 | `updated_by`  | `Address` | Admin who changed it       |
+/// | 4 | `timestamp`   | `u64`     | Ledger time of update      |
+pub fn emit_fee_structure_updated(
+    env: &Env,
+    fee_type: &FeeType,
+    old_fee_bps: u32,
+    new_fee_bps: u32,
+    updated_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("fee_str"),),
+        (
+            fee_type.clone(),
+            old_fee_bps,
+            new_fee_bps,
             updated_by.clone(),
             env.ledger().timestamp(),
         ),

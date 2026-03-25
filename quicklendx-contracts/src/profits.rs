@@ -163,10 +163,9 @@ impl PlatformFee {
         }
 
         let old_config = Self::get_config(env);
-        let old_fee_bps = old_config.fee_bps;
 
         // Optimization: No-op if fee is unchanged
-        if new_fee_bps as u32 == old_fee_bps {
+        if new_fee_bps as u32 == old_config.fee_bps {
             return Ok(old_config);
         }
 
@@ -178,7 +177,7 @@ impl PlatformFee {
         };
 
         env.storage().instance().set(&Self::STORAGE_KEY, &config);
-        emit_platform_fee_updated(env, old_fee_bps, new_fee_bps as u32, admin);
+        emit_platform_fee_updated(env, &config);
         Ok(config)
     }
 

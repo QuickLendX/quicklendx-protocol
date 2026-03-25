@@ -274,7 +274,7 @@ impl Invoice {
             normalized_tags.push_back(normalize_tag(env, &tag)?);
         }
 
-        let id = Self::generate_unique_invoice_id(env);
+        let id = Self::generate_unique_invoice_id(env)?;
         let created_at = env.ledger().timestamp();
 
         let invoice = Self {
@@ -318,8 +318,6 @@ impl Invoice {
             },
             total_paid: 0,
             payment_history: vec![env],
-            reserved_v1: 0,
-            reserved_v2: 0,
         };
 
         // Log invoice creation

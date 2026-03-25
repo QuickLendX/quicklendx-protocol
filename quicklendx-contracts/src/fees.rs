@@ -18,6 +18,7 @@ const VOLUME_KEY: Symbol = symbol_short!("volume");
 #[allow(dead_code)]
 const TREASURY_CONFIG_KEY: Symbol = symbol_short!("treasury");
 const PLATFORM_FEE_KEY: Symbol = symbol_short!("plt_fee");
+const ROTATION_KEY: Symbol = symbol_short!("rotate");
 /// Guard key: set to `true` once `initialize` completes to prevent re-initialization.
 const FEES_INIT_KEY: Symbol = symbol_short!("fee_init");
 
