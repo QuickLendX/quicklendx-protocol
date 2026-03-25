@@ -106,10 +106,33 @@ temporal anomalies when validators, simulation environments, or test harnesses m
   - Consensus-level manipulation of canonical ledger time beyond protocol tolerance.
   - Misconfigured off-chain automation that never advances time far enough to pass grace windows.
 
+## Escrow Release Rules
+
+The escrow release lifecycle follows a strict path to prevent premature or repeated release of funds.
+
+### Release Conditions
+- **Invoice Status**: Must be `Funded`. Release is prohibited for `Pending`, `Verified`, `Refunded`, or `Cancelled` invoices.
+- **Escrow Status**: Must be `Held`. This ensures funds are only moved once.
+- **Verification**: If an invoice is verified *after* being funded, the protocol can automatically trigger the release to ensure the business receives capital promptly.
+
+### Idempotency and Retries
+- The release operation is idempotent.
+- Atomic Transfer: Funds move before the state update. If the transfer fails, the state is NOT updated, allowing for safe retries.
+- Success Guard: Once status becomes `Released`, further attempts are rejected with `InvalidStatus`.
+
+### Lifecycle Transitions
+| Action | Invoice Status | Escrow Status | Result |
+|--------|----------------|--------------|--------|
+| `accept_bid` | `Verified` -> `Funded` | `None` -> `Held` | Funds locked in contract |
+| `release_escrow` | `Funded` | `Held` -> `Released` | Funds moved to Business |
+| `refund_escrow` | `Funded` -> `Refunded` | `Held` -> `Refunded` | Funds moved to Investor |
+| `settle_invoice` | `Funded` -> `Paid` | `Released` | Invoice settled; Investor paid |
+
 ## Running Tests
 From `quicklendx-contracts/`:
 
 ```bash
 cargo test test_partial_payments -- --nocapture
 cargo test test_settlement -- --nocapture
+cargo test test_release_escrow_ -- --nocapture
 ```
