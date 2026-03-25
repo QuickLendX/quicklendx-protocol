@@ -1,6 +1,6 @@
 use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
-use crate::invoice::{Invoice, InvoiceMetadata};
+use crate::invoice::{Invoice, InvoiceMetadata, InvoiceStatus};
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_DESCRIPTION_LENGTH, MAX_KYC_DATA_LENGTH,
     MAX_NAME_LENGTH, MAX_ADDRESS_LENGTH, MAX_TAX_ID_LENGTH, MAX_REJECTION_REASON_LENGTH,
@@ -597,10 +597,28 @@ pub fn validate_bid(
     expected_return: i128,
     investor: &Address,
 ) -> Result<(), QuickLendXError> {
+    // 1. Basic amount validation
     if bid_amount <= 0 {
         return Err(QuickLendXError::InvalidAmount);
     }
 
+    // 2. Invoice state and stale check
+    if invoice.status != InvoiceStatus::Verified {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    // Pre-maturity check: prevent bidding on invoices that have already reached their due date
+    if env.ledger().timestamp() >= invoice.due_date {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    // 3. Ownership check: Business cannot bid on its own invoice
+    if &invoice.business == investor {
+        return Err(QuickLendXError::Unauthorized);
+    }
+
+    // 4. Protocol limits and bid size validation
+    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
     let _limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
     let min_bid_amount = invoice.amount / 100; // 1% min bid
     if bid_amount < min_bid_amount {
@@ -616,13 +634,16 @@ pub fn validate_bid(
         return Err(QuickLendXError::InvalidAmount);
     }
 
-    // Validate investor can make this investment
+    // 5. Investor Eligibility and Capacity
+    // This checks both verification status AND individual/risk-based investment limits
     validate_investor_investment(env, investor, bid_amount)?;
 
+    // 6. Existing Bid Protection
     BidStorage::cleanup_expired_bids(env, &invoice.id);
     let existing_bids = BidStorage::get_bids_for_invoice(env, &invoice.id);
     for bid_id in existing_bids.iter() {
         if let Some(existing_bid) = BidStorage::get_bid(env, &bid_id) {
+            // Prevent multiple active bids from the same investor on one invoice
             if existing_bid.investor == *investor && existing_bid.status == BidStatus::Placed {
                 return Err(QuickLendXError::OperationNotAllowed);
             }
@@ -1232,20 +1253,27 @@ pub fn validate_investor_investment(
     investment_amount: i128,
 ) -> Result<(), QuickLendXError> {
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
-        // Check if investor is verified
+        // 1. Verification status check
         if !matches!(verification.status, BusinessVerificationStatus::Verified) {
             return Err(QuickLendXError::BusinessNotVerified);
         }
 
-        // Check investment limit
-        if investment_amount > verification.investment_limit {
+        // 2. Aggregate Limit Check
+        // Ensure that (new bid + existing active bids + total funded investments) fits within the limit
+        let active_bid_exposure = BidStorage::get_active_bid_amount_sum_for_investor(env, investor);
+        let total_risk_exposure = active_bid_exposure
+            .saturating_add(verification.total_invested)
+            .saturating_add(investment_amount);
+
+        if total_risk_exposure > verification.investment_limit {
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        // Check risk level restrictions
+        // 3. Risk-Based Tiered Checks
+        // Further constraints based on the specific risk level assigned by Admin
         match verification.risk_level {
             InvestorRiskLevel::VeryHigh => {
-                // Very high risk investors have additional restrictions
+                // Individual bid amount caps for high-risk profiles
                 if investment_amount > 10000 {
                     return Err(QuickLendXError::InvalidAmount);
                 }
