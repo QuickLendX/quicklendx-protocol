@@ -37,6 +37,8 @@ mod storage;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
+mod test_backup;
+#[cfg(test)]
 mod test_bid_ranking;
 #[cfg(test)]
 mod test_business_kyc;
@@ -721,33 +723,39 @@ impl QuickLendXContract {
     }
 
     // ============================================================================
-    // Backup Functions
+    // Backup and Restore Functions
     // ============================================================================
 
-    /// @notice Create a point-in-time backup of all invoices.
-    /// @dev Requires admin authorization and applies the configured retention policy.
-    pub fn create_backup(env: Env, admin: Address) -> Result<BytesN<32>, QuickLendXError> {
-        admin.require_auth();
-        AdminStorage::require_admin(&env, &admin)?;
+    /// Create a point-in-time backup of all invoice data (admin only).
+    ///
+    /// # Security
+    /// - Requires admin authorization
+    /// - Triggers automatic cleanup based on retention policy
+    pub fn create_backup(env: Env, caller: Address) -> Result<BytesN<32>, QuickLendXError> {
+        caller.require_auth();
+        AdminStorage::require_admin(&env, &caller)?;
 
         let invoices = backup::BackupStorage::get_all_invoices(&env);
         let backup_id = backup::BackupStorage::generate_backup_id(&env);
-        let backup = backup::Backup {
+        let invoice_count = invoices.len() as u32;
+        let description = String::from_str(&env, "Backup");
+
+        let b = backup::Backup {
             backup_id: backup_id.clone(),
             timestamp: env.ledger().timestamp(),
-            description: String::from_str(&env, "Protocol state backup"),
-            invoice_count: invoices.len(),
+            description,
+            invoice_count,
             status: backup::BackupStatus::Active,
         };
 
-        backup::BackupStorage::store_backup(&env, &backup, Some(&invoices))?;
+        backup::BackupStorage::store_backup(&env, &b);
         backup::BackupStorage::store_backup_data(&env, &backup_id, &invoices);
         backup::BackupStorage::add_to_backup_list(&env, &backup_id);
-        let removed = backup::BackupStorage::cleanup_old_backups(&env)?;
+        backup::BackupStorage::cleanup_old_backups(&env)?;
 
         env.events().publish(
             (symbol_short!("bkup_crt"),),
-            (backup_id.clone(), backup.invoice_count, removed),
+            (backup_id.clone(), invoice_count, env.ledger().timestamp()),
         );
 
         Ok(backup_id)
@@ -1436,6 +1444,8 @@ impl QuickLendXContract {
         env: Env,
         admin: Address,
         min_invoice_amount: i128,
+        min_bid_amount: i128,
+        max_invoices_per_business: u32,
         max_due_date_days: u64,
         grace_period_seconds: u64,
         max_invoices_per_business: u32,
