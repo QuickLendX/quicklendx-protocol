@@ -279,7 +279,6 @@ fn test_version_format_documentation() {
 
     // Version should be a positive integer
     assert!(version > 0);
-    assert!(version <= u32::MAX);
 
     // Current version should be 1 based on PROTOCOL_VERSION constant
     assert_eq!(version, 1);

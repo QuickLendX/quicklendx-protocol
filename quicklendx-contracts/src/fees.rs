@@ -268,7 +268,7 @@ impl FeeManager {
             return Ok(());
         }
 
-       let old_fee_bps = config.fee_bps;
+        let old_fee_bps = config.fee_bps;
         config.fee_bps = fee_bps;
         config.updated_at = env.ledger().timestamp();
         config.updated_by = admin.clone();
@@ -381,9 +381,9 @@ impl FeeManager {
         env.storage()
             .instance()
             .set(&FEE_CONFIG_KEY, &fee_structures);
-            
+
         events::emit_fee_structure_updated(env, &fee_type, old_bps, base_fee_bps, admin);
-        
+
         Ok(updated_structure)
     }
 
@@ -844,10 +844,7 @@ impl FeeManager {
     /// Cancel the pending treasury rotation (admin only).
     ///
     /// Can be called at any time before confirmation to abort the rotation.
-    pub fn cancel_treasury_rotation(
-        env: &Env,
-        admin: &Address,
-    ) -> Result<(), QuickLendXError> {
+    pub fn cancel_treasury_rotation(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         admin.require_auth();
 
         if env

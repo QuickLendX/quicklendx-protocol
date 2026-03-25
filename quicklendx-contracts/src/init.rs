@@ -126,17 +126,25 @@ impl ProtocolInitializer {
     /// - Validates all parameters before any state changes
     /// - Emits initialization event for audit trail
     pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
-
         // Check if already initialized (re-initialization protection with idempotency)
         if Self::is_initialized(env) {
             // Check for idempotency: if initialized with exact same parameters, return Ok(())
-            let current_admin: Address = env.storage().instance().get(&crate::admin::ADMIN_KEY).unwrap();
+            let current_admin: Address = env
+                .storage()
+                .instance()
+                .get(&crate::admin::ADMIN_KEY)
+                .unwrap();
             let current_treasury: Address = env.storage().instance().get(&TREASURY_KEY).unwrap();
             let current_fee_bps: u32 = env.storage().instance().get(&FEE_BPS_KEY).unwrap();
-            let current_config: ProtocolConfig = env.storage().instance().get(&PROTOCOL_CONFIG_KEY).unwrap();
-            let current_whitelist: Vec<Address> = env.storage().instance().get(&WHITELIST_KEY).unwrap_or(Vec::new(env));
+            let current_config: ProtocolConfig =
+                env.storage().instance().get(&PROTOCOL_CONFIG_KEY).unwrap();
+            let current_whitelist: Vec<Address> = env
+                .storage()
+                .instance()
+                .get(&WHITELIST_KEY)
+                .unwrap_or(Vec::new(env));
 
-            if current_admin == params.admin 
+            if current_admin == params.admin
                 && current_treasury == params.treasury
                 && current_fee_bps == params.fee_bps
                 && current_config.min_invoice_amount == params.min_invoice_amount
@@ -241,8 +249,9 @@ impl ProtocolInitializer {
         _env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
-        // Validate fee basis points (0% to 10%)
-        if params.fee_bps < MIN_FEE_BPS || params.fee_bps > MAX_FEE_BPS {
+        // Validate fee basis points (> 0% and <= 10%); MIN_FEE_BPS is 0 (u32 min),
+        // so the lower-bound check is omitted to satisfy clippy::absurd_extreme_comparisons.
+        if params.fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
