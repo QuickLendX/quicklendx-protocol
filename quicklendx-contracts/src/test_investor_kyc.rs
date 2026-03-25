@@ -833,4 +833,203 @@ mod test_investor_kyc {
         let bid2_amount = limit2 / 2;
         let bid3_amount = limit3 / 2;
     }
+
+    // ============================================================================
+    // Category 9: Pending-State Restriction Tests
+    // ============================================================================
+
+    /// A pending investor must receive `KYCAlreadyPending` (not the generic
+    /// `BusinessNotVerified`) when attempting to place a bid.
+    #[test]
+    fn test_pending_investor_cannot_place_bid() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Submit KYC but do NOT verify — investor is pending
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+
+        let result = client.try_place_bid(&investor, &invoice_id, &5_000i128, &6_000i128);
+        assert!(result.is_err(), "Pending investor must not place bids");
+        let err = result.unwrap_err().unwrap();
+        assert_eq!(
+            err,
+            QuickLendXError::KYCAlreadyPending,
+            "Expected KYCAlreadyPending, got {:?}",
+            err
+        );
+    }
+
+    /// A pending investor must receive `KYCAlreadyPending` when attempting to
+    /// withdraw a bid that was placed before their KYC was re-submitted.
+    #[test]
+    fn test_pending_investor_cannot_withdraw_bid() {
+        let (env, client, admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // 1. Verify investor, place a bid
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+        let actual_limit = client
+            .get_investor_verification(&investor)
+            .unwrap()
+            .investment_limit;
+        let bid_amount = actual_limit / 4;
+        let bid_id = client
+            .try_place_bid(&investor, &invoice_id, &bid_amount, &(bid_amount + 1000))
+            .unwrap()
+            .unwrap();
+
+        // 2. Admin rejects → investor resubmits (now pending again)
+        let _ = client.try_reject_investor(
+            &investor,
+            &String::from_str(&env, "Needs updated docs"),
+        );
+        let new_kyc = String::from_str(&env, "Updated KYC data with more information provided");
+        let _ = client.try_submit_investor_kyc(&investor, &new_kyc);
+
+        // 3. Withdraw must fail while pending
+        let result = client.try_withdraw_bid(&bid_id);
+        assert!(result.is_err(), "Pending investor must not withdraw bids");
+        let err = result.unwrap_err().unwrap();
+        assert_eq!(
+            err,
+            QuickLendXError::KYCAlreadyPending,
+            "Expected KYCAlreadyPending, got {:?}",
+            err
+        );
+    }
+
+    /// After a pending investor is verified, they must be able to place and
+    /// withdraw bids again.
+    #[test]
+    fn test_verified_investor_can_act_after_pending_resolved() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Reject → resubmit → verify cycle
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_reject_investor(
+            &investor,
+            &String::from_str(&env, "Needs updated docs"),
+        );
+        let new_kyc = String::from_str(&env, "Updated KYC data with more information provided");
+        let _ = client.try_submit_investor_kyc(&investor, &new_kyc);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+        let actual_limit = client
+            .get_investor_verification(&investor)
+            .unwrap()
+            .investment_limit;
+        let bid_amount = actual_limit / 4;
+
+        let result =
+            client.try_place_bid(&investor, &invoice_id, &bid_amount, &(bid_amount + 1000));
+        assert!(
+            result.is_ok(),
+            "Re-verified investor must be able to place bids"
+        );
+    }
+
+    /// A rejected investor must receive `BusinessNotVerified` (not
+    /// `KYCAlreadyPending`) when attempting to place a bid.
+    #[test]
+    fn test_rejected_investor_gets_business_not_verified_on_bid() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Insufficient KYC data");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_reject_investor(
+            &investor,
+            &String::from_str(&env, "Fraudulent documents"),
+        );
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+
+        let result = client.try_place_bid(&investor, &invoice_id, &5_000i128, &6_000i128);
+        assert!(result.is_err());
+        let err = result.unwrap_err().unwrap();
+        assert_eq!(
+            err,
+            QuickLendXError::BusinessNotVerified,
+            "Rejected investor must get BusinessNotVerified, got {:?}",
+            err
+        );
+    }
+
+    /// An investor with no KYC record must receive `BusinessNotVerified` when
+    /// attempting to place a bid.
+    #[test]
+    fn test_no_kyc_investor_gets_business_not_verified_on_bid() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+
+        let result = client.try_place_bid(&investor, &invoice_id, &5_000i128, &6_000i128);
+        assert!(result.is_err());
+        let err = result.unwrap_err().unwrap();
+        assert_eq!(
+            err,
+            QuickLendXError::BusinessNotVerified,
+            "Unknown investor must get BusinessNotVerified, got {:?}",
+            err
+        );
+    }
+
+    /// Verify that the three KYC states produce distinct, correct errors on
+    /// place_bid: None → BusinessNotVerified, Pending → KYCAlreadyPending,
+    /// Rejected → BusinessNotVerified.
+    #[test]
+    fn test_place_bid_error_matrix_for_all_non_verified_states() {
+        let (env, client, _admin) = setup();
+        let business = Address::generate(&env);
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+
+        // No KYC
+        let inv_none = Address::generate(&env);
+        let err = client
+            .try_place_bid(&inv_none, &invoice_id, &5_000i128, &6_000i128)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::BusinessNotVerified);
+
+        // Pending
+        let inv_pending = Address::generate(&env);
+        let _ = client
+            .try_submit_investor_kyc(&inv_pending, &String::from_str(&env, "KYC data pending"));
+        let err = client
+            .try_place_bid(&inv_pending, &invoice_id, &5_000i128, &6_000i128)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::KYCAlreadyPending);
+
+        // Rejected
+        let inv_rejected = Address::generate(&env);
+        let _ = client
+            .try_submit_investor_kyc(&inv_rejected, &String::from_str(&env, "KYC data rejected"));
+        let _ = client.try_reject_investor(
+            &inv_rejected,
+            &String::from_str(&env, "Rejected for testing"),
+        );
+        let err = client
+            .try_place_bid(&inv_rejected, &invoice_id, &5_000i128, &6_000i128)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::BusinessNotVerified);
+    }
 }
+
