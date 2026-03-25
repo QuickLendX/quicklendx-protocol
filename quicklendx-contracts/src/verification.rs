@@ -701,6 +701,13 @@ pub fn verify_business(
     Ok(())
 }
 
+/// Reject a pending business KYC record with an auditable reason.
+///
+/// # Errors
+/// - `NotAdmin` if `admin` is not a contract admin
+/// - `KYCNotFound` if the business has no KYC record
+/// - `InvalidKYCStatus` if the business is not currently `Pending`
+/// - `InvalidDescription` if `reason` exceeds `MAX_REJECTION_REASON_LENGTH`
 pub fn reject_business(
     env: &Env,
     admin: &Address,
@@ -754,10 +761,7 @@ pub fn require_business_verification(env: &Env, business: &Address) -> Result<()
 /// # Errors
 /// - `KYCAlreadyPending` if the business has a pending KYC application
 /// - `BusinessNotVerified` if the business has no KYC record or is rejected
-pub fn require_business_not_pending(
-    env: &Env,
-    business: &Address,
-) -> Result<(), QuickLendXError> {
+pub fn require_business_not_pending(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
     match BusinessVerificationStorage::get_verification(env, business) {
         Some(v) => match v.status {
             BusinessVerificationStatus::Pending => Err(QuickLendXError::KYCAlreadyPending),
@@ -777,10 +781,7 @@ pub fn require_business_not_pending(
 /// # Errors
 /// - `KYCAlreadyPending` if the investor has a pending KYC application
 /// - `BusinessNotVerified` if the investor has no KYC record or is rejected
-pub fn require_investor_not_pending(
-    env: &Env,
-    investor: &Address,
-) -> Result<(), QuickLendXError> {
+pub fn require_investor_not_pending(env: &Env, investor: &Address) -> Result<(), QuickLendXError> {
     match InvestorVerificationStorage::get(env, investor) {
         Some(v) => match v.status {
             BusinessVerificationStatus::Pending => Err(QuickLendXError::KYCAlreadyPending),
@@ -962,6 +963,13 @@ pub fn verify_investor(
     }
 }
 
+/// Reject a pending investor KYC record with an auditable reason.
+///
+/// # Errors
+/// - `NotAdmin` if `admin` is not a contract admin
+/// - `KYCNotFound` if the investor has no KYC record
+/// - `InvalidKYCStatus` if the investor is not currently `Pending`
+/// - `InvalidDescription` if `reason` exceeds `MAX_REJECTION_REASON_LENGTH`
 pub fn reject_investor(
     env: &Env,
     admin: &Address,
@@ -975,6 +983,9 @@ pub fn reject_investor(
     }
     let mut verification =
         InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
+    if !matches!(verification.status, BusinessVerificationStatus::Pending) {
+        return Err(QuickLendXError::InvalidKYCStatus);
+    }
 
     verification.status = BusinessVerificationStatus::Rejected;
     verification.verified_at = Some(env.ledger().timestamp());
