@@ -66,10 +66,13 @@ pub enum QuickLendXError {
     InvalidTag = 1800,
     TagLimitExceeded = 1801,
 
-    // Fee configuration (1850–1852)
+    // Fee configuration (1850–1855)
     InvalidFeeConfiguration = 1850,
     TreasuryNotConfigured = 1851,
     InvalidFeeBasisPoints = 1852,
+    RotationAlreadyPending = 1853,
+    RotationNotFound = 1854,
+    RotationExpired = 1855,
 
     // Dispute (1900–1906)
     DisputeNotFound = 1900,
@@ -142,6 +145,9 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidFeeConfiguration => symbol_short!("FEE_CFG"),
             QuickLendXError::TreasuryNotConfigured => symbol_short!("TRS_NC"),
             QuickLendXError::InvalidFeeBasisPoints => symbol_short!("FEE_BPS"),
+            QuickLendXError::RotationAlreadyPending => symbol_short!("ROT_PND"),
+            QuickLendXError::RotationNotFound => symbol_short!("ROT_NF"),
+            QuickLendXError::RotationExpired => symbol_short!("ROT_EXP"),
             // Dispute
             QuickLendXError::DisputeNotFound => symbol_short!("DSP_NF"),
             QuickLendXError::DisputeAlreadyExists => symbol_short!("DSP_EX"),
