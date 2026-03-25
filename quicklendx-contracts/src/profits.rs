@@ -159,7 +159,14 @@ impl PlatformFee {
 
         // Validate fee bounds
         if new_fee_bps < 0 || new_fee_bps > MAX_PLATFORM_FEE_BPS {
-            return Err(QuickLendXError::InvalidAmount);
+            return Err(QuickLendXError::InvalidFeeBasisPoints);
+        }
+
+        let old_config = Self::get_config(env);
+
+        // Optimization: No-op if fee is unchanged
+        if new_fee_bps as u32 == old_config.fee_bps {
+            return Ok(old_config);
         }
 
         let config = PlatformFeeConfig {

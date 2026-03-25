@@ -4,10 +4,59 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String,
 use crate::errors::QuickLendXError;
 use crate::protocol_limits::{
     check_string_length, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FEEDBACK_LENGTH,
-    MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
+    MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
 };
 
 const DEFAULT_INVOICE_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days default grace period
+
+/// Normalize a tag: strip leading/trailing ASCII spaces, then ASCII-lowercase all letters.
+///
+/// Tags are always stored in their normalized form so that "Tech", " tech ", and "TECH"
+/// all collapse to the same canonical key "tech". This ensures consistent duplicate
+/// detection and index lookups regardless of the casing or padding the caller supplies.
+///
+/// # Errors
+/// Returns [`QuickLendXError::InvalidTag`] if:
+/// - The tag exceeds 50 bytes before normalization (prevents buffer overflow).
+/// - The normalized result is empty (e.g. a tag that is all spaces).
+/// - The bytes are not valid UTF-8.
+pub(crate) fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError> {
+    let len = tag.len() as usize;
+    // Guard against inputs that exceed the maximum tag length.
+    if len > 50 {
+        return Err(QuickLendXError::InvalidTag);
+    }
+
+    let mut buf = [0u8; 50];
+    tag.copy_into_slice(&mut buf[..len]);
+
+    // Trim leading ASCII spaces.
+    let mut start = 0usize;
+    while start < len && buf[start] == b' ' {
+        start += 1;
+    }
+    // Trim trailing ASCII spaces.
+    let mut end = len;
+    while end > start && buf[end - 1] == b' ' {
+        end -= 1;
+    }
+
+    if start >= end {
+        return Err(QuickLendXError::InvalidTag);
+    }
+
+    // ASCII lowercase: shift A-Z (0x41-0x5A) to a-z (0x61-0x7A).
+    for b in buf[start..end].iter_mut() {
+        if *b >= b'A' && *b <= b'Z' {
+            *b += 32;
+        }
+    }
+
+    let normalized =
+        core::str::from_utf8(&buf[start..end]).map_err(|_| QuickLendXError::InvalidTag)?;
+
+    Ok(String::from_str(env, normalized))
+}
 
 /// Invoice status enumeration
 #[contracttype]
@@ -96,24 +145,24 @@ pub struct InvoiceMetadata {
 
 impl InvoiceMetadata {
     pub fn validate(&self) -> Result<(), QuickLendXError> {
-        if self.customer_name.len() == 0 || self.customer_name.len() > 100 {
+        if self.customer_name.len() == 0 || self.customer_name.len() > MAX_NAME_LENGTH {
             return Err(QuickLendXError::InvalidDescription);
         }
-        if self.customer_address.len() > 200 {
+        if self.customer_address.len() > MAX_ADDRESS_LENGTH {
             return Err(QuickLendXError::InvalidDescription);
         }
-        if self.tax_id.len() > 40 {
+        if self.tax_id.len() > MAX_TAX_ID_LENGTH {
             return Err(QuickLendXError::InvalidDescription);
         }
         if self.line_items.len() > 50 {
             return Err(QuickLendXError::TagLimitExceeded);
         }
         for item in self.line_items.iter() {
-            if item.0.len() == 0 || item.0.len() > 100 {
+            if item.0.len() == 0 || item.0.len() > MAX_DESCRIPTION_LENGTH {
                 return Err(QuickLendXError::InvalidDescription);
             }
         }
-        if self.notes.len() > 500 {
+        if self.notes.len() > MAX_NOTES_LENGTH {
             return Err(QuickLendXError::InvalidDescription);
         }
         Ok(())
@@ -201,7 +250,11 @@ impl Invoice {
         Ok(())
     }
 
-    /// Create a new invoice with audit logging
+    /// Create a new invoice with audit logging.
+    ///
+    /// All supplied tags are normalized (trimmed, ASCII-lowercased) before storage.
+    /// `validate_invoice_tags` must be called by the caller before this function to
+    /// ensure the tag list is within limits and free of normalized duplicates.
     pub fn new(
         env: &Env,
         business: Address,
@@ -213,7 +266,15 @@ impl Invoice {
         tags: Vec<String>,
     ) -> Result<Self, QuickLendXError> {
         check_string_length(&description, MAX_DESCRIPTION_LENGTH)?;
-        let id = Self::generate_unique_invoice_id(env);
+
+        // Normalize every tag before storage so the on-chain representation is always
+        // in canonical form regardless of how the caller formatted the input.
+        let mut normalized_tags = Vec::new(env);
+        for tag in tags.iter() {
+            normalized_tags.push_back(normalize_tag(env, &tag)?);
+        }
+
+        let id = Self::generate_unique_invoice_id(env)?;
         let created_at = env.ledger().timestamp();
 
         let invoice = Self {
@@ -231,7 +292,7 @@ impl Invoice {
             metadata_notes: None,
             metadata_line_items: Vec::new(env),
             category,
-            tags,
+            tags: normalized_tags,
             funded_amount: 0,
             funded_at: None,
             investor: None,
@@ -265,23 +326,50 @@ impl Invoice {
         Ok(invoice)
     }
 
-    /// Generate a unique invoice ID
-    fn generate_unique_invoice_id(env: &Env) -> BytesN<32> {
-        let timestamp = env.ledger().timestamp();
-        let sequence = env.ledger().sequence();
-        let counter_key = symbol_short!("inv_cnt");
-        let counter: u32 = env.storage().instance().get(&counter_key).unwrap_or(0);
-        env.storage()
-            .instance()
-            .set(&counter_key, &counter.saturating_add(1));
-
-        // Create a unique ID from timestamp, sequence, and counter
+    /// @notice Derives a deterministic invoice ID candidate from a ledger slot and counter.
+    /// @dev The candidate format is `timestamp || sequence || counter || 16 zero bytes`.
+    /// @param timestamp Current ledger timestamp used for allocation.
+    /// @param sequence Current ledger sequence used for allocation.
+    /// @param counter Monotonic invoice counter for the contract instance.
+    /// @return A deterministic `BytesN<32>` candidate that can be checked for collisions.
+    pub(crate) fn derive_invoice_id(
+        env: &Env,
+        timestamp: u64,
+        sequence: u32,
+        counter: u32,
+    ) -> BytesN<32> {
         let mut id_bytes = [0u8; 32];
         id_bytes[0..8].copy_from_slice(&timestamp.to_be_bytes());
         id_bytes[8..12].copy_from_slice(&sequence.to_be_bytes());
         id_bytes[12..16].copy_from_slice(&counter.to_be_bytes());
-
         BytesN::from_array(env, &id_bytes)
+    }
+
+    /// @notice Allocates a unique deterministic invoice ID for the current ledger slot.
+    /// @dev Probes forward on the monotonic counter until it finds an unused invoice key in
+    /// instance storage, so an existing invoice cannot be silently overwritten if a candidate
+    /// collides. Counter overflow aborts with `StorageError`.
+    /// @return A storage-safe invoice ID for the new invoice.
+    fn generate_unique_invoice_id(env: &Env) -> Result<BytesN<32>, QuickLendXError> {
+        let timestamp = env.ledger().timestamp();
+        let sequence = env.ledger().sequence();
+        let counter_key = symbol_short!("inv_cnt");
+        let mut counter: u32 = env.storage().instance().get(&counter_key).unwrap_or(0);
+
+        loop {
+            let candidate = Self::derive_invoice_id(env, timestamp, sequence, counter);
+            if InvoiceStorage::get_invoice(env, &candidate).is_none() {
+                let next_counter = counter
+                    .checked_add(1)
+                    .ok_or(QuickLendXError::StorageError)?;
+                env.storage().instance().set(&counter_key, &next_counter);
+                return Ok(candidate);
+            }
+
+            counter = counter
+                .checked_add(1)
+                .ok_or(QuickLendXError::StorageError)?;
+        }
     }
 
     /// Check if invoice is available for funding
@@ -601,40 +689,51 @@ impl Invoice {
         }
     }
 
-    /// Add a tag to the invoice
+    /// Add a tag to the invoice.
+    ///
+    /// The tag is normalized (trimmed, ASCII-lowercased) before storage so that
+    /// "Tech" and " tech " both resolve to "tech". Duplicate detection uses the
+    /// normalized form: adding an already-present normalized tag is a no-op.
     pub fn add_tag(
         &mut self,
-        _env: &Env,
+        env: &Env,
         tag: String,
     ) -> Result<(), crate::errors::QuickLendXError> {
-        // Validate tag length (1-50 characters)
-        if tag.len() < 1 || tag.len() > 50 {
+        let normalized = normalize_tag(env, &tag)?;
+
+        // Validate normalized tag length (1-50 bytes).
+        if normalized.len() < 1 || normalized.len() > 50 {
             return Err(crate::errors::QuickLendXError::InvalidTag);
         }
 
-        // Check tag limit (max 10 tags per invoice)
+        // Check tag limit (max 10 tags per invoice).
         if self.tags.len() >= 10 {
             return Err(crate::errors::QuickLendXError::TagLimitExceeded);
         }
 
-        // Check if tag already exists
+        // Idempotent: skip if the normalized tag already exists.
         for existing_tag in self.tags.iter() {
-            if existing_tag == tag {
-                return Ok(()); // Tag already exists, no need to add
+            if existing_tag == normalized {
+                return Ok(());
             }
         }
 
-        self.tags.push_back(tag);
+        self.tags.push_back(normalized);
         Ok(())
     }
 
-    /// Remove a tag from the invoice
+    /// Remove a tag from the invoice.
+    ///
+    /// The supplied tag is normalized before lookup so that removing "Tech" correctly
+    /// removes the stored "tech" entry. Returns `InvalidTag` if the tag is not present.
     pub fn remove_tag(&mut self, tag: String) -> Result<(), crate::errors::QuickLendXError> {
-        let mut new_tags = Vec::new(&self.tags.env());
+        let env = self.tags.env();
+        let normalized = normalize_tag(&env, &tag)?;
+        let mut new_tags = Vec::new(&env);
         let mut found = false;
 
         for existing_tag in self.tags.iter() {
-            if existing_tag != tag {
+            if existing_tag != normalized {
                 new_tags.push_back(existing_tag.clone());
             } else {
                 found = true;
@@ -649,10 +748,18 @@ impl Invoice {
         Ok(())
     }
 
-    /// Check if invoice has a specific tag
+    /// Check if invoice has a specific tag.
+    ///
+    /// The query tag is normalized before comparison, so `has_tag("Tech")` returns
+    /// `true` when the stored tag is "tech". Returns `false` for any input that
+    /// normalizes to an empty string.
     pub fn has_tag(&self, tag: String) -> bool {
+        let env = self.tags.env();
+        let Ok(normalized) = normalize_tag(&env, &tag) else {
+            return false;
+        };
         for existing_tag in self.tags.iter() {
-            if existing_tag == tag {
+            if existing_tag == normalized {
                 return true;
             }
         }
@@ -670,6 +777,8 @@ impl Invoice {
     }
 }
 
+pub(crate) const TOTAL_INVOICE_COUNT_KEY: soroban_sdk::Symbol = symbol_short!("total_iv");
+
 /// Storage keys for invoice data
 pub struct InvoiceStorage;
 
@@ -682,6 +791,14 @@ impl InvoiceStorage {
         (symbol_short!("tag_idx"), tag.clone())
     }
 
+    /// @notice Adds an invoice to the category index.
+    /// @dev Deduplication guard: the invoice ID is appended only if not already
+    ///      present, preventing duplicate entries that would corrupt count queries.
+    /// @param env   The contract environment.
+    /// @param category   The category bucket to update.
+    /// @param invoice_id The invoice to register.
+    /// @security Caller must ensure `invoice_id` refers to a stored invoice with
+    ///           the matching category field to keep the index consistent.
     pub fn add_category_index(env: &Env, category: &InvoiceCategory, invoice_id: &BytesN<32>) {
         let key = Self::category_key(category);
         let mut invoices = env
@@ -703,6 +820,13 @@ impl InvoiceStorage {
         }
     }
 
+    /// @notice Removes an invoice from the category index.
+    /// @dev Rebuilds the bucket without the target ID. Safe to call even if the
+    ///      ID is absent (no-op). Must be called with the invoice's *old* category
+    ///      before calling `add_category_index` with the new one to avoid stale entries.
+    /// @param env   The contract environment.
+    /// @param category   The category bucket to update.
+    /// @param invoice_id The invoice to deregister.
     pub fn remove_category_index(env: &Env, category: &InvoiceCategory, invoice_id: &BytesN<32>) {
         let key = Self::category_key(category);
         if let Some(invoices) = env.storage().instance().get::<_, Vec<BytesN<32>>>(&key) {
@@ -751,7 +875,15 @@ impl InvoiceStorage {
 
     /// Store an invoice
     pub fn store_invoice(env: &Env, invoice: &Invoice) {
+        let is_new = !env.storage().instance().has(&invoice.id);
         env.storage().instance().set(&invoice.id, invoice);
+
+        // Update total count if this is a new invoice
+        if is_new {
+            let mut count: u32 = env.storage().instance().get(&TOTAL_INVOICE_COUNT_KEY).unwrap_or(0);
+            count = count.saturating_add(1);
+            env.storage().instance().set(&TOTAL_INVOICE_COUNT_KEY, &count);
+        }
 
         // Add to business invoices list
         Self::add_to_business_invoices(env, &invoice.business, &invoice.id);
@@ -972,7 +1104,12 @@ impl InvoiceStorage {
         Self::get_invoice(env, invoice_id).map(|inv| inv.get_invoice_rating_stats())
     }
 
-    /// Get invoices by category
+    /// @notice Returns all invoice IDs registered under a category.
+    /// @dev Reads the `("cat_idx", category)` bucket. Returns an empty Vec when
+    ///      no invoices exist for the category — never panics.
+    /// @param env      The contract environment.
+    /// @param category The category to query.
+    /// @return Vec of invoice IDs. Length equals `get_invoice_count_by_category`.
     pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
         env.storage()
             .instance()
@@ -1046,7 +1183,12 @@ impl InvoiceStorage {
         result
     }
 
-    /// Get invoice count by category
+    /// @notice Returns the number of invoices in a category.
+    /// @dev Always consistent with `get_invoices_by_category(category).len()`.
+    ///      Invariant maintained by `add_category_index` / `remove_category_index`.
+    /// @param env      The contract environment.
+    /// @param category The category to count.
+    /// @return Count of invoice IDs in the category bucket.
     pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
         Self::get_invoices_by_category(env, category).len() as u32
     }
@@ -1056,7 +1198,10 @@ impl InvoiceStorage {
         Self::get_invoices_by_tag(env, tag).len() as u32
     }
 
-    /// Get all available categories
+    /// @notice Returns all 7 canonical invoice categories.
+    /// @dev Statically constructed — result is independent of stored invoice state.
+    ///      Always returns exactly 7 variants with no duplicates.
+    /// @return Vec containing every InvoiceCategory variant.
     pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
         vec![
             env,
@@ -1190,8 +1335,21 @@ impl InvoiceStorage {
             if let Some(md) = invoice.metadata() {
                 Self::remove_metadata_indexes(env, &md, invoice_id);
             }
+
+            // Decrement total count
+            let mut count: u32 = env.storage().instance().get(&TOTAL_INVOICE_COUNT_KEY).unwrap_or(0);
+            if count > 0 {
+                count -= 1;
+                env.storage().instance().set(&TOTAL_INVOICE_COUNT_KEY, &count);
+            }
+
             // Remove invoice itself
             env.storage().instance().remove(invoice_id);
         }
+    }
+
+    /// Get total count of active invoices in the system
+    pub fn get_total_invoice_count(env: &Env) -> u32 {
+        env.storage().instance().get(&TOTAL_INVOICE_COUNT_KEY).unwrap_or(0)
     }
 }

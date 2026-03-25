@@ -312,3 +312,428 @@ fn test_get_whitelisted_currencies_paged() {
     let page3 = client.get_whitelisted_currencies_paged(&10u32, &2u32);
     assert_eq!(page3.len(), 0);
 }
+
+/// Test boundary conditions for pagination with empty whitelist
+#[test]
+fn test_pagination_empty_whitelist_boundaries() {
+    let (_env, client, _admin) = setup();
+    
+    // Empty whitelist with zero offset/limit
+    let result = client.get_whitelisted_currencies_paged(&0u32, &0u32);
+    assert_eq!(result.len(), 0, "empty whitelist with zero limit should return empty");
+    
+    // Empty whitelist with non-zero offset/limit
+    let result = client.get_whitelisted_currencies_paged(&0u32, &10u32);
+    assert_eq!(result.len(), 0, "empty whitelist with any limit should return empty");
+    
+    // Empty whitelist with large offset
+    let result = client.get_whitelisted_currencies_paged(&u32::MAX, &10u32);
+    assert_eq!(result.len(), 0, "empty whitelist with max offset should return empty");
+    
+    // Empty whitelist with max limit
+    let result = client.get_whitelisted_currencies_paged(&0u32, &u32::MAX);
+    assert_eq!(result.len(), 0, "empty whitelist with max limit should return empty");
+}
+
+/// Test boundary conditions for pagination offset saturation
+#[test]
+fn test_pagination_offset_saturation() {
+    let (env, client, admin) = setup();
+    
+    // Add exactly 5 currencies for predictable testing
+    let currencies: Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
+    for currency in &currencies {
+        client.add_currency(&admin, currency);
+    }
+    
+    // Test offset at exact boundary (length)
+    let result = client.get_whitelisted_currencies_paged(&5u32, &10u32);
+    assert_eq!(result.len(), 0, "offset at exact length should return empty");
+    
+    // Test offset just beyond boundary
+    let result = client.get_whitelisted_currencies_paged(&6u32, &10u32);
+    assert_eq!(result.len(), 0, "offset beyond length should return empty");
+    
+    // Test offset at maximum value
+    let result = client.get_whitelisted_currencies_paged(&u32::MAX, &10u32);
+    assert_eq!(result.len(), 0, "max offset should return empty without panic");
+    
+    // Test offset near maximum with small limit
+    let result = client.get_whitelisted_currencies_paged(&(u32::MAX - 1), &1u32);
+    assert_eq!(result.len(), 0, "near-max offset should return empty without panic");
+    
+    // Test valid offset at boundary minus one
+    let result = client.get_whitelisted_currencies_paged(&4u32, &10u32);
+    assert_eq!(result.len(), 1, "offset at length-1 should return 1 item");
+}
+
+/// Test boundary conditions for pagination limit saturation
+#[test]
+fn test_pagination_limit_saturation() {
+    let (env, client, admin) = setup();
+    
+    // Add exactly 3 currencies
+    let currencies: Vec<Address> = (0..3).map(|_| Address::generate(&env)).collect();
+    for currency in &currencies {
+        client.add_currency(&admin, currency);
+    }
+    
+    // Test zero limit
+    let result = client.get_whitelisted_currencies_paged(&0u32, &0u32);
+    assert_eq!(result.len(), 0, "zero limit should return empty");
+    
+    // Test limit larger than available items
+    let result = client.get_whitelisted_currencies_paged(&0u32, &100u32);
+    assert_eq!(result.len(), 3, "limit larger than available should return all items");
+    
+    // Test maximum limit value
+    let result = client.get_whitelisted_currencies_paged(&0u32, &u32::MAX);
+    assert_eq!(result.len(), 3, "max limit should return all items without panic");
+    
+    // Test limit exactly matching available items
+    let result = client.get_whitelisted_currencies_paged(&0u32, &3u32);
+    assert_eq!(result.len(), 3, "limit matching count should return all items");
+    
+    // Test limit one less than available
+    let result = client.get_whitelisted_currencies_paged(&0u32, &2u32);
+    assert_eq!(result.len(), 2, "limit less than count should return limited items");
+}
+
+/// Test boundary conditions for offset + limit overflow scenarios
+#[test]
+fn test_pagination_overflow_protection() {
+    let (env, client, admin) = setup();
+    
+    // Add 10 currencies for comprehensive testing
+    let currencies: Vec<Address> = (0..10).map(|_| Address::generate(&env)).collect();
+    for currency in &currencies {
+        client.add_currency(&admin, currency);
+    }
+    
+    // Test offset + limit overflow (should not panic)
+    let result = client.get_whitelisted_currencies_paged(&u32::MAX, &u32::MAX);
+    assert_eq!(result.len(), 0, "max offset + max limit should return empty without panic");
+    
+    // Test large offset with large limit
+    let result = client.get_whitelisted_currencies_paged(&(u32::MAX - 5), &10u32);
+    assert_eq!(result.len(), 0, "large offset with normal limit should return empty");
+    
+    // Test normal offset with very large limit
+    let result = client.get_whitelisted_currencies_paged(&5u32, &u32::MAX);
+    assert_eq!(result.len(), 5, "normal offset with max limit should return remaining items");
+    
+    // Test edge case: offset at max-1, limit 1
+    let result = client.get_whitelisted_currencies_paged(&(u32::MAX - 1), &1u32);
+    assert_eq!(result.len(), 0, "near-max offset with small limit should return empty");
+    
+    // Test arithmetic overflow protection: offset + limit > u32::MAX
+    let large_offset = u32::MAX / 2;
+    let large_limit = u32::MAX / 2 + 1;
+    let result = client.get_whitelisted_currencies_paged(&large_offset, &large_limit);
+    assert_eq!(result.len(), 0, "arithmetic overflow scenario should be handled safely");
+}
+
+/// Test pagination consistency and ordering
+#[test]
+fn test_pagination_consistency_and_ordering() {
+    let (env, client, admin) = setup();
+    
+    // Add currencies in a specific order
+    let currencies: Vec<Address> = (0..7).map(|_| Address::generate(&env)).collect();
+    for currency in &currencies {
+        client.add_currency(&admin, currency);
+    }
+    
+    // Get full list for comparison
+    let full_list = client.get_whitelisted_currencies();
+    assert_eq!(full_list.len(), 7, "should have 7 currencies");
+    
+    // Test that pagination returns items in same order as full list
+    let page1 = client.get_whitelisted_currencies_paged(&0u32, &3u32);
+    let page2 = client.get_whitelisted_currencies_paged(&3u32, &3u32);
+    let page3 = client.get_whitelisted_currencies_paged(&6u32, &3u32);
+    
+    assert_eq!(page1.len(), 3, "first page should have 3 items");
+    assert_eq!(page2.len(), 3, "second page should have 3 items");
+    assert_eq!(page3.len(), 1, "third page should have 1 item");
+    
+    // Verify ordering consistency
+    for i in 0..3 {
+        assert_eq!(page1.get(i).unwrap(), full_list.get(i).unwrap(), 
+                  "page1 item {} should match full list", i);
+    }
+    for i in 0..3 {
+        assert_eq!(page2.get(i).unwrap(), full_list.get(i + 3).unwrap(), 
+                  "page2 item {} should match full list", i);
+    }
+    assert_eq!(page3.get(0).unwrap(), full_list.get(6).unwrap(), 
+              "page3 item should match full list");
+    
+    // Test overlapping pages don't duplicate
+    let overlap_page = client.get_whitelisted_currencies_paged(&2u32, &3u32);
+    assert_eq!(overlap_page.len(), 3, "overlapping page should have 3 items");
+    assert_eq!(overlap_page.get(0).unwrap(), full_list.get(2).unwrap(), 
+              "overlapping page should start at correct offset");
+}
+
+/// Test pagination with single item edge cases
+#[test]
+fn test_pagination_single_item_edge_cases() {
+    let (env, client, admin) = setup();
+    
+    // Add exactly one currency
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+    
+    // Test various pagination scenarios with single item
+    let result = client.get_whitelisted_currencies_paged(&0u32, &1u32);
+    assert_eq!(result.len(), 1, "should return the single item");
+    assert_eq!(result.get(0).unwrap(), currency, "should return correct currency");
+    
+    let result = client.get_whitelisted_currencies_paged(&0u32, &10u32);
+    assert_eq!(result.len(), 1, "large limit should still return single item");
+    
+    let result = client.get_whitelisted_currencies_paged(&1u32, &1u32);
+    assert_eq!(result.len(), 0, "offset beyond single item should return empty");
+    
+    let result = client.get_whitelisted_currencies_paged(&0u32, &0u32);
+    assert_eq!(result.len(), 0, "zero limit should return empty even with item");
+}
+
+/// Test pagination behavior after whitelist modifications
+#[test]
+fn test_pagination_after_modifications() {
+    let (env, client, admin) = setup();
+    
+    // Add initial currencies
+    let currencies: Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
+    for currency in &currencies {
+        client.add_currency(&admin, currency);
+    }
+    
+    // Test pagination before modification
+    let page_before = client.get_whitelisted_currencies_paged(&0u32, &3u32);
+    assert_eq!(page_before.len(), 3, "should have 3 items before modification");
+    
+    // Remove some currencies
+    client.remove_currency(&admin, &currencies[1]);
+    client.remove_currency(&admin, &currencies[3]);
+    
+    // Test pagination after removal
+    let page_after = client.get_whitelisted_currencies_paged(&0u32, &3u32);
+    assert_eq!(page_after.len(), 3, "should have 3 items after removal");
+    
+    // Verify removed currencies are not in results
+    let full_list_after = client.get_whitelisted_currencies();
+    assert_eq!(full_list_after.len(), 3, "should have 3 total items after removal");
+    assert!(!full_list_after.contains(&currencies[1]), "removed currency should not be present");
+    assert!(!full_list_after.contains(&currencies[3]), "removed currency should not be present");
+    
+    // Test pagination at new boundary
+    let boundary_page = client.get_whitelisted_currencies_paged(&3u32, &1u32);
+    assert_eq!(boundary_page.len(), 0, "offset at new length should return empty");
+    
+    // Clear all currencies and test
+    client.clear_currencies(&admin);
+    let empty_page = client.get_whitelisted_currencies_paged(&0u32, &10u32);
+    assert_eq!(empty_page.len(), 0, "pagination after clear should return empty");
+}
+
+/// Test pagination security: ensure no information leakage or unauthorized access
+#[test]
+fn test_pagination_security_boundaries() {
+    let (env, client, admin) = setup();
+    
+    // Add currencies as admin
+    let currencies: Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
+    for currency in &currencies {
+        client.add_currency(&admin, currency);
+    }
+    
+    // Test that pagination works for non-admin users (public read access)
+    let non_admin = Address::generate(&env);
+    env.mock_all_auths_allowing_non_root_auth();
+    
+    // Non-admin should be able to read paginated results
+    let result = client.get_whitelisted_currencies_paged(&0u32, &3u32);
+    assert_eq!(result.len(), 3, "non-admin should be able to read paginated results");
+    
+    // Test that pagination doesn't expose more data than intended
+    let full_list = client.get_whitelisted_currencies();
+    let paginated_total = client.get_whitelisted_currencies_paged(&0u32, &u32::MAX);
+    assert_eq!(full_list.len(), paginated_total.len(), 
+              "paginated read should not expose more data than full read");
+    
+    // Verify all items match between full and paginated reads
+    for i in 0..full_list.len() {
+        assert_eq!(full_list.get(i).unwrap(), paginated_total.get(i).unwrap(),
+                  "item {} should match between full and paginated reads", i);
+    }
+}
+
+/// Test pagination performance and DoS resistance with large datasets
+#[test]
+fn test_pagination_large_dataset_boundaries() {
+    let (env, client, admin) = setup();
+    
+    // Add a larger number of currencies to test performance boundaries
+    let large_count = 50u32; // Reasonable size for testing
+    let currencies: Vec<Address> = (0..large_count).map(|_| Address::generate(&env)).collect();
+    
+    // Add currencies in batches to test bulk operations
+    let batch_size = 10;
+    for chunk in currencies.chunks(batch_size) {
+        for currency in chunk {
+            client.add_currency(&admin, currency);
+        }
+    }
+    
+    // Verify total count
+    let count = client.currency_count();
+    assert_eq!(count, large_count, "should have added all currencies");
+    
+    // Test pagination across large dataset
+    let page_size = 7u32;
+    let mut total_retrieved = 0u32;
+    let mut offset = 0u32;
+    
+    loop {
+        let page = client.get_whitelisted_currencies_paged(&offset, &page_size);
+        if page.len() == 0 {
+            break;
+        }
+        total_retrieved += page.len();
+        offset += page_size;
+        
+        // Prevent infinite loop in case of implementation error
+        if offset > large_count * 2 {
+            panic!("pagination loop exceeded expected bounds");
+        }
+    }
+    
+    assert_eq!(total_retrieved, large_count, 
+              "should retrieve all items through pagination");
+    
+    // Test large offset with large dataset
+    let result = client.get_whitelisted_currencies_paged(&(large_count + 10), &10u32);
+    assert_eq!(result.len(), 0, "large offset beyond dataset should return empty");
+    
+    // Test boundary at exact dataset size
+    let result = client.get_whitelisted_currencies_paged(&large_count, &1u32);
+    assert_eq!(result.len(), 0, "offset at exact dataset size should return empty");
+}
+
+/// Test pagination with rapid modifications (race condition simulation)
+#[test]
+fn test_pagination_concurrent_modification_boundaries() {
+    let (env, client, admin) = setup();
+    
+    // Add initial dataset
+    let currencies: Vec<Address> = (0..10).map(|_| Address::generate(&env)).collect();
+    for currency in &currencies {
+        client.add_currency(&admin, currency);
+    }
+    
+    // Simulate concurrent reads during modifications
+    let initial_page = client.get_whitelisted_currencies_paged(&0u32, &5u32);
+    assert_eq!(initial_page.len(), 5, "initial page should have 5 items");
+    
+    // Modify whitelist (remove some currencies)
+    client.remove_currency(&admin, &currencies[2]);
+    client.remove_currency(&admin, &currencies[7]);
+    
+    // Read same page after modification
+    let modified_page = client.get_whitelisted_currencies_paged(&0u32, &5u32);
+    assert_eq!(modified_page.len(), 5, "page should still return 5 items after removal");
+    
+    // Verify consistency: total count should match paginated count
+    let total_count = client.currency_count();
+    let mut paginated_count = 0u32;
+    let mut offset = 0u32;
+    
+    loop {
+        let page = client.get_whitelisted_currencies_paged(&offset, &3u32);
+        if page.len() == 0 {
+            break;
+        }
+        paginated_count += page.len();
+        offset += 3u32;
+        
+        if offset > total_count * 2 {
+            break; // Safety break
+        }
+    }
+    
+    assert_eq!(paginated_count, total_count, 
+              "paginated count should match total count after modifications");
+}
+
+/// Test pagination edge cases with address generation and storage
+#[test]
+fn test_pagination_address_handling_boundaries() {
+    let (env, client, admin) = setup();
+    
+    // Test with duplicate address attempts (should be idempotent)
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+    client.add_currency(&admin, &currency); // Duplicate add
+    
+    let result = client.get_whitelisted_currencies_paged(&0u32, &10u32);
+    assert_eq!(result.len(), 1, "duplicate adds should result in single entry");
+    
+    // Test with many unique addresses
+    let unique_currencies: Vec<Address> = (0..15).map(|_| Address::generate(&env)).collect();
+    for currency in &unique_currencies {
+        client.add_currency(&admin, currency);
+    }
+    
+    // Verify all unique addresses are stored and retrievable
+    let total_count = client.currency_count();
+    assert_eq!(total_count, 16u32, "should have 16 total currencies (1 + 15)"); // 1 from duplicate test + 15 new
+    
+    // Test pagination retrieves all unique addresses
+    let all_paginated = client.get_whitelisted_currencies_paged(&0u32, &20u32);
+    assert_eq!(all_paginated.len(), 16, "should retrieve all unique addresses");
+    
+    // Verify no duplicates in paginated results
+    for i in 0..all_paginated.len() {
+        for j in (i + 1)..all_paginated.len() {
+            assert_ne!(all_paginated.get(i).unwrap(), all_paginated.get(j).unwrap(),
+                      "should not have duplicate addresses in paginated results");
+        }
+    }
+}
+
+/// Test pagination memory and storage efficiency boundaries
+#[test]
+fn test_pagination_storage_efficiency() {
+    let (env, client, admin) = setup();
+    
+    // Test empty storage efficiency
+    let empty_result = client.get_whitelisted_currencies_paged(&0u32, &100u32);
+    assert_eq!(empty_result.len(), 0, "empty storage should return empty efficiently");
+    
+    // Add currencies and test storage growth
+    let currencies: Vec<Address> = (0..20).map(|_| Address::generate(&env)).collect();
+    for (i, currency) in currencies.iter().enumerate() {
+        client.add_currency(&admin, currency);
+        
+        // Test pagination at each growth step
+        let count = (i + 1) as u32;
+        let result = client.get_whitelisted_currencies_paged(&0u32, &count);
+        assert_eq!(result.len(), count, "should return correct count at growth step {}", i);
+        
+        // Test boundary pagination
+        let boundary_result = client.get_whitelisted_currencies_paged(&count, &1u32);
+        assert_eq!(boundary_result.len(), 0, "boundary offset should return empty at step {}", i);
+    }
+    
+    // Test bulk clear efficiency
+    client.clear_currencies(&admin);
+    let cleared_result = client.get_whitelisted_currencies_paged(&0u32, &100u32);
+    assert_eq!(cleared_result.len(), 0, "cleared storage should return empty efficiently");
+    
+    // Verify count is also reset
+    let count_after_clear = client.currency_count();
+    assert_eq!(count_after_clear, 0u32, "count should be zero after clear");
+}

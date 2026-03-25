@@ -108,6 +108,10 @@ pub fn create_escrow(
         return Err(QuickLendXError::InvalidAmount);
     }
 
+    if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some() {
+        return Err(QuickLendXError::InvoiceAlreadyFunded);
+    }
+
     // Move funds from investor into contract-controlled escrow
     let contract_address = env.current_contract_address();
     transfer_funds(env, currency, investor, &contract_address, amount)?;

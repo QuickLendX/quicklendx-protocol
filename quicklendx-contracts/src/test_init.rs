@@ -43,7 +43,7 @@ fn test_double_initialization_fails() {
     let admin = Address::generate(&env);
     let treasury = Address::generate(&env);
 
-    let params = InitializationParams {
+    let mut params = InitializationParams {
         admin: admin.clone(),
         treasury: treasury.clone(),
         fee_bps: 200,
@@ -55,9 +55,38 @@ fn test_double_initialization_fails() {
 
     client.initialize(&params);
 
-    // Second initialization should fail
+    // Second initialization with different parameters should fail
+    params.fee_bps = 250;
     let result = client.try_initialize(&params);
     assert_eq!(result, Err(Ok(QuickLendXError::OperationNotAllowed)));
+}
+
+#[test]
+fn test_idempotent_initialization() {
+    let (env, client) = setup();
+
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let initial_currencies = Vec::from_array(&env, [Address::generate(&env)]);
+
+    let params = InitializationParams {
+        admin: admin.clone(),
+        treasury: treasury.clone(),
+        fee_bps: 200,
+        min_invoice_amount: 1_000_000,
+        max_due_date_days: 365,
+        grace_period_seconds: 604800,
+        initial_currencies: initial_currencies.clone(),
+    };
+
+    // First initialization
+    client.initialize(&params);
+    assert!(client.is_initialized());
+
+    // Second initialization with exactly the same parameters should succeed idempotently
+    let result = client.try_initialize(&params);
+    assert_eq!(result, Ok(Ok(())));
+    assert!(client.is_initialized());
 }
 
 #[test]

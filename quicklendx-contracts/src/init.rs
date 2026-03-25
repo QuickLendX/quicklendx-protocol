@@ -126,11 +126,27 @@ impl ProtocolInitializer {
     /// - Validates all parameters before any state changes
     /// - Emits initialization event for audit trail
     pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
-        // Require authorization from the admin
-        params.admin.require_auth();
 
-        // Check if already initialized (re-initialization protection)
+        // Check if already initialized (re-initialization protection with idempotency)
         if Self::is_initialized(env) {
+            // Check for idempotency: if initialized with exact same parameters, return Ok(())
+            let current_admin: Address = env.storage().instance().get(&crate::admin::ADMIN_KEY).unwrap();
+            let current_treasury: Address = env.storage().instance().get(&TREASURY_KEY).unwrap();
+            let current_fee_bps: u32 = env.storage().instance().get(&FEE_BPS_KEY).unwrap();
+            let current_config: ProtocolConfig = env.storage().instance().get(&PROTOCOL_CONFIG_KEY).unwrap();
+            let current_whitelist: Vec<Address> = env.storage().instance().get(&WHITELIST_KEY).unwrap_or(Vec::new(env));
+
+            if current_admin == params.admin 
+                && current_treasury == params.treasury
+                && current_fee_bps == params.fee_bps
+                && current_config.min_invoice_amount == params.min_invoice_amount
+                && current_config.max_due_date_days == params.max_due_date_days
+                && current_config.grace_period_seconds == params.grace_period_seconds
+                && current_whitelist == params.initial_currencies
+            {
+                return Ok(());
+            }
+
             return Err(QuickLendXError::OperationNotAllowed);
         }
 
@@ -161,6 +177,20 @@ impl ProtocolInitializer {
             updated_by: params.admin.clone(),
         };
         env.storage().instance().set(&PROTOCOL_CONFIG_KEY, &config);
+
+        // Sync protocol limits used by invoice validation.
+        // This ensures `store_invoice` / `upload_invoice` enforce the configured bounds
+        // immediately after initialization (Issue #541).
+        crate::protocol_limits::ProtocolLimitsContract::set_protocol_limits_authed(
+            env,
+            &params.admin,
+            params.min_invoice_amount,
+            crate::protocol_limits::DEFAULT_MIN_BID_AMOUNT,
+            crate::protocol_limits::DEFAULT_MIN_BID_BPS,
+            params.max_due_date_days,
+            params.grace_period_seconds,
+            crate::protocol_limits::DEFAULT_MAX_INVOICES_PER_BUSINESS,
+        )?;
 
         // Initialize currency whitelist with provided currencies
         if !params.initial_currencies.is_empty() {
