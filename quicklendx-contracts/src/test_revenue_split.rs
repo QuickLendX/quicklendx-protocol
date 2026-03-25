@@ -421,3 +421,372 @@ fn test_double_distribution_same_period_fails() {
     let result = client.try_distribute_revenue(&admin, &current_period);
     assert!(result.is_err(), "Double distribution should fail");
 }
+
+// ============================================================================
+// Revenue Split Safety – Accounting Invariant Tests
+// ============================================================================
+
+/// Helper: collect fees and distribute, then assert the sum invariant holds.
+fn assert_distribution_sum_invariant(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    admin: &Address,
+    treasury: &Address,
+    treasury_bps: u32,
+    developer_bps: u32,
+    platform_bps: u32,
+    fee_amount: i128,
+) {
+    let user = Address::generate(env);
+    client.configure_revenue_distribution(
+        admin,
+        treasury,
+        &treasury_bps,
+        &developer_bps,
+        &platform_bps,
+        &false,
+        &1,
+    );
+    let mut fees_by_type = Map::new(env);
+    fees_by_type.set(FeeType::Platform, fee_amount);
+    client.collect_transaction_fees(&user, &fees_by_type, &fee_amount);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+    let (t, d, p) = client.distribute_revenue(admin, &current_period);
+
+    assert!(t >= 0, "Treasury amount must be non-negative");
+    assert!(d >= 0, "Developer amount must be non-negative");
+    assert!(p >= 0, "Platform amount must be non-negative");
+    assert_eq!(
+        t + d + p,
+        fee_amount,
+        "Sum invariant violated: {} + {} + {} != {}",
+        t,
+        d,
+        p,
+        fee_amount
+    );
+}
+
+#[test]
+fn test_sum_invariant_even_split() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    client.initialize_fee_system(&admin);
+
+    // 33.33% / 33.33% / 33.34% with amount that causes rounding
+    assert_distribution_sum_invariant(&env, &client, &admin, &treasury, 3333, 3333, 3334, 999);
+}
+
+#[test]
+fn test_sum_invariant_skewed_split() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    client.initialize_fee_system(&admin);
+
+    // 90% / 7% / 3%
+    assert_distribution_sum_invariant(&env, &client, &admin, &treasury, 9000, 700, 300, 10001);
+}
+
+#[test]
+fn test_sum_invariant_with_one_unit() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    client.initialize_fee_system(&admin);
+
+    // 1 unit with 33/33/34 split — only platform should get the 1 unit (remainder)
+    assert_distribution_sum_invariant(&env, &client, &admin, &treasury, 3300, 3300, 3400, 1);
+}
+
+#[test]
+fn test_sum_invariant_large_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    client.initialize_fee_system(&admin);
+
+    // Large amount: 1 trillion units
+    assert_distribution_sum_invariant(
+        &env,
+        &client,
+        &admin,
+        &treasury,
+        5000,
+        3000,
+        2000,
+        1_000_000_000_000,
+    );
+}
+
+#[test]
+fn test_sum_invariant_prime_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    client.initialize_fee_system(&admin);
+
+    // Prime number amount to stress rounding: 7919
+    assert_distribution_sum_invariant(&env, &client, &admin, &treasury, 4111, 2789, 3100, 7919);
+}
+
+// ============================================================================
+// Revenue Split Safety – Invalid Configuration Rejection Tests
+// ============================================================================
+
+#[test]
+fn test_individual_share_exceeds_10000_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // Treasury share exceeds 10_000 even if sum equals 10_000 (impossible, but test bounds)
+    let result =
+        client.try_configure_revenue_distribution(&admin, &treasury, &10001, &0, &0, &false, &100);
+    assert!(
+        result.is_err(),
+        "Individual share > 10000 should be rejected"
+    );
+}
+
+#[test]
+fn test_negative_min_distribution_amount_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    let result = client.try_configure_revenue_distribution(
+        &admin,
+        &treasury,
+        &5000,
+        &2500,
+        &2500,
+        &false,
+        &-1, // negative
+    );
+    assert!(
+        result.is_err(),
+        "Negative min_distribution_amount should be rejected"
+    );
+}
+
+#[test]
+fn test_shares_sum_over_10000_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // Sum = 10001
+    let result = client.try_configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &2001, &false, &100,
+    );
+    assert!(result.is_err(), "Shares summing to > 10000 should fail");
+}
+
+#[test]
+fn test_shares_sum_under_10000_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // Sum = 9999
+    let result = client.try_configure_revenue_distribution(
+        &admin, &treasury, &5000, &3000, &1999, &false, &100,
+    );
+    assert!(result.is_err(), "Shares summing to < 10000 should fail");
+}
+
+#[test]
+fn test_all_zero_shares_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    let result =
+        client.try_configure_revenue_distribution(&admin, &treasury, &0, &0, &0, &false, &100);
+    assert!(result.is_err(), "All-zero shares should be rejected");
+}
+
+// ============================================================================
+// Revenue Split Safety – Edge Case Distribution Tests
+// ============================================================================
+
+#[test]
+fn test_100_percent_platform_split() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // 100% to platform
+    client.configure_revenue_distribution(&admin, &treasury, &0, &0, &10000, &false, &1);
+
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 12345);
+    client.collect_transaction_fees(&user, &fees_by_type, &12345);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+    let (treasury_amount, developer_amount, platform_amount) =
+        client.distribute_revenue(&admin, &current_period);
+
+    assert_eq!(treasury_amount, 0);
+    assert_eq!(developer_amount, 0);
+    assert_eq!(platform_amount, 12345);
+}
+
+#[test]
+fn test_minimum_distribution_threshold_enforced() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // Set min_distribution_amount = 1000
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &2500, &2500, &false, &1000);
+
+    // Collect only 500 (below threshold)
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 500);
+    client.collect_transaction_fees(&user, &fees_by_type, &500);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert!(
+        result.is_err(),
+        "Distribution below min threshold should fail"
+    );
+
+    // Collect more to exceed threshold
+    let mut fees_by_type2 = Map::new(&env);
+    fees_by_type2.set(FeeType::Platform, 600);
+    client.collect_transaction_fees(&user, &fees_by_type2, &600);
+
+    // Now should succeed (pending = 1100 >= 1000)
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert!(
+        result.is_ok(),
+        "Distribution above min threshold should succeed"
+    );
+}
+
+#[test]
+fn test_validate_revenue_shares_directly() {
+    // Test the validate_revenue_shares function directly via the contract
+    // Valid cases
+    assert!(crate::fees::FeeManager::validate_revenue_shares(10000, 0, 0).is_ok());
+    assert!(crate::fees::FeeManager::validate_revenue_shares(0, 10000, 0).is_ok());
+    assert!(crate::fees::FeeManager::validate_revenue_shares(0, 0, 10000).is_ok());
+    assert!(crate::fees::FeeManager::validate_revenue_shares(3333, 3333, 3334).is_ok());
+    assert!(crate::fees::FeeManager::validate_revenue_shares(5000, 3000, 2000).is_ok());
+
+    // Invalid: sum != 10000
+    assert!(crate::fees::FeeManager::validate_revenue_shares(5000, 3000, 1999).is_err());
+    assert!(crate::fees::FeeManager::validate_revenue_shares(5000, 3000, 2001).is_err());
+    assert!(crate::fees::FeeManager::validate_revenue_shares(0, 0, 0).is_err());
+
+    // Invalid: individual share > 10000
+    assert!(crate::fees::FeeManager::validate_revenue_shares(10001, 0, 0).is_err());
+    assert!(crate::fees::FeeManager::validate_revenue_shares(0, 10001, 0).is_err());
+    assert!(crate::fees::FeeManager::validate_revenue_shares(0, 0, 10001).is_err());
+}
+
+#[test]
+fn test_distribution_non_negative_amounts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // Edge case: very small amount with extreme split ratios
+    client.configure_revenue_distribution(&admin, &treasury, &1, &1, &9998, &false, &1);
+
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 3);
+    client.collect_transaction_fees(&user, &fees_by_type, &3);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+    let (t, d, p) = client.distribute_revenue(&admin, &current_period);
+
+    assert!(t >= 0, "Treasury must be >= 0");
+    assert!(d >= 0, "Developer must be >= 0");
+    assert!(p >= 0, "Platform must be >= 0");
+    assert_eq!(t + d + p, 3, "Sum must equal original amount");
+}
+
+#[test]
+fn test_zero_min_distribution_amount_allowed() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+
+    // min_distribution_amount = 0 should be valid
+    let result = client.try_configure_revenue_distribution(
+        &admin, &treasury, &5000, &2500, &2500, &false, &0,
+    );
+    assert!(
+        result.is_ok(),
+        "Zero min_distribution_amount should be allowed"
+    );
+}

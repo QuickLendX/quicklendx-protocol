@@ -12,6 +12,13 @@ fn setup_admin(env: &Env, client: &QuickLendXContractClient) -> Address {
     admin
 }
 
+/// Helper: initialize admin via initialize_admin (first-time setup path)
+fn setup_admin_init(env: &Env, client: &QuickLendXContractClient) -> Address {
+    let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
+    admin
+}
+
 /// Helper function to create and verify a business
 fn setup_business(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> Address {
     let business = Address::generate(&env);

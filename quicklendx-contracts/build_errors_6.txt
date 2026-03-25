@@ -1,34 +1,23 @@
+    Checking quicklendx-contracts v0.1.0 (C:\Users\USER\Desktop\drips\quicklendx-protocol\quicklendx-contracts)
 warning: unused imports: `Address` and `String`
  --> src\defaults.rs:6:19
   |
-6 | ...sdk::{Address, BytesN, Env, String, Vec};
-  |          ^^^^^^^               ^^^^^^
+6 | use soroban_sdk::{Address, BytesN, Env, String, Vec};
+  |                   ^^^^^^^               ^^^^^^
   |
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 warning: unused import: `MAX_TAG_LENGTH`
  --> src\invoice.rs:7:40
   |
-7 | ...OTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_...
-  |                 ^^^^^^^^^^^^^^
+7 |     MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
+  |                                        ^^^^^^^^^^^^^^
 
 warning: unused import: `crate::defaults::DEFAULT_GRACE_PERIOD`
   --> src\settlement.rs:11:5
    |
 11 | use crate::defaults::DEFAULT_GRACE_PERIOD;
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: unused imports: `PlatformFeeConfig` and `PlatformFee`
-  --> src\test_storage.rs:18:22
-   |
-18 | ...s::{PlatformFee, PlatformFeeConfig};
-   |        ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
-
-warning: unused import: `ConfigStorage`
-  --> src\test_storage.rs:20:17
-   |
-20 |     BidStorage, ConfigStorage, Indexes, In...
-   |                 ^^^^^^^^^^^^^
 
 warning: unused imports: `emit_invoice_category_updated`, `emit_invoice_tag_added`, `emit_invoice_tag_removed`, `emit_platform_fee_config_updated`, and `emit_treasury_configured`
   --> src\lib.rs:76:53
@@ -41,6 +30,18 @@ warning: unused imports: `emit_invoice_category_updated`, `emit_invoice_tag_adde
    |     ^^^^^^^^^^^^^^^^^^^^^^^^
 79 |     emit_platform_fee_config_updated, emit_treasury_configured,
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `PlatformFeeConfig` and `PlatformFee`
+  --> src\test_storage.rs:18:22
+   |
+18 | use crate::profits::{PlatformFee, PlatformFeeConfig};
+   |                      ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ConfigStorage`
+  --> src\test_storage.rs:20:17
+   |
+20 |     BidStorage, ConfigStorage, Indexes, InvestmentStorage, InvoiceStorage, StorageKeys,
+   |                 ^^^^^^^^^^^^^
 
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
    --> src\admin.rs:168:18
@@ -245,8 +246,8 @@ warning: use of deprecated method `soroban_sdk::events::Events::publish`: use th
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
    --> src\events.rs:410:10
     |
-410 | ...   .publish((symbol_short!("aud_qry"),...
-    |        ^^^^^^^
+410 |         .publish((symbol_short!("aud_qry"),), (query_type, result_count));
+    |          ^^^^^^^
 
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
    --> src\events.rs:421:18
@@ -317,8 +318,8 @@ warning: use of deprecated method `soroban_sdk::events::Events::publish`: use th
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
    --> src\fees.rs:227:22
     |
-227 | ...   env.events().publish((symbol_short!...
-    |                    ^^^^^^^
+227 |         env.events().publish((symbol_short!("fee_upd"),), fee_bps);
+    |                      ^^^^^^^
 
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
    --> src\init.rs:264:18
@@ -341,8 +342,8 @@ warning: use of deprecated method `soroban_sdk::events::Events::publish`: use th
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
    --> src\notifications.rs:348:14
     |
-348 | ...   .publish((symbol_short!("pref_up"),...
-    |        ^^^^^^^
+348 |             .publish((symbol_short!("pref_up"),), (user.clone(),));
+    |              ^^^^^^^
 
 warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
    --> src\settlement.rs:461:18
@@ -398,6 +399,12 @@ warning: use of deprecated method `soroban_sdk::events::Events::publish`: use th
 630 |         env.events().publish(
     |                      ^^^^^^^
 
+error[E0599]: no method named `append` found for struct `soroban_sdk::String` in the current scope
+  --> src\test_string_limits.rs:20:15
+   |
+20 |         s = s.append(&String::from_str(env, "a"));
+   |               ^^^^^^ method not found in `soroban_sdk::String`
+
 warning: unused variable: `invoice`
    --> src\defaults.rs:142:9
     |
@@ -412,46 +419,28 @@ warning: unused variable: `admin`
 213 |         admin: &Address,
     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
 
-warning: variable does not need to be mutable
-   --> src\storage.rs:260:13
-    |
-260 |         let mut ids: Vec<BytesN<32>> = env
-    |             ----^^^
-    |             |
-    |             help: remove this `mut`
-    |
-    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
-
-warning: variable does not need to be mutable
-   --> src\storage.rs:289:13
-    |
-289 |         let mut ids: Vec<BytesN<32>> = env
-    |             ----^^^
-    |             |
-    |             help: remove this `mut`
-
 warning: unused variable: `limits`
    --> src\verification.rs:500:9
     |
-500 |     let limits = ProtocolLimitsContract::...
+500 |     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_limits`
 
 warning: unused variable: `investment`
    --> src\lib.rs:971:13
     |
-971 |         let investment = InvestmentStorag...
+971 |         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
     |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
 
 warning: unused variable: `investment`
     --> src\lib.rs:1048:13
      |
-1048 |         let investment = InvestmentStora...
+1048 |         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
      |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
 
 warning: unused variable: `investment`
     --> src\lib.rs:1082:13
      |
-1082 |         let investment = InvestmentStora...
+1082 |         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
      |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
 
 warning: multiple associated functions are never used
@@ -459,61 +448,64 @@ warning: multiple associated functions are never used
     |
 177 | impl AnalyticsStorage {
     | --------------------- associated functions in this implementation
-178 |     fn platform_metrics_key() -> (soroban...
+178 |     fn platform_metrics_key() -> (soroban_sdk::Symbol,) {
     |        ^^^^^^^^^^^^^^^^^^^^
 ...
-182 |     fn performance_metrics_key() -> (soro...
+182 |     fn performance_metrics_key() -> (soroban_sdk::Symbol,) {
     |        ^^^^^^^^^^^^^^^^^^^^^^^
 ...
-186 |     fn user_behavior_key(user: &Address) ...
+186 |     fn user_behavior_key(user: &Address) -> (soroban_sdk::Symbol, Address) {
     |        ^^^^^^^^^^^^^^^^^
 ...
-198 |     fn investor_analytics_key(investor: &...
+198 |     fn investor_analytics_key(investor: &Address) -> (soroban_sdk::Symbol, Address) {
     |        ^^^^^^^^^^^^^^^^^^^^^^
 ...
-202 |     fn investor_performance_key() -> (sor...
+202 |     fn investor_performance_key() -> (soroban_sdk::Symbol,) {
     |        ^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-211 |     pub fn store_platform_metrics(env: &E...
+211 |     pub fn store_platform_metrics(env: &Env, metrics: &PlatformMetrics) {
     |            ^^^^^^^^^^^^^^^^^^^^^^
 ...
-217 |     pub fn get_platform_metrics(env: &Env...
+217 |     pub fn get_platform_metrics(env: &Env) -> Option<PlatformMetrics> {
     |            ^^^^^^^^^^^^^^^^^^^^
 ...
-221 |     pub fn store_performance_metrics(env:...
+221 |     pub fn store_performance_metrics(env: &Env, metrics: &PerformanceMetrics) {
     |            ^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-227 |     pub fn get_performance_metrics(env: &...
+227 |     pub fn get_performance_metrics(env: &Env) -> Option<PerformanceMetrics> {
     |            ^^^^^^^^^^^^^^^^^^^^^^^
 ...
-233 |     pub fn store_user_behavior(env: &Env,...
+233 |     pub fn store_user_behavior(env: &Env, user: &Address, behavior: &UserBehaviorMetrics) {
     |            ^^^^^^^^^^^^^^^^^^^
 ...
-239 |     pub fn store_business_report(env: &En...
+239 |     pub fn store_business_report(env: &Env, report: &BusinessReport) {
     |            ^^^^^^^^^^^^^^^^^^^^^
 ...
-251 |     pub fn store_investor_report(env: &En...
+251 |     pub fn store_investor_report(env: &Env, report: &InvestorReport) {
     |            ^^^^^^^^^^^^^^^^^^^^^
 ...
-263 |     pub fn store_investor_analytics(env: ...
+263 |     pub fn store_investor_analytics(env: &Env, investor: &Address, analytics: &InvestorAnalytics) {
     |            ^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-269 |     pub fn get_investor_analytics(env: &E...
+269 |     pub fn get_investor_analytics(env: &Env, investor: &Address) -> Option<InvestorAnalytics> {
     |            ^^^^^^^^^^^^^^^^^^^^^^
 ...
-275 |     pub fn store_investor_performance(env...
+275 |     pub fn store_investor_performance(env: &Env, metrics: &InvestorPerformanceMetrics) {
     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-281 |     pub fn get_investor_performance(env: ...
+281 |     pub fn get_investor_performance(env: &Env) -> Option<InvestorPerformanceMetrics> {
     |            ^^^^^^^^^^^^^^^^^^^^^^^^
     |
     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
-warning: associated functions `calculate_investor_analytics` and `calc_investor_perf_metrics` are never used
-    --> src\analytics.rs:1049:12
+warning: associated functions `calculate_user_behavior_metrics`, `calculate_investor_analytics`, and `calc_investor_perf_metrics` are never used
+    --> src\analytics.rs:431:12
      |
  300 | impl AnalyticsCalculator {
      | ------------------------ associated functions in this implementation
+...
+ 431 |     pub fn calculate_user_behavior_metrics(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
 1049 |     pub fn calculate_investor_analytics(
      |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -527,22 +519,22 @@ warning: associated functions `get_audit_entry`, `query_audit_logs`, `get_audit_
 168 | impl AuditStorage {
     | ----------------- associated functions in this implementation
 ...
-191 |     pub fn get_audit_entry(env: &Env, audit_id...
+191 |     pub fn get_audit_entry(env: &Env, audit_id: &BytesN<32>) -> Option<AuditLogEntry> {
     |            ^^^^^^^^^^^^^^^
 ...
 226 |     pub fn query_audit_logs(
     |            ^^^^^^^^^^^^^^^^
 ...
-269 |     pub fn get_audit_stats(env: &Env) -> Audit...
+269 |     pub fn get_audit_stats(env: &Env) -> AuditStats {
     |            ^^^^^^^^^^^^^^^
 ...
 304 |     pub fn validate_invoice_audit_integrity(
     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-368 |     fn get_all_audit_entries(env: &Env) -> Vec...
+368 |     fn get_all_audit_entries(env: &Env) -> Vec<BytesN<32>> {
     |        ^^^^^^^^^^^^^^^^^^^^^
 ...
-376 |     fn matches_filter(entry: &AuditLogEntry, f...
+376 |     fn matches_filter(entry: &AuditLogEntry, filter: &AuditQueryFilter) -> bool {
     |        ^^^^^^^^^^^^^^
 
 warning: function `log_payment_processed` is never used
@@ -554,19 +546,19 @@ warning: function `log_payment_processed` is never used
 warning: function `log_invoice_uploaded` is never used
    --> src\audit.rs:548:8
     |
-548 | pub fn log_invoice_uploaded(env: &Env, in...
+548 | pub fn log_invoice_uploaded(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
     |        ^^^^^^^^^^^^^^^^^^^^
 
 warning: function `log_invoice_verified` is never used
    --> src\audit.rs:562:8
     |
-562 | pub fn log_invoice_verified(env: &Env, in...
+562 | pub fn log_invoice_verified(env: &Env, invoice_id: BytesN<32>, actor: Address) {
     |        ^^^^^^^^^^^^^^^^^^^^
 
 warning: function `log_invoice_cancelled` is never used
    --> src\audit.rs:576:8
     |
-576 | pub fn log_invoice_cancelled(env: &Env, i...
+576 | pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) {
     |        ^^^^^^^^^^^^^^^^^^^^^
 
 warning: function `log_bid_placed` is never used
@@ -578,13 +570,13 @@ warning: function `log_bid_placed` is never used
 warning: function `log_bid_accepted` is never used
    --> src\audit.rs:610:8
     |
-610 | pub fn log_bid_accepted(env: &Env, invoic...
+610 | pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
     |        ^^^^^^^^^^^^^^^^
 
 warning: function `log_bid_withdrawn` is never used
    --> src\audit.rs:624:8
     |
-624 | pub fn log_bid_withdrawn(env: &Env, invoi...
+624 | pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid_id: BytesN<32>) {
     |        ^^^^^^^^^^^^^^^^^
 
 warning: function `log_escrow_created` is never used
@@ -596,7 +588,7 @@ warning: function `log_escrow_created` is never used
 warning: function `log_settlement_completed` is never used
    --> src\audit.rs:658:8
     |
-658 | pub fn log_settlement_completed(env: &Env...
+658 | pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
     |        ^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: struct `BackupStorage` is never constructed
@@ -611,46 +603,46 @@ warning: multiple associated functions are never used
  47 | impl BackupStorage {
     | ------------------ associated functions in this implementation
  48 |     /// Get the backup retention policy
- 49 |     pub fn get_retention_policy(env: &Env...
+ 49 |     pub fn get_retention_policy(env: &Env) -> BackupRetentionPolicy {
     |            ^^^^^^^^^^^^^^^^^^^^
 ...
- 58 |     pub fn set_retention_policy(env: &Env...
+ 58 |     pub fn set_retention_policy(env: &Env, policy: &BackupRetentionPolicy) {
     |            ^^^^^^^^^^^^^^^^^^^^
 ...
- 64 |     pub fn generate_backup_id(env: &Env) ...
+ 64 |     pub fn generate_backup_id(env: &Env) -> BytesN<32> {
     |            ^^^^^^^^^^^^^^^^^^
 ...
- 91 |     pub fn store_backup(env: &Env, backup...
+ 91 |     pub fn store_backup(env: &Env, backup: &Backup) {
     |            ^^^^^^^^^^^^
 ...
- 96 |     pub fn get_backup(env: &Env, backup_i...
+ 96 |     pub fn get_backup(env: &Env, backup_id: &BytesN<32>) -> Option<Backup> {
     |            ^^^^^^^^^^
 ...
-101 |     pub fn update_backup(env: &Env, backu...
+101 |     pub fn update_backup(env: &Env, backup: &Backup) {
     |            ^^^^^^^^^^^^^
 ...
-106 |     pub fn get_all_backups(env: &Env) -> ...
+106 |     pub fn get_all_backups(env: &Env) -> Vec<BytesN<32>> {
     |            ^^^^^^^^^^^^^^^
 ...
-115 |     pub fn add_to_backup_list(env: &Env, ...
+115 |     pub fn add_to_backup_list(env: &Env, backup_id: &BytesN<32>) {
     |            ^^^^^^^^^^^^^^^^^^
 ...
-124 |     pub fn remove_from_backup_list(env: &...
+124 |     pub fn remove_from_backup_list(env: &Env, backup_id: &BytesN<32>) {
     |            ^^^^^^^^^^^^^^^^^^^^^^^
 ...
-138 |     pub fn store_backup_data(env: &Env, b...
+138 |     pub fn store_backup_data(env: &Env, backup_id: &BytesN<32>, invoices: &Vec<Invoice>) {
     |            ^^^^^^^^^^^^^^^^^
 ...
-144 |     pub fn get_backup_data(env: &Env, bac...
+144 |     pub fn get_backup_data(env: &Env, backup_id: &BytesN<32>) -> Option<Vec<Invoice>> {
     |            ^^^^^^^^^^^^^^^
 ...
-150 |     pub fn validate_backup(env: &Env, bac...
+150 |     pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     |            ^^^^^^^^^^^^^^^
 ...
-172 |     pub fn cleanup_old_backups(env: &Env)...
+172 |     pub fn cleanup_old_backups(env: &Env) -> Result<u32, QuickLendXError> {
     |            ^^^^^^^^^^^^^^^^^^^
 ...
-239 |     pub fn get_all_invoices(env: &Env) ->...
+239 |     pub fn get_all_invoices(env: &Env) -> Vec<Invoice> {
     |            ^^^^^^^^^^^^^^^^
 
 warning: associated functions `set_max_active_bids_per_investor` and `count_active_bids_by_investor` are never used
@@ -662,85 +654,85 @@ warning: associated functions `set_max_active_bids_per_investor` and `count_acti
 162 |     pub fn set_max_active_bids_per_investor(
     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-401 |     pub fn count_active_bids_by_investor(env: ...
+401 |     pub fn count_active_bids_by_investor(env: &Env, investor: &Address) -> u32 {
     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: constant `TOPIC_PAYMENT_RECORDED` is never used
   --> src\events.rs:18:11
    |
-18 | pub const TOPIC_PAYMENT_RECORDED: Symbol =...
+18 | pub const TOPIC_PAYMENT_RECORDED: Symbol = symbol_short!("pay_rec");
    |           ^^^^^^^^^^^^^^^^^^^^^^
 
 warning: constant `TOPIC_INVOICE_SETTLED_FINAL` is never used
   --> src\events.rs:19:11
    |
-19 | pub const TOPIC_INVOICE_SETTLED_FINAL: Sym...
+19 | pub const TOPIC_INVOICE_SETTLED_FINAL: Symbol = symbol_short!("inv_stlf");
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: constant `TOPIC_BID_PLACED` is never used
   --> src\events.rs:20:11
    |
-20 | pub const TOPIC_BID_PLACED: Symbol = symbo...
+20 | pub const TOPIC_BID_PLACED: Symbol = symbol_short!("bid_plc");
    |           ^^^^^^^^^^^^^^^^
 
 warning: constant `TOPIC_BID_ACCEPTED` is never used
   --> src\events.rs:21:11
    |
-21 | pub const TOPIC_BID_ACCEPTED: Symbol = sym...
+21 | pub const TOPIC_BID_ACCEPTED: Symbol = symbol_short!("bid_acc");
    |           ^^^^^^^^^^^^^^^^^^
 
 warning: constant `TOPIC_BID_WITHDRAWN` is never used
   --> src\events.rs:22:11
    |
-22 | pub const TOPIC_BID_WITHDRAWN: Symbol = sy...
+22 | pub const TOPIC_BID_WITHDRAWN: Symbol = symbol_short!("bid_wdr");
    |           ^^^^^^^^^^^^^^^^^^^
 
 warning: constant `TOPIC_BID_EXPIRED` is never used
   --> src\events.rs:23:11
    |
-23 | pub const TOPIC_BID_EXPIRED: Symbol = symb...
+23 | pub const TOPIC_BID_EXPIRED: Symbol = symbol_short!("bid_exp");
    |           ^^^^^^^^^^^^^^^^^
 
 warning: constant `TOPIC_ESCROW_CREATED` is never used
   --> src\events.rs:24:11
    |
-24 | pub const TOPIC_ESCROW_CREATED: Symbol = s...
+24 | pub const TOPIC_ESCROW_CREATED: Symbol = symbol_short!("esc_cr");
    |           ^^^^^^^^^^^^^^^^^^^^
 
 warning: constant `TOPIC_ESCROW_RELEASED` is never used
   --> src\events.rs:25:11
    |
-25 | pub const TOPIC_ESCROW_RELEASED: Symbol = ...
+25 | pub const TOPIC_ESCROW_RELEASED: Symbol = symbol_short!("esc_rel");
    |           ^^^^^^^^^^^^^^^^^^^^^
 
 warning: constant `TOPIC_ESCROW_REFUNDED` is never used
   --> src\events.rs:26:11
    |
-26 | pub const TOPIC_ESCROW_REFUNDED: Symbol = ...
+26 | pub const TOPIC_ESCROW_REFUNDED: Symbol = symbol_short!("esc_ref");
    |           ^^^^^^^^^^^^^^^^^^^^^
 
 warning: function `emit_backup_created` is never used
    --> src\events.rs:342:8
     |
-342 | pub fn emit_backup_created(env: &Env, bac...
+342 | pub fn emit_backup_created(env: &Env, backup_id: &BytesN<32>, invoice_count: u32) {
     |        ^^^^^^^^^^^^^^^^^^^
 
 warning: function `emit_backup_restored` is never used
    --> src\events.rs:350:8
     |
-350 | pub fn emit_backup_restored(env: &Env, ba...
+350 | pub fn emit_backup_restored(env: &Env, backup_id: &BytesN<32>, invoice_count: u32) {
     |        ^^^^^^^^^^^^^^^^^^^^
 
 warning: function `emit_backup_validated` is never used
    --> src\events.rs:358:8
     |
-358 | pub fn emit_backup_validated(env: &Env, b...
+358 | pub fn emit_backup_validated(env: &Env, backup_id: &BytesN<32>, success: bool) {
     |        ^^^^^^^^^^^^^^^^^^^^^
 
 warning: function `emit_backup_archived` is never used
    --> src\events.rs:366:8
     |
-366 | pub fn emit_backup_archived(env: &Env, ba...
+366 | pub fn emit_backup_archived(env: &Env, backup_id: &BytesN<32>) {
     |        ^^^^^^^^^^^^^^^^^^^^
 
 warning: function `emit_retention_policy_updated` is never used
@@ -752,19 +744,19 @@ warning: function `emit_retention_policy_updated` is never used
 warning: function `emit_backups_cleaned` is never used
    --> src\events.rs:392:8
     |
-392 | pub fn emit_backups_cleaned(env: &Env, re...
+392 | pub fn emit_backups_cleaned(env: &Env, removed_count: u32) {
     |        ^^^^^^^^^^^^^^^^^^^^
 
 warning: function `emit_audit_validation` is never used
    --> src\events.rs:400:8
     |
-400 | pub fn emit_audit_validation(env: &Env, i...
+400 | pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool) {
     |        ^^^^^^^^^^^^^^^^^^^^^
 
 warning: function `emit_audit_query` is never used
    --> src\events.rs:408:8
     |
-408 | pub fn emit_audit_query(env: &Env, query_...
+408 | pub fn emit_audit_query(env: &Env, query_type: String, result_count: u32) {
     |        ^^^^^^^^^^^^^^^^
 
 warning: function `emit_dispute_created` is never used
@@ -776,7 +768,7 @@ warning: function `emit_dispute_created` is never used
 warning: function `emit_dispute_under_review` is never used
    --> src\events.rs:477:8
     |
-477 | pub fn emit_dispute_under_review(env: &En...
+477 | pub fn emit_dispute_under_review(env: &Env, invoice_id: &BytesN<32>, reviewed_by: &Address) {
     |        ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: function `emit_dispute_resolved` is never used
@@ -788,13 +780,13 @@ warning: function `emit_dispute_resolved` is never used
 warning: constant `MAX_PLATFORM_FEE_BPS` is never used
   --> src\fees.rs:10:7
    |
-10 | const MAX_PLATFORM_FEE_BPS: u32 = 1000; //...
+10 | const MAX_PLATFORM_FEE_BPS: u32 = 1000; // 10%
    |       ^^^^^^^^^^^^^^^^^^^^
 
 warning: constant `DEFAULT_MIN_INVOICE_AMOUNT` is never used
-  --> src\init.rs:51:7
+  --> src\init.rs:49:7
    |
-51 | const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 10;
+49 | const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: constant `DEFAULT_MAX_DUE_DATE_DAYS` is never used
@@ -806,7 +798,7 @@ warning: constant `DEFAULT_MAX_DUE_DATE_DAYS` is never used
 warning: constant `DEFAULT_GRACE_PERIOD_SECONDS` is never used
   --> src\init.rs:53:7
    |
-53 | const DEFAULT_GRACE_PERIOD_SECONDS: u64 = ...
+53 | const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 7 * 24 * 60 * 60; // 7 days
    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: constant `DEFAULT_FEE_BPS` is never used
@@ -821,7 +813,7 @@ warning: associated functions `get_invoices_with_rating_above`, `get_business_in
  676 | impl InvoiceStorage {
      | ------------------- associated functions in this implementation
 ...
- 908 |     pub fn get_invoices_with_rating_above(env: &Env, ...
+ 908 |     pub fn get_invoices_with_rating_above(env: &Env, threshold: u32) -> Vec<BytesN<32>> {
      |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
  928 |     pub fn get_business_invoices_with_rating_above(
@@ -830,7 +822,7 @@ warning: associated functions `get_invoices_with_rating_above`, `get_business_in
  965 |     pub fn get_invoice_rating_stats(
      |            ^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-1157 |     pub fn delete_invoice(env: &Env, invoice_id: &Byt...
+1157 |     pub fn delete_invoice(env: &Env, invoice_id: &BytesN<32>) {
      |            ^^^^^^^^^^^^^^
 
 warning: struct `NotificationSystem` is never constructed
@@ -848,34 +840,34 @@ warning: multiple associated functions are never used
 228 |     pub fn create_notification(
     |            ^^^^^^^^^^^^^^^^^^^
 ...
-278 |     fn store_notification(env: &Env, noti...
+278 |     fn store_notification(env: &Env, notification: &Notification) {
     |        ^^^^^^^^^^^^^^^^^^
 ...
-284 |     pub fn get_notification(env: &Env, no...
+284 |     pub fn get_notification(env: &Env, notification_id: &BytesN<32>) -> Option<Notification> {
     |            ^^^^^^^^^^^^^^^^
 ...
 290 |     pub fn update_notification_status(
     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-320 |     pub fn get_user_notifications(env: &E...
+320 |     pub fn get_user_notifications(env: &Env, user: &Address) -> Vec<BytesN<32>> {
     |            ^^^^^^^^^^^^^^^^^^^^^^
 ...
-329 |     pub fn get_user_preferences(env: &Env...
+329 |     pub fn get_user_preferences(env: &Env, user: &Address) -> NotificationPreferences {
     |            ^^^^^^^^^^^^^^^^^^^^
 ...
 338 |     pub fn update_user_preferences(
     |            ^^^^^^^^^^^^^^^^^^^^^^^
 ...
-352 |     pub fn get_user_notification_stats(en...
+352 |     pub fn get_user_notification_stats(env: &Env, user: &Address) -> NotificationStats {
     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-384 |     fn get_notification_key(notification_...
+384 |     fn get_notification_key(notification_id: &BytesN<32>) -> DataKey {
     |        ^^^^^^^^^^^^^^^^^^^^
 ...
-388 |     fn get_user_notifications_key(user: &...
+388 |     fn get_user_notifications_key(user: &Address) -> DataKey {
     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-393 |     fn add_to_user_notifications(env: &En...
+393 |     fn add_to_user_notifications(env: &Env, user: &Address, notification_id: &BytesN<32>) {
     |        ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: multiple associated functions are never used
@@ -908,47 +900,29 @@ warning: multiple associated functions are never used
 633 |     pub fn notify_invoice_defaulted(
     |            ^^^^^^^^^^^^^^^^^^^^^^^^
 
-warning: function `make_breakdown` is never used
-   --> src\profits.rs:507:8
-    |
-507 |     fn make_breakdown(
-    |        ^^^^^^^^^^^^^^
+warning: constant `MAX_TAG_LENGTH` is never used
+  --> src\protocol_limits.rs:43:11
+   |
+43 | pub const MAX_TAG_LENGTH: u32 = 50;
+   |           ^^^^^^^^^^^^^^
 
 warning: constant `MAX_NOTIFICATION_TITLE_LENGTH` is never used
   --> src\protocol_limits.rs:48:11
    |
-48 | pub const MAX_NOTIFICATION_TITLE_LENGTH: u...
+48 | pub const MAX_NOTIFICATION_TITLE_LENGTH: u32 = 150;
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: constant `MAX_NOTIFICATION_MESSAGE_LENGTH` is never used
   --> src\protocol_limits.rs:49:11
    |
-49 | ...nst MAX_NOTIFICATION_MESSAGE_LENGTH: u3...
-   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+49 | pub const MAX_NOTIFICATION_MESSAGE_LENGTH: u32 = 1000;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: function `compute_min_bid_amount` is never used
    --> src\protocol_limits.rs:177:8
     |
-177 | pub fn compute_min_bid_amount(invoice_amo...
+177 | pub fn compute_min_bid_amount(invoice_amount: i128, limits: &ProtocolLimits) -> i128 {
     |        ^^^^^^^^^^^^^^^^^^^^^^
-
-warning: struct `ConfigStorage` is never constructed
-   --> src\storage.rs:561:12
-    |
-561 | pub struct ConfigStorage;
-    |            ^^^^^^^^^^^^^
-
-warning: associated functions `set_platform_fees` and `get_platform_fees` are never used
-   --> src\storage.rs:565:12
-    |
-563 | impl ConfigStorage {
-    | ------------------ associated functions in this implementation
-564 |     /// Store platform fee configuration
-565 |     pub fn set_platform_fees(env: &Env, c...
-    |            ^^^^^^^^^^^^^^^^^
-...
-572 |     pub fn get_platform_fees(env: &Env) -...
-    |            ^^^^^^^^^^^^^^^^^
 
 warning: associated function `is_business_verified` is never used
    --> src\verification.rs:123:12
@@ -956,25 +930,13 @@ warning: associated function `is_business_verified` is never used
  72 | impl BusinessVerificationStorage {
     | -------------------------------- associated function in this implementation
 ...
-123 |     pub fn is_business_verified(env: &Env...
+123 |     pub fn is_business_verified(env: &Env, business: &Address) -> bool {
     |            ^^^^^^^^^^^^^^^^^^^^
-
-warning: associated constants `INVESTOR_HISTORY_KEY` and `INVESTOR_ANALYTICS_KEY` are never used
-   --> src\verification.rs:254:11
-    |
-249 | impl InvestorVerificationStorage {
-    | -------------------------------- associated constants in this implementation
-...
-254 |     const INVESTOR_HISTORY_KEY: &'static ...
-    |           ^^^^^^^^^^^^^^^^^^^^
-255 |     #[cfg(test)]
-256 |     const INVESTOR_ANALYTICS_KEY: &'stati...
-    |           ^^^^^^^^^^^^^^^^^^^^^^
 
 warning: function `require_business_verification` is never used
    --> src\verification.rs:634:8
     |
-634 | pub fn require_business_verification(env:...
+634 | pub fn require_business_verification(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: function `recover_base_limit_from_current_limit` is never used
@@ -995,23 +957,25 @@ warning: function `get_investor_analytics` is never used
 1015 | pub fn get_investor_analytics(
      |        ^^^^^^^^^^^^^^^^^^^^^^
 
-warning: `quicklendx-contracts` (lib test) generated 129 warnings (run `cargo fix --lib -p quicklendx-contracts --tests` to apply 14 suggestions)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.36s
-     Running unittests src\lib.rs (target\debug\deps\quicklendx_contracts-0b5e75fec8c570ba.exe)
+warning: `quicklendx-contracts` (lib) generated 122 warnings (run `cargo fix --lib -p quicklendx-contracts` to apply 10 suggestions)
+warning: variable does not need to be mutable
+   --> src\storage.rs:260:13
+    |
+260 |         let mut ids: Vec<BytesN<32>> = env
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-running 1 test
+warning: variable does not need to be mutable
+   --> src\storage.rs:289:13
+    |
+289 |         let mut ids: Vec<BytesN<32>> = env
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
 
-thread 'test_string_limits::test_dispute_limits' (25220) panicked at src\test_string_limits.rs:159:5:
-assertion failed: client.try_create_dispute(&invoice_id, &business, &reason, &evidence).is_ok()
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-Writing test snapshot file for test "test_string_limits::test_dispute_limits" to "test_snapshots\\test_string_limits\\test_dispute_limits.1.json".
-test test_string_limits::test_dispute_limits ... FAILED
-
-failures:
-
-failures:
-    test_string_limits::test_dispute_limits
-
-test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 47 filtered out; finished in 0.11s
-
-error: test failed, to rerun pass `-p quicklendx-contracts --lib`
+For more information about this error, try `rustc --explain E0599`.
+warning: `quicklendx-contracts` (lib test) generated 73 warnings (69 duplicates)
+error: could not compile `quicklendx-contracts` (lib test) due to 1 previous error; 73 warnings emitted

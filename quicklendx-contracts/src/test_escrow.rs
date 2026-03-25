@@ -581,6 +581,56 @@ fn test_escrow_invariants() {
     );
 }
 
+#[test]
+fn test_create_escrow_idempotency_check() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    // Setup parties
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    // Setup token
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    // Create verified invoice
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+
+    // Manually call crate::payments::create_escrow inside the contract context
+    // First call should succeed
+    env.as_contract(&contract_id, || {
+        use crate::payments::create_escrow;
+        let result = create_escrow(
+            &env,
+            &invoice_id,
+            &investor,
+            &business,
+            amount,
+            &currency,
+        );
+        assert!(result.is_ok(), "First create_escrow should succeed");
+    });
+
+    // Second call for the same invoice_id should fail, even if bypassed higher level checks
+    env.as_contract(&contract_id, || {
+        use crate::payments::create_escrow;
+        let result = create_escrow(
+            &env,
+            &invoice_id,
+            &investor,
+            &business,
+            amount,
+            &currency,
+        );
+        
+        // Assert it fails with InvoiceAlreadyFunded
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err, QuickLendXError::InvoiceAlreadyFunded);
+    });
+}
+
 // ============================================================================
 
 #[test]
