@@ -116,7 +116,7 @@ fn upload_invoice(
 /// Return the payload of the most-recent event matching `topic`.
 fn latest_payload<T>(env: &Env, topic: soroban_sdk::Symbol) -> T
 where
-    T: TryFromVal<Env, Val> + core::fmt::Debug + PartialEq,
+    T: TryFromVal<Env, Val> + core::fmt::Debug + PartialEq + Clone,
 {
     let events = env.events().all();
     let mut i = events.len();
