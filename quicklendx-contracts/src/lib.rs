@@ -33,6 +33,8 @@ mod settlement;
 mod storage;
 #[cfg(test)]
 mod test_init;
+#[cfg(test)]
+mod test_reentrancy;
 pub mod types;
 mod verification;
 mod vesting;
@@ -1016,7 +1018,9 @@ impl QuickLendXContract {
         payment_amount: i128,
         transaction_id: String,
     ) -> Result<(), QuickLendXError> {
-        do_process_partial_payment(&env, &invoice_id, payment_amount, transaction_id)
+        reentrancy::with_payment_guard(&env, || {
+            do_process_partial_payment(&env, &invoice_id, payment_amount, transaction_id.clone())
+        })
     }
 
     /// Handle invoice default (admin only)
@@ -2120,6 +2124,5 @@ impl QuickLendXContract {
 
 
 }
-
 
 
