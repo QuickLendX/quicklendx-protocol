@@ -1,8 +1,9 @@
 use crate::errors::QuickLendXError;
+use crate::events;
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, Symbol, Vec};
 
 // Constants
-const MAX_FEE_BPS: u32 = 1000;
+const MAX_FEE_BPS: u32 = 1000; // 10% hard cap for all fees
 #[allow(dead_code)]
 const MIN_FEE_BPS: u32 = 0;
 const BPS_DENOMINATOR: i128 = 10_000;
@@ -226,6 +227,8 @@ impl FeeManager {
             .instance()
             .set(&PLATFORM_FEE_KEY, &platform_config);
 
+        events::emit_treasury_configured(env, &treasury_address, admin);
+
         Ok(treasury_config)
     }
 
@@ -235,19 +238,28 @@ impl FeeManager {
         admin: &Address,
         fee_bps: u32,
     ) -> Result<(), QuickLendXError> {
-        // Explicit admin authorization.
+        // Auth is checked by the caller
         admin.require_auth();
 
-        if fee_bps > 1000 {
+        if fee_bps > MAX_PLATFORM_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
         let mut config = Self::get_platform_fee_config(env)?;
+
+        if config.fee_bps == fee_bps {
+            return Ok(());
+        }
+
+       let old_fee_bps = config.fee_bps;
         config.fee_bps = fee_bps;
+        config.updated_at = env.ledger().timestamp();
+        config.updated_by = admin.clone();
 
         env.storage().instance().set(&PLATFORM_FEE_KEY, &config);
 
-        env.events().publish((symbol_short!("fee_upd"),), fee_bps);
+        events::emit_platform_fee_config_updated(env, old_fee_bps, fee_bps, admin);
+
         Ok(())
     }
 
@@ -316,7 +328,7 @@ impl FeeManager {
     ) -> Result<FeeStructure, QuickLendXError> {
         admin.require_auth();
         if base_fee_bps > MAX_FEE_BPS {
-            return Err(QuickLendXError::InvalidAmount);
+            return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
         if min_fee < 0 || max_fee < min_fee {
             return Err(QuickLendXError::InvalidAmount);
@@ -327,6 +339,7 @@ impl FeeManager {
             .get(&FEE_CONFIG_KEY)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
         let mut found = false;
+        let mut old_bps = 0;
         let updated_structure = FeeStructure {
             fee_type: fee_type.clone(),
             base_fee_bps,
@@ -339,6 +352,7 @@ impl FeeManager {
         for i in 0..fee_structures.len() {
             let structure = fee_structures.get(i).unwrap();
             if structure.fee_type == fee_type {
+                old_bps = structure.base_fee_bps;
                 fee_structures.set(i, updated_structure.clone());
                 found = true;
                 break;
@@ -350,6 +364,9 @@ impl FeeManager {
         env.storage()
             .instance()
             .set(&FEE_CONFIG_KEY, &fee_structures);
+            
+        events::emit_fee_structure_updated(env, &fee_type, old_bps, base_fee_bps, admin);
+        
         Ok(updated_structure)
     }
 
@@ -696,7 +713,7 @@ impl FeeManager {
         max_fee: i128,
     ) -> Result<(), QuickLendXError> {
         if base_fee_bps > MAX_FEE_BPS {
-            return Err(QuickLendXError::InvalidAmount);
+            return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
         if min_fee < 0 || max_fee < 0 || max_fee < min_fee {
             return Err(QuickLendXError::InvalidAmount);

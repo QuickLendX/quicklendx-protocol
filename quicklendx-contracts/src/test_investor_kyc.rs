@@ -32,8 +32,17 @@ mod test_investor_kyc {
         env.mock_all_auths();
         let _ = client.try_initialize_admin(&admin);
 
-        // Initialize protocol limits (min invoice amount, max due date days, grace period seconds).
-        let _ = client.try_initialize_protocol_limits(&admin, &1_000_000i128, &365u64, &86400u64);
+        // Initialize protocol limits (min invoice amount, max due date days, grace period seconds)
+        let _ = client.try_initialize_protocol_limits(
+            &admin,
+            &1_000_000i128,
+            &365u64,
+            &86400u64,
+        );
+        // Initialize protocol limits (min invoice: 1, min bid: 100, min bid bps: 100,
+        // max due date: 365 days, grace period: 86400s)
+        let _ = client
+            .try_initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
 
         (env, client, admin)
     }

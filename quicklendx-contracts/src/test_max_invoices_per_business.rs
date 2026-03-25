@@ -1,4 +1,6 @@
 #![cfg(test)]
+extern crate std;
+use std::format;
 
 use crate::{
     invoice::{InvoiceCategory, InvoiceStatus, InvoiceStorage},
