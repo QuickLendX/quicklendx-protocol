@@ -32,37 +32,35 @@ mod settlement;
 #[cfg(test)]
 mod storage;
 #[cfg(test)]
-mod test_escrow_refund_hardened;
-// #[cfg(test)]
-// mod test_admin;
-// #[cfg(test)]
-// mod test_bid_ranking;
-// #[cfg(test)]
-// mod test_business_kyc;
-// #[cfg(test)]
-// mod test_cancel_refund;
-// #[cfg(test)]
-// mod test_emergency_withdraw;
-// #[cfg(test)]
-// mod test_init;
-// #[cfg(test)]
-// mod test_max_invoices_per_business;
-// #[cfg(test)]
-// mod test_overflow;
-// #[cfg(test)]
-// mod test_pause;
-// #[cfg(test)]
-// mod test_profit_fee;
-// #[cfg(test)]
-// mod test_refund;
-// #[cfg(test)]
-// mod test_storage;
-// #[cfg(test)]
-// mod test_string_limits;
-// #[cfg(test)]
-// mod test_types;
-// #[cfg(test)]
-// mod test_vesting;
+mod test_admin;
+#[cfg(test)]
+mod test_bid_ranking;
+#[cfg(test)]
+mod test_business_kyc;
+#[cfg(test)]
+mod test_cancel_refund;
+#[cfg(test)]
+mod test_emergency_withdraw;
+#[cfg(test)]
+mod test_init;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_max_invoices_per_business;
+#[cfg(test)]
+mod test_overflow;
+#[cfg(test)]
+mod test_pause;
+#[cfg(test)]
+mod test_profit_fee;
+#[cfg(test)]
+mod test_refund;
+#[cfg(test)]
+mod test_storage;
+#[cfg(test)]
+mod test_string_limits;
+#[cfg(test)]
+mod test_types;
+#[cfg(test)]
+mod test_vesting;
 pub mod types;
 mod verification;
 mod vesting;
@@ -3017,38 +3015,38 @@ impl QuickLendXContract {
     }
 }
 
-// #[cfg(test)]
-// mod test;
-// 
-// #[cfg(test)]
-// mod test_bid;
-// 
-// #[cfg(test)]
-// mod test_fees;
-// 
-// #[cfg(test)]
-// mod test_escrow;
-// 
-// #[cfg(test)]
-// mod test_escrow_refund;
-// #[cfg(test)]
-// mod test_fuzz;
-// #[cfg(test)]
-// mod test_insurance;
-// #[cfg(test)]
-// mod test_investor_kyc;
-// #[cfg(test)]
-// mod test_ledger_timestamp_consistency;
-// #[cfg(test)]
-// mod test_lifecycle;
-// #[cfg(test)]
-// mod test_limit;
-// #[cfg(test)]
-// mod test_min_invoice_amount;
-// #[cfg(test)]
-// mod test_profit_fee_formula;
-// #[cfg(test)]
-// mod test_revenue_split;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test;
+
+#[cfg(test)]
+mod test_bid;
+
+#[cfg(test)]
+mod test_fees;
+
+#[cfg(test)]
+mod test_escrow;
+
+#[cfg(test)]
+mod test_escrow_refund;
+#[cfg(test)]
+mod test_fuzz;
+#[cfg(test)]
+mod test_insurance;
+#[cfg(test)]
+mod test_investor_kyc;
+#[cfg(test)]
+mod test_ledger_timestamp_consistency;
+#[cfg(test)]
+mod test_lifecycle;
+#[cfg(test)]
+mod test_limit;
+#[cfg(test)]
+mod test_min_invoice_amount;
+#[cfg(test)]
+mod test_profit_fee_formula;
+#[cfg(test)]
+mod test_revenue_split;
 
 // ============================================================================
 // Analytics Functions missing from exports

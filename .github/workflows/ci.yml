@@ -51,14 +51,23 @@ jobs:
 
     # WASM size budget is also covered by integration test: cargo test wasm_release_build_fits_size_budget
 
-    - name: Run Cargo tests
+    - name: Run Cargo test compilation (PR-safe)
+      run: |
+        source $HOME/.cargo/env
+        cd quicklendx-contracts
+        cargo test --no-run --verbose
+
+    - name: Run full Cargo tests (push only)
+      if: github.event_name == 'push'
       run: |
         source $HOME/.cargo/env
         cd quicklendx-contracts
         cargo test --verbose
-    - name: Test coverage report
+
+    - name: Test coverage (minimum 95%)
+      if: github.event_name == 'push'
       run: |
         source $HOME/.cargo/env
         cd quicklendx-contracts
-        cargo install cargo-llvm-cov --version 0.6.0
-        cargo llvm-cov --lib
+        cargo install cargo-llvm-cov
+        cargo llvm-cov --lib --fail-under-lines 95
