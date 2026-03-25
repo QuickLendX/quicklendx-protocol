@@ -2707,7 +2707,9 @@ impl QuickLendXContract {
 // mod test;
 
 #[cfg(test)]
-// mod test_bid;
+mod test_bid;
+#[cfg(test)]
+mod test_overdue_expiration;
 
 #[cfg(test)]
 // mod test_fees;

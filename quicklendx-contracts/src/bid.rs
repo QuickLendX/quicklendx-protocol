@@ -223,22 +223,32 @@ impl BidStorage {
         while idx < bid_ids.len() {
             let bid_id = bid_ids.get(idx).unwrap();
             if let Some(mut bid) = Self::get_bid(env, &bid_id) {
-                if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
+                // Invariant 1: Preservation — terminal bids are NEVER touched by cleanup.
+                // Accepted, Withdrawn, and Cancelled are immutable terminal states.
+                let is_terminal = bid.status == BidStatus::Accepted
+                    || bid.status == BidStatus::Withdrawn
+                    || bid.status == BidStatus::Cancelled;
+                if is_terminal {
+                    active.push_back(bid_id);
+                // Invariant 2: Idempotency — already-Expired bids are silently skipped.
+                } else if bid.status == BidStatus::Expired {
+                    // drop from active list; do not re-process
+                // Invariant 3: Deadline — only expire Placed bids past their deadline.
+                } else if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
                     bid.status = BidStatus::Expired;
                     Self::update_bid(env, &bid);
                     emit_bid_expired(env, &bid);
                     expired += 1;
                 } else {
+                    // Placed but deadline not yet reached — keep active
                     active.push_back(bid_id);
                 }
             }
             idx += 1;
         }
-
         env.storage()
             .instance()
             .set(&Self::invoice_key(invoice_id), &active);
-
         expired
     }
 
@@ -436,5 +446,62 @@ impl BidStorage {
             bytes[i] = (mix % 256) as u8;
         }
         BytesN::from_array(env, &bytes)
+    }
+
+    /// Validates cleanup invariants for all bids on an invoice.
+    ///
+    /// Returns `true` if all invariants hold:
+    /// - Every `Expired` bid has a deadline strictly in the past.
+    /// - No `Placed` bid has a deadline that has already passed (cleanup was run).
+    pub fn assert_bid_invariants(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        current_timestamp: u64,
+    ) -> bool {
+        let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
+        let mut idx: u32 = 0;
+        while idx < bid_ids.len() {
+            let bid_id = bid_ids.get(idx).unwrap();
+            if let Some(bid) = Self::get_bid(env, &bid_id) {
+                // Every Expired bid must have a past deadline
+                if bid.status == BidStatus::Expired {
+                    if bid.expiration_timestamp >= current_timestamp {
+                        return false;
+                    }
+                }
+                // No Placed bid should remain past its deadline
+                if bid.status == BidStatus::Placed {
+                    if bid.is_expired(current_timestamp) {
+                        return false;
+                    }
+                }
+            }
+            idx += 1;
+        }
+        true
+    }
+
+    /// Returns bid counts by status as `(placed, accepted, withdrawn, expired, cancelled)`.
+    /// Useful for assertions in tests and analytics.
+    pub fn count_bids_by_status(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> (u32, u32, u32, u32, u32) {
+        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+        let (mut placed, mut accepted, mut withdrawn, mut expired, mut cancelled) =
+            (0u32, 0u32, 0u32, 0u32, 0u32);
+        let mut idx: u32 = 0;
+        while idx < records.len() {
+            let bid = records.get(idx).unwrap();
+            match bid.status {
+                BidStatus::Placed => placed += 1,
+                BidStatus::Accepted => accepted += 1,
+                BidStatus::Withdrawn => withdrawn += 1,
+                BidStatus::Expired => expired += 1,
+                BidStatus::Cancelled => cancelled += 1,
+            }
+            idx += 1;
+        }
+        (placed, accepted, withdrawn, expired, cancelled)
     }
 }
