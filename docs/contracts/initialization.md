@@ -106,6 +106,22 @@ All parameters are validated before any state changes:
 | `min_invoice_amount` | > 0 | `InvalidAmount` |
 | `max_due_date_days` | 1 ≤ days ≤ 730 | `InvoiceDueDateInvalid` |
 | `grace_period_seconds` | ≤ 2,592,000 (30 days) | `InvalidTimestamp` |
+| `admin`, `treasury` | Not contract address; must differ | `InvalidAddress` |
+| `initial_currencies` | No duplicates; no contract address | `InvalidCurrency` |
+
+### Initialization Completeness Checks
+
+- Initialization rejects any pre-existing partial state (admin, treasury, fee, protocol config, currency whitelist, or protocol limits) before `proto_in` is set.
+- This prevents partial initialization paths from resulting in mixed configuration state.
+- The currency whitelist is always persisted, even when empty, to make initialization completeness explicit.
+| `admin`, `treasury` | Not contract address; must differ | `InvalidAddress` |
+| `initial_currencies` | No duplicates; no contract address | `InvalidCurrency` |
+
+### Initialization Completeness Checks
+
+- Initialization rejects any pre-existing partial state (admin, treasury, fee, protocol config, currency whitelist, or protocol limits) before `proto_in` is set.
+- This prevents partial initialization paths (e.g., calling `initialize_admin` or `initialize` helpers independently) from resulting in mixed configuration state.
+- The currency whitelist is always persisted, even when empty, to make initialization completeness explicit.
 
 ## Configuration Parameters
 

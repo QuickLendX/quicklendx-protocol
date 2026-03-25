@@ -3,7 +3,7 @@
 use super::*;
 use crate::init::InitializationParams;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Env, IntoVal, Vec};
+use soroban_sdk::{symbol_short, Address, Env, IntoVal, Vec};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>) {
     let env = Env::default();
@@ -11,6 +11,14 @@ fn setup() -> (Env, QuickLendXContractClient<'static>) {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
     (env, client)
+}
+
+fn setup_with_contract() -> (Env, QuickLendXContractClient<'static>, Address) {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    (env, client, contract_id)
 }
 
 #[test]
@@ -185,6 +193,121 @@ fn test_validation_invalid_grace_period() {
 
     let result = client.try_initialize(&params);
     assert_eq!(result, Err(Ok(QuickLendXError::InvalidTimestamp)));
+}
+
+#[test]
+fn test_validation_rejects_contract_admin() {
+    let (env, client, contract_address) = setup_with_contract();
+
+    let params = InitializationParams {
+        admin: contract_address.clone(),
+        treasury: Address::generate(&env),
+        fee_bps: 200,
+        min_invoice_amount: 1_000_000,
+        max_due_date_days: 365,
+        grace_period_seconds: 604800,
+        initial_currencies: Vec::new(&env),
+    };
+
+    let result = client.try_initialize(&params);
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidAddress)));
+}
+
+#[test]
+fn test_validation_rejects_contract_treasury() {
+    let (env, client, contract_address) = setup_with_contract();
+
+    let params = InitializationParams {
+        admin: Address::generate(&env),
+        treasury: contract_address.clone(),
+        fee_bps: 200,
+        min_invoice_amount: 1_000_000,
+        max_due_date_days: 365,
+        grace_period_seconds: 604800,
+        initial_currencies: Vec::new(&env),
+    };
+
+    let result = client.try_initialize(&params);
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidAddress)));
+}
+
+#[test]
+fn test_validation_rejects_admin_treasury_collision() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+
+    let params = InitializationParams {
+        admin: admin.clone(),
+        treasury: admin.clone(),
+        fee_bps: 200,
+        min_invoice_amount: 1_000_000,
+        max_due_date_days: 365,
+        grace_period_seconds: 604800,
+        initial_currencies: Vec::new(&env),
+    };
+
+    let result = client.try_initialize(&params);
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidAddress)));
+}
+
+#[test]
+fn test_validation_rejects_duplicate_currencies() {
+    let (env, client) = setup();
+    let currency = Address::generate(&env);
+    let initial_currencies = Vec::from_array(&env, [currency.clone(), currency.clone()]);
+
+    let params = InitializationParams {
+        admin: Address::generate(&env),
+        treasury: Address::generate(&env),
+        fee_bps: 200,
+        min_invoice_amount: 1_000_000,
+        max_due_date_days: 365,
+        grace_period_seconds: 604800,
+        initial_currencies,
+    };
+
+    let result = client.try_initialize(&params);
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidCurrency)));
+}
+
+#[test]
+fn test_validation_rejects_contract_currency() {
+    let (env, client, contract_address) = setup_with_contract();
+    let initial_currencies = Vec::from_array(&env, [contract_address.clone()]);
+
+    let params = InitializationParams {
+        admin: Address::generate(&env),
+        treasury: Address::generate(&env),
+        fee_bps: 200,
+        min_invoice_amount: 1_000_000,
+        max_due_date_days: 365,
+        grace_period_seconds: 604800,
+        initial_currencies,
+    };
+
+    let result = client.try_initialize(&params);
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidCurrency)));
+}
+
+#[test]
+fn test_initialization_sets_empty_whitelist_key() {
+    let (env, client) = setup();
+
+    let params = InitializationParams {
+        admin: Address::generate(&env),
+        treasury: Address::generate(&env),
+        fee_bps: 200,
+        min_invoice_amount: 1_000_000,
+        max_due_date_days: 365,
+        grace_period_seconds: 604800,
+        initial_currencies: Vec::new(&env),
+    };
+
+    client.initialize(&params);
+
+    let whitelist_key = symbol_short!("curr_wl");
+    let has_key = env.as_contract(&client.address, || env.storage().instance().has(&whitelist_key));
+    assert!(has_key);
 }
 
 #[test]

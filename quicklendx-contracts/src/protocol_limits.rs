@@ -203,6 +203,12 @@ impl ProtocolLimitsContract {
     }
 }
 
+/// @notice Returns true when protocol limits are stored in instance storage.
+/// @dev Used by initialization sanity checks to detect partial state.
+pub(crate) fn has_protocol_limits(env: &Env) -> bool {
+    env.storage().instance().has(&LIMITS_KEY)
+}
+
 pub fn compute_min_bid_amount(invoice_amount: i128, limits: &ProtocolLimits) -> i128 {
     let percent_min = invoice_amount
         .saturating_mul(limits.min_bid_bps as i128)
