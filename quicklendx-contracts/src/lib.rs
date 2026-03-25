@@ -1694,8 +1694,9 @@ impl QuickLendXContract {
     // Fee and Revenue Management Functions
     // ========================================
 
-    /// Initialize fee management system
+    /// Initialize fee management system (admin only, one-time)
     pub fn initialize_fee_system(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        admin.require_auth();
         fees::FeeManager::initialize(&env, &admin)
     }
 
@@ -1717,6 +1718,7 @@ impl QuickLendXContract {
     pub fn update_platform_fee_bps(env: Env, new_fee_bps: u32) -> Result<(), QuickLendXError> {
         let admin =
             BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
 
         let old_config = fees::FeeManager::get_platform_fee_config(&env)?;
         let old_fee_bps = old_config.fee_bps;
