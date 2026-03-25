@@ -1,4 +1,5 @@
 use crate::bid::Bid;
+use crate::fees::{FeeType, FeeStructure};
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::payments::Escrow;
 use crate::profits::PlatformFeeConfig;
@@ -220,10 +221,16 @@ pub fn emit_insurance_claimed(
     );
 }
 
-pub fn emit_platform_fee_updated(env: &Env, config: &PlatformFeeConfig) {
+/// Emit event when platform fee bps is updated
+pub fn emit_platform_fee_updated(env: &Env, old_bps: u32, new_bps: u32, updated_by: &Address) {
     env.events().publish(
         (symbol_short!("fee_upd"),),
-        (config.fee_bps, config.updated_at, config.updated_by.clone()),
+        (
+            old_bps,
+            new_bps,
+            updated_by.clone(),
+            env.ledger().timestamp(),
+        ),
     );
 }
 
@@ -557,6 +564,26 @@ pub fn emit_platform_fee_config_updated(
         (
             old_fee_bps,
             new_fee_bps,
+            updated_by.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emit event when a specific fee structure is updated
+pub fn emit_fee_structure_updated(
+    env: &Env,
+    fee_type: &FeeType,
+    old_bps: u32,
+    new_bps: u32,
+    updated_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("fee_str"),),
+        (
+            fee_type.clone(),
+            old_bps,
+            new_bps,
             updated_by.clone(),
             env.ledger().timestamp(),
         ),

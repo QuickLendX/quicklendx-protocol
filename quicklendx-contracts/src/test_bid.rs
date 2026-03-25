@@ -57,52 +57,6 @@ fn create_verified_invoice(
     invoice_id
 }
 
-// Helper: Setup a real SAC token, mint balances, and return (currency, investor)
-// so that accept_bid (which does a real token transfer) can succeed.
-fn setup_token_and_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    limit: i128,
-) -> (Address, Address) {
-    use soroban_sdk::token;
-    let investor = Address::generate(env);
-    client.submit_investor_kyc(&investor, &String::from_str(env, "KYC"));
-    client.verify_investor(&investor, &limit);
-
-    let token_admin = Address::generate(env);
-    let currency = env
-        .register_stellar_asset_contract_v2(token_admin)
-        .address();
-    let sac = token::StellarAssetClient::new(env, &currency);
-    let tok = token::Client::new(env, &currency);
-    sac.mint(&investor, &limit);
-    let exp = env.ledger().sequence() + 10_000;
-    tok.approve(&investor, &client.address, &limit, &exp);
-    (currency, investor)
-}
-
-// Helper: Create verified invoice with a real SAC currency (needed for accept_bid)
-fn create_verified_invoice_with_token(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    business: &Address,
-    amount: i128,
-    currency: &Address,
-) -> BytesN<32> {
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = client.store_invoice(
-        business,
-        &amount,
-        currency,
-        &due_date,
-        &String::from_str(env, "Invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(env),
-    );
-    let _ = client.try_verify_invoice(&invoice_id);
-    invoice_id
-}
-
 // ============================================================================
 // Category 1: Status Gating - Invoice Verification Required
 // ============================================================================
@@ -177,7 +131,7 @@ fn test_bid_minimum_amount_enforced() {
             min_bid_bps: 100,
             max_due_date_days: 365,
             grace_period_seconds: 86400,
-            max_invoices_per_business: 100,
+            max_invoices_per_business: 100u32,
         },
     );
     let below_min = min_bid.saturating_sub(1);
@@ -1518,30 +1472,35 @@ fn test_business_accepts_one_bid_others_remain_placed() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-
+    
     let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
     let investor3 = add_verified_investor(&env, &client, 100_000);
-    let (currency, investor2) = setup_token_and_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
 
-    let invoice_id = create_verified_invoice_with_token(&env, &client, &business, 100_000, &currency);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
 
+    // Three investors place bids
     let bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
     let bid_id2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000);
     let bid_id3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
 
+    // Business accepts bid2
     let result = client.try_accept_bid(&invoice_id, &bid_id2);
     assert!(result.is_ok(), "Business should be able to accept bid2");
 
+    // Verify bid2 is Accepted
     let bid2 = client.get_bid(&bid_id2).unwrap();
     assert_eq!(bid2.status, BidStatus::Accepted, "Accepted bid should have Accepted status");
 
+    // Verify bid1 and bid3 remain Placed
     let bid1 = client.get_bid(&bid_id1).unwrap();
     assert_eq!(bid1.status, BidStatus::Placed, "Non-accepted bid1 should remain Placed");
-
+    
     let bid3 = client.get_bid(&bid_id3).unwrap();
     assert_eq!(bid3.status, BidStatus::Placed, "Non-accepted bid3 should remain Placed");
 
+    // Verify invoice is now Funded
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Funded, "Invoice should be Funded after accepting bid");
 }
@@ -1553,18 +1512,20 @@ fn test_only_one_escrow_created_for_accepted_bid() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-
+    
     let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
     let investor3 = add_verified_investor(&env, &client, 100_000);
-    let (currency, investor2) = setup_token_and_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
 
-    let invoice_id = create_verified_invoice_with_token(&env, &client, &business, 100_000, &currency);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
 
+    // Three investors place bids
     let _bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
     let bid_id2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000);
     let _bid_id3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
 
+    // Business accepts bid2
     client.accept_bid(&invoice_id, &bid_id2);
 
     // Verify exactly one escrow exists for this invoice
@@ -1587,18 +1548,20 @@ fn test_non_accepted_investors_can_withdraw_after_acceptance() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-
+    
     let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
     let investor3 = add_verified_investor(&env, &client, 100_000);
-    let (currency, investor2) = setup_token_and_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
 
-    let invoice_id = create_verified_invoice_with_token(&env, &client, &business, 100_000, &currency);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
 
+    // Three investors place bids
     let bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
     let bid_id2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000);
     let bid_id3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
 
+    // Business accepts bid2
     client.accept_bid(&invoice_id, &bid_id2);
 
     // investor1 withdraws their bid
@@ -1634,23 +1597,26 @@ fn test_get_bids_for_invoice_returns_all_bids() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-
+    
     let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
     let investor3 = add_verified_investor(&env, &client, 100_000);
     let investor4 = add_verified_investor(&env, &client, 100_000);
-    let (currency, investor2) = setup_token_and_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
 
-    let invoice_id = create_verified_invoice_with_token(&env, &client, &business, 100_000, &currency);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
 
+    // Four investors place bids
     let bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
     let bid_id2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000);
     let bid_id3 = client.place_bid(&investor3, &invoice_id, &20_000, &24_000);
     let bid_id4 = client.place_bid(&investor4, &invoice_id, &12_000, &15_000);
 
+    // Initial state: all bids should be returned
     let all_bids = client.get_bids_for_invoice(&invoice_id);
     assert_eq!(all_bids.len(), 4, "Should return all 4 bids initially");
 
+    // Business accepts bid2
     client.accept_bid(&invoice_id, &bid_id2);
 
     // investor1 withdraws
@@ -1678,16 +1644,18 @@ fn test_cannot_accept_second_bid_after_first_accepted() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
-
+    
+    let investor1 = add_verified_investor(&env, &client, 100_000);
     let investor2 = add_verified_investor(&env, &client, 100_000);
-    let (currency, investor1) = setup_token_and_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
 
-    let invoice_id = create_verified_invoice_with_token(&env, &client, &business, 100_000, &currency);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
 
+    // Two investors place bids
     let bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
     let bid_id2 = client.place_bid(&investor2, &invoice_id, &15_000, &20_000);
 
+    // Business accepts bid1
     let result = client.try_accept_bid(&invoice_id, &bid_id1);
     assert!(result.is_ok(), "First accept should succeed");
 
