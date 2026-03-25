@@ -514,7 +514,9 @@ impl QuickLendXContract {
     /// * `Ok(Invoice)` - The invoice data
     /// * `Err(InvoiceNotFound)` if the ID does not exist
     pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<Invoice, QuickLendXError> {
-        InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
+        let _invoice =
+            InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        Ok(_invoice)
     }
 
     /// Get all invoices for a business
