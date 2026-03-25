@@ -1,10 +1,18 @@
 #![cfg(test)]
 
-use crate::errors::QuickLendXError;
-use crate::invoice::{InvoiceCategory, InvoiceStatus, InvoiceStorage};
-use crate::{QuickLendXContract, QuickLendXContractClient};
-use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Env, String, Vec};
+extern crate std;
+use std::format;
+
+use crate::{
+    invoice::{Invoice, InvoiceCategory, InvoiceStatus, InvoiceStorage},
+    protocol_limits::ProtocolLimitsContract,
+    verification::{BusinessVerificationStatus, BusinessVerificationStorage},
+    QuickLendXContract, QuickLendXContractClient, QuickLendXError,
+};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Address, Env, String, Vec,
+};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address, Address) {
     let env = Env::default();

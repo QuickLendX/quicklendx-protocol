@@ -39,7 +39,7 @@ quicklendx-contracts/src/
 
 ### Single-Shot Initialization
 
-The protocol supports atomic initialization where all parameters are set in one transaction:
+The protocol supports atomic initialization where all parameters are set in one transaction. This function is engineered to be **idempotent**: if called multiple times with the exact same parameters, it safely succeeds without altering the state or emitting duplicate events. If called with different parameters after initial setup, it immediately reverts with an `OperationNotAllowed` error, providing strong replay protection against unauthorized reconfiguration.
 
 ```rust
 use quicklendx_contracts::init::{InitializationParams, ProtocolInitializer};
