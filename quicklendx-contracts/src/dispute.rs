@@ -1,5 +1,9 @@
 use crate::QuickLendXError;
-use soroban_sdk::{contracttype, Address, Env, String, Vec};
+use crate::invoice::{Invoice, InvoiceStatus};
+use crate::protocol_limits::{
+    MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
+};
+use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -12,7 +16,7 @@ pub enum DisputeStatus {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Dispute {
-    pub invoice_id: u64,
+    pub invoice_id: BytesN<32>,
     pub creator: Address,
     pub reason: String,
     pub evidence: String,
@@ -22,66 +26,52 @@ pub struct Dispute {
     pub resolved_at: Option<u64>,
 }
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum InvoiceStatus {
-    Funded,
-    Settled,
-    Defaulted,
-}
 
-#[allow(dead_code)]
-const MAX_REASON_LENGTH: u32 = 500;
-#[allow(dead_code)]
-const MAX_EVIDENCE_LENGTH: u32 = 2000;
-#[allow(dead_code)]
-const MAX_RESOLUTION_LENGTH: u32 = 1000;
+
+
 
 #[allow(dead_code)]
 pub fn create_dispute(
     env: Env,
-    invoice_id: u64,
+    invoice_id: BytesN<32>,
     creator: Address,
     reason: String,
     evidence: String,
 ) -> Result<(), QuickLendXError> {
     creator.require_auth();
 
-    if env.storage().persistent().has(&("dispute", invoice_id)) {
+    if env.storage().persistent().has(&("dispute", invoice_id.clone())) {
         return Err(QuickLendXError::DisputeAlreadyExists);
     }
 
-    let invoice_status: Option<InvoiceStatus> = env
+    let invoice: Invoice = env
         .storage()
-        .persistent()
-        .get(&("invoice_status", invoice_id));
+        .instance()
+        .get(&invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    match invoice_status {
-        Some(InvoiceStatus::Funded) | Some(InvoiceStatus::Settled) => {}
+    match invoice.status {
+        InvoiceStatus::Pending | InvoiceStatus::Verified | InvoiceStatus::Funded | InvoiceStatus::Paid => {}
         _ => return Err(QuickLendXError::InvoiceNotAvailableForFunding),
     }
 
-    let invoice_data: Option<(Address, Address, i128)> =
-        env.storage().persistent().get(&("invoice", invoice_id));
+    let is_authorized = creator == invoice.business || 
+        invoice.investor.as_ref().map_or(false, |inv| creator == *inv);
 
-    if let Some((business, investor, _)) = invoice_data {
-        if creator != business && creator != investor {
-            return Err(QuickLendXError::DisputeNotAuthorized);
-        }
-    } else {
-        return Err(QuickLendXError::InvoiceNotFound);
+    if !is_authorized {
+        return Err(QuickLendXError::DisputeNotAuthorized);
     }
 
-    if reason.len() == 0 || reason.len() > MAX_REASON_LENGTH {
+    if reason.len() == 0 || reason.len() > MAX_DISPUTE_REASON_LENGTH {
         return Err(QuickLendXError::InvalidDisputeReason);
     }
 
-    if evidence.len() > MAX_EVIDENCE_LENGTH {
+    if evidence.len() > MAX_DISPUTE_EVIDENCE_LENGTH {
         return Err(QuickLendXError::InvalidDisputeEvidence);
     }
 
     let dispute = Dispute {
-        invoice_id,
+        invoice_id: invoice_id.clone(),
         creator: creator.clone(),
         reason,
         evidence,
@@ -102,7 +92,7 @@ pub fn create_dispute(
 pub fn put_dispute_under_review(
     env: &Env,
     admin: Address,
-    invoice_id: u64,
+    invoice_id: BytesN<32>,
 ) -> Result<(), QuickLendXError> {
     admin.require_auth();
 
@@ -119,7 +109,7 @@ pub fn put_dispute_under_review(
     let mut dispute: Dispute = env
         .storage()
         .persistent()
-        .get(&("dispute", invoice_id))
+        .get(&("dispute", invoice_id.clone()))
         .ok_or(QuickLendXError::DisputeNotFound)?;
 
     if dispute.status != DisputeStatus::Open {
@@ -139,7 +129,7 @@ pub fn put_dispute_under_review(
 pub fn resolve_dispute(
     env: &Env,
     admin: Address,
-    invoice_id: u64,
+    invoice_id: BytesN<32>,
     resolution: String,
 ) -> Result<(), QuickLendXError> {
     admin.require_auth();
@@ -157,7 +147,7 @@ pub fn resolve_dispute(
     let mut dispute: Dispute = env
         .storage()
         .persistent()
-        .get(&("dispute", invoice_id))
+        .get(&("dispute", invoice_id.clone()))
         .ok_or(QuickLendXError::DisputeNotFound)?;
 
     if dispute.status != DisputeStatus::UnderReview {
@@ -168,7 +158,7 @@ pub fn resolve_dispute(
         return Err(QuickLendXError::DisputeAlreadyResolved);
     }
 
-    if resolution.len() == 0 || resolution.len() > MAX_RESOLUTION_LENGTH {
+    if resolution.len() == 0 || resolution.len() > MAX_DISPUTE_RESOLUTION_LENGTH {
         return Err(QuickLendXError::InvalidDisputeEvidence);
     }
 
@@ -184,7 +174,7 @@ pub fn resolve_dispute(
 }
 
 #[allow(dead_code)]
-pub fn get_dispute_details(env: &Env, invoice_id: u64) -> Result<Dispute, QuickLendXError> {
+pub fn get_dispute_details(env: &Env, invoice_id: BytesN<32>) -> Result<Dispute, QuickLendXError> {
     env.storage()
         .persistent()
         .get(&("dispute", invoice_id))

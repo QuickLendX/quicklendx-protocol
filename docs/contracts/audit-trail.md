@@ -54,8 +54,10 @@ If any check fails or an entry is missing, the function returns `false`.
 
 ## Security Notes
 
-- Audit log is append-only; no deletion or modification of entries.
-- Only the contract itself calls `log_operation`; no public write endpoint for arbitrary audit data.
+- **Append-only guarantee**: once an entry is stored under its `audit_id`, the storage key is never overwritten. Index lists (per-invoice, per-operation, per-actor, global) only grow via `push_back`; no removal path exists.
+- **Mutation guard**: `store_audit_entry` writes each entry exactly once. Subsequent operations append new entries with new IDs; they never update existing ones.
+- **No public write endpoint**: `log_operation` and all `log_*` helpers are internal; external callers cannot inject arbitrary audit records.
+- **Bounded queries**: all query results are hard-capped at `MAX_QUERY_LIMIT` (100) to prevent gas exhaustion.
 - Query and integrity functions are read-only and do not alter state.
 ## Query Filters Usage
 

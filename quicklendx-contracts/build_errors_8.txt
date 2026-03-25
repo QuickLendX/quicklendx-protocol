@@ -1,0 +1,586 @@
+    Checking quicklendx-contracts v0.1.0 (C:\Users\USER\Desktop\drips\quicklendx-protocol\quicklendx-contracts)
+warning: unused imports: `Address` and `String`
+ --> src\defaults.rs:6:19
+  |
+6 | use soroban_sdk::{Address, BytesN, Env, String, Vec};
+  |                   ^^^^^^^               ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `MAX_TAG_LENGTH`
+ --> src\invoice.rs:7:40
+  |
+7 |     MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
+  |                                        ^^^^^^^^^^^^^^
+
+warning: unused import: `crate::defaults::DEFAULT_GRACE_PERIOD`
+  --> src\settlement.rs:11:5
+   |
+11 | use crate::defaults::DEFAULT_GRACE_PERIOD;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `emit_invoice_category_updated`, `emit_invoice_tag_added`, `emit_invoice_tag_removed`, `emit_platform_fee_config_updated`, and `emit_treasury_configured`
+  --> src\lib.rs:76:53
+   |
+76 |     emit_investor_verified, emit_invoice_cancelled, emit_invoice_category_updated,
+   |                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+77 |     emit_invoice_metadata_cleared, emit_invoice_metadata_updated, emit_invoice_tag_added,
+   |                                                                   ^^^^^^^^^^^^^^^^^^^^^^
+78 |     emit_invoice_tag_removed, emit_invoice_uploaded, emit_invoice_verified,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+79 |     emit_platform_fee_config_updated, emit_treasury_configured,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `PlatformFeeConfig` and `PlatformFee`
+  --> src\test_storage.rs:18:22
+   |
+18 | use crate::profits::{PlatformFee, PlatformFeeConfig};
+   |                      ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ConfigStorage`
+  --> src\test_storage.rs:20:17
+   |
+20 |     BidStorage, ConfigStorage, Indexes, InvestmentStorage, InvoiceStorage, StorageKeys,
+   |                 ^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\admin.rs:168:18
+    |
+168 |     env.events().publish(
+    |                  ^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\admin.rs:176:18
+    |
+176 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src\emergency.rs:66:22
+   |
+66 |         env.events().publish(
+   |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\emergency.rs:108:22
+    |
+108 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\emergency.rs:143:22
+    |
+143 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src\events.rs:29:18
+   |
+29 |     env.events().publish(
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src\events.rs:43:18
+   |
+43 |     env.events().publish(
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src\events.rs:54:18
+   |
+54 |     env.events().publish(
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src\events.rs:70:18
+   |
+70 |     env.events().publish(
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src\events.rs:83:18
+   |
+83 |     env.events().publish(
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> src\events.rs:90:18
+   |
+90 |     env.events().publish(
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:106:18
+    |
+106 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:130:18
+    |
+130 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:144:18
+    |
+144 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:155:18
+    |
+155 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:179:18
+    |
+179 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:199:18
+    |
+199 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:212:18
+    |
+212 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:224:18
+    |
+224 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:232:18
+    |
+232 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:252:18
+    |
+252 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:271:18
+    |
+271 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:283:18
+    |
+283 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:297:18
+    |
+297 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:313:18
+    |
+313 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:327:18
+    |
+327 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:343:18
+    |
+343 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:351:18
+    |
+351 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:359:18
+    |
+359 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:367:18
+    |
+367 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:380:18
+    |
+380 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:393:18
+    |
+393 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:401:18
+    |
+401 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:410:10
+    |
+410 |         .publish((symbol_short!("aud_qry"),), (query_type, result_count));
+    |          ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:421:18
+    |
+421 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:439:18
+    |
+439 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:452:18
+    |
+452 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:465:18
+    |
+465 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:478:18
+    |
+478 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:495:18
+    |
+495 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:507:18
+    |
+507 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:525:18
+    |
+525 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:538:18
+    |
+538 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:555:18
+    |
+555 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\events.rs:585:18
+    |
+585 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\fees.rs:227:22
+    |
+227 |         env.events().publish((symbol_short!("fee_upd"),), fee_bps);
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\init.rs:264:18
+    |
+264 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:264:22
+    |
+264 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:311:22
+    |
+311 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:348:14
+    |
+348 |             .publish((symbol_short!("pref_up"),), (user.clone(),));
+    |              ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:461:18
+    |
+461 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:479:18
+    |
+479 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:676:18
+    |
+676 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:683:18
+    |
+683 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:690:18
+    |
+690 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:134:22
+    |
+134 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:215:22
+    |
+215 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\lib.rs:358:22
+    |
+358 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\lib.rs:630:22
+    |
+630 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: unused variable: `invoice`
+   --> src\defaults.rs:142:9
+    |
+142 |     let invoice =
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_invoice`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+error[E0382]: use of moved value: `invoice_id`
+  --> src\dispute.rs:55:34
+   |
+41 |     invoice_id: BytesN<32>,
+   |     ---------- move occurs because `invoice_id` has type `soroban_sdk::BytesN<32>`, which does not implement the `Copy` trait
+...
+48 |     if env.storage().persistent().has(&("dispute", invoice_id)) {
+   |                                                    ---------- value moved here
+...
+55 |         .get(&("invoice_status", invoice_id));
+   |                                  ^^^^^^^^^^ value used here after move
+   |
+help: consider cloning the value if the performance cost is acceptable
+   |
+48 |     if env.storage().persistent().has(&("dispute", invoice_id.clone())) {
+   |                                                              ++++++++
+
+error[E0382]: use of moved value: `invoice_id`
+  --> src\dispute.rs:63:53
+   |
+41 |     invoice_id: BytesN<32>,
+   |     ---------- move occurs because `invoice_id` has type `soroban_sdk::BytesN<32>`, which does not implement the `Copy` trait
+...
+55 |         .get(&("invoice_status", invoice_id));
+   |                                  ---------- value moved here
+...
+63 |         env.storage().persistent().get(&("invoice", invoice_id));
+   |                                                     ^^^^^^^^^^ value used here after move
+   |
+help: consider cloning the value if the performance cost is acceptable
+   |
+55 |         .get(&("invoice_status", invoice_id.clone()));
+   |                                            ++++++++
+
+error[E0382]: use of moved value: `invoice_id`
+  --> src\dispute.rs:82:9
+   |
+41 |     invoice_id: BytesN<32>,
+   |     ---------- move occurs because `invoice_id` has type `soroban_sdk::BytesN<32>`, which does not implement the `Copy` trait
+...
+63 |         env.storage().persistent().get(&("invoice", invoice_id));
+   |                                                     ---------- value moved here
+...
+82 |         invoice_id,
+   |         ^^^^^^^^^^ value used here after move
+   |
+help: consider cloning the value if the performance cost is acceptable
+   |
+63 |         env.storage().persistent().get(&("invoice", invoice_id.clone()));
+   |                                                               ++++++++
+
+error[E0382]: use of moved value: `invoice_id`
+  --> src\dispute.rs:94:27
+   |
+41 |     invoice_id: BytesN<32>,
+   |     ---------- move occurs because `invoice_id` has type `soroban_sdk::BytesN<32>`, which does not implement the `Copy` trait
+...
+82 |         invoice_id,
+   |         ---------- value moved here
+...
+94 |         .set(&("dispute", invoice_id), &dispute);
+   |                           ^^^^^^^^^^ value used here after move
+   |
+help: consider cloning the value if the performance cost is acceptable
+   |
+82 |         invoice_id: invoice_id.clone(),
+   |                   ++++++++++++++++++++
+
+error[E0382]: use of moved value: `invoice_id`
+   --> src\dispute.rs:131:27
+    |
+103 |     invoice_id: BytesN<32>,
+    |     ---------- move occurs because `invoice_id` has type `soroban_sdk::BytesN<32>`, which does not implement the `Copy` trait
+...
+120 |         .get(&("dispute", invoice_id))
+    |                           ---------- value moved here
+...
+131 |         .set(&("dispute", invoice_id), &dispute);
+    |                           ^^^^^^^^^^ value used here after move
+    |
+help: consider cloning the value if the performance cost is acceptable
+    |
+120 |         .get(&("dispute", invoice_id.clone()))
+    |                                     ++++++++
+
+error[E0382]: use of moved value: `invoice_id`
+   --> src\dispute.rs:179:27
+    |
+140 |     invoice_id: BytesN<32>,
+    |     ---------- move occurs because `invoice_id` has type `soroban_sdk::BytesN<32>`, which does not implement the `Copy` trait
+...
+158 |         .get(&("dispute", invoice_id))
+    |                           ---------- value moved here
+...
+179 |         .set(&("dispute", invoice_id), &dispute);
+    |                           ^^^^^^^^^^ value used here after move
+    |
+help: consider cloning the value if the performance cost is acceptable
+    |
+158 |         .get(&("dispute", invoice_id.clone()))
+    |                                     ++++++++
+
+warning: unused variable: `admin`
+   --> src\fees.rs:213:9
+    |
+213 |         admin: &Address,
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `limits`
+   --> src\verification.rs:500:9
+    |
+500 |     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_limits`
+
+warning: unused variable: `investment`
+   --> src\lib.rs:971:13
+    |
+971 |         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
+
+warning: unused variable: `investment`
+    --> src\lib.rs:1048:13
+     |
+1048 |         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+     |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
+
+warning: unused variable: `investment`
+    --> src\lib.rs:1082:13
+     |
+1082 |         let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+     |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_investment`
+
+For more information about this error, try `rustc --explain E0382`.
+warning: `quicklendx-contracts` (lib) generated 69 warnings
+error: could not compile `quicklendx-contracts` (lib) due to 6 previous errors; 69 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+error[E0308]: arguments to this method are incorrect
+    --> src\test_string_limits.rs:150:20
+     |
+ 150 |     assert!(client.try_create_dispute(&business, &invoice_id, &reason, &evidence).is_ok());
+     |                    ^^^^^^^^^^^^^^^^^^ ---------  ----------- expected `&soroban_sdk::Address`, found `&soroban_sdk::BytesN<32>`
+     |                                       |
+     |                                       expected `&soroban_sdk::BytesN<32>`, found `&soroban_sdk::Address`
+     |
+note: method defined here
+    --> src\lib.rs:2069:12
+     |
+2069 |     pub fn create_dispute(
+     |            ^^^^^^^^^^^^^^
+help: swap these arguments
+     |
+ 150 -     assert!(client.try_create_dispute(&business, &invoice_id, &reason, &evidence).is_ok());
+ 150 +     assert!(client.try_create_dispute(&invoice_id, &business, &reason, &evidence).is_ok());
+     |
+
+warning: variable does not need to be mutable
+   --> src\storage.rs:260:13
+    |
+260 |         let mut ids: Vec<BytesN<32>> = env
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src\storage.rs:289:13
+    |
+289 |         let mut ids: Vec<BytesN<32>> = env
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+
+Some errors have detailed explanations: E0308, E0382.
+For more information about an error, try `rustc --explain E0308`.
+warning: `quicklendx-contracts` (lib test) generated 73 warnings (69 duplicates)
+error: could not compile `quicklendx-contracts` (lib test) due to 7 previous errors; 73 warnings emitted
