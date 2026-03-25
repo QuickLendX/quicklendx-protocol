@@ -81,6 +81,10 @@ pub(crate) fn load_accept_bid_context(
 ///
 /// Caller (business) must be authorized. Invoice must be Verified; bid must be Placed and not expired.
 ///
+/// # Invariants
+/// * Each invoice maps to at most one active escrow record (Held status).
+/// * Duplicate escrow creation attempts for the same invoice are rejected.
+///
 /// # Returns
 /// * `Ok(escrow_id)` - The new escrow ID
 ///
