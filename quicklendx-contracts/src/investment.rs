@@ -5,7 +5,22 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 const ACTIVE_INDEX_KEY: Symbol = symbol_short!("act_inv");
 
 /// Premium rate applied to the covered amount expressed in basis points (1/10,000).
-pub const DEFAULT_INSURANCE_PREMIUM_BPS: i128 = 200; // 2% of the covered amount.
+/// Represents 2% of the covered amount (200 / 10,000 = 0.02).
+pub const DEFAULT_INSURANCE_PREMIUM_BPS: i128 = 200;
+
+/// Minimum allowed coverage percentage (inclusive). Zero-percent coverage
+/// carries no protection and is semantically meaningless.
+pub const MIN_COVERAGE_PERCENTAGE: u32 = 1;
+
+/// Maximum allowed coverage percentage (inclusive). Coverage above 100% would
+/// produce a `coverage_amount` exceeding the investment principal, enabling an
+/// over-coverage exploit where a claimant could receive more than was invested.
+pub const MAX_COVERAGE_PERCENTAGE: u32 = 100;
+
+/// Minimum acceptable premium in base currency units. A zero-premium policy
+/// would represent free insurance — an unbounded liability for the provider
+/// with no economic cost to the insured party.
+pub const MIN_PREMIUM_AMOUNT: i128 = 1;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -79,8 +94,41 @@ pub struct Investment {
 }
 
 impl Investment {
+    /// Compute the insurance premium for a given investment amount and coverage
+    /// percentage.
+    ///
+    /// # Arguments
+    /// * `amount`              – Positive investment principal in base currency units.
+    /// * `coverage_percentage` – Integer percentage in
+    ///                           [`MIN_COVERAGE_PERCENTAGE`]`..=`[`MAX_COVERAGE_PERCENTAGE`].
+    ///
+    /// # Returns
+    /// * The premium in base currency units, always ≥ [`MIN_PREMIUM_AMOUNT`] when
+    ///   `coverage_amount > 0`.
+    /// * `0` for any out-of-bounds input — callers **must** treat `0` as a
+    ///   rejection signal.
+    ///
+    /// # Math
+    /// ```text
+    /// coverage_amount = amount × coverage_percentage / 100
+    /// premium         = coverage_amount × DEFAULT_INSURANCE_PREMIUM_BPS / 10_000
+    /// ```
+    /// Both multiplications use `saturating_mul`; division uses `checked_div`
+    /// to prevent overflow and division-by-zero panics.
+    ///
+    /// # Security
+    /// * Rejects `coverage_percentage > MAX_COVERAGE_PERCENTAGE` so that
+    ///   `coverage_amount` can never exceed `amount` (over-coverage exploit).
+    /// * Verifies the `coverage_amount ≤ amount` invariant after computation as
+    ///   an explicit defense-in-depth guard against future arithmetic changes.
+    /// * Applies the [`MIN_PREMIUM_AMOUNT`] floor so that zero-premium insurance
+    ///   is impossible whenever coverage is non-zero.
     pub fn calculate_premium(amount: i128, coverage_percentage: u32) -> i128 {
-        if amount <= 0 || coverage_percentage == 0 {
+        // Reject invalid inputs before any arithmetic.
+        if amount <= 0
+            || coverage_percentage < MIN_COVERAGE_PERCENTAGE
+            || coverage_percentage > MAX_COVERAGE_PERCENTAGE
+        {
             return 0;
         }
 
@@ -89,32 +137,80 @@ impl Investment {
             .checked_div(100)
             .unwrap_or(0);
 
+        // Invariant: coverage can never exceed the principal.
+        // Guaranteed by coverage_percentage ≤ 100, but checked explicitly to
+        // defend against future arithmetic changes or unexpected saturation.
+        if coverage_amount <= 0 || coverage_amount > amount {
+            return 0;
+        }
+
         let premium = coverage_amount
             .saturating_mul(DEFAULT_INSURANCE_PREMIUM_BPS)
             .checked_div(10_000)
             .unwrap_or(0);
 
-        if premium == 0 && coverage_amount > 0 {
-            1
+        // Apply minimum premium floor: positive coverage must always cost
+        // at least MIN_PREMIUM_AMOUNT to prevent zero-premium exploits.
+        if premium < MIN_PREMIUM_AMOUNT {
+            MIN_PREMIUM_AMOUNT
         } else {
             premium
         }
     }
 
+    /// Attach an insurance coverage record to this investment.
+    ///
+    /// # Arguments
+    /// * `provider`            – Address of the insurance provider.
+    /// * `coverage_percentage` – Coverage in
+    ///                           [`MIN_COVERAGE_PERCENTAGE`]`..=`[`MAX_COVERAGE_PERCENTAGE`].
+    /// * `premium`             – Pre-computed premium ≥ [`MIN_PREMIUM_AMOUNT`], typically
+    ///                           produced by [`Investment::calculate_premium`].
+    ///
+    /// # Returns
+    /// * `Ok(coverage_amount)` – The absolute amount covered in base currency units.
+    ///
+    /// # Errors
+    /// * [`InvalidCoveragePercentage`] – `coverage_percentage` out of valid range.
+    /// * [`InvalidAmount`]             – Investment principal ≤ 0, premium below
+    ///                                   minimum, `coverage_amount` is zero or
+    ///                                   exceeds principal, or premium exceeds
+    ///                                   coverage amount.
+    /// * [`OperationNotAllowed`]       – An active coverage entry already exists.
+    ///
+    /// # Security
+    /// All arithmetic bounds are re-checked inside this method so that it is
+    /// safe to call directly (i.e., independently of `lib.rs`), providing
+    /// defense-in-depth against caller omissions.
     pub fn add_insurance(
         &mut self,
         provider: Address,
         coverage_percentage: u32,
         premium: i128,
     ) -> Result<i128, QuickLendXError> {
-        if coverage_percentage == 0 || coverage_percentage > 100 {
+        // Validate coverage percentage bounds.
+        if coverage_percentage < MIN_COVERAGE_PERCENTAGE
+            || coverage_percentage > MAX_COVERAGE_PERCENTAGE
+        {
             return Err(QuickLendXError::InvalidCoveragePercentage);
         }
 
-        if premium <= 0 {
+        // The investment principal must be positive before any derived amount
+        // is computed. A zero or negative principal cannot be meaningfully
+        // insured and would produce a nonsensical coverage_amount.
+        if self.amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
         }
 
+        // Reject zero or below-minimum premiums.  A free policy creates
+        // unbounded liability for the provider and is an economic exploit.
+        if premium < MIN_PREMIUM_AMOUNT {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        // Only one active insurance policy is permitted per investment at a
+        // time.  Multiple concurrent active policies would complicate claim
+        // settlement and open double-coverage exploits.
         for coverage in self.insurance.iter() {
             if coverage.active {
                 return Err(QuickLendXError::OperationNotAllowed);
@@ -126,6 +222,20 @@ impl Investment {
             .saturating_mul(coverage_percentage as i128)
             .checked_div(100)
             .unwrap_or(0);
+
+        // Invariant: coverage_amount must be strictly positive and must not
+        // exceed the investment principal.  Guaranteed by the input bounds
+        // above, but verified explicitly as a defense-in-depth safeguard.
+        if coverage_amount <= 0 || coverage_amount > self.amount {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        // Invariant: premium must not exceed the coverage it funds.  With the
+        // standard 2 % BPS rate this always holds, but an explicit check
+        // prevents economic inversions if the rate is ever changed.
+        if premium > coverage_amount {
+            return Err(QuickLendXError::InvalidAmount);
+        }
 
         self.insurance.push_back(InsuranceCoverage {
             provider,

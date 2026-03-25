@@ -996,14 +996,27 @@ warning: function `get_investor_analytics` is never used
      |        ^^^^^^^^^^^^^^^^^^^^^^
 
 warning: `quicklendx-contracts` (lib test) generated 129 warnings (run `cargo fix --lib -p quicklendx-contracts --tests` to apply 14 suggestions)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.36s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
      Running unittests src\lib.rs (target\debug\deps\quicklendx_contracts-0b5e75fec8c570ba.exe)
 
 running 1 test
 
-thread 'test_string_limits::test_dispute_limits' (25220) panicked at src\test_string_limits.rs:159:5:
+thread 'test_string_limits::test_dispute_limits' (8780) panicked at src\test_string_limits.rs:159:5:
 assertion failed: client.try_create_dispute(&invoice_id, &business, &reason, &evidence).is_ok()
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/01f6ddf7588f42ae2d7eb0a2f21d44e8e96674cf/library\std\src/panicking.rs:689:5
+   1: core::panicking::panic_fmt
+             at /rustc/01f6ddf7588f42ae2d7eb0a2f21d44e8e96674cf/library\core\src/panicking.rs:80:14
+   2: core::panicking::panic
+             at /rustc/01f6ddf7588f42ae2d7eb0a2f21d44e8e96674cf/library\core\src/panicking.rs:150:5
+   3: quicklendx_contracts::test_string_limits::test_dispute_limits
+             at .\src\test_string_limits.rs:159:5
+   4: quicklendx_contracts::test_string_limits::test_dispute_limits::{{closure}}
+             at .\src\test_string_limits.rs:142:25
+   5: core::ops::function::FnOnce::call_once
+             at /rustc/01f6ddf7588f42ae2d7eb0a2f21d44e8e96674cf\library\core\src\ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
 Writing test snapshot file for test "test_string_limits::test_dispute_limits" to "test_snapshots\\test_string_limits\\test_dispute_limits.1.json".
 test test_string_limits::test_dispute_limits ... FAILED
 
@@ -1012,6 +1025,6 @@ failures:
 failures:
     test_string_limits::test_dispute_limits
 
-test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 47 filtered out; finished in 0.11s
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 47 filtered out; finished in 0.09s
 
 error: test failed, to rerun pass `-p quicklendx-contracts --lib`
