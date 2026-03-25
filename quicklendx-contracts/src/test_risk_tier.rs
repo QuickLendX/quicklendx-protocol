@@ -580,5 +580,15 @@ mod test_risk_tier_calculation {
         let limit =
             calculate_investment_limit(&InvestorTier::VIP, &InvestorRiskLevel::Low, i128::MAX);
         assert!(limit > 0, "Should handle max i128 without overflow");
+    
     }
+
+    #[test]
+fn test_invalid_risk_score_rejected() {
+    use crate::verification::validate_risk_score;
+
+    assert!(validate_risk_score(101).is_err());
+    assert!(validate_risk_score(200).is_err());
+ }
 }
+
