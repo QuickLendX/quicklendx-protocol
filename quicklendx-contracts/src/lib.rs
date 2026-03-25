@@ -82,7 +82,10 @@ use events::{
     emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
     emit_invoice_uploaded, emit_invoice_verified,
 };
-use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
+use investment::{
+    InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage, MAX_COVERAGE_PERCENTAGE,
+    MIN_COVERAGE_PERCENTAGE,
+};
 use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
@@ -915,6 +918,16 @@ impl QuickLendXContract {
 
         if investment.status != InvestmentStatus::Active {
             return Err(QuickLendXError::InvalidStatus);
+        }
+
+        // Validate coverage percentage bounds before any arithmetic so that
+        // out-of-range values produce the specific InvalidCoveragePercentage
+        // error rather than the generic InvalidAmount that would result if
+        // calculate_premium silently returned 0 for them.
+        if coverage_percentage < MIN_COVERAGE_PERCENTAGE
+            || coverage_percentage > MAX_COVERAGE_PERCENTAGE
+        {
+            return Err(QuickLendXError::InvalidCoveragePercentage);
         }
 
         let premium = Investment::calculate_premium(investment.amount, coverage_percentage);
