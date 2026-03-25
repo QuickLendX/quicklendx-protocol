@@ -13,6 +13,7 @@ mod test_investor_kyc {
     use crate::errors::QuickLendXError;
     use crate::invoice::InvoiceCategory;
     use crate::invoice::InvoiceStatus;
+    use crate::protocol_limits::MAX_REJECTION_REASON_LENGTH;
     use crate::verification::{BusinessVerificationStatus, InvestorRiskLevel, InvestorTier};
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{
@@ -31,21 +32,15 @@ mod test_investor_kyc {
         env.mock_all_auths();
         let _ = client.try_initialize_admin(&admin);
 
-        // Initialize protocol limits (max invoice amount, min bid amount, min bid bps, max due date, grace period)
-        let _ = client.try_initialize_protocol_limits(
-            &admin,
-            &1_000_000i128,
-            &1i128,
-            &100u32,
-            &365u64,
-            &86400u64,
-        );
-        // Initialize protocol limits (min invoice: 1, min bid: 100, min bid bps: 100,
-        // max due date: 365 days, grace period: 86400s)
-        let _ = client
-            .try_initialize_protocol_limits(&admin, &1i128, &100i128, &100u32, &365u64, &86400u64);
+        // Initialize protocol limits (min invoice amount, max due date days, grace period seconds).
+        let _ = client.try_initialize_protocol_limits(&admin, &1_000_000i128, &365u64, &86400u64);
 
         (env, client, admin)
+    }
+
+    fn create_reason_with_len(env: &Env, len: u32) -> String {
+        let reason = "r".repeat(len as usize);
+        String::from_str(env, &reason)
     }
 
     // Helper: Create verified invoice for bidding tests
@@ -212,7 +207,7 @@ mod test_investor_kyc {
 
     #[test]
     fn test_admin_can_reject_investor() {
-        let (env, client, admin) = setup();
+        let (env, client, _admin) = setup();
         let investor = Address::generate(&env);
         let kyc_data = String::from_str(&env, "Insufficient KYC data");
         let rejection_reason = String::from_str(&env, "Incomplete documentation provided");
@@ -232,6 +227,93 @@ mod test_investor_kyc {
         assert_eq!(verification.status, BusinessVerificationStatus::Rejected);
         assert!(verification.rejection_reason.is_some());
         assert_eq!(verification.rejection_reason.unwrap(), rejection_reason);
+    }
+
+    #[test]
+    fn test_reject_investor_requires_pending_status() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Pending-only rejection test data");
+        let rejection_reason = String::from_str(&env, "Missing compliance checks");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &50_000i128);
+
+        let reject_result = client.try_reject_investor(&investor, &rejection_reason);
+        assert!(reject_result.is_err());
+        assert_eq!(
+            reject_result.unwrap_err().unwrap(),
+            QuickLendXError::InvalidKYCStatus
+        );
+
+        let verification = client.get_investor_verification(&investor).unwrap();
+        assert_eq!(verification.status, BusinessVerificationStatus::Verified);
+        assert!(verification.rejection_reason.is_none());
+    }
+
+    #[test]
+    fn test_reject_investor_reason_length_boundaries() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Investor reason boundary baseline data");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+
+        let max_reason = create_reason_with_len(&env, MAX_REJECTION_REASON_LENGTH);
+        let max_reason_result = client.try_reject_investor(&investor, &max_reason);
+        assert!(max_reason_result.is_ok());
+
+        let rejected = client.get_investor_verification(&investor).unwrap();
+        assert_eq!(rejected.status, BusinessVerificationStatus::Rejected);
+        assert_eq!(rejected.rejection_reason, Some(max_reason));
+
+        let _ = client.try_submit_investor_kyc(
+            &investor,
+            &String::from_str(&env, "Investor reason boundary resubmission data"),
+        );
+
+        let too_long_reason = create_reason_with_len(&env, MAX_REJECTION_REASON_LENGTH + 1);
+        let too_long_result = client.try_reject_investor(&investor, &too_long_reason);
+        assert!(too_long_result.is_err());
+        assert_eq!(
+            too_long_result.unwrap_err().unwrap(),
+            QuickLendXError::InvalidDescription
+        );
+
+        let pending = client.get_investor_verification(&investor).unwrap();
+        assert_eq!(pending.status, BusinessVerificationStatus::Pending);
+        assert!(pending.rejection_reason.is_none());
+    }
+
+    #[test]
+    fn test_reject_investor_repeated_attempt_keeps_indexes_clean() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Repeated investor reject baseline");
+        let first_reason = String::from_str(&env, "Initial investor rejection");
+        let second_reason = String::from_str(&env, "Must fail because already rejected");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let first_result = client.try_reject_investor(&investor, &first_reason);
+        assert!(first_result.is_ok());
+
+        let second_result = client.try_reject_investor(&investor, &second_reason);
+        assert!(second_result.is_err());
+        assert_eq!(
+            second_result.unwrap_err().unwrap(),
+            QuickLendXError::InvalidKYCStatus
+        );
+
+        let rejected = client.get_rejected_investors();
+        let pending = client.get_pending_investors();
+        let verified = client.get_verified_investors();
+        assert_eq!(rejected.len(), 1);
+        assert!(rejected.contains(&investor));
+        assert!(!pending.contains(&investor));
+        assert!(!verified.contains(&investor));
+
+        let verification = client.get_investor_verification(&investor).unwrap();
+        assert_eq!(verification.rejection_reason, Some(first_reason));
     }
 
     #[test]
@@ -339,6 +421,34 @@ mod test_investor_kyc {
 
         let error = result.unwrap_err().unwrap();
         assert_eq!(error, QuickLendXError::InvalidAmount);
+    }
+
+    #[test]
+    fn test_bid_respects_aggregate_exposure_limit() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+        let investment_limit = 100_000i128;
+
+        // Setup verified investor
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &investment_limit);
+
+        // Create 3 invoices
+        let inv1 = create_verified_invoice(&env, &client, &business, 50_000);
+        let inv2 = create_verified_invoice(&env, &client, &business, 50_000);
+        let inv3 = create_verified_invoice(&env, &client, &business, 50_000);
+
+        // Bid 1: 40k (Total: 40k/100k) - Success
+        let _ = client.place_bid(&investor, &inv1, &40_000, &45_000);
+
+        // Bid 2: 40k (Total: 80k/100k) - Success
+        let _ = client.place_bid(&investor, &inv2, &40_000, &45_000);
+
+        // Bid 3: 30k (Total: 110k/100k) - Fail (Aggregate limit exceeded)
+        let result = client.try_place_bid(&investor, &inv3, &30_000, &35_000);
+        assert!(result.is_err(), "Aggregate exposure must be respected");
     }
 
     #[test]
@@ -843,5 +953,197 @@ mod test_investor_kyc {
         let bid1_amount = limit1 / 2; // Use 50% of actual limit
         let bid2_amount = limit2 / 2;
         let bid3_amount = limit3 / 2;
+    }
+
+    // ============================================================================
+    // Category 9: Pending-State Restriction Tests
+    // ============================================================================
+
+    /// A pending investor must receive `KYCAlreadyPending` (not the generic
+    /// `BusinessNotVerified`) when attempting to place a bid.
+    #[test]
+    fn test_pending_investor_cannot_place_bid() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Submit KYC but do NOT verify — investor is pending
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+
+        let result = client.try_place_bid(&investor, &invoice_id, &5_000i128, &6_000i128);
+        assert!(result.is_err(), "Pending investor must not place bids");
+        let err = result.unwrap_err().unwrap();
+        assert_eq!(
+            err,
+            QuickLendXError::KYCAlreadyPending,
+            "Expected KYCAlreadyPending, got {:?}",
+            err
+        );
+    }
+
+    /// A pending investor must receive `KYCAlreadyPending` when attempting to
+    /// withdraw a bid that was placed before their KYC was re-submitted.
+    #[test]
+    fn test_pending_investor_cannot_withdraw_bid() {
+        let (env, client, admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // 1. Verify investor, place a bid
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+        let actual_limit = client
+            .get_investor_verification(&investor)
+            .unwrap()
+            .investment_limit;
+        let bid_amount = actual_limit / 4;
+        let bid_id = client
+            .try_place_bid(&investor, &invoice_id, &bid_amount, &(bid_amount + 1000))
+            .unwrap()
+            .unwrap();
+
+        // 2. Admin rejects → investor resubmits (now pending again)
+        let _ =
+            client.try_reject_investor(&investor, &String::from_str(&env, "Needs updated docs"));
+        let new_kyc = String::from_str(&env, "Updated KYC data with more information provided");
+        let _ = client.try_submit_investor_kyc(&investor, &new_kyc);
+
+        // 3. Withdraw must fail while pending
+        let result = client.try_withdraw_bid(&bid_id);
+        assert!(result.is_err(), "Pending investor must not withdraw bids");
+        let err = result.unwrap_err().unwrap();
+        assert_eq!(
+            err,
+            QuickLendXError::KYCAlreadyPending,
+            "Expected KYCAlreadyPending, got {:?}",
+            err
+        );
+    }
+
+    /// After a pending investor is verified, they must be able to place and
+    /// withdraw bids again.
+    #[test]
+    fn test_verified_investor_can_act_after_pending_resolved() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Reject → resubmit → verify cycle
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ =
+            client.try_reject_investor(&investor, &String::from_str(&env, "Needs updated docs"));
+        let new_kyc = String::from_str(&env, "Updated KYC data with more information provided");
+        let _ = client.try_submit_investor_kyc(&investor, &new_kyc);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+        let actual_limit = client
+            .get_investor_verification(&investor)
+            .unwrap()
+            .investment_limit;
+        let bid_amount = actual_limit / 4;
+
+        let result =
+            client.try_place_bid(&investor, &invoice_id, &bid_amount, &(bid_amount + 1000));
+        assert!(
+            result.is_ok(),
+            "Re-verified investor must be able to place bids"
+        );
+    }
+
+    /// A rejected investor must receive `BusinessNotVerified` (not
+    /// `KYCAlreadyPending`) when attempting to place a bid.
+    #[test]
+    fn test_rejected_investor_gets_business_not_verified_on_bid() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Insufficient KYC data");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ =
+            client.try_reject_investor(&investor, &String::from_str(&env, "Fraudulent documents"));
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+
+        let result = client.try_place_bid(&investor, &invoice_id, &5_000i128, &6_000i128);
+        assert!(result.is_err());
+        let err = result.unwrap_err().unwrap();
+        assert_eq!(
+            err,
+            QuickLendXError::BusinessNotVerified,
+            "Rejected investor must get BusinessNotVerified, got {:?}",
+            err
+        );
+    }
+
+    /// An investor with no KYC record must receive `BusinessNotVerified` when
+    /// attempting to place a bid.
+    #[test]
+    fn test_no_kyc_investor_gets_business_not_verified_on_bid() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+
+        let result = client.try_place_bid(&investor, &invoice_id, &5_000i128, &6_000i128);
+        assert!(result.is_err());
+        let err = result.unwrap_err().unwrap();
+        assert_eq!(
+            err,
+            QuickLendXError::BusinessNotVerified,
+            "Unknown investor must get BusinessNotVerified, got {:?}",
+            err
+        );
+    }
+
+    /// Verify that the three KYC states produce distinct, correct errors on
+    /// place_bid: None → BusinessNotVerified, Pending → KYCAlreadyPending,
+    /// Rejected → BusinessNotVerified.
+    #[test]
+    fn test_place_bid_error_matrix_for_all_non_verified_states() {
+        let (env, client, _admin) = setup();
+        let business = Address::generate(&env);
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+
+        // No KYC
+        let inv_none = Address::generate(&env);
+        let err = client
+            .try_place_bid(&inv_none, &invoice_id, &5_000i128, &6_000i128)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::BusinessNotVerified);
+
+        // Pending
+        let inv_pending = Address::generate(&env);
+        let _ = client
+            .try_submit_investor_kyc(&inv_pending, &String::from_str(&env, "KYC data pending"));
+        let err = client
+            .try_place_bid(&inv_pending, &invoice_id, &5_000i128, &6_000i128)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::KYCAlreadyPending);
+
+        // Rejected
+        let inv_rejected = Address::generate(&env);
+        let _ = client
+            .try_submit_investor_kyc(&inv_rejected, &String::from_str(&env, "KYC data rejected"));
+        let _ = client.try_reject_investor(
+            &inv_rejected,
+            &String::from_str(&env, "Rejected for testing"),
+        );
+        let err = client
+            .try_place_bid(&inv_rejected, &invoice_id, &5_000i128, &6_000i128)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::BusinessNotVerified);
     }
 }

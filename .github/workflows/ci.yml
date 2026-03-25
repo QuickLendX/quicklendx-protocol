@@ -57,6 +57,7 @@ jobs:
         source $HOME/.cargo/env
         cd quicklendx-contracts
         cargo test --verbose
+
     - name: Test coverage (minimum 95%)
       if: false # temporarily disabled alongside test step
       run: |

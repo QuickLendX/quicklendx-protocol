@@ -629,3 +629,60 @@ Potential future improvements:
 - Tag popularity metrics
 - Auto-tagging based on invoice content
 - Tag-based analytics and reporting
+
+---
+
+## Tag Normalization and Duplicate Prevention
+
+### Normalization Rules
+
+All tags are normalized to a canonical form before storage and lookup. Normalization is applied:
+
+- At **invoice creation** (`store_invoice`, `upload_invoice`)
+- At **tag addition** (`add_invoice_tag`)
+- At **tag lookup** (`remove_invoice_tag`, `invoice_has_tag`, `get_invoices_by_tag`, `get_invoices_by_tags`, `get_invoice_count_by_tag`)
+
+The normalization rules are:
+
+1. **Trim**: leading and trailing ASCII space characters (`0x20`) are stripped.
+2. **Lowercase**: ASCII uppercase letters (`A–Z`) are converted to lowercase (`a–z`).
+
+Non-ASCII bytes are passed through unchanged.
+
+**Examples:**
+
+| Input | Stored form |
+|---|---|
+| `"Technology"` | `"technology"` |
+| `" tech "` | `"tech"` |
+| `"URGENT"` | `"urgent"` |
+| `"Tech"` | `"tech"` |
+
+### Duplicate Prevention
+
+Duplicate detection operates on the **normalized** form, not the raw input.
+
+| Scenario | Result |
+|---|---|
+| `["tech", "Tech"]` in one call | `InvalidTag` — normalized duplicate |
+| `["tech", " tech "]` in one call | `InvalidTag` — normalized duplicate |
+| `add_invoice_tag("tech")` then `add_invoice_tag("TECH")` | No-op on second call (idempotent) |
+
+### Index Consistency
+
+Tag indexes (`tag_idx` storage keys) are keyed on the **normalized** tag string. This ensures that:
+
+- All queries (`get_invoices_by_tag`, `get_invoice_count_by_tag`) operate case-insensitively.
+- There is never more than one index bucket for semantically identical tags.
+
+### Implementation Notes
+
+- `normalize_tag(env, tag)` is a `pub(crate)` helper in `invoice.rs` used by `Invoice::add_tag`, `Invoice::remove_tag`, `Invoice::has_tag`, `Invoice::new`, `verification::validate_invoice_tags`, and the public API functions in `lib.rs`.
+- Tags returned by `get_invoice_tags` are always in normalized form since they are stored that way.
+
+### Error Reference
+
+| Error | Code | Trigger |
+|---|---|---|
+| `InvalidTag` | 1800 | Tag is empty after normalization, or is a normalized duplicate in the same list |
+| `TagLimitExceeded` | 1801 | More than 10 tags supplied |

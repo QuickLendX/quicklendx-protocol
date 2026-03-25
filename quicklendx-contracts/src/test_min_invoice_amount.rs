@@ -7,13 +7,15 @@ use soroban_sdk::{testutils::Address as _, Address, Env};
 #[test]
 fn test_validate_invoice_below_minimum() {
     let env = Env::default();
-
-    // Default minimum is 1000 in test mode
-    let result = ProtocolLimitsContract::validate_invoice(
-        env.clone(),
-        999, // Below minimum
-        env.ledger().timestamp() + 86400,
-    );
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let result = env.as_contract(&contract_id, || {
+        // Default minimum is 10 in current protocol defaults.
+        ProtocolLimitsContract::validate_invoice(
+            env.clone(),
+            9, // Below minimum
+            env.ledger().timestamp() + 86400,
+        )
+    });
 
     assert_eq!(result, Err(QuickLendXError::InvalidAmount));
 }
@@ -21,13 +23,15 @@ fn test_validate_invoice_below_minimum() {
 #[test]
 fn test_validate_invoice_at_minimum() {
     let env = Env::default();
-
-    // Default minimum is 1000 in test mode
-    let result = ProtocolLimitsContract::validate_invoice(
-        env.clone(),
-        1000, // At minimum
-        env.ledger().timestamp() + 86400,
-    );
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let result = env.as_contract(&contract_id, || {
+        // Default minimum is 10 in current protocol defaults.
+        ProtocolLimitsContract::validate_invoice(
+            env.clone(),
+            10, // At minimum
+            env.ledger().timestamp() + 86400,
+        )
+    });
 
     assert!(result.is_ok());
 }
@@ -35,12 +39,14 @@ fn test_validate_invoice_at_minimum() {
 #[test]
 fn test_validate_invoice_above_minimum() {
     let env = Env::default();
-
-    let result = ProtocolLimitsContract::validate_invoice(
-        env.clone(),
-        5000, // Above minimum
-        env.ledger().timestamp() + 86400,
-    );
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let result = env.as_contract(&contract_id, || {
+        ProtocolLimitsContract::validate_invoice(
+            env.clone(),
+            5000, // Above minimum
+            env.ledger().timestamp() + 86400,
+        )
+    });
 
     assert!(result.is_ok());
 }

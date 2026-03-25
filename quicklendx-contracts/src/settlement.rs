@@ -8,7 +8,7 @@ use crate::invoice::{
     Invoice, InvoiceStatus, InvoiceStorage, PaymentRecord as InvoicePaymentRecord,
 };
 // use crate::notifications::NotificationSystem;
-use crate::defaults::DEFAULT_GRACE_PERIOD;
+// use crate::defaults::DEFAULT_GRACE_PERIOD;
 // use crate::events::TOPIC_INVOICE_SETTLED_FINAL;
 use crate::payments::transfer_funds;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String};
@@ -50,7 +50,10 @@ pub struct Progress {
 
 /// Record a partial payment. If total reaches invoice total, settlement is finalized.
 ///
-/// Business authorization is required and payer is recorded as the business address.
+/// # Security
+/// - Requires business-owner authorization for every payment attempt.
+/// - Safely bounds applied value to the remaining due amount.
+/// - Preserves `total_paid <= amount` even when callers request an overpayment.
 pub fn process_partial_payment(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -93,6 +96,10 @@ pub fn process_partial_payment(
 /// - Rejects payments to non-payable invoice states
 /// - Caps applied amount so `total_paid` never exceeds `total_due`
 /// - Enforces nonce uniqueness per `(invoice, payer, nonce)` if nonce is non-empty
+///
+/// # Security
+/// - The payer must be the verified invoice business and must authorize the call.
+/// - Stored payment records always reflect the applied amount, never the requested excess.
 pub fn record_payment(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -203,6 +210,11 @@ pub fn record_payment(
 ///
 /// This function preserves existing behavior by requiring the resulting total
 /// payment to satisfy full settlement conditions.
+///
+/// # Security
+/// - Requires an exact final payment equal to the remaining due amount.
+/// - Rejects explicit overpayment attempts instead of silently accepting excess input.
+/// - Keeps payout, accounting totals, and settlement events aligned to invoice principal.
 pub fn settle_invoice(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -219,11 +231,11 @@ pub fn settle_invoice(
     payer.require_auth();
 
     let remaining_due = compute_remaining_due(&invoice)?;
-    let applied_preview = if payment_amount > remaining_due {
-        remaining_due
-    } else {
-        payment_amount
-    };
+    if payment_amount > remaining_due {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let applied_preview = payment_amount;
 
     if applied_preview <= 0 {
         return Err(QuickLendXError::InvalidAmount);
