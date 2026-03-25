@@ -1,4 +1,5 @@
 use crate::bid::Bid;
+use crate::fees::{FeeType, FeeStructure};
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::payments::Escrow;
 use crate::profits::PlatformFeeConfig;
@@ -220,10 +221,16 @@ pub fn emit_insurance_claimed(
     );
 }
 
-pub fn emit_platform_fee_updated(env: &Env, config: &PlatformFeeConfig) {
+/// Emit event when platform fee bps is updated
+pub fn emit_platform_fee_updated(env: &Env, old_bps: u32, new_bps: u32, updated_by: &Address) {
     env.events().publish(
         (symbol_short!("fee_upd"),),
-        (config.fee_bps, config.updated_at, config.updated_by.clone()),
+        (
+            old_bps,
+            new_bps,
+            updated_by.clone(),
+            env.ledger().timestamp(),
+        ),
     );
 }
 
@@ -563,6 +570,26 @@ pub fn emit_platform_fee_config_updated(
     );
 }
 
+/// Emit event when a specific fee structure is updated
+pub fn emit_fee_structure_updated(
+    env: &Env,
+    fee_type: &FeeType,
+    old_bps: u32,
+    new_bps: u32,
+    updated_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("fee_str"),),
+        (
+            fee_type.clone(),
+            old_bps,
+            new_bps,
+            updated_by.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
 /// Emit detailed profit and fee breakdown event for transparency
 ///
 /// This event provides full visibility into settlement calculations:
@@ -594,5 +621,19 @@ pub fn emit_profit_fee_breakdown(
             fee_bps_applied,
             env.ledger().timestamp(),
         ),
+    );
+}
+
+/// Emit event when the admin updates the bid TTL configuration.
+///
+/// ### Fields
+/// - `old_days`: previous TTL value in days (0 = was using compile-time default)
+/// - `new_days`: newly configured TTL value in days
+/// - `admin`: address of the admin who made the change
+/// - `timestamp`: ledger timestamp of the change
+pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Address) {
+    env.events().publish(
+        (symbol_short!("ttl_upd"),),
+        (old_days, new_days, admin.clone(), env.ledger().timestamp()),
     );
 }
