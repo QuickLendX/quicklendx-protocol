@@ -78,6 +78,31 @@ Backward-compatible events still emitted:
 - Invariant:
   - `total_paid <= total_due` is enforced.
 
+## Timestamp Consistency Guarantees
+Settlement and adjacent lifecycle entrypoints enforce monotonic ledger-time assumptions to avoid
+temporal anomalies when validators, simulation environments, or test harnesses move time backward.
+
+- Guarded flows:
+  - Create: invoice due date must remain strictly in the future (`due_date > now`).
+  - Fund: funding entrypoints reject if `now < created_at`.
+  - Settle: settlement rejects if `now < created_at` or `now < funded_at`.
+  - Default: default handlers reject if `now < created_at` or `now < funded_at`.
+- Error behavior:
+  - Non-monotonic transitions fail with `InvalidTimestamp`.
+- Data integrity assumptions:
+  - `created_at` is immutable once written.
+  - If present, `funded_at` must not precede `created_at`.
+  - Lifecycle transitions rely only on ledger timestamp (not sequence number) for time checks.
+
+### Threat Model Notes
+- Mitigated:
+  - Backward-time execution paths that could otherwise settle/default before a valid funding-time
+    reference.
+  - Cross-step inconsistencies caused by stale temporal assumptions.
+- Not mitigated:
+  - Consensus-level manipulation of canonical ledger time beyond protocol tolerance.
+  - Misconfigured off-chain automation that never advances time far enough to pass grace windows.
+
 ## Running Tests
 From `quicklendx-contracts/`:
 
