@@ -43,6 +43,8 @@ pub enum QuickLendXError {
     InvalidCoveragePercentage = 1405,
     MaxBidsPerInvoiceExceeded = 1406,
     MaxInvoicesPerBusinessExceeded = 1407,
+    /// Bid TTL value is outside the allowed bounds (1..=30 days) or is zero.
+    InvalidBidTtl = 1408,
 
     // Rating (1500–1503)
     InvalidRating = 1500,
@@ -66,10 +68,13 @@ pub enum QuickLendXError {
     InvalidTag = 1800,
     TagLimitExceeded = 1801,
 
-    // Fee configuration (1850–1852)
+    // Fee configuration (1850–1855)
     InvalidFeeConfiguration = 1850,
     TreasuryNotConfigured = 1851,
     InvalidFeeBasisPoints = 1852,
+    RotationAlreadyPending = 1853,
+    RotationNotFound = 1854,
+    RotationExpired = 1855,
 
     // Dispute (1900–1906)
     DisputeNotFound = 1900,
@@ -142,6 +147,9 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidFeeConfiguration => symbol_short!("FEE_CFG"),
             QuickLendXError::TreasuryNotConfigured => symbol_short!("TRS_NC"),
             QuickLendXError::InvalidFeeBasisPoints => symbol_short!("FEE_BPS"),
+            QuickLendXError::RotationAlreadyPending => symbol_short!("ROT_PND"),
+            QuickLendXError::RotationNotFound => symbol_short!("ROT_NF"),
+            QuickLendXError::RotationExpired => symbol_short!("ROT_EXP"),
             // Dispute
             QuickLendXError::DisputeNotFound => symbol_short!("DSP_NF"),
             QuickLendXError::DisputeAlreadyExists => symbol_short!("DSP_EX"),
@@ -155,6 +163,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
             QuickLendXError::MaxBidsPerInvoiceExceeded => symbol_short!("MAX_BIDS"),
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
+            QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
         }
     }

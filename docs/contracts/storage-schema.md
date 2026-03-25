@@ -61,10 +61,14 @@ This document describes the on-chain data model and storage schema for the Quick
 
 ## Storage Keys
 
-### Primary Storage
-- `invoice_id` → `Invoice`
-- `bid_id` → `Bid`
-- `investment_id` → `Investment`
+### Primary Storage (Schema v1)
+Primary entity keys use the `DataKey` enum to namespace storage:
+- `DataKey::Invoice(invoice_id)` → `Invoice`
+- `DataKey::Bid(bid_id)` → `Bid`
+- `DataKey::Investment(investment_id)` → `Investment`
+
+The Soroban host serializes the enum discriminant with the payload, guaranteeing that
+`Invoice(x)`, `Bid(x)`, and `Investment(x)` never collide regardless of ID values.
 
 ### Instance Storage
 - `fees` → `PlatformFeeConfig`
@@ -78,11 +82,11 @@ This document describes the on-chain data model and storage schema for the Quick
 
 ### Invoices
 - `inv_bus + business_address` → `Vec<BytesN<32>>` - Invoices by business
-- `inv_stat + status` → `Vec<BytesN<32>>` - Invoices by status
+- `invst_stat + status` → `Vec<BytesN<32>>` - Invoices by status
 
 ### Bids
 - `bids_inv + invoice_id` → `Vec<BytesN<32>>` - Bids by invoice
-- `bids_invstr + investor` → `Vec<BytesN<32>>` - Bids by investor
+- `bids_invr + investor` → `Vec<BytesN<32>>` - Bids by investor
 - `bids_stat + status` → `Vec<BytesN<32>>` - Bids by status
 
 ### Investments
