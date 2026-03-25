@@ -339,7 +339,7 @@ impl QuickLendXContract {
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
-        verification::validate_invoice_tags(&tags)?;
+        verification::validate_invoice_tags(&env, &tags)?;
 
         // Create new invoice
         let invoice = Invoice::new(
@@ -390,7 +390,7 @@ impl QuickLendXContract {
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
-        verification::validate_invoice_tags(&tags)?;
+        verification::validate_invoice_tags(&env, &tags)?;
 
         // Check max invoices per business limit
         let limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
@@ -2409,7 +2409,7 @@ impl QuickLendXContract {
             invoice_count: invoices.len() as u32,
             status: backup::BackupStatus::Active,
         };
-        backup::BackupStorage::store_backup(&env, &b);
+        backup::BackupStorage::store_backup(&env, &b, Some(&invoices))?;
         backup::BackupStorage::store_backup_data(&env, &backup_id, &invoices);
         backup::BackupStorage::add_to_backup_list(&env, &backup_id);
         let _ = backup::BackupStorage::cleanup_old_backups(&env);
