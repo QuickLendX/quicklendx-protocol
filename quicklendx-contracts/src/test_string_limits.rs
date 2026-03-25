@@ -159,3 +159,91 @@ fn test_dispute_limits() {
     assert!(client.try_create_dispute(&invoice_id, &business, &reason, &evidence).is_ok());
 }
 
+// ============================================================================
+// TAG NORMALIZATION + STRING LIMIT INTERACTION TESTS (#527)
+// ============================================================================
+
+/// A 50-char uppercase tag normalizes to a 50-char lowercase tag — still valid.
+#[test]
+fn test_tag_at_limit_uppercase_normalizes_valid() {
+    let (env, client, _admin) = setup();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // 50 uppercase 'A' characters — normalizes to 50 lowercase 'a' characters.
+    let mut s = std::string::String::with_capacity(50);
+    for _ in 0..50 {
+        s.push('A');
+    }
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, &s));
+
+    let res = client.try_store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Desc"),
+        &crate::invoice::InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(res.is_ok(), "50-char uppercase tag should normalize to valid 50-char lowercase");
+}
+
+/// A tag with leading/trailing spaces that trims to exactly 50 chars is valid.
+#[test]
+fn test_tag_trim_to_limit_valid() {
+    let (env, client, _admin) = setup();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Build " " + 50 'a' chars + " " = 52 bytes, normalizes to 50 bytes.
+    let mut s = std::string::String::with_capacity(52);
+    s.push(' ');
+    for _ in 0..50 {
+        s.push('a');
+    }
+    s.push(' ');
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, &s));
+
+    let res = client.try_store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Desc"),
+        &crate::invoice::InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(res.is_ok(), "tag that trims to exactly 50 chars should be valid");
+}
+
+/// A tag with spaces only is rejected after normalization.
+#[test]
+fn test_tag_spaces_only_invalid_after_norm() {
+    let (env, client, _admin) = setup();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, "     "));
+
+    let res = client.try_store_invoice(
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Desc"),
+        &crate::invoice::InvoiceCategory::Services,
+        &tags,
+    );
+    assert!(res.is_err());
+    assert_eq!(
+        res.err().unwrap().unwrap(),
+        crate::errors::QuickLendXError::InvalidTag
+    );
+}
