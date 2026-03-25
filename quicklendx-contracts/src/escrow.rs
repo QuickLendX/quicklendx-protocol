@@ -165,12 +165,15 @@ pub fn refund_escrow_funds(
     invoice_id: &BytesN<32>,
     caller: &Address,
 ) -> Result<(), QuickLendXError> {
-    // 1. Retrieve Invoice
+    // 1. Mandatory authentication check
+    caller.require_auth();
+
+    // 2. Retrieve Invoice
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    // 2. Authorization check
-    // Caller must be either the Admin or the Business owner
+    // 3. Authorization Matrix
+    // Only the Contract Admin or the Business owner of the invoice is authorized
     let is_admin = AdminStorage::is_admin(env, caller);
     let is_business = &invoice.business == caller;
 
@@ -178,11 +181,8 @@ pub fn refund_escrow_funds(
         return Err(QuickLendXError::Unauthorized);
     }
 
-    // Explicitly require auth from the caller
-    caller.require_auth();
-
-    // 3. State check
-    // Invoice must be in Funded status to be eligible for refund
+    // 4. State Protections
+    // Escrow refund is ONLY permitted if the invoice is currently in Funded status
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvalidStatus);
     }
