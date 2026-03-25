@@ -105,8 +105,64 @@ fn test_platform_metrics_after_status_changes() {
 
     let metrics = client.get_platform_metrics();
     assert_eq!(metrics.total_invoices, 2);
-    // Funded count = 1 (inv1 is Funded)
+    // Investments include invoices that are Funded, Paid, or Defaulted
+    assert_eq!(metrics.total_investments, 2);
+}
+
+#[test]
+fn test_platform_metrics_success_rate_paid_only_sparse_data() {
+    let env = Env::default();
+    let (client, _admin, business) = setup_contract(&env);
+
+    let inv1 = create_invoice(&env, &client, &business, 1000, "Paid-only inv");
+    client.update_invoice_status(&inv1, &InvoiceStatus::Verified);
+    client.update_invoice_status(&inv1, &InvoiceStatus::Funded);
+    client.update_invoice_status(&inv1, &InvoiceStatus::Paid);
+
+    let metrics = client.get_platform_metrics();
+    assert_eq!(metrics.total_invoices, 1);
     assert_eq!(metrics.total_investments, 1);
+    assert_eq!(metrics.success_rate, 10000);
+    assert_eq!(metrics.default_rate, 0);
+}
+
+#[test]
+fn test_platform_metrics_default_rate_defaulted_only_sparse_data() {
+    let env = Env::default();
+    let (client, _admin, business) = setup_contract(&env);
+
+    let inv1 = create_invoice(&env, &client, &business, 1000, "Defaulted-only inv");
+    client.update_invoice_status(&inv1, &InvoiceStatus::Verified);
+    client.update_invoice_status(&inv1, &InvoiceStatus::Funded);
+    client.update_invoice_status(&inv1, &InvoiceStatus::Defaulted);
+
+    let metrics = client.get_platform_metrics();
+    assert_eq!(metrics.total_invoices, 1);
+    assert_eq!(metrics.total_investments, 1);
+    assert_eq!(metrics.success_rate, 0);
+    assert_eq!(metrics.default_rate, 10000);
+}
+
+#[test]
+fn test_platform_metrics_success_and_default_rates_mixed_sparse_data() {
+    let env = Env::default();
+    let (client, _admin, business) = setup_contract(&env);
+
+    let inv_paid = create_invoice(&env, &client, &business, 1000, "Mixed paid");
+    client.update_invoice_status(&inv_paid, &InvoiceStatus::Verified);
+    client.update_invoice_status(&inv_paid, &InvoiceStatus::Funded);
+    client.update_invoice_status(&inv_paid, &InvoiceStatus::Paid);
+
+    let inv_defaulted = create_invoice(&env, &client, &business, 1000, "Mixed defaulted");
+    client.update_invoice_status(&inv_defaulted, &InvoiceStatus::Verified);
+    client.update_invoice_status(&inv_defaulted, &InvoiceStatus::Funded);
+    client.update_invoice_status(&inv_defaulted, &InvoiceStatus::Defaulted);
+
+    let metrics = client.get_platform_metrics();
+    assert_eq!(metrics.total_invoices, 2);
+    assert_eq!(metrics.total_investments, 2);
+    assert_eq!(metrics.success_rate, 5000);
+    assert_eq!(metrics.default_rate, 5000);
 }
 
 // ============================================================================

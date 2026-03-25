@@ -62,6 +62,7 @@ mod test_types;
 #[cfg(test)]
 mod test_vesting;
 pub mod types;
+pub use invoice::{InvoiceCategory, InvoiceStatus};
 mod verification;
 mod vesting;
 use admin::AdminStorage;
@@ -81,7 +82,7 @@ use events::{
     emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
-use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
+use invoice::{Invoice, InvoiceMetadata, InvoiceStorage};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
@@ -2463,12 +2464,41 @@ impl QuickLendXContract {
     // Analytics (contract-exported)
     // =========================================================================
 
-    pub fn get_platform_metrics(env: Env) -> Option<analytics::PlatformMetrics> {
-        analytics::AnalyticsStorage::get_platform_metrics(&env)
+    pub fn get_platform_metrics(env: Env) -> analytics::PlatformMetrics {
+        analytics::AnalyticsStorage::get_platform_metrics(&env).unwrap_or_else(|| {
+            analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
+                .unwrap_or(analytics::PlatformMetrics {
+                    total_invoices: 0,
+                    total_investments: 0,
+                    total_volume: 0,
+                    total_fees_collected: 0,
+                    active_investors: 0,
+                    verified_businesses: 0,
+                    average_invoice_amount: 0,
+                    average_investment_amount: 0,
+                    platform_fee_rate: 0,
+                    default_rate: 0,
+                    success_rate: 0,
+                    timestamp: env.ledger().timestamp(),
+                })
+        })
     }
 
-    pub fn get_performance_metrics(env: Env) -> Option<analytics::PerformanceMetrics> {
-        analytics::AnalyticsStorage::get_performance_metrics(&env)
+    pub fn get_performance_metrics(env: Env) -> analytics::PerformanceMetrics {
+        analytics::AnalyticsStorage::get_performance_metrics(&env).unwrap_or_else(|| {
+            analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
+                .unwrap_or(analytics::PerformanceMetrics {
+                    platform_uptime: env.ledger().timestamp(),
+                    average_settlement_time: 0,
+                    average_verification_time: 0,
+                    dispute_resolution_time: 0,
+                    system_response_time: 0,
+                    transaction_success_rate: 0,
+                    error_rate: 0,
+                    user_satisfaction_score: 0,
+                    platform_efficiency: 0,
+                })
+        })
     }
 
     pub fn get_financial_metrics(
