@@ -379,6 +379,11 @@ impl BidStorage {
         }
         filtered
     }
+    /// @notice Deterministically compares two bids.
+    /// @dev Ordering priority: (1) profit, (2) expected_return, (3) bid_amount,
+    /// (4) timestamp with newer bids first, (5) bid_id as final stable tiebreaker.
+    /// This guarantees reproducible ranking across validators even when all economic
+    /// values match.
     pub fn compare_bids(bid1: &Bid, bid2: &Bid) -> Ordering {
         let profit1 = bid1.expected_return.saturating_sub(bid1.bid_amount);
         let profit2 = bid2.expected_return.saturating_sub(bid2.bid_amount);
@@ -392,7 +397,11 @@ impl BidStorage {
             return bid1.bid_amount.cmp(&bid2.bid_amount);
         }
         if bid1.timestamp != bid2.timestamp {
-            return bid2.timestamp.cmp(&bid1.timestamp);
+            return bid1.timestamp.cmp(&bid2.timestamp);
+        }
+        // Final deterministic tiebreaker to avoid validator-dependent ordering
+        if bid1.bid_id != bid2.bid_id {
+            return bid1.bid_id.to_array().cmp(&bid2.bid_id.to_array());
         }
         Ordering::Equal
     }
