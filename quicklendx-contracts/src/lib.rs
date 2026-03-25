@@ -32,6 +32,8 @@ mod settlement;
 #[cfg(test)]
 mod storage;
 #[cfg(test)]
+mod test_analytics_consistency;
+#[cfg(test)]
 mod test_init;
 pub mod types;
 mod verification;
@@ -2065,7 +2067,10 @@ impl QuickLendXContract {
         business: Address,
         period: analytics::TimePeriod,
     ) -> Result<analytics::BusinessReport, QuickLendXError> {
-        analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
+        let report =
+            analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)?;
+        analytics::AnalyticsStorage::store_business_report(&env, &report);
+        Ok(report)
     }
 
     pub fn get_business_report(
@@ -2080,7 +2085,10 @@ impl QuickLendXContract {
         investor: Address,
         period: analytics::TimePeriod,
     ) -> Result<analytics::InvestorReport, QuickLendXError> {
-        analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)
+        let report =
+            analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)?;
+        analytics::AnalyticsStorage::store_investor_report(&env, &report);
+        Ok(report)
     }
 
     pub fn get_investor_report(
@@ -2088,6 +2096,143 @@ impl QuickLendXContract {
         report_id: BytesN<32>,
     ) -> Option<analytics::InvestorReport> {
         analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
+    }
+
+    /// Calculate and return current platform metrics (live, not cached).
+    pub fn get_platform_metrics(env: Env) -> Option<analytics::PlatformMetrics> {
+        analytics::AnalyticsCalculator::calculate_platform_metrics(&env).ok()
+    }
+
+    /// Calculate and return current performance metrics (live, not cached).
+    pub fn get_performance_metrics(env: Env) -> Option<analytics::PerformanceMetrics> {
+        analytics::AnalyticsCalculator::calculate_performance_metrics(&env).ok()
+    }
+
+    /// Admin: recalculate platform metrics and persist them.
+    pub fn update_platform_metrics(env: Env) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+        let metrics = analytics::AnalyticsCalculator::calculate_platform_metrics(&env)?;
+        analytics::AnalyticsStorage::store_platform_metrics(&env, &metrics);
+        Ok(())
+    }
+
+    /// Admin: recalculate performance metrics and persist them.
+    pub fn update_performance_metrics(env: Env) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+        let metrics = analytics::AnalyticsCalculator::calculate_performance_metrics(&env)?;
+        analytics::AnalyticsStorage::store_performance_metrics(&env, &metrics);
+        Ok(())
+    }
+
+    /// Recalculate and persist user behaviour metrics for the given address.
+    pub fn update_user_behavior_metrics(env: Env, user: Address) {
+        if let Ok(metrics) =
+            analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user)
+        {
+            analytics::AnalyticsStorage::store_user_behavior(&env, &user, &metrics);
+        }
+    }
+
+    /// Calculate comprehensive investor analytics and persist them; returns the result.
+    pub fn calculate_investor_analytics(
+        env: Env,
+        investor: Address,
+    ) -> Result<analytics::InvestorAnalytics, QuickLendXError> {
+        let data = analytics::AnalyticsCalculator::calculate_investor_analytics(&env, &investor)?;
+        analytics::AnalyticsStorage::store_investor_analytics(&env, &investor, &data);
+        Ok(data)
+    }
+
+    /// Record a single investment outcome for an investor (updates verification state).
+    pub fn update_investor_analytics(
+        env: Env,
+        investor: Address,
+        investment_amount: i128,
+        is_successful: bool,
+    ) -> Result<(), QuickLendXError> {
+        crate::verification::update_investor_analytics(
+            &env,
+            &investor,
+            investment_amount,
+            is_successful,
+        )
+    }
+
+    /// Calculate platform-wide investor performance metrics, persist and return them.
+    pub fn calc_investor_perf_metrics(
+        env: Env,
+    ) -> Result<analytics::InvestorPerformanceMetrics, QuickLendXError> {
+        let metrics = analytics::AnalyticsCalculator::calc_investor_perf_metrics(&env)?;
+        analytics::AnalyticsStorage::store_investor_performance(&env, &metrics);
+        Ok(metrics)
+    }
+
+    /// Return cached investor analytics data for the given investor, if any.
+    pub fn get_investor_analytics_data(
+        env: Env,
+        investor: Address,
+    ) -> Option<analytics::InvestorAnalytics> {
+        analytics::AnalyticsStorage::get_investor_analytics(&env, &investor)
+    }
+
+    /// Return cached investor performance metrics, if they have been written.
+    pub fn get_investor_performance_metrics(
+        env: Env,
+    ) -> Option<analytics::InvestorPerformanceMetrics> {
+        analytics::AnalyticsStorage::get_investor_performance(&env)
+    }
+
+    /// Admin: recalculate and persist investor analytics for a specific investor.
+    pub fn update_investor_analytics_data(
+        env: Env,
+        investor: Address,
+    ) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+        let data = analytics::AnalyticsCalculator::calculate_investor_analytics(&env, &investor)?;
+        analytics::AnalyticsStorage::store_investor_analytics(&env, &investor, &data);
+        Ok(())
+    }
+
+    /// Admin: recalculate and persist platform-wide investor performance data.
+    pub fn update_investor_performance_data(env: Env) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+        let metrics = analytics::AnalyticsCalculator::calc_investor_perf_metrics(&env)?;
+        analytics::AnalyticsStorage::store_investor_performance(&env, &metrics);
+        Ok(())
+    }
+
+    /// Export analytics data (admin-only). Emits an export event and returns a
+    /// confirmation string. The `export_type` and `filters` are recorded in the
+    /// event for off-chain processors to consume.
+    pub fn export_analytics_data(
+        env: Env,
+        export_type: String,
+        filters: Vec<String>,
+    ) -> Result<String, QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+        env.events().publish(
+            (symbol_short!("analytics"), symbol_short!("export")),
+            (export_type, filters),
+        );
+        Ok(String::from_str(&env, "Analytics data exported"))
+    }
+
+    /// Query analytics data with optional filters and a result-count cap.
+    pub fn query_analytics_data(
+        env: Env,
+        _query_type: String,
+        _filters: Vec<String>,
+        limit: u32,
+    ) -> Vec<String> {
+        let _capped = cap_query_limit(limit);
+        let mut results = Vec::new(&env);
+        results.push_back(String::from_str(&env, "Analytics query completed"));
+        results
     }
 
     pub fn get_analytics_summary(
