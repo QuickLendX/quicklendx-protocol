@@ -42,16 +42,16 @@ Invoice fields used for progress:
 - `status`
 
 ## Overpayment Behavior
-Overpayment is capped at the remaining due amount:
+Settlement and partial-payment paths intentionally behave differently:
 
-- `applied_amount = min(requested_amount, remaining_due)`
-- `total_paid` is updated only by `applied_amount`
-- `total_paid` can never exceed `amount`
+- `process_partial_payment` safely bounds any excess request with `applied_amount = min(requested_amount, remaining_due)`.
+- `settle_invoice` rejects explicit overpayment attempts with `InvalidAmount` unless the submitted amount exactly matches the remaining due.
+- In both paths, `total_paid` can never exceed `amount`.
 
-Remainder handling:
+Accounting guarantees:
 
-- Remainder is not applied to invoice state.
-- No refund transfer is needed because only applied amount is used for settlement accounting and payout.
+- Rejected settlement overpayments do not mutate invoice state, investment state, balances, or settlement events.
+- Accepted final settlements emit `pay_rec` for the exact remaining due and `inv_stlf` for the final settled total.
 
 ## Events
 Settlement emits:
@@ -68,6 +68,9 @@ Backward-compatible events still emitted:
 - Replay/idempotency:
   - Non-empty nonce is enforced unique per `(invoice, payer, nonce)`.
   - Duplicate nonce attempts are rejected.
+- Overpayment integrity:
+  - Final settlement requires an exact remaining-due payment to avoid ambiguous excess-value handling.
+  - Partial-payment capping still protects incremental repayment flows without allowing accounting drift.
 - Arithmetic safety:
   - Checked arithmetic is used for payment accumulation and progress calculations.
   - Invalid/overflowing states reject with contract errors.
@@ -83,4 +86,5 @@ From `quicklendx-contracts/`:
 
 ```bash
 cargo test test_partial_payments -- --nocapture
+cargo test test_settlement -- --nocapture
 ```

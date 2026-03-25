@@ -2731,6 +2731,8 @@ mod test_min_invoice_amount;
 mod test_profit_fee_formula;
 #[cfg(test)]
 mod test_revenue_split;
+#[cfg(test)]
+mod test_settlement;
 
 // ============================================================================
 // Analytics Functions missing from exports
