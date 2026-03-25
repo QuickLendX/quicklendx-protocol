@@ -971,3 +971,201 @@ fn test_investment_queries_comprehensive_workflow() {
         assert_eq!(investment.status, crate::investment::InvestmentStatus::Active);
     }
 }
+
+// ============================================================================
+// Missing Record Resilience Tests
+// Ensures all query endpoints handle missing/non-existent records gracefully
+// without panicking or returning inconsistent results.
+// ============================================================================
+
+/// Returns a random BytesN<32> that is guaranteed to not exist in storage.
+fn random_id(env: &Env) -> BytesN<32> {
+    BytesN::random(env)
+}
+
+// ── get_invoice ───────────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_invoice_missing_returns_err() {
+    let (env, client) = setup();
+    let result = client.try_get_invoice(&random_id(&env));
+    assert!(result.is_err(), "get_invoice on missing ID must return Err, not panic");
+}
+
+// ── get_bid ───────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_bid_missing_returns_none() {
+    let (env, client) = setup();
+    let result = client.get_bid(&random_id(&env));
+    assert!(result.is_none(), "get_bid on missing ID must return None, not panic");
+}
+
+// ── get_investment ────────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_investment_missing_returns_err() {
+    let (env, client) = setup();
+    let result = client.try_get_investment(&random_id(&env));
+    assert!(result.is_err(), "get_investment on missing ID must return Err, not panic");
+}
+
+// ── get_invoice_investment ────────────────────────────────────────────────────
+
+#[test]
+fn test_get_invoice_investment_missing_returns_err() {
+    let (env, client) = setup();
+    let result = client.try_get_invoice_investment(&random_id(&env));
+    assert!(result.is_err(), "get_invoice_investment on missing invoice must return Err");
+}
+
+// ── get_bids_for_invoice ──────────────────────────────────────────────────────
+
+#[test]
+fn test_get_bids_for_invoice_missing_returns_empty() {
+    let (env, client) = setup();
+    let bids = client.get_bids_for_invoice(&random_id(&env));
+    assert_eq!(bids.len(), 0, "get_bids_for_invoice on missing invoice must return empty vec");
+}
+
+// ── get_best_bid ──────────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_best_bid_missing_invoice_returns_none() {
+    let (env, client) = setup();
+    let result = client.get_best_bid(&random_id(&env));
+    assert!(result.is_none(), "get_best_bid on missing invoice must return None");
+}
+
+#[test]
+fn test_get_best_bid_invoice_with_no_bids_returns_none() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+    let invoice_id = create_invoice(&env, &client, &business, 1000, InvoiceCategory::Services, false);
+    let result = client.get_best_bid(&invoice_id);
+    assert!(result.is_none(), "get_best_bid on invoice with no bids must return None");
+}
+
+// ── get_ranked_bids ───────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_ranked_bids_missing_invoice_returns_empty() {
+    let (env, client) = setup();
+    let bids = client.get_ranked_bids(&random_id(&env));
+    assert_eq!(bids.len(), 0, "get_ranked_bids on missing invoice must return empty vec");
+}
+
+#[test]
+fn test_get_ranked_bids_invoice_with_no_bids_returns_empty() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+    let invoice_id = create_invoice(&env, &client, &business, 1000, InvoiceCategory::Services, false);
+    let bids = client.get_ranked_bids(&invoice_id);
+    assert_eq!(bids.len(), 0, "get_ranked_bids on invoice with no bids must return empty vec");
+}
+
+// ── get_bids_by_status ────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_bids_by_status_missing_invoice_returns_empty() {
+    let (env, client) = setup();
+    let bids = client.get_bids_by_status(&random_id(&env), &BidStatus::Placed);
+    assert_eq!(bids.len(), 0, "get_bids_by_status on missing invoice must return empty vec");
+}
+
+// ── get_bids_by_investor ──────────────────────────────────────────────────────
+
+#[test]
+fn test_get_bids_by_investor_missing_invoice_returns_empty() {
+    let (env, client) = setup();
+    let investor = Address::generate(&env);
+    let bids = client.get_bids_by_investor(&random_id(&env), &investor);
+    assert_eq!(bids.len(), 0, "get_bids_by_investor on missing invoice must return empty vec");
+}
+
+#[test]
+fn test_get_bids_by_investor_no_bids_placed_returns_empty() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let invoice_id = create_invoice(&env, &client, &business, 1000, InvoiceCategory::Services, false);
+    let bids = client.get_bids_by_investor(&invoice_id, &investor);
+    assert_eq!(bids.len(), 0, "get_bids_by_investor with no bids must return empty vec");
+}
+
+// ── get_all_bids_by_investor ──────────────────────────────────────────────────
+
+#[test]
+fn test_get_all_bids_by_investor_no_bids_returns_empty() {
+    let (env, client) = setup();
+    let investor = Address::generate(&env);
+    let bids = client.get_all_bids_by_investor(&investor);
+    assert_eq!(bids.len(), 0, "get_all_bids_by_investor with no bids must return empty vec");
+}
+
+// ── get_business_invoices ─────────────────────────────────────────────────────
+
+#[test]
+fn test_get_business_invoices_unknown_business_returns_empty() {
+    let (env, client) = setup();
+    let unknown = Address::generate(&env);
+    let invoices = client.get_business_invoices(&unknown);
+    assert_eq!(invoices.len(), 0, "get_business_invoices for unknown business must return empty vec");
+}
+
+// ── get_investments_by_investor ───────────────────────────────────────────────
+
+#[test]
+fn test_get_investments_by_investor_unknown_investor_returns_empty() {
+    let (env, client) = setup();
+    let unknown = Address::generate(&env);
+    let investments = client.get_investments_by_investor(&unknown);
+    assert_eq!(investments.len(), 0, "get_investments_by_investor for unknown investor must return empty vec");
+}
+
+// ── get_escrow_details ────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_escrow_details_missing_invoice_returns_err() {
+    let (env, client) = setup();
+    let result = client.try_get_escrow_details(&random_id(&env));
+    assert!(result.is_err(), "get_escrow_details on missing invoice must return Err");
+}
+
+// ── get_bid_history_paged ─────────────────────────────────────────────────────
+
+#[test]
+fn test_get_bid_history_paged_missing_invoice_returns_empty() {
+    let (env, client) = setup();
+    let bids = client.get_bid_history_paged(
+        &random_id(&env),
+        &Option::<BidStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(bids.len(), 0, "get_bid_history_paged on missing invoice must return empty vec");
+}
+
+// ── get_investor_bids_paged ───────────────────────────────────────────────────
+
+#[test]
+fn test_get_investor_bids_paged_unknown_investor_returns_empty() {
+    let (env, client) = setup();
+    let unknown = Address::generate(&env);
+    let bids = client.get_investor_bids_paged(
+        &unknown,
+        &Option::<BidStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(bids.len(), 0, "get_investor_bids_paged for unknown investor must return empty vec");
+}
+
+// ── cleanup_expired_bids on missing invoice ───────────────────────────────────
+
+#[test]
+fn test_cleanup_expired_bids_missing_invoice_returns_zero() {
+    let (env, client) = setup();
+    let count = client.cleanup_expired_bids(&random_id(&env));
+    assert_eq!(count, 0, "cleanup_expired_bids on missing invoice must return 0, not panic");
+}

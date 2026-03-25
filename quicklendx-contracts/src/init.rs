@@ -178,6 +178,20 @@ impl ProtocolInitializer {
         };
         env.storage().instance().set(&PROTOCOL_CONFIG_KEY, &config);
 
+        // Sync protocol limits used by invoice validation.
+        // This ensures `store_invoice` / `upload_invoice` enforce the configured bounds
+        // immediately after initialization (Issue #541).
+        crate::protocol_limits::ProtocolLimitsContract::set_protocol_limits_authed(
+            env,
+            &params.admin,
+            params.min_invoice_amount,
+            crate::protocol_limits::DEFAULT_MIN_BID_AMOUNT,
+            crate::protocol_limits::DEFAULT_MIN_BID_BPS,
+            params.max_due_date_days,
+            params.grace_period_seconds,
+            crate::protocol_limits::DEFAULT_MAX_INVOICES_PER_BUSINESS,
+        )?;
+
         // Initialize currency whitelist with provided currencies
         if !params.initial_currencies.is_empty() {
             env.storage()

@@ -1,4 +1,9 @@
-#![no_std]
+#![cfg_attr(target_family = "wasm", no_std)]
+#[cfg(target_family = "wasm")]
+extern crate alloc;
+
+#[cfg(test)]
+mod scratch_events;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 mod admin;
@@ -43,10 +48,9 @@ use escrow::{
 use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_escrow_created,
     emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_cancelled, emit_invoice_category_updated,
-    emit_invoice_metadata_cleared, emit_invoice_metadata_updated, emit_invoice_tag_added,
-    emit_invoice_tag_removed, emit_invoice_uploaded, emit_invoice_verified,
-    emit_platform_fee_config_updated, emit_treasury_configured,
+    emit_investor_verified, emit_invoice_cancelled,
+    emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
+    emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
@@ -85,7 +89,6 @@ impl QuickLendXContract {
 
     /// Initialize the protocol with all required configuration (one-time setup)
     pub fn initialize(env: Env, params: init::InitializationParams) -> Result<(), QuickLendXError> {
-        params.admin.require_auth();
         init::ProtocolInitializer::initialize(&env, &params)
     }
 
@@ -308,7 +311,7 @@ impl QuickLendXContract {
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
-        verification::validate_invoice_tags(&tags)?;
+        verification::validate_invoice_tags(&env, &tags)?;
 
         // Create new invoice
         let invoice = Invoice::new(
@@ -359,7 +362,7 @@ impl QuickLendXContract {
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
-        verification::validate_invoice_tags(&tags)?;
+        verification::validate_invoice_tags(&env, &tags)?;
 
         // Check max invoices per business limit
         let limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
@@ -409,6 +412,7 @@ impl QuickLendXContract {
 
     /// Verify an invoice (admin or automated process)
     pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
 
@@ -501,6 +505,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         metadata: InvoiceMetadata,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -521,6 +526,7 @@ impl QuickLendXContract {
 
     /// Clear metadata attached to an invoice
     pub fn clear_invoice_metadata(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -562,6 +568,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         new_status: InvoiceStatus,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -942,7 +949,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         payment_amount: i128,
     ) -> Result<(), QuickLendXError> {
-        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+        let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = reentrancy::with_payment_guard(&env, || {
             do_settle_invoice(&env, &invoice_id, payment_amount)
@@ -1019,7 +1026,7 @@ impl QuickLendXContract {
         admin.require_auth();
 
         // Get the investment to track investor analytics
-        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+        let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = do_handle_default(&env, &invoice_id);
 
@@ -1053,7 +1060,7 @@ impl QuickLendXContract {
         admin.require_auth();
 
         // Get the investment to track investor analytics
-        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+        let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = do_mark_invoice_defaulted(&env, &invoice_id, grace_period);
 
@@ -1196,7 +1203,6 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
-        let _ = protocol_limits::ProtocolLimitsContract::initialize(env.clone(), admin.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
@@ -1423,6 +1429,7 @@ impl QuickLendXContract {
             if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
                 if invoice.is_overdue(current_timestamp) {
                     overdue_count += 1;
+                    let _ = notifications::NotificationSystem::notify_payment_overdue(&env, &invoice);
                 }
                 let _ = invoice.check_and_handle_expiration(&env, grace_period)?;
             }
