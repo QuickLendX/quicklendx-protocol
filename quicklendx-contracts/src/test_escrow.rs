@@ -14,8 +14,9 @@
 /// - Token balances verified before/after transfers
 use super::*;
 use crate::bid::BidStatus;
+use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use crate::payments::EscrowStatus;
+use crate::payments::{create_escrow, EscrowStatus};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, BytesN, Env, String, Vec,
@@ -421,6 +422,96 @@ fn test_escrow_creation_validates_amount() {
         invoice.funded_amount, invoice_amount,
         "Invoice funded amount should match bid amount"
     );
+}
+
+#[test]
+fn test_rejects_mismatched_invoice_bid_pair_without_side_effects() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 100_000);
+
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+
+    let amount = 10_000i128;
+    let invoice_id_1 = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let invoice_id_2 = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id_2, amount, amount + 500);
+
+    let investor_before = token_client.balance(&investor);
+    let contract_before = token_client.balance(&contract_id);
+
+    let result = client.try_accept_bid(&invoice_id_1, &bid_id);
+    assert!(result.is_err(), "Mismatched invoice/bid pair must fail");
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::Unauthorized);
+
+    let invoice_1 = client.get_invoice(&invoice_id_1);
+    let invoice_2 = client.get_invoice(&invoice_id_2);
+    let bid = client.get_bid(&bid_id).unwrap();
+
+    assert_eq!(invoice_1.status, InvoiceStatus::Verified);
+    assert_eq!(invoice_2.status, InvoiceStatus::Verified);
+    assert_eq!(bid.status, BidStatus::Placed);
+    assert_eq!(token_client.balance(&investor), investor_before);
+    assert_eq!(token_client.balance(&contract_id), contract_before);
+    assert!(client.try_get_escrow_details(&invoice_id_1).is_err());
+    assert!(client.try_get_escrow_details(&invoice_id_2).is_err());
+}
+
+#[test]
+fn test_rejects_accept_when_escrow_already_exists() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 100_000);
+
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1000);
+
+    let investor_before_manual = token_client.balance(&investor);
+    let contract_before_manual = token_client.balance(&contract_id);
+    let _escrow_id = create_escrow(&env, &invoice_id, &investor, &business, amount, &currency)
+        .expect("manual escrow setup should succeed");
+
+    assert_eq!(
+        token_client.balance(&investor),
+        investor_before_manual - amount
+    );
+    assert_eq!(
+        token_client.balance(&contract_id),
+        contract_before_manual + amount
+    );
+
+    let investor_before_accept = token_client.balance(&investor);
+    let contract_before_accept = token_client.balance(&contract_id);
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+
+    assert!(
+        result.is_err(),
+        "Acceptance must fail when escrow already exists"
+    );
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidStatus);
+    assert_eq!(token_client.balance(&investor), investor_before_accept);
+    assert_eq!(token_client.balance(&contract_id), contract_before_accept);
+
+    let invoice = client.get_invoice(&invoice_id);
+    let bid = client.get_bid(&bid_id).unwrap();
+    let escrow = client.get_escrow_details(&invoice_id);
+
+    assert_eq!(invoice.status, InvoiceStatus::Verified);
+    assert_eq!(invoice.funded_amount, 0);
+    assert_eq!(bid.status, BidStatus::Placed);
+    assert_eq!(escrow.status, EscrowStatus::Held);
+    assert_eq!(escrow.amount, amount);
 }
 
 #[test]

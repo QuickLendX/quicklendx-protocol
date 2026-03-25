@@ -9,8 +9,73 @@ use crate::errors::QuickLendXError;
 use crate::events::{emit_escrow_refunded, emit_invoice_funded};
 use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
 use crate::invoice::{InvoiceStatus, InvoiceStorage};
-use crate::payments::{create_escrow, refund_escrow};
+use crate::payments::{create_escrow, refund_escrow, EscrowStorage};
+use crate::verification::require_business_not_pending;
 use soroban_sdk::{Address, BytesN, Env, Vec};
+
+/// Loaded and validated state required to accept a bid.
+pub(crate) struct AcceptBidContext {
+    pub invoice: crate::invoice::Invoice,
+    pub bid: crate::bid::Bid,
+}
+
+/// Validate the invoice, bid, and escrow state before any funds move.
+///
+/// # Security
+/// - Authorization is checked against the exact invoice being funded
+/// - The bid must belong to that invoice
+/// - The invoice must not already have escrow, funding metadata, or an investment
+pub(crate) fn load_accept_bid_context(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    bid_id: &BytesN<32>,
+) -> Result<AcceptBidContext, QuickLendXError> {
+    BidStorage::cleanup_expired_bids(env, invoice_id);
+
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+    invoice.business.require_auth();
+    require_business_not_pending(env, &invoice.business)?;
+
+    if invoice.status == InvoiceStatus::Funded {
+        return Err(QuickLendXError::InvoiceAlreadyFunded);
+    }
+
+    if !invoice.is_available_for_funding() {
+        return Err(QuickLendXError::InvoiceNotAvailableForFunding);
+    }
+
+    if invoice.funded_amount != 0 || invoice.funded_at.is_some() || invoice.investor.is_some() {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some()
+        || InvestmentStorage::get_investment_by_invoice(env, invoice_id).is_some()
+    {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    let bid = BidStorage::get_bid(env, bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    if bid.invoice_id != *invoice_id {
+        return Err(QuickLendXError::Unauthorized);
+    }
+
+    if bid.status != BidStatus::Placed {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    if bid.is_expired(env.ledger().timestamp()) {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    if bid.bid_amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    Ok(AcceptBidContext { invoice, bid })
+}
 
 /// Accept a bid and fund the invoice: transfer in from investor, create escrow, update state.
 ///
@@ -27,41 +92,10 @@ pub fn accept_bid_and_fund(
     invoice_id: &BytesN<32>,
     bid_id: &BytesN<32>,
 ) -> Result<BytesN<32>, QuickLendXError> {
-    // 1. Retrieve Invoice
-    let mut invoice =
-        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-
-    // 2. Auth checks
-    // Verify that the caller is the business owner of the invoice
-    invoice.business.require_auth();
-
-    // 3. Invariant checks
-    // Invoice must be in Verified status
-    if invoice.status != InvoiceStatus::Verified {
-        // If it's already funded, return specific error
-        if invoice.status == InvoiceStatus::Funded {
-            return Err(QuickLendXError::InvoiceAlreadyFunded);
-        }
-        return Err(QuickLendXError::InvoiceNotAvailableForFunding);
-    }
-
-    // 4. Retrieve Bid
-    let mut bid = BidStorage::get_bid(env, bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-
-    // Bid must match invoice
-    if bid.invoice_id != *invoice_id {
-        return Err(QuickLendXError::Unauthorized);
-    }
-
-    // Bid must be Placed
-    if bid.status != BidStatus::Placed {
-        return Err(QuickLendXError::InvalidStatus);
-    }
-
-    // Check bid expiration
-    if bid.is_expired(env.ledger().timestamp()) {
-        return Err(QuickLendXError::InvalidStatus);
-    }
+    let AcceptBidContext {
+        mut invoice,
+        mut bid,
+    } = load_accept_bid_context(env, invoice_id, bid_id)?;
 
     // 5. Lock funds in escrow
     // This calls payments::create_escrow which calls token transfer and emits emit_escrow_created

@@ -76,13 +76,12 @@ use escrow::{
 use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_escrow_created,
     emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_cancelled,
-    emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
-    emit_invoice_uploaded, emit_invoice_verified,
+    emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
+    emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
-use payments::{create_escrow, release_escrow, EscrowStorage};
+use payments::{release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
@@ -824,58 +823,10 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
-        BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+        let escrow_id = do_accept_bid_and_fund(&env, &invoice_id, &bid_id)?;
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-        let invoice_id = bid.invoice_id.clone();
-        BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-        invoice.business.require_auth();
-
-        // Enforce KYC: a pending business must not accept bids.
-        require_business_not_pending(&env, &invoice.business)?;
-
-        if invoice.status != InvoiceStatus::Verified || bid.status != BidStatus::Placed {
-            return Err(QuickLendXError::InvalidStatus);
-        }
-
-        let escrow_id = create_escrow(
-            &env,
-            &invoice_id,
-            &bid.investor,
-            &invoice.business,
-            bid.bid_amount,
-            &invoice.currency,
-        )?;
-        bid.status = BidStatus::Accepted;
-        BidStorage::update_bid(&env, &bid);
-        // Remove from old status list before changing status
-        InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
-
-        invoice.mark_as_funded(
-            &env,
-            bid.investor.clone(),
-            bid.bid_amount,
-            env.ledger().timestamp(),
-        );
-        InvoiceStorage::update_invoice(&env, &invoice);
-
-        // Add to new status list after status change
-        InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Funded, &invoice_id);
-        let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
-        let investment = Investment {
-            investment_id: investment_id.clone(),
-            invoice_id: invoice_id.clone(),
-            investor: bid.investor.clone(),
-            amount: bid.bid_amount,
-            funded_at: env.ledger().timestamp(),
-            status: InvestmentStatus::Active,
-            insurance: Vec::new(&env),
-        };
-        InvestmentStorage::store_investment(&env, &investment);
-
         let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
             .expect("Escrow should exist after creation");
         emit_escrow_created(&env, &escrow);
@@ -1458,7 +1409,8 @@ impl QuickLendXContract {
             if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
                 if invoice.is_overdue(current_timestamp) {
                     overdue_count += 1;
-                    let _ = notifications::NotificationSystem::notify_payment_overdue(&env, &invoice);
+                    let _ =
+                        notifications::NotificationSystem::notify_payment_overdue(&env, &invoice);
                 }
                 let _ = invoice.check_and_handle_expiration(&env, grace_period)?;
             }
@@ -2128,9 +2080,7 @@ impl QuickLendXContract {
         let mut result = Vec::new(&env);
         for i in 0..limit {
             let id = ids.get(i as u32).unwrap();
-            result.push_back(
-                InvoiceStorage::get_invoice(&env, &id).map(|inv| inv.status),
-            );
+            result.push_back(InvoiceStorage::get_invoice(&env, &id).map(|inv| inv.status));
         }
         result
     }
@@ -2290,10 +2240,7 @@ impl QuickLendXContract {
         audit::AuditStorage::get_invoice_audit_trail(&env, &invoice_id)
     }
 
-    pub fn get_audit_entry(
-        env: Env,
-        audit_id: BytesN<32>,
-    ) -> Option<audit::AuditLogEntry> {
+    pub fn get_audit_entry(env: Env, audit_id: BytesN<32>) -> Option<audit::AuditLogEntry> {
         audit::AuditStorage::get_audit_entry(&env, &audit_id)
     }
 
@@ -2388,10 +2335,7 @@ impl QuickLendXContract {
         Ok(backup_id)
     }
 
-    pub fn get_backup_details(
-        env: Env,
-        backup_id: BytesN<32>,
-    ) -> Option<backup::Backup> {
+    pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<backup::Backup> {
         backup::BackupStorage::get_backup(&env, &backup_id)
     }
 
@@ -2488,8 +2432,8 @@ impl QuickLendXContract {
     pub fn get_analytics_summary(
         env: Env,
     ) -> (analytics::PlatformMetrics, analytics::PerformanceMetrics) {
-        let platform = analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
-            .unwrap_or(analytics::PlatformMetrics {
+        let platform = analytics::AnalyticsCalculator::calculate_platform_metrics(&env).unwrap_or(
+            analytics::PlatformMetrics {
                 total_invoices: 0,
                 total_investments: 0,
                 total_volume: 0,
@@ -2502,7 +2446,8 @@ impl QuickLendXContract {
                 default_rate: 0,
                 success_rate: 0,
                 timestamp: env.ledger().timestamp(),
-            });
+            },
+        );
         let performance = analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
             .unwrap_or(analytics::PerformanceMetrics {
                 platform_uptime: env.ledger().timestamp(),
@@ -2534,14 +2479,10 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    pub fn update_user_behavior_metrics(
-        env: Env,
-        user: Address,
-    ) -> Result<(), QuickLendXError> {
+    pub fn update_user_behavior_metrics(env: Env, user: Address) -> Result<(), QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
-        let metrics =
-            analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user)?;
+        let metrics = analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user)?;
         analytics::AnalyticsStorage::store_user_behavior(&env, &user, &metrics);
         Ok(())
     }
@@ -2551,7 +2492,8 @@ impl QuickLendXContract {
         business: Address,
         period: analytics::TimePeriod,
     ) -> Result<analytics::BusinessReport, QuickLendXError> {
-        let report = analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)?;
+        let report =
+            analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)?;
         analytics::AnalyticsStorage::store_business_report(&env, &report);
         Ok(report)
     }
@@ -2568,7 +2510,8 @@ impl QuickLendXContract {
         investor: Address,
         period: analytics::TimePeriod,
     ) -> Result<analytics::InvestorReport, QuickLendXError> {
-        let report = analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)?;
+        let report =
+            analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)?;
         analytics::AnalyticsStorage::store_investor_report(&env, &report);
         Ok(report)
     }
@@ -2584,7 +2527,8 @@ impl QuickLendXContract {
         env: Env,
         investor: Address,
     ) -> Result<analytics::InvestorAnalytics, QuickLendXError> {
-        let analytics = analytics::AnalyticsCalculator::calculate_investor_analytics(&env, &investor)?;
+        let analytics =
+            analytics::AnalyticsCalculator::calculate_investor_analytics(&env, &investor)?;
         analytics::AnalyticsStorage::store_investor_analytics(&env, &investor, &analytics);
         Ok(analytics)
     }
