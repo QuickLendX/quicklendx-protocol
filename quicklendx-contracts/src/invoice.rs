@@ -257,6 +257,8 @@ impl Invoice {
             },
             total_paid: 0,
             payment_history: vec![env],
+            reserved_v1: 0,
+            reserved_v2: 0,
         };
 
         // Log invoice creation
@@ -670,6 +672,8 @@ impl Invoice {
     }
 }
 
+pub(crate) const TOTAL_INVOICE_COUNT_KEY: soroban_sdk::Symbol = symbol_short!("total_iv");
+
 /// Storage keys for invoice data
 pub struct InvoiceStorage;
 
@@ -766,7 +770,15 @@ impl InvoiceStorage {
 
     /// Store an invoice
     pub fn store_invoice(env: &Env, invoice: &Invoice) {
+        let is_new = !env.storage().instance().has(&invoice.id);
         env.storage().instance().set(&invoice.id, invoice);
+
+        // Update total count if this is a new invoice
+        if is_new {
+            let mut count: u32 = env.storage().instance().get(&TOTAL_INVOICE_COUNT_KEY).unwrap_or(0);
+            count = count.saturating_add(1);
+            env.storage().instance().set(&TOTAL_INVOICE_COUNT_KEY, &count);
+        }
 
         // Add to business invoices list
         Self::add_to_business_invoices(env, &invoice.business, &invoice.id);
@@ -1215,8 +1227,21 @@ impl InvoiceStorage {
             if let Some(md) = invoice.metadata() {
                 Self::remove_metadata_indexes(env, &md, invoice_id);
             }
+
+            // Decrement total count
+            let mut count: u32 = env.storage().instance().get(&TOTAL_INVOICE_COUNT_KEY).unwrap_or(0);
+            if count > 0 {
+                count -= 1;
+                env.storage().instance().set(&TOTAL_INVOICE_COUNT_KEY, &count);
+            }
+
             // Remove invoice itself
             env.storage().instance().remove(invoice_id);
         }
+    }
+
+    /// Get total count of active invoices in the system
+    pub fn get_total_invoice_count(env: &Env) -> u32 {
+        env.storage().instance().get(&TOTAL_INVOICE_COUNT_KEY).unwrap_or(0)
     }
 }
