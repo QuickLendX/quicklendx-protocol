@@ -21,6 +21,7 @@ mod events;
 mod fees;
 mod init;
 mod investment;
+mod investment_queries;
 mod invoice;
 mod notifications;
 mod pause;
@@ -78,7 +79,7 @@ pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
 
 #[inline]
 fn cap_query_limit(limit: u32) -> u32 {
-    limit.min(MAX_QUERY_LIMIT)
+    investment_queries::InvestmentQueries::cap_query_limit(limit)
 }
 
 #[contractimpl]
@@ -1827,6 +1828,39 @@ impl QuickLendXContract {
     }
 
     /// Get investments by investor with optional status filter and pagination
+    /// Retrieves paginated investments for a specific investor with enhanced boundary checking.
+    /// 
+    /// This function provides overflow-safe pagination with comprehensive boundary validation
+    /// to prevent arithmetic overflow and ensure consistent behavior across all edge cases.
+    /// 
+    /// # Arguments
+    /// * `env` - Soroban environment
+    /// * `investor` - Address of the investor to query
+    /// * `status_filter` - Optional filter by investment status
+    /// * `offset` - Starting position (0-based, will be capped to available data)
+    /// * `limit` - Maximum records to return (capped to MAX_QUERY_LIMIT)
+    /// 
+    /// # Returns
+    /// * Vector of investment IDs matching the criteria
+    /// 
+    /// # Security Notes
+    /// - Uses saturating arithmetic throughout to prevent overflow attacks
+    /// - Validates all array bounds before access
+    /// - Caps query limit to prevent DoS via large requests
+    /// - Handles edge cases like offset >= total_count gracefully
+    /// 
+    /// # Examples
+    /// ```
+    /// // Get first 10 active investments
+    /// let investments = contract.get_investor_investments_paged(
+    ///     env, investor, Some(InvestmentStatus::Active), 0, 10
+    /// );
+    /// 
+    /// // Get next page with offset
+    /// let next_page = contract.get_investor_investments_paged(
+    ///     env, investor, Some(InvestmentStatus::Active), 10, 10
+    /// );
+    /// ```
     pub fn get_investor_investments_paged(
         env: Env,
         investor: Address,
@@ -1834,35 +1868,13 @@ impl QuickLendXContract {
         offset: u32,
         limit: u32,
     ) -> Vec<BytesN<32>> {
-        let capped_limit = cap_query_limit(limit);
-        let all_investment_ids = InvestmentStorage::get_investments_by_investor(&env, &investor);
-        let mut filtered = Vec::new(&env);
-
-        for investment_id in all_investment_ids.iter() {
-            if let Some(investment) = InvestmentStorage::get_investment(&env, &investment_id) {
-                if let Some(status) = &status_filter {
-                    if investment.status == *status {
-                        filtered.push_back(investment_id);
-                    }
-                } else {
-                    filtered.push_back(investment_id);
-                }
-            }
-        }
-
-        // Apply pagination (overflow-safe)
-        let mut result = Vec::new(&env);
-        let len_u32 = filtered.len() as u32;
-        let start = offset.min(len_u32);
-        let end = start.saturating_add(capped_limit).min(len_u32);
-        let mut idx = start;
-        while idx < end {
-            if let Some(investment_id) = filtered.get(idx) {
-                result.push_back(investment_id);
-            }
-            idx += 1;
-        }
-        result
+        investment_queries::InvestmentQueries::get_investor_investments_paginated(
+            &env,
+            &investor,
+            status_filter,
+            offset,
+            limit,
+        )
     }
 
     /// Get available invoices with pagination and optional filters
