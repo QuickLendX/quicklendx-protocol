@@ -81,9 +81,8 @@ use escrow::{
 use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_escrow_created,
     emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_cancelled,
-    emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
-    emit_invoice_uploaded, emit_invoice_verified,
+    emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
+    emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{
     InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage, MAX_COVERAGE_PERCENTAGE,
@@ -1669,7 +1668,8 @@ impl QuickLendXContract {
             if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
                 if invoice.is_overdue(current_timestamp) {
                     overdue_count += 1;
-                    let _ = notifications::NotificationSystem::notify_payment_overdue(&env, &invoice);
+                    let _ =
+                        notifications::NotificationSystem::notify_payment_overdue(&env, &invoice);
                 }
                 let _ = invoice.check_and_handle_expiration(&env, grace_period)?;
             }
@@ -2425,9 +2425,7 @@ impl QuickLendXContract {
         let mut result = Vec::new(&env);
         for i in 0..limit {
             let id = ids.get(i as u32).unwrap();
-            result.push_back(
-                InvoiceStorage::get_invoice(&env, &id).map(|inv| inv.status),
-            );
+            result.push_back(InvoiceStorage::get_invoice(&env, &id).map(|inv| inv.status));
         }
         result
     }
@@ -2603,10 +2601,7 @@ impl QuickLendXContract {
         audit::AuditStorage::get_invoice_audit_trail(&env, &invoice_id)
     }
 
-    pub fn get_audit_entry(
-        env: Env,
-        audit_id: BytesN<32>,
-    ) -> Option<audit::AuditLogEntry> {
+    pub fn get_audit_entry(env: Env, audit_id: BytesN<32>) -> Option<audit::AuditLogEntry> {
         audit::AuditStorage::get_audit_entry(&env, &audit_id)
     }
 
@@ -2710,10 +2705,7 @@ impl QuickLendXContract {
         Ok(backup_id)
     }
 
-    pub fn get_backup_details(
-        env: Env,
-        backup_id: BytesN<32>,
-    ) -> Option<backup::Backup> {
+    pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<backup::Backup> {
         backup::BackupStorage::get_backup(&env, &backup_id)
     }
 
@@ -2810,8 +2802,8 @@ impl QuickLendXContract {
     pub fn get_analytics_summary(
         env: Env,
     ) -> (analytics::PlatformMetrics, analytics::PerformanceMetrics) {
-        let platform = analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
-            .unwrap_or(analytics::PlatformMetrics {
+        let platform = analytics::AnalyticsCalculator::calculate_platform_metrics(&env).unwrap_or(
+            analytics::PlatformMetrics {
                 total_invoices: 0,
                 total_investments: 0,
                 total_volume: 0,
@@ -2824,7 +2816,8 @@ impl QuickLendXContract {
                 default_rate: 0,
                 success_rate: 0,
                 timestamp: env.ledger().timestamp(),
-            });
+            },
+        );
         let performance = analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
             .unwrap_or(analytics::PerformanceMetrics {
                 platform_uptime: env.ledger().timestamp(),
@@ -2856,14 +2849,10 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    pub fn update_user_behavior_metrics(
-        env: Env,
-        user: Address,
-    ) -> Result<(), QuickLendXError> {
+    pub fn update_user_behavior_metrics(env: Env, user: Address) -> Result<(), QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
-        let metrics =
-            analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user)?;
+        let metrics = analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user)?;
         analytics::AnalyticsStorage::store_user_behavior(&env, &user, &metrics);
         Ok(())
     }
@@ -2873,7 +2862,8 @@ impl QuickLendXContract {
         business: Address,
         period: analytics::TimePeriod,
     ) -> Result<analytics::BusinessReport, QuickLendXError> {
-        let report = analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)?;
+        let report =
+            analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)?;
         analytics::AnalyticsStorage::store_business_report(&env, &report);
         Ok(report)
     }
@@ -2890,7 +2880,8 @@ impl QuickLendXContract {
         investor: Address,
         period: analytics::TimePeriod,
     ) -> Result<analytics::InvestorReport, QuickLendXError> {
-        let report = analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)?;
+        let report =
+            analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)?;
         analytics::AnalyticsStorage::store_investor_report(&env, &report);
         Ok(report)
     }
@@ -2906,7 +2897,8 @@ impl QuickLendXContract {
         env: Env,
         investor: Address,
     ) -> Result<analytics::InvestorAnalytics, QuickLendXError> {
-        let analytics = analytics::AnalyticsCalculator::calculate_investor_analytics(&env, &investor)?;
+        let analytics =
+            analytics::AnalyticsCalculator::calculate_investor_analytics(&env, &investor)?;
         analytics::AnalyticsStorage::store_investor_analytics(&env, &investor, &analytics);
         Ok(analytics)
     }
