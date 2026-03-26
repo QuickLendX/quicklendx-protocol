@@ -1,6 +1,6 @@
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
 /// Time period for analytics reports
 #[contracttype]
@@ -175,6 +175,10 @@ pub struct AnalyticsData {
 pub struct AnalyticsStorage;
 
 impl AnalyticsStorage {
+    fn report_counter_key() -> (soroban_sdk::Symbol,) {
+        (symbol_short!("rpt_cnt"),)
+    }
+
     fn platform_metrics_key() -> (soroban_sdk::Symbol,) {
         (symbol_short!("plt_met"),)
     }
@@ -287,10 +291,32 @@ impl AnalyticsStorage {
     pub fn generate_report_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let sequence = env.ledger().sequence();
-        let _combined = timestamp.wrapping_add(sequence as u64);
-        let bytes = Bytes::new(env);
-        let hash = env.crypto().sha256(&bytes);
-        BytesN::from_array(&env, &hash.to_array())
+        let counter = env
+            .storage()
+            .instance()
+            .get(&Self::report_counter_key())
+            .unwrap_or(0u64);
+        let next_counter = counter.saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&Self::report_counter_key(), &next_counter);
+
+        let mut id_bytes = [0u8; 32];
+        id_bytes[0] = 0x52; // 'R'
+        id_bytes[1] = 0x50; // 'P'
+        id_bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
+        id_bytes[10..14].copy_from_slice(&sequence.to_be_bytes());
+        id_bytes[14..22].copy_from_slice(&next_counter.to_be_bytes());
+
+        let mix = timestamp
+            .saturating_add(sequence as u64)
+            .saturating_add(next_counter)
+            .saturating_add(0x5250);
+        for i in 22..32 {
+            id_bytes[i] = mix.wrapping_add(i as u64) as u8;
+        }
+
+        BytesN::from_array(env, &id_bytes)
     }
 }
 
@@ -298,6 +324,102 @@ impl AnalyticsStorage {
 pub struct AnalyticsCalculator;
 
 impl AnalyticsCalculator {
+    /// Build a stable category counter vector for analytics reports.
+    ///
+    /// # Security
+    /// Returns a fixed category ordering so persistence and retrieval remain
+    /// deterministic across repeated generations for the same underlying data.
+    fn initialize_category_counters(env: &Env) -> Vec<(InvoiceCategory, u32)> {
+        let mut counters = Vec::new(env);
+        let categories = [
+            InvoiceCategory::Services,
+            InvoiceCategory::Products,
+            InvoiceCategory::Consulting,
+            InvoiceCategory::Manufacturing,
+            InvoiceCategory::Technology,
+            InvoiceCategory::Healthcare,
+            InvoiceCategory::Other,
+        ];
+
+        for category in categories.iter() {
+            counters.push_back((category.clone(), 0u32));
+        }
+
+        counters
+    }
+
+    /// Increment a category counter while preserving the original vector order.
+    fn increment_category_counter(
+        counters: &mut Vec<(InvoiceCategory, u32)>,
+        category: &InvoiceCategory,
+    ) {
+        for i in 0..counters.len() {
+            let (current_category, count) = counters.get(i).unwrap();
+            if current_category == *category {
+                counters.set(i, (current_category, count.saturating_add(1)));
+                break;
+            }
+        }
+    }
+
+    /// Collect persisted investments for a single investor using the indexed
+    /// storage layout maintained by `InvestmentStorage`.
+    ///
+    /// # Security
+    /// Reads through the investor index instead of scanning unrelated state,
+    /// which keeps report generation bounded and avoids accidentally mixing
+    /// another investor's positions into the report.
+    fn get_investor_investments(
+        env: &Env,
+        investor: &Address,
+    ) -> Vec<crate::investment::Investment> {
+        let mut investments = Vec::new(env);
+        let investment_ids =
+            crate::investment::InvestmentStorage::get_investments_by_investor(env, investor);
+
+        for investment_id in investment_ids.iter() {
+            if let Some(investment) =
+                crate::investment::InvestmentStorage::get_investment(env, &investment_id)
+            {
+                investments.push_back(investment);
+            }
+        }
+
+        investments
+    }
+
+    /// Validate investor report invariants before persisting them.
+    ///
+    /// # Security
+    /// This is a defense-in-depth consistency gate that rejects malformed
+    /// reports before they are written to storage, preventing retrieval of a
+    /// self-contradictory snapshot.
+    fn validate_investor_report(report: &InvestorReport) -> Result<(), QuickLendXError> {
+        if report.end_date < report.start_date
+            || report.total_returns < 0
+            || report.total_invested < 0
+            || report.success_rate < 0
+            || report.default_rate < 0
+            || report.success_rate > 10_000
+            || report.default_rate > 10_000
+            || report.portfolio_diversity < 0
+            || report.risk_tolerance > 100
+        {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
+        let mut category_total = 0u32;
+        for (_, count) in report.preferred_categories.iter() {
+            category_total = category_total.saturating_add(count);
+        }
+
+        if category_total != report.investments_made {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
+        Ok(())
+    }
+
     /// Calculate comprehensive platform metrics
     pub fn calculate_platform_metrics(env: &Env) -> Result<PlatformMetrics, QuickLendXError> {
         let current_timestamp = env.ledger().timestamp();
@@ -867,7 +989,7 @@ impl AnalyticsCalculator {
             None
         };
 
-        Ok(BusinessReport {
+        let report = BusinessReport {
             report_id,
             business_address: business.clone(),
             period,
@@ -883,7 +1005,11 @@ impl AnalyticsCalculator {
             rating_average,
             total_ratings: rating_count,
             generated_at: current_timestamp,
-        })
+        };
+
+        AnalyticsStorage::store_business_report(env, &report);
+
+        Ok(report)
     }
 
     /// Generate investor report
@@ -896,29 +1022,14 @@ impl AnalyticsCalculator {
         let (start_date, end_date) = Self::get_period_dates(current_timestamp, period.clone());
         let report_id = AnalyticsStorage::generate_report_id(env);
 
-        // Get investor's investments in the period (simplified)
-        let all_investments: Vec<crate::investment::Investment> = Vec::new(env); // Placeholder - would need proper tracking
+        // Get investor's persisted investments in the selected period.
+        let all_investments = Self::get_investor_investments(env, investor);
         let mut investments_made = 0u32;
         let mut total_invested = 0i128;
         let mut total_returns = 0i128;
         let mut successful_investments = 0u32;
         let mut defaulted_investments = 0u32;
-        let mut preferred_categories = Vec::new(env);
-
-        // Initialize category tracking
-        let categories = [
-            InvoiceCategory::Services,
-            InvoiceCategory::Products,
-            InvoiceCategory::Consulting,
-            InvoiceCategory::Manufacturing,
-            InvoiceCategory::Technology,
-            InvoiceCategory::Healthcare,
-            InvoiceCategory::Other,
-        ];
-
-        for category in categories.iter() {
-            preferred_categories.push_back((category.clone(), 0u32));
-        }
+        let mut preferred_categories = Self::initialize_category_counters(env);
 
         for investment in all_investments.iter() {
             if investment.funded_at >= start_date && investment.funded_at <= end_date {
@@ -928,18 +1039,16 @@ impl AnalyticsCalculator {
                 if let Some(invoice) =
                     crate::invoice::InvoiceStorage::get_invoice(env, &investment.invoice_id)
                 {
-                    // Update category preferences
-                    for i in 0..preferred_categories.len() {
-                        let (cat, count) = preferred_categories.get(i).unwrap();
-                        if cat == invoice.category {
-                            preferred_categories.set(i, (cat, count.saturating_add(1)));
-                            break;
-                        }
-                    }
+                    Self::increment_category_counter(&mut preferred_categories, &invoice.category);
+                }
 
-                    match invoice.status {
-                        InvoiceStatus::Paid => {
-                            successful_investments += 1;
+                match investment.status {
+                    crate::investment::InvestmentStatus::Completed => {
+                        successful_investments += 1;
+
+                        if let Some(invoice) =
+                            crate::invoice::InvoiceStorage::get_invoice(env, &investment.invoice_id)
+                        {
                             let (profit, _) = crate::profits::calculate_profit(
                                 env,
                                 investment.amount,
@@ -947,10 +1056,14 @@ impl AnalyticsCalculator {
                             );
                             total_returns = total_returns
                                 .saturating_add(investment.amount.saturating_add(profit));
+                        } else {
+                            total_returns = total_returns.saturating_add(investment.amount);
                         }
-                        InvoiceStatus::Defaulted => defaulted_investments += 1,
-                        _ => {}
                     }
+                    crate::investment::InvestmentStatus::Defaulted => {
+                        defaulted_investments += 1;
+                    }
+                    _ => {}
                 }
             }
         }
@@ -999,7 +1112,7 @@ impl AnalyticsCalculator {
             0
         };
 
-        Ok(InvestorReport {
+        let report = InvestorReport {
             report_id,
             investor_address: investor.clone(),
             period,
@@ -1015,7 +1128,12 @@ impl AnalyticsCalculator {
             risk_tolerance,
             portfolio_diversity,
             generated_at: current_timestamp,
-        })
+        };
+
+        Self::validate_investor_report(&report)?;
+        AnalyticsStorage::store_investor_report(env, &report);
+
+        Ok(report)
     }
 
     /// Get period dates based on time period

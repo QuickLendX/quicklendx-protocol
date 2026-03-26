@@ -32,6 +32,9 @@ mod settlement;
 #[cfg(test)]
 mod storage;
 #[cfg(test)]
+#[path = "test/test_analytics.rs"]
+mod test_analytics;
+#[cfg(test)]
 mod test_init;
 pub mod types;
 mod verification;
