@@ -8,9 +8,11 @@ use soroban_sdk::{BytesN, Env, Vec};
 /// Default grace period in seconds (7 days)
 pub const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60;
 
-/// Mark an invoice as defaulted (admin or automated process)
-/// Checks due date + grace period before marking as defaulted
-///
+/// @notice Marks a funded invoice as defaulted after its grace window has strictly elapsed.
+/// @dev Defaulting is allowed only when `ledger.timestamp() > due_date + resolved_grace_period`.
+/// Calls using a timestamp equal to the grace deadline must fail to avoid early liquidation.
+/// Grace resolution order is: explicit override, protocol config, then `DEFAULT_GRACE_PERIOD`.
+/// 
 /// # Arguments
 /// * `env` - The environment
 /// * `invoice_id` - The invoice ID to mark as defaulted
@@ -51,7 +53,9 @@ pub fn mark_invoice_defaulted(
     handle_default(env, invoice_id)
 }
 
-/// Resolve grace period using per-call override, protocol config, or default.
+/// @notice Resolves the effective grace period for default evaluation.
+/// @dev Resolution order is per-call override first, then stored protocol config, and finally
+/// `DEFAULT_GRACE_PERIOD` when no config has been initialized yet.
 pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> u64 {
     match grace_period {
         Some(value) => value,
@@ -61,8 +65,9 @@ pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> u64 {
     }
 }
 
-/// Handle invoice default - internal function that performs the actual defaulting
-/// This function assumes all validations have been done (grace period, status, etc.)
+/// @notice Applies the default transition after all time and status checks have passed.
+/// @dev This helper does not re-check the grace-period cutoff and must only be reached from
+/// validated call sites such as `mark_invoice_defaulted` or `check_and_handle_expiration`.
 pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;

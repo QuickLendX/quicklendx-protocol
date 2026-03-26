@@ -5,6 +5,8 @@ extern crate alloc;
 #[cfg(test)]
 mod scratch_events;
 #[cfg(test)]
+mod test_default;
+#[cfg(test)]
 mod test_fees;
 #[cfg(test)]
 mod test_fees_extended;
@@ -37,6 +39,8 @@ mod settlement;
 mod storage;
 #[cfg(test)]
 mod test_init;
+#[cfg(test)]
+mod test_overdue_expiration;
 pub mod types;
 mod verification;
 mod vesting;
