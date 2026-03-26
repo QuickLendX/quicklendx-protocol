@@ -33,11 +33,13 @@ mod settlement;
 mod storage;
 #[cfg(test)]
 mod test_init;
+#[cfg(test)]
+mod test_partial_payments;
 pub mod types;
 mod verification;
 mod vesting;
 use admin::AdminStorage;
-use bid::{Bid, BidStatus, BidStorage};
+use bid::{Bid, BidStorage};
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
 };
@@ -48,12 +50,14 @@ use escrow::{
 use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_escrow_created,
     emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_cancelled,
-    emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
-    emit_invoice_uploaded, emit_invoice_verified,
+    emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
+    emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
-use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
+pub use invoice::InvoiceCategory;
+pub use invoice::InvoiceStatus;
+pub use bid::BidStatus;
+use invoice::{Invoice, InvoiceMetadata, InvoiceStorage};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
@@ -1429,7 +1433,8 @@ impl QuickLendXContract {
             if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
                 if invoice.is_overdue(current_timestamp) {
                     overdue_count += 1;
-                    let _ = notifications::NotificationSystem::notify_payment_overdue(&env, &invoice);
+                    let _ =
+                        notifications::NotificationSystem::notify_payment_overdue(&env, &invoice);
                 }
                 let _ = invoice.check_and_handle_expiration(&env, grace_period)?;
             }
@@ -2068,7 +2073,10 @@ impl QuickLendXContract {
         analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
     }
 
-    pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<analytics::BusinessReport> {
+    pub fn get_business_report(
+        env: Env,
+        report_id: BytesN<32>,
+    ) -> Option<analytics::BusinessReport> {
         analytics::AnalyticsStorage::get_business_report(&env, &report_id)
     }
 
@@ -2080,7 +2088,10 @@ impl QuickLendXContract {
         analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)
     }
 
-    pub fn get_investor_report(env: Env, report_id: BytesN<32>) -> Option<analytics::InvestorReport> {
+    pub fn get_investor_report(
+        env: Env,
+        report_id: BytesN<32>,
+    ) -> Option<analytics::InvestorReport> {
         analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
     }
 
@@ -2118,8 +2129,105 @@ impl QuickLendXContract {
         (platform, performance)
     }
 
+    // =================================Raw Backup Functions=========================
+    // These functions wrap the BackupStorage implementation to provide the public 
+    // contract API required by integration tests and governance.
+    // ============================================================================
 
+    /// Create a new backup of the entire system state (admin only).
+    pub fn create_backup(env: Env, admin: Address) -> Result<BytesN<32>, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        admin.require_auth();
+        if Some(admin) != AdminStorage::get_admin(&env) {
+            return Err(QuickLendXError::NotAdmin);
+        }
+
+        let invoices = backup::BackupStorage::get_all_invoices(&env);
+        let backup_id = backup::BackupStorage::generate_backup_id(&env);
+        let backup = backup::Backup {
+            backup_id: backup_id.clone(),
+            timestamp: env.ledger().timestamp(),
+            description: String::from_str(&env, "Manual Backup"),
+            invoice_count: invoices.len() as u32,
+            status: backup::BackupStatus::Active,
+        };
+
+        backup::BackupStorage::store_backup(&env, &backup, Some(&invoices))?;
+        backup::BackupStorage::add_to_backup_list(&env, &backup_id);
+        backup::BackupStorage::store_backup_data(&env, &backup_id, &invoices);
+
+        Ok(backup_id)
+    }
+
+    /// Retrieve metadata for a specific backup.
+    pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<backup::Backup> {
+        backup::BackupStorage::get_backup(&env, &backup_id)
+    }
+
+    /// Retrieve all stored backup IDs.
+    pub fn get_backups(env: Env) -> Vec<BytesN<32>> {
+        backup::BackupStorage::get_all_backups(&env)
+    }
+
+    /// Archive a backup, preventing it from being auto-cleaned (admin only).
+    pub fn archive_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        admin.require_auth();
+        if Some(admin) != AdminStorage::get_admin(&env) {
+            return Err(QuickLendXError::NotAdmin);
+        }
+
+        let mut backup = backup::BackupStorage::get_backup(&env, &backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        backup.status = backup::BackupStatus::Archived;
+        backup::BackupStorage::update_backup(&env, &backup)
+    }
+
+    /// Validate the integrity of a backup.
+    pub fn validate_backup(env: Env, backup_id: BytesN<32>) -> bool {
+        backup::BackupStorage::validate_backup(&env, &backup_id).is_ok()
+    }
+
+    /// Restore the entire system state from a backup (admin only).
+    pub fn restore_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        admin.require_auth();
+        if Some(admin) != AdminStorage::get_admin(&env) {
+            return Err(QuickLendXError::NotAdmin);
+        }
+
+        let invoices = backup::BackupStorage::get_backup_data(&env, &backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+        // Clear current state and restore from backup
+        InvoiceStorage::clear_all(&env);
+        for invoice in invoices.iter() {
+            InvoiceStorage::store_invoice(&env, &invoice);
+        }
+
+        Ok(())
+    }
+
+    /// Update the system backup retention policy (admin only).
+    pub fn set_backup_retention_policy(
+        env: Env,
+        admin: Address,
+        max_backups: u32,
+        max_age_seconds: u64,
+        auto_cleanup: bool,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        admin.require_auth();
+        if Some(admin) != AdminStorage::get_admin(&env) {
+            return Err(QuickLendXError::NotAdmin);
+        }
+
+        let policy = backup::BackupRetentionPolicy {
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled: auto_cleanup,
+        };
+        backup::BackupStorage::set_retention_policy(&env, &policy);
+        Ok(())
+    }
 }
-
-
-

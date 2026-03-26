@@ -2,8 +2,8 @@ use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceMetadata, InvoiceStatus};
 use crate::protocol_limits::{
-    check_string_length, ProtocolLimitsContract, MAX_DESCRIPTION_LENGTH, MAX_KYC_DATA_LENGTH,
-    MAX_NAME_LENGTH, MAX_ADDRESS_LENGTH, MAX_TAX_ID_LENGTH, MAX_REJECTION_REASON_LENGTH,
+    check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
+    MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_REJECTION_REASON_LENGTH, MAX_TAX_ID_LENGTH,
 };
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
@@ -76,13 +76,13 @@ impl BusinessVerificationStorage {
     const ADMIN_KEY: &'static str = "admin_address";
 
     /// Validates that a state transition is allowed according to KYC lifecycle rules
-    /// 
+    ///
     /// Valid transitions:
     /// - None → Pending (new submission)
     /// - Pending → Verified (admin approval)
     /// - Pending → Rejected (admin rejection)
     /// - Rejected → Pending (resubmission after rejection)
-    /// 
+    ///
     /// Invalid transitions:
     /// - Verified → *any other state (verified is final)
     /// - Pending → Pending (duplicate submission)
@@ -95,16 +95,22 @@ impl BusinessVerificationStorage {
         match (old_status, new_status) {
             // New submission (no previous status)
             (None, BusinessVerificationStatus::Pending) => Ok(()),
-            
+
             // Pending → Verified (admin approval)
-            (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Verified) => Ok(()),
-            
+            (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Verified) => {
+                Ok(())
+            }
+
             // Pending → Rejected (admin rejection)
-            (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Rejected) => Ok(()),
-            
+            (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Rejected) => {
+                Ok(())
+            }
+
             // Rejected → Pending (resubmission after rejection)
-            (Some(BusinessVerificationStatus::Rejected), BusinessVerificationStatus::Pending) => Ok(()),
-            
+            (Some(BusinessVerificationStatus::Rejected), BusinessVerificationStatus::Pending) => {
+                Ok(())
+            }
+
             // Invalid transitions
             (Some(BusinessVerificationStatus::Verified), _) => {
                 Err(QuickLendXError::InvalidKYCStatus) // Verified is final
@@ -153,17 +159,20 @@ impl BusinessVerificationStorage {
         let verified = Self::get_verified_businesses(env);
         let pending = Self::get_pending_businesses(env);
         let rejected = Self::get_rejected_businesses(env);
-        
+
         let in_verified = verified.iter().any(|addr| addr == *business);
         let in_pending = pending.iter().any(|addr| addr == *business);
         let in_rejected = rejected.iter().any(|addr| addr == *business);
-        
+
         // Business should be in exactly one list
-        let count = [in_verified, in_pending, in_rejected].iter().filter(|&&x| x).count();
+        let count = [in_verified, in_pending, in_rejected]
+            .iter()
+            .filter(|&&x| x)
+            .count();
         if count != 1 {
             return Err(QuickLendXError::InvalidKYCStatus);
         }
-        
+
         Ok(())
     }
 
@@ -190,7 +199,10 @@ impl BusinessVerificationStorage {
         env.storage().instance().get(business)
     }
 
-    pub fn update_verification(env: &Env, verification: &BusinessVerification) -> Result<(), QuickLendXError> {
+    pub fn update_verification(
+        env: &Env,
+        verification: &BusinessVerification,
+    ) -> Result<(), QuickLendXError> {
         let old_verification = Self::get_verification(env, &verification.business);
         let old_status = old_verification.as_ref().map(|v| v.status.clone());
 
@@ -198,7 +210,10 @@ impl BusinessVerificationStorage {
         Self::validate_state_transition(old_status.clone(), verification.status.clone())?;
 
         // Validate rejection reason immutability
-        Self::validate_rejection_reason_immutability(&old_verification, &verification.rejection_reason)?;
+        Self::validate_rejection_reason_immutability(
+            &old_verification,
+            &verification.rejection_reason,
+        )?;
 
         // Remove from old status list
         if let Some(old_ver) = old_verification {
@@ -667,7 +682,10 @@ pub fn submit_kyc_application(
     let old_status = existing_verification.as_ref().map(|v| v.status.clone());
 
     // Validate state transition to Pending
-    BusinessVerificationStorage::validate_state_transition(old_status.clone(), BusinessVerificationStatus::Pending)?;
+    BusinessVerificationStorage::validate_state_transition(
+        old_status.clone(),
+        BusinessVerificationStatus::Pending,
+    )?;
 
     let verification = BusinessVerification {
         business: business.clone(),
@@ -680,14 +698,14 @@ pub fn submit_kyc_application(
     };
 
     BusinessVerificationStorage::update_verification(env, &verification)?;
-    
+
     // Emit appropriate event based on whether this is a resubmission
     if matches!(old_status, Some(BusinessVerificationStatus::Rejected)) {
         emit_kyc_resubmitted(env, business);
     } else {
         emit_kyc_submitted(env, business);
     }
-    
+
     Ok(())
 }
 
