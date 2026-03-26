@@ -261,6 +261,12 @@ impl ProtocolInitializer {
             return Err(QuickLendXError::InvalidTimestamp);
         }
 
+        // Prevent contradictory limits where grace exceeds the due-date horizon.
+        let max_grace_for_horizon = params.max_due_date_days.saturating_mul(86_400);
+        if params.grace_period_seconds > max_grace_for_horizon {
+            return Err(QuickLendXError::InvalidTimestamp);
+        }
+
         Ok(())
     }
 
