@@ -32,7 +32,13 @@ mod settlement;
 #[cfg(test)]
 mod storage;
 #[cfg(test)]
+mod test_bid;
+#[cfg(test)]
+mod test_cancel_refund;
+#[cfg(test)]
 mod test_init;
+#[cfg(test)]
+mod test_queries;
 pub mod types;
 mod verification;
 mod vesting;
