@@ -29,6 +29,10 @@ pub struct PendingEmergencyWithdrawal {
 pub struct EmergencyWithdraw;
 
 impl EmergencyWithdraw {
+    /// @notice Queue an emergency withdrawal for stuck funds.
+    /// @dev This flow intentionally remains callable while paused so admins can
+    ///      recover assets during incidents without reopening normal protocol operations.
+    ///
     /// Initiate an emergency withdrawal. Only admin. Call `execute_emergency_withdraw` after timelock.
     ///
     /// # Errors
@@ -41,8 +45,7 @@ impl EmergencyWithdraw {
         amount: i128,
         target: Address,
     ) -> Result<(), QuickLendXError> {
-        admin.require_auth();
-        AdminStorage::require_admin(env, admin)?;
+        AdminStorage::require_admin_auth(env, admin)?;
 
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -71,6 +74,9 @@ impl EmergencyWithdraw {
         Ok(())
     }
 
+    /// @notice Execute a queued emergency withdrawal after the timelock expires.
+    /// @dev This path is also pause-exempt; the timelock remains the primary safety control.
+    ///
     /// Execute the pending emergency withdrawal. Only after timelock has elapsed. Only admin.
     ///
     /// Transfers `amount` of `token` from the contract to the stored `target`.
@@ -81,8 +87,7 @@ impl EmergencyWithdraw {
     /// * `EmergencyWithdrawTimelockNotElapsed` if unlock_at has not passed
     /// * Transfer errors (e.g. `InsufficientFunds`) if contract balance is insufficient
     pub fn execute(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
-        admin.require_auth();
-        AdminStorage::require_admin(env, admin)?;
+        AdminStorage::require_admin_auth(env, admin)?;
 
         let pending: PendingEmergencyWithdrawal = env
             .storage()
@@ -118,11 +123,14 @@ impl EmergencyWithdraw {
         Ok(())
     }
 
-    /// Get the current pending emergency withdrawal, if any.
+    /// @notice Return the current pending emergency withdrawal, if any.
     pub fn get_pending(env: &Env) -> Option<PendingEmergencyWithdrawal> {
         env.storage().instance().get(&PENDING_WITHDRAWAL_KEY)
     }
 
+    /// @notice Cancel a pending emergency withdrawal.
+    /// @dev Cancellation remains available while paused to let admins abort a queued recovery action.
+    ///
     /// Cancel a pending emergency withdrawal (admin only).
     /// Useful if initiate was triggered by mistake or a threat has passed.
     ///
@@ -130,8 +138,7 @@ impl EmergencyWithdraw {
     /// * `NotAdmin` if caller is not admin
     /// * `StorageKeyNotFound` if no pending withdrawal exists
     pub fn cancel(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
-        admin.require_auth();
-        AdminStorage::require_admin(env, admin)?;
+        AdminStorage::require_admin_auth(env, admin)?;
 
         let pending: PendingEmergencyWithdrawal = env
             .storage()

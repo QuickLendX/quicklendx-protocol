@@ -17,11 +17,7 @@ impl CurrencyWhitelist {
         admin: &Address,
         currency: &Address,
     ) -> Result<(), QuickLendXError> {
-        let current_admin = AdminStorage::get_admin(env).ok_or(QuickLendXError::NotAdmin)?;
-        if *admin != current_admin {
-            return Err(QuickLendXError::NotAdmin);
-        }
-        // Auth handled by caller natively requiring auth on the admin argument
+        AdminStorage::require_admin_auth(env, admin)?;
 
         let mut list = Self::get_whitelisted_currencies(env);
         if list.iter().any(|a| a == *currency) {
@@ -90,11 +86,7 @@ impl CurrencyWhitelist {
         admin: &Address,
         currencies: &Vec<Address>,
     ) -> Result<(), QuickLendXError> {
-        let current_admin = AdminStorage::get_admin(env).ok_or(QuickLendXError::NotAdmin)?;
-        if *admin != current_admin {
-            return Err(QuickLendXError::NotAdmin);
-        }
-        // Auth handled by ProtocolInitializer
+        AdminStorage::require_admin_auth(env, admin)?;
 
         let mut deduped: Vec<Address> = Vec::new(env);
         for currency in currencies.iter() {

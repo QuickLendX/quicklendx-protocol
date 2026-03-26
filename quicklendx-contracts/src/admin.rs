@@ -34,6 +34,9 @@ pub const ADMIN_INITIALIZED_KEY: Symbol = symbol_short!("adm_init");
 pub struct AdminStorage;
 
 impl AdminStorage {
+    /// @notice Initialize the protocol admin address once.
+    /// @dev Requires the proposed admin to authorize accepting the role.
+    ///
     /// Initialize the admin address (can only be called once)
     ///
     /// # Arguments
@@ -75,6 +78,9 @@ impl AdminStorage {
         Ok(())
     }
 
+    /// @notice Transfer the admin role to a new address.
+    /// @dev Only the current admin may rotate control.
+    ///
     /// Transfer admin role to a new address
     ///
     /// # Arguments
@@ -111,6 +117,8 @@ impl AdminStorage {
         Ok(())
     }
 
+    /// @notice Return the current admin address, if initialized.
+    ///
     /// Get the current admin address
     ///
     /// # Arguments
@@ -123,6 +131,8 @@ impl AdminStorage {
         env.storage().instance().get(&ADMIN_KEY)
     }
 
+    /// @notice Check whether an address matches the stored admin.
+    ///
     /// Check if an address is the admin
     ///
     /// # Arguments
@@ -140,6 +150,11 @@ impl AdminStorage {
         }
     }
 
+    /// @notice Require that an address matches the current admin.
+    /// @dev This does not call `require_auth`; pair it with
+    ///      [`Self::require_admin_auth`] when the caller must both authenticate
+    ///      and be recognized as admin.
+    ///
     /// Require that an address is the admin (authorization helper)
     ///
     /// # Arguments
@@ -160,6 +175,14 @@ impl AdminStorage {
             return Err(QuickLendXError::NotAdmin);
         }
         Ok(())
+    }
+
+    /// @notice Require both caller authentication and current-admin membership.
+    /// @dev Use this helper for pause-exempt governance and emergency flows so
+    ///      admin semantics stay consistent even while protocol business logic is paused.
+    pub fn require_admin_auth(env: &Env, address: &Address) -> Result<(), QuickLendXError> {
+        address.require_auth();
+        Self::require_admin(env, address)
     }
 }
 
