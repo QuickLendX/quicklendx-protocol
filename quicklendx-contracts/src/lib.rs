@@ -33,6 +33,8 @@ mod settlement;
 mod storage;
 #[cfg(test)]
 mod test_init;
+#[cfg(test)]
+mod test_bid_exclusivity;
 pub mod types;
 mod verification;
 mod vesting;
