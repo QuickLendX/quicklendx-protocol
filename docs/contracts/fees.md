@@ -46,6 +46,26 @@ The protocol supports various types of fees (Platform, Processing, Verification,
   - `max_fee >= min_fee`
 - **Error Codes**: Rejection of invalid BPS returns `InvalidFeeBasisPoints` (Contract Error 105).
 
+### 6. Fee Collection Map Validation
+
+When fees are collected via `collect_fees`, the input map is validated before any state is written.
+
+#### Rules
+
+| Rule | Behaviour on violation |
+|:---|:---|
+| `total_amount > 0` | `InvalidAmount` |
+| Every map value `>= 0` | `InvalidAmount` |
+| `sum(map values) == total_amount` | `InvalidFeeConfiguration` |
+| Missing fee types in map | Allowed — treated as zero contribution |
+| Multiple calls same period | Fees accumulate (merge), not overwrite |
+
+#### Security Rationale
+- **No silent under-reporting**: A caller cannot declare `total_amount = 500` but only map `200` — the mismatch is caught.
+- **No negative poisoning**: A negative entry cannot cancel out a legitimate fee to reduce `total_collected` in storage.
+- **Missing types are safe**: Absent map keys do not panic; they default to zero. This is the core of the #597 fix.
+- **Accumulation not overwrite**: Prior to this fix, old code replaced `fees_by_type` entirely each call; now it merges, preserving earlier period data.
+
 ## Technical Implementation
 
 ### Core Components
@@ -125,6 +145,8 @@ Strict boundary checks prevent "silent misconfiguration" where a typo could lead
 - **`InvalidFeeBasisPoints`**: Rejection of BPS > 1000.
 - **`InvalidAmount`**: Rejection of negative amounts or inconsistent min/max bounds.
 - **`NotAdmin`**: Unauthorized modification attempt.
+- **`InvalidFeeConfiguration`**: Map sum does not equal `total_amount`, or revenue shares do not sum to 10,000 BPS.
+- **`StorageKeyNotFound`**: Reading fee config before the fee system has been initialized.
 
 ## Migration and Upgrades
 

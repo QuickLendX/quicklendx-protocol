@@ -899,3 +899,197 @@ fn test_calculate_transaction_fees_late_payment_flag() {
         "Late payment must increase total fees"
     );
 }
+
+// ============================================================================
+//  Fee collection map handling for missing fee types
+// ============================================================================
+
+/// Happy path: map with all three active fee types, sum matches total.
+#[test]
+fn test_collect_fees_valid_map_accepted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let mut fees = Map::new(&env);
+    fees.set(FeeType::Platform, 200_i128);
+    fees.set(FeeType::Processing, 50_i128);
+    fees.set(FeeType::Verification, 100_i128);
+
+    // sum = 350 == total_amount → must succeed
+    client.collect_transaction_fees(&user, &fees, &350);
+
+    let period = env.ledger().timestamp() / 2_592_000;
+    let analytics = client.get_fee_analytics(&period);
+    assert_eq!(analytics.total_fees, 350);
+    assert_eq!(analytics.total_transactions, 1);
+}
+
+/// Missing fee types: map contains only Platform fee.
+/// Processing and Verification are absent.
+/// Must succeed when sum still matches total_amount.
+#[test]
+fn test_collect_fees_missing_fee_types_allowed_when_sum_matches() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let mut fees = Map::new(&env);
+    fees.set(FeeType::Platform, 200_i128);
+    // Processing and Verification deliberately absent
+
+    client.collect_transaction_fees(&user, &fees, &200);
+
+    let period = env.ledger().timestamp() / 2_592_000;
+    let analytics = client.get_fee_analytics(&period);
+    assert_eq!(analytics.total_fees, 200);
+    assert_eq!(analytics.total_transactions, 1);
+}
+
+/// Empty map with total_amount == 0 must be rejected (total <= 0 guard).
+#[test]
+fn test_collect_fees_empty_map_zero_total_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let fees: Map<FeeType, i128> = Map::new(&env);
+
+    let result = client.try_collect_transaction_fees(&user, &fees, &0);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidAmount);
+}
+
+/// Map sum less than total_amount → InvalidFeeConfiguration.
+#[test]
+fn test_collect_fees_map_sum_less_than_total_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let mut fees = Map::new(&env);
+    fees.set(FeeType::Platform, 100_i128);
+    // sum = 100, total_amount = 200 → mismatch
+
+    let result = client.try_collect_transaction_fees(&user, &fees, &200);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidFeeConfiguration);
+}
+
+/// Map sum greater than total_amount → InvalidFeeConfiguration.
+#[test]
+fn test_collect_fees_map_sum_greater_than_total_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let mut fees = Map::new(&env);
+    fees.set(FeeType::Platform, 500_i128);
+    // sum = 500, total_amount = 200 → mismatch
+
+    let result = client.try_collect_transaction_fees(&user, &fees, &200);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidFeeConfiguration);
+}
+
+/// Any negative fee amount in the map → InvalidAmount.
+#[test]
+fn test_collect_fees_negative_fee_amount_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let mut fees = Map::new(&env);
+    fees.set(FeeType::Platform, 300_i128);
+    fees.set(FeeType::Processing, -100_i128); // negative → invalid
+
+    let result = client.try_collect_transaction_fees(&user, &fees, &200);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidAmount);
+}
+
+/// Multiple calls in the same period must accumulate fees, not overwrite.
+#[test]
+fn test_collect_fees_accumulates_across_calls_same_period() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let mut fees1 = Map::new(&env);
+    fees1.set(FeeType::Platform, 200_i128);
+    client.collect_transaction_fees(&user, &fees1, &200);
+
+    let mut fees2 = Map::new(&env);
+    fees2.set(FeeType::Processing, 50_i128);
+    client.collect_transaction_fees(&user, &fees2, &50);
+
+    let period = env.ledger().timestamp() / 2_592_000;
+    let analytics = client.get_fee_analytics(&period);
+    // Both calls must be reflected — not overwritten
+    assert_eq!(analytics.total_fees, 250);
+    assert_eq!(analytics.total_transactions, 2);
+}
+
+/// Zero-value fee entry in map must be accepted (zero is not negative).
+#[test]
+fn test_collect_fees_zero_value_entry_in_map_accepted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let mut fees = Map::new(&env);
+    fees.set(FeeType::Platform, 200_i128);
+    fees.set(FeeType::Processing, 0_i128); // zero is valid
+    // sum = 200 == total_amount
+
+    client.collect_transaction_fees(&user, &fees, &200);
+
+    let period = env.ledger().timestamp() / 2_592_000;
+    let analytics = client.get_fee_analytics(&period);
+    assert_eq!(analytics.total_fees, 200);
+    assert_eq!(analytics.total_transactions, 1);
+}
