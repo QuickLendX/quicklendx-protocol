@@ -32,6 +32,8 @@ mod settlement;
 #[cfg(test)]
 mod storage;
 #[cfg(test)]
+mod test_dispute;
+#[cfg(test)]
 mod test_init;
 pub mod types;
 mod verification;
@@ -53,7 +55,7 @@ use events::{
     emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
-use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
+use invoice::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
@@ -2116,6 +2118,97 @@ impl QuickLendXContract {
                 platform_efficiency: 0,
             });
         (platform, performance)
+    }
+
+    // ============================================================================
+    // Dispute Management Functions
+    // ============================================================================
+
+    /// Open a new dispute on an invoice.
+    ///
+    /// Only the invoice's business owner or its investor may call this function.
+    /// Exactly one dispute is allowed per invoice.  The invoice must be in a
+    /// Pending, Verified, Funded, or Paid state.
+    ///
+    /// # Parameters
+    /// - `invoice_id` — 32-byte invoice identifier.
+    /// - `creator`    — Address raising the dispute (must be business or investor).
+    /// - `reason`     — Human-readable reason (1–1000 chars).
+    /// - `evidence`   — Supporting evidence (1–2000 chars).
+    ///
+    /// # Errors
+    /// `InvoiceNotFound`, `DisputeAlreadyExists`, `DisputeNotAuthorized`,
+    /// `InvoiceNotAvailableForFunding`, `InvalidDisputeReason`, `InvalidDisputeEvidence`.
+    pub fn create_dispute(
+        env: Env,
+        invoice_id: BytesN<32>,
+        creator: Address,
+        reason: String,
+        evidence: String,
+    ) -> Result<(), QuickLendXError> {
+        dispute::create_dispute(&env, &invoice_id, &creator, &reason, &evidence)
+    }
+
+    /// Advance a dispute from `Disputed` → `UnderReview`.
+    ///
+    /// Admin-only operation.  The dispute must currently be in the `Disputed`
+    /// state; any other state is rejected with `InvalidStatus`.
+    ///
+    /// # Parameters
+    /// - `invoice_id` — 32-byte invoice identifier.
+    /// - `admin`      — Admin address (must match the stored admin).
+    ///
+    /// # Errors
+    /// `NotAdmin`, `Unauthorized`, `DisputeNotFound`, `InvalidStatus`.
+    pub fn put_dispute_under_review(
+        env: Env,
+        invoice_id: BytesN<32>,
+        admin: Address,
+    ) -> Result<(), QuickLendXError> {
+        dispute::put_dispute_under_review(&env, &admin, &invoice_id)
+    }
+
+    /// Finalize a dispute from `UnderReview` → `Resolved`.
+    ///
+    /// Admin-only operation.  The dispute must currently be in `UnderReview`.
+    /// This is the terminal state; no further transitions are possible.
+    ///
+    /// # Parameters
+    /// - `invoice_id`  — 32-byte invoice identifier.
+    /// - `admin`       — Admin address (must match the stored admin).
+    /// - `resolution`  — Resolution text (1–2000 chars).
+    ///
+    /// # Errors
+    /// `NotAdmin`, `Unauthorized`, `DisputeNotFound`, `DisputeNotUnderReview`,
+    /// `InvalidDisputeReason`.
+    pub fn resolve_dispute(
+        env: Env,
+        invoice_id: BytesN<32>,
+        admin: Address,
+        resolution: String,
+    ) -> Result<(), QuickLendXError> {
+        dispute::resolve_dispute(&env, &admin, &invoice_id, &resolution)
+    }
+
+    /// Get the dispute details for a given invoice.
+    ///
+    /// Returns `Some(Dispute)` if a dispute exists, `None` if no dispute has
+    /// been filed on the invoice.
+    pub fn get_dispute_details(env: Env, invoice_id: BytesN<32>) -> Option<Dispute> {
+        dispute::get_dispute_details(&env, &invoice_id)
+    }
+
+    /// Get all invoice IDs that have any dispute (any status).
+    pub fn get_invoices_with_disputes(env: Env) -> Vec<BytesN<32>> {
+        dispute::get_invoices_with_disputes(&env)
+    }
+
+    /// Get all invoice IDs whose dispute status matches `status`.
+    pub fn get_invoices_by_dispute_status(
+        env: Env,
+        status: DisputeStatus,
+    ) -> Vec<BytesN<32>> {
+        dispute::get_invoices_by_dispute_status(&env, &status)
     }
 
 
