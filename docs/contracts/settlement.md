@@ -81,6 +81,18 @@ Backward-compatible events still emitted:
 - Invariant:
   - `total_paid <= total_due` is enforced.
 
+## Vesting Validation Notes
+The vesting flow also relies on ledger-time validation to keep token release schedules sane and reviewable.
+
+- Schedule creation rejects zero-value vesting amounts.
+- The creating caller must authorize and must be the configured protocol admin.
+- `start_time` cannot be backdated relative to the current ledger timestamp.
+- `end_time` must be strictly after `start_time`.
+- `cliff_time = start_time + cliff_seconds` must not overflow and must be strictly before `end_time`.
+- Release calculations reject impossible stored states such as `released_amount > total_amount` or timelines where `cliff_time` falls outside `[start_time, end_time)`.
+
+These checks prevent schedules that would unlock immediately from stale timestamps, collapse into zero-duration timelines, or defer the entire vesting curve to an invalid cliff boundary.
+
 ## Timestamp Consistency Guarantees
 Settlement and adjacent lifecycle entrypoints enforce monotonic ledger-time assumptions to avoid
 temporal anomalies when validators, simulation environments, or test harnesses move time backward.

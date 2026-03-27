@@ -33,6 +33,8 @@ mod settlement;
 mod storage;
 #[cfg(test)]
 mod test_init;
+#[cfg(test)]
+mod test_vesting;
 pub mod types;
 mod verification;
 mod vesting;
@@ -2120,6 +2122,5 @@ impl QuickLendXContract {
 
 
 }
-
 
 

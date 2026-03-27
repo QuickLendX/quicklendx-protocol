@@ -41,7 +41,7 @@ fn setup() -> (
 
 #[test]
 fn test_create_schedule_transfers_funds() {
-    let (env, client, admin, beneficiary, token_id, token_client) = setup();
+    let (_env, client, admin, beneficiary, token_id, token_client) = setup();
 
     let total = 1_000i128;
     let id = client.create_vesting_schedule(
@@ -84,7 +84,7 @@ fn test_zero_amount_fails() {
 
 #[test]
 fn test_invalid_timestamps_fail() {
-    let (_env, client, admin, beneficiary, token_id, _token_client) = setup();
+    let (env, client, admin, beneficiary, token_id, _token_client) = setup();
 
     let res_end_before_start = client.try_create_vesting_schedule(
         &admin,
@@ -97,6 +97,28 @@ fn test_invalid_timestamps_fail() {
     );
     assert!(res_end_before_start.is_err());
 
+    let res_start_in_past = client.try_create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &100i128,
+        &999u64,
+        &0u64,
+        &1_500u64,
+    );
+    assert!(res_start_in_past.is_err());
+
+    let res_start_equals_end = client.try_create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &100i128,
+        &1_500u64,
+        &0u64,
+        &1_500u64,
+    );
+    assert!(res_start_equals_end.is_err());
+
     let res_cliff_after_end = client.try_create_vesting_schedule(
         &admin,
         &token_id,
@@ -107,6 +129,28 @@ fn test_invalid_timestamps_fail() {
         &1_500u64,
     );
     assert!(res_cliff_after_end.is_err());
+
+    let res_cliff_at_end = client.try_create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &100i128,
+        &1_000u64,
+        &500u64,
+        &1_500u64,
+    );
+    assert!(res_cliff_at_end.is_err());
+
+    let res_cliff_overflow = client.try_create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &100i128,
+        &env.ledger().timestamp(),
+        &u64::MAX,
+        &(u64::MAX - 1),
+    );
+    assert!(res_cliff_overflow.is_err());
 }
 
 #[test]
@@ -185,10 +229,8 @@ fn test_release_after_end_releases_remaining() {
 }
 
 #[test]
-fn test_past_cliff_allows_immediate_release() {
+fn test_start_time_equal_to_now_is_allowed() {
     let (env, client, admin, beneficiary, token_id, token_client) = setup();
-
-    env.ledger().set_timestamp(2_000);
 
     let total = 2_000i128;
     let id = client.create_vesting_schedule(
@@ -196,11 +238,15 @@ fn test_past_cliff_allows_immediate_release() {
         &token_id,
         &beneficiary,
         &total,
-        &1_000u64,
-        &100u64,
+        &2_000u64,
+        &0u64,
         &3_000u64,
     );
 
+    let releasable_at_start = client.get_vesting_releasable(&id).unwrap();
+    assert_eq!(releasable_at_start, 0);
+
+    env.ledger().set_timestamp(2_500);
     let released = client.release_vested_tokens(&beneficiary, &id);
     assert_eq!(released, 1_000);
     assert_eq!(token_client.balance(&beneficiary), 1_000);
@@ -211,6 +257,27 @@ fn test_past_cliff_allows_immediate_release() {
     env.ledger().set_timestamp(3_000);
     let released_final = client.release_vested_tokens(&beneficiary, &id);
     assert_eq!(released_final, 1_000);
+}
+
+#[test]
+fn test_release_at_exact_cliff_uses_elapsed_vesting() {
+    let (env, client, admin, beneficiary, token_id, token_client) = setup();
+
+    let id = client.create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1_000i128,
+        &1_000u64,
+        &500u64,
+        &2_000u64,
+    );
+
+    env.ledger().set_timestamp(1_500);
+
+    let released = client.release_vested_tokens(&beneficiary, &id);
+    assert_eq!(released, 500);
+    assert_eq!(token_client.balance(&beneficiary), 500);
 }
 
 #[test]
@@ -229,5 +296,23 @@ fn test_only_beneficiary_can_release() {
     );
 
     let result = client.try_release_vested_tokens(&intruder, &id);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_only_admin_can_create_schedule() {
+    let (env, client, _admin, beneficiary, token_id, _token_client) = setup();
+    let attacker = Address::generate(&env);
+
+    let result = client.try_create_vesting_schedule(
+        &attacker,
+        &token_id,
+        &beneficiary,
+        &1_000i128,
+        &1_500u64,
+        &0u64,
+        &2_000u64,
+    );
+
     assert!(result.is_err());
 }
