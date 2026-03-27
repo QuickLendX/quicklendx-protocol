@@ -153,12 +153,9 @@ impl ProtocolInitializer {
         // Validate all parameters before making any state changes
         Self::validate_initialization_params(env, params)?;
 
-        // Initialize admin (this also checks admin_initialized flag)
+        // Initialize admin (this also checks admin_initialized flag and requires auth)
         // We set this first as it's the foundation for all admin operations
-        env.storage().instance().set(&ADMIN_INITIALIZED_KEY, &true);
-        env.storage()
-            .instance()
-            .set(&crate::admin::ADMIN_KEY, &params.admin);
+        crate::admin::AdminStorage::initialize(env, &params.admin)?;
 
         // Store treasury address
         env.storage()

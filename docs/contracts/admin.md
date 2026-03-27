@@ -74,3 +74,28 @@ Behavior:
 - Anonymous admin initialization is blocked.
 - Admin-only comments now match actual runtime enforcement.
 - Legacy compatibility path still preserves single-admin invariants.
+
+## Protocol Pause Mechanism (#605)
+
+The protocol implements a global pause mechanism to halt all mutating operations in case of emergency or maintenance.
+
+### Enforcement
+When the protocol is paused (`is_paused() == true`):
+- All public mutating entrypoints in `QuickLendXContract` call `PauseControl::require_not_paused()`.
+- Mutating operations include:
+    - **Invoices**: creation, upload, verification, cancellation, metadata updates, status changes, settlement.
+    - **Bids**: placing, withdrawing, cancelling, accepting.
+    - **Escrow**: funding, releasing, refunding.
+    - **Investments**: adding insurance.
+
+### Exceptions
+The following operations remain available even when paused:
+- **View/Read APIs**: all `get_*`, `query_*`, and status checks continue to function.
+- **Admin Configuration**: admin role transfers and system parameter configuration (e.g., fee updates, protocol limits).
+- **Emergency Flows**: emergency withdrawal flows remain operational to ensure fund recovery if necessary.
+
+### Management
+Only the protocol admin can pause or unpause the contract:
+- `pause(admin)`: sets the paused state to `true`.
+- `unpause(admin)`: sets the paused state to `false`.
+- Both operations require admin authorization.

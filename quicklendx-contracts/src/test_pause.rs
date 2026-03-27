@@ -16,8 +16,22 @@ fn setup(env: &Env) -> (QuickLendXContractClient, Address, Address, Address, Add
     client.initialize_admin(&admin);
     let business = Address::generate(env);
     let investor = Address::generate(env);
-    let currency = Address::generate(env);
-    (client, admin, business, investor, currency)
+    
+    // Register token contract for currency
+    let token_admin = Address::generate(env);
+    let currency_address = env.register_stellar_asset_contract_v2(token_admin).address();
+    let token_client = soroban_sdk::token::Client::new(env, &currency_address);
+    let sac_client = soroban_sdk::token::StellarAssetClient::new(env, &currency_address);
+    
+    // Mint tokens to investor
+    sac_client.mint(&investor, &1_000_000i128);
+    // Approve contract to spend investor's tokens
+    token_client.approve(&investor, &contract_id, &1_000_000i128, &200_000u32);
+
+    // Verify business by default since most ops require it
+    verify_business_for_test(env, &client, &admin, &business);
+    
+    (client, admin, business, investor, currency_address)
 }
 
 fn verify_investor_for_test(
@@ -28,6 +42,16 @@ fn verify_investor_for_test(
 ) {
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(investor, &limit);
+}
+
+fn verify_business_for_test(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    admin: &Address,
+    business: &Address,
+) {
+    client.submit_kyc_application(business, &String::from_str(env, "Business KYC"));
+    client.verify_business(admin, business);
 }
 
 #[test]
@@ -264,9 +288,6 @@ fn test_verify_invoice_fails_when_paused() {
 fn test_upload_invoice_fails_when_paused() {
     let env = Env::default();
     let (client, admin, business, _investor, currency) = setup(&env);
-    env.mock_all_auths();
-    client.submit_kyc_application(&business, &String::from_str(&env, "KYC"));
-    client.verify_business(&admin, &business);
     let due_date = env.ledger().timestamp() + 86400;
 
     client.pause(&admin);
@@ -280,6 +301,145 @@ fn test_upload_invoice_fails_when_paused() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
+    let err = result.err().expect("expected contract error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+}
+
+#[test]
+fn test_pause_blocks_accept_bid_and_fund() {
+    let env = Env::default();
+    let (client, admin, business, investor, currency) = setup(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+
+    client.pause(&admin);
+
+    let result = client.try_accept_bid_and_fund(&invoice_id, &bid_id);
+    let err = result.err().expect("expected contract error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+}
+
+#[test]
+fn test_pause_blocks_release_escrow_funds() {
+    let env = Env::default();
+    let (client, admin, business, investor, currency) = setup(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    
+    // Debug: check if accept_bid fails
+    let accept_res = client.try_accept_bid(&invoice_id, &bid_id);
+    if let Err(err) = accept_res {
+        panic!("Setup failed at accept_bid: {:?}", err);
+    }
+
+    client.pause(&admin);
+
+    let result = client.try_release_escrow_funds(&invoice_id);
+    let err = result.err().expect("expected contract error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+}
+
+#[test]
+fn test_pause_blocks_refund_escrow_funds() {
+    let env = Env::default();
+    let (client, admin, business, investor, currency) = setup(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    client.pause(&admin);
+
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
+    let err = result.err().expect("expected contract error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+}
+
+#[test]
+fn test_pause_blocks_cancel_bid() {
+    let env = Env::default();
+    let (client, admin, business, investor, currency) = setup(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+
+    client.pause(&admin);
+
+    let result = client.try_cancel_bid(&bid_id);
+    let err = result.err().expect("expected contract error");
+    let contract_error = err.expect("expected contract invoke error");
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+}
+
+#[test]
+fn test_pause_blocks_update_invoice_category() {
+    let env = Env::default();
+    let (client, admin, business, _investor, currency) = setup(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.pause(&admin);
+
+    let result = client.try_update_invoice_category(&invoice_id, &InvoiceCategory::Products);
     let err = result.err().expect("expected contract error");
     let contract_error = err.expect("expected contract invoke error");
     assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
