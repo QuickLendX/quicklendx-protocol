@@ -32,7 +32,13 @@
       "Bash(export PATH=\"/c/msys64/mingw64/bin:$HOME/.cargo/bin:$PATH\")",
       "Bash(cargo +stable-x86_64-pc-windows-gnu test test_dispute -- --nocapture)",
       "Bash(cargo +stable-x86_64-pc-windows-gnu test --lib test_dispute)",
-      "Bash(cargo +stable-x86_64-pc-windows-gnu test --lib)"
+      "Bash(cargo +stable-x86_64-pc-windows-gnu test --lib)",
+      "Bash(ls -la /c/Users/Covez/Desktop/quicklendx-protocol/quicklendx-contracts/src/*.rs)",
+      "Bash(grep -l \"^#\\\\[test\\\\]\" /c/Users/Covez/Desktop/quicklendx-protocol/quicklendx-contracts/src/test*.rs)",
+      "Bash(cargo test:*)",
+      "Read(//c/Users/Covez/Desktop/quicklendx-protocol/quicklendx-contracts/$USERPROFILE/.cargo/**)",
+      "Read(//c/Users/Covez/Desktop/quicklendx-protocol/quicklendx-contracts/$HOME/.cargo/**)",
+      "Bash(rustc --edition 2021 --crate-type lib /c/Users/Covez/Desktop/quicklendx-protocol/quicklendx-contracts/src/settlement.rs)"
     ]
   }
 }

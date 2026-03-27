@@ -1,12 +1,14 @@
 # Settlement Contract Flow
 
 ## Overview
-QuickLendX settlement now supports full and partial invoice payments with durable on-chain payment records.
+QuickLendX settlement supports full and partial invoice payments with durable on-chain payment records and hardened finalization safety.
 
 - Partial payments accumulate per invoice.
 - Payment progress is queryable at any time.
 - Applied payment amount is capped so `total_paid` never exceeds invoice `amount` (total due).
 - Every applied payment is persisted as a dedicated payment record with payer, amount, timestamp, and nonce/tx id.
+- Settlement finalization is protected against double-execution via a dedicated finalization flag.
+- Disbursement invariant (`investor_return + platform_fee == total_paid`) is checked before fund transfer.
 
 ## State Machine
 QuickLendX uses existing invoice statuses. For settlement:
@@ -27,6 +29,7 @@ Settlement storage in `src/settlement.rs` uses keyed records (no large single-va
 - `PaymentCount(invoice_id) -> u32`
 - `Payment(invoice_id, idx) -> SettlementPaymentRecord`
 - `PaymentNonce(invoice_id, payer, nonce) -> bool`
+- `Finalized(invoice_id) -> bool` — double-settlement guard flag
 
 `SettlementPaymentRecord` fields:
 
@@ -53,11 +56,38 @@ Accounting guarantees:
 - Rejected settlement overpayments do not mutate invoice state, investment state, balances, or settlement events.
 - Accepted final settlements emit `pay_rec` for the exact remaining due and `inv_stlf` for the final settled total.
 
+## Finalization Safety
+
+### Double-Settlement Protection
+A dedicated `Finalized(invoice_id)` storage flag is set atomically during settlement finalization. Any subsequent settlement attempt (via `settle_invoice` or auto-settlement through `process_partial_payment`) is rejected immediately with `InvalidStatus`.
+
+### Accounting Invariant
+Before disbursing funds, the settlement engine asserts:
+
+```
+investor_return + platform_fee == total_paid
+```
+
+If this invariant is violated (e.g., due to rounding errors in fee calculation), the settlement is rejected with `InvalidAmount`. This prevents any accounting drift between what the business paid and what gets disbursed.
+
+### Payment Count Limit
+Each invoice is limited to `MAX_PAYMENT_COUNT` (1,000) discrete payment records. This prevents unbounded storage growth and protects against payment-count overflow attacks.
+
+## Public Query API
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `get_invoice_progress` | `(env, invoice_id) -> Progress` | Aggregate settlement progress |
+| `get_payment_count` | `(env, invoice_id) -> u32` | Total number of payment records |
+| `get_payment_record` | `(env, invoice_id, index) -> SettlementPaymentRecord` | Single record by index |
+| `get_payment_records` | `(env, invoice_id, from, limit) -> Vec<SettlementPaymentRecord>` | Paginated record slice |
+| `is_invoice_finalized` | `(env, invoice_id) -> bool` | Whether settlement is complete |
+
 ## Events
 Settlement emits:
 
 - `pay_rec` (PaymentRecorded): `(invoice_id, payer, applied_amount, total_paid, status)`
-- `inv_stlf` (InvoiceSettled): `(invoice_id, final_amount, paid_at)`
+- `inv_stlf` (InvoiceSettledFinal): `(invoice_id, final_amount, paid_at)`
 
 Backward-compatible events still emitted:
 
@@ -65,21 +95,30 @@ Backward-compatible events still emitted:
 - `inv_set` (existing settlement event)
 
 ## Security Considerations
-- Replay/idempotency:
-  - Non-empty nonce is enforced unique per `(invoice, payer, nonce)`.
-  - Duplicate nonce attempts are rejected.
-- Overpayment integrity:
-  - Final settlement requires an exact remaining-due payment to avoid ambiguous excess-value handling.
-  - Partial-payment capping still protects incremental repayment flows without allowing accounting drift.
-- Arithmetic safety:
-  - Checked arithmetic is used for payment accumulation and progress calculations.
-  - Invalid/overflowing states reject with contract errors.
-- Authorization:
-  - Payer must be the invoice business owner and must authorize payment.
-- Closed invoice protection:
-  - Payments are rejected for `Paid`, `Cancelled`, `Defaulted`, and `Refunded` states.
-- Invariant:
-  - `total_paid <= total_due` is enforced.
+
+### Replay/Idempotency
+- Non-empty nonce is enforced unique per `(invoice, payer, nonce)`.
+- Duplicate nonce attempts are rejected with `OperationNotAllowed`.
+- Nonces are scoped per invoice — the same nonce can be used on different invoices.
+
+### Overpayment Integrity
+- Final settlement requires an exact remaining-due payment to avoid ambiguous excess-value handling.
+- Partial-payment capping protects incremental repayment flows without allowing accounting drift.
+
+### Arithmetic Safety
+- Checked arithmetic (`checked_add`, `checked_sub`, `checked_mul`, `checked_div`) is used for all payment accumulation and progress calculations.
+- Invalid/overflowing states reject with contract errors.
+
+### Authorization
+- Payer must be the invoice business owner and must authorize payment.
+
+### Closed Invoice Protection
+- Payments are rejected for `Paid`, `Cancelled`, `Defaulted`, and `Refunded` states.
+
+### Invariants
+- `total_paid <= total_due` is enforced at every payment step.
+- `investor_return + platform_fee == total_paid` is enforced at finalization.
+- `payment_count <= MAX_PAYMENT_COUNT` (1,000) per invoice.
 
 ## Timestamp Consistency Guarantees
 Settlement and adjacent lifecycle entrypoints enforce monotonic ledger-time assumptions to avoid
@@ -102,6 +141,9 @@ temporal anomalies when validators, simulation environments, or test harnesses m
   - Backward-time execution paths that could otherwise settle/default before a valid funding-time
     reference.
   - Cross-step inconsistencies caused by stale temporal assumptions.
+  - Double-settlement via finalization flag.
+  - Accounting drift via disbursement invariant check.
+  - Unbounded storage via payment count limit.
 - Not mitigated:
   - Consensus-level manipulation of canonical ledger time beyond protocol tolerance.
   - Misconfigured off-chain automation that never advances time far enough to pass grace windows.

@@ -4,6 +4,7 @@ mod tests {
     use crate::invoice::{InvoiceCategory, InvoiceStatus};
     use crate::settlement::{
         get_invoice_progress, get_payment_count, get_payment_record, get_payment_records,
+        is_invoice_finalized,
     };
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{
@@ -75,6 +76,11 @@ mod tests {
         client.cancel_invoice(&invoice_id);
         (invoice_id, business)
     }
+
+    // ========================================================================
+    // Existing tests (preserved)
+    // ========================================================================
+
     #[test]
     fn test_partial_payment_accumulates_correctly() {
         let env = Env::default();
@@ -387,17 +393,11 @@ mod tests {
         assert_eq!(progress.progress_percent, 100);
         assert_eq!(progress.remaining_due, 0);
     }
-    // Comprehensive tests for partial payments and settlement
-    //
-    // This module provides 95%+ test coverage for:
-    // - process_partial_payment validation (zero/negative amounts)
-    // - Payment progress tracking
-    // - Overpayment capped at 100%
-    // - Payment records and transaction IDs
-    // - Edge cases and error handling
-    // ============================================================================
-    // HELPER FUNCTIONS (second set for tests below)
-    // ============================================================================
+
+    // ========================================================================
+    // Helper functions (second set)
+    // ========================================================================
+
     fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address) {
         let env = Env::default();
         env.mock_all_auths();
@@ -427,3 +427,231 @@ mod tests {
         client.verify_investor(&investor, &limit);
         investor
     }
+
+    // ========================================================================
+    // New hardening tests for partial payments
+    // ========================================================================
+
+    /// Single payment of exact invoice amount triggers auto-settlement and
+    /// sets finalization flag.
+    #[test]
+    fn test_single_full_partial_payment_finalizes() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let (invoice_id, _business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+
+        env.ledger().set_timestamp(7_000);
+        client.process_partial_payment(&invoice_id, &1_000, &String::from_str(&env, "full"));
+
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.total_paid, 1_000);
+        assert_eq!(invoice.status, InvoiceStatus::Paid);
+
+        let finalized = env.as_contract(&contract_id, || {
+            is_invoice_finalized(&env, &invoice_id).unwrap()
+        });
+        assert!(finalized);
+    }
+
+    /// Payment record sum must always equal invoice.total_paid.
+    #[test]
+    fn test_payment_record_sum_equals_total_paid() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let (invoice_id, _business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+
+        let amounts: [i128; 4] = [150, 250, 350, 250];
+        for (i, &amt) in amounts.iter().enumerate() {
+            env.ledger().set_timestamp(8_000 + i as u64 * 100);
+            let nonce = String::from_str(&env, &format!("sum-{}", i));
+            client.process_partial_payment(&invoice_id, &amt, &nonce);
+        }
+
+        let invoice = client.get_invoice(&invoice_id);
+        let count = env.as_contract(&contract_id, || {
+            get_payment_count(&env, &invoice_id).unwrap()
+        });
+        let records = env.as_contract(&contract_id, || {
+            get_payment_records(&env, &invoice_id, 0, count).unwrap()
+        });
+        let sum: i128 = (0..records.len())
+            .map(|i| records.get(i as u32).unwrap().amount)
+            .sum();
+        assert_eq!(
+            sum, invoice.total_paid,
+            "sum of durable records must equal invoice.total_paid"
+        );
+    }
+
+    /// Minimum payment of 1 unit is accepted.
+    #[test]
+    fn test_minimum_payment_accepted() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let (invoice_id, _business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+
+        env.ledger().set_timestamp(9_000);
+        client.process_partial_payment(&invoice_id, &1, &String::from_str(&env, "min-pay"));
+
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.total_paid, 1);
+        assert_eq!(invoice.status, InvoiceStatus::Funded);
+    }
+
+    /// Many small payments accumulate correctly to full settlement.
+    #[test]
+    fn test_many_small_payments_accumulate_to_full() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let (invoice_id, _business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 100);
+
+        // 100 payments of 1 each.
+        for i in 0..100u32 {
+            env.ledger().set_timestamp(10_000 + i as u64);
+            let nonce = String::from_str(&env, &format!("small-{}", i));
+            client.process_partial_payment(&invoice_id, &1, &nonce);
+        }
+
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.total_paid, 100);
+        assert_eq!(invoice.status, InvoiceStatus::Paid);
+
+        let count = env.as_contract(&contract_id, || {
+            get_payment_count(&env, &invoice_id).unwrap()
+        });
+        assert_eq!(count, 100);
+    }
+
+    /// Overpayment attempt on the final payment: capped amount is recorded,
+    /// not the requested amount.
+    #[test]
+    fn test_capped_payment_record_reflects_applied_not_requested() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let (invoice_id, _business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 500);
+
+        env.ledger().set_timestamp(11_000);
+        client.process_partial_payment(&invoice_id, &400, &String::from_str(&env, "pre"));
+
+        env.ledger().set_timestamp(11_100);
+        // Request 300, but only 100 remains.
+        client.process_partial_payment(&invoice_id, &300, &String::from_str(&env, "over"));
+
+        let record = env.as_contract(&contract_id, || {
+            get_payment_record(&env, &invoice_id, 1).unwrap()
+        });
+        assert_eq!(record.amount, 100, "recorded amount must be capped at remaining_due");
+
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.total_paid, 500);
+    }
+
+    /// Progress for a non-existent invoice returns InvoiceNotFound.
+    #[test]
+    fn test_progress_for_nonexistent_invoice() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let missing_id = BytesN::from_array(&env, &[99u8; 32]);
+        let result = env.as_contract(&contract_id, || {
+            get_invoice_progress(&env, &missing_id)
+        });
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), QuickLendXError::InvoiceNotFound);
+    }
+
+    /// Payment count for a non-existent invoice returns InvoiceNotFound.
+    #[test]
+    fn test_payment_count_for_nonexistent_invoice() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let missing_id = BytesN::from_array(&env, &[98u8; 32]);
+        let result = env.as_contract(&contract_id, || {
+            get_payment_count(&env, &missing_id)
+        });
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), QuickLendXError::InvoiceNotFound);
+    }
+
+    /// Querying payment record at invalid index returns StorageKeyNotFound.
+    #[test]
+    fn test_payment_record_at_invalid_index() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let (invoice_id, _business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+
+        // No payments made yet; index 0 should not exist.
+        let result = env.as_contract(&contract_id, || {
+            get_payment_record(&env, &invoice_id, 0)
+        });
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), QuickLendXError::StorageKeyNotFound);
+    }
+
+    /// Unique nonces are accepted; the same nonce across different invoices
+    /// should be fine (nonce is scoped per invoice).
+    #[test]
+    fn test_same_nonce_different_invoices_accepted() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+
+        let (invoice_id_a, _biz_a, _inv_a, _cur_a) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+        let (invoice_id_b, _biz_b, _inv_b, _cur_b) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+
+        let shared_nonce = String::from_str(&env, "shared-nonce");
+        env.ledger().set_timestamp(12_000);
+        client.process_partial_payment(&invoice_id_a, &100, &shared_nonce);
+        // Same nonce on different invoice should succeed.
+        client.process_partial_payment(&invoice_id_b, &100, &shared_nonce);
+
+        let a = client.get_invoice(&invoice_id_a);
+        let b = client.get_invoice(&invoice_id_b);
+        assert_eq!(a.total_paid, 100);
+        assert_eq!(b.total_paid, 100);
+    }
+
+    /// After full settlement via partial payments, progress shows 100% and 0 remaining.
+    #[test]
+    fn test_progress_at_100_percent_after_full_partial_payment() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let (invoice_id, _business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+
+        env.ledger().set_timestamp(13_000);
+        client.process_partial_payment(&invoice_id, &1_000, &String::from_str(&env, "full-prog"));
+
+        let progress = env.as_contract(&contract_id, || {
+            get_invoice_progress(&env, &invoice_id).unwrap()
+        });
+        assert_eq!(progress.progress_percent, 100);
+        assert_eq!(progress.remaining_due, 0);
+        assert_eq!(progress.total_paid, progress.total_due);
+        assert_eq!(progress.status, InvoiceStatus::Paid);
+    }
+}

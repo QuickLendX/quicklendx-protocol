@@ -37,6 +37,10 @@ mod test_init;
 mod test_dispute;
 #[cfg(test)]
 mod test_string_limits;
+#[cfg(test)]
+mod test_settlement;
+#[cfg(test)]
+mod test_partial_payments;
 pub mod types;
 mod verification;
 mod vesting;
@@ -61,7 +65,14 @@ use invoice::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus, I
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
-    process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
+    get_invoice_progress as do_get_invoice_progress,
+    get_payment_count as do_get_payment_count,
+    get_payment_record as do_get_payment_record,
+    get_payment_records as do_get_payment_records,
+    is_invoice_finalized as do_is_invoice_finalized,
+    process_partial_payment as do_process_partial_payment,
+    settle_invoice as do_settle_invoice,
+    Progress, SettlementPaymentRecord,
 };
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
@@ -1023,6 +1034,53 @@ impl QuickLendXContract {
         transaction_id: String,
     ) -> Result<(), QuickLendXError> {
         do_process_partial_payment(&env, &invoice_id, payment_amount, transaction_id)
+    }
+
+    /// Get aggregate settlement progress for an invoice.
+    pub fn get_settlement_progress(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<Progress, QuickLendXError> {
+        do_get_invoice_progress(&env, &invoice_id)
+    }
+
+    /// Get the total number of recorded payments for an invoice.
+    pub fn get_settlement_payment_count(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<u32, QuickLendXError> {
+        do_get_payment_count(&env, &invoice_id)
+    }
+
+    /// Get a single settlement payment record by index.
+    pub fn get_settlement_payment_record(
+        env: Env,
+        invoice_id: BytesN<32>,
+        index: u32,
+    ) -> Result<SettlementPaymentRecord, QuickLendXError> {
+        do_get_payment_record(&env, &invoice_id, index)
+    }
+
+    /// Get a paginated slice of settlement payment records.
+    ///
+    /// # Arguments
+    /// * `from` - Starting index (inclusive)
+    /// * `limit` - Maximum number of records to return
+    pub fn get_settlement_payment_records(
+        env: Env,
+        invoice_id: BytesN<32>,
+        from: u32,
+        limit: u32,
+    ) -> Result<Vec<SettlementPaymentRecord>, QuickLendXError> {
+        do_get_payment_records(&env, &invoice_id, from, limit)
+    }
+
+    /// Check whether an invoice settlement has been finalized.
+    pub fn is_settlement_finalized(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<bool, QuickLendXError> {
+        do_is_invoice_finalized(&env, &invoice_id)
     }
 
     /// Handle invoice default (admin only)
