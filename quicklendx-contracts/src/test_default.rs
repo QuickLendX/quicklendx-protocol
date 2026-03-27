@@ -407,7 +407,7 @@ fn test_default_status_transition() {
     assert_eq!(invoice.status, InvoiceStatus::Funded);
 
     // Check status in funded list
-    let funded_invoices = client.get_invoices_by_status(&InvoiceStatus::Funded);
+    let funded_invoices = client.get_invoices_by_status(InvoiceStatus::Funded);
     assert!(funded_invoices.iter().any(|id| id == invoice_id));
 
     // Move time past grace period
@@ -423,11 +423,11 @@ fn test_default_status_transition() {
     assert_eq!(defaulted_invoice.status, InvoiceStatus::Defaulted);
 
     // Verify removed from funded list
-    let funded_after = client.get_invoices_by_status(&InvoiceStatus::Funded);
+    let funded_after = client.get_invoices_by_status(InvoiceStatus::Funded);
     assert!(!funded_after.iter().any(|id| id == invoice_id));
 
     // Verify added to defaulted list
-    let defaulted_invoices = client.get_invoices_by_status(&InvoiceStatus::Defaulted);
+    let defaulted_invoices = client.get_invoices_by_status(InvoiceStatus::Defaulted);
     assert!(defaulted_invoices.iter().any(|id| id == invoice_id));
 }
 
@@ -583,7 +583,7 @@ fn test_cannot_default_paid_invoice() {
     );
 
     // Mark as paid via status update
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Paid);
 
     // Move time well past any grace period
     let grace_period = 7 * 24 * 60 * 60;

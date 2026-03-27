@@ -304,15 +304,15 @@ impl AnalyticsCalculator {
 
         // Get all invoices by status
         let pending_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Pending);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Pending);
         let verified_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Verified);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Verified);
         let funded_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Funded);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
         let paid_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Paid);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Paid);
         let defaulted_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Defaulted);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Defaulted);
 
         let total_invoices = (pending_invoices.len()
             + verified_invoices.len()
@@ -332,7 +332,7 @@ impl AnalyticsCalculator {
         .iter()
         {
             for id in invoice_id.iter() {
-                if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &id) {
+                if let Some(invoice) = crate::storage::InvoiceStorage::get_invoice(env, &id) {
                     total_volume = total_volume.saturating_add(invoice.amount);
                 }
             }
@@ -344,12 +344,9 @@ impl AnalyticsCalculator {
         // Calculate total fees collected
         let mut total_fees = 0i128;
         for invoice_id in paid_invoices.iter() {
-            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &invoice_id) {
+            if let Some(invoice) = crate::storage::InvoiceStorage::get_invoice(env, &invoice_id) {
                 if let Some(investment) =
-                    crate::investment::InvestmentStorage::get_investment_by_invoice(
-                        env,
-                        &invoice_id,
-                    )
+                    crate::storage::InvestmentStorage::get_investment_by_invoice(env, &invoice_id)
                 {
                     let (_, platform_fee) =
                         crate::profits::calculate_profit(env, investment.amount, invoice.amount);
@@ -363,7 +360,7 @@ impl AnalyticsCalculator {
 
         // Count verified businesses
         let verified_businesses =
-            crate::verification::BusinessVerificationStorage::get_verified_businesses(env);
+            crate::storage::BusinessVerificationStorage::get_verified_businesses(env);
         let verified_businesses_count = verified_businesses.len() as u32;
 
         // Calculate averages
@@ -377,10 +374,7 @@ impl AnalyticsCalculator {
             let mut total_invested = 0i128;
             for invoice_id in funded_invoices.iter() {
                 if let Some(investment) =
-                    crate::investment::InvestmentStorage::get_investment_by_invoice(
-                        env,
-                        &invoice_id,
-                    )
+                    crate::storage::InvestmentStorage::get_investment_by_invoice(env, &invoice_id)
                 {
                     total_invested = total_invested.saturating_add(investment.amount);
                 }
@@ -435,7 +429,7 @@ impl AnalyticsCalculator {
         let _current_timestamp = env.ledger().timestamp();
 
         // Get user's invoices
-        let user_invoices = crate::invoice::InvoiceStorage::get_business_invoices(env, user);
+        let user_invoices = crate::storage::InvoiceStorage::get_business_invoices(env, user);
         let total_invoices_uploaded = user_invoices.len() as u32;
 
         // Get user's investments (simplified - would need proper tracking)
@@ -477,7 +471,7 @@ impl AnalyticsCalculator {
         // Find last activity
         let mut last_activity = 0u64;
         for invoice_id in user_invoices.iter() {
-            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &invoice_id) {
+            if let Some(invoice) = crate::storage::InvoiceStorage::get_invoice(env, &invoice_id) {
                 if invoice.created_at > last_activity {
                     last_activity = invoice.created_at;
                 }
@@ -539,13 +533,13 @@ impl AnalyticsCalculator {
         ]
         .iter()
         {
-            let invoices = crate::invoice::InvoiceStorage::get_invoices_by_status(env, status);
+            let invoices = crate::storage::InvoiceStorage::get_invoices_by_status(env, *status);
             for invoice_id in invoices.iter() {
                 all_invoices.push_back(invoice_id);
             }
         }
         for invoice_id in all_invoices.iter() {
-            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &invoice_id) {
+            if let Some(invoice) = crate::storage::InvoiceStorage::get_invoice(env, &invoice_id) {
                 if invoice.created_at >= start_date && invoice.created_at <= end_date {
                     total_volume = total_volume.saturating_add(invoice.amount);
 
@@ -576,7 +570,7 @@ impl AnalyticsCalculator {
                     // Calculate fees and profits for paid invoices
                     if invoice.status == InvoiceStatus::Paid {
                         if let Some(investment) =
-                            crate::investment::InvestmentStorage::get_investment_by_invoice(
+                            crate::storage::InvestmentStorage::get_investment_by_invoice(
                                 env,
                                 &invoice_id,
                             )
@@ -692,7 +686,7 @@ impl AnalyticsCalculator {
         .iter()
         {
             let count =
-                crate::invoice::InvoiceStorage::get_invoices_by_status(env, status).len() as u32;
+                crate::storage::InvoiceStorage::get_invoices_by_status(env, *status).len() as u32;
             total_transactions += count;
             if *status == InvoiceStatus::Paid {
                 successful_transactions = count;
@@ -707,7 +701,7 @@ impl AnalyticsCalculator {
 
         // Calculate error rate (simplified)
         let defaulted_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Defaulted);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Defaulted);
         let error_rate = if total_transactions > 0 {
             (defaulted_invoices.len() as u32)
                 .saturating_mul(10000)
@@ -720,13 +714,13 @@ impl AnalyticsCalculator {
         let mut total_rating = 0u32;
         let mut rating_count = 0u32;
         let _invoices_with_ratings =
-            crate::invoice::InvoiceStorage::get_invoices_with_ratings_count(env);
+            crate::storage::InvoiceStorage::get_invoices_with_ratings_count(env);
 
         // Get paid invoices for rating calculation
         let paid_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Paid);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Paid);
         for invoice_id in paid_invoices.iter() {
-            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &invoice_id) {
+            if let Some(invoice) = crate::storage::InvoiceStorage::get_invoice(env, &invoice_id) {
                 if let Some(avg_rating) = invoice.average_rating {
                     total_rating = total_rating.saturating_add(avg_rating);
                     rating_count += 1;
@@ -770,7 +764,7 @@ impl AnalyticsCalculator {
         let report_id = AnalyticsStorage::generate_report_id(env);
 
         // Get business invoices in the period
-        let all_invoices = crate::invoice::InvoiceStorage::get_business_invoices(env, business);
+        let all_invoices = crate::storage::InvoiceStorage::get_business_invoices(env, business);
         let mut invoices_uploaded = 0u32;
         let mut invoices_funded = 0u32;
         let mut total_volume = 0i128;
@@ -797,7 +791,7 @@ impl AnalyticsCalculator {
         }
 
         for invoice_id in all_invoices.iter() {
-            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &invoice_id) {
+            if let Some(invoice) = crate::storage::InvoiceStorage::get_invoice(env, &invoice_id) {
                 if invoice.created_at >= start_date && invoice.created_at <= end_date {
                     invoices_uploaded += 1;
                     total_volume = total_volume.saturating_add(invoice.amount);
@@ -817,7 +811,7 @@ impl AnalyticsCalculator {
                     {
                         invoices_funded += 1;
                         if let Some(investment) =
-                            crate::investment::InvestmentStorage::get_investment_by_invoice(
+                            crate::storage::InvestmentStorage::get_investment_by_invoice(
                                 env,
                                 &invoice_id,
                             )
@@ -926,7 +920,7 @@ impl AnalyticsCalculator {
                 total_invested = total_invested.saturating_add(investment.amount);
 
                 if let Some(invoice) =
-                    crate::invoice::InvoiceStorage::get_invoice(env, &investment.invoice_id)
+                    crate::storage::InvoiceStorage::get_invoice(env, &investment.invoice_id)
                 {
                     // Update category preferences
                     for i in 0..preferred_categories.len() {
@@ -1053,7 +1047,7 @@ impl AnalyticsCalculator {
         let current_timestamp = env.ledger().timestamp();
 
         // Get investor verification data
-        let verification = crate::verification::InvestorVerificationStorage::get(env, investor)
+        let verification = crate::storage::InvestorVerificationStorage::get(env, investor)
             .ok_or(QuickLendXError::KYCNotFound)?;
         if verification.status != crate::verification::BusinessVerificationStatus::Verified {
             return Err(QuickLendXError::BusinessNotVerified);
@@ -1145,11 +1139,11 @@ impl AnalyticsCalculator {
 
         // Get investor counts by status
         let verified_investors =
-            crate::verification::InvestorVerificationStorage::get_verified_investors(env);
+            crate::storage::InvestorVerificationStorage::get_verified_investors(env);
         let pending_investors =
-            crate::verification::InvestorVerificationStorage::get_pending_investors(env);
+            crate::storage::InvestorVerificationStorage::get_pending_investors(env);
         let rejected_investors =
-            crate::verification::InvestorVerificationStorage::get_rejected_investors(env);
+            crate::storage::InvestorVerificationStorage::get_rejected_investors(env);
 
         let total_investors =
             verified_investors.len() + pending_investors.len() + rejected_investors.len();
@@ -1165,11 +1159,10 @@ impl AnalyticsCalculator {
         ];
 
         for tier in tiers.iter() {
-            let tier_investors =
-                crate::verification::InvestorVerificationStorage::get_investors_by_tier(
-                    env,
-                    tier.clone(),
-                );
+            let tier_investors = crate::storage::InvestorVerificationStorage::get_investors_by_tier(
+                env,
+                tier.clone(),
+            );
             investors_by_tier.push_back((tier.clone(), tier_investors.len() as u32));
         }
 
@@ -1184,7 +1177,7 @@ impl AnalyticsCalculator {
 
         for risk_level in risk_levels.iter() {
             let risk_investors =
-                crate::verification::InvestorVerificationStorage::get_investors_by_risk_level(
+                crate::storage::InvestorVerificationStorage::get_investors_by_risk_level(
                     env,
                     risk_level.clone(),
                 );
@@ -1199,7 +1192,7 @@ impl AnalyticsCalculator {
 
         for investor in verified_investors.iter() {
             if let Some(verification) =
-                crate::verification::InvestorVerificationStorage::get(env, &investor)
+                crate::storage::InvestorVerificationStorage::get(env, &investor)
             {
                 total_investment_volume =
                     total_investment_volume.saturating_add(verification.total_invested);
@@ -1234,7 +1227,7 @@ impl AnalyticsCalculator {
         let mut top_performing_investors = Vec::new(env);
         for investor in verified_investors.iter() {
             if let Some(verification) =
-                crate::verification::InvestorVerificationStorage::get(env, &investor)
+                crate::storage::InvestorVerificationStorage::get(env, &investor)
             {
                 if verification.successful_investments > 5 && verification.risk_score < 30 {
                     top_performing_investors.push_back(investor);

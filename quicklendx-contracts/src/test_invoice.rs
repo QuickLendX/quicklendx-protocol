@@ -829,7 +829,7 @@ fn test_invoice_status_transition_funded_to_paid() {
     assert_eq!(invoice.status, InvoiceStatus::Funded);
 
     // Transition to Paid
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Paid);
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
@@ -874,7 +874,7 @@ fn test_invoice_status_transition_funded_to_defaulted() {
     assert_eq!(invoice.status, InvoiceStatus::Funded);
 
     // Transition to Defaulted
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Defaulted);
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Defaulted);
@@ -890,7 +890,7 @@ fn test_invoice_invalid_status_transition() {
     let invoice_id = create_test_invoice(&env, &client, &business, 1_000_000);
 
     // Transition from Pending directly to Paid (allowed by current contract behavior)
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Paid);
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
 }

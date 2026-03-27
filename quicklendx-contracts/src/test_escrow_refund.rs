@@ -67,7 +67,7 @@ fn test_refund_transfers_and_updates_status() {
         &Vec::new(&env),
     );
     // Bypass admin verify path in this test by updating status directly
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
 
     // Prepare investor and place bid
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
@@ -126,7 +126,7 @@ fn test_refund_idempotency_and_release_blocked() {
         &Vec::new(&env),
     );
     // Avoid admin-only path in this test; update status directly
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
 
     // Investor setup and bid
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
@@ -232,7 +232,7 @@ fn test_refund_fails_when_caller_is_neither_admin_nor_business() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
 
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
     client.verify_investor(&investor, &10_000i128);
@@ -274,7 +274,7 @@ fn test_refund_fails_if_invoice_status_not_funded() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
 
     let result = client.try_refund_escrow_funds(&invoice_id, &admin);
     assert!(
@@ -304,7 +304,7 @@ fn test_refund_events_emitted_correctly() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
 
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
     client.verify_investor(&investor, &10_000i128);

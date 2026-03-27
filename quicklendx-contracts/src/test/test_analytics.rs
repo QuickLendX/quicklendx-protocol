@@ -97,11 +97,11 @@ fn test_platform_metrics_after_status_changes() {
     let inv2 = create_invoice(&env, &client, &business, 2000, "Status inv 2");
 
     // Verify and fund inv1
-    client.update_invoice_status(&inv1, &InvoiceStatus::Verified);
-    client.update_invoice_status(&inv1, &InvoiceStatus::Funded);
+    client.update_invoice_status(&inv1, InvoiceStatus::Verified);
+    client.update_invoice_status(&inv1, InvoiceStatus::Funded);
 
     // Mark inv2 as paid
-    client.update_invoice_status(&inv2, &InvoiceStatus::Paid);
+    client.update_invoice_status(&inv2, InvoiceStatus::Paid);
 
     let metrics = client.get_platform_metrics();
     assert_eq!(metrics.total_invoices, 2);
@@ -136,8 +136,8 @@ fn test_performance_metrics_with_invoices() {
     let inv2 = create_invoice(&env, &client, &business, 2000, "Perf inv 2");
 
     // One paid, one defaulted
-    client.update_invoice_status(&inv1, &InvoiceStatus::Paid);
-    client.update_invoice_status(&inv2, &InvoiceStatus::Defaulted);
+    client.update_invoice_status(&inv1, InvoiceStatus::Paid);
+    client.update_invoice_status(&inv2, InvoiceStatus::Defaulted);
 
     let metrics = client.get_performance_metrics();
     // 1 paid out of 2 total = 50% = 5000 bps
@@ -269,8 +269,8 @@ fn test_business_report_with_invoices() {
     let _inv2 = create_invoice(&env, &client, &business, 2000, "Biz report inv 2");
 
     // Fund one invoice
-    client.update_invoice_status(&inv1, &InvoiceStatus::Verified);
-    client.update_invoice_status(&inv1, &InvoiceStatus::Funded);
+    client.update_invoice_status(&inv1, InvoiceStatus::Verified);
+    client.update_invoice_status(&inv1, InvoiceStatus::Funded);
 
     let report = client.generate_business_report(&business, &TimePeriod::AllTime);
     assert_eq!(report.invoices_uploaded, 2);
@@ -1012,8 +1012,8 @@ fn test_get_business_report_fields_match_generated_data() {
     let _inv2 = create_invoice(&env, &client, &business, 5000, "Match test inv 2");
 
     // Fund one invoice
-    client.update_invoice_status(&inv1, &InvoiceStatus::Verified);
-    client.update_invoice_status(&inv1, &InvoiceStatus::Funded);
+    client.update_invoice_status(&inv1, InvoiceStatus::Verified);
+    client.update_invoice_status(&inv1, InvoiceStatus::Funded);
 
     // Generate report
     let generated = client.generate_business_report(&business, &TimePeriod::AllTime);
@@ -1131,8 +1131,8 @@ fn test_get_business_report_with_paid_and_defaulted_invoices() {
     let _inv3 = create_invoice(&env, &client, &business, 3000, "Pending invoice");
 
     // Mark one as paid, one as defaulted
-    client.update_invoice_status(&inv1, &InvoiceStatus::Paid);
-    client.update_invoice_status(&inv2, &InvoiceStatus::Defaulted);
+    client.update_invoice_status(&inv1, InvoiceStatus::Paid);
+    client.update_invoice_status(&inv2, InvoiceStatus::Defaulted);
 
     let generated = client.generate_business_report(&business, &TimePeriod::AllTime);
     let retrieved = client.get_business_report(&generated.report_id).unwrap();

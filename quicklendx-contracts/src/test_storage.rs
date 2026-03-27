@@ -7,7 +7,7 @@
 //! - Edge cases and error conditions
 //! - Deterministic behavior under Soroban
 
-use soroban_sdk::{testutils::Address as _, vec, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{symbol_short, testutils::Address as _, vec, Address, BytesN, Env, String, Vec};
 
 use crate::bid::{Bid, BidStatus};
 use crate::investment::{Investment, InvestmentStatus};
@@ -17,20 +17,27 @@ use crate::invoice::{
 };
 use crate::profits::{PlatformFee, PlatformFeeConfig};
 use crate::storage::{
-    BidStorage, ConfigStorage, Indexes, InvestmentStorage, InvoiceStorage, StorageKeys,
+    BidStorage, ConfigStorage, DataKey, Indexes, InvestmentStorage, InvoiceStorage, StorageKeys,
 };
+use crate::QuickLendXContract;
+
+fn setup_test() -> (Env, Address) {
+    let env = Env::default();
+    let address = env.register(QuickLendXContract, ());
+    (env, address)
+}
 
 #[test]
 fn test_storage_keys() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
         let bid_id = BytesN::from_array(&env, &[2; 32]);
         let investment_id = BytesN::from_array(&env, &[3; 32]);
 
         // Test invoice key
         let key = StorageKeys::invoice(&invoice_id);
-        assert_eq!(key, invoice_id);
+        assert_eq!(key, DataKey::Invoice(invoice_id));
 
         // Test different invoice ID generates different key
         let invoice_id_2 = BytesN::from_array(&env, &[4; 32]);
@@ -39,7 +46,7 @@ fn test_storage_keys() {
 
         // Test bid key
         let key = StorageKeys::bid(&bid_id);
-        assert_eq!(key, bid_id);
+        assert_eq!(key, DataKey::Bid(bid_id));
 
         // Test different bid ID generates different key
         let bid_id_2 = BytesN::from_array(&env, &[5; 32]);
@@ -48,7 +55,7 @@ fn test_storage_keys() {
 
         // Test investment key
         let key = StorageKeys::investment(&investment_id);
-        assert_eq!(key, investment_id);
+        assert_eq!(key, DataKey::Investment(investment_id));
 
         // Test different investment ID generates different key
         let investment_id_2 = BytesN::from_array(&env, &[6; 32]);
@@ -57,243 +64,238 @@ fn test_storage_keys() {
 
         // Test platform fees key
         let key = StorageKeys::platform_fees();
-        assert_eq!(key, soroban_sdk::symbol_short!("fees"));
+        assert_eq!(key, DataKey::PlatformFees);
 
         // Test invoice count key
         let key = StorageKeys::invoice_count();
-        assert_eq!(key, soroban_sdk::symbol_short!("inv_count"));
+        assert_eq!(key, DataKey::InvoiceCount);
 
         // Test bid count key
         let key = StorageKeys::bid_count();
-        assert_eq!(key, soroban_sdk::symbol_short!("bid_count"));
+        assert_eq!(key, DataKey::BidCount);
 
         // Test investment count key
         let key = StorageKeys::investment_count();
-        assert_eq!(key, soroban_sdk::symbol_short!("inv_cnt"));
+        assert_eq!(key, DataKey::InvestmentCount);
     });
 }
 
 #[test]
 fn test_indexes() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         let business = Address::generate(&env);
         let investor = Address::generate(&env);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
 
         // Test invoice by business index
-        let (symbol, addr) = Indexes::invoices_by_business(&business);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("inv_bus"));
-        assert_eq!(addr, business);
+        let key = Indexes::invoices_by_business(&business);
+        assert_eq!(key, DataKey::InvoicesByBusiness(business.clone()));
 
         // Test different business address generates different key
         let business_2 = Address::generate(&env);
-        let (symbol_2, addr_2) = Indexes::invoices_by_business(&business_2);
-        assert_eq!(symbol_2, soroban_sdk::symbol_short!("inv_bus"));
-        assert_ne!(addr, addr_2);
+        let key_2 = Indexes::invoices_by_business(&business_2);
+        assert_ne!(key, key_2);
 
         // Test invoice by status indexes
-        let (symbol, status_symbol) = Indexes::invoices_by_status(InvoiceStatus::Pending);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("inv_stat"));
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("pending"));
+        let key = Indexes::invoices_by_status(InvoiceStatus::Pending);
+        assert_eq!(key, DataKey::InvoicesByStatus(symbol_short!("pending")));
 
-        let (_, status_symbol) = Indexes::invoices_by_status(InvoiceStatus::Verified);
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("verified"));
-        let (_, status_symbol) = Indexes::invoices_by_status(InvoiceStatus::Funded);
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("funded"));
-        let (_, status_symbol) = Indexes::invoices_by_status(InvoiceStatus::Paid);
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("paid"));
-        let (_, status_symbol) = Indexes::invoices_by_status(InvoiceStatus::Defaulted);
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("defaulted"));
-        let (_, status_symbol) = Indexes::invoices_by_status(InvoiceStatus::Cancelled);
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("cancelled"));
+        let key = Indexes::invoices_by_status(InvoiceStatus::Verified);
+        assert_eq!(key, DataKey::InvoicesByStatus(symbol_short!("verified")));
+        let key = Indexes::invoices_by_status(InvoiceStatus::Funded);
+        assert_eq!(key, DataKey::InvoicesByStatus(symbol_short!("funded")));
+        let key = Indexes::invoices_by_status(InvoiceStatus::Paid);
+        assert_eq!(key, DataKey::InvoicesByStatus(symbol_short!("paid")));
+        let key = Indexes::invoices_by_status(InvoiceStatus::Defaulted);
+        assert_eq!(key, DataKey::InvoicesByStatus(symbol_short!("defaulted")));
+        let key = Indexes::invoices_by_status(InvoiceStatus::Cancelled);
+        assert_eq!(key, DataKey::InvoicesByStatus(symbol_short!("cancelled")));
 
         // Test bid indexes
-        let (symbol, id) = Indexes::bids_by_invoice(&invoice_id);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("bids_inv"));
-        assert_eq!(id, invoice_id);
+        let key = Indexes::bids_by_invoice(&invoice_id);
+        assert_eq!(key, DataKey::BidsByInvoice(invoice_id.clone()));
 
         // Test different invoice ID generates different key for bid index
         let invoice_id_2 = BytesN::from_array(&env, &[4; 32]);
-        let (symbol_2, id_2) = Indexes::bids_by_invoice(&invoice_id_2);
-        assert_eq!(symbol_2, soroban_sdk::symbol_short!("bids_inv"));
-        assert_ne!(id, id_2);
+        let key_2 = Indexes::bids_by_invoice(&invoice_id_2);
+        assert_ne!(key, key_2);
 
-        let (symbol, addr) = Indexes::bids_by_investor(&investor);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("bids_inv"));
-        assert_eq!(addr, investor);
+        let key = Indexes::bids_by_investor(&investor);
+        assert_eq!(key, DataKey::BidsByInvestor(investor.clone()));
 
         // Test different investor address generates different key for bid index
         let investor_2 = Address::generate(&env);
-        let (symbol_2, addr_2) = Indexes::bids_by_investor(&investor_2);
-        assert_eq!(symbol_2, soroban_sdk::symbol_short!("bids_inv"));
-        assert_ne!(addr, addr_2);
+        let key_2 = Indexes::bids_by_investor(&investor_2);
+        assert_ne!(key, key_2);
 
-        let (symbol, status_symbol) = Indexes::bids_by_status(BidStatus::Placed);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("bids_stat"));
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("placed"));
-        let (_, status_symbol) = Indexes::bids_by_status(BidStatus::Withdrawn);
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("withdrawn"));
-        let (_, status_symbol) = Indexes::bids_by_status(BidStatus::Accepted);
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("accepted"));
-        let (_, status_symbol) = Indexes::bids_by_status(BidStatus::Expired);
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("expired"));
+        let key = Indexes::bids_by_status(BidStatus::Placed);
+        assert_eq!(key, DataKey::BidsByStatus(symbol_short!("placed")));
+        let key = Indexes::bids_by_status(BidStatus::Withdrawn);
+        assert_eq!(key, DataKey::BidsByStatus(symbol_short!("withdrawn")));
+        let key = Indexes::bids_by_status(BidStatus::Accepted);
+        assert_eq!(key, DataKey::BidsByStatus(symbol_short!("accepted")));
+        let key = Indexes::bids_by_status(BidStatus::Expired);
+        assert_eq!(key, DataKey::BidsByStatus(symbol_short!("expired")));
 
         // Test investment indexes
-        let (symbol, id) = Indexes::investments_by_invoice(&invoice_id);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("invst_inv"));
-        assert_eq!(id, invoice_id);
+        let key = Indexes::investments_by_invoice(&invoice_id);
+        assert_eq!(key, DataKey::InvestmentsByInvoice(invoice_id.clone()));
 
         // Test different invoice ID generates different key for investment index
-        let (symbol_2, id_2) = Indexes::investments_by_invoice(&invoice_id_2);
-        assert_eq!(symbol_2, soroban_sdk::symbol_short!("invst_inv"));
-        assert_ne!(id, id_2);
+        let key_2 = Indexes::investments_by_invoice(&invoice_id_2);
+        assert_ne!(key, key_2);
 
-        let (symbol, addr) = Indexes::investments_by_investor(&investor);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("inv_invst"));
-        assert_eq!(addr, investor);
+        let key = Indexes::investments_by_investor(&investor);
+        assert_eq!(key, DataKey::InvestmentsByInvestor(investor.clone()));
 
         // Test different investor address generates different key for investment index
-        let (symbol_2, addr_2) = Indexes::investments_by_investor(&investor_2);
-        assert_eq!(symbol_2, soroban_sdk::symbol_short!("inv_invst"));
-        assert_ne!(addr, addr_2);
+        let key_2 = Indexes::investments_by_investor(&investor_2);
+        assert_ne!(key, key_2);
 
-        let (symbol, status_symbol) = Indexes::investments_by_status(InvestmentStatus::Active);
-        assert_eq!(symbol, soroban_sdk::symbol_short!("inv_stat"));
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("active"));
-        let (_, status_symbol) = Indexes::investments_by_status(InvestmentStatus::Withdrawn);
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("withdrawn"));
-        let (_, status_symbol) = Indexes::investments_by_status(InvestmentStatus::Completed);
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("completed"));
-        let (_, status_symbol) = Indexes::investments_by_status(InvestmentStatus::Defaulted);
-        assert_eq!(status_symbol, soroban_sdk::symbol_short!("defaulted"));
+        let key = Indexes::investments_by_status(InvestmentStatus::Active);
+        assert_eq!(key, DataKey::InvestmentsByStatus(symbol_short!("active")));
+        let key = Indexes::investments_by_status(InvestmentStatus::Withdrawn);
+        assert_eq!(
+            key,
+            DataKey::InvestmentsByStatus(symbol_short!("withdrawn"))
+        );
+        let key = Indexes::investments_by_status(InvestmentStatus::Completed);
+        assert_eq!(
+            key,
+            DataKey::InvestmentsByStatus(symbol_short!("completed"))
+        );
+        let key = Indexes::investments_by_status(InvestmentStatus::Defaulted);
+        assert_eq!(
+            key,
+            DataKey::InvestmentsByStatus(symbol_short!("defaulted"))
+        );
     });
 }
 
 #[test]
 fn test_invoice_storage() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
-        env.as_contract(&Address::generate(&env), || {
-            let invoice_id = BytesN::from_array(&env, &[1; 32]);
-            let business = Address::generate(&env);
-            let currency = Address::generate(&env);
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
+        let business = Address::generate(&env);
+        let currency = Address::generate(&env);
 
-            let metadata = InvoiceMetadata {
-                customer_name: String::from_str(&env, "ABC Corp"),
-                customer_address: String::from_str(&env, "123 Main St"),
-                tax_id: String::from_str(&env, "123456789"),
-                line_items: Vec::new(&env),
-                notes: String::from_str(&env, "Notes"),
-            };
+        let metadata = InvoiceMetadata {
+            customer_name: String::from_str(&env, "ABC Corp"),
+            customer_address: String::from_str(&env, "123 Main St"),
+            tax_id: String::from_str(&env, "123456789"),
+            line_items: Vec::new(&env),
+            notes: String::from_str(&env, "Notes"),
+        };
 
-            let dispute = Dispute {
-                created_by: Address::generate(&env),
-                created_at: 0,
-                reason: String::from_str(&env, ""),
-                evidence: String::from_str(&env, ""),
-                resolution: String::from_str(&env, ""),
-                resolved_by: Address::generate(&env),
-                resolved_at: 0,
-            };
+        let dispute = Dispute {
+            created_by: Address::generate(&env),
+            created_at: 0,
+            reason: String::from_str(&env, ""),
+            evidence: String::from_str(&env, ""),
+            resolution: String::from_str(&env, ""),
+            resolved_by: Address::generate(&env),
+            resolved_at: 0,
+        };
 
-            let invoice = Invoice {
-                id: invoice_id.clone(),
-                business: business.clone(),
-                amount: 10000,
-                currency: currency.clone(),
-                due_date: 1234567890,
-                status: InvoiceStatus::Pending,
-                created_at: 1234567890,
-                description: String::from_str(&env, "Consulting services"),
-                metadata_customer_name: Some(metadata.customer_name.clone()),
-                metadata_customer_address: Some(metadata.customer_address.clone()),
-                metadata_tax_id: Some(metadata.tax_id.clone()),
-                metadata_notes: Some(metadata.notes.clone()),
-                metadata_line_items: metadata.line_items.clone(),
-                category: InvoiceCategory::Consulting,
-                tags: Vec::new(&env),
-                funded_amount: 0,
-                funded_at: None,
-                investor: None,
-                settled_at: None,
-                average_rating: None,
-                total_ratings: 0,
-                ratings: Vec::new(&env),
-                dispute_status: crate::invoice::DisputeStatus::None,
-                dispute: dispute.clone(),
-                total_paid: 0,
-                payment_history: Vec::new(&env),
-            };
+        let invoice = Invoice {
+            id: invoice_id.clone(),
+            business: business.clone(),
+            amount: 10000,
+            currency: currency.clone(),
+            due_date: 1234567890,
+            status: InvoiceStatus::Pending,
+            created_at: 1234567890,
+            description: String::from_str(&env, "Consulting services"),
+            metadata_customer_name: Some(metadata.customer_name.clone()),
+            metadata_customer_address: Some(metadata.customer_address.clone()),
+            metadata_tax_id: Some(metadata.tax_id.clone()),
+            metadata_notes: Some(metadata.notes.clone()),
+            metadata_line_items: metadata.line_items.clone(),
+            category: InvoiceCategory::Consulting,
+            tags: Vec::new(&env),
+            funded_amount: 0,
+            funded_at: None,
+            investor: None,
+            settled_at: None,
+            average_rating: None,
+            total_ratings: 0,
+            ratings: Vec::new(&env),
+            dispute_status: crate::invoice::DisputeStatus::None,
+            dispute: dispute.clone(),
+            total_paid: 0,
+            payment_history: Vec::new(&env),
+        };
 
-            // Test storing invoice
-            InvoiceStorage::store(&env, &invoice);
+        // Test storing invoice
+        InvoiceStorage::store_invoice(&env, &invoice);
 
-            // Test retrieving invoice
-            let retrieved = InvoiceStorage::get(&env, &invoice_id).unwrap();
-            assert_eq!(retrieved, invoice);
+        // Test retrieving invoice
+        let retrieved = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        assert_eq!(retrieved, invoice);
 
-            // Test getting a non-existent invoice
-            let non_existent_invoice_id = BytesN::from_array(&env, &[99; 32]);
-            assert!(InvoiceStorage::get(&env, &non_existent_invoice_id).is_none());
+        // Test getting a non-existent invoice
+        let non_existent_invoice_id = BytesN::from_array(&env, &[99; 32]);
+        assert!(InvoiceStorage::get_invoice(&env, &non_existent_invoice_id).is_none());
 
-            // Test getting invoices by business
-            let business_invoices = InvoiceStorage::get_by_business(&env, &business);
-            assert_eq!(business_invoices.len(), 1);
-            assert_eq!(business_invoices.get(0).unwrap(), invoice_id);
+        // Test getting invoices by business
+        let business_invoices = InvoiceStorage::get_business_invoices(&env, &business);
+        assert_eq!(business_invoices.len(), 1);
+        assert_eq!(business_invoices.get(0).unwrap(), invoice_id);
 
-            // Test getting invoices by a business with no invoices
-            let business_no_invoices = Address::generate(&env);
-            let empty_business_invoices =
-                InvoiceStorage::get_by_business(&env, &business_no_invoices);
-            assert!(empty_business_invoices.is_empty());
+        // Test getting invoices by a business with no invoices
+        let business_no_invoices = Address::generate(&env);
+        let empty_business_invoices =
+            InvoiceStorage::get_business_invoices(&env, &business_no_invoices);
+        assert!(empty_business_invoices.is_empty());
 
-            // Test getting invoices by status
-            let pending_invoices = InvoiceStorage::get_by_status(&env, InvoiceStatus::Pending);
-            assert_eq!(pending_invoices.len(), 1);
-            assert_eq!(pending_invoices.get(0).unwrap(), invoice_id);
+        // Test getting invoices by status
+        let pending_invoices = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Pending);
+        assert_eq!(pending_invoices.len(), 1);
+        assert_eq!(pending_invoices.get(0).unwrap(), invoice_id);
 
-            // Test getting invoices by a status with no invoices
-            let funded_invoices = InvoiceStorage::get_by_status(&env, InvoiceStatus::Funded);
-            assert!(funded_invoices.is_empty());
+        // Test getting invoices by a status with no invoices
+        let funded_invoices = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Funded);
+        assert!(funded_invoices.is_empty());
 
-            // Test updating invoice status
-            let mut updated_invoice = invoice.clone();
-            updated_invoice.status = InvoiceStatus::Verified;
-            InvoiceStorage::update(&env, &updated_invoice);
+        // Test updating invoice status
+        let mut updated_invoice = invoice.clone();
+        updated_invoice.status = InvoiceStatus::Verified;
+        InvoiceStorage::update_invoice(&env, &updated_invoice);
 
-            let retrieved_updated = InvoiceStorage::get(&env, &invoice_id).unwrap();
-            assert_eq!(retrieved_updated.status, InvoiceStatus::Verified);
+        let retrieved_updated = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        assert_eq!(retrieved_updated.status, InvoiceStatus::Verified);
 
-            // Check that indexes are updated
-            let verified_invoices = InvoiceStorage::get_by_status(&env, InvoiceStatus::Verified);
-            assert_eq!(verified_invoices.len(), 1);
-            assert_eq!(verified_invoices.get(0).unwrap(), invoice_id);
+        // Check that indexes are updated
+        let verified_invoices =
+            InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified);
+        assert_eq!(verified_invoices.len(), 1);
+        assert_eq!(verified_invoices.get(0).unwrap(), invoice_id);
 
-            let pending_invoices_after =
-                InvoiceStorage::get_by_status(&env, InvoiceStatus::Pending);
-            assert_eq!(pending_invoices_after.len(), 0);
+        let pending_invoices_after =
+            InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Pending);
+        assert_eq!(pending_invoices_after.len(), 0);
 
-            // Test updating invoice to the same status (should not change indexes)
-            InvoiceStorage::update(&env, &retrieved_updated); // Update with the same status
-            let verified_invoices_same_status =
-                InvoiceStorage::get_by_status(&env, InvoiceStatus::Verified);
-            assert_eq!(verified_invoices_same_status.len(), 1);
-            assert_eq!(verified_invoices_same_status.get(0).unwrap(), invoice_id);
+        // Test updating invoice to the same status (should not change indexes)
+        InvoiceStorage::update_invoice(&env, &retrieved_updated); // Update with the same status
+        let verified_invoices_same_status =
+            InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified);
+        assert_eq!(verified_invoices_same_status.len(), 1);
+        assert_eq!(verified_invoices_same_status.get(0).unwrap(), invoice_id);
 
-            // Test invoice counter
-            let count1 = InvoiceStorage::next_count(&env);
-            let count2 = InvoiceStorage::next_count(&env);
-            assert_eq!(count1, 1);
-            assert_eq!(count2, 2);
-        });
+        // Test invoice counter
+        let count1 = InvoiceStorage::next_count(&env);
+        let count2 = InvoiceStorage::next_count(&env);
+        assert_eq!(count1, 1);
+        assert_eq!(count2, 2);
     });
 }
 
 #[test]
 fn test_bid_storage() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         let bid_id = BytesN::from_array(&env, &[2; 32]);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
         let investor = Address::generate(&env);
@@ -310,64 +312,64 @@ fn test_bid_storage() {
         };
 
         // Test storing bid
-        BidStorage::store(&env, &bid);
+        BidStorage::store_bid(&env, &bid);
 
         // Test retrieving bid
-        let retrieved = BidStorage::get(&env, &bid_id).unwrap();
+        let retrieved = BidStorage::get_bid(&env, &bid_id).unwrap();
         assert_eq!(retrieved, bid);
 
         // Test getting a non-existent bid
         let non_existent_bid_id = BytesN::from_array(&env, &[99; 32]);
-        assert!(BidStorage::get(&env, &non_existent_bid_id).is_none());
+        assert!(BidStorage::get_bid(&env, &non_existent_bid_id).is_none());
 
         // Test getting bids by invoice
-        let invoice_bids = BidStorage::get_by_invoice(&env, &invoice_id);
+        let invoice_bids = BidStorage::get_bids_for_invoice(&env, &invoice_id);
         assert_eq!(invoice_bids.len(), 1);
         assert_eq!(invoice_bids.get(0).unwrap(), bid_id);
 
         // Test getting bids by an invoice with no bids
         let invoice_id_no_bids = BytesN::from_array(&env, &[98; 32]);
-        let empty_invoice_bids = BidStorage::get_by_invoice(&env, &invoice_id_no_bids);
+        let empty_invoice_bids = BidStorage::get_bids_for_invoice(&env, &invoice_id_no_bids);
         assert!(empty_invoice_bids.is_empty());
 
         // Test getting bids by investor
-        let investor_bids = BidStorage::get_by_investor(&env, &investor);
+        let investor_bids = BidStorage::get_bids_for_investor(&env, &investor);
         assert_eq!(investor_bids.len(), 1);
         assert_eq!(investor_bids.get(0).unwrap(), bid_id);
 
         // Test getting bids by an investor with no bids
         let investor_no_bids = Address::generate(&env);
-        let empty_investor_bids = BidStorage::get_by_investor(&env, &investor_no_bids);
+        let empty_investor_bids = BidStorage::get_bids_for_investor(&env, &investor_no_bids);
         assert!(empty_investor_bids.is_empty());
 
         // Test getting bids by status
-        let placed_bids = BidStorage::get_by_status(&env, BidStatus::Placed);
+        let placed_bids = BidStorage::get_bids_by_status(&env, BidStatus::Placed);
         assert_eq!(placed_bids.len(), 1);
         assert_eq!(placed_bids.get(0).unwrap(), bid_id);
 
         // Test getting bids by a status with no bids
-        let accepted_bids_empty = BidStorage::get_by_status(&env, BidStatus::Accepted);
+        let accepted_bids_empty = BidStorage::get_bids_by_status(&env, BidStatus::Accepted);
         assert!(accepted_bids_empty.is_empty());
 
         // Test updating bid status
         let mut updated_bid = bid.clone();
         updated_bid.status = BidStatus::Accepted;
-        BidStorage::update(&env, &updated_bid);
+        BidStorage::update_bid(&env, &updated_bid);
 
-        let retrieved_updated = BidStorage::get(&env, &bid_id).unwrap();
+        let retrieved_updated = BidStorage::get_bid(&env, &bid_id).unwrap();
         assert_eq!(retrieved_updated.status, BidStatus::Accepted);
 
         // Check that indexes are updated
-        let accepted_bids = BidStorage::get_by_status(&env, BidStatus::Accepted);
+        let accepted_bids = BidStorage::get_bids_by_status(&env, BidStatus::Accepted);
         assert_eq!(accepted_bids.len(), 1);
         assert_eq!(accepted_bids.get(0).unwrap(), bid_id);
 
-        let placed_bids_after = BidStorage::get_by_status(&env, BidStatus::Placed);
+        let placed_bids_after = BidStorage::get_bids_by_status(&env, BidStatus::Placed);
         assert_eq!(placed_bids_after.len(), 0);
 
         // Test updating bid to the same status (should not change indexes)
-        BidStorage::update(&env, &retrieved_updated); // Update with the same status
-        let accepted_bids_same_status = BidStorage::get_by_status(&env, BidStatus::Accepted);
+        BidStorage::update_bid(&env, &retrieved_updated); // Update with the same status
+        let accepted_bids_same_status = BidStorage::get_bids_by_status(&env, BidStatus::Accepted);
         assert_eq!(accepted_bids_same_status.len(), 1);
         assert_eq!(accepted_bids_same_status.get(0).unwrap(), bid_id);
 
@@ -381,8 +383,8 @@ fn test_bid_storage() {
 
 #[test]
 fn test_investment_storage() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         let investment_id = BytesN::from_array(&env, &[3; 32]);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
         let investor = Address::generate(&env);
@@ -398,70 +400,71 @@ fn test_investment_storage() {
         };
 
         // Test storing investment
-        InvestmentStorage::store(&env, &investment);
+        InvestmentStorage::store_investment(&env, &investment);
 
         // Test retrieving investment
-        let retrieved = InvestmentStorage::get(&env, &investment_id).unwrap();
+        let retrieved = InvestmentStorage::get_investment(&env, &investment_id).unwrap();
         assert_eq!(retrieved, investment);
 
         // Test getting a non-existent investment
         let non_existent_investment_id = BytesN::from_array(&env, &[99; 32]);
-        assert!(InvestmentStorage::get(&env, &non_existent_investment_id).is_none());
+        assert!(InvestmentStorage::get_investment(&env, &non_existent_investment_id).is_none());
 
         // Test getting investments by invoice
-        let invoice_investments = InvestmentStorage::get_by_invoice(&env, &invoice_id);
+        let invoice_investments = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
         assert_eq!(invoice_investments.len(), 1);
         assert_eq!(invoice_investments.get(0).unwrap(), investment_id);
 
         // Test getting investments by an invoice with no investments
         let invoice_id_no_investments = BytesN::from_array(&env, &[98; 32]);
         let empty_invoice_investments =
-            InvestmentStorage::get_by_invoice(&env, &invoice_id_no_investments);
+            InvestmentStorage::get_investment_by_invoice(&env, &invoice_id_no_investments);
         assert!(empty_invoice_investments.is_empty());
 
         // Test getting investments by investor
-        let investor_investments = InvestmentStorage::get_by_investor(&env, &investor);
+        let investor_investments = InvestmentStorage::get_investments_for_investor(&env, &investor);
         assert_eq!(investor_investments.len(), 1);
         assert_eq!(investor_investments.get(0).unwrap(), investment_id);
 
         // Test getting investments by an investor with no investments
         let investor_no_investments = Address::generate(&env);
         let empty_investor_investments =
-            InvestmentStorage::get_by_investor(&env, &investor_no_investments);
+            InvestmentStorage::get_investments_for_investor(&env, &investor_no_investments);
         assert!(empty_investor_investments.is_empty());
 
         // Test getting investments by status
-        let active_investments = InvestmentStorage::get_by_status(&env, InvestmentStatus::Active);
+        let active_investments =
+            InvestmentStorage::get_investments_by_status(&env, InvestmentStatus::Active);
         assert_eq!(active_investments.len(), 1);
         assert_eq!(active_investments.get(0).unwrap(), investment_id);
 
         // Test getting investments by a status with no investments
         let completed_investments_empty =
-            InvestmentStorage::get_by_status(&env, InvestmentStatus::Completed);
+            InvestmentStorage::get_investments_by_status(&env, InvestmentStatus::Completed);
         assert!(completed_investments_empty.is_empty());
 
         // Test updating investment status
         let mut updated_investment = investment.clone();
         updated_investment.status = InvestmentStatus::Completed;
-        InvestmentStorage::update(&env, &updated_investment);
+        InvestmentStorage::update_investment(&env, &updated_investment);
 
-        let retrieved_updated = InvestmentStorage::get(&env, &investment_id).unwrap();
+        let retrieved_updated = InvestmentStorage::get_investment(&env, &investment_id).unwrap();
         assert_eq!(retrieved_updated.status, InvestmentStatus::Completed);
 
         // Check that indexes are updated
         let completed_investments =
-            InvestmentStorage::get_by_status(&env, InvestmentStatus::Completed);
+            InvestmentStorage::get_investments_by_status(&env, InvestmentStatus::Completed);
         assert_eq!(completed_investments.len(), 1);
         assert_eq!(completed_investments.get(0).unwrap(), investment_id);
 
         let active_investments_after =
-            InvestmentStorage::get_by_status(&env, InvestmentStatus::Active);
+            InvestmentStorage::get_investments_by_status(&env, InvestmentStatus::Active);
         assert_eq!(active_investments_after.len(), 0);
 
         // Test updating investment to the same status (should not change indexes)
-        InvestmentStorage::update(&env, &retrieved_updated); // Update with the same status
+        InvestmentStorage::update_investment(&env, &retrieved_updated); // Update with the same status
         let completed_investments_same_status =
-            InvestmentStorage::get_by_status(&env, InvestmentStatus::Completed);
+            InvestmentStorage::get_investments_by_status(&env, InvestmentStatus::Completed);
         assert_eq!(completed_investments_same_status.len(), 1);
         assert_eq!(
             completed_investments_same_status.get(0).unwrap(),
@@ -478,8 +481,8 @@ fn test_investment_storage() {
 
 #[test]
 fn test_config_storage() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         // Simple test to verify config storage works
         // Note: Actual PlatformFeeConfig structure may differ
         // This test focuses on storage mechanics rather than specific fields
@@ -492,8 +495,8 @@ fn test_config_storage() {
 
 #[test]
 fn test_storage_isolation() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         // Create different entities
         let invoice_id1 = BytesN::from_array(&env, &[1; 32]);
         let invoice_id2 = BytesN::from_array(&env, &[2; 32]);
@@ -504,12 +507,12 @@ fn test_storage_isolation() {
         let invoice1 = create_test_invoice(&env, invoice_id1.clone(), business1.clone());
         let invoice2 = create_test_invoice(&env, invoice_id2.clone(), business2.clone());
 
-        InvoiceStorage::store(&env, &invoice1);
-        InvoiceStorage::store(&env, &invoice2);
+        InvoiceStorage::store_invoice(&env, &invoice1);
+        InvoiceStorage::store_invoice(&env, &invoice2);
 
         // Test that businesses have separate invoice lists
-        let business1_invoices = InvoiceStorage::get_by_business(&env, &business1);
-        let business2_invoices = InvoiceStorage::get_by_business(&env, &business2);
+        let business1_invoices = InvoiceStorage::get_business_invoices(&env, &business1);
+        let business2_invoices = InvoiceStorage::get_business_invoices(&env, &business2);
 
         assert_eq!(business1_invoices.len(), 1);
         assert_eq!(business2_invoices.len(), 1);
@@ -573,8 +576,8 @@ fn create_test_invoice(env: &Env, id: BytesN<32>, business: Address) -> Invoice 
 
 #[test]
 fn test_storage_key_collision_detection() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         // Test that different entity types with same ID don't collide
         let id = BytesN::from_array(&env, &[1; 32]);
 
@@ -582,9 +585,10 @@ fn test_storage_key_collision_detection() {
         let bid_key = StorageKeys::bid(&id);
         let investment_key = StorageKeys::investment(&id);
 
-        // Keys should be identical for same ID (by design)
-        assert_eq!(invoice_key, bid_key);
-        assert_eq!(bid_key, investment_key);
+        // Keys should be different for same ID (resolved conflict)
+        assert_ne!(invoice_key, bid_key);
+        assert_ne!(bid_key, investment_key);
+        assert_ne!(invoice_key, investment_key);
 
         // Test symbol keys don't collide
         let fees_key = StorageKeys::platform_fees();
@@ -600,12 +604,12 @@ fn test_storage_key_collision_detection() {
 
 #[test]
 fn test_type_serialization_integrity() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         // Test complex invoice serialization
         let invoice = create_complex_invoice(&env);
-        InvoiceStorage::store(&env, &invoice);
-        let retrieved = InvoiceStorage::get(&env, &invoice.id).unwrap();
+        InvoiceStorage::store_invoice(&env, &invoice);
+        let retrieved = InvoiceStorage::get_invoice(&env, &invoice.id).unwrap();
         assert_eq!(invoice, retrieved);
 
         // Test all enum variants serialize correctly
@@ -617,8 +621,8 @@ fn test_type_serialization_integrity() {
 
 #[test]
 fn test_index_consistency() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         let business = Address::generate(&env);
         let invoice1 =
             create_test_invoice(&env, BytesN::from_array(&env, &[1; 32]), business.clone());
@@ -626,23 +630,23 @@ fn test_index_consistency() {
             create_test_invoice(&env, BytesN::from_array(&env, &[2; 32]), business.clone());
 
         // Store invoices
-        InvoiceStorage::store(&env, &invoice1);
-        InvoiceStorage::store(&env, &invoice2);
+        InvoiceStorage::store_invoice(&env, &invoice1);
+        InvoiceStorage::store_invoice(&env, &invoice2);
 
         // Verify indexes are consistent
-        let business_invoices = InvoiceStorage::get_by_business(&env, &business);
+        let business_invoices = InvoiceStorage::get_business_invoices(&env, &business);
         assert_eq!(business_invoices.len(), 2);
 
-        let pending_invoices = InvoiceStorage::get_by_status(&env, InvoiceStatus::Pending);
+        let pending_invoices = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Pending);
         assert_eq!(pending_invoices.len(), 2);
 
         // Update status and verify index consistency
         let mut updated_invoice = invoice1.clone();
         updated_invoice.status = InvoiceStatus::Verified;
-        InvoiceStorage::update(&env, &updated_invoice);
+        InvoiceStorage::update_invoice(&env, &updated_invoice);
 
-        let pending_after = InvoiceStorage::get_by_status(&env, InvoiceStatus::Pending);
-        let verified_after = InvoiceStorage::get_by_status(&env, InvoiceStatus::Verified);
+        let pending_after = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Pending);
+        let verified_after = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified);
 
         assert_eq!(pending_after.len(), 1);
         assert_eq!(verified_after.len(), 1);
@@ -651,18 +655,18 @@ fn test_index_consistency() {
 
 #[test]
 fn test_storage_edge_cases() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         // Test empty collections
         let empty_business = Address::generate(&env);
-        let empty_invoices = InvoiceStorage::get_by_business(&env, &empty_business);
+        let empty_invoices = InvoiceStorage::get_business_invoices(&env, &empty_business);
         assert!(empty_invoices.is_empty());
 
         // Test non-existent entities
         let non_existent_id = BytesN::from_array(&env, &[99; 32]);
-        assert!(InvoiceStorage::get(&env, &non_existent_id).is_none());
-        assert!(BidStorage::get(&env, &non_existent_id).is_none());
-        assert!(InvestmentStorage::get(&env, &non_existent_id).is_none());
+        assert!(InvoiceStorage::get_invoice(&env, &non_existent_id).is_none());
+        assert!(BidStorage::get_bid(&env, &non_existent_id).is_none());
+        assert!(InvestmentStorage::get_investment(&env, &non_existent_id).is_none());
 
         // Test maximum values
         test_maximum_values(&env);
@@ -673,14 +677,14 @@ fn test_storage_edge_cases() {
 fn test_deterministic_behavior() {
     // Run same operations multiple times to ensure deterministic results
     for _ in 0..5 {
-        let env = Env::default();
-        env.as_contract(&Address::generate(&env), || {
+        let (env, address) = setup_test();
+        env.as_contract(&address, || {
             let invoice_id = BytesN::from_array(&env, &[42; 32]);
             let business = Address::generate(&env);
             let invoice = create_test_invoice(&env, invoice_id.clone(), business.clone());
 
-            InvoiceStorage::store(&env, &invoice);
-            let retrieved = InvoiceStorage::get(&env, &invoice_id).unwrap();
+            InvoiceStorage::store_invoice(&env, &invoice);
+            let retrieved = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
 
             assert_eq!(invoice, retrieved);
 
@@ -695,8 +699,8 @@ fn test_deterministic_behavior() {
 
 #[test]
 fn test_concurrent_index_updates() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         let business = Address::generate(&env);
         let mut invoices = Vec::new(&env);
 
@@ -710,11 +714,11 @@ fn test_concurrent_index_updates() {
         // Store all invoices
         for i in 0..invoices.len() {
             let invoice = invoices.get(i).unwrap();
-            InvoiceStorage::store(&env, &invoice);
+            InvoiceStorage::store_invoice(&env, &invoice);
         }
 
         // Verify all are indexed correctly
-        let business_invoices = InvoiceStorage::get_by_business(&env, &business);
+        let business_invoices = InvoiceStorage::get_business_invoices(&env, &business);
         assert_eq!(business_invoices.len(), 10);
 
         // Update all to different statuses
@@ -726,13 +730,13 @@ fn test_concurrent_index_updates() {
             } else {
                 InvoiceStatus::Funded
             };
-            InvoiceStorage::update(&env, &updated);
+            InvoiceStorage::update_invoice(&env, &updated);
         }
 
         // Verify index consistency
-        let verified = InvoiceStorage::get_by_status(&env, InvoiceStatus::Verified);
-        let funded = InvoiceStorage::get_by_status(&env, InvoiceStatus::Funded);
-        let pending = InvoiceStorage::get_by_status(&env, InvoiceStatus::Pending);
+        let verified = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified);
+        let funded = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Funded);
+        let pending = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Pending);
 
         assert_eq!(verified.len(), 5);
         assert_eq!(funded.len(), 5);
@@ -830,10 +834,10 @@ fn test_invoice_status_serialization(_env: &Env) {
     ];
 
     for status in statuses {
-        let (_, status_symbol) = Indexes::invoices_by_status(status.clone());
+        let key1 = Indexes::invoices_by_status(status.clone());
         // Verify symbol generation is consistent
-        let (_, status_symbol2) = Indexes::invoices_by_status(status);
-        assert_eq!(status_symbol, status_symbol2);
+        let key2 = Indexes::invoices_by_status(status);
+        assert_eq!(key1, key2);
     }
 }
 
@@ -846,9 +850,9 @@ fn test_bid_status_serialization(_env: &Env) {
     ];
 
     for status in statuses {
-        let (_, status_symbol) = Indexes::bids_by_status(status.clone());
-        let (_, status_symbol2) = Indexes::bids_by_status(status);
-        assert_eq!(status_symbol, status_symbol2);
+        let key1 = Indexes::bids_by_status(status.clone());
+        let key2 = Indexes::bids_by_status(status);
+        assert_eq!(key1, key2);
     }
 }
 
@@ -861,9 +865,9 @@ fn test_investment_status_serialization(_env: &Env) {
     ];
 
     for status in statuses {
-        let (_, status_symbol) = Indexes::investments_by_status(status.clone());
-        let (_, status_symbol2) = Indexes::investments_by_status(status);
-        assert_eq!(status_symbol, status_symbol2);
+        let key1 = Indexes::investments_by_status(status.clone());
+        let key2 = Indexes::investments_by_status(status);
+        assert_eq!(key1, key2);
     }
 }
 
@@ -909,8 +913,8 @@ fn test_maximum_values(env: &Env) {
     };
 
     // Should handle maximum values without issues
-    InvoiceStorage::store(env, &invoice);
-    let retrieved = InvoiceStorage::get(env, &max_id).unwrap();
+    InvoiceStorage::store_invoice(env, &invoice);
+    let retrieved = InvoiceStorage::get_invoice(env, &max_id).unwrap();
     assert_eq!(invoice, retrieved);
 }
 
@@ -934,8 +938,8 @@ fn test_escrow_storage_keys() {
 
 #[test]
 fn test_storage_counter_increments() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         // Test invoice counter
         let count1 = InvoiceStorage::next_count(&env);
         let count2 = InvoiceStorage::next_count(&env);
@@ -955,8 +959,8 @@ fn test_storage_counter_increments() {
 
 #[test]
 fn test_multiple_invoices_same_business() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         let business = Address::generate(&env);
         let invoice_id_1 = BytesN::from_array(&env, &[1; 32]);
         let invoice_id_2 = BytesN::from_array(&env, &[2; 32]);
@@ -964,10 +968,10 @@ fn test_multiple_invoices_same_business() {
         let invoice1 = create_test_invoice(&env, invoice_id_1.clone(), business.clone());
         let invoice2 = create_test_invoice(&env, invoice_id_2.clone(), business.clone());
 
-        InvoiceStorage::store(&env, &invoice1);
-        InvoiceStorage::store(&env, &invoice2);
+        InvoiceStorage::store_invoice(&env, &invoice1);
+        InvoiceStorage::store_invoice(&env, &invoice2);
 
-        let invoices = InvoiceStorage::get_by_business(&env, &business);
+        let invoices = InvoiceStorage::get_business_invoices(&env, &business);
         assert_eq!(invoices.len(), 2, "Should have 2 invoices for business");
         assert!(invoices.iter().any(|id| id == invoice_id_1));
         assert!(invoices.iter().any(|id| id == invoice_id_2));
@@ -976,17 +980,17 @@ fn test_multiple_invoices_same_business() {
 
 #[test]
 fn test_storage_retrieval_consistency() {
-    let env = Env::default();
-    env.as_contract(&Address::generate(&env), || {
+    let (env, address) = setup_test();
+    env.as_contract(&address, || {
         let business = Address::generate(&env);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
 
         let invoice = create_test_invoice(&env, invoice_id.clone(), business);
-        InvoiceStorage::store(&env, &invoice);
+        InvoiceStorage::store_invoice(&env, &invoice);
 
         // Retrieve multiple times - should be consistent
-        let retrieved1 = InvoiceStorage::get(&env, &invoice_id).unwrap();
-        let retrieved2 = InvoiceStorage::get(&env, &invoice_id).unwrap();
+        let retrieved1 = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        let retrieved2 = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
 
         assert_eq!(
             retrieved1, retrieved2,

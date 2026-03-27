@@ -81,7 +81,7 @@ fn test_status_list_after_verify() {
         &[(InvoiceStatus::Pending, 1), (InvoiceStatus::Verified, 0)],
     );
 
-    client.update_invoice_status(&id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&id, InvoiceStatus::Verified);
 
     assert_status_consistency(
         &env,
@@ -97,7 +97,7 @@ fn test_status_list_after_cancel() {
     let currency = Address::generate(&env);
 
     let id = create_invoice(&env, &client, &business, &currency, 1000);
-    client.update_invoice_status(&id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&id, InvoiceStatus::Verified);
 
     client.cancel_invoice(&id);
 
@@ -119,8 +119,8 @@ fn test_status_list_after_update_invoice_status_funded() {
     let currency = Address::generate(&env);
 
     let id = create_invoice(&env, &client, &business, &currency, 1000);
-    client.update_invoice_status(&id, &InvoiceStatus::Verified);
-    client.update_invoice_status(&id, &InvoiceStatus::Funded);
+    client.update_invoice_status(&id, InvoiceStatus::Verified);
+    client.update_invoice_status(&id, InvoiceStatus::Funded);
 
     assert_status_consistency(
         &env,
@@ -142,7 +142,7 @@ fn test_status_list_through_full_lifecycle() {
     let id = create_invoice(&env, &client, &business, &currency, 1000);
 
     // Pending -> Verified
-    client.update_invoice_status(&id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&id, InvoiceStatus::Verified);
     assert_status_consistency(
         &env,
         &client,
@@ -150,7 +150,7 @@ fn test_status_list_through_full_lifecycle() {
     );
 
     // Verified -> Funded
-    client.update_invoice_status(&id, &InvoiceStatus::Funded);
+    client.update_invoice_status(&id, InvoiceStatus::Funded);
     assert_status_consistency(
         &env,
         &client,
@@ -158,7 +158,7 @@ fn test_status_list_through_full_lifecycle() {
     );
 
     // Funded -> Paid
-    client.update_invoice_status(&id, &InvoiceStatus::Paid);
+    client.update_invoice_status(&id, InvoiceStatus::Paid);
     assert_status_consistency(
         &env,
         &client,
@@ -175,12 +175,12 @@ fn test_status_list_no_duplicates_on_repeated_add() {
     let id = create_invoice(&env, &client, &business, &currency, 1000);
 
     // Manually verify the pending list has exactly 1 entry
-    let pending = client.get_invoices_by_status(&InvoiceStatus::Pending);
+    let pending = client.get_invoices_by_status(InvoiceStatus::Pending);
     assert_eq!(pending.len(), 1);
 
     // Update to verified and back should not create duplicates
-    client.update_invoice_status(&id, &InvoiceStatus::Verified);
-    let verified = client.get_invoices_by_status(&InvoiceStatus::Verified);
+    client.update_invoice_status(&id, InvoiceStatus::Verified);
+    let verified = client.get_invoices_by_status(InvoiceStatus::Verified);
     assert_eq!(verified.len(), 1);
 }
 
@@ -207,7 +207,7 @@ fn test_status_list_multiple_invoices_mixed_transitions() {
     );
 
     // Verify id1
-    client.update_invoice_status(&id1, &InvoiceStatus::Verified);
+    client.update_invoice_status(&id1, InvoiceStatus::Verified);
     assert_status_consistency(
         &env,
         &client,
@@ -227,7 +227,7 @@ fn test_status_list_multiple_invoices_mixed_transitions() {
     );
 
     // Fund id1
-    client.update_invoice_status(&id1, &InvoiceStatus::Funded);
+    client.update_invoice_status(&id1, InvoiceStatus::Funded);
     assert_status_consistency(
         &env,
         &client,
@@ -240,7 +240,7 @@ fn test_status_list_multiple_invoices_mixed_transitions() {
     );
 
     // Default id1
-    client.update_invoice_status(&id1, &InvoiceStatus::Defaulted);
+    client.update_invoice_status(&id1, InvoiceStatus::Defaulted);
     assert_status_consistency(
         &env,
         &client,
@@ -283,7 +283,7 @@ fn test_accept_bid_updates_status_list() {
         &Vec::new(&env),
     );
 
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
 
     assert_status_consistency(
         &env,
@@ -330,11 +330,11 @@ fn test_count_matches_list_length_all_statuses() {
     let id3 = create_invoice(&env, &client, &business, &currency, 3000);
     let id4 = create_invoice(&env, &client, &business, &currency, 4000);
 
-    client.update_invoice_status(&id1, &InvoiceStatus::Verified);
-    client.update_invoice_status(&id2, &InvoiceStatus::Verified);
-    client.update_invoice_status(&id2, &InvoiceStatus::Funded);
-    client.update_invoice_status(&id3, &InvoiceStatus::Verified);
-    client.update_invoice_status(&id3, &InvoiceStatus::Paid);
+    client.update_invoice_status(&id1, InvoiceStatus::Verified);
+    client.update_invoice_status(&id2, InvoiceStatus::Verified);
+    client.update_invoice_status(&id2, InvoiceStatus::Funded);
+    client.update_invoice_status(&id3, InvoiceStatus::Verified);
+    client.update_invoice_status(&id3, InvoiceStatus::Paid);
     client.cancel_invoice(&id4);
 
     let all_statuses = [

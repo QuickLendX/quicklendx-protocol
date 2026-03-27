@@ -3,10 +3,8 @@
 
 use crate::errors::QuickLendXError;
 use crate::events::{emit_invoice_settled, emit_partial_payment};
-use crate::investment::{InvestmentStatus, InvestmentStorage};
-use crate::invoice::{
-    Invoice, InvoiceStatus, InvoiceStorage, PaymentRecord as InvoicePaymentRecord,
-};
+use crate::invoice::{Invoice, InvoiceStatus};
+use crate::storage::{InvestmentStorage, InvoiceStorage};
 // use crate::notifications::NotificationSystem;
 use crate::defaults::DEFAULT_GRACE_PERIOD;
 // use crate::events::TOPIC_INVOICE_SETTLED_FINAL;
@@ -193,7 +191,7 @@ pub fn record_payment(
         payer,
         applied_amount,
         invoice.total_paid,
-        &invoice.status,
+        invoice.status,
     );
 
     get_invoice_progress(env, invoice_id)
@@ -353,8 +351,8 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     InvoiceStorage::update_invoice(env, &invoice);
 
     if previous_status != invoice.status {
-        InvoiceStorage::remove_from_status_invoices(env, &previous_status, invoice_id);
-        InvoiceStorage::add_to_status_invoices(env, &invoice.status, invoice_id);
+        InvoiceStorage::remove_from_status_invoices(env, previous_status, invoice_id);
+        InvoiceStorage::add_to_status_invoices(env, invoice.status, invoice_id);
     }
 
     let mut updated_investment = investment;
@@ -456,7 +454,7 @@ fn emit_payment_recorded(
     payer: &Address,
     applied_amount: i128,
     total_paid: i128,
-    status: &InvoiceStatus,
+    status: InvoiceStatus,
 ) {
     env.events().publish(
         (symbol_short!("pay_rec"),),

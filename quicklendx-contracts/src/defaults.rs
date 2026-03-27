@@ -1,9 +1,10 @@
 use crate::errors::QuickLendXError;
 use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice_expired};
 use crate::init::ProtocolInitializer;
-use crate::investment::{InvestmentStatus, InvestmentStorage};
-use crate::invoice::{InvoiceStatus, InvoiceStorage};
-use soroban_sdk::{Address, BytesN, Env, String, Vec};
+use crate::investment::InvestmentStatus;
+use crate::invoice::InvoiceStatus;
+use crate::storage::{InvestmentStorage, InvoiceStorage};
+use soroban_sdk::{BytesN, Env, Vec};
 
 /// Default grace period in seconds (7 days)
 pub const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60;
@@ -78,14 +79,14 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     }
 
     // Remove from funded status list
-    InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
+    InvoiceStorage::remove_from_status_invoices(env, InvoiceStatus::Funded, invoice_id);
 
     // Mark invoice as defaulted
     invoice.mark_as_defaulted();
     InvoiceStorage::update_invoice(env, &invoice);
 
     // Add to defaulted status list
-    InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Defaulted, invoice_id);
+    InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Defaulted, invoice_id);
 
     // Emit expiration event
     emit_invoice_expired(env, &invoice);

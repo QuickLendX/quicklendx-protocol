@@ -18,7 +18,7 @@ const SECONDS_PER_DAY: u64 = 86400;
 pub const MAX_BIDS_PER_INVOICE: u32 = 50;
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum BidStatus {
     Placed,
     Withdrawn,

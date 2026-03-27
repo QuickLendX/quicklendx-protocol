@@ -24,7 +24,6 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
-#[cfg(test)]
 mod storage;
 #[cfg(test)]
 mod test_admin;
@@ -60,10 +59,7 @@ pub mod types;
 mod verification;
 mod vesting;
 use admin::AdminStorage;
-use bid::{Bid, BidStatus, BidStorage};
-use defaults::{
-    handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
-};
+use bid::{Bid, BidStatus};
 use errors::QuickLendXError;
 use escrow::{
     accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds,
@@ -76,12 +72,17 @@ use events::{
     emit_invoice_tag_removed, emit_invoice_uploaded, emit_invoice_verified,
     emit_platform_fee_config_updated, emit_treasury_configured,
 };
-use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
-use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
-use payments::{create_escrow, release_escrow, EscrowStorage};
+use investment::{InsuranceCoverage, Investment, InvestmentStatus};
+use crate::invoice::{Invoice, InvoiceCategory, InvoiceMetadata, InvoiceStatus};
+use payments::{create_escrow, release_escrow};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
+};
+use storage::StorageKeys;
+use storage::{
+    BidStorage, BusinessVerificationStorage, EscrowStorage, InvestmentStorage,
+    InvestorVerificationStorage, InvoiceStorage,
 };
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
@@ -89,8 +90,7 @@ use verification::{
     reject_investor as do_reject_investor, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_investor_investment, validate_invoice_metadata,
     verify_business, verify_investor as do_verify_investor, verify_invoice_data,
-    BusinessVerificationStatus, BusinessVerificationStorage, InvestorRiskLevel, InvestorTier,
-    InvestorVerification, InvestorVerificationStorage,
+    BusinessVerificationStatus, InvestorRiskLevel, InvestorTier, InvestorVerification,
 };
 
 #[contract]
@@ -170,12 +170,13 @@ impl QuickLendXContract {
     pub fn set_bid_ttl_days(env: Env, days: u64) -> Result<u64, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        bid::BidStorage::set_bid_ttl_days(&env, &admin, days)
+        BidStorage::set_bid_ttl_days(&env, days);
+        Ok(days)
     }
 
     /// Get configured bid TTL in days (returns default 7 if not set)
     pub fn get_bid_ttl_days(env: Env) -> u64 {
-        bid::BidStorage::get_bid_ttl_days(&env)
+        BidStorage::get_bid_ttl_days(&env)
     }
 
     /// Initiate emergency withdraw for stuck funds (admin only). Timelock applies before execute.
@@ -467,14 +468,10 @@ impl QuickLendXContract {
 
         // Remove from pending status list
         // Remove from old status list (Pending)
-        InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Pending, &invoice_id);
-
-        invoice.verify(&env, admin.clone());
+        InvoiceStorage::remove_from_status_invoices(&env, invoice.status, &invoice_id);
+        invoice.status = InvoiceStatus::Verified;
         InvoiceStorage::update_invoice(&env, &invoice);
-
-        // Add to verified status list
-        // Add to new status list (Verified)
-        InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
+        InvoiceStorage::add_to_status_invoices(&env, invoice.status, &invoice_id);
 
         emit_invoice_verified(&env, &invoice);
 
@@ -496,7 +493,7 @@ impl QuickLendXContract {
         invoice.business.require_auth();
 
         // Remove from old status list
-        InvoiceStorage::remove_from_status_invoices(&env, &invoice.status, &invoice_id);
+        InvoiceStorage::remove_from_status_invoices(&env, invoice.status, &invoice_id);
 
         // Cancel the invoice (only works if Pending or Verified)
         invoice.cancel(&env, invoice.business.clone())?;
@@ -505,7 +502,7 @@ impl QuickLendXContract {
         InvoiceStorage::update_invoice(&env, &invoice);
 
         // Add to cancelled status list
-        InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Cancelled, &invoice_id);
+        InvoiceStorage::add_to_status_invoices(&env, InvoiceStatus::Cancelled, &invoice_id);
 
         // Emit event
         emit_invoice_cancelled(&env, &invoice);
@@ -580,19 +577,18 @@ impl QuickLendXContract {
         InvoiceStorage::get_invoices_by_customer(&env, &customer_name)
     }
 
-    /// Get invoices indexed by tax id
     pub fn get_invoices_by_tax_id(env: Env, tax_id: String) -> Vec<BytesN<32>> {
         InvoiceStorage::get_invoices_by_tax_id(&env, &tax_id)
     }
 
     /// Get all invoices by status
     pub fn get_invoices_by_status(env: Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_invoices_by_status(&env, &status)
+        InvoiceStorage::get_invoices_by_status(&env, status)
     }
 
     /// Get all available invoices (verified and not funded)
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified)
+        InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified)
     }
 
     /// Update invoice status (admin function)
@@ -606,7 +602,7 @@ impl QuickLendXContract {
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
         // Remove from old status list
-        InvoiceStorage::remove_from_status_invoices(&env, &invoice.status, &invoice_id);
+        InvoiceStorage::remove_from_status_invoices(&env, invoice.status, &invoice_id);
 
         // Update status
         match new_status {
@@ -631,7 +627,7 @@ impl QuickLendXContract {
         InvoiceStorage::update_invoice(&env, &invoice);
 
         // Add to new status list
-        InvoiceStorage::add_to_status_invoices(&env, &invoice.status, &invoice_id);
+        InvoiceStorage::add_to_status_invoices(&env, invoice.status, &invoice_id);
 
         // Emit event
         env.events().publish(
@@ -652,7 +648,7 @@ impl QuickLendXContract {
 
     /// Get invoice count by status
     pub fn get_invoice_count_by_status(env: Env, status: InvoiceStatus) -> u32 {
-        let invoices = InvoiceStorage::get_invoices_by_status(&env, &status);
+        let invoices = InvoiceStorage::get_invoices_by_status(&env, status);
         invoices.len() as u32
     }
 
@@ -677,7 +673,6 @@ impl QuickLendXContract {
 
     /// Clear all invoices from storage (admin only, used for restore operations)
     pub fn clear_all_invoices(env: Env) -> Result<(), QuickLendXError> {
-        use crate::invoice::InvoiceStorage;
         InvoiceStorage::clear_all(&env);
         Ok(())
     }
@@ -723,12 +718,12 @@ impl QuickLendXContract {
     /// Cancel a placed bid (investor only, Placed → Cancelled).
     pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> Result<bool, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        Ok(bid::BidStorage::cancel_bid(&env, &bid_id))
+        Ok(BidStorage::cancel_bid(&env, &bid_id))
     }
 
     /// Get all bids placed by an investor across all invoices.
     pub fn get_all_bids_by_investor(env: Env, investor: Address) -> Vec<Bid> {
-        bid::BidStorage::get_all_bids_by_investor(&env, &investor)
+        BidStorage::get_all_bids_by_investor(&env, &investor)
     }
 
     /// Place a bid on an invoice
@@ -855,7 +850,7 @@ impl QuickLendXContract {
         bid.status = BidStatus::Accepted;
         BidStorage::update_bid(&env, &bid);
         // Remove from old status list before changing status
-        InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
+        InvoiceStorage::remove_from_status_invoices(&env, InvoiceStatus::Verified, &invoice_id);
 
         invoice.mark_as_funded(
             &env,
@@ -866,7 +861,7 @@ impl QuickLendXContract {
         InvoiceStorage::update_invoice(&env, &invoice);
 
         // Add to new status list after status change
-        InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Funded, &invoice_id);
+        InvoiceStorage::add_to_status_invoices(&env, InvoiceStatus::Funded, &invoice_id);
         let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         let investment = Investment {
             investment_id: investment_id.clone(),
@@ -1149,8 +1144,7 @@ impl QuickLendXContract {
         investment_limit: i128,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         let verification = do_verify_investor(&env, &admin, &investor, investment_limit)?;
         emit_investor_verified(&env, &verification);
         Ok(())
@@ -1184,8 +1178,7 @@ impl QuickLendXContract {
         new_limit: i128,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         verification::set_investment_limit(&env, &admin, &investor, new_limit)
     }
 
@@ -1220,18 +1213,19 @@ impl QuickLendXContract {
 
     /// Set admin address (initialization function)
     pub fn set_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        if let Some(current_admin) = BusinessVerificationStorage::get_admin(&env) {
+        if let Some(current_admin) = AdminStorage::get_admin(&env) {
             current_admin.require_auth();
+            AdminStorage::set_admin(&env, &current_admin, &admin)?;
         } else {
             admin.require_auth();
+            AdminStorage::initialize(&env, &admin)?;
         }
-        BusinessVerificationStorage::set_admin(&env, &admin);
         Ok(())
     }
 
     /// Get admin address
     pub fn get_admin(env: Env) -> Option<Address> {
-        BusinessVerificationStorage::get_admin(&env)
+        AdminStorage::get_admin(&env)
     }
 
     /// Initialize protocol limits (admin only). Sets min amount, max due date days, grace period.
@@ -1467,7 +1461,7 @@ impl QuickLendXContract {
         grace_period: u64,
     ) -> Result<u32, QuickLendXError> {
         let current_timestamp = env.ledger().timestamp();
-        let funded_invoices = InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Funded);
+        let funded_invoices = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Funded);
         let mut overdue_count = 0u32;
 
         for invoice_id in funded_invoices.iter() {
@@ -1497,20 +1491,17 @@ impl QuickLendXContract {
     // Category and Tag Management Functions
 
     /// Get invoices by category
-    pub fn get_invoices_by_category(
-        env: Env,
-        category: invoice::InvoiceCategory,
-    ) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_invoices_by_category(&env, &category)
+    pub fn get_invoices_by_category(env: Env, category: InvoiceCategory) -> Vec<BytesN<32>> {
+        InvoiceStorage::get_invoices_by_category(&env, category)
     }
 
     /// Get invoices by category and status
-    pub fn get_invoices_by_cat_status(
+    pub fn get_invoices_by_cat_and_status(
         env: Env,
-        category: invoice::InvoiceCategory,
+        category: InvoiceCategory,
         status: InvoiceStatus,
     ) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_invoices_by_category_and_status(&env, &category, &status)
+        InvoiceStorage::get_invoices_by_category_and_status(&env, category, status)
     }
 
     /// Get invoices by tag
@@ -1525,7 +1516,7 @@ impl QuickLendXContract {
 
     /// Get invoice count by category
     pub fn get_invoice_count_by_category(env: Env, category: invoice::InvoiceCategory) -> u32 {
-        InvoiceStorage::get_invoice_count_by_category(&env, &category)
+        InvoiceStorage::get_invoice_count_by_category(&env, category)
     }
 
     /// Get invoice count by tag
@@ -1570,8 +1561,8 @@ impl QuickLendXContract {
         );
 
         // Update indexes
-        InvoiceStorage::remove_category_index(&env, &old_category, &invoice_id);
-        InvoiceStorage::add_category_index(&env, &new_category, &invoice_id);
+        InvoiceStorage::remove_category_index(&env, old_category, &invoice_id);
+        InvoiceStorage::add_category_index(&env, new_category, &invoice_id);
 
         Ok(())
     }
@@ -1665,8 +1656,7 @@ impl QuickLendXContract {
 
     /// Configure treasury address for platform fee routing (admin only)
     pub fn configure_treasury(env: Env, treasury_address: Address) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
 
         let _treasury_config =
             fees::FeeManager::configure_treasury(&env, &admin, treasury_address.clone())?;
@@ -1679,8 +1669,7 @@ impl QuickLendXContract {
 
     /// Update platform fee basis points (admin only)
     pub fn update_platform_fee_bps(env: Env, new_fee_bps: u32) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
 
         let old_config = fees::FeeManager::get_platform_fee_config(&env)?;
         let old_fee_bps = old_config.fee_bps;
@@ -1775,8 +1764,7 @@ impl QuickLendXContract {
         min_distribution_amount: i128,
     ) -> Result<(), QuickLendXError> {
         // Verify admin
-        let stored_admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let stored_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         if admin != stored_admin {
             return Err(QuickLendXError::NotAdmin);
         }
@@ -1849,8 +1837,8 @@ impl QuickLendXContract {
 
         for invoice_id in all_invoices.iter() {
             if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
-                if let Some(status) = &status_filter {
-                    if invoice.status == *status {
+                if let Some(status) = status_filter {
+                    if invoice.status == status {
                         filtered.push_back(invoice_id);
                     }
                 } else {
@@ -1888,8 +1876,8 @@ impl QuickLendXContract {
 
         for investment_id in all_investment_ids.iter() {
             if let Some(investment) = InvestmentStorage::get_investment(&env, &investment_id) {
-                if let Some(status) = &status_filter {
-                    if investment.status == *status {
+                if let Some(status) = status_filter {
+                    if investment.status == status {
                         filtered.push_back(investment_id);
                     }
                 } else {
@@ -1924,7 +1912,7 @@ impl QuickLendXContract {
     ) -> Vec<BytesN<32>> {
         let capped_limit = cap_query_limit(limit);
         let verified_invoices =
-            InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified);
+            InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified);
         let mut filtered = Vec::new(&env);
 
         for invoice_id in verified_invoices.iter() {
@@ -1978,8 +1966,8 @@ impl QuickLendXContract {
         let mut filtered = Vec::new(&env);
 
         for bid in all_bids.iter() {
-            if let Some(status) = &status_filter {
-                if bid.status == *status {
+            if let Some(status) = status_filter {
+                if bid.status == status {
                     filtered.push_back(bid);
                 }
             } else {
@@ -2016,8 +2004,8 @@ impl QuickLendXContract {
 
         for bid_id in all_bid_ids.iter() {
             if let Some(bid) = BidStorage::get_bid(&env, &bid_id) {
-                if let Some(status) = &status_filter {
-                    if bid.status == *status {
+                if let Some(status) = status_filter {
+                    if bid.status == status {
                         filtered.push_back(bid);
                     }
                 } else {

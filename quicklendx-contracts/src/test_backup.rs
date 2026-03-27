@@ -542,7 +542,7 @@ fn test_backup_contracttype_roundtrip_conversions() {
         let policy_val: Val = policy.clone().into_val(&env);
 
         let backup_decoded = Backup::try_from_val(&env, &backup_val).unwrap();
-        let status_decoded = BackupStatus::try_from_val(&env, &status_val).unwrap();
+        let status_decoded = BackupStatus::try_from_val(&env, status_val).unwrap();
         let policy_decoded = BackupRetentionPolicy::try_from_val(&env, &policy_val).unwrap();
 
         assert_eq!(backup_decoded, backup);

@@ -262,13 +262,13 @@ fn test_get_invoices_by_status() {
     );
 
     // Get pending invoices
-    let pending_invoices = client.get_invoices_by_status(&InvoiceStatus::Pending);
+    let pending_invoices = client.get_invoices_by_status(InvoiceStatus::Pending);
     assert_eq!(pending_invoices.len(), 2);
     assert!(pending_invoices.contains(&invoice1_id));
     assert!(pending_invoices.contains(&invoice2_id));
 
     // Get verified invoices (should be empty initially)
-    let verified_invoices = client.get_invoices_by_status(&InvoiceStatus::Verified);
+    let verified_invoices = client.get_invoices_by_status(InvoiceStatus::Verified);
     assert_eq!(verified_invoices.len(), 0);
 }
 
@@ -367,16 +367,16 @@ fn test_update_invoice_status() {
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 
     // Update to verified
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Verified);
 
     // Check status lists
-    let pending_invoices = client.get_invoices_by_status(&InvoiceStatus::Pending);
+    let pending_invoices = client.get_invoices_by_status(InvoiceStatus::Pending);
     assert_eq!(pending_invoices.len(), 0);
 
-    let verified_invoices = client.get_invoices_by_status(&InvoiceStatus::Verified);
+    let verified_invoices = client.get_invoices_by_status(InvoiceStatus::Verified);
     assert_eq!(verified_invoices.len(), 1);
     assert!(verified_invoices.contains(&invoice_id));
 }
@@ -609,7 +609,7 @@ fn test_get_available_invoices() {
     assert_eq!(available_invoices.len(), 0);
 
     // Verify one invoice
-    client.update_invoice_status(&invoice1_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice1_id, InvoiceStatus::Verified);
 
     // Now one available invoice
     let available_invoices = client.get_available_invoices();
@@ -649,10 +649,10 @@ fn test_invoice_count_functions() {
     );
 
     // Test count by status
-    let pending_count = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
+    let pending_count = client.get_invoice_count_by_status(InvoiceStatus::Pending);
     assert_eq!(pending_count, 2);
 
-    let verified_count = client.get_invoice_count_by_status(&InvoiceStatus::Verified);
+    let verified_count = client.get_invoice_count_by_status(InvoiceStatus::Verified);
     assert_eq!(verified_count, 0);
 
     // Test total count
@@ -696,11 +696,11 @@ fn test_invoice_lifecycle() {
     let mut invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Verified);
 
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Paid);
     invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
     assert!(invoice.settled_at.is_some());
@@ -731,7 +731,7 @@ fn test_simple_bid_storage() {
         &Vec::new(&env),
     );
 
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place a single bid to test basic functionality
@@ -787,7 +787,7 @@ fn test_unique_bid_id_generation() {
         &Vec::new(&env),
     );
 
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place first bid
@@ -828,7 +828,7 @@ fn test_bid_expiration_cleanup() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     let bid_id = client.place_bid(&investor, &invoice_id, &500, &650);
@@ -877,7 +877,7 @@ fn test_bid_validation_rules() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
     verify_investor_for_test(&env, &client, &other_investor, 10_000);
     verify_investor_for_test(&env, &client, &break_even_investor, 10_000);
@@ -943,7 +943,7 @@ fn test_withdraw_bid() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place a bid
@@ -994,7 +994,7 @@ fn test_get_bids_for_invoice() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor_a, 10_000);
     verify_investor_for_test(&env, &client, &investor_b, 10_000);
 
@@ -1065,7 +1065,7 @@ fn test_escrow_creation_on_bid_acceptance() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place bid
@@ -1121,7 +1121,7 @@ fn test_escrow_release_on_verification() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place and accept bid (creates escrow)
@@ -1174,7 +1174,7 @@ fn test_escrow_refund() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place and accept bid (creates escrow)
@@ -1231,7 +1231,7 @@ fn test_escrow_status_tracking() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place and accept bid
@@ -1313,7 +1313,7 @@ fn test_escrow_double_operation_prevention() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     // Place and accept bid
@@ -1382,7 +1382,7 @@ fn test_add_invoice_rating() {
     );
 
     // Verify the invoice
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
 
     // Fund the invoice properly
     env.as_contract(&contract_id, || {
@@ -1637,21 +1637,21 @@ fn test_rating_queries() {
             )
             .unwrap();
         InvoiceStorage::update_invoice(&env, &invoice1);
-        InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Pending, &invoice1_id);
-        InvoiceStorage::add_to_status_invoices(&env, &InvoiceStatus::Funded, &invoice1_id);
+        InvoiceStorage::remove_from_status_invoices(&env, InvoiceStatus::Pending, &invoice1_id);
+        InvoiceStorage::add_to_status_invoices(&env, InvoiceStatus::Funded, &invoice1_id);
     });
 
     // Verify that invoice is properly moved to Funded status
     env.as_contract(&contract_id, || {
         let pending_invoices =
-            InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Pending);
+            InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Pending);
         assert_eq!(
             pending_invoices.len(),
             0,
             "No invoices should be in Pending status"
         );
 
-        let funded_invoices = InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Funded);
+        let funded_invoices = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Funded);
         assert_eq!(
             funded_invoices.len(),
             1,
@@ -2864,7 +2864,7 @@ fn test_notification_creation_on_invoice_status_change() {
     let initial_count = initial_notifications.len();
 
     // Update invoice status (should trigger notification)
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
 
     // Check that business received verification notification
     let updated_notifications = client.get_user_notifications(&business);
@@ -3931,7 +3931,7 @@ fn test_investment_insurance_lifecycle() {
         &Vec::new(&env),
     );
 
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
@@ -4026,7 +4026,7 @@ fn test_query_investment_insurance_single_coverage() {
         &Vec::new(&env),
     );
 
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000i128, &5_500i128);
@@ -4126,7 +4126,7 @@ fn test_query_investment_insurance_premium_calculation() {
         &Vec::new(&env),
     );
 
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 100_000);
 
     let bid_id = client.place_bid(&investor, &invoice_id, &invoice_amount, &11_000i128);
@@ -4214,7 +4214,7 @@ fn test_query_investment_insurance_inactive_coverage() {
         &Vec::new(&env),
     );
 
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Verified);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
@@ -4333,9 +4333,9 @@ fn test_basic_readme_queries() {
     let business_invoices = client.get_business_invoices(&business);
     assert_eq!(business_invoices.len(), 1);
 
-    let _pending_invoices = client.get_invoices_by_status(&InvoiceStatus::Pending);
-    let _verified_invoices = client.get_invoices_by_status(&InvoiceStatus::Verified);
-    let _funded_invoices = client.get_invoices_by_status(&InvoiceStatus::Funded);
+    let _pending_invoices = client.get_invoices_by_status(InvoiceStatus::Pending);
+    let _verified_invoices = client.get_invoices_by_status(InvoiceStatus::Verified);
+    let _funded_invoices = client.get_invoices_by_status(InvoiceStatus::Funded);
 
     let _available_invoices = client.get_available_invoices();
 
@@ -4480,12 +4480,12 @@ fn test_invariants_after_full_lifecycle() {
         "total_invoice_count must be at least 1"
     );
 
-    let paid_count = client.get_invoice_count_by_status(&InvoiceStatus::Paid);
-    let pending_count = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
-    let verified_count = client.get_invoice_count_by_status(&InvoiceStatus::Verified);
-    let funded_count = client.get_invoice_count_by_status(&InvoiceStatus::Funded);
-    let defaulted_count = client.get_invoice_count_by_status(&InvoiceStatus::Defaulted);
-    let cancelled_count = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
+    let paid_count = client.get_invoice_count_by_status(InvoiceStatus::Paid);
+    let pending_count = client.get_invoice_count_by_status(InvoiceStatus::Pending);
+    let verified_count = client.get_invoice_count_by_status(InvoiceStatus::Verified);
+    let funded_count = client.get_invoice_count_by_status(InvoiceStatus::Funded);
+    let defaulted_count = client.get_invoice_count_by_status(InvoiceStatus::Defaulted);
+    let cancelled_count = client.get_invoice_count_by_status(InvoiceStatus::Cancelled);
 
     assert_eq!(
         paid_count, 1,
@@ -4529,7 +4529,7 @@ fn test_invariants_after_full_lifecycle() {
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.id, invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
-    let paid_invoices = client.get_invoices_by_status(&InvoiceStatus::Paid);
+    let paid_invoices = client.get_invoices_by_status(InvoiceStatus::Paid);
     assert_eq!(paid_invoices.len(), 1);
     assert_eq!(paid_invoices.get(0).unwrap(), invoice_id);
 }
@@ -5028,7 +5028,7 @@ fn test_complete_invoice_lifecycle_with_cancellation() {
     assert_eq!(invoice.status, InvoiceStatus::Cancelled);
 
     // Verify cancelled invoices are tracked
-    let cancelled_invoices = client.get_invoices_by_status(&InvoiceStatus::Cancelled);
+    let cancelled_invoices = client.get_invoices_by_status(InvoiceStatus::Cancelled);
     assert_eq!(cancelled_invoices.len(), 1);
     assert_eq!(cancelled_invoices.get(0).unwrap(), invoice_id);
 }
@@ -5090,9 +5090,9 @@ fn test_invoice_lifecycle_counts() {
     client.cancel_invoice(&invoice_id_3);
 
     // Verify counts
-    let pending_count = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
-    let verified_count = client.get_invoice_count_by_status(&InvoiceStatus::Verified);
-    let cancelled_count = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
+    let pending_count = client.get_invoice_count_by_status(InvoiceStatus::Pending);
+    let verified_count = client.get_invoice_count_by_status(InvoiceStatus::Verified);
+    let cancelled_count = client.get_invoice_count_by_status(InvoiceStatus::Cancelled);
     let total_count = client.get_total_invoice_count();
 
     assert_eq!(pending_count, 1);
@@ -5144,7 +5144,7 @@ fn test_get_invoices_by_status_cancelled() {
     }
 
     // Get all cancelled invoices
-    let cancelled_invoices = client.get_invoices_by_status(&InvoiceStatus::Cancelled);
+    let cancelled_invoices = client.get_invoices_by_status(InvoiceStatus::Cancelled);
     assert_eq!(cancelled_invoices.len(), 3);
 
     // Verify all cancelled IDs are in the list

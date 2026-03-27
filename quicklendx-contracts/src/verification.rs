@@ -1,9 +1,11 @@
-use crate::bid::{BidStatus, BidStorage};
+use crate::bid::BidStatus;
 use crate::errors::QuickLendXError;
+use crate::events::emit_investor_verified;
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_KYC_DATA_LENGTH, MAX_REJECTION_REASON_LENGTH,
 };
+use crate::storage::BidStorage;
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 #[contracttype]
@@ -66,447 +68,7 @@ pub struct InvestorVerification {
     pub compliance_notes: Option<String>,
 }
 
-pub struct BusinessVerificationStorage;
-
-impl BusinessVerificationStorage {
-    const VERIFIED_BUSINESSES_KEY: &'static str = "verified_businesses";
-    const PENDING_BUSINESSES_KEY: &'static str = "pending_businesses";
-    const REJECTED_BUSINESSES_KEY: &'static str = "rejected_businesses";
-    const ADMIN_KEY: &'static str = "admin_address";
-
-    pub fn store_verification(env: &Env, verification: &BusinessVerification) {
-        env.storage()
-            .instance()
-            .set(&verification.business, verification);
-
-        // Add to status-specific lists
-        match verification.status {
-            BusinessVerificationStatus::Verified => {
-                Self::add_to_verified_businesses(env, &verification.business);
-            }
-            BusinessVerificationStatus::Pending => {
-                Self::add_to_pending_businesses(env, &verification.business);
-            }
-            BusinessVerificationStatus::Rejected => {
-                Self::add_to_rejected_businesses(env, &verification.business);
-            }
-        }
-    }
-
-    pub fn set_verification_status(
-        env: &Env,
-        business: &Address,
-        status: BusinessVerificationStatus,
-    ) {
-        let verified_at = if matches!(status, BusinessVerificationStatus::Verified) {
-            Some(env.ledger().timestamp())
-        } else {
-            None
-        };
-
-        let verification = BusinessVerification {
-            business: business.clone(),
-            status,
-            verified_at,
-            verified_by: None,
-            kyc_data: String::from_str(env, "Mock KYC data"),
-            submitted_at: env.ledger().timestamp(),
-            rejection_reason: None,
-        };
-        Self::store_verification(env, &verification);
-    }
-
-    pub fn get_verification(env: &Env, business: &Address) -> Option<BusinessVerification> {
-        env.storage().instance().get(business)
-    }
-
-    pub fn update_verification(env: &Env, verification: &BusinessVerification) {
-        let old_verification = Self::get_verification(env, &verification.business);
-
-        // Remove from old status list
-        if let Some(old_ver) = old_verification {
-            match old_ver.status {
-                BusinessVerificationStatus::Verified => {
-                    Self::remove_from_verified_businesses(env, &verification.business);
-                }
-                BusinessVerificationStatus::Pending => {
-                    Self::remove_from_pending_businesses(env, &verification.business);
-                }
-                BusinessVerificationStatus::Rejected => {
-                    Self::remove_from_rejected_businesses(env, &verification.business);
-                }
-            }
-        }
-
-        // Store new verification
-        Self::store_verification(env, verification);
-    }
-
-    pub fn is_business_verified(env: &Env, business: &Address) -> bool {
-        if let Some(verification) = Self::get_verification(env, business) {
-            matches!(verification.status, BusinessVerificationStatus::Verified)
-        } else {
-            false
-        }
-    }
-
-    pub fn get_verified_businesses(env: &Env) -> Vec<Address> {
-        env.storage()
-            .instance()
-            .get(&Self::VERIFIED_BUSINESSES_KEY)
-            .unwrap_or(vec![env])
-    }
-
-    pub fn get_pending_businesses(env: &Env) -> Vec<Address> {
-        env.storage()
-            .instance()
-            .get(&Self::PENDING_BUSINESSES_KEY)
-            .unwrap_or(vec![env])
-    }
-
-    pub fn get_rejected_businesses(env: &Env) -> Vec<Address> {
-        env.storage()
-            .instance()
-            .get(&Self::REJECTED_BUSINESSES_KEY)
-            .unwrap_or(vec![env])
-    }
-
-    fn add_to_verified_businesses(env: &Env, business: &Address) {
-        let mut verified = Self::get_verified_businesses(env);
-        verified.push_back(business.clone());
-        env.storage()
-            .instance()
-            .set(&Self::VERIFIED_BUSINESSES_KEY, &verified);
-    }
-
-    fn add_to_pending_businesses(env: &Env, business: &Address) {
-        let mut pending = Self::get_pending_businesses(env);
-        pending.push_back(business.clone());
-        env.storage()
-            .instance()
-            .set(&Self::PENDING_BUSINESSES_KEY, &pending);
-    }
-
-    fn add_to_rejected_businesses(env: &Env, business: &Address) {
-        let mut rejected = Self::get_rejected_businesses(env);
-        rejected.push_back(business.clone());
-        env.storage()
-            .instance()
-            .set(&Self::REJECTED_BUSINESSES_KEY, &rejected);
-    }
-
-    fn remove_from_verified_businesses(env: &Env, business: &Address) {
-        let verified = Self::get_verified_businesses(env);
-        let mut new_verified = vec![env];
-        for addr in verified.iter() {
-            if addr != *business {
-                new_verified.push_back(addr);
-            }
-        }
-        env.storage()
-            .instance()
-            .set(&Self::VERIFIED_BUSINESSES_KEY, &new_verified);
-    }
-
-    fn remove_from_pending_businesses(env: &Env, business: &Address) {
-        let pending = Self::get_pending_businesses(env);
-        let mut new_pending = vec![env];
-        for addr in pending.iter() {
-            if addr != *business {
-                new_pending.push_back(addr);
-            }
-        }
-        env.storage()
-            .instance()
-            .set(&Self::PENDING_BUSINESSES_KEY, &new_pending);
-    }
-
-    fn remove_from_rejected_businesses(env: &Env, business: &Address) {
-        let rejected = Self::get_rejected_businesses(env);
-        let mut new_rejected = vec![env];
-        for addr in rejected.iter() {
-            if addr != *business {
-                new_rejected.push_back(addr);
-            }
-        }
-        env.storage()
-            .instance()
-            .set(&Self::REJECTED_BUSINESSES_KEY, &new_rejected);
-    }
-
-    /// @deprecated Use `admin::AdminStorage::initialize()` or `admin::AdminStorage::set_admin()` instead
-    /// This function is kept for backward compatibility with existing tests.
-    /// It syncs with the new AdminStorage system.
-    pub fn set_admin(env: &Env, admin: &Address) {
-        // Store in old location for backward compatibility
-        env.storage().instance().set(&Self::ADMIN_KEY, admin);
-
-        // Always sync with new AdminStorage
-        // This allows tests that call set_admin() multiple times to work
-        env.storage()
-            .instance()
-            .set(&crate::admin::ADMIN_KEY, admin);
-        env.storage()
-            .instance()
-            .set(&crate::admin::ADMIN_INITIALIZED_KEY, &true);
-    }
-
-    /// @deprecated Use `admin::AdminStorage::get_admin()` instead
-    /// This function is kept for backward compatibility only
-    pub fn get_admin(env: &Env) -> Option<Address> {
-        // Try new storage first, fall back to old
-        crate::admin::AdminStorage::get_admin(env)
-            .or_else(|| env.storage().instance().get(&Self::ADMIN_KEY))
-    }
-
-    /// @deprecated Use `admin::AdminStorage::is_admin()` instead
-    /// This function is kept for backward compatibility only
-    pub fn is_admin(env: &Env, address: &Address) -> bool {
-        crate::admin::AdminStorage::is_admin(env, address)
-    }
-}
-
-pub struct InvestorVerificationStorage;
-
-impl InvestorVerificationStorage {
-    const VERIFIED_INVESTORS_KEY: &'static str = "verified_investors";
-    const PENDING_INVESTORS_KEY: &'static str = "pending_investors";
-    const REJECTED_INVESTORS_KEY: &'static str = "rejected_investors";
-    #[cfg(test)]
-    const INVESTOR_HISTORY_KEY: &'static str = "investor_history";
-    #[cfg(test)]
-    const INVESTOR_ANALYTICS_KEY: &'static str = "investor_analytics";
-
-    pub fn submit(env: &Env, investor: &Address, kyc_data: String) -> Result<(), QuickLendXError> {
-        check_string_length(&kyc_data, MAX_KYC_DATA_LENGTH)?;
-        let mut verification = Self::get(env, investor);
-        match verification {
-            Some(ref existing) => match existing.status {
-                BusinessVerificationStatus::Pending => {
-                    return Err(QuickLendXError::KYCAlreadyPending)
-                }
-                BusinessVerificationStatus::Verified => {
-                    return Err(QuickLendXError::KYCAlreadyVerified)
-                }
-                BusinessVerificationStatus::Rejected => {
-                    verification = Some(InvestorVerification {
-                        investor: investor.clone(),
-                        status: BusinessVerificationStatus::Pending,
-                        verified_at: None,
-                        verified_by: None,
-                        kyc_data,
-                        investment_limit: existing.investment_limit,
-                        submitted_at: env.ledger().timestamp(),
-                        tier: existing.tier.clone(),
-                        risk_level: existing.risk_level.clone(),
-                        risk_score: existing.risk_score,
-                        total_invested: existing.total_invested,
-                        total_returns: existing.total_returns,
-                        successful_investments: existing.successful_investments,
-                        defaulted_investments: existing.defaulted_investments,
-                        last_activity: existing.last_activity,
-                        rejection_reason: None,
-                        compliance_notes: None,
-                    });
-                }
-            },
-            None => {
-                verification = Some(InvestorVerification {
-                    investor: investor.clone(),
-                    status: BusinessVerificationStatus::Pending,
-                    verified_at: None,
-                    verified_by: None,
-                    kyc_data,
-                    investment_limit: 0,
-                    submitted_at: env.ledger().timestamp(),
-                    tier: InvestorTier::Basic,
-                    risk_level: InvestorRiskLevel::High, // Default to high risk for new investors
-                    risk_score: 100,                     // Default high risk score
-                    total_invested: 0,
-                    total_returns: 0,
-                    successful_investments: 0,
-                    defaulted_investments: 0,
-                    last_activity: env.ledger().timestamp(),
-                    rejection_reason: None,
-                    compliance_notes: None,
-                });
-            }
-        }
-
-        if let Some(v) = verification {
-            Self::store(env, &v);
-            Self::add_to_pending_investors(env, investor);
-        }
-        Ok(())
-    }
-
-    pub fn store(env: &Env, verification: &InvestorVerification) {
-        env.storage()
-            .instance()
-            .set(&verification.investor, verification);
-    }
-
-    pub fn get(env: &Env, investor: &Address) -> Option<InvestorVerification> {
-        env.storage().instance().get(investor)
-    }
-
-    pub fn update(env: &Env, verification: &InvestorVerification) {
-        let old_verification = Self::get(env, &verification.investor);
-
-        // Remove from old status list
-        if let Some(old_ver) = old_verification {
-            match old_ver.status {
-                BusinessVerificationStatus::Verified => {
-                    Self::remove_from_verified_investors(env, &verification.investor);
-                }
-                BusinessVerificationStatus::Pending => {
-                    Self::remove_from_pending_investors(env, &verification.investor);
-                }
-                BusinessVerificationStatus::Rejected => {
-                    Self::remove_from_rejected_investors(env, &verification.investor);
-                }
-            }
-        }
-
-        // Store new verification
-        Self::store(env, verification);
-
-        // Add to new status list
-        match verification.status {
-            BusinessVerificationStatus::Verified => {
-                Self::add_to_verified_investors(env, &verification.investor);
-            }
-            BusinessVerificationStatus::Pending => {
-                Self::add_to_pending_investors(env, &verification.investor);
-            }
-            BusinessVerificationStatus::Rejected => {
-                Self::add_to_rejected_investors(env, &verification.investor);
-            }
-        }
-    }
-
-    pub fn is_investor_verified(env: &Env, investor: &Address) -> bool {
-        if let Some(verification) = Self::get(env, investor) {
-            matches!(verification.status, BusinessVerificationStatus::Verified)
-        } else {
-            false
-        }
-    }
-
-    pub fn get_verified_investors(env: &Env) -> Vec<Address> {
-        env.storage()
-            .instance()
-            .get(&Self::VERIFIED_INVESTORS_KEY)
-            .unwrap_or(vec![env])
-    }
-
-    pub fn get_pending_investors(env: &Env) -> Vec<Address> {
-        env.storage()
-            .instance()
-            .get(&Self::PENDING_INVESTORS_KEY)
-            .unwrap_or(vec![env])
-    }
-
-    pub fn get_rejected_investors(env: &Env) -> Vec<Address> {
-        env.storage()
-            .instance()
-            .get(&Self::REJECTED_INVESTORS_KEY)
-            .unwrap_or(vec![env])
-    }
-
-    pub fn get_investors_by_tier(env: &Env, tier: InvestorTier) -> Vec<Address> {
-        let verified_investors = Self::get_verified_investors(env);
-        let mut tier_investors = Vec::new(env);
-
-        for investor in verified_investors.iter() {
-            if let Some(verification) = Self::get(env, &investor) {
-                if verification.tier == tier {
-                    tier_investors.push_back(investor);
-                }
-            }
-        }
-
-        tier_investors
-    }
-
-    pub fn get_investors_by_risk_level(env: &Env, risk_level: InvestorRiskLevel) -> Vec<Address> {
-        let verified_investors = Self::get_verified_investors(env);
-        let mut risk_investors = Vec::new(env);
-
-        for investor in verified_investors.iter() {
-            if let Some(verification) = Self::get(env, &investor) {
-                if verification.risk_level == risk_level {
-                    risk_investors.push_back(investor);
-                }
-            }
-        }
-
-        risk_investors
-    }
-
-    fn add_to_verified_investors(env: &Env, investor: &Address) {
-        let mut verified = Self::get_verified_investors(env);
-        verified.push_back(investor.clone());
-        env.storage()
-            .instance()
-            .set(&Self::VERIFIED_INVESTORS_KEY, &verified);
-    }
-
-    fn add_to_pending_investors(env: &Env, investor: &Address) {
-        let mut pending = Self::get_pending_investors(env);
-        pending.push_back(investor.clone());
-        env.storage()
-            .instance()
-            .set(&Self::PENDING_INVESTORS_KEY, &pending);
-    }
-
-    fn add_to_rejected_investors(env: &Env, investor: &Address) {
-        let mut rejected = Self::get_rejected_investors(env);
-        rejected.push_back(investor.clone());
-        env.storage()
-            .instance()
-            .set(&Self::REJECTED_INVESTORS_KEY, &rejected);
-    }
-
-    fn remove_from_verified_investors(env: &Env, investor: &Address) {
-        let verified = Self::get_verified_investors(env);
-        let mut new_verified = vec![env];
-        for addr in verified.iter() {
-            if addr != *investor {
-                new_verified.push_back(addr);
-            }
-        }
-        env.storage()
-            .instance()
-            .set(&Self::VERIFIED_INVESTORS_KEY, &new_verified);
-    }
-
-    fn remove_from_pending_investors(env: &Env, investor: &Address) {
-        let pending = Self::get_pending_investors(env);
-        let mut new_pending = vec![env];
-        for addr in pending.iter() {
-            if addr != *investor {
-                new_pending.push_back(addr);
-            }
-        }
-        env.storage()
-            .instance()
-            .set(&Self::PENDING_INVESTORS_KEY, &new_pending);
-    }
-
-    fn remove_from_rejected_investors(env: &Env, investor: &Address) {
-        let rejected = Self::get_rejected_investors(env);
-        let mut new_rejected = vec![env];
-        for addr in rejected.iter() {
-            if addr != *investor {
-                new_rejected.push_back(addr);
-            }
-        }
-        env.storage()
-            .instance()
-            .set(&Self::REJECTED_INVESTORS_KEY, &new_rejected);
-    }
-}
+// Storage operations have been moved to crate::storage
 
 pub fn validate_bid(
     env: &Env,
@@ -537,10 +99,10 @@ pub fn validate_bid(
     // Validate investor can make this investment
     validate_investor_investment(env, investor, bid_amount)?;
 
-    BidStorage::cleanup_expired_bids(env, &invoice.id);
-    let existing_bids = BidStorage::get_bids_for_invoice(env, &invoice.id);
+    crate::storage::BidStorage::cleanup_expired_bids(env, &invoice.id);
+    let existing_bids = crate::storage::BidStorage::get_bids_for_invoice(env, &invoice.id);
     for bid_id in existing_bids.iter() {
-        if let Some(existing_bid) = BidStorage::get_bid(env, &bid_id) {
+        if let Some(existing_bid) = crate::storage::BidStorage::get_bid(env, &bid_id) {
             if existing_bid.investor == *investor && existing_bid.status == BidStatus::Placed {
                 return Err(QuickLendXError::OperationNotAllowed);
             }
@@ -561,7 +123,7 @@ pub fn submit_kyc_application(
 
     // Check if business already has a verification record
     if let Some(existing_verification) =
-        BusinessVerificationStorage::get_verification(env, business)
+        crate::storage::BusinessVerificationStorage::get_verification(env, business)
     {
         match existing_verification.status {
             BusinessVerificationStatus::Pending => {
@@ -586,7 +148,7 @@ pub fn submit_kyc_application(
         rejection_reason: None,
     };
 
-    BusinessVerificationStorage::store_verification(env, &verification);
+    crate::storage::BusinessVerificationStorage::store_verification(env, &verification);
     emit_kyc_submitted(env, business);
     Ok(())
 }
@@ -598,12 +160,13 @@ pub fn verify_business(
 ) -> Result<(), QuickLendXError> {
     // Only admin can verify businesses
     admin.require_auth();
-    if !BusinessVerificationStorage::is_admin(env, admin) {
+    if !crate::admin::AdminStorage::is_admin(env, admin) {
         return Err(QuickLendXError::NotAdmin);
     }
 
-    let mut verification = BusinessVerificationStorage::get_verification(env, business)
-        .ok_or(QuickLendXError::KYCNotFound)?;
+    let mut verification =
+        crate::storage::BusinessVerificationStorage::get_verification(env, business)
+            .ok_or(QuickLendXError::KYCNotFound)?;
 
     if !matches!(verification.status, BusinessVerificationStatus::Pending) {
         return Err(QuickLendXError::InvalidKYCStatus);
@@ -613,7 +176,7 @@ pub fn verify_business(
     verification.verified_at = Some(env.ledger().timestamp());
     verification.verified_by = Some(admin.clone());
 
-    BusinessVerificationStorage::update_verification(env, &verification);
+    crate::storage::BusinessVerificationStorage::update_verification(env, &verification);
     emit_business_verified(env, business, admin);
     Ok(())
 }
@@ -627,12 +190,13 @@ pub fn reject_business(
     check_string_length(&reason, MAX_REJECTION_REASON_LENGTH)?;
     // Only admin can reject businesses
     admin.require_auth();
-    if !BusinessVerificationStorage::is_admin(env, admin) {
+    if !crate::admin::AdminStorage::is_admin(env, admin) {
         return Err(QuickLendXError::NotAdmin);
     }
 
-    let mut verification = BusinessVerificationStorage::get_verification(env, business)
-        .ok_or(QuickLendXError::KYCNotFound)?;
+    let mut verification =
+        crate::storage::BusinessVerificationStorage::get_verification(env, business)
+            .ok_or(QuickLendXError::KYCNotFound)?;
 
     if !matches!(verification.status, BusinessVerificationStatus::Pending) {
         return Err(QuickLendXError::InvalidKYCStatus);
@@ -641,7 +205,7 @@ pub fn reject_business(
     verification.status = BusinessVerificationStatus::Rejected;
     verification.rejection_reason = Some(reason);
 
-    BusinessVerificationStorage::update_verification(env, &verification);
+    crate::storage::BusinessVerificationStorage::update_verification(env, &verification);
     emit_business_rejected(env, business, admin);
     Ok(())
 }
@@ -650,11 +214,11 @@ pub fn get_business_verification_status(
     env: &Env,
     business: &Address,
 ) -> Option<BusinessVerification> {
-    BusinessVerificationStorage::get_verification(env, business)
+    crate::storage::BusinessVerificationStorage::get_verification(env, business)
 }
 
 pub fn require_business_verification(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
-    if !BusinessVerificationStorage::is_business_verified(env, business) {
+    if !crate::storage::BusinessVerificationStorage::is_business_verified(env, business) {
         return Err(QuickLendXError::BusinessNotVerified);
     }
     Ok(())
@@ -758,7 +322,29 @@ pub fn submit_investor_kyc(
     kyc_data: String,
 ) -> Result<(), QuickLendXError> {
     investor.require_auth();
-    InvestorVerificationStorage::submit(env, investor, kyc_data)
+    crate::storage::InvestorVerificationStorage::store_verification(
+        env,
+        &InvestorVerification {
+            investor: investor.clone(),
+            status: BusinessVerificationStatus::Pending,
+            verified_at: None,
+            verified_by: None,
+            kyc_data: kyc_data.clone(),
+            investment_limit: 0,
+            submitted_at: env.ledger().timestamp(),
+            tier: InvestorTier::Basic,
+            risk_level: InvestorRiskLevel::High,
+            risk_score: 100,
+            total_invested: 0,
+            total_returns: 0,
+            successful_investments: 0,
+            defaulted_investments: 0,
+            last_activity: env.ledger().timestamp(),
+            rejection_reason: None,
+            compliance_notes: None,
+        },
+    );
+    Ok(())
 }
 
 pub fn verify_investor(
@@ -777,7 +363,8 @@ pub fn verify_investor(
     }
 
     let mut verification =
-        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
+        crate::storage::InvestorVerificationStorage::get_verification(env, investor)
+            .ok_or(QuickLendXError::KYCNotFound)?;
 
     match verification.status {
         BusinessVerificationStatus::Verified => return Err(QuickLendXError::KYCAlreadyVerified),
@@ -799,7 +386,8 @@ pub fn verify_investor(
             verification.risk_score = risk_score;
             verification.compliance_notes = Some(String::from_str(env, "Verified by admin"));
 
-            InvestorVerificationStorage::update(env, &verification);
+            crate::storage::InvestorVerificationStorage::update_verification(env, &verification);
+            emit_investor_verified(env, &verification);
             Ok(verification)
         }
     }
@@ -817,7 +405,8 @@ pub fn reject_investor(
         return Err(QuickLendXError::NotAdmin);
     }
     let mut verification =
-        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
+        crate::storage::InvestorVerificationStorage::get_verification(env, investor)
+            .ok_or(QuickLendXError::KYCNotFound)?;
 
     verification.status = BusinessVerificationStatus::Rejected;
     verification.verified_at = Some(env.ledger().timestamp());
@@ -825,12 +414,12 @@ pub fn reject_investor(
     verification.rejection_reason = Some(reason);
     verification.compliance_notes = Some(String::from_str(env, "Rejected by admin"));
 
-    InvestorVerificationStorage::update(env, &verification);
+    crate::storage::InvestorVerificationStorage::update_verification(env, &verification);
     Ok(())
 }
 
 pub fn get_investor_verification(env: &Env, investor: &Address) -> Option<InvestorVerification> {
-    InvestorVerificationStorage::get(env, investor)
+    crate::storage::InvestorVerificationStorage::get_verification(env, investor)
 }
 
 /// Calculate investor risk score based on various factors
@@ -853,7 +442,9 @@ pub fn calculate_investor_risk_score(
     }
 
     // Check investment history if available
-    if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
+    if let Some(verification) =
+        crate::storage::InvestorVerificationStorage::get_verification(env, investor)
+    {
         let total_investments =
             verification.successful_investments + verification.defaulted_investments;
 
@@ -886,7 +477,9 @@ pub fn determine_investor_tier(
     investor: &Address,
     risk_score: u32,
 ) -> Result<InvestorTier, QuickLendXError> {
-    if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
+    if let Some(verification) =
+        crate::storage::InvestorVerificationStorage::get_verification(env, investor)
+    {
         let total_invested = verification.total_invested;
         let successful_investments = verification.successful_investments;
 
@@ -990,7 +583,9 @@ pub fn update_investor_analytics(
         return Err(QuickLendXError::InvalidAmount);
     }
 
-    if let Some(mut verification) = InvestorVerificationStorage::get(env, investor) {
+    if let Some(mut verification) =
+        crate::storage::InvestorVerificationStorage::get_verification(env, investor)
+    {
         let prior_base_limit = recover_base_limit_from_current_limit(
             verification.investment_limit,
             &verification.tier,
@@ -1026,7 +621,7 @@ pub fn update_investor_analytics(
         verification.investment_limit =
             calculate_investment_limit(&verification.tier, &verification.risk_level, base_limit);
 
-        InvestorVerificationStorage::update(env, &verification);
+        crate::storage::InvestorVerificationStorage::update_verification(env, &verification);
     }
 
     Ok(())
@@ -1037,7 +632,8 @@ pub fn get_investor_analytics(
     env: &Env,
     investor: &Address,
 ) -> Result<InvestorVerification, QuickLendXError> {
-    InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)
+    crate::storage::InvestorVerificationStorage::get_verification(env, investor)
+        .ok_or(QuickLendXError::KYCNotFound)
 }
 
 /// Validate investor can make investment based on limits and risk
@@ -1046,7 +642,9 @@ pub fn validate_investor_investment(
     investor: &Address,
     investment_amount: i128,
 ) -> Result<(), QuickLendXError> {
-    if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
+    if let Some(verification) =
+        crate::storage::InvestorVerificationStorage::get_verification(env, investor)
+    {
         // Check if investor is verified
         if !matches!(verification.status, BusinessVerificationStatus::Verified) {
             return Err(QuickLendXError::BusinessNotVerified);
@@ -1101,7 +699,8 @@ pub fn set_investment_limit(
     }
 
     let mut verification =
-        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
+        crate::storage::InvestorVerificationStorage::get_verification(env, investor)
+            .ok_or(QuickLendXError::KYCNotFound)?;
 
     // Only allow setting limits for verified investors
     if !matches!(verification.status, BusinessVerificationStatus::Verified) {
@@ -1116,7 +715,7 @@ pub fn set_investment_limit(
     verification.compliance_notes =
         Some(String::from_str(env, "Investment limit updated by admin"));
 
-    InvestorVerificationStorage::update(env, &verification);
+    crate::storage::InvestorVerificationStorage::update_verification(env, &verification);
     Ok(())
 }
 

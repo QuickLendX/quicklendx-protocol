@@ -312,7 +312,7 @@ fn test_cancel_invoice_paid_fails() {
     );
 
     // Manually set status to Paid
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Paid);
 
     // Try to cancel - should fail
     client.cancel_invoice(&invoice_id);
@@ -337,7 +337,7 @@ fn test_cancel_invoice_defaulted_fails() {
     );
 
     // Manually set status to Defaulted
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Defaulted);
 
     // Try to cancel - should fail
     client.cancel_invoice(&invoice_id);
@@ -638,14 +638,14 @@ fn test_cancel_invoice_updates_status_list() {
     client.cancel_invoice(&invoice_id);
 
     // Verify invoice appears in cancelled list
-    let cancelled_invoices = client.get_invoices_by_status(&InvoiceStatus::Cancelled);
+    let cancelled_invoices = client.get_invoices_by_status(InvoiceStatus::Cancelled);
     assert!(
         cancelled_invoices.contains(&invoice_id),
         "Invoice should be in cancelled list"
     );
 
     // Verify invoice not in pending list
-    let pending_invoices = client.get_invoices_by_status(&InvoiceStatus::Pending);
+    let pending_invoices = client.get_invoices_by_status(InvoiceStatus::Pending);
     assert!(
         !pending_invoices.contains(&invoice_id),
         "Invoice should not be in pending list"
@@ -712,7 +712,7 @@ fn test_complete_lifecycle_with_cancellation() {
     assert_eq!(invoice.status, InvoiceStatus::Cancelled);
 
     // Verify invoice is in cancelled list
-    let cancelled_invoices = client.get_invoices_by_status(&InvoiceStatus::Cancelled);
+    let cancelled_invoices = client.get_invoices_by_status(InvoiceStatus::Cancelled);
     assert!(cancelled_invoices.contains(&invoice_id));
 }
 

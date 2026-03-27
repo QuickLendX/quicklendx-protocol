@@ -323,13 +323,13 @@ fn test_full_invoice_lifecycle() {
     // Status query lists are updated.
     assert!(
         !client
-            .get_invoices_by_status(&InvoiceStatus::Funded)
+            .get_invoices_by_status(InvoiceStatus::Funded)
             .contains(&invoice_id),
         "Invoice should not be in Funded list"
     );
     assert!(
         client
-            .get_invoices_by_status(&InvoiceStatus::Paid)
+            .get_invoices_by_status(InvoiceStatus::Paid)
             .contains(&invoice_id),
         "Invoice should be in Paid list"
     );
@@ -601,7 +601,7 @@ fn test_full_lifecycle_step_by_step() {
         InvestmentStatus::Completed
     );
     assert!(client
-        .get_invoices_by_status(&InvoiceStatus::Paid)
+        .get_invoices_by_status(InvoiceStatus::Paid)
         .contains(&invoice_id));
     assert!(
         has_event_with_topic(&env, symbol_short!("inv_set")),

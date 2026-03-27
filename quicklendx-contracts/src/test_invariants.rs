@@ -707,12 +707,12 @@ fn test_invariants_after_full_lifecycle() {
     );
 
     // status counts: our invoice is Paid
-    let paid_count = client.get_invoice_count_by_status(&InvoiceStatus::Paid);
-    let pending_count = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
-    let verified_count = client.get_invoice_count_by_status(&InvoiceStatus::Verified);
-    let funded_count = client.get_invoice_count_by_status(&InvoiceStatus::Funded);
-    let defaulted_count = client.get_invoice_count_by_status(&InvoiceStatus::Defaulted);
-    let cancelled_count = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
+    let paid_count = client.get_invoice_count_by_status(InvoiceStatus::Paid);
+    let pending_count = client.get_invoice_count_by_status(InvoiceStatus::Pending);
+    let verified_count = client.get_invoice_count_by_status(InvoiceStatus::Verified);
+    let funded_count = client.get_invoice_count_by_status(InvoiceStatus::Funded);
+    let defaulted_count = client.get_invoice_count_by_status(InvoiceStatus::Defaulted);
+    let cancelled_count = client.get_invoice_count_by_status(InvoiceStatus::Cancelled);
 
     assert_eq!(
         paid_count, 1,
@@ -761,7 +761,7 @@ fn test_invariants_after_full_lifecycle() {
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.id, invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
-    let paid_invoices = client.get_invoices_by_status(&InvoiceStatus::Paid);
+    let paid_invoices = client.get_invoices_by_status(InvoiceStatus::Paid);
     assert_eq!(paid_invoices.len(), 1);
     assert_eq!(paid_invoices.get(0).unwrap(), invoice_id);
 }

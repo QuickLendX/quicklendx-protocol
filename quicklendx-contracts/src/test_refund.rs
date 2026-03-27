@@ -130,7 +130,7 @@ fn test_business_can_trigger_refund() {
 
     env.as_contract(&client.address, || {
         let investment =
-            crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
+            crate::storage::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
                 .unwrap();
         assert_eq!(investment.status, InvestmentStatus::Refunded);
     });
@@ -252,7 +252,7 @@ fn test_cannot_refund_missing_escrow() {
     client.verify_invoice(&invoice_id);
 
     // Forcibly update status to Funded, skipping the bid process (no escrow record created)
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Funded);
+    client.update_invoice_status(&invoice_id, InvoiceStatus::Funded);
 
     // Attempt to refund should fail because there is no corresponding escrow record
     let result = client.try_refund_escrow_funds(&invoice_id, &admin);
@@ -273,7 +273,7 @@ fn test_refund_updates_internal_states_correctly() {
     assert_eq!(pre_refund_invoice.status, InvoiceStatus::Funded);
 
     // Status list tracking count check before refund
-    let pre_refunded_count = client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+    let pre_refunded_count = client.get_invoice_count_by_status(InvoiceStatus::Refunded);
 
     // Perform the refund
     client.refund_escrow_funds(&invoice_id, &business);
@@ -283,7 +283,7 @@ fn test_refund_updates_internal_states_correctly() {
     assert_eq!(post_refund_invoice.status, InvoiceStatus::Refunded);
 
     // 2. Invoice Status tracking lists should be updated correctly
-    let post_refunded_count = client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+    let post_refunded_count = client.get_invoice_count_by_status(InvoiceStatus::Refunded);
 
     assert_eq!(post_refunded_count, pre_refunded_count + 1);
 
@@ -295,7 +295,7 @@ fn test_refund_updates_internal_states_correctly() {
     // 4. Investment status should update to Refunded
     env.as_contract(&client.address, || {
         let investment =
-            crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
+            crate::storage::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
                 .unwrap();
         assert_eq!(investment.status, InvestmentStatus::Refunded);
     });

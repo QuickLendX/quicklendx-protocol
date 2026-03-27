@@ -1,15 +1,16 @@
 #![cfg(test)]
 
 use crate::{
-    invoice::{Invoice, InvoiceCategory, InvoiceStatus, InvoiceStorage},
-    protocol_limits::ProtocolLimitsContract,
-    verification::{BusinessVerificationStatus, BusinessVerificationStorage},
-    QuickLendXContract, QuickLendXContractClient, QuickLendXError,
     init::InitializationParams,
+    invoice::{Invoice, InvoiceCategory, InvoiceStatus},
+    protocol_limits::ProtocolLimitsContract,
+    storage::{BusinessVerificationStorage, InvoiceStorage},
+    verification::{BusinessVerification, BusinessVerificationStatus},
+    QuickLendXContract, QuickLendXContractClient, QuickLendXError,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, Env, String, Vec, vec,
+    vec, Address, Env, String, Vec,
 };
 
 fn setup(env: &Env) -> (QuickLendXContractClient, Address, Address, Address, Address) {
@@ -40,11 +41,16 @@ fn setup(env: &Env) -> (QuickLendXContractClient, Address, Address, Address, Add
 
     // Verify business
     env.as_contract(&contract_id, || {
-        BusinessVerificationStorage::set_verification_status(
-            &env,
-            &business,
-            BusinessVerificationStatus::Verified,
-        );
+        let verification = BusinessVerification {
+            business: business.clone(),
+            status: BusinessVerificationStatus::Verified,
+            verified_at: Some(env.ledger().timestamp()),
+            verified_by: Some(admin.clone()),
+            kyc_data: String::from_str(&env, "Test"),
+            submitted_at: env.ledger().timestamp(),
+            rejection_reason: None,
+        };
+        BusinessVerificationStorage::store_verification(&env, &verification);
     });
 
     (client, admin, business, currency, contract_id)
@@ -121,7 +127,7 @@ fn test_next_invoice_after_limit_fails_with_clear_error() {
         &category,
         &tags,
     );
-    
+
     assert!(result.is_err(), "4th invoice should fail");
     let err = result.err().expect("Expected error result");
     if let Ok(contract_err) = err {
@@ -200,7 +206,10 @@ fn test_cancelled_invoices_free_slot() {
         &category,
         &tags,
     );
-    assert!(result.is_ok(), "Should be able to create invoice after cancellation");
+    assert!(
+        result.is_ok(),
+        "Should be able to create invoice after cancellation"
+    );
 
     // Verify active count is 2
     let active_count = env.as_contract(&contract_id, || {
@@ -245,6 +254,9 @@ fn test_paid_invoices_free_slot() {
 
     // Mark first invoice as paid (simulate payment flow)
     env.as_contract(&contract_id, || {
+        let investment =
+            crate::storage::InvestmentStorage::get_investment_by_invoice(&env, &invoice1_id)
+                .unwrap();
         let mut invoice1 = InvoiceStorage::get_invoice(&env, &invoice1_id).unwrap();
         invoice1.mark_as_paid(&env, business.clone(), env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice1);
@@ -630,7 +642,12 @@ fn test_various_statuses_count_as_active() {
 
         // Invoice 2: Funded
         let mut invoice2 = InvoiceStorage::get_invoice(&env, &ids.get(2).unwrap()).unwrap();
-        invoice2.mark_as_funded(&env, Address::generate(&env), amount, env.ledger().timestamp());
+        invoice2.mark_as_funded(
+            &env,
+            Address::generate(&env),
+            amount,
+            env.ledger().timestamp(),
+        );
         InvoiceStorage::update_invoice(&env, &invoice2);
 
         // Invoice 3: Defaulted

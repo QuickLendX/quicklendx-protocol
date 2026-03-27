@@ -13,9 +13,9 @@
 //! - All mutating operations MUST check pause state before execution
 //! - Read APIs (get_bid, get_escrow_details, etc.) MUST continue functioning
 
+use crate::bid::BidStatus;
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use crate::bid::BidStatus;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env, String, Vec};
