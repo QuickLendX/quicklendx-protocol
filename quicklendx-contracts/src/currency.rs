@@ -126,13 +126,26 @@ impl CurrencyWhitelist {
         Self::get_whitelisted_currencies(env).len()
     }
 
-    /// Return a paginated slice of the whitelist (offset + limit).
-    /// Keeps reads bounded when the list grows large.
+    /// @notice Return a paginated slice of the whitelist with hard cap enforcement
+    /// @param env The contract environment
+    /// @param offset Starting index for pagination (0-based)
+    /// @param limit Maximum number of results to return (capped at MAX_QUERY_LIMIT)
+    /// @return Vector of whitelisted currency addresses
+    /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance
     pub fn get_whitelisted_currencies_paged(env: &Env, offset: u32, limit: u32) -> Vec<Address> {
+        // Import MAX_QUERY_LIMIT from parent module
+        const MAX_QUERY_LIMIT: u32 = 100;
+        
+        // Validate query parameters for security
+        if offset > u32::MAX - MAX_QUERY_LIMIT {
+            return Vec::new(env);
+        }
+        
+        let capped_limit = limit.min(MAX_QUERY_LIMIT);
         let list = Self::get_whitelisted_currencies(env);
         let mut page: Vec<Address> = Vec::new(env);
         let len = list.len();
-        let end = (offset + limit).min(len);
+        let end = (offset + capped_limit).min(len);
         if offset >= len {
             return page;
         }

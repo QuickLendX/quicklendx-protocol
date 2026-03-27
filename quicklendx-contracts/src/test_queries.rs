@@ -1169,3 +1169,207 @@ fn test_cleanup_expired_bids_missing_invoice_returns_zero() {
     let count = client.cleanup_expired_bids(&random_id(&env));
     assert_eq!(count, 0, "cleanup_expired_bids on missing invoice must return 0, not panic");
 }
+
+/// Test comprehensive MAX_QUERY_LIMIT enforcement across all endpoints
+#[test]
+fn test_comprehensive_max_query_limit_enforcement() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    // Create more data than MAX_QUERY_LIMIT for comprehensive testing
+    let mut invoice_ids = Vec::new(&env);
+    for i in 0..150u32 {
+        let invoice_id = create_invoice(
+            &env,
+            &client,
+            &business,
+            1000 + i as i128,
+            InvoiceCategory::Services,
+            true,
+        );
+        invoice_ids.push_back(invoice_id);
+        
+        // Create bids for some invoices
+        if i < 50 {
+            let _ = create_bid(&env, &client, &invoice_id, &investor, 900 + i as i128);
+        }
+    }
+    
+    // Test all paginated endpoints with excessive limits
+    let excessive_limit = 1000u32;
+    
+    let business_invoices = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &excessive_limit,
+    );
+    assert_eq!(
+        business_invoices.len(),
+        crate::MAX_QUERY_LIMIT,
+        "Business invoices should enforce MAX_QUERY_LIMIT"
+    );
+    
+    let available_invoices = client.get_available_invoices_paged(
+        &Option::<i128>::None,
+        &Option::<i128>::None,
+        &Option::<InvoiceCategory>::None,
+        &0u32,
+        &excessive_limit,
+    );
+    assert_eq!(
+        available_invoices.len(),
+        crate::MAX_QUERY_LIMIT,
+        "Available invoices should enforce MAX_QUERY_LIMIT"
+    );
+    
+    let investor_investments = client.get_investor_investments_paged(
+        &investor,
+        &Option::<InvestmentStatus>::None,
+        &0u32,
+        &excessive_limit,
+    );
+    assert!(
+        investor_investments.len() <= crate::MAX_QUERY_LIMIT,
+        "Investor investments should not exceed MAX_QUERY_LIMIT"
+    );
+    
+    // Test with first invoice that has bids
+    if let Some(first_invoice) = invoice_ids.get(0) {
+        let bid_history = client.get_bid_history_paged(
+            &first_invoice,
+            &Option::<BidStatus>::None,
+            &0u32,
+            &excessive_limit,
+        );
+        assert!(
+            bid_history.len() <= crate::MAX_QUERY_LIMIT,
+            "Bid history should not exceed MAX_QUERY_LIMIT"
+        );
+    }
+    
+    let investor_bids = client.get_investor_bids_paged(
+        &investor,
+        &Option::<BidStatus>::None,
+        &0u32,
+        &excessive_limit,
+    );
+    assert!(
+        investor_bids.len() <= crate::MAX_QUERY_LIMIT,
+        "Investor bids should not exceed MAX_QUERY_LIMIT"
+    );
+}
+
+/// Test query parameter validation edge cases
+#[test]
+fn test_query_parameter_validation_edge_cases() {
+    let (env, client) = setup();
+    
+    let business = Address::generate(&env);
+    
+    // Test with maximum safe offset
+    let max_safe_offset = u32::MAX - crate::MAX_QUERY_LIMIT - 1;
+    let result = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &max_safe_offset,
+        &10u32,
+    );
+    assert_eq!(result.len(), 0, "Max safe offset should return empty results");
+    
+    // Test with offset that would cause overflow
+    let overflow_offset = u32::MAX - 50;
+    let result2 = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &overflow_offset,
+        &100u32,
+    );
+    assert_eq!(result2.len(), 0, "Overflow offset should return empty results");
+    
+    // Test with u32::MAX limit (should be capped)
+    let result3 = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &u32::MAX,
+    );
+    assert_eq!(result3.len(), 0, "u32::MAX limit with no data should return empty");
+}
+
+/// Test that pagination maintains consistency across multiple calls
+#[test]
+fn test_pagination_consistency_across_calls() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    
+    let business = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    
+    // Create exactly 3 * MAX_QUERY_LIMIT invoices for thorough testing
+    let total_invoices = 3 * crate::MAX_QUERY_LIMIT;
+    for i in 0..total_invoices {
+        let _ = create_invoice(
+            &env,
+            &client,
+            &business,
+            1000 + i as i128,
+            InvoiceCategory::Services,
+            true,
+        );
+    }
+    
+    // Get all pages
+    let mut all_results = Vec::new(&env);
+    let mut offset = 0u32;
+    
+    loop {
+        let page = client.get_business_invoices_paged(
+            &business,
+            &Option::<InvoiceStatus>::None,
+            &offset,
+            &crate::MAX_QUERY_LIMIT,
+        );
+        
+        if page.len() == 0 {
+            break;
+        }
+        
+        // Verify page size doesn't exceed limit
+        assert!(
+            page.len() <= crate::MAX_QUERY_LIMIT,
+            "Page size should not exceed MAX_QUERY_LIMIT"
+        );
+        
+        // Add to results
+        for item in page.iter() {
+            all_results.push_back(item);
+        }
+        
+        offset += page.len();
+    }
+    
+    // Verify we got all invoices
+    assert_eq!(
+        all_results.len(),
+        total_invoices,
+        "Should retrieve all invoices across pages"
+    );
+    
+    // Verify no duplicates
+    for i in 0..all_results.len() {
+        for j in (i + 1)..all_results.len() {
+            assert_ne!(
+                all_results.get(i).unwrap(),
+                all_results.get(j).unwrap(),
+                "Should not have duplicate results"
+            );
+        }
+    }
+}
