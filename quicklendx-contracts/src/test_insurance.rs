@@ -7,18 +7,20 @@
 /// 4.  State validation – insurance is only allowed on Active investments.
 /// 5.  Coverage-percentage validation – below min, above max, exact boundaries.
 /// 6.  Investment-amount validation – zero, negative, tiny (premium rounds to 0).
-/// 7.  Active-insurance guard – only one active policy per investment.
+/// 7.  Cumulative active-coverage cap – multiple active policies may coexist,
+///     but their total percentage can never exceed the configured cap.
 /// 8.  Premium-vs-coverage invariant – premium must not exceed coverage amount.
 /// 9.  Over-coverage exploit prevention – coverage_amount never exceeds principal.
 /// 10. Query correctness – `query_investment_insurance` returns all historical entries.
-/// 11. Claim / process_insurance_claim – deactivates coverage, returns correct amounts.
+/// 11. Claim handling – single-claim compatibility and multi-policy deactivation.
 /// 12. Cross-investment isolation – operations on one investment do not affect another.
 extern crate alloc;
 use super::*;
 use crate::errors::QuickLendXError;
 use crate::investment::{
     Investment, InvestmentStatus, InvestmentStorage, DEFAULT_INSURANCE_PREMIUM_BPS,
-    MAX_COVERAGE_PERCENTAGE, MIN_COVERAGE_PERCENTAGE, MIN_PREMIUM_AMOUNT,
+    MAX_COVERAGE_PERCENTAGE, MAX_TOTAL_COVERAGE_PERCENTAGE, MIN_COVERAGE_PERCENTAGE,
+    MIN_PREMIUM_AMOUNT,
 };
 use soroban_sdk::{
     testutils::{Address as _, MockAuth, MockAuthInvoke},
@@ -91,6 +93,7 @@ fn test_constants_have_expected_values() {
     assert_eq!(DEFAULT_INSURANCE_PREMIUM_BPS, 200);
     assert_eq!(MIN_COVERAGE_PERCENTAGE, 1);
     assert_eq!(MAX_COVERAGE_PERCENTAGE, 100);
+    assert_eq!(MAX_TOTAL_COVERAGE_PERCENTAGE, 100);
     assert_eq!(MIN_PREMIUM_AMOUNT, 1);
 }
 
@@ -454,11 +457,11 @@ fn test_add_insurance_rejects_tiny_amount_where_premium_rounds_to_zero() {
 }
 
 // ============================================================================
-// 7. Active-insurance guard (OperationNotAllowed)
+// 7. Cumulative active-coverage cap (OperationNotAllowed)
 // ============================================================================
 
 #[test]
-fn test_add_insurance_rejects_duplicate_active_coverage() {
+fn test_add_insurance_allows_multiple_active_coverages_within_cumulative_cap() {
     let (env, client, contract_id) = setup();
     env.mock_all_auths();
 
@@ -467,16 +470,61 @@ fn test_add_insurance_rejects_duplicate_active_coverage() {
     let provider_b = Address::generate(&env);
     let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 30);
 
-    // First add succeeds
+    client.add_investment_insurance(&id, &provider_a, &60u32);
+    client.add_investment_insurance(&id, &provider_b, &40u32);
+
+    let records = client.query_investment_insurance(&id);
+    assert_eq!(records.len(), 2);
+    assert!(records.get(0).unwrap().active);
+    assert!(records.get(1).unwrap().active);
+    assert_eq!(records.get(0).unwrap().coverage_percentage, 60);
+    assert_eq!(records.get(1).unwrap().coverage_percentage, 40);
+}
+
+#[test]
+fn test_add_insurance_rejects_when_cumulative_coverage_exceeds_cap() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let provider_a = Address::generate(&env);
+    let provider_b = Address::generate(&env);
+    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 31);
+
     client.add_investment_insurance(&id, &provider_a, &60u32);
 
-    // Second add while active coverage exists must fail
     let err = client
-        .try_add_investment_insurance(&id, &provider_b, &40u32)
+        .try_add_investment_insurance(&id, &provider_b, &41u32)
         .err()
         .unwrap()
         .unwrap();
     assert_eq!(err, QuickLendXError::OperationNotAllowed);
+
+    let records = client.query_investment_insurance(&id);
+    assert_eq!(records.len(), 1);
+    assert_eq!(records.get(0).unwrap().coverage_percentage, 60);
+}
+
+#[test]
+fn test_add_insurance_accepts_exact_cumulative_cap_across_multiple_policies() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let provider_a = Address::generate(&env);
+    let provider_b = Address::generate(&env);
+    let provider_c = Address::generate(&env);
+    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 32);
+
+    client.add_investment_insurance(&id, &provider_a, &30u32);
+    client.add_investment_insurance(&id, &provider_b, &30u32);
+    client.add_investment_insurance(&id, &provider_c, &40u32);
+
+    let records = client.query_investment_insurance(&id);
+    assert_eq!(records.len(), 3);
+    assert_eq!(records.get(0).unwrap().coverage_percentage, 30);
+    assert_eq!(records.get(1).unwrap().coverage_percentage, 30);
+    assert_eq!(records.get(2).unwrap().coverage_percentage, 40);
 }
 
 #[test]
@@ -487,9 +535,9 @@ fn test_add_insurance_allowed_after_previous_is_deactivated() {
     let investor = Address::generate(&env);
     let provider_a = Address::generate(&env);
     let provider_b = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 31);
+    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 33);
 
-    client.add_investment_insurance(&id, &provider_a, &40u32);
+    client.add_investment_insurance(&id, &provider_a, &60u32);
     set_insurance_inactive(&env, &contract_id, &id, 0);
 
     // After deactivation a new policy may be added
@@ -714,6 +762,39 @@ fn test_second_claim_returns_none_after_first() {
     assert!(investment.process_insurance_claim().is_none());
 }
 
+#[test]
+fn test_process_all_insurance_claims_deactivates_all_active_coverages() {
+    let env = Env::default();
+    let investor = Address::generate(&env);
+    let provider_a = Address::generate(&env);
+    let provider_b = Address::generate(&env);
+
+    let mut investment = Investment {
+        investment_id: BytesN::from_array(&env, &[17u8; 32]),
+        invoice_id: BytesN::from_array(&env, &[18u8; 32]),
+        investor: investor.clone(),
+        amount: 10_000,
+        funded_at: env.ledger().timestamp(),
+        status: InvestmentStatus::Active,
+        insurance: Vec::new(&env),
+    };
+
+    let premium_a = Investment::calculate_premium(10_000, 40);
+    let premium_b = Investment::calculate_premium(10_000, 60);
+    investment.add_insurance(provider_a.clone(), 40, premium_a).unwrap();
+    investment.add_insurance(provider_b.clone(), 60, premium_b).unwrap();
+
+    let claims = investment.process_all_insurance_claims(&env);
+    assert_eq!(claims.len(), 2);
+    assert_eq!(claims.get(0).unwrap(), (provider_a, 4_000));
+    assert_eq!(claims.get(1).unwrap(), (provider_b, 6_000));
+    assert!(!investment.has_active_insurance());
+
+    let records = investment.insurance;
+    assert!(!records.get(0).unwrap().active);
+    assert!(!records.get(1).unwrap().active);
+}
+
 // ============================================================================
 // 12. Cross-investment isolation
 // ============================================================================
@@ -857,10 +938,12 @@ fn test_add_insurance_unit_rejects_premium_exceeding_coverage_amount() {
 }
 
 #[test]
-fn test_add_insurance_unit_active_guard() {
+fn test_add_insurance_unit_enforces_cumulative_cap() {
     let env = Env::default();
     let investor = Address::generate(&env);
-    let provider = Address::generate(&env);
+    let provider_a = Address::generate(&env);
+    let provider_b = Address::generate(&env);
+    let provider_c = Address::generate(&env);
 
     let mut inv = Investment {
         investment_id: BytesN::from_array(&env, &[15u8; 32]),
@@ -872,12 +955,16 @@ fn test_add_insurance_unit_active_guard() {
         insurance: Vec::new(&env),
     };
 
-    let premium = Investment::calculate_premium(10_000, 50);
-    inv.add_insurance(provider.clone(), 50, premium).unwrap();
+    let premium_a = Investment::calculate_premium(10_000, 50);
+    let premium_b = Investment::calculate_premium(10_000, 30);
+    let premium_c = Investment::calculate_premium(10_000, 21);
+    inv.add_insurance(provider_a.clone(), 50, premium_a).unwrap();
+    inv.add_insurance(provider_b.clone(), 30, premium_b).unwrap();
 
-    // Second add while active → OperationNotAllowed
+    assert_eq!(inv.total_active_coverage_percentage(), 80);
+
     assert_eq!(
-        inv.add_insurance(provider.clone(), 30, premium),
+        inv.add_insurance(provider_c.clone(), 21, premium_c),
         Err(QuickLendXError::OperationNotAllowed)
     );
 }

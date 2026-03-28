@@ -20,6 +20,7 @@ math.
 | `DEFAULT_INSURANCE_PREMIUM_BPS` | `200` | 2 % premium rate in basis points (1/10 000) |
 | `MIN_COVERAGE_PERCENTAGE` | `1` | Lowest valid coverage percentage (inclusive) |
 | `MAX_COVERAGE_PERCENTAGE` | `100` | Highest valid coverage percentage (inclusive) |
+| `MAX_TOTAL_COVERAGE_PERCENTAGE` | `100` | Highest cumulative percentage across all active policies |
 | `MIN_PREMIUM_AMOUNT` | `1` | Minimum acceptable premium in base currency units |
 
 #### `InsuranceCoverage` structure
@@ -107,8 +108,10 @@ pub fn add_investment_insurance(
    → `InvalidCoveragePercentage`
 5. Computed premium must be ≥ `MIN_PREMIUM_AMOUNT` (investment too small otherwise)
    → `InvalidAmount`
-6. `add_insurance` re-validates all bounds independently (defense-in-depth)
-7. No currently active coverage may exist → `OperationNotAllowed`
+6. Existing active policies must remain at or below `MAX_TOTAL_COVERAGE_PERCENTAGE`
+    and the new policy must not push the active total above the cap
+    → `OperationNotAllowed`
+7. `add_insurance` re-validates all bounds independently (defense-in-depth)
 
 **On success:**
 
@@ -127,7 +130,7 @@ pub fn add_investment_insurance(
 | `InvalidStatus` | Investment is not in `Active` state |
 | `InvalidCoveragePercentage` | `coverage_percentage < 1` or `> 100` |
 | `InvalidAmount` | Computed premium is zero (investment amount too small), investment principal ≤ 0, coverage amount exceeds principal, or premium > coverage amount |
-| `OperationNotAllowed` | An active insurance record already exists on this investment |
+| `OperationNotAllowed` | Existing active coverage is malformed or the new policy would make cumulative active coverage exceed `MAX_TOTAL_COVERAGE_PERCENTAGE` |
 
 ---
 
@@ -153,10 +156,10 @@ No authorization required — read-only operation.
 Uninsured Investment (Active)
           │
           ▼ add_investment_insurance(…)
-Insured Investment (Active + insurance[n].active = true)
+Insured Investment (Active + one or more `insurance[n].active = true`)
           │
-          ▼ process_insurance_claim() on default/settlement
-Claimed   (insurance[n].active = false, provider/amount preserved)
+          ▼ process_all_insurance_claims() on default
+Claimed   (all active records become `false`, provider/amount preserved)
           │
           ▼ add_investment_insurance(…)  [optional — new policy]
 Re-insured (Active + insurance[n+1].active = true)
@@ -168,8 +171,9 @@ Re-insured (Active + insurance[n+1].active = true)
 |---|---|---|---|
 | 1 | Investment created | 0 | N/A |
 | 2 | Insurance added | 1 | `true` |
-| 3 | Insurance claimed | 1 | `false` |
-| 4 | Second policy added (after claim) | 2 | `true` (index 1) |
+| 3 | Second active policy added within cap | 2 | `true` on both entries |
+| 4 | Invoice defaulted / claims processed | 2 | `false` on both entries |
+| 5 | Re-insured later | 3 | `true` on the new entry |
 
 ---
 
@@ -213,12 +217,15 @@ Re-insured (Active + insurance[n+1].active = true)
 Guaranteed analytically when `coverage_percentage ≤ 100`, but explicitly
 re-checked after arithmetic as a defense-in-depth safeguard.
 
-### Single active insurance
+### Cumulative active insurance cap
 
 ```
-✓ Can add:    When no active insurance record exists
-✗ Cannot add: When any insurance record has active = true → OperationNotAllowed
+✓ Can add:    When active coverage total + new policy ≤ MAX_TOTAL_COVERAGE_PERCENTAGE (100)
+✗ Cannot add: When cumulative active coverage would exceed 100 % → OperationNotAllowed
 ```
+
+Inactive historical policies are excluded from the cumulative check, so a new
+policy can be added after earlier policies are claimed or manually deactivated.
 
 ---
 
@@ -248,11 +255,36 @@ re-checked after arithmetic as a defense-in-depth safeguard.
 | Unauthorized insurance addition | `investor.require_auth()` |
 | Over-coverage exploit (`coverage_percentage > 100`) | Explicit range check in `lib.rs` and `add_insurance` before any multiplication |
 | Zero-premium free insurance | `MIN_PREMIUM_AMOUNT` floor in `calculate_premium`; `premium < MIN_PREMIUM_AMOUNT` check in `add_insurance` |
-| Double-coverage / concurrent active policies | `has_active_insurance()` check; `OperationNotAllowed` on duplicate |
+| Aggregate over-coverage across stacked policies | `total_active_coverage_percentage()` + `MAX_TOTAL_COVERAGE_PERCENTAGE` check before insertion |
+| Residual active coverage after default | `process_all_insurance_claims()` deactivates every active policy before persistence |
 | Insurance on settled/defaulted investment | Status check → `InvalidStatus` |
 | Negative or zero investment principal | Explicit `self.amount > 0` guard |
 | Economic inversion (premium > coverage) | `premium > coverage_amount` guard |
 | Integer overflow | `saturating_mul` + `checked_div` throughout |
+
+---
+
+## Security Notes
+
+- The cumulative cap is enforced on active percentages, not record count. This
+    keeps storage append-only for auditability while still preventing aggregate
+    coverage from exceeding principal.
+- The cap check uses saturating addition as defense in depth. Malformed stored
+    state cannot wrap into a smaller total and bypass validation.
+- Default handling now drains every active policy in one pass before the
+    investment is persisted. This prevents stale active coverage from remaining on
+    a defaulted investment.
+
+---
+
+## Verification
+
+Targeted regression coverage should include:
+
+- Multiple active policies that sum to exactly 100 %
+- Rejection when a new policy would push active total above 100 %
+- Historical inactive policies excluded from the active-cap calculation
+- Default processing deactivating all active policies, not only the first one
 
 ---
 
