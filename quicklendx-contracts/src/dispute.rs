@@ -36,6 +36,9 @@ pub fn create_dispute(
         return Err(QuickLendXError::DisputeAlreadyExists);
     }
 
+    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFound)?;
+
     // --- 4. Invoice must be in a state where disputes are meaningful ---
     //    Disputes are relevant once the invoice has moved past initial upload:
     //    Pending, Verified, Funded, or Paid all qualify.  Cancelled, Defaulted,
