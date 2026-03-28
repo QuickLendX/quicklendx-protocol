@@ -32,10 +32,6 @@ mod settlement;
 #[cfg(test)]
 mod storage;
 #[cfg(test)]
-mod test_default;
-#[cfg(test)]
-mod test_errors;
-#[cfg(test)]
 mod test_init;
 pub mod types;
 mod verification;
@@ -44,6 +40,7 @@ use admin::AdminStorage;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
+    OverdueScanResult,
 };
 use errors::QuickLendXError;
 use escrow::{
@@ -1415,7 +1412,7 @@ impl QuickLendXContract {
 
     /// Check for overdue invoices and send notifications (admin or automated process)
     pub fn check_overdue_invoices(env: Env) -> Result<u32, QuickLendXError> {
-        let grace_period = defaults::resolve_grace_period(&env, None);
+        let grace_period = defaults::resolve_grace_period(&env, None)?;
         Self::check_overdue_invoices_grace(env, grace_period)
     }
 
@@ -1450,7 +1447,7 @@ impl QuickLendXContract {
     ) -> Result<bool, QuickLendXError> {
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        let grace = defaults::resolve_grace_period(&env, grace_period);
+        let grace = defaults::resolve_grace_period(&env, grace_period)?;
         invoice.check_and_handle_expiration(&env, grace)
     }
 

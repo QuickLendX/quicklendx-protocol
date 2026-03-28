@@ -133,7 +133,16 @@ pub fn create_escrow(
     Ok(escrow_id)
 }
 
-/// Release escrow funds to business (contract → business). Escrow must be Held.
+/// Release escrow funds to business (contract → business).
+///
+/// # Requirements
+/// - Escrow must be in `Held` status.
+/// - The invoice should ideally be in `Funded` or `Paid` status (enforced by caller in `lib.rs`).
+///
+/// # Security
+/// - Idempotency: Once released, status becomes `Released`, preventing repeated transfers.
+/// - Atomic: Funds are transferred before updating status in storage; if transfer fails,
+///   the operation can be safely retried.
 ///
 /// # Errors
 /// * `StorageKeyNotFound` if no escrow for invoice, `InvalidStatus` if not Held
@@ -142,6 +151,7 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     if escrow.status != EscrowStatus::Held {
+        // Prevents repeated release (idempotency)
         return Err(QuickLendXError::InvalidStatus);
     }
 

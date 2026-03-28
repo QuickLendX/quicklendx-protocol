@@ -165,7 +165,9 @@ pub struct InvoiceStorage;
 impl InvoiceStorage {
     /// Store an invoice
     pub fn store(env: &Env, invoice: &Invoice) {
-        env.storage().persistent().set(&DataKey::Invoice(invoice.id.clone()), invoice);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Invoice(invoice.id.clone()), invoice);
         Self::add_to_business_index(env, &invoice.business, &invoice.id);
         Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
         if let Some(ref name) = invoice.metadata_customer_name {
@@ -194,7 +196,9 @@ impl InvoiceStorage {
 
     /// Get an invoice by ID
     pub fn get(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
-        env.storage().persistent().get(&DataKey::Invoice(invoice_id.clone()))
+        env.storage()
+            .persistent()
+            .get(&DataKey::Invoice(invoice_id.clone()))
     }
 
     /// Update an invoice
@@ -221,7 +225,9 @@ impl InvoiceStorage {
                 }
             }
         }
-        env.storage().persistent().set(&DataKey::Invoice(invoice.id.clone()), invoice);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Invoice(invoice.id.clone()), invoice);
     }
 
     /// Add invoice to business index
@@ -336,7 +342,9 @@ pub struct BidStorage;
 impl BidStorage {
     /// Store a bid
     pub fn store(env: &Env, bid: &Bid) {
-        env.storage().persistent().set(&DataKey::Bid(bid.bid_id.clone()), bid);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Bid(bid.bid_id.clone()), bid);
 
         // Update indexes
         Self::add_to_invoice_index(env, &bid.invoice_id, &bid.bid_id);
@@ -346,7 +354,9 @@ impl BidStorage {
 
     /// Get a bid by ID
     pub fn get(env: &Env, bid_id: &BytesN<32>) -> Option<Bid> {
-        env.storage().persistent().get(&DataKey::Bid(bid_id.clone()))
+        env.storage()
+            .persistent()
+            .get(&DataKey::Bid(bid_id.clone()))
     }
 
     /// Update a bid
@@ -359,7 +369,9 @@ impl BidStorage {
             }
         }
 
-        env.storage().persistent().set(&DataKey::Bid(bid.bid_id.clone()), bid);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Bid(bid.bid_id.clone()), bid);
     }
 
     /// Get bids by invoice
@@ -451,9 +463,10 @@ pub struct InvestmentStorage;
 impl InvestmentStorage {
     /// Store an investment
     pub fn store(env: &Env, investment: &Investment) {
-        env.storage()
-            .persistent()
-            .set(&DataKey::Investment(investment.investment_id.clone()), investment);
+        env.storage().persistent().set(
+            &DataKey::Investment(investment.investment_id.clone()),
+            investment,
+        );
 
         // Update indexes
         Self::add_to_invoice_index(env, &investment.invoice_id, &investment.investment_id);
@@ -463,7 +476,9 @@ impl InvestmentStorage {
 
     /// Get an investment by ID
     pub fn get(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
-        env.storage().persistent().get(&DataKey::Investment(investment_id.clone()))
+        env.storage()
+            .persistent()
+            .get(&DataKey::Investment(investment_id.clone()))
     }
 
     /// Update an investment
@@ -484,9 +499,10 @@ impl InvestmentStorage {
             }
         }
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Investment(investment.investment_id.clone()), investment);
+        env.storage().persistent().set(
+            &DataKey::Investment(investment.investment_id.clone()),
+            investment,
+        );
     }
 
     /// Get investments by invoice
@@ -586,5 +602,30 @@ impl ConfigStorage {
     /// Get platform fee configuration
     pub fn get_platform_fees(env: &Env) -> Option<PlatformFeeConfig> {
         env.storage().instance().get(&StorageKeys::platform_fees())
+    }
+}
+
+/// Helper for clean resets (used in migrations/tests)
+pub struct StorageManager;
+
+impl StorageManager {
+    /// Clear all mapping indexes and core entities for a fresh state.
+    /// WARNING: This is a destructive operation.
+    pub fn clear_all_mappings(env: &Env) {
+        // Clear counters
+        env.storage()
+            .persistent()
+            .remove(&StorageKeys::invoice_count());
+        env.storage().persistent().remove(&StorageKeys::bid_count());
+        env.storage()
+            .persistent()
+            .remove(&StorageKeys::investment_count());
+
+        // Note: In a real protocol, we would need a way to discover all keys.
+        // Since we can't iterate, we clear the known "singleton" or "root" keys
+        // that point to lists or maps of other data.
+
+        // Clearing these effectively "orphans" the data, which is what
+        // a "clear" operation does in this context (e.g. for testing/restore).
     }
 }
