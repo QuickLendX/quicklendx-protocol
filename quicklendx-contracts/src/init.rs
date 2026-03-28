@@ -129,6 +129,10 @@ impl ProtocolInitializer {
     /// - Atomic state updates
     /// - Audit trail emission
     ///
+    /// @notice Initializes the protocol in a single atomic operation.
+    /// @dev Requires admin authorization and validates all addresses/parameters
+    ///      before any state changes are committed.
+    ///
     /// # Arguments
     /// * `env` - The contract environment
     /// * `params` - Initialization parameters containing all configuration
@@ -171,6 +175,7 @@ impl ProtocolInitializer {
     ) -> Result<(), QuickLendXError> {
         // Check if already initialized (re-initialization protection with idempotency)
         if Self::is_initialized(env) {
+            params.admin.require_auth();
             // Check for idempotency: if initialized with exact same parameters, return Ok(())
             let current_admin: Address = env.storage().instance().get(&crate::admin::ADMIN_KEY).unwrap();
             let current_treasury: Address = env.storage().instance().get(&TREASURY_KEY).unwrap();
@@ -194,6 +199,7 @@ impl ProtocolInitializer {
 
         // VALIDATION: Validate all parameters before making any state changes
         Self::validate_initialization_params(env, params)?;
+        params.admin.require_auth();
 
         // ATOMIC: Initialize admin system first (foundation for all operations)
         AdminStorage::initialize(env, &params.admin)?;
@@ -264,6 +270,8 @@ impl ProtocolInitializer {
     /// # Returns
     /// * `true` if the protocol has been initialized
     /// * `false` otherwise
+    ///
+    /// @notice Returns true when the initialization flag is set.
     pub fn is_initialized(env: &Env) -> bool {
         env.storage()
             .instance()
@@ -284,7 +292,7 @@ impl ProtocolInitializer {
     /// * `Ok(())` if all parameters are valid
     /// * `Err(QuickLendXError)` with specific error for invalid parameters
     fn validate_initialization_params(
-        _env: &Env,
+        env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // VALIDATION: Fee basis points (0% to 10%)
@@ -323,6 +331,8 @@ impl ProtocolInitializer {
     /// # Returns
     /// * `Some(ProtocolConfig)` if configuration exists
     /// * `None` if protocol has not been initialized
+    ///
+    /// @notice Returns the stored protocol configuration, if initialized.
     pub fn get_protocol_config(env: &Env) -> Option<ProtocolConfig> {
         env.storage().instance().get(&PROTOCOL_CONFIG_KEY)
     }
@@ -537,6 +547,7 @@ impl ProtocolInitializer {
 // ============================================================================
 
 /// Emit protocol initialization event
+/// @notice Emits a single initialization event with the configured parameters.
 fn emit_protocol_initialized(
     env: &Env,
     admin: &Address,
