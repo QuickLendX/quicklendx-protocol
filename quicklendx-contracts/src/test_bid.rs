@@ -141,6 +141,7 @@ fn test_bid_minimum_amount_enforced() {
             min_bid_bps: 100,
             max_due_date_days: 365,
             grace_period_seconds: 86400,
+            max_invoices_per_business: 100,
         },
     );
     let below_min = min_bid.saturating_sub(1);
