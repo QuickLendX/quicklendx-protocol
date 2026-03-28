@@ -8,10 +8,10 @@ use crate::invoice::{
     Invoice, InvoiceStatus, InvoiceStorage, PaymentRecord as InvoicePaymentRecord,
 };
 // use crate::notifications::NotificationSystem;
-use crate::defaults::DEFAULT_GRACE_PERIOD;
+// use crate::defaults::DEFAULT_GRACE_PERIOD;
 // use crate::events::TOPIC_INVOICE_SETTLED_FINAL;
 use crate::payments::transfer_funds;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
 const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
 
@@ -21,7 +21,7 @@ const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
 enum SettlementDataKey {
     PaymentCount(BytesN<32>),
     Payment(BytesN<32>, u32),
-    PaymentNonce(BytesN<32>, Address, String),
+    PaymentNonce(BytesN<32>, String),
 }
 
 /// Durable payment record stored per invoice/payment-index.
@@ -50,7 +50,11 @@ pub struct Progress {
 
 /// Record a partial payment. If total reaches invoice total, settlement is finalized.
 ///
-/// Business authorization is required and payer is recorded as the business address.
+/// # Security
+/// - @security Requires business-owner authorization for every payment attempt.
+/// - @security Safely bounds applied value to the remaining due amount.
+/// - @security Guards against replayed transaction identifiers per invoice.
+/// - Preserves `total_paid <= amount` even when callers request an overpayment.
 pub fn process_partial_payment(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -92,7 +96,11 @@ pub fn process_partial_payment(
 /// - Rejects missing invoices
 /// - Rejects payments to non-payable invoice states
 /// - Caps applied amount so `total_paid` never exceeds `total_due`
-/// - Enforces nonce uniqueness per `(invoice, payer, nonce)` if nonce is non-empty
+/// - Enforces nonce uniqueness per `(invoice, nonce)` if nonce is non-empty
+///
+/// # Security
+/// - The payer must be the verified invoice business and must authorize the call.
+/// - Stored payment records always reflect the applied amount, never the requested excess.
 pub fn record_payment(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -114,11 +122,7 @@ pub fn record_payment(
     payer.require_auth();
 
     if payment_nonce.len() > 0 {
-        let nonce_key = SettlementDataKey::PaymentNonce(
-            invoice_id.clone(),
-            payer.clone(),
-            payment_nonce.clone(),
-        );
+        let nonce_key = SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce.clone());
         let seen: bool = env.storage().persistent().get(&nonce_key).unwrap_or(false);
         if seen {
             return Err(QuickLendXError::OperationNotAllowed);
@@ -173,7 +177,7 @@ pub fn record_payment(
 
     if payment_nonce.len() > 0 {
         env.storage().persistent().set(
-            &SettlementDataKey::PaymentNonce(invoice_id.clone(), payer.clone(), payment_nonce),
+            &SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce),
             &true,
         );
     }
@@ -203,6 +207,11 @@ pub fn record_payment(
 ///
 /// This function preserves existing behavior by requiring the resulting total
 /// payment to satisfy full settlement conditions.
+///
+/// # Security
+/// - Requires an exact final payment equal to the remaining due amount.
+/// - Rejects explicit overpayment attempts instead of silently accepting excess input.
+/// - Keeps payout, accounting totals, and settlement events aligned to invoice principal.
 pub fn settle_invoice(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -219,11 +228,11 @@ pub fn settle_invoice(
     payer.require_auth();
 
     let remaining_due = compute_remaining_due(&invoice)?;
-    let applied_preview = if payment_amount > remaining_due {
-        remaining_due
-    } else {
-        payment_amount
-    };
+    if payment_amount > remaining_due {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let applied_preview = payment_amount;
 
     if applied_preview <= 0 {
         return Err(QuickLendXError::InvalidAmount);
@@ -298,6 +307,34 @@ pub fn get_payment_record(
         .ok_or(QuickLendXError::StorageKeyNotFound)
 }
 
+/// Returns the total number of payment records for an invoice.
+pub fn get_payment_count(env: &Env, invoice_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
+    ensure_invoice_exists(env, invoice_id)?;
+    Ok(get_payment_count_internal(env, invoice_id))
+}
+
+/// Returns a range of payment records for an invoice.
+pub fn get_payment_records(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    offset: u32,
+    limit: u32,
+) -> Result<Vec<SettlementPaymentRecord>, QuickLendXError> {
+    ensure_invoice_exists(env, invoice_id)?;
+    let count = get_payment_count_internal(env, invoice_id);
+    let mut records = Vec::new(env);
+
+    let start = offset;
+    let end = core::cmp::min(offset.saturating_add(limit), count);
+
+    for i in start..end {
+        let record = get_payment_record(env, invoice_id, i)?;
+        records.push_back(record);
+    }
+
+    Ok(records)
+}
+
 fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -308,6 +345,14 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
 
     if invoice.total_paid < invoice.amount || invoice.total_paid < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
+    }
+
+    // Auto-release escrow funds to business if they are still held in the contract.
+    // This ensures the business receives the original funded amount during the settlement transition.
+    if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
+        if escrow.status == crate::payments::EscrowStatus::Held {
+            crate::payments::release_escrow(env, invoice_id)?;
+        }
     }
 
     let investor_address = invoice

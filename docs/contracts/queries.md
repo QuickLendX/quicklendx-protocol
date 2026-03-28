@@ -1,256 +1,134 @@
-# Query Functions Documentation
+# Query Hard Caps and Resilience
+
+> **Module:** `quicklendx-contracts/src/lib.rs` — query endpoints
+> **Tests:** `quicklendx-contracts/src/test_queries.rs`, `quicklendx-contracts/src/test_limit.rs`
+
+---
 
 ## Overview
 
-The QuickLendX contract provides comprehensive read-only query functions to support frontend dashboards and analytics. All query functions are gas-efficient and support pagination where needed.
+All query endpoints in the QuickLendX protocol are designed to handle missing
+or non-existent records gracefully — returning `None`, an empty `Vec`, or a
+typed `Err` rather than panicking or producing inconsistent results.
 
-## Global Query Limit Cap
+Additionally, all paginated endpoints enforce strict **hard caps** on query limits
+to prevent resource abuse and ensure predictable performance characteristics.
 
-- `MAX_QUERY_LIMIT = 100` for public paginated/query endpoints.
-- For any endpoint with a `limit` argument, the contract applies `effective_limit = min(limit, 100)`.
-- This prevents unbounded reads and reduces DoS risk from oversized queries.
+---
 
-## Query Functions
+## MAX_QUERY_LIMIT Hard Cap Enforcement
 
-### Invoice Queries
+### Security Guarantee
 
-#### get_invoices_by_business_paginated
-Get invoices for a specific business with optional status filter and pagination.
+**All paginated endpoints enforce a hard cap of `MAX_QUERY_LIMIT = 100` records per query.**
 
-**Parameters:**
-- `business: Address` - Business address
-- `status_filter: Option<InvoiceStatus>` - Optional status filter (Pending, Verified, Funded, Paid, Defaulted, Cancelled)
-- `offset: u32` - Pagination offset (0-based)
-- `limit: u32` - Maximum number of results to return (capped at 100)
+This limit cannot be bypassed by:
+- Passing `limit > MAX_QUERY_LIMIT` (automatically capped)
+- Using overflow attacks with large offset values (validated and rejected)
+- Combining parameters to exceed resource bounds (comprehensive validation)
 
-**Returns:** `Vec<BytesN<32>>` - List of invoice IDs
+### Validation Rules
 
-**Example:**
+1. **Limit Capping**: `limit` parameter is automatically capped using `limit.min(MAX_QUERY_LIMIT)`
+2. **Overflow Protection**: Offset values that could cause `offset + MAX_QUERY_LIMIT` to overflow are rejected
+3. **Empty Results**: Invalid parameters return empty results rather than errors
+4. **Zero Limit Handling**: `limit=0` returns empty results (not an error)
+
+### Implementation
+
 ```rust
-// Get first 10 verified invoices for a business
-let invoices = client.get_invoices_by_business_paginated(
-    &business,
-    &Some(InvoiceStatus::Verified),
-    &0,
-    &10
-);
+/// Maximum number of records returned by paginated query endpoints.
+pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
+
+/// Validates and caps query limit to prevent resource abuse
+#[inline]
+fn cap_query_limit(limit: u32) -> u32 {
+    limit.min(MAX_QUERY_LIMIT)
+}
+
+/// Validates query parameters for security and resource protection
+fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError> {
+    // Check for potential overflow in offset + limit calculation
+    if offset > u32::MAX - MAX_QUERY_LIMIT {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+    Ok(())
+}
 ```
 
-#### get_available_invoices_paginated
-Get available invoices (verified and not funded) with optional filters and pagination.
+---
 
-**Parameters:**
-- `min_amount: Option<i128>` - Optional minimum amount filter
-- `max_amount: Option<i128>` - Optional maximum amount filter
-- `category_filter: Option<InvoiceCategory>` - Optional category filter
-- `offset: u32` - Pagination offset
-- `limit: u32` - Maximum number of results (capped at 100)
+## Paginated Endpoints with Hard Cap Enforcement
 
-**Returns:** `Vec<BytesN<32>>` - List of invoice IDs
+| Endpoint | Hard Cap Applied | Validation |
+|---|---|---|
+| `get_business_invoices_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_investor_investments_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_available_invoices_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_bid_history_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_investor_bids_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_whitelisted_currencies_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
 
-**Example:**
-```rust
-// Get invoices between 1000 and 5000 in Services category
-let invoices = client.get_available_invoices_paginated(
-    &Some(1000i128),
-    &Some(5000i128),
-    &Some(InvoiceCategory::Services),
-    &0,
-    &20
-);
+---
+
+## Resilience Guarantees by Endpoint
+
+| Endpoint | Missing record behaviour |
+|---|---|
+| `get_invoice(id)` | Returns `Err(InvoiceNotFound)` |
+| `get_bid(id)` | Returns `None` |
+| `get_investment(id)` | Returns `Err(StorageKeyNotFound)` |
+| `get_invoice_investment(id)` | Returns `Err(StorageKeyNotFound)` |
+| `get_bids_for_invoice(id)` | Returns empty `Vec` |
+| `get_best_bid(id)` | Returns `None` |
+| `get_ranked_bids(id)` | Returns empty `Vec` |
+| `get_bids_by_status(id, status)` | Returns empty `Vec` |
+| `get_bids_by_investor(id, investor)` | Returns empty `Vec` |
+| `get_all_bids_by_investor(investor)` | Returns empty `Vec` |
+| `get_business_invoices(business)` | Returns empty `Vec` |
+| `get_investments_by_investor(investor)` | Returns empty `Vec` |
+| `get_escrow_details(id)` | Returns `Err(StorageKeyNotFound)` |
+| `get_bid_history_paged(id, ...)` | Returns empty `Vec` (capped) |
+| `get_investor_bids_paged(investor, ...)` | Returns empty `Vec` (capped) |
+| `cleanup_expired_bids(id)` | Returns `0` |
+
+---
+
+## Security Assumptions
+
+- **Hard cap enforcement**: No query endpoint can return more than `MAX_QUERY_LIMIT` records
+- **Overflow protection**: All pagination arithmetic uses overflow-safe operations
+- **No panics**: No query endpoint panics on missing input — all storage lookups use `Option`
+  returns (`get` returning `None`) which are handled before unwrapping
+- **Authorization-free**: Query endpoints are read-only and require no authorization — they cannot
+  mutate state
+- **Information isolation**: Missing records never leak information about other records
+- **Resource bounds**: Query execution time and memory usage are bounded by `MAX_QUERY_LIMIT`
+
+---
+
+## Test Coverage
+
+### Comprehensive Hard Cap Tests (`test_limit.rs`)
+
+- **Limit=0 scenarios**: All endpoints return empty results
+- **Limit > MAX_QUERY_LIMIT**: All endpoints cap to MAX_QUERY_LIMIT
+- **Large offset scenarios**: Offsets beyond data return empty results
+- **Overflow protection**: Dangerous offset values are safely handled
+- **Pagination consistency**: Multi-page results maintain order and completeness
+- **Edge cases**: Exactly MAX_QUERY_LIMIT items, extreme values
+
+### Integration Tests (`test_queries.rs`)
+
+- **Cross-endpoint validation**: Consistent behavior across all paginated endpoints
+- **Parameter validation**: Edge cases for offset/limit combinations
+- **Data consistency**: No duplicates or missing items across pagination
+
+---
+
+## Running Tests
+```bash
+cd quicklendx-contracts
+cargo test test_queries
+cargo test test_limit
 ```
-
-#### get_available_invoices
-Get all available invoices (verified and not funded) - simple version without pagination.
-
-**Returns:** `Vec<BytesN<32>>` - List of invoice IDs
-
-### Investment Queries
-
-#### get_investments_by_investor_paginated
-Get investments for a specific investor with optional status filter and pagination.
-
-**Parameters:**
-- `investor: Address` - Investor address
-- `status_filter: Option<InvestmentStatus>` - Optional status filter (Active, Withdrawn, Completed, Defaulted)
-- `offset: u32` - Pagination offset
-- `limit: u32` - Maximum number of results (capped at 100)
-
-**Returns:** `Vec<BytesN<32>>` - List of investment IDs
-
-**Example:**
-```rust
-// Get first 10 active investments for an investor
-let investments = client.get_investments_by_investor_paginated(
-    &investor,
-    &Some(InvestmentStatus::Active),
-    &0,
-    &10
-);
-```
-
-#### get_investments_by_investor
-Get all investments for an investor - simple version without pagination.
-
-**Parameters:**
-- `investor: Address` - Investor address
-
-**Returns:** `Vec<BytesN<32>>` - List of investment IDs
-
-### Bid Queries
-
-#### get_bid_history_paginated
-Get bid history for an invoice with optional status filter and pagination.
-
-**Parameters:**
-- `invoice_id: BytesN<32>` - Invoice identifier
-- `status_filter: Option<BidStatus>` - Optional status filter (Placed, Withdrawn, Accepted, Expired)
-- `offset: u32` - Pagination offset
-- `limit: u32` - Maximum number of results (capped at 100)
-
-**Returns:** `Vec<Bid>` - List of bid records
-
-**Example:**
-```rust
-// Get first 5 placed bids for an invoice
-let bids = client.get_bid_history_paginated(
-    &invoice_id,
-    &Some(BidStatus::Placed),
-    &0,
-    &5
-);
-```
-
-#### get_investor_bid_history_paginated
-Get bid history for an investor with optional status filter and pagination.
-
-**Parameters:**
-- `investor: Address` - Investor address
-- `status_filter: Option<BidStatus>` - Optional status filter
-- `offset: u32` - Pagination offset
-- `limit: u32` - Maximum number of results (capped at 100)
-
-**Returns:** `Vec<Bid>` - List of bid records
-
-**Example:**
-```rust
-// Get all accepted bids for an investor
-let bids = client.get_investor_bid_history_paginated(
-    &investor,
-    &Some(BidStatus::Accepted),
-    &0,
-    &100
-);
-```
-
-#### get_bid_history
-Get all bid history for an invoice - simple version without pagination.
-
-**Parameters:**
-- `invoice_id: BytesN<32>` - Invoice identifier
-
-**Returns:** `Vec<Bid>` - List of bid records
-
-## Pagination Patterns
-
-### Basic Pagination
-```rust
-// Page 1: First 10 results
-let page1 = client.get_invoices_by_business_paginated(&business, &None, &0, &10);
-
-// Page 2: Next 10 results
-let page2 = client.get_invoices_by_business_paginated(&business, &None, &10, &10);
-
-// Page 3: Next 10 results
-let page3 = client.get_invoices_by_business_paginated(&business, &None, &20, &10);
-```
-
-### Filtered Pagination
-```rust
-// Get verified invoices only, paginated
-let verified = client.get_invoices_by_business_paginated(
-    &business,
-    &Some(InvoiceStatus::Verified),
-    &0,
-    &10
-);
-```
-
-### Amount Range Filtering
-```rust
-// Get invoices between 1000 and 10000
-let filtered = client.get_available_invoices_paginated(
-    &Some(1000i128),
-    &Some(10000i128),
-    &None,
-    &0,
-    &20
-);
-```
-
-## Best Practices
-
-### Pagination
-- Use reasonable page sizes (10-50 items) to balance gas costs and user experience
-- Always check if results are fewer than the limit to detect end of data
-- Store offset values for efficient navigation
-
-### Filtering
-- Use status filters to reduce data transfer and processing
-- Combine multiple filters for precise queries
-- Cache frequently accessed filtered results
-
-### Performance
-- Query functions are read-only and gas-efficient
-- Use pagination for large datasets
-- Filter at the contract level to minimize data transfer
-
-## Frontend Integration
-
-### Dashboard Queries
-```rust
-// Business dashboard: Get recent invoices
-let recent_invoices = client.get_invoices_by_business_paginated(
-    &business,
-    &None,
-    &0,
-    &10
-);
-
-// Investor dashboard: Get active investments
-let active_investments = client.get_investments_by_investor_paginated(
-    &investor,
-    &Some(InvestmentStatus::Active),
-    &0,
-    &20
-);
-```
-
-### Search and Filter
-```rust
-// Search available invoices by amount range
-let search_results = client.get_available_invoices_paginated(
-    &Some(min_amount),
-    &Some(max_amount),
-    &category,
-    &0,
-    &50
-);
-```
-
-### Analytics
-```rust
-// Get all investments for analytics
-let all_investments = client.get_investments_by_investor(&investor);
-
-// Get bid history for analysis
-let bid_history = client.get_bid_history(&invoice_id);
-```
-
-## Security Notes
-
-- All query functions are read-only (no state changes)
-- No authorization required for queries (public data)
-- Pagination limits prevent excessive gas usage
-- Filters are applied at contract level for efficiency
-

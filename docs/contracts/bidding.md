@@ -84,6 +84,14 @@ The contract provides a public function to trigger bid cleanup:
 
 - `cleanup_expired_bids(invoice_id: BytesN<32>) -> u32`: Scans all bids for an invoice, transitioning `Placed` bids that have passed their expiration window to `Expired` status. It also removes already-expired or orphaned bid records from the invoice's internal bid index. Returns the total count of cleaned items. This operation is idempotent and safe to call repeatedly.
 
+### Invariants for Bid Cleanup
+
+1. **Invarant 1 — Preservation**: `Accepted`, `Withdrawn`, and `Cancelled` bids are **never** mutated by cleanup. These are terminal states and the cleanup function unconditionally skips them.
+2. **Invariant 2 — Deadline**: A `Placed` bid is only transitioned to `Expired` if `current_ledger_timestamp > bid.expiration_timestamp` (strict greater-than).
+3. **Invariant 3 — Idempotency**: Running `cleanup_expired_bids` multiple times at the same timestamp produces the same result as running it once. Already-`Expired` bids are silently handled.
+4. **Invariant 4 — Field Integrity**: Only `status` is mutated. All other fields remain identical after cleanup.
+5. **Invariant 5 — Post-condition**: After a cleanup pass, no `Placed` bid in the invoice's active list has a deadline in the past.
+
 ### 3. Bid Ranking
 
 Bids are ranked based on the following priority:
