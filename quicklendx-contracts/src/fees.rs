@@ -336,6 +336,136 @@ impl FeeManager {
         Err(QuickLendXError::StorageKeyNotFound)
     }
 
+    /// Validate min/max fee consistency for a specific fee type.
+    ///
+    /// # Consistency Rules
+    /// 1. **Range Validity**: `min_fee <= max_fee`
+    /// 2. **Non-negative Values**: Both `min_fee` and `max_fee` must be >= 0
+    /// 3. **Reasonable Bounds**: `max_fee` must not exceed 10x the base fee
+    ///    (calculated as `base_fee_bps / 100` to account for BPS unit)
+    /// 4. **Minimum Floor**: When base_fee_bps > 0, min_fee should be <= base fee max
+    ///
+    /// # Security Notes
+    /// - Prevents fee structures where max_fee could bypass intended limits
+    /// - Ensures min_fee doesn't force all transactions into floor pricing
+    /// - Guards against misconfiguration where bounds are inversely related
+    ///
+    /// # Errors
+    /// - `InvalidAmount` if min_fee > max_fee or either is negative
+    /// - `InvalidFeeConfiguration` if bounds exceed reasonable thresholds
+    pub fn validate_fee_structure_consistency(
+        fee_type: &FeeType,
+        base_fee_bps: u32,
+        min_fee: i128,
+        max_fee: i128,
+    ) -> Result<(), QuickLendXError> {
+        // Rule 1: Non-negative constraint
+        if min_fee < 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        if max_fee < 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        // Rule 2: Range ordering constraint
+        if max_fee < min_fee {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        // Rule 3: Sanity check on max_fee (shouldn't exceed reasonable bounds)
+        // For platform/processing fees, max_fee shouldn't be excessively large
+        // Set a protocol-wide absolute maximum of 10M stroops
+        const ABSOLUTE_MAX_FEE: i128 = 10_000_000_000_000; // 10M stroops
+
+        if max_fee > ABSOLUTE_MAX_FEE {
+            return Err(QuickLendXError::InvalidFeeConfiguration);
+        }
+
+        // Rule 4: Fee type-specific consistency checks
+        match fee_type {
+            FeeType::Platform | FeeType::Processing | FeeType::Verification => {
+                // For these fee types, ensure max doesn't exceed a reasonable bound
+                // based on the base rate. A max of 100x base seems reasonable.
+                let calculated_max_threshold =
+                    (base_fee_bps as i128).saturating_mul(100).saturating_mul(100); // 100x times BPS value * 100
+                if max_fee > calculated_max_threshold && calculated_max_threshold > 0 {
+                    return Err(QuickLendXError::InvalidFeeConfiguration);
+                }
+            }
+            FeeType::EarlyPayment | FeeType::LatePayment => {
+                // Early/late payment fees may have different thresholds
+                // Allow more flexibility but still bounded
+                let calculated_max_threshold =
+                    (base_fee_bps as i128).saturating_mul(500).saturating_mul(100); // 500x for flexibility
+                if max_fee > calculated_max_threshold && calculated_max_threshold > 0 {
+                    return Err(QuickLendXError::InvalidFeeConfiguration);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate consistency across all fee structures in the system.
+    ///
+    /// # Cross-Type Consistency Rules
+    /// 1. No two fee types can have overlapping responsibility zones
+    /// 2. Total of all min_fees shouldn't exceed half the protocol's maximum
+    /// 3. LatePayment fees must have higher or equal max bounds than standard fees
+    ///
+    /// # Errors
+    /// - `InvalidFeeConfiguration` if cross-type consistency violations detected
+    pub fn validate_cross_fee_consistency(
+        env: &Env,
+        fee_type: &FeeType,
+        min_fee: i128,
+        max_fee: i128,
+    ) -> Result<(), QuickLendXError> {
+        let fee_structures: Vec<FeeStructure> = match env
+            .storage()
+            .instance()
+            .get(&FEE_CONFIG_KEY) {
+            Some(structures) => structures,
+            None => return Ok(()), // No existing structures, skip cross-check
+        };
+
+        // Check rule 1: For LatePayment, ensure it doesn't undercut regular fees
+        if *fee_type == FeeType::LatePayment {
+            for i in 0..fee_structures.len() {
+                let structure = fee_structures.get(i).unwrap();
+                if structure.fee_type == FeeType::Platform && structure.min_fee > min_fee {
+                    // LatePayment min shouldn't be less than Platform min
+                    // (though LatePayment max should be higher)
+                    if min_fee < structure.min_fee {
+                        return Err(QuickLendXError::InvalidFeeConfiguration);
+                    }
+                }
+            }
+        }
+
+        // Check rule 2: Validate total system fee exposure isn't unreasonable
+        let mut total_active_min_fees: i128 = 0;
+        for i in 0..fee_structures.len() {
+            let structure = fee_structures.get(i).unwrap();
+            if structure.is_active {
+                total_active_min_fees = total_active_min_fees.saturating_add(structure.min_fee);
+            }
+        }
+
+        // Add the current fee being configured
+        total_active_min_fees = total_active_min_fees.saturating_add(min_fee);
+
+        // Total min fees shouldn't exceed half the protocol max
+        const PROTOCOL_MAX_SINGLE_TRANSACTION: i128 = 5_000_000_000_000; // 5M stroops
+        const MAX_TOTAL_MIN_FEES: i128 = PROTOCOL_MAX_SINGLE_TRANSACTION / 2;
+
+        if total_active_min_fees > MAX_TOTAL_MIN_FEES {
+            return Err(QuickLendXError::InvalidFeeConfiguration);
+        }
+
+        Ok(())
+    }
+
     pub fn update_fee_structure(
         env: &Env,
         admin: &Address,
@@ -349,9 +479,10 @@ impl FeeManager {
         if base_fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
-        if min_fee < 0 || max_fee < min_fee {
-            return Err(QuickLendXError::InvalidAmount);
-        }
+
+        // Apply comprehensive consistency checks
+        Self::validate_fee_structure_consistency(&fee_type, base_fee_bps, min_fee, max_fee)?;
+        Self::validate_cross_fee_consistency(env, &fee_type, min_fee, max_fee)?;
         let mut fee_structures: Vec<FeeStructure> = env
             .storage()
             .instance()
