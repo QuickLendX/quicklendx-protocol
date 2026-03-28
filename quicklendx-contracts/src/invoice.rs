@@ -1073,7 +1073,6 @@ impl InvoiceStorage {
         }
         high_rated_invoices
     }
-    }
 
     fn add_to_metadata_index(
         env: &Env,
