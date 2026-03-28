@@ -647,12 +647,46 @@ impl FeeManager {
         Ok(volume_data)
     }
 
+    /// Validate a fee collection map before persisting.
+    fn validate_fee_collection_map(
+        fees_collected: &Map<FeeType, i128>,
+        total_amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        let mut computed_total: i128 = 0;
+
+        for fee_type in fees_collected.keys() {
+            let amount = fees_collected.get(fee_type).unwrap_or(0);
+
+            if amount < 0 {
+                return Err(QuickLendXError::InvalidAmount);
+            }
+
+            computed_total = computed_total
+                .checked_add(amount)
+                .ok_or(QuickLendXError::InvalidFeeConfiguration)?;
+        }
+
+        if computed_total != total_amount {
+            return Err(QuickLendXError::InvalidFeeConfiguration);
+        }
+
+        Ok(())
+    }
+
     pub fn collect_fees(
         env: &Env,
         user: &Address,
         fees_collected: Map<FeeType, i128>,
         total_amount: i128,
     ) -> Result<(), QuickLendXError> {
+        if total_amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        // Validate the map: no negatives, sum == total_amount.
+        // Missing fee types are acceptable (treated as zero).
+        Self::validate_fee_collection_map(&fees_collected, total_amount)?;
+
         let period = Self::get_current_period(env);
         let key = (REVENUE_KEY, period);
         let mut revenue_data: RevenueData =
@@ -664,13 +698,23 @@ impl FeeManager {
                 pending_distribution: 0,
                 transaction_count: 0,
             });
+
         revenue_data.total_collected = revenue_data.total_collected.saturating_add(total_amount);
         revenue_data.pending_distribution = revenue_data
             .pending_distribution
             .saturating_add(total_amount);
         revenue_data.transaction_count = revenue_data.transaction_count.saturating_add(1);
-        // Copy fees by type into revenue data
-        revenue_data.fees_by_type = fees_collected;
+
+        // Merge incoming fees into existing period map rather than overwriting.
+        // This preserves fees collected in earlier calls within the same period.
+        for fee_type in fees_collected.keys() {
+            let amount = fees_collected.get(fee_type.clone()).unwrap_or(0);
+            let existing: i128 = revenue_data.fees_by_type.get(fee_type.clone()).unwrap_or(0);
+            revenue_data
+                .fees_by_type
+                .set(fee_type, existing.saturating_add(amount));
+        }
+
         env.storage().instance().set(&key, &revenue_data);
         Self::update_user_volume(env, user, total_amount)?;
         Ok(())

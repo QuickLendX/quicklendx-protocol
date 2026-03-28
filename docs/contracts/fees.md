@@ -254,6 +254,8 @@ Strict boundary checks prevent "silent misconfiguration" where a typo could lead
 - **`InvalidFeeBasisPoints`**: Rejection of BPS > 1000.
 - **`InvalidAmount`**: Rejection of negative amounts or inconsistent min/max bounds.
 - **`NotAdmin`**: Unauthorized modification attempt.
+- **`InvalidFeeConfiguration`**: Map sum does not equal `total_amount`, or revenue shares do not sum to 10,000 BPS.
+- **`StorageKeyNotFound`**: Reading fee config before the fee system has been initialized.
 
 ## Migration and Upgrades
 
