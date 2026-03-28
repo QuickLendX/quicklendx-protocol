@@ -66,8 +66,9 @@ Backward-compatible events still emitted:
 
 ## Security Considerations
 - Replay/idempotency:
-  - Non-empty nonce is enforced unique per `(invoice, payer, nonce)`.
-  - Duplicate nonce attempts are rejected.
+  - Non-empty nonce is enforced unique per invoice (`invoice_id`, `nonce`).
+  - Duplicate nonce attempts are rejected with `OperationNotAllowed`.
+  - The uniqueness guard executes before invoice totals or payment history are mutated, so rejected replays do not partially apply.
 - Overpayment integrity:
   - Final settlement requires an exact remaining-due payment to avoid ambiguous excess-value handling.
   - Partial-payment capping still protects incremental repayment flows without allowing accounting drift.

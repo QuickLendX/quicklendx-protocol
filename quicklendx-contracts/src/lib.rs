@@ -73,7 +73,7 @@ pub use invoice::{InvoiceCategory, InvoiceStatus};
 mod verification;
 mod vesting;
 use admin::AdminStorage;
-use bid::{Bid, BidStatus, BidStorage};
+use bid::{Bid, BidStorage};
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
     OverdueScanResult,
