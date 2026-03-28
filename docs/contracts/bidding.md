@@ -76,7 +76,13 @@ pub fn place_bid(
 
 - **Default TTL**: 7 days (604,800 seconds)
 - **Expiration Timestamp**: Calculated as `current_timestamp + DEFAULT_BID_TTL`
-- **Automatic Cleanup**: Expired bids are marked as `Expired` and removed from active counting
+- **Automatic Cleanup**: Expired bids are marked as `Expired` and removed from active counting. This is triggered automatically during certain operations or can be called manually.
+
+#### Cleanup Mechanism
+
+The contract provides a public function to trigger bid cleanup:
+
+- `cleanup_expired_bids(invoice_id: BytesN<32>) -> u32`: Scans all bids for an invoice, transitioning `Placed` bids that have passed their expiration window to `Expired` status. It also removes already-expired or orphaned bid records from the invoice's internal bid index. Returns the total count of cleaned items. This operation is idempotent and safe to call repeatedly.
 
 ### 3. Bid Ranking
 
