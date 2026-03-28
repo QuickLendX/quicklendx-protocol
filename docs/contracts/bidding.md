@@ -65,6 +65,9 @@ Only `status` is mutated. All other fields remain identical after cleanup.
 ### Invariant 5 — Post-condition
 After a cleanup pass, no `Placed` bid in the invoice's active list has a deadline in the past. Verified by `assert_bid_invariants`.
 
+### Invariant 6 — Investor Pruning
+When an investor's bid count is queried or when a new bid is placed, the protocol automatically prunes `Expired` bids from the investor's global index. This maintains $O(\text{active\_bids})$ performance for rate-limiting and ensures storage consistency.
+
 ---
 
 ## Public API
@@ -74,6 +77,12 @@ Triggers a maintenance pass for all bids on the given invoice. Returns the numbe
 
 ### `assert_bid_invariants(env, invoice_id, current_timestamp) -> bool`
 Post-condition validator. Returns `true` if all invariants hold. Use in tests and audit tooling.
+
+### `count_active_placed_bids_for_investor(env, investor) -> u32`
+Returns the number of active `Placed` bids for a given investor across all invoices. Triggers `refresh_investor_bids` to ensure accuracy and prune stale index entries.
+
+### `refresh_investor_bids(env, investor) -> u32`
+Internal maintenance helper that scans an investor's bid index and prunes `Expired` entries.
 
 ### `count_bids_by_status(env, invoice_id) -> (u32, u32, u32, u32, u32)`
 Returns `(placed, accepted, withdrawn, expired, cancelled)` counts for all bids on an invoice.
@@ -91,7 +100,7 @@ cargo test test_overdue_expiration
 
 | File | Purpose |
 |---|---|
-| `src/test_overdue_expiration.rs` | Invariant tests for cleanup under all status combinations and timestamp boundaries |
+| `src/test_overdue_expiration.rs` | Invariant and **load tests** for cleanup under high bid pressure (50+ items) |
 | `src/test_bid.rs` | Full bid lifecycle integration tests |
 
 ---
