@@ -21,7 +21,11 @@ const MAX_ACTIVE_BIDS_PER_INVESTOR_KEY: Symbol = symbol_short!("mx_actbd");
 const DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 20;
 const SECONDS_PER_DAY: u64 = 86400;
 
-/// Maximum number of bids allowed per invoice to prevent unbound storage growth
+/// @notice Maximum number of active bids allowed per invoice.
+/// @dev An active bid is one in the `Placed` status. Limiting this prevents unbounded
+/// storage growth, keeping state reads and iterations highly efficient and within
+/// Soroban compute limits. Bids transitioning to terminal states (like Expired, Cancelled)
+/// are excluded from this limit, so new bids can replace old ones.
 pub const MAX_BIDS_PER_INVOICE: u32 = 50;
 
 /// Snapshot of the current bid TTL configuration returned by `get_bid_ttl_config`.
