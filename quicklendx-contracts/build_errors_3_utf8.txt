@@ -1,0 +1,615 @@
+﻿cargo :     Checking 
+quicklendx-contracts 
+v0.1.0 (C:\Users\ADMIN\D
+esktop\mide-drips\quickl
+endx-protocol\quicklendx
+-contracts)
+At line:1 char:1
++ cargo check --tests 
+--message-format=short 
+> build_errors_3.txt 
+2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo      
+        : NotSpecified  
+  : (    Checking qu.   
+ ..endx-contracts):S    
+tring) [], RemoteEx    
+ception
+    + FullyQualifiedErr 
+   orId : NativeComman  
+  dError
+ 
+src\lib.rs:73:5: 
+error[E0252]: the name 
+`Bid` is defined 
+multiple times: `Bid` 
+reimported here
+src\lib.rs:73:10: 
+error[E0252]: the name 
+`BidStatus` is defined 
+multiple times: 
+`BidStatus` reimported 
+here
+src\lib.rs:73:45: 
+error[E0252]: the name 
+`InsuranceCoverage` is 
+defined multiple times: 
+`InsuranceCoverage` 
+reimported here
+src\lib.rs:73:64: 
+error[E0252]: the name 
+`Investment` is defined 
+multiple times: 
+`Investment` reimported 
+here
+src\lib.rs:73:76: 
+error[E0252]: the name 
+`InvestmentStatus` is 
+defined multiple times: 
+`InvestmentStatus` 
+reimported here
+src\lib.rs:74:5: 
+error[E0252]: the name 
+`Invoice` is defined 
+multiple times: 
+`Invoice` reimported 
+here
+src\lib.rs:74:31: 
+error[E0252]: the name 
+`InvoiceMetadata` is 
+defined multiple times: 
+`InvoiceMetadata` 
+reimported here
+src\lib.rs:74:63: 
+error[E0252]: the name 
+`InvoiceStatus` is 
+defined multiple times: 
+`InvoiceStatus` 
+reimported here
+src\lib.rs:75:20: 
+error[E0252]: the name 
+`PlatformFee` is 
+defined multiple times: 
+`PlatformFee` 
+reimported here
+src\lib.rs:75:33: 
+error[E0252]: the name 
+`PlatformFeeConfig` is 
+defined multiple times: 
+`PlatformFeeConfig` 
+reimported here
+src\events.rs:2:19: 
+warning: unused import: 
+`FeeStructure`
+src\invoice.rs:7:40: 
+warning: unused import: 
+`MAX_TAG_LENGTH`
+src\lib.rs:73:5: 
+warning: unused 
+imports: `BidStatus`, 
+`Bid`, 
+`InsuranceCoverage`, 
+`InvestmentStatus`, 
+`Investment`, 
+`InvoiceMetadata`, 
+`InvoiceStatus`, 
+`Invoice`, 
+`PlatformFeeConfig`, 
+and `PlatformFee`
+src\test_init.rs:6:33: 
+warning: unused import: 
+`IntoVal`
+src\admin.rs:168:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\admin.rs:176:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\emergency.rs:66:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\emergency.rs:108:22:
+ warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\emergency.rs:143:22:
+ warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:106:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:129:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:149:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:173:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:191:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:207:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:235:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:271:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:299:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:329:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:348:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:369:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:391:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:426:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:452:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:472:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:497:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:518:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:543:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:567:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:585:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:612:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:641:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:669:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:698:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:724:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:750:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:773:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:796:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:809:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:822:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:834:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:853:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:870:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:887:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:900:10: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:921:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:944:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:962:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:988:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:1006:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:1032:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:1072:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:1095:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\fees.rs:559:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\fees.rs:685:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\init.rs:302:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\notifications.rs:264
+:22: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\notifications.rs:311
+:22: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\notifications.rs:348
+:14: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\settlement.rs:498:18
+: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\settlement.rs:516:18
+: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\verification.rs:869:
+18: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\verification.rs:880:
+18: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\verification.rs:892:
+18: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\verification.rs:904:
+18: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\vesting.rs:134:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\vesting.rs:215:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\lib.rs:337:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\lib.rs:609:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\storage.rs:281:13: 
+warning: variable does 
+not need to be mutable
+src\storage.rs:310:13: 
+warning: variable does 
+not need to be mutable
+src\test_init.rs:192:10:
+ warning: unused 
+variable: `env`: help: 
+if this is intentional, 
+prefix it with an 
+underscore: `_env`
+src\test_init.rs:275:10:
+ warning: unused 
+variable: `env`: help: 
+if this is intentional, 
+prefix it with an 
+underscore: `_env`
+src\test_init.rs:316:9: 
+warning: unused 
+variable: 
+`current_admin`: help: 
+if this is intentional, 
+prefix it with an 
+underscore: 
+`_current_admin`
+src\verification.rs:636:
+9: warning: unused 
+variable: `limits`: 
+help: if this is 
+intentional, prefix it 
+with an underscore: 
+`_limits`
+warning: 
+`quicklendx-contracts` 
+(lib test) generated 75 
+warnings (61 duplicates)
+error: could not 
+compile 
+`quicklendx-contracts` 
+(lib test) due to 10 
+previous errors; 75 
+warnings emitted
+warning: build failed, 
+waiting for other jobs 
+to finish...
+warning: 
+`quicklendx-contracts` 
+(lib) generated 69 
+warnings (8 duplicates)
+error: could not 
+compile 
+`quicklendx-contracts` 
+(lib) due to 10 
+previous errors; 69 
+warnings emitted

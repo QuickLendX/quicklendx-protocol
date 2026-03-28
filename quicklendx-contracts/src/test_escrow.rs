@@ -1067,3 +1067,45 @@ fn test_single_escrow_per_invoice_with_multiple_bids() {
         "Escrow investor unchanged"
     );
 }
+
+#[test]
+fn test_release_escrow_fails_if_not_funded() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+
+    // Invoice is Verified but not Funded. release_escrow_funds should fail.
+    let result = client.try_release_escrow_funds(&invoice_id);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+}
+
+#[test]
+fn test_release_escrow_fails_if_refunded() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1000);
+
+    client.accept_bid(&invoice_id, &bid_id);
+    
+    // Refund the escrow
+    client.refund_escrow_funds(&invoice_id, &admin);
+
+    // Invoice status is now Refunded. release_escrow_funds should fail.
+    let result = client.try_release_escrow_funds(&invoice_id);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+}
