@@ -1,5 +1,5 @@
 use crate::bid::Bid;
-use crate::fees::{FeeType, FeeStructure};
+use crate::fees::{FeeStructure, FeeType};
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::payments::Escrow;
 use crate::profits::PlatformFeeConfig;
@@ -496,11 +496,7 @@ pub fn emit_insurance_claimed(
 pub fn emit_platform_fee_updated(env: &Env, config: &PlatformFeeConfig) {
     env.events().publish(
         (symbol_short!("fee_upd"),),
-        (
-            config.fee_bps,
-            config.updated_at,
-            config.updated_by.clone(),
-        ),
+        (config.fee_bps, config.updated_at, config.updated_by.clone()),
     );
 }
 

@@ -493,7 +493,7 @@ fn test_settle_invoice_exact_remaining_due_preserves_totals_and_emits_final_even
 }
 
 // ============================================================================
-// New hardening tests
+// Hardening tests
 // ============================================================================
 
 /// Double settlement attempt must be rejected after invoice is already paid.
@@ -664,6 +664,54 @@ fn test_no_accounting_drift_after_multiple_partial_then_settle() {
         .map(|i| records.get(i as u32).unwrap().amount)
         .sum();
     assert_eq!(sum, invoice_amount, "sum of all payment records must equal total_due");
+}
+
+#[test]
+fn test_settle_invoice_auto_releases_escrow() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_amount = 1_000i128;
+    let investment_amount = 900i128;
+
+    let invoice_id = setup_funded_invoice(
+        &env,
+        &client,
+        &business,
+        &investor,
+        &currency,
+        invoice_amount,
+        investment_amount,
+    );
+
+    let token_client = token::Client::new(&env, &currency);
+
+    // Escrow should be Held initially
+    let escrow_before = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow_before.status, crate::payments::EscrowStatus::Held);
+
+    let business_balance_before = token_client.balance(&business);
+
+    // Settle invoice. This should trigger auto-release.
+    client.settle_invoice(&invoice_id, &invoice_amount);
+
+    // After settlement, escrow status should be Released
+    let escrow_after = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow_after.status, crate::payments::EscrowStatus::Released);
+
+    // Business balance should reflect: initial + release_amount - settlement_amount
+    // Since invoice_amount == settlement_amount AND release_amount == investment_amount (900):
+    // final_balance = initial + 900 - 1000 = initial - 100
+    let business_balance_after = token_client.balance(&business);
+    assert_eq!(business_balance_after, business_balance_before + investment_amount - invoice_amount);
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Paid);
 }
 
 /// Zero-amount settle attempt must be rejected.

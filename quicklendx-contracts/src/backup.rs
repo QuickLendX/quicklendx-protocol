@@ -60,7 +60,8 @@ impl BackupStorage {
             return Err(QuickLendXError::StorageError);
         }
 
-        if backup.description.len() == 0 || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH {
+        if backup.description.len() == 0 || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
+        {
             return Err(QuickLendXError::InvalidDescription);
         }
 
@@ -95,9 +96,15 @@ impl BackupStorage {
     /// Generate a unique backup ID
     pub fn generate_backup_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
-        let counter: u64 = env.storage().instance().get(&BACKUP_COUNTER_KEY).unwrap_or(0);
+        let counter: u64 = env
+            .storage()
+            .instance()
+            .get(&BACKUP_COUNTER_KEY)
+            .unwrap_or(0);
         let next_counter = counter.saturating_add(1);
-        env.storage().instance().set(&BACKUP_COUNTER_KEY, &next_counter);
+        env.storage()
+            .instance()
+            .set(&BACKUP_COUNTER_KEY, &next_counter);
 
         let mut id_bytes = [0u8; 32];
         // Add backup prefix

@@ -38,7 +38,9 @@
       "Bash(cargo test:*)",
       "Read(//c/Users/Covez/Desktop/quicklendx-protocol/quicklendx-contracts/$USERPROFILE/.cargo/**)",
       "Read(//c/Users/Covez/Desktop/quicklendx-protocol/quicklendx-contracts/$HOME/.cargo/**)",
-      "Bash(rustc --edition 2021 --crate-type lib /c/Users/Covez/Desktop/quicklendx-protocol/quicklendx-contracts/src/settlement.rs)"
+      "Bash(rustc --edition 2021 --crate-type lib /c/Users/Covez/Desktop/quicklendx-protocol/quicklendx-contracts/src/settlement.rs)",
+      "Bash(where python3:*)",
+      "Bash(\"/C/Users/Covez/.cargo/bin/cargo\" check:*)"
     ]
   }
 }

@@ -30,7 +30,7 @@ const MAX_PAYMENT_COUNT: u32 = 1_000;
 enum SettlementDataKey {
     PaymentCount(BytesN<32>),
     Payment(BytesN<32>, u32),
-    PaymentNonce(BytesN<32>, Address, String),
+    PaymentNonce(BytesN<32>, String),
     /// Marks an invoice as finalized to guard against double-settlement.
     Finalized(BytesN<32>),
 }
@@ -62,8 +62,9 @@ pub struct Progress {
 /// Record a partial payment. If total reaches invoice total, settlement is finalized.
 ///
 /// # Security
-/// - Requires business-owner authorization for every payment attempt.
-/// - Safely bounds applied value to the remaining due amount.
+/// - @security Requires business-owner authorization for every payment attempt.
+/// - @security Safely bounds applied value to the remaining due amount.
+/// - @security Guards against replayed transaction identifiers per invoice.
 /// - Preserves `total_paid <= amount` even when callers request an overpayment.
 /// - Rejects payments when MAX_PAYMENT_COUNT is reached.
 pub fn process_partial_payment(
@@ -107,7 +108,7 @@ pub fn process_partial_payment(
 /// - Rejects missing invoices
 /// - Rejects payments to non-payable invoice states
 /// - Caps applied amount so `total_paid` never exceeds `total_due`
-/// - Enforces nonce uniqueness per `(invoice, payer, nonce)` if nonce is non-empty
+/// - Enforces nonce uniqueness per `(invoice, nonce)` if nonce is non-empty
 /// - Rejects if payment count has reached MAX_PAYMENT_COUNT
 ///
 /// # Security
@@ -135,11 +136,7 @@ pub fn record_payment(
 
     // Replay protection: reject duplicate nonces.
     if payment_nonce.len() > 0 {
-        let nonce_key = SettlementDataKey::PaymentNonce(
-            invoice_id.clone(),
-            payer.clone(),
-            payment_nonce.clone(),
-        );
+        let nonce_key = SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce.clone());
         let seen: bool = env.storage().persistent().get(&nonce_key).unwrap_or(false);
         if seen {
             return Err(QuickLendXError::OperationNotAllowed);
@@ -201,7 +198,7 @@ pub fn record_payment(
 
     if payment_nonce.len() > 0 {
         env.storage().persistent().set(
-            &SettlementDataKey::PaymentNonce(invoice_id.clone(), payer.clone(), payment_nonce),
+            &SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce),
             &true,
         );
     }
@@ -407,6 +404,14 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
 
     if invoice.total_paid < invoice.amount || invoice.total_paid < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
+    }
+
+    // Auto-release escrow funds to business if they are still held in the contract.
+    // This ensures the business receives the original funded amount during the settlement transition.
+    if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
+        if escrow.status == crate::payments::EscrowStatus::Held {
+            crate::payments::release_escrow(env, invoice_id)?;
+        }
     }
 
     let investor_address = invoice
