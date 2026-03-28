@@ -287,10 +287,14 @@ impl AnalyticsStorage {
     pub fn generate_report_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let sequence = env.ledger().sequence();
-        let _combined = timestamp.wrapping_add(sequence as u64);
-        let bytes = Bytes::new(env);
+        let ts = timestamp.to_be_bytes();
+        let seq = sequence.to_be_bytes();
+        let combined: [u8; 12] = [
+            ts[0], ts[1], ts[2], ts[3], ts[4], ts[5], ts[6], ts[7], seq[0], seq[1], seq[2], seq[3],
+        ];
+        let bytes = Bytes::from_array(env, &combined);
         let hash = env.crypto().sha256(&bytes);
-        BytesN::from_array(&env, &hash.to_array())
+        BytesN::from_array(env, &hash.to_array())
     }
 }
 

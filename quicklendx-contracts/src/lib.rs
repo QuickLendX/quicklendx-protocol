@@ -2299,7 +2299,10 @@ impl QuickLendXContract {
         business: Address,
         period: analytics::TimePeriod,
     ) -> Result<analytics::BusinessReport, QuickLendXError> {
-        analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
+        let report =
+            analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)?;
+        analytics::AnalyticsStorage::store_business_report(&env, &report);
+        Ok(report)
     }
 
     /// Retrieve a stored business report by ID
