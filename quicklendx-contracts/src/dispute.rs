@@ -13,27 +13,19 @@ pub enum DisputeStatus {
     Resolved,
 }
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Dispute {
-    pub invoice_id: BytesN<32>,
-    pub creator: Address,
-    pub reason: String,
-    pub evidence: String,
-    pub status: DisputeStatus,
-    pub resolution: Option<String>,
-    pub created_at: u64,
-    pub resolved_at: Option<u64>,
-}
+// ---------------------------------------------------------------------------
+// Storage helpers
+// ---------------------------------------------------------------------------
 
 #[allow(dead_code)]
 pub fn create_dispute(
-    env: Env,
-    invoice_id: BytesN<32>,
-    creator: Address,
-    reason: String,
-    evidence: String,
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    creator: &Address,
+    reason: &String,
+    evidence: &String,
 ) -> Result<(), QuickLendXError> {
+    // --- 1. Authentication: creator must sign the transaction ---
     creator.require_auth();
 
     if env
@@ -44,12 +36,11 @@ pub fn create_dispute(
         return Err(QuickLendXError::DisputeAlreadyExists);
     }
 
-    let invoice: Invoice = env
-        .storage()
-        .instance()
-        .get(&invoice_id)
-        .ok_or(QuickLendXError::InvoiceNotFound)?;
-
+    // --- 4. Invoice must be in a state where disputes are meaningful ---
+    //    Disputes are relevant once the invoice has moved past initial upload:
+    //    Pending, Verified, Funded, or Paid all qualify.  Cancelled, Defaulted,
+    //    and Refunded are terminal failure/resolution states where raising a new
+    //    dispute adds no value.
     match invoice.status {
         InvoiceStatus::Pending
         | InvoiceStatus::Verified
@@ -64,152 +55,205 @@ pub fn create_dispute(
             .as_ref()
             .map_or(false, |inv| creator == *inv);
 
-    if !is_authorized {
+    if !is_business && !is_investor {
         return Err(QuickLendXError::DisputeNotAuthorized);
     }
 
+    // --- 6. Input validation ---
     if reason.len() == 0 || reason.len() > MAX_DISPUTE_REASON_LENGTH {
         return Err(QuickLendXError::InvalidDisputeReason);
     }
-
-    if evidence.len() > MAX_DISPUTE_EVIDENCE_LENGTH {
+    if evidence.len() == 0 || evidence.len() > MAX_DISPUTE_EVIDENCE_LENGTH {
         return Err(QuickLendXError::InvalidDisputeEvidence);
     }
 
-    let dispute = Dispute {
-        invoice_id: invoice_id.clone(),
-        creator: creator.clone(),
-        reason,
-        evidence,
-        status: DisputeStatus::Open,
-        resolution: None,
-        created_at: env.ledger().timestamp(),
-        resolved_at: None,
+    // --- 7. Record the dispute on the invoice ---
+    let now = env.ledger().timestamp();
+    invoice.dispute_status = DisputeStatus::Disputed;
+    invoice.dispute = Dispute {
+        created_by: creator.clone(),
+        created_at: now,
+        reason: reason.clone(),
+        evidence: evidence.clone(),
+        resolution: String::from_str(env, ""),
+        resolved_by: Address::from_str(
+            env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        ),
+        resolved_at: 0,
     };
 
-    env.storage()
-        .persistent()
-        .set(&("dispute", invoice_id), &dispute);
+    // --- 8. Persist and index ---
+    InvoiceStorage::update_invoice(env, &invoice);
+    add_to_dispute_index(env, invoice_id);
 
     Ok(())
 }
 
+/// @notice Advances a dispute from `Disputed` to `UnderReview`.
+///
+/// @dev Only the platform admin may call this function.  The dispute must be
+///      in the `Disputed` state; any other state (including `UnderReview` or
+///      `Resolved`) is rejected.
+///
+/// @param env        The Soroban contract environment.
+/// @param admin      The admin address (must match the stored admin).
+/// @param invoice_id The 32-byte invoice identifier.
+///
+/// @return `Ok(())` on success.
+///
+/// @error `NotAdmin`          No admin has been configured.
+/// @error `Unauthorized`      Caller is not the stored admin.
+/// @error `DisputeNotFound`   No dispute exists on this invoice.
+/// @error `InvalidStatus`     Dispute is not in `Disputed` state.
 #[allow(dead_code)]
 pub fn put_dispute_under_review(
     env: &Env,
-    admin: Address,
-    invoice_id: BytesN<32>,
+    admin: &Address,
+    invoice_id: &BytesN<32>,
 ) -> Result<(), QuickLendXError> {
+    // --- 1. Authentication and role check ---
     admin.require_auth();
+    assert_is_admin(env, admin)?;
 
-    let stored_admin: Address = env
-        .storage()
-        .instance()
-        .get(&"admin")
-        .ok_or(QuickLendXError::NotAdmin)?;
+    // --- 2. Load the invoice ---
+    let mut invoice: Invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    if admin != stored_admin {
-        return Err(QuickLendXError::Unauthorized);
+    // --- 3. Dispute must exist ---
+    if invoice.dispute_status == DisputeStatus::None {
+        return Err(QuickLendXError::DisputeNotFound);
     }
 
-    let mut dispute: Dispute = env
-        .storage()
-        .persistent()
-        .get(&("dispute", invoice_id.clone()))
-        .ok_or(QuickLendXError::DisputeNotFound)?;
-
-    if dispute.status != DisputeStatus::Open {
+    // --- 4. State machine: only Disputed → UnderReview is allowed ---
+    if invoice.dispute_status != DisputeStatus::Disputed {
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    dispute.status = DisputeStatus::UnderReview;
-
-    env.storage()
-        .persistent()
-        .set(&("dispute", invoice_id), &dispute);
+    // --- 5. Transition ---
+    invoice.dispute_status = DisputeStatus::UnderReview;
+    InvoiceStorage::update_invoice(env, &invoice);
 
     Ok(())
 }
 
+/// @notice Finalizes a dispute, recording the admin's resolution text.
+///
+/// @dev Only the platform admin may call this function.  The dispute must be
+///      in the `UnderReview` state.  The `Resolved` state is terminal — no
+///      further transitions are possible, and a second call returns
+///      `DisputeNotUnderReview` because the status is no longer `UnderReview`.
+///
+/// @param env        The Soroban contract environment.
+/// @param admin      The admin address (must match the stored admin).
+/// @param invoice_id The 32-byte invoice identifier.
+/// @param resolution Resolution text (1 – MAX_DISPUTE_RESOLUTION_LENGTH chars).
+///
+/// @return `Ok(())` on success.
+///
+/// @error `NotAdmin`              No admin has been configured.
+/// @error `Unauthorized`          Caller is not the stored admin.
+/// @error `DisputeNotFound`       No dispute exists on this invoice.
+/// @error `DisputeNotUnderReview` Dispute is not in `UnderReview` state.
+/// @error `InvalidDisputeReason`  `resolution` is empty or exceeds the length limit.
 #[allow(dead_code)]
 pub fn resolve_dispute(
     env: &Env,
-    admin: Address,
-    invoice_id: BytesN<32>,
-    resolution: String,
+    admin: &Address,
+    invoice_id: &BytesN<32>,
+    resolution: &String,
 ) -> Result<(), QuickLendXError> {
+    // --- 1. Authentication and role check ---
     admin.require_auth();
+    assert_is_admin(env, admin)?;
 
-    let stored_admin: Address = env
-        .storage()
-        .instance()
-        .get(&"admin")
-        .ok_or(QuickLendXError::NotAdmin)?;
+    // --- 2. Load the invoice ---
+    let mut invoice: Invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    if admin != stored_admin {
-        return Err(QuickLendXError::Unauthorized);
+    // --- 3. Dispute must exist ---
+    if invoice.dispute_status == DisputeStatus::None {
+        return Err(QuickLendXError::DisputeNotFound);
     }
 
-    let mut dispute: Dispute = env
-        .storage()
-        .persistent()
-        .get(&("dispute", invoice_id.clone()))
-        .ok_or(QuickLendXError::DisputeNotFound)?;
-
-    if dispute.status != DisputeStatus::UnderReview {
+    // --- 4. State machine: only UnderReview → Resolved is allowed.
+    //    This also prevents re-resolution (Resolved → Resolved) because
+    //    the status is no longer UnderReview. ---
+    if invoice.dispute_status != DisputeStatus::UnderReview {
         return Err(QuickLendXError::DisputeNotUnderReview);
     }
 
-    if dispute.status == DisputeStatus::Resolved {
-        return Err(QuickLendXError::DisputeAlreadyResolved);
-    }
-
+    // --- 5. Validate resolution text ---
     if resolution.len() == 0 || resolution.len() > MAX_DISPUTE_RESOLUTION_LENGTH {
-        return Err(QuickLendXError::InvalidDisputeEvidence);
+        return Err(QuickLendXError::InvalidDisputeReason);
     }
 
-    dispute.status = DisputeStatus::Resolved;
-    dispute.resolution = Some(resolution);
-    dispute.resolved_at = Some(env.ledger().timestamp());
+    // --- 6. Record resolution (write-once) ---
+    let now = env.ledger().timestamp();
+    invoice.dispute_status = DisputeStatus::Resolved;
+    invoice.dispute.resolution = resolution.clone();
+    invoice.dispute.resolved_by = admin.clone();
+    invoice.dispute.resolved_at = now;
 
-    env.storage()
-        .persistent()
-        .set(&("dispute", invoice_id), &dispute);
+    InvoiceStorage::update_invoice(env, &invoice);
 
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Query entry points
+// ---------------------------------------------------------------------------
+
+/// @notice Returns the dispute embedded in the invoice, if one exists.
+///
+/// @param env        The Soroban contract environment.
+/// @param invoice_id The 32-byte invoice identifier.
+///
+/// @return `Some(Dispute)` when a dispute exists, `None` otherwise.
+///
+/// @dev Returns `None` (not an error) when `dispute_status == DisputeStatus::None`
+///      so callers can distinguish "no dispute" from "invoice not found".
 #[allow(dead_code)]
-pub fn get_dispute_details(env: &Env, invoice_id: BytesN<32>) -> Result<Dispute, QuickLendXError> {
-    env.storage()
-        .persistent()
-        .get(&("dispute", invoice_id))
-        .ok_or(QuickLendXError::DisputeNotFound)
+pub fn get_dispute_details(env: &Env, invoice_id: &BytesN<32>) -> Option<Dispute> {
+    let invoice = InvoiceStorage::get_invoice(env, invoice_id)?;
+    if invoice.dispute_status == DisputeStatus::None {
+        return None;
+    }
+    Some(invoice.dispute)
 }
 
+/// @notice Returns all invoice IDs that have an active or historical dispute.
+///
+/// @dev Iterates the persisted dispute index; the list grows as disputes are
+///      created and is never pruned (historical disputes remain visible).
+///
+/// @param env The Soroban contract environment.
+/// @return A `Vec<BytesN<32>>` of invoice IDs.
 #[allow(dead_code)]
-pub fn get_disputes_by_status(
-    env: &Env,
-    status: DisputeStatus,
-    start: u64,
-    limit: u32,
-) -> Vec<Dispute> {
-    let mut disputes = Vec::new(env);
-    let max_limit = 50u32;
-    let query_limit = if limit > max_limit { max_limit } else { limit };
+pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
+    get_dispute_index(env)
+}
 
-    let end = start.saturating_add(query_limit as u64);
-    for i in start..end {
-        if let Some(dispute) = env
-            .storage()
-            .persistent()
-            .get::<_, Dispute>(&("dispute", i))
-        {
-            if dispute.status == status {
-                disputes.push_back(dispute);
+/// @notice Returns all invoice IDs whose dispute status matches `status`.
+///
+/// @dev Iterates every invoice in the dispute index and filters by status.
+///      The caller supplies the desired `DisputeStatus` variant.  Passing
+///      `DisputeStatus::None` always returns an empty list because invoices
+///      are only added to the index when a dispute is created.
+///
+/// @param env    The Soroban contract environment.
+/// @param status The dispute status to filter by.
+/// @return A `Vec<BytesN<32>>` of matching invoice IDs.
+#[allow(dead_code)]
+pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<BytesN<32>> {
+    let index = get_dispute_index(env);
+    let mut result = Vec::new(env);
+    for invoice_id in index.iter() {
+        if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
+            if invoice.dispute_status == *status {
+                result.push_back(invoice_id);
             }
         }
     }
-
-    disputes
+    result
 }
