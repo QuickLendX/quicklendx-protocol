@@ -1687,17 +1687,6 @@ impl QuickLendXContract {
         Ok(defaults::scan_funded_invoice_expirations(&env, grace_period, None)?.overdue_count)
     }
 
-        for invoice_id in funded_invoices.iter() {
-            if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
-                if invoice.is_overdue(current_timestamp) {
-                    overdue_count += 1;
-                    let _ =
-                        notifications::NotificationSystem::notify_payment_overdue(&env, &invoice);
-                }
-                let _ = invoice.check_and_handle_expiration(&env, grace_period)?;
-            }
-        }
-
     /// @notice Returns the current funded-invoice overdue scan cursor.
     /// @param env The contract environment.
     /// @return Zero-based index of the next funded invoice to inspect.
