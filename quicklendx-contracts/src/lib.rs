@@ -106,6 +106,8 @@ use verification::{
     InvestorVerification, InvestorVerificationStorage,
 };
 
+pub use crate::types::*;
+
 #[contract]
 pub struct QuickLendXContract;
 
@@ -1044,6 +1046,7 @@ impl QuickLendXContract {
         provider: Address,
         coverage_percentage: u32,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let mut investment = InvestmentStorage::get_investment(&env, &investment_id)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
@@ -1084,6 +1087,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         payment_amount: i128,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = reentrancy::with_payment_guard(&env, || {
@@ -1675,6 +1679,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         new_category: invoice::InvoiceCategory,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -1712,6 +1717,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         tag: String,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -1739,6 +1745,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         tag: String,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -2237,6 +2244,110 @@ impl QuickLendXContract {
     /// Get bid history for an invoice (simple version without pagination)
     pub fn get_bid_history(env: Env, invoice_id: BytesN<32>) -> Vec<Bid> {
         BidStorage::get_bid_records_for_invoice(&env, &invoice_id)
+    }
+
+    // =========================================================================
+    // Backup
+    // =========================================================================
+
+    /// Create a backup of all invoice data (admin only).
+    pub fn create_backup(env: Env, admin: Address) -> Result<BytesN<32>, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        AdminStorage::require_admin(&env, &admin)?;
+        let backup_id = backup::BackupStorage::generate_backup_id(&env);
+        let invoices = backup::BackupStorage::get_all_invoices(&env);
+        let b = backup::Backup {
+            backup_id: backup_id.clone(),
+            timestamp: env.ledger().timestamp(),
+            description: String::from_str(&env, "Manual Backup"),
+            invoice_count: invoices.len() as u32,
+            status: backup::BackupStatus::Active,
+        };
+        backup::BackupStorage::store_backup(&env, &b, Some(&invoices))?;
+        backup::BackupStorage::store_backup_data(&env, &backup_id, &invoices);
+        backup::BackupStorage::add_to_backup_list(&env, &backup_id);
+        let _ = backup::BackupStorage::cleanup_old_backups(&env);
+        Ok(backup_id)
+    }
+
+    /// Restore invoice data from a backup (admin only).
+    pub fn restore_backup(
+        env: Env,
+        admin: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        AdminStorage::require_admin(&env, &admin)?;
+        backup::BackupStorage::validate_backup(&env, &backup_id)?;
+        let invoices = backup::BackupStorage::get_backup_data(&env, &backup_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        InvoiceStorage::clear_all(&env);
+        for inv in invoices.iter() {
+            InvoiceStorage::store_invoice(&env, &inv);
+        }
+        Ok(())
+    }
+
+    /// Archive a backup (admin only).
+    pub fn archive_backup(
+        env: Env,
+        admin: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        AdminStorage::require_admin(&env, &admin)?;
+        let mut b = backup::BackupStorage::get_backup(&env, &backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        b.status = backup::BackupStatus::Archived;
+        backup::BackupStorage::update_backup(&env, &b)?;
+        backup::BackupStorage::remove_from_backup_list(&env, &backup_id);
+        Ok(())
+    }
+
+    /// Validate a backup's integrity.
+    pub fn validate_backup(env: Env, backup_id: BytesN<32>) -> bool {
+        backup::BackupStorage::validate_backup(&env, &backup_id).is_ok()
+    }
+
+    /// Get backup details by ID.
+    pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<backup::Backup> {
+        backup::BackupStorage::get_backup(&env, &backup_id)
+    }
+
+    /// Get list of all active backup IDs.
+    pub fn get_backups(env: Env) -> Vec<BytesN<32>> {
+        backup::BackupStorage::get_all_backups(&env)
+    }
+
+    /// Manually trigger cleanup of old backups (admin only).
+    pub fn cleanup_backups(env: Env, admin: Address) -> Result<u32, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        AdminStorage::require_admin(&env, &admin)?;
+        backup::BackupStorage::cleanup_old_backups(&env)
+    }
+
+    /// Configure backup retention policy (admin only).
+    pub fn set_backup_retention_policy(
+        env: Env,
+        admin: Address,
+        max_backups: u32,
+        max_age_seconds: u64,
+        auto_cleanup_enabled: bool,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        AdminStorage::require_admin(&env, &admin)?;
+        let policy = backup::BackupRetentionPolicy {
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+        };
+        backup::BackupStorage::set_retention_policy(&env, &policy);
+        Ok(())
+    }
+
+    /// Get current backup retention policy.
+    pub fn get_backup_retention_policy(env: Env) -> backup::BackupRetentionPolicy {
+        backup::BackupStorage::get_retention_policy(&env)
     }
 
     // ============================================================================
