@@ -2,12 +2,120 @@
 
 This document describes the centralized profit and fee calculation formula used in the QuickLendX protocol for invoice settlement.
 
+It also documents the deterministic transaction-fee formula used by `calculate_transaction_fees`
+for platform, processing, verification, and optional payment-timing fees.
+
 ## Overview
 
 When an invoice is settled, funds flow from the business (debtor) to the investor who funded the invoice. The protocol calculates:
 
 1. **Investor Return** - The total amount returned to the investor
 2. **Platform Fee** - The fee collected by the platform from any profit
+
+For transaction fees, the contract separately calculates a total fee amount using the user's
+volume tier and whether the payment is early or late.
+
+## Transaction Fee Formula
+
+### Fee Structures
+
+The fee engine evaluates every active configured fee structure:
+
+- `Platform`
+- `Processing`
+- `Verification`
+- `EarlyPayment` (only included when `is_early_payment = true`)
+- `LatePayment` (only included when `is_late_payment = true`)
+
+Default initialization enables:
+
+- `Platform`: `200` bps, `min_fee = 100`, `max_fee = 1_000_000`
+- `Processing`: `50` bps, `min_fee = 50`, `max_fee = 500_000`
+- `Verification`: `100` bps, `min_fee = 100`, `max_fee = 100_000`
+
+### Deterministic Order of Operations
+
+For each active fee structure, the contract applies the same sequence every time:
+
+```text
+1. raw_fee = floor(transaction_amount * base_fee_bps / 10_000)
+2. clamped_fee = min(max(raw_fee, min_fee), max_fee)
+3. discounted_fee = clamped_fee - floor(clamped_fee * tier_discount_bps / 10_000)
+   - skipped for LatePayment
+4. early_adjusted_fee = discounted_fee - floor(discounted_fee * 1_000 / 10_000)
+   - only for Platform when is_early_payment = true
+5. late_adjusted_fee = clamped_fee + floor(clamped_fee * 2_000 / 10_000)
+   - only for LatePayment when is_late_payment = true
+```
+
+Total transaction fees equal the sum of each structure's final fee.
+
+### Volume Tier Discounts
+
+| Tier | Threshold | Discount |
+|------|-----------|----------|
+| Standard | `< 100_000_000_000` | `0` bps |
+| Silver | `>= 100_000_000_000` | `500` bps |
+| Gold | `>= 500_000_000_000` | `1,000` bps |
+| Platinum | `>= 1_000_000_000_000` | `1,500` bps |
+
+### Transaction Fee Examples
+
+#### 1. Standard user, regular payment
+
+```text
+Amount: 10,000
+
+Platform   = floor(10,000 * 200 / 10,000) = 200
+Processing = floor(10,000 * 50  / 10,000) = 50
+Verification = floor(10,000 * 100 / 10,000) = 100
+
+Total = 350
+```
+
+#### 2. Gold user, early payment
+
+```text
+Amount: 10,000
+Tier discount: 10%
+
+Platform:
+  200 -> 180 after Gold discount -> 162 after early-payment discount
+Processing:
+  50 -> 45
+Verification:
+  100 -> 90
+
+Total = 297
+```
+
+#### 3. Platinum user, late payment with LatePayment fee configured at 100 bps
+
+```text
+Amount: 10,000
+Tier discount: 15%
+
+Discounted standard fees:
+  Platform: 200 -> 170
+  Processing: 50 -> 43
+  Verification: 100 -> 85
+  Subtotal = 298
+
+LatePayment fee:
+  floor(10,000 * 100 / 10,000) = 100
+  20% surcharge = 120
+  No tier discount applies to LatePayment
+
+Total = 418
+```
+
+### Transaction Fee Security Notes
+
+- The calculation is deterministic: the same stored fee config, user tier, amount, and timing flags always return the same output.
+- Integer arithmetic truncates toward zero, so rounding behavior is reviewable and predictable.
+- Saturating arithmetic prevents overflow-based panics.
+- Min/max fee clamping happens before discounts or penalties, which prevents modifiers from bypassing configured bounds on the base fee amount.
+- `LatePayment` fees intentionally do not receive volume-tier discounts, preserving the deterrent effect of overdue penalties.
 
 ## Formula
 

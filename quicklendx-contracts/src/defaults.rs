@@ -3,10 +3,26 @@ use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice
 use crate::init::ProtocolInitializer;
 use crate::investment::{InvestmentStatus, InvestmentStorage};
 use crate::invoice::{InvoiceStatus, InvoiceStorage};
-use soroban_sdk::{BytesN, Env, Vec};
+use soroban_sdk::{contracttype, symbol_short, BytesN, Env, Vec};
 
 /// Default grace period in seconds (7 days)
 pub const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60;
+/// Default number of funded invoices processed per overdue scan call.
+pub const DEFAULT_OVERDUE_SCAN_BATCH_LIMIT: u32 = 25;
+/// Hard cap for caller-provided overdue scan limits.
+pub const MAX_OVERDUE_SCAN_BATCH_LIMIT: u32 = 100;
+
+const OVERDUE_SCAN_CURSOR_KEY: soroban_sdk::Symbol = symbol_short!("ovd_scan");
+
+/// Result metadata returned by the bounded overdue invoice scanner.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OverdueScanResult {
+    pub overdue_count: u32,
+    pub scanned_count: u32,
+    pub total_funded: u32,
+    pub next_cursor: u32,
+}
 
 /// Maximum allowed grace period in seconds (30 days)
 /// This prevents excessively long grace periods that could lock funds indefinitely
@@ -98,6 +114,123 @@ pub fn mark_invoice_defaulted(
     handle_default(env, invoice_id)
 }
 
+
+/// @notice Returns the funded-invoice scan cursor used by bounded overdue scans.
+/// @dev The cursor is normalized against the current funded-invoice count before use.
+/// @param env The contract environment.
+/// @return Zero-based index of the next funded invoice to inspect.
+pub fn get_overdue_scan_cursor(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&OVERDUE_SCAN_CURSOR_KEY)
+        .unwrap_or(0)
+}
+
+/// @notice Returns the batch size used when callers do not provide an explicit scan limit.
+/// @return Default funded-invoice batch size for overdue scanning.
+pub fn default_overdue_scan_batch_limit() -> u32 {
+    DEFAULT_OVERDUE_SCAN_BATCH_LIMIT
+}
+
+/// @notice Returns the maximum funded-invoice batch size accepted by bounded overdue scans.
+/// @return Hard cap applied to caller-provided scan limits.
+pub fn max_overdue_scan_batch_limit() -> u32 {
+    MAX_OVERDUE_SCAN_BATCH_LIMIT
+}
+
+fn set_overdue_scan_cursor(env: &Env, cursor: u32) {
+    env.storage()
+        .instance()
+        .set(&OVERDUE_SCAN_CURSOR_KEY, &cursor);
+}
+
+fn normalize_cursor(cursor: u32, funded_count: u32) -> u32 {
+    if funded_count == 0 || cursor >= funded_count {
+        0
+    } else {
+        cursor
+    }
+}
+
+fn resolve_scan_limit(limit: Option<u32>) -> u32 {
+    limit
+        .unwrap_or(DEFAULT_OVERDUE_SCAN_BATCH_LIMIT)
+        .max(1)
+        .min(MAX_OVERDUE_SCAN_BATCH_LIMIT)
+}
+
+/// @notice Scans funded invoices in a deterministic bounded window for overdue/default handling.
+/// @dev Uses a rotating cursor stored in instance storage so repeated calls eventually inspect
+///      the full funded set without any single call walking every invoice. The function reads a
+///      snapshot of the funded index once, then processes at most `limit` entries from that snapshot.
+/// @param env The contract environment.
+/// @param grace_period Grace period in seconds used to determine default eligibility.
+/// @param limit Optional funded-invoice batch size. Values are clamped to `1..=100`.
+/// @return Scan result containing overdue count, scanned count, funded snapshot size, and next cursor.
+/// @security Bounded loops protect against excessive per-call work. Callers that need full coverage
+///           must invoke the scan repeatedly until `next_cursor` wraps to `0`.
+pub fn scan_funded_invoice_expirations(
+    env: &Env,
+    grace_period: u64,
+    limit: Option<u32>,
+) -> Result<OverdueScanResult, QuickLendXError> {
+    let funded_invoices = InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Funded);
+    let total_funded = funded_invoices.len();
+
+    if total_funded == 0 {
+        set_overdue_scan_cursor(env, 0);
+        return Ok(OverdueScanResult {
+            overdue_count: 0,
+            scanned_count: 0,
+            total_funded: 0,
+            next_cursor: 0,
+        });
+    }
+
+    let scan_limit = resolve_scan_limit(limit).min(total_funded);
+    let current_timestamp = env.ledger().timestamp();
+    let mut cursor = normalize_cursor(get_overdue_scan_cursor(env), total_funded);
+    let mut overdue_count = 0u32;
+    let mut scanned_count = 0u32;
+
+    while scanned_count < scan_limit {
+        if let Some(invoice_id) = funded_invoices.get(cursor) {
+            if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
+                if invoice.is_overdue(current_timestamp) {
+                    overdue_count = overdue_count.saturating_add(1);
+                    let _ = crate::notifications::NotificationSystem::notify_payment_overdue(
+                        env, &invoice,
+                    );
+                }
+
+                if current_timestamp > invoice.grace_deadline(grace_period) {
+                    let _ = invoice.check_and_handle_expiration(env, grace_period)?;
+                }
+            }
+        }
+
+        scanned_count = scanned_count.saturating_add(1);
+        cursor = if cursor + 1 >= total_funded {
+            0
+        } else {
+            cursor + 1
+        };
+    }
+
+    let next_cursor = if scan_limit >= total_funded {
+        0
+    } else {
+        cursor
+    };
+    set_overdue_scan_cursor(env, next_cursor);
+
+    Ok(OverdueScanResult {
+        overdue_count,
+        scanned_count,
+        total_funded,
+        next_cursor,
+    })
+}
 
 /// Handle invoice default - internal function that performs the actual defaulting
 /// This function assumes all validations have been done (grace period, status, etc.)

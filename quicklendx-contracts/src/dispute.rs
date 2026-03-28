@@ -1,8 +1,8 @@
-use crate::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceStatus};
 use crate::protocol_limits::{
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
 };
+use crate::QuickLendXError;
 use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
 
 #[contracttype]
@@ -26,10 +26,6 @@ pub struct Dispute {
     pub resolved_at: Option<u64>,
 }
 
-
-
-
-
 #[allow(dead_code)]
 pub fn create_dispute(
     env: Env,
@@ -40,7 +36,11 @@ pub fn create_dispute(
 ) -> Result<(), QuickLendXError> {
     creator.require_auth();
 
-    if env.storage().persistent().has(&("dispute", invoice_id.clone())) {
+    if env
+        .storage()
+        .persistent()
+        .has(&("dispute", invoice_id.clone()))
+    {
         return Err(QuickLendXError::DisputeAlreadyExists);
     }
 
@@ -51,12 +51,18 @@ pub fn create_dispute(
         .ok_or(QuickLendXError::InvoiceNotFound)?;
 
     match invoice.status {
-        InvoiceStatus::Pending | InvoiceStatus::Verified | InvoiceStatus::Funded | InvoiceStatus::Paid => {}
+        InvoiceStatus::Pending
+        | InvoiceStatus::Verified
+        | InvoiceStatus::Funded
+        | InvoiceStatus::Paid => {}
         _ => return Err(QuickLendXError::InvoiceNotAvailableForFunding),
     }
 
-    let is_authorized = creator == invoice.business || 
-        invoice.investor.as_ref().map_or(false, |inv| creator == *inv);
+    let is_authorized = creator == invoice.business
+        || invoice
+            .investor
+            .as_ref()
+            .map_or(false, |inv| creator == *inv);
 
     if !is_authorized {
         return Err(QuickLendXError::DisputeNotAuthorized);
