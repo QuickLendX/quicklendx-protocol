@@ -568,6 +568,60 @@ impl Invoice {
         self.status = InvoiceStatus::Defaulted;
     }
 
+    /// Apply an admin-authorized status override used for recovery, backfills, and tests.
+    ///
+    /// The admin pathway is intentionally narrower than arbitrary mutation: only
+    /// lifecycle statuses that already have index/event support can be targeted.
+    /// The normal user-facing settlement and funding flows should still use
+    /// `accept_bid`, `settle_invoice`, and default handling entrypoints.
+    ///
+    /// # Errors
+    /// Returns [`QuickLendXError::InvalidStatus`] when the requested target status
+    /// is unsupported or when the invoice is already terminal (`Cancelled` or `Refunded`).
+    pub fn apply_admin_status_update(
+        &mut self,
+        env: &Env,
+        admin: &Address,
+        new_status: &InvoiceStatus,
+    ) -> Result<(), QuickLendXError> {
+        if matches!(
+            self.status,
+            InvoiceStatus::Cancelled | InvoiceStatus::Refunded
+        ) {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+
+        match new_status {
+            InvoiceStatus::Verified => {
+                if self.status != InvoiceStatus::Pending {
+                    return Err(QuickLendXError::InvalidStatus);
+                }
+                self.verify(env, admin.clone());
+            }
+            InvoiceStatus::Funded => {
+                if self.status != InvoiceStatus::Verified {
+                    return Err(QuickLendXError::InvalidStatus);
+                }
+                self.mark_as_funded(env, admin.clone(), self.amount, env.ledger().timestamp());
+            }
+            InvoiceStatus::Paid => {
+                if self.status != InvoiceStatus::Funded {
+                    return Err(QuickLendXError::InvalidStatus);
+                }
+                self.mark_as_paid(env, admin.clone(), env.ledger().timestamp());
+            }
+            InvoiceStatus::Defaulted => {
+                if self.status != InvoiceStatus::Funded {
+                    return Err(QuickLendXError::InvalidStatus);
+                }
+                self.mark_as_defaulted();
+            }
+            _ => return Err(QuickLendXError::InvalidStatus),
+        }
+
+        Ok(())
+    }
+
     /// Cancel the invoice (only if Pending or Verified, not Funded)
     pub fn cancel(&mut self, env: &Env, actor: Address) -> Result<(), QuickLendXError> {
         // Can only cancel if Pending or Verified (not yet funded)
@@ -720,10 +774,10 @@ impl Invoice {
         }
 
         self.tags.push_back(normalized.clone());
-        
+
         // Update Index for discoverability
         InvoiceStorage::add_tag_index(env, &normalized, &self.id);
-        
+
         Ok(())
     }
 
@@ -750,10 +804,10 @@ impl Invoice {
         }
 
         self.tags = new_tags;
-        
+
         // Remove from Index
         InvoiceStorage::remove_tag_index(&env, &normalized, &self.id);
-        
+
         Ok(())
     }
 
@@ -1073,11 +1127,6 @@ impl InvoiceStorage {
         }
         high_rated_invoices
     }
-
-        // 🛡️ INDEX ROLLBACK PROTECTION
-        // Remove the invoice from the old category index before updating
-        InvoiceStorage::remove_category_index(env, &self.category, &self.id);
-
     fn add_to_metadata_index(
         env: &Env,
         key: &(soroban_sdk::Symbol, String),
@@ -1203,9 +1252,9 @@ impl InvoiceStorage {
                     .instance()
                     .set(&TOTAL_INVOICE_COUNT_KEY, &count);
             }
-
-        // Add to the new category index
-        InvoiceStorage::add_category_index(env, &self.category, &self.id);
+            env.storage().instance().remove(invoice_id);
+        }
+    }
 
     /// Get total count of active invoices in the system
     pub fn get_total_invoice_count(env: &Env) -> u32 {

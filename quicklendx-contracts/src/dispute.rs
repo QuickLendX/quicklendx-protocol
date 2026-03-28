@@ -117,8 +117,8 @@ pub fn put_dispute_under_review(
     assert_is_admin(env, admin)?;
 
     // --- 2. Load the invoice ---
-    let mut invoice: Invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::InvoiceNotFound)?;
+    let mut invoice: Invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     // --- 3. Dispute must exist ---
     if invoice.dispute_status == DisputeStatus::None {
@@ -168,8 +168,8 @@ pub fn resolve_dispute(
     assert_is_admin(env, admin)?;
 
     // --- 2. Load the invoice ---
-    let mut invoice: Invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::InvoiceNotFound)?;
+    let mut invoice: Invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     // --- 3. Dispute must exist ---
     if invoice.dispute_status == DisputeStatus::None {

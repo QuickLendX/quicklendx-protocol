@@ -356,7 +356,8 @@ impl AnalyticsCalculator {
 
         // Calculate total investments by counting invoices that have been funded at least once.
         // In this contract model, an invoice that is Paid or Defaulted must have been funded.
-        let total_investments = (funded_invoices.len() + paid_invoices.len() + defaulted_invoices.len()) as u32;
+        let total_investments =
+            (funded_invoices.len() + paid_invoices.len() + defaulted_invoices.len()) as u32;
 
         // Calculate total fees collected
         let mut total_fees = 0i128;
