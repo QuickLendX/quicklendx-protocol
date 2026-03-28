@@ -268,6 +268,28 @@ impl QuickLendXContract {
         emergency::EmergencyWithdraw::get_pending(&env)
     }
 
+    /// Check if the pending emergency withdrawal can be executed.
+    ///
+    /// Returns true if the withdrawal exists, is not cancelled, timelock has elapsed,
+    /// and has not expired.
+    pub fn can_exec_emergency(env: Env) -> bool {
+        emergency::EmergencyWithdraw::can_execute(&env).unwrap_or(false)
+    }
+
+    /// Get time remaining until the emergency withdrawal can be executed.
+    ///
+    /// Returns seconds until unlock (0 if already unlocked).
+    pub fn emg_time_until_unlock(env: Env) -> u64 {
+        emergency::EmergencyWithdraw::time_until_unlock(&env).unwrap_or(0)
+    }
+
+    /// Get time remaining until the emergency withdrawal expires.
+    ///
+    /// Returns seconds until expiration (0 if already expired).
+    pub fn emg_time_until_expire(env: Env) -> u64 {
+        emergency::EmergencyWithdraw::time_until_expiration(&env).unwrap_or(0)
+    }
+
     /// Add a token address to the currency whitelist (admin only).
     pub fn add_currency(
         env: Env,
