@@ -5,6 +5,8 @@ extern crate alloc;
 #[cfg(test)]
 mod scratch_events;
 #[cfg(test)]
+mod test_default;
+#[cfg(test)]
 mod test_fees;
 #[cfg(test)]
 mod test_fees_extended;

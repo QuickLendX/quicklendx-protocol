@@ -9,7 +9,7 @@
 /// 5. Edge cases - multiple defaults, already defaulted invoices
 use super::*;
 use crate::errors::QuickLendXError;
-use crate::init::ProtocolInitializer;
+use crate::init::InitializationParams;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -460,6 +460,59 @@ fn test_default_exactly_at_grace_deadline() {
 }
 
 #[test]
+fn test_default_with_none_rejects_exactly_at_default_grace_deadline() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    let grace_deadline = invoice.due_date + crate::defaults::DEFAULT_GRACE_PERIOD;
+    env.ledger().set_timestamp(grace_deadline);
+
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &None);
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, QuickLendXError::OperationNotAllowed);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+}
+
+#[test]
+fn test_check_invoice_expiration_respects_strict_protocol_grace_boundary() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let custom_grace = 2 * 24 * 60 * 60;
+    set_protocol_grace_period(&env, &client, &admin, custom_grace);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    let grace_deadline = invoice.due_date + custom_grace;
+
+    env.ledger().set_timestamp(grace_deadline);
+    let did_default_at_deadline = client.check_invoice_expiration(&invoice_id, &None);
+    assert!(!did_default_at_deadline);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+
+    env.ledger().set_timestamp(grace_deadline + 1);
+    let did_default_after_deadline = client.check_invoice_expiration(&invoice_id, &None);
+    assert!(did_default_after_deadline);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Defaulted);
+}
+
+#[test]
 fn test_multiple_invoices_default_handling() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
@@ -483,7 +536,6 @@ fn test_multiple_invoices_default_handling() {
     );
 
     let invoice1 = client.get_invoice(&invoice1_id);
-    let invoice2 = client.get_invoice(&invoice2_id);
     let grace_period = 7 * 24 * 60 * 60;
 
     // Move time past first invoice's grace period but not second
