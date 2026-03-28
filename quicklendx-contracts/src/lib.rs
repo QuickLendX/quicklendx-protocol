@@ -2520,6 +2520,10 @@ impl QuickLendXContract {
                     platform_efficiency: 0,
                 })
         })
+    }
+
+    pub fn generate_business_report(
+        env: Env,
         business: Address,
         period: analytics::TimePeriod,
     ) -> Result<analytics::BusinessReport, QuickLendXError> {
