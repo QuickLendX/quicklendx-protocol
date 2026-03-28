@@ -1065,6 +1065,8 @@ impl QuickLendXContract {
     /// * `StorageKeyNotFound` if investment does not exist
     /// * `InvalidStatus` if investment is not Active
     /// * `InvalidAmount` if computed premium is zero
+    /// * `OperationNotAllowed` if the new policy would push total active
+    ///   coverage above the cumulative cap
     pub fn add_investment_insurance(
         env: Env,
         investment_id: BytesN<32>,
@@ -2520,6 +2522,10 @@ impl QuickLendXContract {
                     platform_efficiency: 0,
                 })
         })
+    }
+
+    pub fn generate_business_report(
+        env: Env,
         business: Address,
         period: analytics::TimePeriod,
     ) -> Result<analytics::BusinessReport, QuickLendXError> {
