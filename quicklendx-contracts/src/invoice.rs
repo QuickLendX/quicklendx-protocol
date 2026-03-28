@@ -1074,10 +1074,6 @@ impl InvoiceStorage {
         high_rated_invoices
     }
 
-        // 🛡️ INDEX ROLLBACK PROTECTION
-        // Remove the invoice from the old category index before updating
-        InvoiceStorage::remove_category_index(env, &self.category, &self.id);
-
     fn add_to_metadata_index(
         env: &Env,
         key: &(soroban_sdk::Symbol, String),
@@ -1203,9 +1199,8 @@ impl InvoiceStorage {
                     .instance()
                     .set(&TOTAL_INVOICE_COUNT_KEY, &count);
             }
-
-        // Add to the new category index
-        InvoiceStorage::add_category_index(env, &self.category, &self.id);
+        }
+    }
 
     /// Get total count of active invoices in the system
     pub fn get_total_invoice_count(env: &Env) -> u32 {

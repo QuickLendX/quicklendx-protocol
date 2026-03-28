@@ -436,6 +436,7 @@ impl QuickLendXContract {
     /// * `InvalidDescription` if description is empty
     pub fn store_invoice(
         env: Env,
+        admin: Address,
         business: Address,
         amount: i128,
         currency: Address,
@@ -445,6 +446,8 @@ impl QuickLendXContract {
         tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env);
+        AdminStorage::require_admin(&env, &admin)?;
+        admin.require_auth();
         // Validate input parameters
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -1625,17 +1628,6 @@ impl QuickLendXContract {
         Ok(defaults::scan_funded_invoice_expirations(&env, grace_period, None)?.overdue_count)
     }
 
-        for invoice_id in funded_invoices.iter() {
-            if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
-                if invoice.is_overdue(current_timestamp) {
-                    overdue_count += 1;
-                    let _ =
-                        notifications::NotificationSystem::notify_payment_overdue(&env, &invoice);
-                }
-                let _ = invoice.check_and_handle_expiration(&env, grace_period)?;
-            }
-        }
-
     /// @notice Returns the current funded-invoice overdue scan cursor.
     /// @param env The contract environment.
     /// @return Zero-based index of the next funded invoice to inspect.
@@ -2520,13 +2512,6 @@ impl QuickLendXContract {
                     platform_efficiency: 0,
                 })
         })
-        business: Address,
-        period: analytics::TimePeriod,
-    ) -> Result<analytics::BusinessReport, QuickLendXError> {
-        let report =
-            analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)?;
-        analytics::AnalyticsStorage::store_business_report(&env, &report);
-        Ok(report)
     }
 
     /// Retrieve a stored business report by ID
@@ -2767,7 +2752,7 @@ impl QuickLendXContract {
     // Backup
     // =========================================================================
 
-    pub fn create_backup(env: Env, admin: Address) -> Result<BytesN<32>, QuickLendXError> {
+    pub fn create_backup_unused(env: Env, admin: Address) -> Result<BytesN<32>, QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
         let backup_id = backup::BackupStorage::generate_backup_id(&env);
         let invoices = backup::BackupStorage::get_all_invoices(&env);
@@ -2847,10 +2832,6 @@ impl QuickLendXContract {
         };
         backup::BackupStorage::set_retention_policy(&env, &policy);
         Ok(())
-    }
-
-    pub fn get_backup_retention_policy(env: Env) -> backup::BackupRetentionPolicy {
-        backup::BackupStorage::get_retention_policy(&env)
     }
 
     // =========================================================================
