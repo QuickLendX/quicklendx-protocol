@@ -386,8 +386,9 @@ impl FeeManager {
             FeeType::Platform | FeeType::Processing | FeeType::Verification => {
                 // For these fee types, ensure max doesn't exceed a reasonable bound
                 // based on the base rate. A max of 100x base seems reasonable.
-                let calculated_max_threshold =
-                    (base_fee_bps as i128).saturating_mul(100).saturating_mul(100); // 100x times BPS value * 100
+                let calculated_max_threshold = (base_fee_bps as i128)
+                    .saturating_mul(100)
+                    .saturating_mul(100); // 100x times BPS value * 100
                 if max_fee > calculated_max_threshold && calculated_max_threshold > 0 {
                     return Err(QuickLendXError::InvalidFeeConfiguration);
                 }
@@ -395,8 +396,9 @@ impl FeeManager {
             FeeType::EarlyPayment | FeeType::LatePayment => {
                 // Early/late payment fees may have different thresholds
                 // Allow more flexibility but still bounded
-                let calculated_max_threshold =
-                    (base_fee_bps as i128).saturating_mul(500).saturating_mul(100); // 500x for flexibility
+                let calculated_max_threshold = (base_fee_bps as i128)
+                    .saturating_mul(500)
+                    .saturating_mul(100); // 500x for flexibility
                 if max_fee > calculated_max_threshold && calculated_max_threshold > 0 {
                     return Err(QuickLendXError::InvalidFeeConfiguration);
                 }
@@ -421,10 +423,8 @@ impl FeeManager {
         min_fee: i128,
         max_fee: i128,
     ) -> Result<(), QuickLendXError> {
-        let fee_structures: Vec<FeeStructure> = match env
-            .storage()
-            .instance()
-            .get(&FEE_CONFIG_KEY) {
+        let fee_structures: Vec<FeeStructure> = match env.storage().instance().get(&FEE_CONFIG_KEY)
+        {
             Some(structures) => structures,
             None => return Ok(()), // No existing structures, skip cross-check
         };
