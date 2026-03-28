@@ -36,6 +36,18 @@ Placed ──(cleanup)──► Expired    [terminal, only if now > expiration_t
 
 Terminal states (`Accepted`, `Withdrawn`, `Cancelled`, `Expired`) are immutable — no further transitions are permitted.
 
+### Withdrawal Guard
+
+`withdraw_bid` is only valid for bids that are still in the `Placed` state.
+Before checking the status, the contract runs an expiry refresh for the parent
+invoice so a stale bid whose deadline has already passed is first converted to
+`Expired`. This guarantees deterministic rejection semantics:
+
+- `Placed` and not expired: withdrawal succeeds and status becomes `Withdrawn`
+- `Accepted`: withdrawal returns `OperationNotAllowed`
+- `Expired`: withdrawal returns `OperationNotAllowed`
+- `Withdrawn` or `Cancelled`: withdrawal returns `OperationNotAllowed`
+
 ---
 
 ## Expiry Configuration
@@ -107,7 +119,16 @@ cargo test test_overdue_expiration
 
 ## Security Notes
 
-The maximum bids per invoice limit is a critical security and performance feature that ensures the QuickLendX protocol remains scalable and efficient while maintaining fair competition among investors. The implementation provides robust error handling, comprehensive testing, and clear documentation for maintainability.
+Withdrawal rejection is status-gated and deterministic. Refreshing expiry
+inside `withdraw_bid` prevents a time-expired bid from slipping through as a
+stale `Placed` record, which would otherwise allow an investor to withdraw a
+bid that should already be terminal. The module therefore preserves these
+assumptions:
+
+1. Accepted bids remain immutable after funding.
+2. Expired bids cannot be revived through withdrawal.
+3. Rejected withdrawals surface `OperationNotAllowed` consistently for all
+   terminal bid states.
 
 ---
 

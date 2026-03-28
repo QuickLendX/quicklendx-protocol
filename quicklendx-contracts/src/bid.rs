@@ -363,7 +363,7 @@ impl BidStorage {
                 // Invariant 2: Idempotency — already-Expired bids are silently skipped.
                 } else if bid.status == BidStatus::Expired {
                     // drop from active list; do not re-process
-                // Invariant 3: Deadline — only expire Placed bids past their deadline.
+                    // Invariant 3: Deadline — only expire Placed bids past their deadline.
                 } else if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
                     bid.status = BidStatus::Expired;
                     Self::update_bid(env, &bid);
@@ -643,10 +643,7 @@ impl BidStorage {
 
     /// Returns bid counts by status as `(placed, accepted, withdrawn, expired, cancelled)`.
     /// Useful for assertions in tests and analytics.
-    pub fn count_bids_by_status(
-        env: &Env,
-        invoice_id: &BytesN<32>,
-    ) -> (u32, u32, u32, u32, u32) {
+    pub fn count_bids_by_status(env: &Env, invoice_id: &BytesN<32>) -> (u32, u32, u32, u32, u32) {
         let records = Self::get_bid_records_for_invoice(env, invoice_id);
         let (mut placed, mut accepted, mut withdrawn, mut expired, mut cancelled) =
             (0u32, 0u32, 0u32, 0u32, 0u32);
