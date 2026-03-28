@@ -67,6 +67,13 @@ pub struct InvestorVerification {
     pub compliance_notes: Option<String>,
 }
 
+pub fn validate_risk_score(score: u32) -> Result<(), QuickLendXError> {
+    if score > 100 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+    Ok(())
+}
+
 pub struct BusinessVerificationStorage;
 
 impl BusinessVerificationStorage {
@@ -998,6 +1005,7 @@ pub fn verify_investor(
         BusinessVerificationStatus::Pending | BusinessVerificationStatus::Rejected => {
             // Calculate risk score and determine tier
             let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
+validate_risk_score(risk_score)?;
             let tier = determine_investor_tier(env, investor, risk_score)?;
             let risk_level = determine_risk_level(risk_score);
 
@@ -1110,32 +1118,29 @@ pub fn determine_investor_tier(
     investor: &Address,
     risk_score: u32,
 ) -> Result<InvestorTier, QuickLendXError> {
+    validate_risk_score(risk_score)?;
+
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
         let total_invested = verification.total_invested;
         let successful_investments = verification.successful_investments;
 
-        // VIP tier: Very low risk, high investment volume, many successful investments
-        if risk_score <= 10 && total_invested > 5000000 && successful_investments > 50 {
-            return Ok(InvestorTier::VIP);
-        }
-
-        // Platinum tier: Low risk, high investment volume
-        if risk_score <= 20 && total_invested > 1000000 && successful_investments > 20 {
-            return Ok(InvestorTier::Platinum);
-        }
-
-        // Gold tier: Medium-low risk, moderate investment volume
-        if risk_score <= 40 && total_invested > 100000 && successful_investments > 10 {
-            return Ok(InvestorTier::Gold);
-        }
-
-        // Silver tier: Medium risk, some investment history
-        if risk_score <= 60 && total_invested > 10000 && successful_investments > 3 {
-            return Ok(InvestorTier::Silver);
+        match risk_score {
+            0..=10 if total_invested > 5_000_000 && successful_investments > 50 => {
+                return Ok(InvestorTier::VIP);
+            }
+            11..=20 if total_invested > 1_000_000 && successful_investments > 20 => {
+                return Ok(InvestorTier::Platinum);
+            }
+            21..=40 if total_invested > 100_000 && successful_investments > 10 => {
+                return Ok(InvestorTier::Gold);
+            }
+            41..=60 if total_invested > 10_000 && successful_investments > 3 => {
+                return Ok(InvestorTier::Silver);
+            }
+            _ => {}
         }
     }
 
-    // Default to Basic tier
     Ok(InvestorTier::Basic)
 }
 
@@ -1145,7 +1150,8 @@ pub fn determine_risk_level(risk_score: u32) -> InvestorRiskLevel {
         0..=25 => InvestorRiskLevel::Low,
         26..=50 => InvestorRiskLevel::Medium,
         51..=75 => InvestorRiskLevel::High,
-        _ => InvestorRiskLevel::VeryHigh,
+        76..=100 => InvestorRiskLevel::VeryHigh,
+        _ => InvestorRiskLevel::VeryHigh, // fallback safety
     }
 }
 
