@@ -112,9 +112,29 @@ pub struct QuickLendXContract;
 /// Maximum number of records returned by paginated query endpoints.
 pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
 
+/// @notice Validates and caps query limit to prevent resource abuse
+/// @param limit The requested limit value
+/// @return The capped limit value, never exceeding MAX_QUERY_LIMIT
+/// @dev Returns 0 if limit is 0, enforcing empty result behavior
 #[inline]
 fn cap_query_limit(limit: u32) -> u32 {
     investment_queries::InvestmentQueries::cap_query_limit(limit)
+}
+
+/// @notice Validates query parameters for security and resource protection
+/// @param offset The pagination offset
+/// @param limit The requested result limit
+/// @return Result indicating validation success or failure
+/// @dev Prevents potential overflow and ensures reasonable query bounds
+fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError> {
+    // Check for potential overflow in offset + limit calculation
+    if offset > u32::MAX - MAX_QUERY_LIMIT {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+    
+    // Limit is automatically capped by cap_query_limit, but we validate the input
+    // Note: limit=0 is allowed and results in empty response
+    Ok(())
 }
 
 #[contractimpl]
@@ -1943,6 +1963,13 @@ impl QuickLendXContract {
     // ========================================
 
     /// Get invoices by business with optional status filter and pagination
+    /// @notice Get business invoices with pagination and optional status filtering
+    /// @param business The business address to query invoices for
+    /// @param status_filter Optional status filter (None returns all statuses)
+    /// @param offset Starting index for pagination (0-based)
+    /// @param limit Maximum number of results to return (capped at MAX_QUERY_LIMIT)
+    /// @return Vector of invoice IDs matching the criteria
+    /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance
     pub fn get_business_invoices_paged(
         env: Env,
         business: Address,
@@ -1950,6 +1977,12 @@ impl QuickLendXContract {
         offset: u32,
         limit: u32,
     ) -> Vec<BytesN<32>> {
+        // Validate query parameters for security
+        if validate_query_params(offset, limit).is_err() {
+            // Return empty result on validation failure
+            return Vec::new(&env);
+        }
+        
         let capped_limit = cap_query_limit(limit);
         let all_invoices = InvoiceStorage::get_business_invoices(&env, &business);
         let mut filtered = Vec::new(&env);
@@ -2032,6 +2065,14 @@ impl QuickLendXContract {
     }
 
     /// Get available invoices with pagination and optional filters
+    /// @notice Get available invoices with pagination and optional filters
+    /// @param min_amount Optional minimum invoice amount filter
+    /// @param max_amount Optional maximum invoice amount filter
+    /// @param category_filter Optional category filter
+    /// @param offset Starting index for pagination (0-based)
+    /// @param limit Maximum number of results to return (capped at MAX_QUERY_LIMIT)
+    /// @return Vector of verified invoice IDs matching the criteria
+    /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance
     pub fn get_available_invoices_paged(
         env: Env,
         min_amount: Option<i128>,
@@ -2040,6 +2081,11 @@ impl QuickLendXContract {
         offset: u32,
         limit: u32,
     ) -> Vec<BytesN<32>> {
+        // Validate query parameters for security
+        if validate_query_params(offset, limit).is_err() {
+            return Vec::new(&env);
+        }
+        
         let capped_limit = cap_query_limit(limit);
         let verified_invoices =
             InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified);
@@ -2084,6 +2130,13 @@ impl QuickLendXContract {
     }
 
     /// Get bid history for an invoice with pagination
+    /// @notice Get bid history for an invoice with pagination and optional status filtering
+    /// @param invoice_id The invoice ID to query bids for
+    /// @param status_filter Optional status filter (None returns all statuses)
+    /// @param offset Starting index for pagination (0-based)
+    /// @param limit Maximum number of results to return (capped at MAX_QUERY_LIMIT)
+    /// @return Vector of bids matching the criteria
+    /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance
     pub fn get_bid_history_paged(
         env: Env,
         invoice_id: BytesN<32>,
@@ -2091,6 +2144,11 @@ impl QuickLendXContract {
         offset: u32,
         limit: u32,
     ) -> Vec<Bid> {
+        // Validate query parameters for security
+        if validate_query_params(offset, limit).is_err() {
+            return Vec::new(&env);
+        }
+        
         let capped_limit = cap_query_limit(limit);
         let all_bids = BidStorage::get_bid_records_for_invoice(&env, &invoice_id);
         let mut filtered = Vec::new(&env);
@@ -2121,6 +2179,13 @@ impl QuickLendXContract {
     }
 
     /// Get bid history for an investor with pagination
+    /// @notice Get bid history for an investor with pagination and optional status filtering
+    /// @param investor The investor address to query bids for
+    /// @param status_filter Optional status filter (None returns all statuses)
+    /// @param offset Starting index for pagination (0-based)
+    /// @param limit Maximum number of results to return (capped at MAX_QUERY_LIMIT)
+    /// @return Vector of bids matching the criteria
+    /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance
     pub fn get_investor_bids_paged(
         env: Env,
         investor: Address,
@@ -2128,6 +2193,11 @@ impl QuickLendXContract {
         offset: u32,
         limit: u32,
     ) -> Vec<Bid> {
+        // Validate query parameters for security
+        if validate_query_params(offset, limit).is_err() {
+            return Vec::new(&env);
+        }
+        
         let capped_limit = cap_query_limit(limit);
         let all_bid_ids = BidStorage::get_bids_by_investor_all(&env, &investor);
         let mut filtered = Vec::new(&env);
