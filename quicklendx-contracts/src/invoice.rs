@@ -732,7 +732,7 @@ impl Invoice {
         // 🔒 AUTH PROTECTION
         self.business.require_auth();
 
-        let env = self.tags.env();
+        let env = self.tags.env().clone();
         let normalized = normalize_tag(&env, &tag)?;
         let mut new_tags = Vec::new(&env);
         let mut found = false;
@@ -798,6 +798,14 @@ impl InvoiceStorage {
 
     fn tag_key(tag: &String) -> (soroban_sdk::Symbol, String) {
         (symbol_short!("tag_idx"), tag.clone())
+    }
+
+    fn metadata_customer_key(name: &String) -> (soroban_sdk::Symbol, String) {
+        (symbol_short!("cust_idx"), name.clone())
+    }
+
+    fn metadata_tax_key(tax: &String) -> (soroban_sdk::Symbol, String) {
+        (symbol_short!("tax_idx"), tax.clone())
     }
 
     /// @notice Adds an invoice to the category index.
@@ -1074,10 +1082,6 @@ impl InvoiceStorage {
         high_rated_invoices
     }
 
-        // 🛡️ INDEX ROLLBACK PROTECTION
-        // Remove the invoice from the old category index before updating
-        InvoiceStorage::remove_category_index(env, &self.category, &self.id);
-
     fn add_to_metadata_index(
         env: &Env,
         key: &(soroban_sdk::Symbol, String),
@@ -1203,9 +1207,8 @@ impl InvoiceStorage {
                     .instance()
                     .set(&TOTAL_INVOICE_COUNT_KEY, &count);
             }
-
-        // Add to the new category index
-        InvoiceStorage::add_category_index(env, &self.category, &self.id);
+        }
+    }
 
     /// Get total count of active invoices in the system
     pub fn get_total_invoice_count(env: &Env) -> u32 {
@@ -1213,5 +1216,91 @@ impl InvoiceStorage {
             .instance()
             .get(&TOTAL_INVOICE_COUNT_KEY)
             .unwrap_or(0)
+    }
+
+    /// Get all invoice IDs for a given category
+    pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
+        let key = Self::category_key(category);
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    /// Get invoice IDs for a given category filtered by status
+    pub fn get_invoices_by_category_and_status(
+        env: &Env,
+        category: &InvoiceCategory,
+        status: &InvoiceStatus,
+    ) -> Vec<BytesN<32>> {
+        let all = Self::get_invoices_by_category(env, category);
+        let mut result = Vec::new(env);
+        for id in all.iter() {
+            if let Some(invoice) = Self::get_invoice(env, &id) {
+                if invoice.status == *status {
+                    result.push_back(id);
+                }
+            }
+        }
+        result
+    }
+
+    /// Get all invoice IDs for a given tag
+    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
+        let key = Self::tag_key(tag);
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    /// Get invoice IDs that match all supplied tags (AND logic)
+    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
+        if tags.len() == 0 {
+            return Vec::new(env);
+        }
+        let mut result: Option<Vec<BytesN<32>>> = None;
+        for tag in tags.iter() {
+            let ids = Self::get_invoices_by_tag(env, &tag);
+            result = Some(match result {
+                None => ids,
+                Some(prev) => {
+                    let mut intersection = Vec::new(env);
+                    for id in prev.iter() {
+                        for other in ids.iter() {
+                            if id == other {
+                                intersection.push_back(id.clone());
+                                break;
+                            }
+                        }
+                    }
+                    intersection
+                }
+            });
+        }
+        result.unwrap_or_else(|| Vec::new(env))
+    }
+
+    /// Count invoices in a given category
+    pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
+        Self::get_invoices_by_category(env, category).len()
+    }
+
+    /// Count invoices with a given tag
+    pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
+        Self::get_invoices_by_tag(env, tag).len()
+    }
+
+    /// Return all known invoice categories
+    pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
+        let mut cats = Vec::new(env);
+        cats.push_back(InvoiceCategory::Services);
+        cats.push_back(InvoiceCategory::Products);
+        cats.push_back(InvoiceCategory::Consulting);
+        cats.push_back(InvoiceCategory::Manufacturing);
+        cats.push_back(InvoiceCategory::Technology);
+        cats.push_back(InvoiceCategory::Healthcare);
+        cats.push_back(InvoiceCategory::Other);
+        cats
     }
 }

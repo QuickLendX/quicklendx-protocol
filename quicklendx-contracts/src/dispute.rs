@@ -1,22 +1,78 @@
-use crate::invoice::{Invoice, InvoiceStatus};
+/// @title Dispute Module (Standalone Storage)
+/// @notice Provides dispute lifecycle management using separate persistent storage.
+/// @dev This module stores disputes independently from invoices in persistent storage
+///      keyed by ("dispute", invoice_id). The primary contract interface uses the
+///      invoice-embedded dispute model (see lib.rs). This module is retained for
+///      reference and potential future migration to standalone dispute storage.
+///
+/// ## Security: Input Validation for Storage Growth Prevention
+///
+/// All string fields (reason, evidence, resolution) are bounded by protocol limits
+/// defined in `protocol_limits.rs`:
+///   - `MAX_DISPUTE_REASON_LENGTH`     = 1000 chars
+///   - `MAX_DISPUTE_EVIDENCE_LENGTH`   = 2000 chars
+///   - `MAX_DISPUTE_RESOLUTION_LENGTH` = 2000 chars
+///
+/// These limits prevent adversarial callers from inflating on-chain storage costs
+/// by submitting oversized payloads. Empty reason/resolution strings are also
+/// rejected to ensure disputes carry meaningful content.
+use crate::admin::AdminStorage;
+use crate::invoice::{Dispute, DisputeStatus, Invoice, InvoiceStatus, InvoiceStorage};
 use crate::protocol_limits::{
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
 };
 use crate::QuickLendXError;
-use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DisputeStatus {
-    Open,
-    UnderReview,
-    Resolved,
+// ---------------------------------------------------------------------------
+// Private helpers
+// ---------------------------------------------------------------------------
+
+fn assert_is_admin(env: &Env, address: &Address) -> Result<(), QuickLendXError> {
+    AdminStorage::require_admin(env, address)
+}
+
+fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
+    let key = symbol_short!("disp_idx");
+    let mut index: Vec<BytesN<32>> = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(env));
+    for existing in index.iter() {
+        if existing == *invoice_id {
+            return;
+        }
+    }
+    index.push_back(invoice_id.clone());
+    env.storage().persistent().set(&key, &index);
+}
+
+fn get_dispute_index(env: &Env) -> Vec<BytesN<32>> {
+    let key = symbol_short!("disp_idx");
+    env.storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(env))
 }
 
 // ---------------------------------------------------------------------------
-// Storage helpers
+// Public entry points
 // ---------------------------------------------------------------------------
 
+/// @notice Create a dispute on an invoice (standalone storage variant).
+/// @dev Validates:
+///   - No duplicate dispute for the same invoice
+///   - Invoice exists and is in a disputable status (Pending/Verified/Funded/Paid)
+///   - Creator is the business owner or investor on the invoice
+///   - Reason is non-empty and <= MAX_DISPUTE_REASON_LENGTH (1000 chars)
+///   - Evidence is non-empty and <= MAX_DISPUTE_EVIDENCE_LENGTH (2000 chars)
+/// @param env The contract environment.
+/// @param invoice_id The invoice to dispute.
+/// @param creator The address creating the dispute (must be authorized).
+/// @param reason The dispute reason (1–1000 chars).
+/// @param evidence Supporting evidence (1–2000 chars).
+/// @return Ok(()) on success, Err with typed error on failure.
 #[allow(dead_code)]
 pub fn create_dispute(
     env: &Env,
@@ -36,11 +92,11 @@ pub fn create_dispute(
         return Err(QuickLendXError::DisputeAlreadyExists);
     }
 
+    // --- 3. Load the invoice ---
+    let mut invoice: Invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFound)?;
+
     // --- 4. Invoice must be in a state where disputes are meaningful ---
-    //    Disputes are relevant once the invoice has moved past initial upload:
-    //    Pending, Verified, Funded, or Paid all qualify.  Cancelled, Defaulted,
-    //    and Refunded are terminal failure/resolution states where raising a new
-    //    dispute adds no value.
     match invoice.status {
         InvoiceStatus::Pending
         | InvoiceStatus::Verified
@@ -49,13 +105,13 @@ pub fn create_dispute(
         _ => return Err(QuickLendXError::InvoiceNotAvailableForFunding),
     }
 
-    let is_authorized = creator == invoice.business
+    let is_authorized = creator == &invoice.business
         || invoice
             .investor
             .as_ref()
-            .map_or(false, |inv| creator == *inv);
+            .map_or(false, |inv| creator == inv);
 
-    if !is_business && !is_investor {
+    if !is_authorized {
         return Err(QuickLendXError::DisputeNotAuthorized);
     }
 
@@ -75,11 +131,8 @@ pub fn create_dispute(
         created_at: now,
         reason: reason.clone(),
         evidence: evidence.clone(),
-        resolution: String::from_str(env, ""),
-        resolved_by: Address::from_str(
-            env,
-            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-        ),
+        resolution: soroban_sdk::String::from_str(env, ""),
+        resolved_by: env.current_contract_address(),
         resolved_at: 0,
     };
 

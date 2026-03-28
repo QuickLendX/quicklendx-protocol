@@ -17,7 +17,7 @@ impl CurrencyWhitelist {
         admin: &Address,
         currency: &Address,
     ) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin_auth(env, admin)?;
+        AdminStorage::require_admin(env, admin)?;
 
         let mut list = Self::get_whitelisted_currencies(env);
         if list.iter().any(|a| a == *currency) {
@@ -86,7 +86,7 @@ impl CurrencyWhitelist {
         admin: &Address,
         currencies: &Vec<Address>,
     ) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin_auth(env, admin)?;
+        AdminStorage::require_admin(env, admin)?;
 
         let mut deduped: Vec<Address> = Vec::new(env);
         for currency in currencies.iter() {
