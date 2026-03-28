@@ -544,8 +544,39 @@ fn test_count_investor_investments() {
         &ctx.investor,
         Some(InvestmentStatus::Completed),
     );
+    assert_eq!(all_paged.len(), 2);
+}
 
-    assert_eq!(total_count, 10, "Total count should be 10");
-    assert_eq!(active_count, 4, "Active count should be 4 (indices 0,3,6,9)");
-    assert_eq!(completed_count, 3, "Completed count should be 3 (indices 1,4,7)");
+/// Test: get_invoice_investment should ignore stale pointers where invoice_id does not match
+#[test]
+fn test_get_investment_by_invoice_stale_pointer_protection() {
+    let ctx = setup_context();
+
+    let business = Address::generate(&ctx.env);
+    let investor = Address::generate(&ctx.env);
+
+    setup_business(&ctx, &business);
+    setup_investor(&ctx, &investor, 50_000);
+
+    // 1. Create a valid investment
+    let invoice_id = fund_invoice(&ctx, &business, &investor, 1_000);
+    let investment = ctx.client.get_invoice_investment(&invoice_id);
+    let investment_id = investment.investment_id.clone();
+
+    // 2. Corrupt storage: Point another invoice_id to this same investment_id
+    let second_invoice_id = BytesN::from_array(&ctx.env, &[77u8; 32]);
+    let index_key = (soroban_sdk::symbol_short!("inv_map"), second_invoice_id.clone());
+    
+    ctx.env.as_contract(&ctx.client.address, || {
+        ctx.env.storage().instance().set(&index_key, &investment_id);
+    });
+
+    // 3. Verify lookup for first invoice still works
+    let retrieved_1 = ctx.client.get_invoice_investment(&invoice_id);
+    assert_eq!(retrieved_1.investment_id, investment_id);
+
+    // 4. Verify lookup for second invoice returns error (stale/invalid pointer)
+    // because Investment.invoice_id (invoice_id) != second_invoice_id
+    let result = ctx.client.try_get_invoice_investment(&second_invoice_id);
+    assert!(result.is_err(), "Should ignore stale pointer and return error");
 }

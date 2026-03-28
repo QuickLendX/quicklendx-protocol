@@ -30,11 +30,40 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
-#[cfg(test)]
 mod storage;
 #[cfg(test)]
+#[cfg(test)]
+mod test_admin;
+#[cfg(test)]
+mod test_admin_simple;
+#[cfg(test)]
+mod test_admin_standalone;
+#[cfg(test)]
 mod test_init;
+#[cfg(test)]
+mod test_max_invoices_per_business;
+#[cfg(test)]
+mod test_overflow;
+#[cfg(test)]
+mod test_pause;
+#[cfg(test)]
+mod test_profit_fee;
+#[cfg(test)]
+mod test_refund;
+#[cfg(test)]
+mod test_storage;
+#[cfg(test)]
+mod test_investment_queries;
+#[cfg(test)]
+mod test_investment_consistency;
+#[cfg(test)]
+mod test_string_limits;
+#[cfg(test)]
+mod test_types;
+#[cfg(test)]
+mod test_vesting;
 pub mod types;
+pub use invoice::{InvoiceCategory, InvoiceStatus};
 mod verification;
 mod vesting;
 use admin::AdminStorage;
@@ -54,7 +83,7 @@ use events::{
     emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
-use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
+use invoice::{Invoice, InvoiceMetadata, InvoiceStorage};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
@@ -113,6 +142,11 @@ impl QuickLendXContract {
         1u32
     }
 
+    /// Get current protocol limits
+    pub fn get_protocol_limits(env: Env) -> protocol_limits::ProtocolLimits {
+        protocol_limits::ProtocolLimitsContract::get_protocol_limits(env)
+    }
+
     /// Initialize the admin address (deprecated: use initialize)
     pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         AdminStorage::initialize(&env, &admin)
@@ -132,7 +166,7 @@ impl QuickLendXContract {
     /// - Requires authorization from current admin
     pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), QuickLendXError> {
         let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        AdminStorage::set_admin(&env, &current_admin, &new_admin)
+        AdminStorage::transfer_admin(&env, &current_admin, &new_admin)
     }
 
     /// Get the current admin address
@@ -142,6 +176,58 @@ impl QuickLendXContract {
     /// * `None` if admin has not been initialized
     pub fn get_current_admin(env: Env) -> Option<Address> {
         AdminStorage::get_admin(&env)
+    }
+
+    /// Set protocol configuration (admin only)
+    pub fn set_protocol_config(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+    ) -> Result<(), QuickLendXError> {
+        init::ProtocolInitializer::set_protocol_config(
+            &env,
+            &admin,
+            min_invoice_amount,
+            max_due_date_days,
+            grace_period_seconds,
+        )
+    }
+
+    /// Set fee configuration (admin only)
+    pub fn set_fee_config(env: Env, admin: Address, fee_bps: u32) -> Result<(), QuickLendXError> {
+        init::ProtocolInitializer::set_fee_config(&env, &admin, fee_bps)
+    }
+
+    /// Set treasury address (admin only)
+    pub fn set_treasury(env: Env, admin: Address, treasury: Address) -> Result<(), QuickLendXError> {
+        init::ProtocolInitializer::set_treasury(&env, &admin, &treasury)
+    }
+
+    /// Get current fee in basis points
+    pub fn get_fee_bps(env: Env) -> u32 {
+        init::ProtocolInitializer::get_fee_bps(&env)
+    }
+
+    /// Get treasury address
+    pub fn get_treasury(env: Env) -> Option<Address> {
+        init::ProtocolInitializer::get_treasury(&env)
+    }
+
+    /// Get minimum invoice amount
+    pub fn get_min_invoice_amount(env: Env) -> i128 {
+        init::ProtocolInitializer::get_min_invoice_amount(&env)
+    }
+
+    /// Get maximum due date days
+    pub fn get_max_due_date_days(env: Env) -> u64 {
+        init::ProtocolInitializer::get_max_due_date_days(&env)
+    }
+
+    /// Get grace period in seconds
+    pub fn get_grace_period_seconds(env: Env) -> u64 {
+        init::ProtocolInitializer::get_grace_period_seconds(&env)
     }
 
     /// Admin-only: configure default bid TTL (days). Bounds: 1..=30.
@@ -1212,7 +1298,7 @@ impl QuickLendXContract {
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
-            100, // max_invoices_per_business
+            100, // max_invoices_per_business (default)
         )
     }
 
@@ -1381,6 +1467,15 @@ impl QuickLendXContract {
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || {
+            let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+            // Strictly enforce that escrow can only be released for Funded invoices.
+            // This prevents premature release even if an escrow object exists (e.g. from tests).
+            if invoice.status != InvoiceStatus::Funded {
+                return Err(QuickLendXError::InvalidStatus);
+            }
+
             let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
                 .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
@@ -2057,14 +2152,17 @@ impl QuickLendXContract {
         let schedule = vesting::Vesting::get_schedule(&env, id)?;
         vesting::Vesting::releasable_amount(&env, &schedule).ok()
     }
+
     // ============================================================================
-    // Analytics Functions missing from exports
+    // Analytics Functions
     // ============================================================================
 
+    /// Get user behavior metrics
     pub fn get_user_behavior_metrics(env: Env, user: Address) -> analytics::UserBehaviorMetrics {
         analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).unwrap()
     }
 
+    /// Get financial metrics for a specific period
     pub fn get_financial_metrics(
         env: Env,
         period: analytics::TimePeriod,
@@ -2072,18 +2170,79 @@ impl QuickLendXContract {
         analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period).unwrap()
     }
 
+    /// Generate a business report for a specific period
     pub fn generate_business_report(
         env: Env,
+        admin: Address,
+        max_backups: u32,
+        max_age_seconds: u64,
+        auto_cleanup_enabled: bool,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        let policy = backup::BackupRetentionPolicy {
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+        };
+        backup::BackupStorage::set_retention_policy(&env, &policy);
+        Ok(())
+    }
+
+    pub fn get_backup_retention_policy(env: Env) -> backup::BackupRetentionPolicy {
+        backup::BackupStorage::get_retention_policy(&env)
+    }
+
+    // =========================================================================
+    // Analytics (contract-exported)
+    // =========================================================================
+
+    pub fn get_platform_metrics(env: Env) -> analytics::PlatformMetrics {
+        analytics::AnalyticsStorage::get_platform_metrics(&env).unwrap_or_else(|| {
+            analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
+                .unwrap_or(analytics::PlatformMetrics {
+                    total_invoices: 0,
+                    total_investments: 0,
+                    total_volume: 0,
+                    total_fees_collected: 0,
+                    active_investors: 0,
+                    verified_businesses: 0,
+                    average_invoice_amount: 0,
+                    average_investment_amount: 0,
+                    platform_fee_rate: 0,
+                    default_rate: 0,
+                    success_rate: 0,
+                    timestamp: env.ledger().timestamp(),
+                })
+        })
+    }
+
+    pub fn get_performance_metrics(env: Env) -> analytics::PerformanceMetrics {
+        analytics::AnalyticsStorage::get_performance_metrics(&env).unwrap_or_else(|| {
+            analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
+                .unwrap_or(analytics::PerformanceMetrics {
+                    platform_uptime: env.ledger().timestamp(),
+                    average_settlement_time: 0,
+                    average_verification_time: 0,
+                    dispute_resolution_time: 0,
+                    system_response_time: 0,
+                    transaction_success_rate: 0,
+                    error_rate: 0,
+                    user_satisfaction_score: 0,
+                    platform_efficiency: 0,
+                })
+        })
         business: Address,
         period: analytics::TimePeriod,
     ) -> Result<analytics::BusinessReport, QuickLendXError> {
         analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
     }
 
+    /// Retrieve a stored business report by ID
     pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<analytics::BusinessReport> {
         analytics::AnalyticsStorage::get_business_report(&env, &report_id)
     }
 
+    /// Generate an investor report for a specific period
     pub fn generate_investor_report(
         env: Env,
         investor: Address,
@@ -2092,10 +2251,12 @@ impl QuickLendXContract {
         analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)
     }
 
+    /// Retrieve a stored investor report by ID
     pub fn get_investor_report(env: Env, report_id: BytesN<32>) -> Option<analytics::InvestorReport> {
         analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
     }
 
+    /// Get a summary of platform and performance metrics
     pub fn get_analytics_summary(
         env: Env,
     ) -> (analytics::PlatformMetrics, analytics::PerformanceMetrics) {
@@ -2129,9 +2290,4 @@ impl QuickLendXContract {
             });
         (platform, performance)
     }
-
-
 }
-
-
-
