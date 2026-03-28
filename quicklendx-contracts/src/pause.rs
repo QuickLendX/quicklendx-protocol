@@ -5,7 +5,9 @@ use soroban_sdk::{symbol_short, Address, Env, Symbol};
 /// Storage key for protocol pause flag.
 const PAUSED_KEY: Symbol = symbol_short!("paused");
 
-/// Pause controller for the protocol.
+/// Pause controller for the QuickLendX protocol.
+///
+/// # Security Model
 ///
 /// When the protocol is paused:
 /// - Non-view, non-admin entrypoints MUST reject with `OperationNotAllowed`
@@ -18,6 +20,9 @@ impl PauseControl {
     /// @notice Return whether the protocol is currently paused.
     ///
     /// Returns true if the protocol is currently paused.
+    ///
+    /// # Returns
+    /// * `bool` - Current pause status
     pub fn is_paused(env: &Env) -> bool {
         env.storage().instance().get(&PAUSED_KEY).unwrap_or(false)
     }
@@ -27,6 +32,15 @@ impl PauseControl {
     ///      and exit emergency mode while user/business flows are frozen.
     ///
     /// Set the pause flag (admin only).
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `admin` - The address of the caller (must be admin)
+    /// * `paused` - The new pause state
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    /// * `Err(QuickLendXError::NotAdmin)` if caller is not admin
     pub fn set_paused(env: &Env, admin: &Address, paused: bool) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin_auth(env, admin)?;
 
@@ -40,11 +54,11 @@ impl PauseControl {
     ///
     /// Require that the protocol is not paused.
     ///
-    /// Returns `OperationNotAllowed` when paused.
-    pub fn require_not_paused(env: &Env) -> Result<(), QuickLendXError> {
+    /// # Panics
+    /// * `QuickLendXError::OperationNotAllowed` - if the protocol is paused
+    pub fn require_not_paused(env: &Env) {
         if Self::is_paused(env) {
             return Err(QuickLendXError::ContractPaused);
         }
-        Ok(())
     }
 }
