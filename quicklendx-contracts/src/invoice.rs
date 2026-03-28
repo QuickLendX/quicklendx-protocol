@@ -3,7 +3,7 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String,
 
 use crate::errors::QuickLendXError;
 use crate::protocol_limits::{
-    check_string_length, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FEEDBACK_LENGTH,
+    check_invoice_limit, check_string_length, is_active_status, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FEEDBACK_LENGTH,
     MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
     MAX_TRANSACTION_ID_LENGTH,
 };
@@ -267,6 +267,10 @@ impl Invoice {
         tags: Vec<String>,
     ) -> Result<Self, QuickLendXError> {
         check_string_length(&description, MAX_DESCRIPTION_LENGTH)?;
+
+        // Enforce maximum active invoices per business (status-aware limit)
+        // This check is performed BEFORE any storage writes to prevent race conditions
+        check_invoice_limit(env, &business)?;
 
         // Normalize every tag before storage so the on-chain representation is always
         // in canonical form regardless of how the caller formatted the input.
@@ -732,7 +736,7 @@ impl Invoice {
         // 🔒 AUTH PROTECTION
         self.business.require_auth();
 
-        let env = self.tags.env();
+        let env = self.business.env(); // Use business env instead of tags env
         let normalized = normalize_tag(&env, &tag)?;
         let mut new_tags = Vec::new(&env);
         let mut found = false;
@@ -1074,10 +1078,6 @@ impl InvoiceStorage {
         high_rated_invoices
     }
 
-        // 🛡️ INDEX ROLLBACK PROTECTION
-        // Remove the invoice from the old category index before updating
-        InvoiceStorage::remove_category_index(env, &self.category, &self.id);
-
     fn add_to_metadata_index(
         env: &Env,
         key: &(soroban_sdk::Symbol, String),
@@ -1203,11 +1203,10 @@ impl InvoiceStorage {
                     .instance()
                     .set(&TOTAL_INVOICE_COUNT_KEY, &count);
             }
+        }
+    }
 
-        // Add to the new category index
-        InvoiceStorage::add_category_index(env, &self.category, &self.id);
-
-    /// Get total count of active invoices in the system
+    /// Get total count of active invoices in system
     pub fn get_total_invoice_count(env: &Env) -> u32 {
         env.storage()
             .instance()
