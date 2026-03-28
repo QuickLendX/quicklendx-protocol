@@ -4,6 +4,7 @@ mod tests {
     use crate::invoice::{InvoiceCategory, InvoiceStatus};
     use crate::settlement::{
         get_invoice_progress, get_payment_count, get_payment_record, get_payment_records,
+        record_payment,
     };
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{
@@ -60,7 +61,13 @@ mod tests {
         env: &Env,
         client: &QuickLendXContractClient,
     ) -> (BytesN<32>, Address) {
+        let admin = Address::generate(env);
+        client.set_admin(&admin);
+
         let business = Address::generate(env);
+        client.submit_kyc_application(&business, &String::from_str(env, "business-kyc"));
+        client.verify_business(&admin, &business);
+
         let currency = Address::generate(env);
         let due_date = env.ledger().timestamp() + 86_400;
         let invoice_id = client.store_invoice(
@@ -75,6 +82,7 @@ mod tests {
         client.cancel_invoice(&invoice_id);
         (invoice_id, business)
     }
+
     #[test]
     fn test_partial_payment_accumulates_correctly() {
         let env = Env::default();
@@ -407,6 +415,68 @@ mod tests {
         client.set_admin(&admin);
         (env, client, admin)
     }
+    #[test]
+    fn test_transaction_id_uniqueness_is_scoped_per_invoice() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+
+        let (invoice_id, _business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+        let (other_invoice_id, _other_business, _other_investor, _other_currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 750);
+
+        let tx_id = String::from_str(&env, "unique-tx-id");
+
+        client.process_partial_payment(&invoice_id, &100, &tx_id);
+
+        let result = client.try_process_partial_payment(&invoice_id, &100, &tx_id);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            QuickLendXError::OperationNotAllowed
+        );
+
+        // The same transaction id can still be used on a different invoice because
+        // replay protection is intentionally scoped to a single invoice.
+        client.process_partial_payment(&other_invoice_id, &125, &tx_id);
+
+        let other_count = env.as_contract(&contract_id, || {
+            get_payment_count(&env, &other_invoice_id).unwrap()
+        });
+        assert_eq!(other_count, 1);
+    }
+
+    #[test]
+    fn test_record_payment_rejects_duplicate_nonce_before_mutation() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+
+        let (invoice_id, business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+        let duplicate_tx = String::from_str(&env, "direct-dup-tx");
+
+        env.as_contract(&contract_id, || {
+            record_payment(&env, &invoice_id, &business, 200, duplicate_tx.clone()).unwrap()
+        });
+
+        let result = env.as_contract(&contract_id, || {
+            record_payment(&env, &invoice_id, &business, 150, duplicate_tx.clone())
+        });
+        assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+
+        let count = env.as_contract(&contract_id, || {
+            get_payment_count(&env, &invoice_id).unwrap()
+        });
+        assert_eq!(count, 1);
+
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.total_paid, 200);
+    }
+
     fn create_verified_business(
         env: &Env,
         client: &QuickLendXContractClient,
@@ -427,3 +497,4 @@ mod tests {
         client.verify_investor(&investor, &limit);
         investor
     }
+}

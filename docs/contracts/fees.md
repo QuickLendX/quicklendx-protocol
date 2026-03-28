@@ -46,6 +46,135 @@ The protocol supports various types of fees (Platform, Processing, Verification,
   - `max_fee >= min_fee`
 - **Error Codes**: Rejection of invalid BPS returns `InvalidFeeBasisPoints` (Contract Error 105).
 
+### 6. Min/Max Fee Structure Consistency Checks
+
+The platform enforces strict consistency validations on min/max fee bounds per fee type and across the entire fee structure system to prevent misconfiguration and ensure reasonable fee scaling.
+
+#### Per-Fee-Type Consistency Rules
+
+The `validate_fee_structure_consistency()` function enforces the following rules for each fee type individually:
+
+1. **Range Validity**: `min_fee <= max_fee`
+   - Ensures the fee bounds define a valid range where all calculated fees fit.
+   - Violation returns `InvalidAmount` error.
+
+2. **Non-negative Values**: Both `min_fee` and `max_fee` must be >= 0
+   - Fees cannot be negative (that would represent a rebate, not a fee).
+   - Violation returns `InvalidAmount` error.
+
+3. **Reasonable Bounds**: `max_fee` must not exceed 100x the base fee calculation
+   - For Platform, Processing, and Verification fees: max ≤ base_fee_bps × 100 × 100
+   - For EarlyPayment and LatePayment fees: max ≤ base_fee_bps × 500 × 100 (more flexible for incentives/penalties)
+   - Prevents fee structures where the cap is disproportionate to the base rate.
+   - Violation returns `InvalidFeeConfiguration` error.
+
+4. **Absolute Protocol Maximum**: `max_fee <= 10,000,000,000,000` (10M stroops)
+   - Hard cap prevents fees from consuming entire user balances.
+   - Protects against configuration errors or overflow scenarios.
+   - Violation returns `InvalidFeeConfiguration` error.
+
+#### Cross-Fee-Type Consistency Rules
+
+The `validate_cross_fee_consistency()` function enforces invariants across multiple fee structures:
+
+1. **LatePayment Floor Rule**: LatePayment fees must not undercut Platform fees
+   - If a LatePayment fee is configured, its `min_fee` must not be less than the Platform fee's `min_fee`.
+   - Ensures late payment penalties don't accidentally become cheaper than regular payments.
+   - Violation returns `InvalidFeeConfiguration` error.
+
+2. **Total Active Min Fees Limit**: Sum of all active fee structures' `min_fee` must not exceed 2,500,000,000,000 (2.5M stroops)
+   - Prevents misconfiguration where multiple fee types combine to create excessive minimum charges.
+   - Formula: `total_active_min_fees = Σ(min_fee for all active fee types) <= PROTOCOL_MAX_TOTAL_MIN_FEES`
+   - Violation returns `InvalidFeeConfiguration` error.
+
+3. **No Type Overlap**: Each fee type serves a distinct purpose
+   - Platform fees for general transaction overhead
+   - Processing fees for specialized processing
+   - Verification fees for identity/business verification
+   - EarlyPayment fees for incentivizing early repayment
+   - LatePayment fees for penalizing late repayment
+
+#### Implementation Details
+
+All consistency checks are performed in `update_fee_structure()` before any state mutations:
+
+```rust
+pub fn update_fee_structure(
+    env: &Env,
+    admin: &Address,
+    fee_type: FeeType,
+    base_fee_bps: u32,
+    min_fee: i128,
+    max_fee: i128,
+    is_active: bool,
+) -> Result<FeeStructure, QuickLendXError> {
+    admin.require_auth();
+    
+    if base_fee_bps > MAX_FEE_BPS {
+        return Err(QuickLendXError::InvalidFeeBasisPoints);
+    }
+
+    // Apply per-type consistency checks
+    Self::validate_fee_structure_consistency(
+        &fee_type, 
+        base_fee_bps, 
+        min_fee, 
+        max_fee
+    )?;
+    
+    // Apply cross-type consistency checks
+    Self::validate_cross_fee_consistency(env, &fee_type, min_fee, max_fee)?;
+    
+    // ... continue with fee structure update
+}
+```
+
+#### Error Scenarios
+
+| Validation | Error Code | Interpretation |
+| :--- | :--- | :--- |
+| min_fee > max_fee | `InvalidAmount` | Invalid range; bounds must respect ordering |
+| min_fee < 0 or max_fee < 0 | `InvalidAmount` | Negative fees not allowed |
+| max_fee > protocol limit | `InvalidFeeConfiguration` | Exceeds absolute protocol bound |
+| max_fee > 100x base_fee | `InvalidFeeConfiguration` | Unreasonable scaling for type |
+| LatePayment min < Platform min | `InvalidFeeConfiguration` | Late payments undercut regular fees |
+| Total active min fees too high | `InvalidFeeConfiguration` | Excessive combined minimums |
+
+#### Examples
+
+**Valid Configuration**:
+```
+FeeStructure {
+    fee_type: Platform,
+    base_fee_bps: 200,        // 2%
+    min_fee: 100,             // 100 stroops
+    max_fee: 500_000,         // Reasonable cap (within 100x multiplier)
+    is_active: true,
+}
+```
+
+**Invalid Configuration** (max_fee < min_fee):
+```
+FeeStructure {
+    fee_type: Processing,
+    base_fee_bps: 100,
+    min_fee: 1000,            // 1000 stroops
+    max_fee: 500,             // ERROR: max < min
+    is_active: true,
+}
+```
+
+**Invalid Configuration** (exceeds protocol maximum):
+```
+FeeStructure {
+    fee_type: Verification,
+    base_fee_bps: 100,
+    min_fee: 100,
+    max_fee: 15_000_000_000_000,  // ERROR: > 10M stroops absolute max
+    is_active: true,
+}
+```
+
 ## Technical Implementation
 
 ### Core Components
@@ -125,6 +254,8 @@ Strict boundary checks prevent "silent misconfiguration" where a typo could lead
 - **`InvalidFeeBasisPoints`**: Rejection of BPS > 1000.
 - **`InvalidAmount`**: Rejection of negative amounts or inconsistent min/max bounds.
 - **`NotAdmin`**: Unauthorized modification attempt.
+- **`InvalidFeeConfiguration`**: Map sum does not equal `total_amount`, or revenue shares do not sum to 10,000 BPS.
+- **`StorageKeyNotFound`**: Reading fee config before the fee system has been initialized.
 
 ## Migration and Upgrades
 

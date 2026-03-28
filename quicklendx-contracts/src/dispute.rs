@@ -1,128 +1,22 @@
-//! # Dispute Resolution Module
-//!
-//! Implements a three-stage dispute state machine for invoice financing disputes.
-//! Only invoice stakeholders (business owner or investor) may open a dispute, and
-//! only the platform admin may advance or resolve it — preventing any unauthorized
-//! write to the `Resolved` state.
-//!
-//! ## State Machine
-//! ```
-//! DisputeStatus::None (invoice default)
-//!       │
-//!       ▼  create_dispute  (business | investor)
-//! DisputeStatus::Disputed
-//!       │
-//!       ▼  put_dispute_under_review  (admin only)
-//! DisputeStatus::UnderReview
-//!       │
-//!       ▼  resolve_dispute  (admin only)
-//! DisputeStatus::Resolved  ◄── terminal: no further transitions allowed
-//! ```
-//!
-//! ## Role Constraints
-//! | Operation               | Authorized callers          |
-//! |-------------------------|-----------------------------|
-//! | `create_dispute`        | Invoice business or investor |
-//! | `put_dispute_under_review` | Platform admin only      |
-//! | `resolve_dispute`       | Platform admin only         |
-//!
-//! ## Security Invariants
-//! 1. Exactly one dispute per invoice (`DisputeAlreadyExists` guard).
-//! 2. Forward-only transitions — skipping or reversing states is rejected.
-//! 3. `resolution` field is write-once; a second call returns
-//!    `DisputeNotUnderReview` (because status is `Resolved`, not `UnderReview`).
-//! 4. Admin identity is read from instance storage — the caller-supplied `admin`
-//!    address is cross-checked against the stored value *after* `require_auth`,
-//!    so a valid signature for the wrong address still fails.
-
-use crate::errors::QuickLendXError;
-use crate::invoice::{Dispute, DisputeStatus, Invoice, InvoiceStatus, InvoiceStorage};
+use crate::invoice::{Invoice, InvoiceStatus};
 use crate::protocol_limits::{
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
 };
-use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
+use crate::QuickLendXError;
+use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DisputeStatus {
+    Open,
+    UnderReview,
+    Resolved,
+}
 
 // ---------------------------------------------------------------------------
 // Storage helpers
 // ---------------------------------------------------------------------------
 
-/// @notice Storage key for the list of all invoice IDs that have an active
-///         or historical dispute.  Used by `get_invoices_with_disputes`.
-const DISPUTE_INDEX_KEY: soroban_sdk::Symbol = symbol_short!("dsp_idx");
-
-/// @notice Returns the dispute index (list of invoice IDs that have disputes).
-/// @dev Stored in instance storage under `DISPUTE_INDEX_KEY`.
-fn get_dispute_index(env: &Env) -> Vec<BytesN<32>> {
-    env.storage()
-        .instance()
-        .get(&DISPUTE_INDEX_KEY)
-        .unwrap_or_else(|| Vec::new(env))
-}
-
-/// @notice Appends `invoice_id` to the dispute index if not already present.
-/// @dev Deduplication prevents the index from growing unboundedly on re-open
-///      attempts (which are rejected before reaching this function, but
-///      the guard is cheap insurance).
-fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
-    let mut index = get_dispute_index(env);
-    for existing in index.iter() {
-        if existing == *invoice_id {
-            return;
-        }
-    }
-    index.push_back(invoice_id.clone());
-    env.storage().instance().set(&DISPUTE_INDEX_KEY, &index);
-}
-
-// ---------------------------------------------------------------------------
-// Admin verification helper
-// ---------------------------------------------------------------------------
-
-/// @notice Verifies that `caller` is the stored platform admin.
-/// @dev Reads the admin address from instance storage under key `ADMIN_KEY` (`"admin"`).
-///      Returns `NotAdmin` if the key is absent and `Unauthorized` if the
-///      stored address does not match `caller`.
-/// @security Called *after* `caller.require_auth()` so both the cryptographic
-///           signature and the role binding must be satisfied.
-fn assert_is_admin(env: &Env, caller: &Address) -> Result<(), QuickLendXError> {
-    use crate::admin::ADMIN_KEY;
-    
-    let stored_admin: Address = env
-        .storage()
-        .instance()
-        .get(&ADMIN_KEY)
-        .ok_or(QuickLendXError::NotAdmin)?;
-
-    if *caller != stored_admin {
-        return Err(QuickLendXError::Unauthorized);
-    }
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Public entry points
-// ---------------------------------------------------------------------------
-
-/// @notice Opens a new dispute on an invoice.
-///
-/// @dev Only the business that owns the invoice, or the investor who funded it,
-///      may call this function.  Exactly one dispute is allowed per invoice;
-///      subsequent attempts return `DisputeAlreadyExists`.
-///
-/// @param env        The Soroban contract environment.
-/// @param invoice_id The 32-byte invoice identifier.
-/// @param creator    The address of the party raising the dispute.
-/// @param reason     A human-readable reason string (1 – MAX_DISPUTE_REASON_LENGTH chars).
-/// @param evidence   Supporting evidence string (1 – MAX_DISPUTE_EVIDENCE_LENGTH chars).
-///
-/// @return `Ok(())` on success.
-///
-/// @error `InvoiceNotFound`             Invoice does not exist in storage.
-/// @error `DisputeAlreadyExists`        A dispute already exists for this invoice.
-/// @error `DisputeNotAuthorized`        Creator is neither the business nor the investor.
-/// @error `InvoiceNotAvailableForFunding` Invoice is not in a state that allows disputes.
-/// @error `InvalidDisputeReason`        `reason` is empty or exceeds the length limit.
-/// @error `InvalidDisputeEvidence`      `evidence` is empty or exceeds the length limit.
 #[allow(dead_code)]
 pub fn create_dispute(
     env: &Env,
@@ -134,12 +28,11 @@ pub fn create_dispute(
     // --- 1. Authentication: creator must sign the transaction ---
     creator.require_auth();
 
-    // --- 2. Load the invoice ---
-    let mut invoice: Invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::InvoiceNotFound)?;
-
-    // --- 3. Guard: exactly one dispute per invoice ---
-    if invoice.dispute_status != DisputeStatus::None {
+    if env
+        .storage()
+        .persistent()
+        .has(&("dispute", invoice_id.clone()))
+    {
         return Err(QuickLendXError::DisputeAlreadyExists);
     }
 
@@ -156,12 +49,11 @@ pub fn create_dispute(
         _ => return Err(QuickLendXError::InvoiceNotAvailableForFunding),
     }
 
-    // --- 5. Role check: only the business owner or the investor may dispute ---
-    let is_business = *creator == invoice.business;
-    let is_investor = invoice
-        .investor
-        .as_ref()
-        .map_or(false, |inv| creator == inv);
+    let is_authorized = creator == invoice.business
+        || invoice
+            .investor
+            .as_ref()
+            .map_or(false, |inv| creator == *inv);
 
     if !is_business && !is_investor {
         return Err(QuickLendXError::DisputeNotAuthorized);

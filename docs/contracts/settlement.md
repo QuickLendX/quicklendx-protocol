@@ -66,8 +66,9 @@ Backward-compatible events still emitted:
 
 ## Security Considerations
 - Replay/idempotency:
-  - Non-empty nonce is enforced unique per `(invoice, payer, nonce)`.
-  - Duplicate nonce attempts are rejected.
+  - Non-empty nonce is enforced unique per invoice (`invoice_id`, `nonce`).
+  - Duplicate nonce attempts are rejected with `OperationNotAllowed`.
+  - The uniqueness guard executes before invoice totals or payment history are mutated, so rejected replays do not partially apply.
 - Overpayment integrity:
   - Final settlement requires an exact remaining-due payment to avoid ambiguous excess-value handling.
   - Partial-payment capping still protects incremental repayment flows without allowing accounting drift.
@@ -80,6 +81,18 @@ Backward-compatible events still emitted:
   - Payments are rejected for `Paid`, `Cancelled`, `Defaulted`, and `Refunded` states.
 - Invariant:
   - `total_paid <= total_due` is enforced.
+
+## Vesting Validation Notes
+The vesting flow also relies on ledger-time validation to keep token release schedules sane and reviewable.
+
+- Schedule creation rejects zero-value vesting amounts.
+- The creating caller must authorize and must be the configured protocol admin.
+- `start_time` cannot be backdated relative to the current ledger timestamp.
+- `end_time` must be strictly after `start_time`.
+- `cliff_time = start_time + cliff_seconds` must not overflow and must be strictly before `end_time`.
+- Release calculations reject impossible stored states such as `released_amount > total_amount` or timelines where `cliff_time` falls outside `[start_time, end_time)`.
+
+These checks prevent schedules that would unlock immediately from stale timestamps, collapse into zero-duration timelines, or defer the entire vesting curve to an invalid cliff boundary.
 
 ## Timestamp Consistency Guarantees
 Settlement and adjacent lifecycle entrypoints enforce monotonic ledger-time assumptions to avoid
@@ -106,10 +119,33 @@ temporal anomalies when validators, simulation environments, or test harnesses m
   - Consensus-level manipulation of canonical ledger time beyond protocol tolerance.
   - Misconfigured off-chain automation that never advances time far enough to pass grace windows.
 
+## Escrow Release Rules
+
+The escrow release lifecycle follows a strict path to prevent premature or repeated release of funds.
+
+### Release Conditions
+- **Invoice Status**: Must be `Funded`. Release is prohibited for `Pending`, `Verified`, `Refunded`, or `Cancelled` invoices.
+- **Escrow Status**: Must be `Held`. This ensures funds are only moved once.
+- **Verification**: If an invoice is verified *after* being funded, the protocol can automatically trigger the release to ensure the business receives capital promptly.
+
+### Idempotency and Retries
+- The release operation is idempotent.
+- Atomic Transfer: Funds move before the state update. If the transfer fails, the state is NOT updated, allowing for safe retries.
+- Success Guard: Once status becomes `Released`, further attempts are rejected with `InvalidStatus`.
+
+### Lifecycle Transitions
+| Action | Invoice Status | Escrow Status | Result |
+|--------|----------------|--------------|--------|
+| `accept_bid` | `Verified` -> `Funded` | `None` -> `Held` | Funds locked in contract |
+| `release_escrow` | `Funded` | `Held` -> `Released` | Funds moved to Business |
+| `refund_escrow` | `Funded` -> `Refunded` | `Held` -> `Refunded` | Funds moved to Investor |
+| `settle_invoice` | `Funded` -> `Paid` | `Released` | Invoice settled; Investor paid |
+
 ## Running Tests
 From `quicklendx-contracts/`:
 
 ```bash
 cargo test test_partial_payments -- --nocapture
 cargo test test_settlement -- --nocapture
+cargo test test_release_escrow_ -- --nocapture
 ```

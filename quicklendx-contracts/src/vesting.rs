@@ -69,6 +69,59 @@ impl VestingStorage {
 pub struct Vesting;
 
 impl Vesting {
+    /// Validate vesting schedule inputs and compute the derived cliff timestamp.
+    ///
+    /// # Security
+    /// - Rejects zero-value schedules
+    /// - Prevents backdated or non-monotonic timelines
+    /// - Rejects cliff configurations that eliminate the post-cliff vesting window
+    fn validate_schedule_inputs(
+        env: &Env,
+        total_amount: i128,
+        start_time: u64,
+        cliff_seconds: u64,
+        end_time: u64,
+    ) -> Result<u64, QuickLendXError> {
+        if total_amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let now = env.ledger().timestamp();
+        if start_time < now {
+            return Err(QuickLendXError::InvalidTimestamp);
+        }
+        if end_time <= start_time {
+            return Err(QuickLendXError::InvalidTimestamp);
+        }
+
+        let cliff_time = start_time
+            .checked_add(cliff_seconds)
+            .ok_or(QuickLendXError::InvalidTimestamp)?;
+        if cliff_time >= end_time {
+            return Err(QuickLendXError::InvalidTimestamp);
+        }
+
+        Ok(cliff_time)
+    }
+
+    /// Validate schedule invariants before performing vesting arithmetic.
+    fn validate_schedule_state(schedule: &VestingSchedule) -> Result<(), QuickLendXError> {
+        if schedule.total_amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        if schedule.released_amount < 0 || schedule.released_amount > schedule.total_amount {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        if schedule.start_time >= schedule.end_time {
+            return Err(QuickLendXError::InvalidTimestamp);
+        }
+        if schedule.cliff_time < schedule.start_time || schedule.cliff_time >= schedule.end_time {
+            return Err(QuickLendXError::InvalidTimestamp);
+        }
+
+        Ok(())
+    }
+
     /// Create a new vesting schedule for a beneficiary.
     ///
     /// # Arguments
@@ -96,19 +149,8 @@ impl Vesting {
         admin.require_auth();
         AdminStorage::require_admin(env, admin)?;
 
-        if total_amount <= 0 {
-            return Err(QuickLendXError::InvalidAmount);
-        }
-        if end_time <= start_time {
-            return Err(QuickLendXError::InvalidTimestamp);
-        }
-
-        let cliff_time = start_time
-            .checked_add(cliff_seconds)
-            .ok_or(QuickLendXError::InvalidTimestamp)?;
-        if cliff_time > end_time {
-            return Err(QuickLendXError::InvalidTimestamp);
-        }
+        let cliff_time =
+            Self::validate_schedule_inputs(env, total_amount, start_time, cliff_seconds, end_time)?;
 
         let id = VestingStorage::next_id(env);
         let now = env.ledger().timestamp();
@@ -154,6 +196,8 @@ impl Vesting {
 
     /// Calculate total vested amount for a schedule at current time.
     pub fn vested_amount(env: &Env, schedule: &VestingSchedule) -> Result<i128, QuickLendXError> {
+        Self::validate_schedule_state(schedule)?;
+
         let now = env.ledger().timestamp();
         if now < schedule.cliff_time {
             return Ok(0);
@@ -183,7 +227,10 @@ impl Vesting {
         schedule: &VestingSchedule,
     ) -> Result<i128, QuickLendXError> {
         let vested = Self::vested_amount(env, schedule)?;
-        Ok((vested - schedule.released_amount).max(0))
+        let releasable = vested
+            .checked_sub(schedule.released_amount)
+            .ok_or(QuickLendXError::InvalidAmount)?;
+        Ok(releasable)
     }
 
     /// Release vested tokens to the beneficiary.
@@ -203,13 +250,17 @@ impl Vesting {
 
         let releasable = Self::releasable_amount(env, &schedule)?;
         if releasable <= 0 {
-            return Err(QuickLendXError::OperationNotAllowed);
-        }
-
+    // Idempotent behavior: repeated calls return 0 instead of error
+    return Ok(0);
+}
         let contract = env.current_contract_address();
         transfer_funds(env, &schedule.token, &contract, beneficiary, releasable)?;
 
-        schedule.released_amount = schedule.released_amount.saturating_add(releasable);
+        schedule.released_amount = schedule
+            .released_amount
+            .checked_add(releasable)
+            .ok_or(QuickLendXError::InvalidAmount)?;
+        Self::validate_schedule_state(&schedule)?;
         VestingStorage::update(env, &schedule);
 
         env.events().publish(
