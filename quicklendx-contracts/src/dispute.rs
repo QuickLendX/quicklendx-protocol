@@ -16,42 +16,48 @@
 /// These limits prevent adversarial callers from inflating on-chain storage costs
 /// by submitting oversized payloads. Empty reason/resolution strings are also
 /// rejected to ensure disputes carry meaningful content.
-use crate::invoice::{Invoice, InvoiceStatus};
+use crate::admin::AdminStorage;
+use crate::invoice::{Dispute, DisputeStatus, Invoice, InvoiceStatus, InvoiceStorage};
 use crate::protocol_limits::{
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
 };
 use crate::QuickLendXError;
-use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
-/// @notice Dispute status for standalone dispute storage.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DisputeStatus {
-    Open,
-    UnderReview,
-    Resolved,
+// ---------------------------------------------------------------------------
+// Private helpers
+// ---------------------------------------------------------------------------
+
+fn assert_is_admin(env: &Env, address: &Address) -> Result<(), QuickLendXError> {
+    AdminStorage::require_admin(env, address)
 }
 
-/// @notice Dispute record stored in persistent storage.
-/// @dev Keyed by ("dispute", invoice_id). One dispute per invoice.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Dispute {
-    pub invoice_id: BytesN<32>,
-    pub creator: Address,
-    /// @notice Dispute reason. Must be 1–1000 chars (non-empty, bounded).
-    pub reason: String,
-    /// @notice Supporting evidence. Must be 1–2000 chars (bounded).
-    pub evidence: String,
-    pub status: DisputeStatus,
-    /// @notice Admin-provided resolution text. Set when dispute is resolved.
-    pub resolution: Option<String>,
-    pub created_at: u64,
-    pub resolved_at: Option<u64>,
+fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
+    let key = symbol_short!("disp_idx");
+    let mut index: Vec<BytesN<32>> = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(env));
+    for existing in index.iter() {
+        if existing == *invoice_id {
+            return;
+        }
+    }
+    index.push_back(invoice_id.clone());
+    env.storage().persistent().set(&key, &index);
+}
+
+fn get_dispute_index(env: &Env) -> Vec<BytesN<32>> {
+    let key = symbol_short!("disp_idx");
+    env.storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(env))
 }
 
 // ---------------------------------------------------------------------------
-// Storage helpers
+// Public entry points
 // ---------------------------------------------------------------------------
 
 /// @notice Create a dispute on an invoice (standalone storage variant).
@@ -86,11 +92,11 @@ pub fn create_dispute(
         return Err(QuickLendXError::DisputeAlreadyExists);
     }
 
+    // --- 3. Load the invoice ---
+    let mut invoice: Invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFound)?;
+
     // --- 4. Invoice must be in a state where disputes are meaningful ---
-    //    Disputes are relevant once the invoice has moved past initial upload:
-    //    Pending, Verified, Funded, or Paid all qualify.  Cancelled, Defaulted,
-    //    and Refunded are terminal failure/resolution states where raising a new
-    //    dispute adds no value.
     match invoice.status {
         InvoiceStatus::Pending
         | InvoiceStatus::Verified
@@ -99,13 +105,13 @@ pub fn create_dispute(
         _ => return Err(QuickLendXError::InvoiceNotAvailableForFunding),
     }
 
-    let is_authorized = creator == invoice.business
+    let is_authorized = creator == &invoice.business
         || invoice
             .investor
             .as_ref()
-            .map_or(false, |inv| creator == *inv);
+            .map_or(false, |inv| creator == inv);
 
-    if !is_business && !is_investor {
+    if !is_authorized {
         return Err(QuickLendXError::DisputeNotAuthorized);
     }
 
@@ -125,11 +131,8 @@ pub fn create_dispute(
         created_at: now,
         reason: reason.clone(),
         evidence: evidence.clone(),
-        resolution: String::from_str(env, ""),
-        resolved_by: Address::from_str(
-            env,
-            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-        ),
+        resolution: soroban_sdk::String::from_str(env, ""),
+        resolved_by: env.current_contract_address(),
         resolved_at: 0,
     };
 

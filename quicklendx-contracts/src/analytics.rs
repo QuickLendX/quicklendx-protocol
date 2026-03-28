@@ -1,6 +1,6 @@
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, String, Vec};
 
 /// Time period for analytics reports
 #[contracttype]
@@ -732,8 +732,6 @@ impl AnalyticsCalculator {
         // Calculate user satisfaction score (based on ratings)
         let mut total_rating = 0u32;
         let mut rating_count = 0u32;
-        let _invoices_with_ratings =
-            crate::invoice::InvoiceStorage::get_invoices_with_ratings_count(env);
 
         // Get paid invoices for rating calculation
         let paid_invoices =
@@ -1256,7 +1254,7 @@ impl AnalyticsCalculator {
 
         Ok(InvestorPerformanceMetrics {
             total_investors: total_investors as u32,
-            verified_investors: verified_investors.len() as u32,
+            verified_investors: verified_investors.len(),
             pending_investors: pending_investors.len() as u32,
             rejected_investors: rejected_investors.len() as u32,
             investors_by_tier,
@@ -1268,5 +1266,52 @@ impl AnalyticsCalculator {
             top_performing_investors,
             generated_at: current_timestamp,
         })
+    }
+
+    fn get_investor_investments(
+        env: &Env,
+        investor: &Address,
+    ) -> Vec<crate::investment::Investment> {
+        let ids =
+            crate::investment::InvestmentStorage::get_investments_by_investor(env, investor);
+        let mut result: Vec<crate::investment::Investment> = Vec::new(env);
+        for id in ids.iter() {
+            if let Some(inv) = crate::investment::InvestmentStorage::get_investment(env, &id) {
+                result.push_back(inv);
+            }
+        }
+        result
+    }
+
+    fn initialize_category_counters(env: &Env) -> Vec<(InvoiceCategory, u32)> {
+        Vec::new(env)
+    }
+
+    fn increment_category_counter(
+        counters: &mut Vec<(InvoiceCategory, u32)>,
+        category: &InvoiceCategory,
+    ) {
+        let env = counters.env().clone();
+        let mut new_counters: Vec<(InvoiceCategory, u32)> = Vec::new(&env);
+        let mut found = false;
+        for (cat, count) in counters.iter() {
+            if cat == *category {
+                new_counters.push_back((cat, count.saturating_add(1)));
+                found = true;
+            } else {
+                new_counters.push_back((cat, count));
+            }
+        }
+        if !found {
+            new_counters.push_back((category.clone(), 1u32));
+        }
+        *counters = new_counters;
+    }
+
+    fn validate_investor_report(report: &InvestorReport) -> Result<(), QuickLendXError> {
+        if report.total_invested < 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        Ok(())
     }
 }
