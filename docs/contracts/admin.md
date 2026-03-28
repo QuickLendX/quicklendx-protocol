@@ -29,7 +29,7 @@ Admin state is stored in `src/admin.rs` using instance storage with isolated key
 - `ADMIN_INITIALIZED_KEY` (`"adm_init"`): Initialization flag (prevents re-initialization)
 - `ADMIN_TRANSFER_LOCK_KEY` (`"adm_lock"`): Transfer lock (prevents concurrent transfers)
 
-## Initialization Rules
+## Initialization And Rotation
 
 ### `AdminStorage::initialize(env, admin)`
 
@@ -47,7 +47,7 @@ Hardened initialization with comprehensive security:
 - **Race condition protection**: Atomic check-and-set prevents concurrent initialization
 - **State integrity**: No partial initialization states possible
 
-## Transfer Rules
+`transfer_admin(new_admin)`:
 
 ### `AdminStorage::transfer_admin(env, current_admin, new_admin)`
 
@@ -97,7 +97,7 @@ Execute operation with current admin context:
 - Passes admin address to operation
 - Handles all authorization errors
 
-## Privileged Operations
+## Pause Policy
 
 All privileged operations use the hardened authorization framework:
 
@@ -152,7 +152,9 @@ Emitted when admin role is transferred:
 - **Timestamp precision**: Ledger timestamp for accurate ordering
 - **Complete context**: All relevant addresses and data included
 
-## Backward Compatibility
+- Invoice creation and upload
+- Bid placement, acceptance, and withdrawal
+- Invoice verification and other business-state mutations guarded by `PauseControl::require_not_paused`
 
 ### Legacy Support
 
