@@ -1543,7 +1543,7 @@ impl QuickLendXContract {
     /// @param env The contract environment.
     /// @return Number of overdue funded invoices found within the scanned window.
     pub fn check_overdue_invoices(env: Env) -> Result<u32, QuickLendXError> {
-        let grace_period = defaults::resolve_grace_period(&env, None);
+        let grace_period = defaults::resolve_grace_period(&env, None)?;
         Self::check_overdue_invoices_grace(env, grace_period)
     }
 
@@ -1599,7 +1599,7 @@ impl QuickLendXContract {
     ) -> Result<bool, QuickLendXError> {
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        let grace = defaults::resolve_grace_period(&env, grace_period);
+        let grace = defaults::resolve_grace_period(&env, grace_period)?;
         invoice.check_and_handle_expiration(&env, grace)
     }
 
