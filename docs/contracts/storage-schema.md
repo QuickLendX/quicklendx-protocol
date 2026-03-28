@@ -148,3 +148,40 @@ The schema is designed to support future features:
 - Analytics and reporting (separate analytics storage)
 - Multi-currency support (currency field in Invoice)
 - Partial payments (payments vector in Invoice)
+
+## Invariant Testing
+
+The protocol includes comprehensive invariant tests to verify storage consistency:
+
+### Run Invariant Tests
+
+```bash
+cargo test --lib test_invariants
+```
+
+### Invariant Categories
+
+1. **Status Index Coherence**
+   - Invoice status indexes match primary records
+   - Bid status indexes match primary records
+   - Investment status indexes match primary records
+
+2. **Index Update Consistency**
+   - Status changes properly update indexes
+   - No orphaned records in indexes
+
+3. **Cross-Module Consistency**
+   - Funded invoices have associated investors
+   - Accepted bids correspond to investments
+   - Counters increment correctly
+
+4. **Full Lifecycle Tests**
+   - End-to-end workflow validation
+   - Multi-entity stress testing with status bucket verification
+
+### Security Invariants
+
+- Sum of all status bucket counts equals total entity count
+- All entities in indexes exist in primary storage
+- No duplicate entries in indexes
+- Counters are monotonically increasing

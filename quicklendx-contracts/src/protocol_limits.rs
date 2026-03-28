@@ -60,6 +60,44 @@ pub fn check_string_length(s: &String, max_len: u32) -> Result<(), QuickLendXErr
     Ok(())
 }
 
+/// @notice Validate protocol limit update parameters.
+/// @dev Rejects out-of-bounds values and unsafe parameter combinations.
+fn validate_protocol_limits_params(
+    min_invoice_amount: i128,
+    min_bid_amount: i128,
+    min_bid_bps: u32,
+    max_due_date_days: u64,
+    grace_period_seconds: u64,
+) -> Result<(), QuickLendXError> {
+    if min_invoice_amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if min_bid_amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if min_bid_bps > 10_000 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if max_due_date_days == 0 || max_due_date_days > 730 {
+        return Err(QuickLendXError::InvoiceDueDateInvalid);
+    }
+
+    if grace_period_seconds > 2_592_000 {
+        return Err(QuickLendXError::InvalidTimestamp);
+    }
+
+    // Grace period must fit within the allowed due-date window.
+    let max_grace_for_horizon = max_due_date_days.saturating_mul(86_400);
+    if grace_period_seconds > max_grace_for_horizon {
+        return Err(QuickLendXError::InvalidTimestamp);
+    }
+
+    Ok(())
+}
+
 #[allow(dead_code)]
 pub struct ProtocolLimitsContract;
 
@@ -128,26 +166,13 @@ impl ProtocolLimitsContract {
         max_invoices_per_business: u32,
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
-
-        if min_invoice_amount <= 0 {
-            return Err(QuickLendXError::InvalidAmount);
-        }
-
-        if min_bid_amount <= 0 {
-            return Err(QuickLendXError::InvalidAmount);
-        }
-
-        if min_bid_bps > 10_000 {
-            return Err(QuickLendXError::InvalidAmount);
-        }
-
-        if max_due_date_days == 0 || max_due_date_days > 730 {
-            return Err(QuickLendXError::InvoiceDueDateInvalid);
-        }
-
-        if grace_period_seconds > 2_592_000 {
-            return Err(QuickLendXError::InvalidTimestamp);
-        }
+        validate_protocol_limits_params(
+            min_invoice_amount,
+            min_bid_amount,
+            min_bid_bps,
+            max_due_date_days,
+            grace_period_seconds,
+        )?;
 
         let limits = ProtocolLimits {
             min_invoice_amount,
