@@ -1,54 +1,87 @@
-# Analytics Contract Notes
+# Analytics
 
-## Investor Report Consistency
+## Overview
+This module provides aggregated analytics for the protocol. Analytics are derived from invoice lifecycle state and are exposed via public getters on `QuickLendXContract`.
 
-The analytics module now enforces deterministic investor-report behavior for a fixed ledger snapshot.
+The primary goal is to provide **correct and safe** platform-level totals, rates, and average calculations even when the system has **no data** (zero invoices) or **sparse data** (e.g., only Paid invoices).
 
-### Guarantees
+## Metrics and Definitions
 
-- `generate_investor_report` derives report contents from persisted investor investment indexes instead of placeholder in-memory data.
-- Generated investor reports are validated before persistence.
-- Persisted reports are immediately retrievable through `get_investor_report`.
-- Repeated generation in the same ledger state produces identical report contents, with only `report_id` changing.
-- Empty-history investors return a valid zeroed report instead of failing or producing partial data.
+### Platform totals
+- **`total_invoices`**
+  - Total number of invoices across all relevant statuses.
+- **`total_volume`**
+  - Sum of invoice face values across invoices considered in platform totals.
+- **`total_investments`**
+  - Count of invoices that represent an investment lifecycle.
+  - **Definition used by the calculator**:
+    - `Funded` + `Paid` + `Defaulted`
+- **`total_fees_collected`**
+  - Aggregate platform fees collected (as recorded by the analytics calculator/storage).
 
-### Persistence Model
+### Averages
+- **`average_invoice_amount`**
+  - `total_volume / total_invoices`.
+- **`average_investment_amount`**
+  - `total_volume / total_investments` for invoices counted as investments.
 
-- Investor reports are stored under their generated `report_id`.
-- Business reports are also persisted on generation to keep reporting behavior consistent across analytics endpoints.
-- Report identifiers now use a monotonic counter plus ledger timestamp and sequence values to avoid accidental key collisions.
+### Rates (basis points)
+Rates are expressed in **basis points (bps)**:
+- `10_000 bps` = `100%`
+- `5_000 bps` = `50%`
 
-## Security Assumptions
+- **`success_rate`**
+  - Intended to represent the fraction of investments that successfully completed.
+  - Calculator definition:
+    - `Paid / (Funded + Paid + Defaulted)` expressed in bps.
+- **`default_rate`**
+  - Intended to represent the fraction of investments that defaulted.
+  - Calculator definition:
+    - `Defaulted / (Funded + Paid + Defaulted)` expressed in bps.
 
-- Investor report generation trusts the contract-maintained investment index in `InvestmentStorage`.
-- Report validation rejects malformed snapshots where:
-  - `end_date < start_date`
-  - `total_invested` or `total_returns` is negative
-  - `success_rate` or `default_rate` falls outside `0..=10_000`
-  - `risk_tolerance > 100`
-  - preferred-category totals do not match `investments_made`
-- Category counters use a fixed ordering to keep retrieval deterministic and review-friendly.
+## Correctness Rules (Zero and Sparse Data)
 
-## Test Coverage
+### Rule: no division by zero
+If a denominator is `0`, the calculator returns `0` for that derived metric.
 
-The focused analytics test suite in [`src/test/test_analytics.rs`](/c:/Users/ADMIN/Desktop/midea-drips/quicklendx-protocol/quicklendx-contracts/src/test/test_analytics.rs) covers:
+Examples:
+- If `total_invoices == 0` then `average_invoice_amount == 0`.
+- If `total_investments == 0` then `success_rate == 0` and `default_rate == 0`.
 
-- investor report generation consistency for a fixed snapshot
-- investor report persistence round-trips
-- retrieval determinism
-- no-investment-history scenarios
-- period filtering
-- business report persistence regression coverage
+### Rule: sparse investment outcomes
+Sparse datasets should still produce intuitive results:
+- If there is exactly 1 investment and it is `Paid`, then `success_rate == 10_000` and `default_rate == 0`.
+- If there is exactly 1 investment and it is `Defaulted`, then `success_rate == 0` and `default_rate == 10_000`.
 
-## Test Command
+### Rule: clamp rates to 100%
+Any basis-point rate is clamped to `<= 10_000`.
 
-```bash
-cargo test --lib test_analytics -- --nocapture
-```
+## Security Assumptions and Invariants
 
-Observed result during this change:
+### Assumptions
+- Invoice lifecycle transitions are enforced by the contract, and invoice status is a trusted source of truth.
+- Analytics getters do not mutate state.
 
-```text
-running 7 tests
-7 passed; 0 failed
-```
+### Invariants enforced by the calculator
+- Derived metrics do not panic on empty/sparse data.
+- Rates are always within `[0, 10_000]`.
+- Investment counting includes all terminal investment statuses (`Paid`, `Defaulted`) in addition to `Funded`.
+
+## Public API Notes (NatSpec-style)
+
+- `/// @notice Returns platform metrics aggregated from current invoice state.`
+- `/// @dev Rates are returned as basis points (bps). 10_000 = 100%.`
+- `/// @dev Zero-denominator derived metrics return 0.`
+
+## Testing
+
+### Coverage focus
+Tests cover:
+- Zero-data behavior (all derived metrics are zero).
+- Sparse-data behavior (Paid-only, Defaulted-only).
+- Mixed sparse-data behavior (Paid + Defaulted).
+- Investment counting correctness (`Funded + Paid + Defaulted`).
+
+### Test locations
+- Unit tests: `src/test/test_analytics.rs`
+- Analytics-only runner: `tests/analytics_accuracy.rs`

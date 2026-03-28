@@ -291,32 +291,14 @@ impl AnalyticsStorage {
     pub fn generate_report_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let sequence = env.ledger().sequence();
-        let counter = env
-            .storage()
-            .instance()
-            .get(&Self::report_counter_key())
-            .unwrap_or(0u64);
-        let next_counter = counter.saturating_add(1);
-        env.storage()
-            .instance()
-            .set(&Self::report_counter_key(), &next_counter);
-
-        let mut id_bytes = [0u8; 32];
-        id_bytes[0] = 0x52; // 'R'
-        id_bytes[1] = 0x50; // 'P'
-        id_bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
-        id_bytes[10..14].copy_from_slice(&sequence.to_be_bytes());
-        id_bytes[14..22].copy_from_slice(&next_counter.to_be_bytes());
-
-        let mix = timestamp
-            .saturating_add(sequence as u64)
-            .saturating_add(next_counter)
-            .saturating_add(0x5250);
-        for i in 22..32 {
-            id_bytes[i] = mix.wrapping_add(i as u64) as u8;
-        }
-
-        BytesN::from_array(env, &id_bytes)
+        let ts = timestamp.to_be_bytes();
+        let seq = sequence.to_be_bytes();
+        let combined: [u8; 12] = [
+            ts[0], ts[1], ts[2], ts[3], ts[4], ts[5], ts[6], ts[7], seq[0], seq[1], seq[2], seq[3],
+        ];
+        let bytes = Bytes::from_array(env, &combined);
+        let hash = env.crypto().sha256(&bytes);
+        BytesN::from_array(env, &hash.to_array())
     }
 }
 
@@ -324,100 +306,12 @@ impl AnalyticsStorage {
 pub struct AnalyticsCalculator;
 
 impl AnalyticsCalculator {
-    /// Build a stable category counter vector for analytics reports.
-    ///
-    /// # Security
-    /// Returns a fixed category ordering so persistence and retrieval remain
-    /// deterministic across repeated generations for the same underlying data.
-    fn initialize_category_counters(env: &Env) -> Vec<(InvoiceCategory, u32)> {
-        let mut counters = Vec::new(env);
-        let categories = [
-            InvoiceCategory::Services,
-            InvoiceCategory::Products,
-            InvoiceCategory::Consulting,
-            InvoiceCategory::Manufacturing,
-            InvoiceCategory::Technology,
-            InvoiceCategory::Healthcare,
-            InvoiceCategory::Other,
-        ];
-
-        for category in categories.iter() {
-            counters.push_back((category.clone(), 0u32));
+    fn bps(numer: u32, denom: u32) -> i128 {
+        if denom == 0 {
+            return 0;
         }
-
-        counters
-    }
-
-    /// Increment a category counter while preserving the original vector order.
-    fn increment_category_counter(
-        counters: &mut Vec<(InvoiceCategory, u32)>,
-        category: &InvoiceCategory,
-    ) {
-        for i in 0..counters.len() {
-            let (current_category, count) = counters.get(i).unwrap();
-            if current_category == *category {
-                counters.set(i, (current_category, count.saturating_add(1)));
-                break;
-            }
-        }
-    }
-
-    /// Collect persisted investments for a single investor using the indexed
-    /// storage layout maintained by `InvestmentStorage`.
-    ///
-    /// # Security
-    /// Reads through the investor index instead of scanning unrelated state,
-    /// which keeps report generation bounded and avoids accidentally mixing
-    /// another investor's positions into the report.
-    fn get_investor_investments(
-        env: &Env,
-        investor: &Address,
-    ) -> Vec<crate::investment::Investment> {
-        let mut investments = Vec::new(env);
-        let investment_ids =
-            crate::investment::InvestmentStorage::get_investments_by_investor(env, investor);
-
-        for investment_id in investment_ids.iter() {
-            if let Some(investment) =
-                crate::investment::InvestmentStorage::get_investment(env, &investment_id)
-            {
-                investments.push_back(investment);
-            }
-        }
-
-        investments
-    }
-
-    /// Validate investor report invariants before persisting them.
-    ///
-    /// # Security
-    /// This is a defense-in-depth consistency gate that rejects malformed
-    /// reports before they are written to storage, preventing retrieval of a
-    /// self-contradictory snapshot.
-    fn validate_investor_report(report: &InvestorReport) -> Result<(), QuickLendXError> {
-        if report.end_date < report.start_date
-            || report.total_returns < 0
-            || report.total_invested < 0
-            || report.success_rate < 0
-            || report.default_rate < 0
-            || report.success_rate > 10_000
-            || report.default_rate > 10_000
-            || report.portfolio_diversity < 0
-            || report.risk_tolerance > 100
-        {
-            return Err(QuickLendXError::OperationNotAllowed);
-        }
-
-        let mut category_total = 0u32;
-        for (_, count) in report.preferred_categories.iter() {
-            category_total = category_total.saturating_add(count);
-        }
-
-        if category_total != report.investments_made {
-            return Err(QuickLendXError::OperationNotAllowed);
-        }
-
-        Ok(())
+        let v = (numer.saturating_mul(10000)).saturating_div(denom) as i128;
+        v.min(10000).max(0)
     }
 
     /// Calculate comprehensive platform metrics
@@ -460,8 +354,9 @@ impl AnalyticsCalculator {
             }
         }
 
-        // Calculate total investments by counting funded invoices
-        let total_investments = funded_invoices.len() as u32;
+        // Calculate total investments by counting invoices that have been funded at least once.
+        // In this contract model, an invoice that is Paid or Defaulted must have been funded.
+        let total_investments = (funded_invoices.len() + paid_invoices.len() + defaulted_invoices.len()) as u32;
 
         // Calculate total fees collected
         let mut total_fees = 0i128;
@@ -497,14 +392,17 @@ impl AnalyticsCalculator {
 
         let average_investment_amount = if total_investments > 0 {
             let mut total_invested = 0i128;
-            for invoice_id in funded_invoices.iter() {
-                if let Some(investment) =
-                    crate::investment::InvestmentStorage::get_investment_by_invoice(
-                        env,
-                        &invoice_id,
-                    )
-                {
-                    total_invested = total_invested.saturating_add(investment.amount);
+            // Include all invoices that should have associated investments.
+            for invoice_ids in [&funded_invoices, &paid_invoices, &defaulted_invoices].iter() {
+                for invoice_id in invoice_ids.iter() {
+                    if let Some(investment) =
+                        crate::investment::InvestmentStorage::get_investment_by_invoice(
+                            env,
+                            &invoice_id,
+                        )
+                    {
+                        total_invested = total_invested.saturating_add(investment.amount);
+                    }
                 }
             }
             total_invested.saturating_div(total_investments as i128)
@@ -518,20 +416,13 @@ impl AnalyticsCalculator {
 
         // Calculate default rate
         let _current_timestamp = env.ledger().timestamp();
-        let default_rate = if total_investments > 0 {
-            let defaulted_count = defaulted_invoices.len() as u32;
-            (defaulted_count.saturating_mul(10000)).saturating_div(total_investments) as i128
-        } else {
-            0
-        };
+        let default_rate = Self::bps(defaulted_invoices.len() as u32, total_investments);
 
         // Calculate success rate
-        let success_rate = if total_investments > 0 {
-            let successful_count = paid_invoices.len() as u32;
-            (successful_count.saturating_mul(10000)).saturating_div(total_investments) as i128
-        } else {
-            0
-        };
+        let success_rate = Self::bps(paid_invoices.len() as u32, total_investments);
+
+        let success_rate = success_rate.min(10000);
+        let default_rate = default_rate.min(10000);
 
         Ok(PlatformMetrics {
             total_invoices,
