@@ -778,8 +778,41 @@ impl QuickLendXContract {
     }
 
     /// Cancel a placed bid (investor only, Placed → Cancelled).
+    ///
+    /// # Race Safety
+    /// Uses a read-check-write pattern that validates the bid is still in `Placed`
+    /// status before transitioning. Terminal statuses (`Withdrawn`, `Accepted`,
+    /// `Expired`, `Cancelled`) are immutable — a bid that has already left `Placed`
+    /// will cause this function to return `false` without any state mutation,
+    /// preventing double-action execution regardless of call ordering.
     pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> bool {
-        bid::BidStorage::cancel_bid(&env, &bid_id)
+        pause::PauseControl::require_not_paused(&env).is_ok()
+            && bid::BidStorage::cancel_bid(&env, &bid_id)
+    }
+
+    /// Withdraw a bid (investor only, Placed → Withdrawn).
+    ///
+    /// # Race Safety
+    /// Validates `BidStatus::Placed` atomically before transitioning. If a
+    /// concurrent `cancel_bid` or expiry has already moved the bid to a terminal
+    /// status, this call returns `OperationNotAllowed` without mutating state,
+    /// preventing double-action execution.
+    pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        let mut bid =
+            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        bid.investor.require_auth();
+        require_investor_not_pending(&env, &bid.investor)?;
+        // Re-read status after auth to guard against concurrent transitions.
+        let bid_fresh =
+            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        if bid_fresh.status != BidStatus::Placed {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+        bid.status = BidStatus::Withdrawn;
+        BidStorage::update_bid(&env, &bid);
+        emit_bid_withdrawn(&env, &bid);
+        Ok(())
     }
 
     /// Get all bids placed by an investor across all invoices.
@@ -997,39 +1030,6 @@ impl QuickLendXContract {
             premium,
         );
         emit_insurance_premium_collected(&env, &investment_id, &provider, premium);
-
-        Ok(())
-    }
-
-    /// Withdraw a bid (investor only, before acceptance)
-    ///
-    /// Validates:
-    /// - Bid exists
-    /// - Caller is the bid owner (authorization check)
-    /// - Bid is in Placed status (prevents withdrawal of accepted/expired/withdrawn bids)
-    /// - Updates bid status to Withdrawn
-    pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        // Get bid and validate it exists
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-
-        // Authorization check: Only the investor who owns the bid can withdraw it
-        bid.investor.require_auth();
-
-        // Enforce KYC: a pending investor must not withdraw bids.
-        require_investor_not_pending(&env, &bid.investor)?;
-
-        // Status validation: Only allow withdrawal if bid is placed
-        // Prevents withdrawal of accepted, withdrawn, or expired bids
-        if bid.status != BidStatus::Placed {
-            return Err(QuickLendXError::OperationNotAllowed);
-        }
-        bid.status = BidStatus::Withdrawn;
-        BidStorage::update_bid(&env, &bid);
-
-        // Emit bid withdrawn event
-        emit_bid_withdrawn(&env, &bid);
 
         Ok(())
     }
