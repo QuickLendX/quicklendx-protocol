@@ -99,7 +99,7 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
     get_investor_verification as do_get_investor_verification, reject_business,
     reject_investor as do_reject_investor, require_business_not_pending,
-    require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
+    require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc, normalize_tag,
     submit_kyc_application, validate_bid, validate_investor_investment, validate_invoice_metadata,
     verify_business, verify_investor as do_verify_investor, verify_invoice_data,
     BusinessVerificationStatus, BusinessVerificationStorage, InvestorRiskLevel, InvestorTier,
@@ -1721,20 +1721,21 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
-        // Only the business owner can add tags
+        // Authorization: Ensure the stored business owner authorizes the change
         invoice.business.require_auth();
 
-        // Add the tag
-        invoice.add_tag(&env, tag.clone())?;
+        // Tag Normalization: Synchronize with protocol requirements
+        let normalized_tag = normalize_tag(&env, &tag)?;
+        invoice.add_tag(&env, normalized_tag.clone())?;
 
         // Update the invoice
         InvoiceStorage::update_invoice(&env, &invoice);
 
-        // Emit event
-        events::emit_invoice_tag_added(&env, &invoice_id, &invoice.business, &tag);
+        // Emit event with normalized data
+        events::emit_invoice_tag_added(&env, &invoice_id, &invoice.business, &normalized_tag);
 
-        // Update index
-        InvoiceStorage::add_tag_index(&env, &tag, &invoice_id);
+        // Update index with normalized form
+        InvoiceStorage::add_tag_index(&env, &normalized_tag, &invoice_id);
 
         Ok(())
     }
@@ -1749,20 +1750,21 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
-        // Only the business owner can remove tags
+        // Authorization: Ensure the stored business owner authorizes the removal
         invoice.business.require_auth();
 
-        // Remove the tag
-        invoice.remove_tag(tag.clone())?;
+        // Normalize tag for removal lookup
+        let normalized_tag = normalize_tag(&env, &tag)?;
+        invoice.remove_tag(normalized_tag.clone())?;
 
         // Update the invoice
         InvoiceStorage::update_invoice(&env, &invoice);
 
-        // Emit event
-        events::emit_invoice_tag_removed(&env, &invoice_id, &invoice.business, &tag);
+        // Emit event with normalized data
+        events::emit_invoice_tag_removed(&env, &invoice_id, &invoice.business, &normalized_tag);
 
-        // Update index
-        InvoiceStorage::remove_tag_index(&env, &tag, &invoice_id);
+        // Update index using normalized form
+        InvoiceStorage::remove_tag_index(&env, &normalized_tag, &invoice_id);
 
         Ok(())
     }
