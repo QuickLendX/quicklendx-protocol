@@ -105,8 +105,64 @@ fn test_platform_metrics_after_status_changes() {
 
     let metrics = client.get_platform_metrics().unwrap();
     assert_eq!(metrics.total_invoices, 2);
-    // Funded count = 1 (inv1 is Funded)
+    // Investments include invoices that are Funded, Paid, or Defaulted
+    assert_eq!(metrics.total_investments, 2);
+}
+
+#[test]
+fn test_platform_metrics_success_rate_paid_only_sparse_data() {
+    let env = Env::default();
+    let (client, _admin, business) = setup_contract(&env);
+
+    let inv1 = create_invoice(&env, &client, &business, 1000, "Paid-only inv");
+    client.update_invoice_status(&inv1, &InvoiceStatus::Verified);
+    client.update_invoice_status(&inv1, &InvoiceStatus::Funded);
+    client.update_invoice_status(&inv1, &InvoiceStatus::Paid);
+
+    let metrics = client.get_platform_metrics();
+    assert_eq!(metrics.total_invoices, 1);
     assert_eq!(metrics.total_investments, 1);
+    assert_eq!(metrics.success_rate, 10000);
+    assert_eq!(metrics.default_rate, 0);
+}
+
+#[test]
+fn test_platform_metrics_default_rate_defaulted_only_sparse_data() {
+    let env = Env::default();
+    let (client, _admin, business) = setup_contract(&env);
+
+    let inv1 = create_invoice(&env, &client, &business, 1000, "Defaulted-only inv");
+    client.update_invoice_status(&inv1, &InvoiceStatus::Verified);
+    client.update_invoice_status(&inv1, &InvoiceStatus::Funded);
+    client.update_invoice_status(&inv1, &InvoiceStatus::Defaulted);
+
+    let metrics = client.get_platform_metrics();
+    assert_eq!(metrics.total_invoices, 1);
+    assert_eq!(metrics.total_investments, 1);
+    assert_eq!(metrics.success_rate, 0);
+    assert_eq!(metrics.default_rate, 10000);
+}
+
+#[test]
+fn test_platform_metrics_success_and_default_rates_mixed_sparse_data() {
+    let env = Env::default();
+    let (client, _admin, business) = setup_contract(&env);
+
+    let inv_paid = create_invoice(&env, &client, &business, 1000, "Mixed paid");
+    client.update_invoice_status(&inv_paid, &InvoiceStatus::Verified);
+    client.update_invoice_status(&inv_paid, &InvoiceStatus::Funded);
+    client.update_invoice_status(&inv_paid, &InvoiceStatus::Paid);
+
+    let inv_defaulted = create_invoice(&env, &client, &business, 1000, "Mixed defaulted");
+    client.update_invoice_status(&inv_defaulted, &InvoiceStatus::Verified);
+    client.update_invoice_status(&inv_defaulted, &InvoiceStatus::Funded);
+    client.update_invoice_status(&inv_defaulted, &InvoiceStatus::Defaulted);
+
+    let metrics = client.get_platform_metrics();
+    assert_eq!(metrics.total_invoices, 2);
+    assert_eq!(metrics.total_investments, 2);
+    assert_eq!(metrics.success_rate, 5000);
+    assert_eq!(metrics.default_rate, 5000);
 }
 
 // ============================================================================
@@ -465,6 +521,124 @@ fn test_analytics_summary_returns_tuple() {
     assert_eq!(performance.average_settlement_time, 0);
 }
 
+
+
+// ============================================================================
+// PLATFORM METRICS
+// ============================================================================
+
+#[test]
+fn test_platform_metrics_empty_state() {
+    let env = Env::default();
+    let (client, _, _) = setup_contract(&env);
+
+    let metrics = client.get_platform_metrics().unwrap();
+
+    assert_eq!(metrics.total_invoices, 0);
+    assert_eq!(metrics.total_investments, 0);
+    assert_eq!(metrics.total_volume, 0);
+    assert_eq!(metrics.total_fees_collected, 0);
+    assert_eq!(metrics.average_invoice_amount, 0);
+    assert_eq!(metrics.average_investment_amount, 0);
+    assert_eq!(metrics.success_rate, 0);
+    assert_eq!(metrics.default_rate, 0);
+}
+
+#[test]
+fn test_platform_metrics_update() {
+    let env = Env::default();
+    let (client, admin, _) = setup_contract(&env);
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    client.update_platform_metrics();
+
+    let metrics = client.get_platform_metrics().unwrap();
+
+    assert!(metrics.total_invoices >= 0);
+    assert!(metrics.total_volume >= 0);
+}
+
+// ============================================================================
+// PERFORMANCE METRICS
+// ============================================================================
+
+#[test]
+fn test_performance_metrics_empty_state() {
+    let env = Env::default();
+    let (client, _, _) = setup_contract(&env);
+
+    let metrics = client.get_performance_metrics().unwrap();
+
+    assert_eq!(metrics.average_settlement_time, 0);
+    assert_eq!(metrics.average_verification_time, 0);
+    assert_eq!(metrics.dispute_resolution_time, 0);
+    assert_eq!(metrics.transaction_success_rate, 0);
+    assert_eq!(metrics.error_rate, 0);
+    assert_eq!(metrics.user_satisfaction_score, 0);
+}
+
+#[test]
+fn test_performance_metrics_update() {
+    let env = Env::default();
+    let (client, admin, _) = setup_contract(&env);
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    client.update_performance_metrics();
+
+    let metrics = client.get_performance_metrics().unwrap();
+
+    assert!(metrics.transaction_success_rate >= 0);
+    assert!(metrics.error_rate >= 0);
+}
+
+// ============================================================================
+// ANALYTICS SUMMARY (ISSUE#600)
+// ============================================================================
+
+#[test]
+fn test_analytics_summary_empty_state_fallback() {
+    let env = Env::default();
+    let (client, _, _) = setup_contract(&env);
+
+    let (platform, performance) = client.get_analytics_summary();
+
+    assert_eq!(platform.total_invoices, 0);
+    assert_eq!(platform.total_investments, 0);
+    assert_eq!(platform.total_volume, 0);
+    assert_eq!(platform.total_fees_collected, 0);
+    assert_eq!(platform.average_invoice_amount, 0);
+    assert_eq!(platform.average_investment_amount, 0);
+    assert_eq!(platform.success_rate, 0);
+    assert_eq!(platform.default_rate, 0);
+
+    assert_eq!(performance.average_settlement_time, 0);
+    assert_eq!(performance.average_verification_time, 0);
+    assert_eq!(performance.dispute_resolution_time, 0);
+    assert_eq!(performance.transaction_success_rate, 0);
+    assert_eq!(performance.error_rate, 0);
+    assert_eq!(performance.user_satisfaction_score, 0);
+}
+
+#[test]
+fn test_analytics_summary_after_updates() {
+    let env = Env::default();
+    let (client, admin, _) = setup_contract(&env);
+
+    env.mock_all_auths();
+    client.set_admin(&admin);
+
+    client.update_platform_metrics();
+    client.update_performance_metrics();
+
+    let (platform, performance) = client.get_analytics_summary();
+
+    assert!(platform.total_invoices >= 0);
+    assert!(performance.transaction_success_rate >= 0);
+}
 // ============================================================================
 // USER BEHAVIOR UPDATE AND STORAGE TEST
 // ============================================================================
