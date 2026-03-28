@@ -800,6 +800,14 @@ impl InvoiceStorage {
         (symbol_short!("tag_idx"), tag.clone())
     }
 
+    fn metadata_customer_key(name: &String) -> (soroban_sdk::Symbol, String) {
+        (symbol_short!("cust_idx"), name.clone())
+    }
+
+    fn metadata_tax_key(tax: &String) -> (soroban_sdk::Symbol, String) {
+        (symbol_short!("tax_idx"), tax.clone())
+    }
+
     /// @notice Adds an invoice to the category index.
     /// @dev Deduplication guard: the invoice ID is appended only if not already
     ///      present, preventing duplicate entries that would corrupt count queries.
