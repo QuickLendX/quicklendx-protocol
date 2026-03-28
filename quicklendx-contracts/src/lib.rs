@@ -82,9 +82,8 @@ use escrow::{
 use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_escrow_created,
     emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_cancelled,
-    emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
-    emit_invoice_uploaded, emit_invoice_verified,
+    emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
+    emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{Invoice, InvoiceMetadata, InvoiceStorage};
@@ -1529,7 +1528,8 @@ impl QuickLendXContract {
             if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
                 if invoice.is_overdue(current_timestamp) {
                     overdue_count += 1;
-                    let _ = notifications::NotificationSystem::notify_payment_overdue(&env, &invoice);
+                    let _ =
+                        notifications::NotificationSystem::notify_payment_overdue(&env, &invoice);
                 }
                 let _ = invoice.check_and_handle_expiration(&env, grace_period)?;
             }
