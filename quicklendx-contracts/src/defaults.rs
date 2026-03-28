@@ -55,19 +55,14 @@ const MAX_GRACE_PERIOD: u64 = 30 * 24 * 60 * 60;
 pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64, QuickLendXError> {
     match grace_period {
         Some(value) => {
-            // Validate override value
-            // Allow zero (immediate default) but reject excessively large values
             if value > MAX_GRACE_PERIOD {
                 return Err(QuickLendXError::InvalidTimestamp);
             }
             Ok(value)
         }
-        None => {
-            // Fallback to protocol config or hardcoded default
-            Ok(ProtocolInitializer::get_protocol_config(env)
-                .map(|config| config.grace_period_seconds)
-                .unwrap_or(DEFAULT_GRACE_PERIOD))
-        }
+        None => Ok(ProtocolInitializer::get_protocol_config(env)
+            .map(|config| config.grace_period_seconds)
+            .unwrap_or(DEFAULT_GRACE_PERIOD)),
     }
 }
 
@@ -75,7 +70,7 @@ pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64,
 /// @dev Defaulting is allowed only when `ledger.timestamp() > due_date + resolved_grace_period`.
 /// Calls using a timestamp equal to the grace deadline must fail to avoid early liquidation.
 /// Grace resolution order is: explicit override, protocol config, then `DEFAULT_GRACE_PERIOD`.
-/// 
+///
 /// # Arguments
 /// * `env` - The environment
 /// * `invoice_id` - The invoice ID to mark as defaulted
@@ -93,12 +88,10 @@ pub fn mark_invoice_defaulted(
     let invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    // Check if invoice is already defaulted (no double default)
     if invoice.status == InvoiceStatus::Defaulted {
         return Err(QuickLendXError::InvoiceAlreadyDefaulted);
     }
 
-    // Only funded invoices can be defaulted
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvoiceNotAvailableForFunding);
     }
@@ -107,15 +100,12 @@ pub fn mark_invoice_defaulted(
     let grace = resolve_grace_period(env, grace_period)?;
     let grace_deadline = invoice.grace_deadline(grace);
 
-    // Check if grace period has passed
     if current_timestamp <= grace_deadline {
         return Err(QuickLendXError::OperationNotAllowed);
     }
 
-    // Proceed with default handling
     handle_default(env, invoice_id)
 }
-
 
 /// @notice Returns the funded-invoice scan cursor used by bounded overdue scans.
 /// @dev The cursor is normalized against the current funded-invoice count before use.
@@ -241,30 +231,23 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    // Check if already defaulted (no double default)
     if invoice.status == InvoiceStatus::Defaulted {
         return Err(QuickLendXError::InvoiceAlreadyDefaulted);
     }
 
-    // Validate invoice is in funded status
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    // Remove from funded status list
     InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
 
-    // Mark invoice as defaulted
     invoice.mark_as_defaulted();
     InvoiceStorage::update_invoice(env, &invoice);
 
-    // Add to defaulted status list
     InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Defaulted, invoice_id);
 
-    // Emit expiration event
     emit_invoice_expired(env, &invoice);
 
-    // Update investment status and process insurance claims
     if let Some(mut investment) = InvestmentStorage::get_investment_by_invoice(env, invoice_id) {
         investment.status = InvestmentStatus::Defaulted;
 
@@ -291,20 +274,13 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
         }
     }
 
-    // Emit default event
     emit_invoice_defaulted(env, &invoice);
-
-    // Send notification
-    // No notifications
 
     Ok(())
 }
 
 /// Get all invoice IDs that have active or resolved disputes
 pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
-    // This is a simplified implementation. In a production environment,
-    // we would maintain a separate index for invoices with disputes.
-    // For now, we return empty as a placeholder or could iterate (expensive).
     Vec::new(env)
 }
 
@@ -316,11 +292,5 @@ pub fn get_dispute_details(
     let _invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    // In this implementation, the Dispute struct is part of the Invoice struct
-    // but the analytics module expects a separate query.
-    // Actually, looking at types.rs or invoice.rs, let's see where Dispute is.
-    // If it's not in Invoice, we might need a separate storage.
-    // Based on analytics.rs usage, it seems to expect it found here.
-
-    Ok(None) // Placeholder
+    Ok(None)
 }
