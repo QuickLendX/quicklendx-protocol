@@ -68,9 +68,31 @@ Behavior:
 - If admin is initialized, it performs authenticated transfer from current admin.
 - Legacy verification storage is synchronized after updates for compatibility reads.
 
+## Emergency Pause
+
+The protocol implements a comprehensive pause-guard mechanism to prevent unauthorized state mutations during emergency events.
+
+### Control Operations
+
+- `pause(admin)`: Authenticated admin only. Sets the protocol to paused state.
+- `unpause(admin)`: Authenticated admin only. Restores the protocol to active state.
+- `is_paused()`: Public getter to check current pause status.
+
+### Impact of Pause
+
+When the protocol is **Paused**, all mutating operations are restricted, including:
+- Invoice creation, upload, verification, and cancellation.
+- Bid placement, acceptance, and withdrawal.
+- Escrow funding, release, and refund.
+- Protocol limit updates and fee configuration.
+- KYC submissions and verification.
+
+**Read-only operations** (getters) remain functional during a pause to ensure transparency and allow users to view their data.
+
 ## Security Notes
 
 - Privileged wrappers no longer rely on caller-supplied addresses alone.
 - Anonymous admin initialization is blocked.
 - Admin-only comments now match actual runtime enforcement.
 - Legacy compatibility path still preserves single-admin invariants.
+- **Pause Guards**: Injected into 20+ mutating entrypoints to ensure complete coverage.
