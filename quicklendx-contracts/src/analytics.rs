@@ -1,6 +1,6 @@
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, String, Vec};
 
 /// Time period for analytics reports
 #[contracttype]
@@ -312,6 +312,62 @@ impl AnalyticsCalculator {
         }
         let v = (numer.saturating_mul(10000)).saturating_div(denom) as i128;
         v.min(10000).max(0)
+    }
+
+    fn get_investor_investments(
+        env: &Env,
+        investor: &Address,
+    ) -> Vec<crate::investment::Investment> {
+        let mut investments = Vec::new(env);
+        for investment_id in crate::investment::InvestmentStorage::get_investments_by_investor(env, investor)
+            .iter()
+        {
+            if let Some(investment) =
+                crate::investment::InvestmentStorage::get_investment(env, &investment_id)
+            {
+                investments.push_back(investment);
+            }
+        }
+        investments
+    }
+
+    fn initialize_category_counters(env: &Env) -> Vec<(InvoiceCategory, u32)> {
+        let mut counters = Vec::new(env);
+        for category in [
+            InvoiceCategory::Services,
+            InvoiceCategory::Products,
+            InvoiceCategory::Consulting,
+            InvoiceCategory::Manufacturing,
+            InvoiceCategory::Technology,
+            InvoiceCategory::Healthcare,
+            InvoiceCategory::Other,
+        ]
+        .iter()
+        {
+            counters.push_back((category.clone(), 0));
+        }
+        counters
+    }
+
+    fn increment_category_counter(
+        counters: &mut Vec<(InvoiceCategory, u32)>,
+        category: &InvoiceCategory,
+    ) {
+        for i in 0..counters.len() {
+            let (existing, count) = counters.get(i).unwrap();
+            if existing == *category {
+                counters.set(i, (existing, count.saturating_add(1)));
+                return;
+            }
+        }
+        counters.push_back((category.clone(), 1));
+    }
+
+    fn validate_investor_report(report: &InvestorReport) -> Result<(), QuickLendXError> {
+        if report.end_date < report.start_date {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+        Ok(())
     }
 
     /// Calculate comprehensive platform metrics
