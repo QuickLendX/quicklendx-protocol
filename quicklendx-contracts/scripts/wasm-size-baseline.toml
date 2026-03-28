@@ -1,0 +1,38 @@
+# WASM size baseline for QuickLendX release artifact regression checks.
+#
+# This file is committed to source control so CI can compare the current
+# build against a known-good size without running a full historical build.
+#
+# ── How to update ─────────────────────────────────────────────────────────────
+#  1. Build the contract:  cd quicklendx-contracts && ./scripts/check-wasm-size.sh
+#  2. Note the "WASM size: … bytes" line in the output.
+#  3. Update [baseline].bytes to the new value.
+#  4. Update [baseline].recorded to today's date.
+#  5. Update WASM_SIZE_BASELINE_BYTES in tests/wasm_build_size_budget.rs to match.
+#  6. Update BASELINE_BYTES in scripts/check-wasm-size.sh to match.
+#  7. Commit all changes in the same PR that introduced the binary growth.
+#
+# ── Security note ─────────────────────────────────────────────────────────────
+#  This file is read-only data used for size comparison; it does not execute
+#  any code.  Weakening the values (raising bytes, raising regression_margin,
+#  or raising hard_budget_bytes) bypasses regression detection and requires
+#  explicit code-review approval.
+# ──────────────────────────────────────────────────────────────────────────────
+
+[baseline]
+# Optimised WASM size in bytes at the last recorded state.
+# Must match WASM_SIZE_BASELINE_BYTES in tests/wasm_build_size_budget.rs
+# and BASELINE_BYTES in scripts/check-wasm-size.sh.
+bytes = 217668
+
+# ISO-8601 date when this baseline was last recorded (informational only).
+recorded = "2026-03-25"
+
+# Maximum fractional growth allowed relative to `bytes` before CI fails.
+# Must match WASM_REGRESSION_MARGIN in tests/wasm_build_size_budget.rs.
+regression_margin = 0.05
+
+# Absolute ceiling in bytes (Stellar network deployment hard limit, 256 KiB).
+# Must match WASM_SIZE_BUDGET_BYTES in tests/wasm_build_size_budget.rs
+# and MAX_BYTES in scripts/check-wasm-size.sh.
+hard_budget_bytes = 262144

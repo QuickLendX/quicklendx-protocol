@@ -4,7 +4,8 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String,
 use crate::errors::QuickLendXError;
 use crate::protocol_limits::{
     check_string_length, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FEEDBACK_LENGTH,
-    MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
+    MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
+    MAX_TRANSACTION_ID_LENGTH,
 };
 
 const DEFAULT_INVOICE_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days default grace period
@@ -880,9 +881,15 @@ impl InvoiceStorage {
 
         // Update total count if this is a new invoice
         if is_new {
-            let mut count: u32 = env.storage().instance().get(&TOTAL_INVOICE_COUNT_KEY).unwrap_or(0);
+            let mut count: u32 = env
+                .storage()
+                .instance()
+                .get(&TOTAL_INVOICE_COUNT_KEY)
+                .unwrap_or(0);
             count = count.saturating_add(1);
-            env.storage().instance().set(&TOTAL_INVOICE_COUNT_KEY, &count);
+            env.storage()
+                .instance()
+                .set(&TOTAL_INVOICE_COUNT_KEY, &count);
         }
 
         // Add to business invoices list
@@ -936,6 +943,9 @@ impl InvoiceStorage {
             };
             env.storage().instance().remove(&key);
         }
+
+        // Unify with other storage cleanups
+        crate::storage::StorageManager::clear_all_mappings(env);
     }
 
     /// Get all invoices for a business
@@ -1334,10 +1344,16 @@ impl InvoiceStorage {
             }
 
             // Decrement total count
-            let mut count: u32 = env.storage().instance().get(&TOTAL_INVOICE_COUNT_KEY).unwrap_or(0);
+            let mut count: u32 = env
+                .storage()
+                .instance()
+                .get(&TOTAL_INVOICE_COUNT_KEY)
+                .unwrap_or(0);
             if count > 0 {
                 count -= 1;
-                env.storage().instance().set(&TOTAL_INVOICE_COUNT_KEY, &count);
+                env.storage()
+                    .instance()
+                    .set(&TOTAL_INVOICE_COUNT_KEY, &count);
             }
 
             // Remove invoice itself
@@ -1347,6 +1363,9 @@ impl InvoiceStorage {
 
     /// Get total count of active invoices in the system
     pub fn get_total_invoice_count(env: &Env) -> u32 {
-        env.storage().instance().get(&TOTAL_INVOICE_COUNT_KEY).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&TOTAL_INVOICE_COUNT_KEY)
+            .unwrap_or(0)
     }
 }
