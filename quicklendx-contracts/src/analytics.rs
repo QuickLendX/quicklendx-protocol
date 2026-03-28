@@ -287,10 +287,14 @@ impl AnalyticsStorage {
     pub fn generate_report_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let sequence = env.ledger().sequence();
-        let _combined = timestamp.wrapping_add(sequence as u64);
-        let bytes = Bytes::new(env);
+        let ts = timestamp.to_be_bytes();
+        let seq = sequence.to_be_bytes();
+        let combined: [u8; 12] = [
+            ts[0], ts[1], ts[2], ts[3], ts[4], ts[5], ts[6], ts[7], seq[0], seq[1], seq[2], seq[3],
+        ];
+        let bytes = Bytes::from_array(env, &combined);
         let hash = env.crypto().sha256(&bytes);
-        BytesN::from_array(&env, &hash.to_array())
+        BytesN::from_array(env, &hash.to_array())
     }
 }
 
@@ -298,6 +302,14 @@ impl AnalyticsStorage {
 pub struct AnalyticsCalculator;
 
 impl AnalyticsCalculator {
+    fn bps(numer: u32, denom: u32) -> i128 {
+        if denom == 0 {
+            return 0;
+        }
+        let v = (numer.saturating_mul(10000)).saturating_div(denom) as i128;
+        v.min(10000).max(0)
+    }
+
     /// Calculate comprehensive platform metrics
     pub fn calculate_platform_metrics(env: &Env) -> Result<PlatformMetrics, QuickLendXError> {
         let current_timestamp = env.ledger().timestamp();
@@ -338,8 +350,9 @@ impl AnalyticsCalculator {
             }
         }
 
-        // Calculate total investments by counting funded invoices
-        let total_investments = funded_invoices.len() as u32;
+        // Calculate total investments by counting invoices that have been funded at least once.
+        // In this contract model, an invoice that is Paid or Defaulted must have been funded.
+        let total_investments = (funded_invoices.len() + paid_invoices.len() + defaulted_invoices.len()) as u32;
 
         // Calculate total fees collected
         let mut total_fees = 0i128;
@@ -375,14 +388,17 @@ impl AnalyticsCalculator {
 
         let average_investment_amount = if total_investments > 0 {
             let mut total_invested = 0i128;
-            for invoice_id in funded_invoices.iter() {
-                if let Some(investment) =
-                    crate::investment::InvestmentStorage::get_investment_by_invoice(
-                        env,
-                        &invoice_id,
-                    )
-                {
-                    total_invested = total_invested.saturating_add(investment.amount);
+            // Include all invoices that should have associated investments.
+            for invoice_ids in [&funded_invoices, &paid_invoices, &defaulted_invoices].iter() {
+                for invoice_id in invoice_ids.iter() {
+                    if let Some(investment) =
+                        crate::investment::InvestmentStorage::get_investment_by_invoice(
+                            env,
+                            &invoice_id,
+                        )
+                    {
+                        total_invested = total_invested.saturating_add(investment.amount);
+                    }
                 }
             }
             total_invested.saturating_div(total_investments as i128)
@@ -396,20 +412,13 @@ impl AnalyticsCalculator {
 
         // Calculate default rate
         let _current_timestamp = env.ledger().timestamp();
-        let default_rate = if total_investments > 0 {
-            let defaulted_count = defaulted_invoices.len() as u32;
-            (defaulted_count.saturating_mul(10000)).saturating_div(total_investments) as i128
-        } else {
-            0
-        };
+        let default_rate = Self::bps(defaulted_invoices.len() as u32, total_investments);
 
         // Calculate success rate
-        let success_rate = if total_investments > 0 {
-            let successful_count = paid_invoices.len() as u32;
-            (successful_count.saturating_mul(10000)).saturating_div(total_investments) as i128
-        } else {
-            0
-        };
+        let success_rate = Self::bps(paid_invoices.len() as u32, total_investments);
+
+        let success_rate = success_rate.min(10000);
+        let default_rate = default_rate.min(10000);
 
         Ok(PlatformMetrics {
             total_invoices,

@@ -1,688 +1,306 @@
-//! Reentrancy guard tests and Soroban security model documentation
-//!
-//! # Why Callback-Based Reentrancy is NOT Possible in Soroban
-//!
-//! Soroban's execution model differs fundamentally from Ethereum:
-//!
-//! 1. **No fallback functions**: Contracts cannot define code that runs
-//!    when receiving tokens (no `receive()` or `fallback()` equivalents)
-//!
-//! 2. **SAC transfers are atomic**: `token.transfer()` updates balances
-//!    without executing any recipient code - it's a pure state change
-//!
-//! 3. **No mid-execution callbacks**: Cross-contract calls complete fully
-//!    before returning control to the caller
-//!
-//! # Why We Still Use Guards (Defense in Depth)
-//!
-//! - Protects against potential future Soroban model changes
-//! - Prevents accidental nested calls within same transaction
-//! - Documents security-critical code paths
-//! - Standard security pattern for financial operations
-//!
-//! # Test Coverage
-//!
-//! Integration tests (via contract client):
-//!   1. Guard blocks when lock is already held
-//!   2. Lock is released after successful operation
-//!   3. Lock is released after failed operation
-//!   4. Sequential protected operations work correctly
-//!
-//! Unit tests (directly exercising `with_payment_guard`):
-//!   5. Initial lock state is absent/false before any operation
-//!   6. Guard returns the closure's value on success
-//!   7. Error variant is specifically `OperationNotAllowed`
-//!   8. Guard handles `Err` returned by the closure, releases lock
-//!   9. Multiple lock/release cycles complete without deadlock
-//!  10. Guard with a non-unit return type passes value through
-
 use super::*;
 use crate::errors::QuickLendXError;
-use crate::invoice::InvoiceCategory;
-use crate::reentrancy::with_payment_guard;
-use soroban_sdk::{
-    symbol_short, testutils::Address as _, token, Address, BytesN, Env, String, Vec,
-};
+use crate::invoice::{InvoiceCategory, InvoiceStatus, InvoiceStorage};
+use crate::payments::{EscrowStatus, EscrowStorage};
+use crate::reentrancy::{is_payment_guard_locked, with_payment_guard};
+use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Vec};
 
-// ============================================================================
-// Test Context - Efficient setup with shared resources
-// ============================================================================
-
-struct TestContext<'a> {
+/// Test fixture for payment-path reentrancy regressions.
+struct PaymentFixture {
     env: Env,
-    client: QuickLendXContractClient<'a>,
     contract_id: Address,
     admin: Address,
+    business: Address,
+    investor: Address,
     currency: Address,
-    sac_client: token::StellarAssetClient<'a>,
-    token_client: token::Client<'a>,
 }
 
-impl<'a> TestContext<'a> {
-    fn new(
-        env: Env,
-        client: QuickLendXContractClient<'a>,
-        contract_id: Address,
-        admin: Address,
-        currency: Address,
-    ) -> Self {
-        let sac_client = token::StellarAssetClient::new(&env, &currency);
+impl PaymentFixture {
+    fn new() -> Self {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let business = Address::generate(&env);
+        let investor = Address::generate(&env);
+        let token_admin = Address::generate(&env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+
+        let initial_balance = 100_000i128;
+        let expiration = env.ledger().sequence() + 10_000;
         let token_client = token::Client::new(&env, &currency);
+        let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+        sac_client.mint(&business, &initial_balance);
+        sac_client.mint(&investor, &initial_balance);
+        token_client.approve(&business, &contract_id, &initial_balance, &expiration);
+        token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
+
+        client.set_admin(&admin);
+        client.submit_kyc_application(&business, &String::from_str(&env, "business-kyc"));
+        client.verify_business(&admin, &business);
+        client.submit_investor_kyc(&investor, &String::from_str(&env, "investor-kyc"));
+        client.verify_investor(&investor, &initial_balance);
+
         Self {
             env,
-            client,
             contract_id,
             admin,
+            business,
+            investor,
             currency,
-            sac_client,
-            token_client,
         }
+    }
+
+    fn client(&self) -> QuickLendXContractClient<'_> {
+        QuickLendXContractClient::new(&self.env, &self.contract_id)
+    }
+
+    fn token_client(&self) -> token::Client<'_> {
+        token::Client::new(&self.env, &self.currency)
+    }
+
+    fn create_invoice_with_bid(
+        &self,
+        invoice_amount: i128,
+        bid_amount: i128,
+    ) -> (BytesN<32>, BytesN<32>) {
+        let due_date = self.env.ledger().timestamp() + 86_400;
+        let client = self.client();
+        let invoice_id = client.store_invoice(
+            &self.business,
+            &invoice_amount,
+            &self.currency,
+            &due_date,
+            &String::from_str(&self.env, "reentrancy-regression"),
+            &InvoiceCategory::Services,
+            &Vec::new(&self.env),
+        );
+        client.verify_invoice(&invoice_id);
+
+        let bid_id = client.place_bid(
+            &self.investor,
+            &invoice_id,
+            &bid_amount,
+            &(invoice_amount + 100),
+        );
+
+        (invoice_id, bid_id)
+    }
+
+    fn fund_invoice(&self, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
+        self.client().accept_bid(invoice_id, bid_id);
+    }
+
+    fn invoice(&self, invoice_id: &BytesN<32>) -> crate::invoice::Invoice {
+        self.env.as_contract(&self.contract_id, || {
+            InvoiceStorage::get_invoice(&self.env, invoice_id).unwrap()
+        })
+    }
+
+    fn escrow(&self, invoice_id: &BytesN<32>) -> crate::payments::Escrow {
+        self.env.as_contract(&self.contract_id, || {
+            EscrowStorage::get_escrow_by_invoice(&self.env, invoice_id).unwrap()
+        })
+    }
+
+    fn guard_locked(&self) -> bool {
+        self.env
+            .as_contract(&self.contract_id, || is_payment_guard_locked(&self.env))
+    }
+
+    fn business_balance(&self) -> i128 {
+        self.token_client().balance(&self.business)
+    }
+
+    fn investor_balance(&self) -> i128 {
+        self.token_client().balance(&self.investor)
+    }
+
+    fn contract_balance(&self) -> i128 {
+        self.token_client().balance(&self.contract_id)
     }
 }
 
-fn setup_context() -> TestContext<'static> {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-
-    let token_admin = Address::generate(&env);
-    let currency = env
-        .register_stellar_asset_contract_v2(token_admin)
-        .address();
-
-    TestContext::new(env, client, contract_id, admin, currency)
+fn run_nested_attempt<R, F>(fixture: &PaymentFixture, operation: F) -> Result<R, QuickLendXError>
+where
+    F: FnOnce() -> Result<R, QuickLendXError>,
+{
+    fixture
+        .env
+        .as_contract(&fixture.contract_id, || with_payment_guard(&fixture.env, operation))
 }
 
-fn setup_business(ctx: &TestContext, business: &Address) {
-    ctx.client
-        .submit_kyc_application(business, &String::from_str(&ctx.env, "Business KYC"));
-    ctx.client.verify_business(&ctx.admin, business);
-}
-
-fn setup_investor(ctx: &TestContext, investor: &Address, limit: i128) {
-    ctx.sac_client.mint(investor, &(limit * 10));
-    let expiration = ctx.env.ledger().sequence() + 100_000;
-    ctx.token_client
-        .approve(investor, &ctx.contract_id, &(limit * 10), &expiration);
-    ctx.client
-        .submit_investor_kyc(investor, &String::from_str(&ctx.env, "Investor KYC"));
-    ctx.client.verify_investor(investor, &limit);
-}
-
-/// Create a verified invoice with a placed bid (ready to accept).
-fn create_invoice_with_bid(
-    ctx: &TestContext,
-    business: &Address,
-    investor: &Address,
-    amount: i128,
-) -> (BytesN<32>, BytesN<32>) {
-    let due_date = ctx.env.ledger().timestamp() + 86_400;
-
-    let invoice_id = ctx.client.store_invoice(
-        business,
-        &amount,
-        &ctx.currency,
-        &due_date,
-        &String::from_str(&ctx.env, "Invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(&ctx.env),
-    );
-
-    ctx.client.verify_invoice(&invoice_id);
-
-    let bid_id = ctx
-        .client
-        .place_bid(investor, &invoice_id, &amount, &(amount + 100));
-
-    (invoice_id, bid_id)
-}
-
-// ============================================================================
-// Integration Tests (via contract client)
-// ============================================================================
-
-/// Test 1: Guard blocks when lock is already set.
-///
-/// Simulates a reentrant call by manually setting `pay_lock` before
-/// calling a protected function. Verifies the call is rejected.
 #[test]
-fn test_guard_blocks_when_lock_is_set() {
-    let ctx = setup_context();
+fn test_guard_rejects_direct_nested_execution_and_clears_lock() {
+    let fixture = PaymentFixture::new();
 
-    let business = Address::generate(&ctx.env);
-    let investor = Address::generate(&ctx.env);
-
-    setup_business(&ctx, &business);
-    setup_investor(&ctx, &investor, 50_000);
-
-    let (invoice_id, bid_id) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
-
-    // Manually hold the lock before calling the protected function.
-    ctx.env.as_contract(&ctx.contract_id, || {
-        ctx.env
-            .storage()
-            .instance()
-            .set(&symbol_short!("pay_lock"), &true);
+    let result = run_nested_attempt(&fixture, || {
+        with_payment_guard(&fixture.env, || Ok::<(), QuickLendXError>(()))
     });
 
-    let result = ctx.client.try_accept_bid(&invoice_id, &bid_id);
-    assert!(result.is_err(), "Should fail when lock is already set");
-
-    // Clean up so the env can be reused safely.
-    ctx.env.as_contract(&ctx.contract_id, || {
-        ctx.env
-            .storage()
-            .instance()
-            .set(&symbol_short!("pay_lock"), &false);
-    });
+    assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+    assert!(!fixture.guard_locked(), "guard must clear after nested rejection");
 }
 
-/// Test 2: Guard releases lock after successful operation.
-///
-/// Verifies that after a successful protected operation completes,
-/// the lock is set back to false.
 #[test]
-fn test_guard_releases_lock_after_success() {
-    let ctx = setup_context();
+fn test_guard_clears_after_inner_error() {
+    let fixture = PaymentFixture::new();
 
-    let business = Address::generate(&ctx.env);
-    let investor = Address::generate(&ctx.env);
-
-    setup_business(&ctx, &business);
-    setup_investor(&ctx, &investor, 50_000);
-
-    let (invoice_id, bid_id) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
-
-    let result = ctx.client.try_accept_bid(&invoice_id, &bid_id);
-    assert!(result.is_ok(), "accept_bid should succeed");
-
-    let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
-        ctx.env
-            .storage()
-            .instance()
-            .get(&symbol_short!("pay_lock"))
-            .unwrap_or(false)
+    let result: Result<(), QuickLendXError> = fixture.env.as_contract(&fixture.contract_id, || {
+        with_payment_guard(&fixture.env, || Err(QuickLendXError::InvoiceNotFound))
     });
 
-    assert!(!lock_value, "Lock must be false after successful operation");
+    assert_eq!(result, Err(QuickLendXError::InvoiceNotFound));
+    assert!(!fixture.guard_locked(), "guard must clear after inner errors");
 }
 
-/// Test 3: Guard releases lock after failed operation.
-///
-/// Verifies that even when the protected closure panics/errors,
-/// the lock is still cleared to prevent deadlock.
 #[test]
-fn test_guard_releases_lock_after_failure() {
-    let ctx = setup_context();
+fn test_nested_accept_bid_is_rejected_without_state_change() {
+    let fixture = PaymentFixture::new();
+    let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_000, 1_000);
 
-    let business = Address::generate(&ctx.env);
-    let investor = Address::generate(&ctx.env);
-
-    setup_business(&ctx, &business);
-    setup_investor(&ctx, &investor, 50_000);
-
-    let (invoice_id, _) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
-
-    // Use a bid_id that does not exist so the call fails inside the guard.
-    let fake_bid_id = BytesN::from_array(&ctx.env, &[99u8; 32]);
-    let result = ctx.client.try_accept_bid(&invoice_id, &fake_bid_id);
-    assert!(result.is_err(), "Should fail for non-existent bid");
-
-    let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
-        ctx.env
-            .storage()
-            .instance()
-            .get(&symbol_short!("pay_lock"))
-            .unwrap_or(false)
+    let result = run_nested_attempt(&fixture, || {
+        QuickLendXContract::accept_bid(
+            fixture.env.clone(),
+            invoice_id.clone(),
+            bid_id.clone(),
+        )
     });
 
-    assert!(
-        !lock_value,
-        "Lock must be false even after failed operation"
-    );
+    assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+    assert_eq!(fixture.invoice(&invoice_id).status, InvoiceStatus::Verified);
+    assert!(fixture.env.as_contract(&fixture.contract_id, || {
+        EscrowStorage::get_escrow_by_invoice(&fixture.env, &invoice_id).is_none()
+    }));
+    assert!(!fixture.guard_locked());
+
+    fixture.client().accept_bid(&invoice_id, &bid_id);
+    assert_eq!(fixture.invoice(&invoice_id).status, InvoiceStatus::Funded);
 }
 
-/// Test 4: Sequential protected calls succeed.
-///
-/// Verifies that multiple protected operations can run one after the other,
-/// proving the lock is released between each call.
 #[test]
-fn test_sequential_protected_calls_succeed() {
-    let ctx = setup_context();
+fn test_nested_accept_bid_and_fund_is_rejected_without_state_change() {
+    let fixture = PaymentFixture::new();
+    let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_200, 1_000);
 
-    let business = Address::generate(&ctx.env);
-    let investor = Address::generate(&ctx.env);
-
-    setup_business(&ctx, &business);
-    setup_investor(&ctx, &investor, 100_000);
-
-    let (invoice_1, bid_1) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
-    let (invoice_2, bid_2) = create_invoice_with_bid(&ctx, &business, &investor, 2_000);
-
-    let result_1 = ctx.client.try_accept_bid(&invoice_1, &bid_1);
-    assert!(result_1.is_ok(), "First accept_bid should succeed");
-
-    let result_2 = ctx.client.try_accept_bid(&invoice_2, &bid_2);
-    assert!(
-        result_2.is_ok(),
-        "Second accept_bid should succeed (lock released after first)"
-    );
-
-    let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
-        ctx.env
-            .storage()
-            .instance()
-            .get(&symbol_short!("pay_lock"))
-            .unwrap_or(false)
+    let result = run_nested_attempt(&fixture, || {
+        QuickLendXContract::accept_bid_and_fund(
+            fixture.env.clone(),
+            invoice_id.clone(),
+            bid_id.clone(),
+        )
     });
 
-    assert!(!lock_value, "Lock should be false after all operations");
+    assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+    assert_eq!(fixture.invoice(&invoice_id).status, InvoiceStatus::Verified);
+    assert!(fixture.env.as_contract(&fixture.contract_id, || {
+        EscrowStorage::get_escrow_by_invoice(&fixture.env, &invoice_id).is_none()
+    }));
+    assert!(!fixture.guard_locked());
 }
 
-// ============================================================================
-// Unit Tests (directly exercising `with_payment_guard`)
-// ============================================================================
-
-/// Test 5: Initial lock state is absent before any operation.
-///
-/// Before `with_payment_guard` has ever been called, the storage key
-/// should not exist — `unwrap_or(false)` must treat it as unlocked.
 #[test]
-fn test_initial_lock_state_is_absent() {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
+fn test_nested_release_escrow_is_rejected_without_releasing_funds() {
+    let fixture = PaymentFixture::new();
+    let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_000, 1_000);
+    fixture.fund_invoice(&invoice_id, &bid_id);
 
-    let lock_before: bool = env.as_contract(&contract_id, || {
-        env.storage()
-            .instance()
-            .get(&symbol_short!("pay_lock"))
-            .unwrap_or(false)
+    let business_before = fixture.business_balance();
+    let contract_before = fixture.contract_balance();
+
+    let result = run_nested_attempt(&fixture, || {
+        QuickLendXContract::release_escrow_funds(fixture.env.clone(), invoice_id.clone())
     });
 
-    assert!(
-        !lock_before,
-        "Lock must be absent (treated as false) before any guard call"
-    );
+    assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+    assert_eq!(fixture.escrow(&invoice_id).status, EscrowStatus::Held);
+    assert_eq!(fixture.invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(fixture.business_balance(), business_before);
+    assert_eq!(fixture.contract_balance(), contract_before);
+    assert!(!fixture.guard_locked());
 }
 
-/// Test 6: Guard passes the closure's return value through on success.
-///
-/// `with_payment_guard` must return whatever the closure returns, not just `()`.
 #[test]
-fn test_guard_returns_closure_value() {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
+fn test_nested_refund_escrow_is_rejected_without_refunding_funds() {
+    let fixture = PaymentFixture::new();
+    let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_000, 1_000);
+    fixture.fund_invoice(&invoice_id, &bid_id);
 
-    let outcome: Result<u32, QuickLendXError> =
-        env.as_contract(&contract_id, || with_payment_guard(&env, || Ok(42u32)));
+    let investor_before = fixture.investor_balance();
+    let contract_before = fixture.contract_balance();
 
-    assert_eq!(
-        outcome,
-        Ok(42u32),
-        "Guard must pass the closure's Ok value through unchanged"
-    );
+    let result = run_nested_attempt(&fixture, || {
+        QuickLendXContract::refund_escrow_funds(
+            fixture.env.clone(),
+            invoice_id.clone(),
+            fixture.admin.clone(),
+        )
+    });
+
+    assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+    assert_eq!(fixture.escrow(&invoice_id).status, EscrowStatus::Held);
+    assert_eq!(fixture.invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(fixture.investor_balance(), investor_before);
+    assert_eq!(fixture.contract_balance(), contract_before);
+    assert!(!fixture.guard_locked());
 }
 
-/// Test 7: Error variant is specifically `OperationNotAllowed`.
-///
-/// When the lock is held, the returned error must be exactly
-/// `QuickLendXError::OperationNotAllowed`, not a generic/unknown variant.
 #[test]
-fn test_guard_error_variant_is_operation_not_allowed() {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
+fn test_nested_settle_invoice_is_rejected_without_payout() {
+    let fixture = PaymentFixture::new();
+    let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_000, 900);
+    fixture.fund_invoice(&invoice_id, &bid_id);
 
-    env.as_contract(&contract_id, || {
-        // Hold the lock manually.
-        env.storage()
-            .instance()
-            .set(&symbol_short!("pay_lock"), &true);
+    let business_before = fixture.business_balance();
+    let investor_before = fixture.investor_balance();
+    let contract_before = fixture.contract_balance();
 
-        let result: Result<(), QuickLendXError> = with_payment_guard(&env, || Ok(()));
-
-        assert_eq!(
-            result,
-            Err(QuickLendXError::OperationNotAllowed),
-            "Must return OperationNotAllowed when lock is held"
-        );
-
-        // Release so env stays clean.
-        env.storage()
-            .instance()
-            .set(&symbol_short!("pay_lock"), &false);
+    let result = run_nested_attempt(&fixture, || {
+        QuickLendXContract::settle_invoice(fixture.env.clone(), invoice_id.clone(), 1_000)
     });
+
+    assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+    let invoice = fixture.invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+    assert_eq!(invoice.total_paid, 0);
+    assert_eq!(fixture.business_balance(), business_before);
+    assert_eq!(fixture.investor_balance(), investor_before);
+    assert_eq!(fixture.contract_balance(), contract_before);
+    assert!(!fixture.guard_locked());
 }
 
-/// Test 8: Guard releases lock when the closure itself returns `Err`.
-///
-/// If the user's closure returns `Err`, the guard must still clear the lock
-/// before propagating the error.
 #[test]
-fn test_guard_releases_lock_when_closure_returns_err() {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
+fn test_nested_partial_payment_is_rejected_without_recording_progress() {
+    let fixture = PaymentFixture::new();
+    let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_000, 900);
+    fixture.fund_invoice(&invoice_id, &bid_id);
 
-    env.as_contract(&contract_id, || {
-        // Guard runs, closure returns Err.
-        let result: Result<(), QuickLendXError> =
-            with_payment_guard(&env, || Err(QuickLendXError::InvoiceNotFound));
+    let business_before = fixture.business_balance();
+    let investor_before = fixture.investor_balance();
+    let contract_before = fixture.contract_balance();
 
-        assert_eq!(
-            result,
-            Err(QuickLendXError::InvoiceNotFound),
-            "Closure error must be propagated"
-        );
-
-        // Lock must be released despite the closure error.
-        let lock: bool = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("pay_lock"))
-            .unwrap_or(false);
-
-        assert!(!lock, "Lock must be false after closure returns Err");
-    });
-}
-
-// ============================================================================
-// Unit Tests for with_payment_guard
-// ============================================================================
-
-/// Test 5: with_payment_guard returns Ok on success
-///
-/// Directly invokes with_payment_guard with a closure that succeeds.
-#[test]
-fn test_guard_unit_success() {
-    let ctx = setup_context();
-
-    let result: Result<i32, _> = ctx.env.as_contract(&ctx.contract_id, || {
-        crate::reentrancy::with_payment_guard(&ctx.env, || Ok(42))
+    let result = run_nested_attempt(&fixture, || {
+        QuickLendXContract::process_partial_payment(
+            fixture.env.clone(),
+            invoice_id.clone(),
+            400,
+            String::from_str(&fixture.env, "nested-callback"),
+        )
     });
 
-    assert_eq!(result.unwrap(), 42);
-
-    // Lock must be cleared
-    let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().get(&key).unwrap_or(false)
-    });
-    assert!(!lock_value, "Lock should be false after successful guard");
-}
-
-/// Test 6: with_payment_guard clears lock after inner error
-///
-/// Verifies the guard releases the lock even when the closure returns Err.
-#[test]
-fn test_guard_unit_failure_clears_lock() {
-    let ctx = setup_context();
-
-    let result: Result<(), _> = ctx.env.as_contract(&ctx.contract_id, || {
-        crate::reentrancy::with_payment_guard(&ctx.env, || {
-            Err(crate::errors::QuickLendXError::InvalidStatus)
-        })
-    });
-
-    assert!(result.is_err());
-
-    // Lock must be cleared despite error
-    let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().get(&key).unwrap_or(false)
-    });
-    assert!(!lock_value, "Lock should be false after guard failure");
-}
-
-/// Test 7: with_payment_guard blocks reentrant calls
-///
-/// Manually sets lock then calls guard — should return OperationNotAllowed.
-#[test]
-fn test_guard_unit_reentrant_blocked() {
-    let ctx = setup_context();
-
-    let result: Result<(), _> = ctx.env.as_contract(&ctx.contract_id, || {
-        // Set lock manually
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().set(&key, &true);
-
-        crate::reentrancy::with_payment_guard(&ctx.env, || Ok(()))
-    });
-
-    assert!(result.is_err(), "Should return OperationNotAllowed");
-
-    // Clean up
-    ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().set(&key, &false);
-    });
-}
-
-/// Test 8: Lock defaults to false on fresh contract
-///
-/// Verifies pay_lock is not set on a fresh contract (defaults to false).
-#[test]
-fn test_lock_not_set_on_fresh_contract() {
-    let ctx = setup_context();
-
-    let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().get(&key).unwrap_or(false)
-    });
-
-    assert!(!lock_value, "pay_lock should default to false");
-}
-
-// ============================================================================
-// Guard Blocking on All Guarded Endpoints
-// ============================================================================
-
-/// Test 9: accept_bid_and_fund blocked by pre-set lock
-#[test]
-fn test_accept_bid_and_fund_guard_blocks() {
-    let ctx = setup_context();
-
-    let business = Address::generate(&ctx.env);
-    let investor = Address::generate(&ctx.env);
-
-    setup_business(&ctx, &business);
-    setup_investor(&ctx, &investor, 50_000);
-
-    let (invoice_id, bid_id) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
-
-    // Set lock before calling
-    ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().set(&key, &true);
-    });
-
-    let result = ctx.client.try_accept_bid_and_fund(&invoice_id, &bid_id);
-    assert!(
-        result.is_err(),
-        "accept_bid_and_fund should fail when lock is set"
-    );
-
-    // Clean up
-    ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().set(&key, &false);
-    });
-}
-
-/// Test 10: release_escrow_funds blocked by pre-set lock
-#[test]
-fn test_release_escrow_guard_blocks() {
-    let ctx = setup_context();
-
-    let business = Address::generate(&ctx.env);
-    let investor = Address::generate(&ctx.env);
-
-    setup_business(&ctx, &business);
-    setup_investor(&ctx, &investor, 50_000);
-
-    let (invoice_id, bid_id) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
-
-    // Accept bid to create escrow
-    let result = ctx.client.try_accept_bid(&invoice_id, &bid_id);
-    assert!(result.is_ok(), "accept_bid should succeed first");
-
-    // Set lock before calling release
-    ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().set(&key, &true);
-    });
-
-    let result = ctx.client.try_release_escrow_funds(&invoice_id);
-    assert!(
-        result.is_err(),
-        "release_escrow_funds should fail when lock is set"
-    );
-
-    // Clean up
-    ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().set(&key, &false);
-    });
-}
-
-/// Test 11: refund_escrow_funds blocked by pre-set lock
-#[test]
-fn test_refund_escrow_guard_blocks() {
-    let ctx = setup_context();
-
-    let business = Address::generate(&ctx.env);
-    let investor = Address::generate(&ctx.env);
-
-    setup_business(&ctx, &business);
-    setup_investor(&ctx, &investor, 50_000);
-
-    let (invoice_id, bid_id) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
-
-    // Accept bid to create escrow
-    let result = ctx.client.try_accept_bid(&invoice_id, &bid_id);
-    assert!(result.is_ok(), "accept_bid should succeed first");
-
-    // Set lock before calling refund
-    ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().set(&key, &true);
-    });
-
-    let result = ctx.client.try_refund_escrow_funds(&invoice_id, &ctx.admin);
-    assert!(
-        result.is_err(),
-        "refund_escrow_funds should fail when lock is set"
-    );
-
-    // Clean up
-    ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().set(&key, &false);
-    });
-}
-
-/// Test 12: Mixed sequential calls to different guarded endpoints
-///
-/// Verifies that calling different guarded functions sequentially works
-/// because the lock is released between each call.
-#[test]
-fn test_mixed_sequential_endpoints() {
-    let ctx = setup_context();
-
-    let business = Address::generate(&ctx.env);
-    let investor = Address::generate(&ctx.env);
-
-    setup_business(&ctx, &business);
-    setup_investor(&ctx, &investor, 100_000);
-
-    // Create two invoices with bids
-    let (invoice_1, bid_1) = create_invoice_with_bid(&ctx, &business, &investor, 1_000);
-    let (invoice_2, bid_2) = create_invoice_with_bid(&ctx, &business, &investor, 2_000);
-
-    // First: accept_bid (guarded)
-    let r1 = ctx.client.try_accept_bid(&invoice_1, &bid_1);
-    assert!(r1.is_ok(), "First accept_bid should succeed");
-
-    // Second: accept_bid_and_fund (different guarded endpoint)
-    let r2 = ctx.client.try_accept_bid_and_fund(&invoice_2, &bid_2);
-    assert!(
-        r2.is_ok(),
-        "accept_bid_and_fund should succeed after accept_bid"
-    );
-
-    // Lock should be clear after both
-    let lock_value: bool = ctx.env.as_contract(&ctx.contract_id, || {
-        let key = symbol_short!("pay_lock");
-        ctx.env.storage().instance().get(&key).unwrap_or(false)
-    });
-    assert!(
-        !lock_value,
-        "Lock should be released after mixed sequential calls"
-    );
-}
-/// Test 9: Multiple lock/release cycles complete without deadlock.
-///
-/// Calls `with_payment_guard` five times in sequence — each must find
-/// the lock free and release it cleanly for the next.
-#[test]
-fn test_multiple_lock_release_cycles() {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
-
-    env.as_contract(&contract_id, || {
-        for i in 0u32..5 {
-            let result: Result<u32, QuickLendXError> = with_payment_guard(&env, || Ok(i));
-
-            assert_eq!(
-                result,
-                Ok(i),
-                "Cycle {i} must succeed — lock should be free between calls"
-            );
-
-            let lock: bool = env
-                .storage()
-                .instance()
-                .get(&symbol_short!("pay_lock"))
-                .unwrap_or(false);
-
-            assert!(!lock, "Lock must be false after cycle {i}");
-        }
-    });
-}
-
-/// Test 10: Guard with explicit `Some(false)` in storage treats it as unlocked.
-///
-/// `unwrap_or(false)` handles absent keys, but the key may also be explicitly
-/// stored as `false` (e.g., after a previous run). Guard must allow entry in
-/// that case too.
-#[test]
-fn test_guard_allows_entry_when_lock_is_explicitly_false() {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
-
-    env.as_contract(&contract_id, || {
-        // Explicitly write false — simulates state after a previous guard run.
-        env.storage()
-            .instance()
-            .set(&symbol_short!("pay_lock"), &false);
-
-        let result: Result<u64, QuickLendXError> = with_payment_guard(&env, || Ok(99u64));
-
-        assert_eq!(
-            result,
-            Ok(99u64),
-            "Guard must allow entry when lock is explicitly false"
-        );
-
-        let lock: bool = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("pay_lock"))
-            .unwrap_or(false);
-
-        assert!(!lock, "Lock must remain false after successful call");
-    });
+    assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+    let invoice = fixture.invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+    assert_eq!(invoice.total_paid, 0);
+    assert_eq!(invoice.payment_history.len(), 0);
+    assert_eq!(fixture.business_balance(), business_before);
+    assert_eq!(fixture.investor_balance(), investor_before);
+    assert_eq!(fixture.contract_balance(), contract_before);
+    assert!(!fixture.guard_locked());
 }
