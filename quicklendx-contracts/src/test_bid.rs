@@ -8,6 +8,7 @@
 /// 4. Ranking - profit-based bid comparison works correctly
 use super::*;
 use crate::bid::BidStatus;
+use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::payments::EscrowStatus;
 use crate::protocol_limits::compute_min_bid_amount;
@@ -55,6 +56,15 @@ fn create_verified_invoice(
 
     let _ = client.try_verify_invoice(&invoice_id);
     invoice_id
+}
+
+fn assert_contract_error<T>(
+    result: Result<T, Result<QuickLendXError, soroban_sdk::InvokeError>>,
+    expected: QuickLendXError,
+) {
+    let err = result.expect_err("expected contract call to fail");
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, expected);
 }
 
 // ============================================================================
@@ -131,6 +141,7 @@ fn test_bid_minimum_amount_enforced() {
             min_bid_bps: 100,
             max_due_date_days: 365,
             grace_period_seconds: 86400,
+            max_invoices_per_business: 100,
         },
     );
     let below_min = min_bid.saturating_sub(1);
@@ -207,7 +218,55 @@ fn test_bid_withdrawal_only_placed_bids() {
 
     // Second withdraw attempt should fail
     let result = client.try_withdraw_bid(&bid_id);
-    assert!(result.is_err(), "Cannot withdraw non-Placed bid");
+    assert_contract_error(result, QuickLendXError::OperationNotAllowed);
+}
+
+/// Core Test: Accepted bids cannot be withdrawn
+#[test]
+fn test_bid_withdrawal_rejects_accepted_bid() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let result = client.try_withdraw_bid(&bid_id);
+    assert_contract_error(result, QuickLendXError::OperationNotAllowed);
+
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Accepted);
+}
+
+/// Core Test: Expired bids are refreshed then rejected during withdrawal
+#[test]
+fn test_bid_withdrawal_rejects_expired_bid_without_manual_cleanup() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+
+    let expiration = client.get_bid(&bid_id).unwrap().expiration_timestamp;
+    env.ledger().set_timestamp(expiration + 1);
+
+    let result = client.try_withdraw_bid(&bid_id);
+    assert_contract_error(result, QuickLendXError::OperationNotAllowed);
+
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Expired);
+
+    let expired_bids = client.get_bids_by_status(&invoice_id, &BidStatus::Expired);
+    assert_eq!(expired_bids.len(), 1, "Expired bid should be queryable by status");
 }
 
 // ============================================================================
