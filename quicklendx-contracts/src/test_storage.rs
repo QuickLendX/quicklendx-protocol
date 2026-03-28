@@ -169,8 +169,7 @@ fn test_indexes() {
 fn test_invoice_storage() {
     let env = Env::default();
     with_registered_contract(&env, || {
-        with_registered_contract(&env, || {
-            let invoice_id = BytesN::from_array(&env, &[1; 32]);
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
             let business = Address::generate(&env);
             let currency = Address::generate(&env);
 
@@ -281,7 +280,6 @@ fn test_invoice_storage() {
             let count2 = InvoiceStorage::next_count(&env);
             assert_eq!(count1, 1);
             assert_eq!(count2, 2);
-        });
     });
 }
 

@@ -29,10 +29,31 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
-#[cfg(test)]
 mod storage;
 #[cfg(test)]
 mod test_init;
+#[cfg(test)]
+mod test_max_invoices_per_business;
+#[cfg(test)]
+mod test_overflow;
+#[cfg(test)]
+mod test_pause;
+#[cfg(test)]
+mod test_profit_fee;
+#[cfg(test)]
+mod test_refund;
+#[cfg(test)]
+mod test_storage;
+#[cfg(test)]
+mod test_investment_queries;
+#[cfg(test)]
+mod test_investment_consistency;
+#[cfg(test)]
+mod test_string_limits;
+#[cfg(test)]
+mod test_types;
+#[cfg(test)]
+mod test_vesting;
 pub mod types;
 mod verification;
 mod vesting;
@@ -110,6 +131,11 @@ impl QuickLendXContract {
     /// Major versions indicate breaking changes that require migration.
     pub fn get_version(_env: Env) -> u32 {
         1u32
+    }
+
+    /// Get current protocol limits
+    pub fn get_protocol_limits(env: Env) -> protocol_limits::ProtocolLimits {
+        protocol_limits::ProtocolLimitsContract::get_protocol_limits(env)
     }
 
     /// Initialize the admin address (deprecated: use initialize)
@@ -1211,7 +1237,7 @@ impl QuickLendXContract {
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
-            100, // max_invoices_per_business
+            100, // max_invoices_per_business (default)
         )
     }
 
@@ -2045,14 +2071,17 @@ impl QuickLendXContract {
         let schedule = vesting::Vesting::get_schedule(&env, id)?;
         vesting::Vesting::releasable_amount(&env, &schedule).ok()
     }
+
     // ============================================================================
-    // Analytics Functions missing from exports
+    // Analytics Functions
     // ============================================================================
 
+    /// Get user behavior metrics
     pub fn get_user_behavior_metrics(env: Env, user: Address) -> analytics::UserBehaviorMetrics {
         analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).unwrap()
     }
 
+    /// Get financial metrics for a specific period
     pub fn get_financial_metrics(
         env: Env,
         period: analytics::TimePeriod,
@@ -2060,6 +2089,7 @@ impl QuickLendXContract {
         analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period).unwrap()
     }
 
+    /// Generate a business report for a specific period
     pub fn generate_business_report(
         env: Env,
         business: Address,
@@ -2068,10 +2098,12 @@ impl QuickLendXContract {
         analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
     }
 
+    /// Retrieve a stored business report by ID
     pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<analytics::BusinessReport> {
         analytics::AnalyticsStorage::get_business_report(&env, &report_id)
     }
 
+    /// Generate an investor report for a specific period
     pub fn generate_investor_report(
         env: Env,
         investor: Address,
@@ -2080,10 +2112,12 @@ impl QuickLendXContract {
         analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)
     }
 
+    /// Retrieve a stored investor report by ID
     pub fn get_investor_report(env: Env, report_id: BytesN<32>) -> Option<analytics::InvestorReport> {
         analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
     }
 
+    /// Get a summary of platform and performance metrics
     pub fn get_analytics_summary(
         env: Env,
     ) -> (analytics::PlatformMetrics, analytics::PerformanceMetrics) {
@@ -2117,9 +2151,4 @@ impl QuickLendXContract {
             });
         (platform, performance)
     }
-
-
 }
-
-
-
