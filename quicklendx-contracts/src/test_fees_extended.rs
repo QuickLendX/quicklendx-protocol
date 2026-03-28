@@ -27,6 +27,25 @@ fn setup_investor(env: &Env, client: &QuickLendXContractClient, admin: &Address)
     investor
 }
 
+fn set_user_volume_tier(
+    client: &QuickLendXContractClient,
+    user: &Address,
+    target_tier: crate::fees::VolumeTier,
+) {
+    match target_tier {
+        crate::fees::VolumeTier::Standard => {}
+        crate::fees::VolumeTier::Silver => {
+            client.update_user_transaction_volume(user, &100_000_000_000);
+        }
+        crate::fees::VolumeTier::Gold => {
+            client.update_user_transaction_volume(user, &500_000_000_000);
+        }
+        crate::fees::VolumeTier::Platinum => {
+            client.update_user_transaction_volume(user, &1_000_000_000_000);
+        }
+    }
+}
+
 // ============================================================================
 // EDGE CASE TESTS - ZERO AND SMALL AMOUNTS
 // ============================================================================
@@ -218,6 +237,73 @@ fn test_early_and_late_payment_combined() {
     assert!(combined_fees < regular_fees);
 }
 
+/// Small-amount fee calculations should clamp first and then apply modifiers deterministically.
+#[test]
+fn test_transaction_fee_small_amount_uses_minimums_before_modifiers() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let regular_fees = client.calculate_transaction_fees(&user, &1, &false, &false);
+    let early_fees = client.calculate_transaction_fees(&user, &1, &true, &false);
+
+    // Base fees clamp to configured minimums: 100 + 50 + 100 = 250
+    // Early discount applies after clamp on Platform only: 100 -> 90
+    assert_eq!(regular_fees, 250);
+    assert_eq!(early_fees, 240);
+}
+
+/// Large-amount calculations should clamp to maximums before discounts are applied.
+#[test]
+fn test_transaction_fee_large_amount_uses_maximums_before_tier_discount() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+    set_user_volume_tier(&client, &user, crate::fees::VolumeTier::Platinum);
+
+    let amount = 100_000_000_i128;
+    let fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
+
+    // Platform max 1_000_000 -> 850_000 after Platinum discount
+    // Processing max 500_000 -> 425_000 after Platinum discount
+    // Verification max 100_000 -> 85_000 after Platinum discount
+    assert_eq!(fees, 1_360_000);
+}
+
+/// Repeated calculations over the same state and input should remain deterministic.
+#[test]
+fn test_transaction_fee_same_inputs_are_deterministic() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+    set_user_volume_tier(&client, &user, crate::fees::VolumeTier::Silver);
+    client.update_fee_structure(&admin, &FeeType::LatePayment, &100, &50, &10_000, &true);
+
+    let amount = 12_345_i128;
+    let first = client.calculate_transaction_fees(&user, &amount, &true, &true);
+    let second = client.calculate_transaction_fees(&user, &amount, &true, &true);
+    let third = client.calculate_transaction_fees(&user, &amount, &true, &true);
+
+    assert_eq!(first, second);
+    assert_eq!(second, third);
+    assert_eq!(third, 533);
+}
+
 // ============================================================================
 // REVENUE DISTRIBUTION PATTERN TESTS - VARIOUS SPLITS
 // ============================================================================
@@ -367,7 +453,7 @@ fn test_multiple_fee_updates_sequence() {
     client.set_platform_fee(&300);
     assert_eq!(client.get_platform_fee().fee_bps, 300);
 
-    client.set_platform_fee(&500);
+    client.update_platform_fee_bps(&500);
     assert_eq!(client.get_platform_fee().fee_bps, 500);
 
     client.set_platform_fee(&150);
@@ -387,7 +473,7 @@ fn test_treasury_persists_across_updates() {
     client.initialize_fee_system(&admin);
     client.configure_treasury(&treasury);
 
-    client.set_platform_fee(&500);
+    client.update_platform_fee_bps(&500);
 
     let treasury_addr = client.get_treasury_address();
     assert!(treasury_addr.is_some());

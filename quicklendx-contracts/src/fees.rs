@@ -10,6 +10,8 @@ const BPS_DENOMINATOR: i128 = 10_000;
 const DEFAULT_PLATFORM_FEE_BPS: u32 = 200; // 2%
 const MAX_PLATFORM_FEE_BPS: u32 = 1000; // 10%
 const ROTATION_TTL_SECONDS: u64 = 604_800; // 7 days
+const EARLY_PLATFORM_DISCOUNT_BPS: i128 = 1_000; // 10%
+const LATE_FEE_SURCHARGE_BPS: i128 = 2_000; // 20%
 
 // Storage keys
 const FEE_CONFIG_KEY: Symbol = symbol_short!("fee_cfg");
@@ -268,7 +270,7 @@ impl FeeManager {
             return Ok(());
         }
 
-       let old_fee_bps = config.fee_bps;
+        let old_fee_bps = config.fee_bps;
         config.fee_bps = fee_bps;
         config.updated_at = env.ledger().timestamp();
         config.updated_by = admin.clone();
@@ -512,12 +514,24 @@ impl FeeManager {
         env.storage()
             .instance()
             .set(&FEE_CONFIG_KEY, &fee_structures);
-            
         events::emit_fee_structure_updated(env, &fee_type, old_bps, base_fee_bps, admin);
-        
         Ok(updated_structure)
     }
 
+    /// Calculate deterministic transaction fees for a user and payment-timing context.
+    ///
+    /// Fee application order is intentionally fixed so the same inputs always produce
+    /// the same output:
+    /// 1. Compute each active fee's raw basis-point amount.
+    /// 2. Clamp the raw fee into that structure's `[min_fee, max_fee]` range.
+    /// 3. Apply the user's volume-tier discount to every fee except `LatePayment`.
+    /// 4. Apply the early-payment discount to the `Platform` fee only.
+    /// 5. Apply the late-payment surcharge to the `LatePayment` fee only.
+    ///
+    /// # Security notes
+    /// - Uses saturating arithmetic to avoid overflow-based panics.
+    /// - Iterates only over configured fee structures, keeping work deterministic.
+    /// - Uses integer division throughout, so rounding always truncates toward zero.
     pub fn calculate_total_fees(
         env: &Env,
         user: &Address,
@@ -553,16 +567,23 @@ impl FeeManager {
                     fee.saturating_sub(fee.saturating_mul(tier_discount as i128) / BPS_DENOMINATOR);
             }
             if is_early_payment && structure.fee_type == FeeType::Platform {
-                fee = fee.saturating_sub(fee.saturating_mul(1000) / BPS_DENOMINATOR);
+                fee = fee.saturating_sub(
+                    fee.saturating_mul(EARLY_PLATFORM_DISCOUNT_BPS) / BPS_DENOMINATOR,
+                );
             }
             if is_late_payment && structure.fee_type == FeeType::LatePayment {
-                fee = fee.saturating_add(fee.saturating_mul(2000) / BPS_DENOMINATOR);
+                fee = fee
+                    .saturating_add(fee.saturating_mul(LATE_FEE_SURCHARGE_BPS) / BPS_DENOMINATOR);
             }
             total_fees = total_fees.saturating_add(fee);
         }
         Ok(total_fees)
     }
 
+    /// Calculate the raw fee for one structure and clamp it to the configured bounds.
+    ///
+    /// The clamp happens before tier discounts or timing modifiers so that the contract
+    /// always applies discounts and penalties to a bounded intermediate value.
     fn calculate_base_fee(structure: &FeeStructure, amount: i128) -> Result<i128, QuickLendXError> {
         let fee = amount.saturating_mul(structure.base_fee_bps as i128) / BPS_DENOMINATOR;
         let fee = if fee < structure.min_fee {
@@ -575,6 +596,7 @@ impl FeeManager {
         Ok(fee)
     }
 
+    /// Return the fixed discount, in basis points, for a user's current volume tier.
     fn get_tier_discount(tier: &VolumeTier) -> u32 {
         match tier {
             VolumeTier::Standard => 0,
@@ -598,6 +620,10 @@ impl FeeManager {
             })
     }
 
+    /// Update a user's cumulative transaction volume and derived discount tier.
+    ///
+    /// Tier thresholds are monotonic and based only on persisted cumulative volume,
+    /// which keeps the derived tier deterministic for repeated inputs.
     pub fn update_user_volume(
         env: &Env,
         user: &Address,
@@ -975,10 +1001,7 @@ impl FeeManager {
     /// Cancel the pending treasury rotation (admin only).
     ///
     /// Can be called at any time before confirmation to abort the rotation.
-    pub fn cancel_treasury_rotation(
-        env: &Env,
-        admin: &Address,
-    ) -> Result<(), QuickLendXError> {
+    pub fn cancel_treasury_rotation(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         admin.require_auth();
 
         if env
