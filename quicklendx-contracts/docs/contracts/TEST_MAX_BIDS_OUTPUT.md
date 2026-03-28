@@ -11,6 +11,9 @@
 3. **Status Isolation in Quotas**:
    Only bids in the `Placed` status count against the cap. Bids in terminal states (`Accepted`, `Expired`, `Withdrawn`, `Cancelled`) do not contribute to `MAX_BIDS_PER_INVOICE`. This ensures that legitimate bid cancellations immediately free up capacity.
 
+4. **Critical Authentication Fix**:
+   Discovered and patched a critical authorization vulnerability where `cancel_bid` was entirely missing the `bid.investor.require_auth()` verification, which ostensibly would have allowed any malicious actor to cancel any other investor's `Placed` bids without authorization. This fix guarantees that an investor maintains absolute sovereign control over canceling their own bids.
+
 ## Test Output
 
 ```

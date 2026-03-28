@@ -530,6 +530,9 @@ impl BidStorage {
     /// Returns false if bid not found or already not Placed.
     pub fn cancel_bid(env: &Env, bid_id: &BytesN<32>) -> bool {
         if let Some(mut bid) = Self::get_bid(env, bid_id) {
+            // SECURITY FIX: User must authorize their own bid cancellation
+            bid.investor.require_auth();
+            
             if bid.status == BidStatus::Placed {
                 bid.status = BidStatus::Cancelled;
                 Self::update_bid(env, &bid);
