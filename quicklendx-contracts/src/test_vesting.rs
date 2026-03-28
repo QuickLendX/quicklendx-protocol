@@ -932,3 +932,108 @@ fn test_integer_division_rounding() {
         "Integer division should truncate correctly"
     );
 }
+
+#[test]
+fn test_release_idempotency() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+
+    let id = client.create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000,
+        &1000,
+        &0,
+        &2000,
+    );
+
+    env.ledger().set_timestamp(1500);
+
+    let first = client.release_vested_tokens(&beneficiary, &id);
+    let second = client.release_vested_tokens(&beneficiary, &id);
+
+    assert_eq!(second, 0);
+
+    let schedule = client.get_vesting_schedule(&id).unwrap();
+    assert_eq!(schedule.released_amount, first);
+}
+
+#[test]
+fn test_multi_step_progression() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+
+    let total = 1000;
+    let id = client.create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &total,
+        &1000,
+        &0,
+        &2000,
+    );
+
+    env.ledger().set_timestamp(1250);
+    let r1 = client.release_vested_tokens(&beneficiary, &id);
+
+    env.ledger().set_timestamp(1500);
+    let r2 = client.release_vested_tokens(&beneficiary, &id);
+
+    env.ledger().set_timestamp(2000);
+    let r3 = client.release_vested_tokens(&beneficiary, &id);
+
+    let schedule = client.get_vesting_schedule(&id).unwrap();
+
+    assert_eq!(r1 + r2 + r3, total);
+    assert_eq!(schedule.released_amount, total);
+}
+
+#[test]
+fn test_never_exceeds_total() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+
+    let total = 1000;
+    let id = client.create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &total,
+        &1000,
+        &0,
+        &2000,
+    );
+
+    env.ledger().set_timestamp(3000);
+
+    let _ = client.release_vested_tokens(&beneficiary, &id);
+    let extra = client.release_vested_tokens(&beneficiary, &id);
+
+    let schedule = client.get_vesting_schedule(&id).unwrap();
+
+    assert_eq!(schedule.released_amount, total);
+    assert_eq!(extra, 0);
+}
+
+#[test]
+fn test_releasable_consistency() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+
+    let id = client.create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000,
+        &1000,
+        &0,
+        &2000,
+    );
+
+    env.ledger().set_timestamp(1500);
+
+    let releasable_before = client.get_vesting_releasable(&id).unwrap();
+    let released = client.release_vested_tokens(&beneficiary, &id);
+    let releasable_after = client.get_vesting_releasable(&id).unwrap();
+
+    assert_eq!(released, releasable_before);
+    assert_eq!(releasable_after, 0);
+}
