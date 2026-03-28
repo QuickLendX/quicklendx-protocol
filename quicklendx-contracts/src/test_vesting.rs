@@ -1037,3 +1037,21 @@ fn test_releasable_consistency() {
     assert_eq!(released, releasable_before);
     assert_eq!(releasable_after, 0);
 }
+
+#[test]
+fn test_only_admin_can_create_schedule() {
+    let (env, client, _admin, beneficiary, token_id, _token_client) = setup();
+    let attacker = Address::generate(&env);
+
+    let result = client.try_create_vesting_schedule(
+        &attacker,
+        &token_id,
+        &beneficiary,
+        &1_000i128,
+        &1_500u64,
+        &0u64,
+        &2_000u64,
+    );
+
+    assert!(result.is_err());
+}
