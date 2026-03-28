@@ -936,6 +936,9 @@ impl InvoiceStorage {
             };
             env.storage().instance().remove(&key);
         }
+
+        // Unify with other storage cleanups
+        crate::storage::StorageManager::clear_all_mappings(env);
     }
 
     /// Get all invoices for a business
