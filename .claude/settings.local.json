@@ -32,7 +32,8 @@
       "Bash(export PATH=\"/c/msys64/mingw64/bin:$HOME/.cargo/bin:$PATH\")",
       "Bash(cargo +stable-x86_64-pc-windows-gnu test test_dispute -- --nocapture)",
       "Bash(cargo +stable-x86_64-pc-windows-gnu test --lib test_dispute)",
-      "Bash(cargo +stable-x86_64-pc-windows-gnu test --lib)"
+      "Bash(cargo +stable-x86_64-pc-windows-gnu test --lib)",
+      "Bash(cargo test:*)"
     ]
   }
 }
