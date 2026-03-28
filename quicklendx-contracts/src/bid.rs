@@ -456,8 +456,14 @@ impl BidStorage {
         }
         Ordering::Equal
     }
-    pub fn get_best_bid(env: &Env, invoice_id: &BytesN<32>) -> Option<Bid> {
-        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+
+    /// Select the best placed bid from a bid list using `compare_bids`.
+    ///
+    /// # Security
+    /// This helper is used by both `get_best_bid` and `rank_bids` so they
+    /// cannot drift on tie handling. Any ordering change flows through one
+    /// path, preserving the invariant that best bid == first ranked bid.
+    fn select_best_placed_bid(records: &Vec<Bid>) -> Option<Bid> {
         let mut best: Option<Bid> = None;
         let mut idx: u32 = 0;
         while idx < records.len() {
@@ -480,6 +486,42 @@ impl BidStorage {
         }
         best
     }
+
+    /// Return the index of the best bid inside `records` using `compare_bids`.
+    fn select_best_index(records: &Vec<Bid>) -> Option<u32> {
+        if records.len() == 0 {
+            return None;
+        }
+
+        let mut best_idx: u32 = 0;
+        let mut best_bid = records.get(0).unwrap();
+        let mut idx: u32 = 1;
+        while idx < records.len() {
+            let candidate = records.get(idx).unwrap();
+            if Self::compare_bids(&candidate, &best_bid) == Ordering::Greater {
+                best_idx = idx;
+                best_bid = candidate;
+            }
+            idx += 1;
+        }
+        Some(best_idx)
+    }
+
+    /// Return the highest-ranked placed bid for an invoice.
+    ///
+    /// # Invariant
+    /// When `rank_bids` is non-empty, this method always returns the same bid
+    /// as `rank_bids(...).get(0)`.
+    pub fn get_best_bid(env: &Env, invoice_id: &BytesN<32>) -> Option<Bid> {
+        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+        Self::select_best_placed_bid(&records)
+    }
+
+    /// Return all placed bids sorted from best to worst.
+    ///
+    /// # Invariant
+    /// If this function returns at least one bid, the first element equals the
+    /// value returned by `get_best_bid` for the same invoice and ledger state.
     pub fn rank_bids(env: &Env, invoice_id: &BytesN<32>) -> Vec<Bid> {
         let records = Self::get_bid_records_for_invoice(env, invoice_id);
         let mut remaining = Vec::new(env);
@@ -495,17 +537,8 @@ impl BidStorage {
         let mut ranked = Vec::new(env);
 
         while remaining.len() > 0 {
-            let mut best_idx: u32 = 0;
-            let mut best_bid = remaining.get(0).unwrap();
-            let mut search_idx: u32 = 1;
-            while search_idx < remaining.len() {
-                let candidate = remaining.get(search_idx).unwrap();
-                if Self::compare_bids(&candidate, &best_bid) == Ordering::Greater {
-                    best_idx = search_idx;
-                    best_bid = candidate;
-                }
-                search_idx += 1;
-            }
+            let best_idx = Self::select_best_index(&remaining).unwrap();
+            let best_bid = remaining.get(best_idx).unwrap();
             ranked.push_back(best_bid);
 
             let mut new_remaining = Vec::new(env);
