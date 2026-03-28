@@ -1,3 +1,21 @@
+/// @title Dispute Module (Standalone Storage)
+/// @notice Provides dispute lifecycle management using separate persistent storage.
+/// @dev This module stores disputes independently from invoices in persistent storage
+///      keyed by ("dispute", invoice_id). The primary contract interface uses the
+///      invoice-embedded dispute model (see lib.rs). This module is retained for
+///      reference and potential future migration to standalone dispute storage.
+///
+/// ## Security: Input Validation for Storage Growth Prevention
+///
+/// All string fields (reason, evidence, resolution) are bounded by protocol limits
+/// defined in `protocol_limits.rs`:
+///   - `MAX_DISPUTE_REASON_LENGTH`     = 1000 chars
+///   - `MAX_DISPUTE_EVIDENCE_LENGTH`   = 2000 chars
+///   - `MAX_DISPUTE_RESOLUTION_LENGTH` = 2000 chars
+///
+/// These limits prevent adversarial callers from inflating on-chain storage costs
+/// by submitting oversized payloads. Empty reason/resolution strings are also
+/// rejected to ensure disputes carry meaningful content.
 use crate::invoice::{Invoice, InvoiceStatus};
 use crate::protocol_limits::{
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
@@ -5,6 +23,7 @@ use crate::protocol_limits::{
 use crate::QuickLendXError;
 use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
 
+/// @notice Dispute status for standalone dispute storage.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DisputeStatus {
@@ -16,6 +35,7 @@ pub enum DisputeStatus {
 // ---------------------------------------------------------------------------
 // Storage helpers
 // ---------------------------------------------------------------------------
+
 
 #[allow(dead_code)]
 pub fn create_dispute(
