@@ -89,8 +89,14 @@ pub enum QuickLendXError {
     NotificationNotFound = 2000,
     NotificationBlocked = 2001,
 
-    // Emergency (2100)
+    // Emergency withdraw (2100–2104)
     ContractPaused = 2100,
+    EmergencyWithdrawNotFound = 2101,
+    EmergencyWithdrawTimelockNotElapsed = 2102,
+    EmergencyWithdrawExpired = 2103,
+    EmergencyWithdrawCancelled = 2104,
+    EmergencyWithdrawAlreadyExists = 2105,
+    EmergencyWithdrawInsufficientBalance = 2106,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -165,6 +171,12 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
+            QuickLendXError::EmergencyWithdrawNotFound => symbol_short!("EMG_NF"),
+            QuickLendXError::EmergencyWithdrawTimelockNotElapsed => symbol_short!("EMG_TLK"),
+            QuickLendXError::EmergencyWithdrawExpired => symbol_short!("EMG_EXP"),
+            QuickLendXError::EmergencyWithdrawCancelled => symbol_short!("EMG_CNL"),
+            QuickLendXError::EmergencyWithdrawAlreadyExists => symbol_short!("EMG_EX"),
+            QuickLendXError::EmergencyWithdrawInsufficientBalance => symbol_short!("EMG_BAL"),
         }
     }
 }

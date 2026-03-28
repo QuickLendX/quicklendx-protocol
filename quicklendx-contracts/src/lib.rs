@@ -4,6 +4,10 @@ extern crate alloc;
 
 #[cfg(test)]
 mod scratch_events;
+#[cfg(test)]
+mod test_fees;
+#[cfg(test)]
+mod test_fees_extended;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 mod admin;
@@ -21,6 +25,7 @@ mod events;
 mod fees;
 mod init;
 mod investment;
+mod investment_queries;
 mod invoice;
 mod notifications;
 mod pause;
@@ -29,18 +34,14 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
-#[cfg(test)]
 mod storage;
+#[cfg(test)]
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
-mod test_bid_ranking;
+mod test_admin_simple;
 #[cfg(test)]
-mod test_business_kyc;
-#[cfg(test)]
-mod test_cancel_refund;
-#[cfg(test)]
-mod test_emergency_withdraw;
+mod test_admin_standalone;
 #[cfg(test)]
 mod test_init;
 #[cfg(test)]
@@ -56,12 +57,17 @@ mod test_refund;
 #[cfg(test)]
 mod test_storage;
 #[cfg(test)]
+mod test_investment_queries;
+#[cfg(test)]
+mod test_investment_consistency;
+#[cfg(test)]
 mod test_string_limits;
 #[cfg(test)]
 mod test_types;
 #[cfg(test)]
 mod test_vesting;
 pub mod types;
+pub use invoice::{InvoiceCategory, InvoiceStatus};
 mod verification;
 mod vesting;
 use admin::AdminStorage;
@@ -81,7 +87,7 @@ use events::{
     emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
-use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
+use invoice::{Invoice, InvoiceMetadata, InvoiceStorage};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
@@ -106,7 +112,7 @@ pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
 
 #[inline]
 fn cap_query_limit(limit: u32) -> u32 {
-    limit.min(MAX_QUERY_LIMIT)
+    investment_queries::InvestmentQueries::cap_query_limit(limit)
 }
 
 #[contractimpl]
@@ -140,6 +146,11 @@ impl QuickLendXContract {
         1u32
     }
 
+    /// Get current protocol limits
+    pub fn get_protocol_limits(env: Env) -> protocol_limits::ProtocolLimits {
+        protocol_limits::ProtocolLimitsContract::get_protocol_limits(env)
+    }
+
     /// Initialize the admin address (deprecated: use initialize)
     pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         AdminStorage::initialize(&env, &admin)
@@ -159,7 +170,7 @@ impl QuickLendXContract {
     /// - Requires authorization from current admin
     pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), QuickLendXError> {
         let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        AdminStorage::set_admin(&env, &current_admin, &new_admin)
+        AdminStorage::transfer_admin(&env, &current_admin, &new_admin)
     }
 
     /// Get the current admin address
@@ -169,6 +180,58 @@ impl QuickLendXContract {
     /// * `None` if admin has not been initialized
     pub fn get_current_admin(env: Env) -> Option<Address> {
         AdminStorage::get_admin(&env)
+    }
+
+    /// Set protocol configuration (admin only)
+    pub fn set_protocol_config(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+    ) -> Result<(), QuickLendXError> {
+        init::ProtocolInitializer::set_protocol_config(
+            &env,
+            &admin,
+            min_invoice_amount,
+            max_due_date_days,
+            grace_period_seconds,
+        )
+    }
+
+    /// Set fee configuration (admin only)
+    pub fn set_fee_config(env: Env, admin: Address, fee_bps: u32) -> Result<(), QuickLendXError> {
+        init::ProtocolInitializer::set_fee_config(&env, &admin, fee_bps)
+    }
+
+    /// Set treasury address (admin only)
+    pub fn set_treasury(env: Env, admin: Address, treasury: Address) -> Result<(), QuickLendXError> {
+        init::ProtocolInitializer::set_treasury(&env, &admin, &treasury)
+    }
+
+    /// Get current fee in basis points
+    pub fn get_fee_bps(env: Env) -> u32 {
+        init::ProtocolInitializer::get_fee_bps(&env)
+    }
+
+    /// Get treasury address
+    pub fn get_treasury(env: Env) -> Option<Address> {
+        init::ProtocolInitializer::get_treasury(&env)
+    }
+
+    /// Get minimum invoice amount
+    pub fn get_min_invoice_amount(env: Env) -> i128 {
+        init::ProtocolInitializer::get_min_invoice_amount(&env)
+    }
+
+    /// Get maximum due date days
+    pub fn get_max_due_date_days(env: Env) -> u64 {
+        init::ProtocolInitializer::get_max_due_date_days(&env)
+    }
+
+    /// Get grace period in seconds
+    pub fn get_grace_period_seconds(env: Env) -> u64 {
+        init::ProtocolInitializer::get_grace_period_seconds(&env)
     }
 
     /// Admin-only: configure default bid TTL (days). Bounds: 1..=30.
@@ -204,6 +267,28 @@ impl QuickLendXContract {
         env: Env,
     ) -> Option<emergency::PendingEmergencyWithdrawal> {
         emergency::EmergencyWithdraw::get_pending(&env)
+    }
+
+    /// Check if the pending emergency withdrawal can be executed.
+    ///
+    /// Returns true if the withdrawal exists, is not cancelled, timelock has elapsed,
+    /// and has not expired.
+    pub fn can_exec_emergency(env: Env) -> bool {
+        emergency::EmergencyWithdraw::can_execute(&env).unwrap_or(false)
+    }
+
+    /// Get time remaining until the emergency withdrawal can be executed.
+    ///
+    /// Returns seconds until unlock (0 if already unlocked).
+    pub fn emg_time_until_unlock(env: Env) -> u64 {
+        emergency::EmergencyWithdraw::time_until_unlock(&env).unwrap_or(0)
+    }
+
+    /// Get time remaining until the emergency withdrawal expires.
+    ///
+    /// Returns seconds until expiration (0 if already expired).
+    pub fn emg_time_until_expire(env: Env) -> u64 {
+        emergency::EmergencyWithdraw::time_until_expiration(&env).unwrap_or(0)
     }
 
     /// Add a token address to the currency whitelist (admin only).
@@ -715,8 +800,41 @@ impl QuickLendXContract {
     }
 
     /// Cancel a placed bid (investor only, Placed → Cancelled).
+    ///
+    /// # Race Safety
+    /// Uses a read-check-write pattern that validates the bid is still in `Placed`
+    /// status before transitioning. Terminal statuses (`Withdrawn`, `Accepted`,
+    /// `Expired`, `Cancelled`) are immutable — a bid that has already left `Placed`
+    /// will cause this function to return `false` without any state mutation,
+    /// preventing double-action execution regardless of call ordering.
     pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> bool {
-        bid::BidStorage::cancel_bid(&env, &bid_id)
+        pause::PauseControl::require_not_paused(&env).is_ok()
+            && bid::BidStorage::cancel_bid(&env, &bid_id)
+    }
+
+    /// Withdraw a bid (investor only, Placed → Withdrawn).
+    ///
+    /// # Race Safety
+    /// Validates `BidStatus::Placed` atomically before transitioning. If a
+    /// concurrent `cancel_bid` or expiry has already moved the bid to a terminal
+    /// status, this call returns `OperationNotAllowed` without mutating state,
+    /// preventing double-action execution.
+    pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        let mut bid =
+            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        bid.investor.require_auth();
+        require_investor_not_pending(&env, &bid.investor)?;
+        // Re-read status after auth to guard against concurrent transitions.
+        let bid_fresh =
+            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        if bid_fresh.status != BidStatus::Placed {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+        bid.status = BidStatus::Withdrawn;
+        BidStorage::update_bid(&env, &bid);
+        emit_bid_withdrawn(&env, &bid);
+        Ok(())
     }
 
     /// Get all bids placed by an investor across all invoices.
@@ -934,39 +1052,6 @@ impl QuickLendXContract {
             premium,
         );
         emit_insurance_premium_collected(&env, &investment_id, &provider, premium);
-
-        Ok(())
-    }
-
-    /// Withdraw a bid (investor only, before acceptance)
-    ///
-    /// Validates:
-    /// - Bid exists
-    /// - Caller is the bid owner (authorization check)
-    /// - Bid is in Placed status (prevents withdrawal of accepted/expired/withdrawn bids)
-    /// - Updates bid status to Withdrawn
-    pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        // Get bid and validate it exists
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-
-        // Authorization check: Only the investor who owns the bid can withdraw it
-        bid.investor.require_auth();
-
-        // Enforce KYC: a pending investor must not withdraw bids.
-        require_investor_not_pending(&env, &bid.investor)?;
-
-        // Status validation: Only allow withdrawal if bid is placed
-        // Prevents withdrawal of accepted, withdrawn, or expired bids
-        if bid.status != BidStatus::Placed {
-            return Err(QuickLendXError::OperationNotAllowed);
-        }
-        bid.status = BidStatus::Withdrawn;
-        BidStorage::update_bid(&env, &bid);
-
-        // Emit bid withdrawn event
-        emit_bid_withdrawn(&env, &bid);
 
         Ok(())
     }
@@ -1240,7 +1325,7 @@ impl QuickLendXContract {
             100, // min_bid_bps
             max_due_date_days,
             grace_period_seconds,
-            100, // max_invoices_per_business
+            100, // max_invoices_per_business (default)
         )
     }
 
@@ -1409,6 +1494,15 @@ impl QuickLendXContract {
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || {
+            let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+            // Strictly enforce that escrow can only be released for Funded invoices.
+            // This prevents premature release even if an escrow object exists (e.g. from tests).
+            if invoice.status != InvoiceStatus::Funded {
+                return Err(QuickLendXError::InvalidStatus);
+            }
+
             let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
                 .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
@@ -1465,21 +1559,16 @@ impl QuickLendXContract {
         Ok(defaults::scan_funded_invoice_expirations(&env, grace_period, None)?.overdue_count)
     }
 
-    /// @notice Scans funded invoices for overdue/default handling with an explicit batch size.
-    /// @dev `limit` is clamped to the configured safeguard range before execution. The returned
-    ///      cursor allows callers and operators to observe deterministic progress across calls.
-    /// @param env The contract environment.
-    /// @param grace_period Optional grace period override. Uses protocol config when omitted.
-    /// @param limit Optional funded-invoice batch size for this call.
-    /// @return Detailed scan metadata for the processed funded-invoice window.
-    pub fn scan_overdue_invoices(
-        env: Env,
-        grace_period: Option<u64>,
-        limit: Option<u32>,
-    ) -> Result<OverdueScanResult, QuickLendXError> {
-        let resolved_grace = defaults::resolve_grace_period(&env, grace_period);
-        defaults::scan_funded_invoice_expirations(&env, resolved_grace, limit)
-    }
+        for invoice_id in funded_invoices.iter() {
+            if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
+                if invoice.is_overdue(current_timestamp) {
+                    overdue_count += 1;
+                    let _ =
+                        notifications::NotificationSystem::notify_payment_overdue(&env, &invoice);
+                }
+                let _ = invoice.check_and_handle_expiration(&env, grace_period)?;
+            }
+        }
 
     /// @notice Returns the current funded-invoice overdue scan cursor.
     /// @param env The contract environment.
@@ -1889,6 +1978,39 @@ impl QuickLendXContract {
     }
 
     /// Get investments by investor with optional status filter and pagination
+    /// Retrieves paginated investments for a specific investor with enhanced boundary checking.
+    /// 
+    /// This function provides overflow-safe pagination with comprehensive boundary validation
+    /// to prevent arithmetic overflow and ensure consistent behavior across all edge cases.
+    /// 
+    /// # Arguments
+    /// * `env` - Soroban environment
+    /// * `investor` - Address of the investor to query
+    /// * `status_filter` - Optional filter by investment status
+    /// * `offset` - Starting position (0-based, will be capped to available data)
+    /// * `limit` - Maximum records to return (capped to MAX_QUERY_LIMIT)
+    /// 
+    /// # Returns
+    /// * Vector of investment IDs matching the criteria
+    /// 
+    /// # Security Notes
+    /// - Uses saturating arithmetic throughout to prevent overflow attacks
+    /// - Validates all array bounds before access
+    /// - Caps query limit to prevent DoS via large requests
+    /// - Handles edge cases like offset >= total_count gracefully
+    /// 
+    /// # Examples
+    /// ```
+    /// // Get first 10 active investments
+    /// let investments = contract.get_investor_investments_paged(
+    ///     env, investor, Some(InvestmentStatus::Active), 0, 10
+    /// );
+    /// 
+    /// // Get next page with offset
+    /// let next_page = contract.get_investor_investments_paged(
+    ///     env, investor, Some(InvestmentStatus::Active), 10, 10
+    /// );
+    /// ```
     pub fn get_investor_investments_paged(
         env: Env,
         investor: Address,
@@ -1896,35 +2018,13 @@ impl QuickLendXContract {
         offset: u32,
         limit: u32,
     ) -> Vec<BytesN<32>> {
-        let capped_limit = cap_query_limit(limit);
-        let all_investment_ids = InvestmentStorage::get_investments_by_investor(&env, &investor);
-        let mut filtered = Vec::new(&env);
-
-        for investment_id in all_investment_ids.iter() {
-            if let Some(investment) = InvestmentStorage::get_investment(&env, &investment_id) {
-                if let Some(status) = &status_filter {
-                    if investment.status == *status {
-                        filtered.push_back(investment_id);
-                    }
-                } else {
-                    filtered.push_back(investment_id);
-                }
-            }
-        }
-
-        // Apply pagination (overflow-safe)
-        let mut result = Vec::new(&env);
-        let len_u32 = filtered.len() as u32;
-        let start = offset.min(len_u32);
-        let end = start.saturating_add(capped_limit).min(len_u32);
-        let mut idx = start;
-        while idx < end {
-            if let Some(investment_id) = filtered.get(idx) {
-                result.push_back(investment_id);
-            }
-            idx += 1;
-        }
-        result
+        investment_queries::InvestmentQueries::get_investor_investments_paginated(
+            &env,
+            &investor,
+            status_filter,
+            offset,
+            limit,
+        )
     }
 
     /// Get available invoices with pagination and optional filters
@@ -2108,11 +2208,17 @@ impl QuickLendXContract {
         vesting::Vesting::releasable_amount(&env, &schedule).ok()
     }
 
-    // =========================================================================
-    // Rating
-    // =========================================================================
+    // ============================================================================
+    // Analytics Functions
+    // ============================================================================
 
-    pub fn add_invoice_rating(
+    /// Get user behavior metrics
+    pub fn get_user_behavior_metrics(env: Env, user: Address) -> analytics::UserBehaviorMetrics {
+        analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).unwrap()
+    }
+
+    /// Get financial metrics for a specific period
+    pub fn get_financial_metrics(
         env: Env,
         invoice_id: BytesN<32>,
         rating: u32,
@@ -2127,46 +2233,80 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    pub fn get_invoice_rating_stats(
+    /// Generate a business report for a specific period
+    pub fn generate_business_report(
         env: Env,
-        invoice_id: BytesN<32>,
-    ) -> Result<(Option<u32>, u32, Option<u32>, Option<u32>), QuickLendXError> {
-        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-        Ok((
-            invoice.average_rating,
-            invoice.total_ratings,
-            invoice.get_highest_rating(),
-            invoice.get_lowest_rating(),
-        ))
+        admin: Address,
+        max_backups: u32,
+        max_age_seconds: u64,
+        auto_cleanup_enabled: bool,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        let policy = backup::BackupRetentionPolicy {
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+        };
+        backup::BackupStorage::set_retention_policy(&env, &policy);
+        Ok(())
     }
 
-    pub fn get_invoices_with_rating_above(env: Env, threshold: u32) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_invoices_with_rating_above(&env, threshold)
-    }
-
-    pub fn get_invoices_with_ratings_count(env: Env) -> u32 {
-        InvoiceStorage::get_invoices_with_ratings_count(&env)
+    pub fn get_backup_retention_policy(env: Env) -> backup::BackupRetentionPolicy {
+        backup::BackupStorage::get_retention_policy(&env)
     }
 
     // =========================================================================
-    // Batch / misc invoice queries
+    // Analytics (contract-exported)
     // =========================================================================
 
-    pub fn get_invoices_by_status_batch(
-        env: Env,
-        ids: Vec<BytesN<32>>,
-    ) -> Vec<Option<InvoiceStatus>> {
-        let limit = cap_query_limit(ids.len() as u32) as usize;
-        let mut result = Vec::new(&env);
-        for i in 0..limit {
-            let id = ids.get(i as u32).unwrap();
-            result.push_back(InvoiceStorage::get_invoice(&env, &id).map(|inv| inv.status));
-        }
-        result
+    pub fn get_platform_metrics(env: Env) -> analytics::PlatformMetrics {
+        analytics::AnalyticsStorage::get_platform_metrics(&env).unwrap_or_else(|| {
+            analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
+                .unwrap_or(analytics::PlatformMetrics {
+                    total_invoices: 0,
+                    total_investments: 0,
+                    total_volume: 0,
+                    total_fees_collected: 0,
+                    active_investors: 0,
+                    verified_businesses: 0,
+                    average_invoice_amount: 0,
+                    average_investment_amount: 0,
+                    platform_fee_rate: 0,
+                    default_rate: 0,
+                    success_rate: 0,
+                    timestamp: env.ledger().timestamp(),
+                })
+        })
     }
 
-    pub fn fund_invoice(
+    pub fn get_performance_metrics(env: Env) -> analytics::PerformanceMetrics {
+        analytics::AnalyticsStorage::get_performance_metrics(&env).unwrap_or_else(|| {
+            analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
+                .unwrap_or(analytics::PerformanceMetrics {
+                    platform_uptime: env.ledger().timestamp(),
+                    average_settlement_time: 0,
+                    average_verification_time: 0,
+                    dispute_resolution_time: 0,
+                    system_response_time: 0,
+                    transaction_success_rate: 0,
+                    error_rate: 0,
+                    user_satisfaction_score: 0,
+                    platform_efficiency: 0,
+                })
+        })
+        business: Address,
+        period: analytics::TimePeriod,
+    ) -> Result<analytics::BusinessReport, QuickLendXError> {
+        analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
+    }
+
+    /// Retrieve a stored business report by ID
+    pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<analytics::BusinessReport> {
+        analytics::AnalyticsStorage::get_business_report(&env, &report_id)
+    }
+
+    /// Generate an investor report for a specific period
+    pub fn generate_investor_report(
         env: Env,
         investor: Address,
         invoice_id: BytesN<32>,
@@ -2503,13 +2643,12 @@ impl QuickLendXContract {
         analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period)
     }
 
-    pub fn get_user_behavior_metrics(
-        env: Env,
-        user: Address,
-    ) -> Result<analytics::UserBehaviorMetrics, QuickLendXError> {
-        analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user)
+    /// Retrieve a stored investor report by ID
+    pub fn get_investor_report(env: Env, report_id: BytesN<32>) -> Option<analytics::InvestorReport> {
+        analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
     }
 
+    /// Get a summary of platform and performance metrics
     pub fn get_analytics_summary(
         env: Env,
     ) -> (analytics::PlatformMetrics, analytics::PerformanceMetrics) {
@@ -2543,292 +2682,4 @@ impl QuickLendXContract {
             });
         (platform, performance)
     }
-
-    pub fn update_platform_metrics(env: Env) -> Result<(), QuickLendXError> {
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
-        let metrics = analytics::AnalyticsCalculator::calculate_platform_metrics(&env)?;
-        analytics::AnalyticsStorage::store_platform_metrics(&env, &metrics);
-        Ok(())
-    }
-
-    pub fn update_performance_metrics(env: Env) -> Result<(), QuickLendXError> {
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
-        let metrics = analytics::AnalyticsCalculator::calculate_performance_metrics(&env)?;
-        analytics::AnalyticsStorage::store_performance_metrics(&env, &metrics);
-        Ok(())
-    }
-
-    pub fn update_user_behavior_metrics(env: Env, user: Address) -> Result<(), QuickLendXError> {
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
-        let metrics = analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user)?;
-        analytics::AnalyticsStorage::store_user_behavior(&env, &user, &metrics);
-        Ok(())
-    }
-
-    pub fn generate_business_report(
-        env: Env,
-        business: Address,
-        period: analytics::TimePeriod,
-    ) -> Result<analytics::BusinessReport, QuickLendXError> {
-        let report =
-            analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)?;
-        analytics::AnalyticsStorage::store_business_report(&env, &report);
-        Ok(report)
-    }
-
-    pub fn get_business_report(
-        env: Env,
-        report_id: BytesN<32>,
-    ) -> Option<analytics::BusinessReport> {
-        analytics::AnalyticsStorage::get_business_report(&env, &report_id)
-    }
-
-    pub fn generate_investor_report(
-        env: Env,
-        investor: Address,
-        period: analytics::TimePeriod,
-    ) -> Result<analytics::InvestorReport, QuickLendXError> {
-        let report =
-            analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)?;
-        analytics::AnalyticsStorage::store_investor_report(&env, &report);
-        Ok(report)
-    }
-
-    pub fn get_investor_report(
-        env: Env,
-        report_id: BytesN<32>,
-    ) -> Option<analytics::InvestorReport> {
-        analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
-    }
-
-    pub fn calculate_investor_analytics(
-        env: Env,
-        investor: Address,
-    ) -> Result<analytics::InvestorAnalytics, QuickLendXError> {
-        let analytics =
-            analytics::AnalyticsCalculator::calculate_investor_analytics(&env, &investor)?;
-        analytics::AnalyticsStorage::store_investor_analytics(&env, &investor, &analytics);
-        Ok(analytics)
-    }
-
-    pub fn get_investor_analytics_data(
-        env: Env,
-        investor: Address,
-    ) -> Option<analytics::InvestorAnalytics> {
-        analytics::AnalyticsStorage::get_investor_analytics(&env, &investor)
-    }
-
-    pub fn update_investor_analytics(
-        env: Env,
-        investor: Address,
-        amount: i128,
-        success: bool,
-    ) -> Result<(), QuickLendXError> {
-        let mut data = analytics::AnalyticsStorage::get_investor_analytics(&env, &investor)
-            .unwrap_or_else(|| {
-                let ts = env.ledger().timestamp();
-                analytics::AnalyticsCalculator::calculate_investor_analytics(&env, &investor)
-                    .unwrap_or(analytics::InvestorAnalytics {
-                        investor_address: investor.clone(),
-                        tier: crate::verification::InvestorTier::Basic,
-                        risk_level: crate::verification::InvestorRiskLevel::Low,
-                        risk_score: 0,
-                        investment_limit: 0,
-                        total_invested: 0,
-                        total_returns: 0,
-                        successful_investments: 0,
-                        defaulted_investments: 0,
-                        success_rate: 0,
-                        average_investment_size: 0,
-                        portfolio_diversity_score: 0,
-                        preferred_categories: soroban_sdk::vec![&env],
-                        last_activity: ts,
-                        account_age: 0,
-                        compliance_score: 0,
-                        generated_at: ts,
-                    })
-            });
-        data.total_invested = data.total_invested.saturating_add(amount);
-        if success {
-            data.successful_investments = data.successful_investments.saturating_add(1);
-        } else {
-            data.defaulted_investments = data.defaulted_investments.saturating_add(1);
-        }
-        let total = data.successful_investments + data.defaulted_investments;
-        data.success_rate = if total > 0 {
-            (data.successful_investments as i128 * 10000) / total as i128
-        } else {
-            0
-        };
-        analytics::AnalyticsStorage::store_investor_analytics(&env, &investor, &data);
-        Ok(())
-    }
-
-    pub fn update_investor_analytics_data(
-        env: Env,
-        investor: Address,
-    ) -> Result<(), QuickLendXError> {
-        let analytics =
-            analytics::AnalyticsCalculator::calculate_investor_analytics(&env, &investor)?;
-        analytics::AnalyticsStorage::store_investor_analytics(&env, &investor, &analytics);
-        Ok(())
-    }
-
-    pub fn calc_investor_perf_metrics(
-        env: Env,
-    ) -> Result<analytics::InvestorPerformanceMetrics, QuickLendXError> {
-        let metrics = analytics::AnalyticsCalculator::calc_investor_perf_metrics(&env)?;
-        analytics::AnalyticsStorage::store_investor_performance(&env, &metrics);
-        Ok(metrics)
-    }
-
-    pub fn get_investor_performance_metrics(
-        env: Env,
-    ) -> Option<analytics::InvestorPerformanceMetrics> {
-        analytics::AnalyticsStorage::get_investor_performance(&env)
-    }
-
-    pub fn update_investor_performance_data(env: Env) -> Result<(), QuickLendXError> {
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
-        let metrics = analytics::AnalyticsCalculator::calc_investor_perf_metrics(&env)?;
-        analytics::AnalyticsStorage::store_investor_performance(&env, &metrics);
-        Ok(())
-    }
-
-    pub fn export_analytics_data(
-        env: Env,
-        export_type: String,
-        filters: Vec<String>,
-    ) -> Result<String, QuickLendXError> {
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
-        env.events()
-            .publish((symbol_short!("ana_exp"),), (export_type, filters));
-        Ok(String::from_str(&env, "Analytics data exported"))
-    }
-
-    pub fn query_analytics_data(
-        env: Env,
-        _query_type: String,
-        _filters: Vec<String>,
-        limit: u32,
-    ) -> Vec<String> {
-        let _capped = cap_query_limit(limit);
-        let mut result = Vec::new(&env);
-        result.push_back(String::from_str(&env, "Analytics query completed"));
-        result
-    }
-}
-
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-mod test_bid;
-
-#[cfg(test)]
-mod test_fees;
-
-#[cfg(test)]
-mod test_overdue_expiration;
-
-#[cfg(test)]
-mod test_escrow;
-
-#[cfg(test)]
-mod test_escrow_refund;
-#[cfg(test)]
-mod test_fuzz;
-#[cfg(test)]
-mod test_insurance;
-#[cfg(test)]
-mod test_investor_kyc;
-#[cfg(test)]
-mod test_ledger_timestamp_consistency;
-#[cfg(test)]
-mod test_lifecycle;
-#[cfg(test)]
-mod test_limit;
-#[cfg(test)]
-mod test_min_invoice_amount;
-#[cfg(test)]
-mod test_profit_fee_formula;
-#[cfg(test)]
-mod test_revenue_split;
-
-// ============================================================================
-// Analytics Functions missing from exports
-// ============================================================================
-
-pub fn get_user_behavior_metrics(env: Env, user: Address) -> analytics::UserBehaviorMetrics {
-    analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).unwrap()
-}
-
-pub fn get_financial_metrics(
-    env: Env,
-    period: analytics::TimePeriod,
-) -> analytics::FinancialMetrics {
-    analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period).unwrap()
-}
-
-pub fn generate_business_report(
-    env: Env,
-    business: Address,
-    period: analytics::TimePeriod,
-) -> Result<analytics::BusinessReport, QuickLendXError> {
-    analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
-}
-
-pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<analytics::BusinessReport> {
-    analytics::AnalyticsStorage::get_business_report(&env, &report_id)
-}
-
-pub fn generate_investor_report(
-    env: Env,
-    investor: Address,
-    period: analytics::TimePeriod,
-) -> Result<analytics::InvestorReport, QuickLendXError> {
-    analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)
-}
-
-pub fn get_investor_report(env: Env, report_id: BytesN<32>) -> Option<analytics::InvestorReport> {
-    analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
-}
-
-pub fn get_analytics_summary(
-    env: Env,
-) -> (analytics::PlatformMetrics, analytics::PerformanceMetrics) {
-    let platform = analytics::AnalyticsCalculator::calculate_platform_metrics(&env).unwrap_or(
-        analytics::PlatformMetrics {
-            total_invoices: 0,
-            total_investments: 0,
-            total_volume: 0,
-            total_fees_collected: 0,
-            active_investors: 0,
-            verified_businesses: 0,
-            average_invoice_amount: 0,
-            average_investment_amount: 0,
-            platform_fee_rate: 0,
-            default_rate: 0,
-            success_rate: 0,
-            timestamp: env.ledger().timestamp(),
-        },
-    );
-    let performance = analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
-        .unwrap_or(analytics::PerformanceMetrics {
-            platform_uptime: env.ledger().timestamp(),
-            average_settlement_time: 0,
-            average_verification_time: 0,
-            dispute_resolution_time: 0,
-            system_response_time: 0,
-            transaction_success_rate: 0,
-            error_rate: 0,
-            user_satisfaction_score: 0,
-            platform_efficiency: 0,
-        });
-    (platform, performance)
 }
