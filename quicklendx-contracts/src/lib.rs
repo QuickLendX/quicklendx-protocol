@@ -1784,7 +1784,7 @@ impl QuickLendXContract {
 
         // Normalize tag for removal lookup
         let normalized_tag = normalize_tag(&env, &tag)?;
-        invoice.remove_tag(normalized_tag.clone())?;
+        invoice.remove_tag(&env, normalized_tag.clone())?;
 
         // Update the invoice
         InvoiceStorage::update_invoice(&env, &invoice);

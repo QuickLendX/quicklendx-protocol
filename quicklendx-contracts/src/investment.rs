@@ -24,6 +24,18 @@ pub const MIN_PREMIUM_AMOUNT: i128 = 1;
 
 pub use crate::types::{InsuranceCoverage, Investment, InvestmentStatus};
 
+impl InvestmentStatus {
+    pub fn validate_transition(from: &Self, to: &Self) -> Result<(), QuickLendXError> {
+        match (from, to) {
+            (InvestmentStatus::Active, InvestmentStatus::Withdrawn) => Ok(()),
+            (InvestmentStatus::Active, InvestmentStatus::Completed) => Ok(()),
+            (InvestmentStatus::Active, InvestmentStatus::Defaulted) => Ok(()),
+            (InvestmentStatus::Active, InvestmentStatus::Refunded) => Ok(()),
+            _ => Err(QuickLendXError::InvalidStatus),
+        }
+    }
+}
+
 impl Investment {
     /// Compute the insurance premium for a given investment amount and coverage
     /// percentage.

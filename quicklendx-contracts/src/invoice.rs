@@ -612,12 +612,11 @@ impl Invoice {
     }
 
     /// Remove a tag from the invoice (Business Owner Only).
-    pub fn remove_tag(&mut self, tag: String) -> Result<(), crate::errors::QuickLendXError> {
+    pub fn remove_tag(&mut self, env: &Env, tag: String) -> Result<(), crate::errors::QuickLendXError> {
         // 🔒 AUTH PROTECTION
         self.business.require_auth();
 
-        let env = self.tags.env();
-        let normalized = normalize_tag(&env, &tag)?;
+        let normalized = normalize_tag(env, &tag)?;
         let mut new_tags = Vec::new(&env);
         let mut found = false;
 
@@ -636,7 +635,7 @@ impl Invoice {
         self.tags = new_tags;
         
         // Remove from Index
-        InvoiceStorage::remove_tag_index(&env, &normalized, &self.id);
+        InvoiceStorage::remove_tag_index(env, &normalized, &self.id);
         
         Ok(())
     }
@@ -676,12 +675,28 @@ pub(crate) const TOTAL_INVOICE_COUNT_KEY: soroban_sdk::Symbol = symbol_short!("t
 pub struct InvoiceStorage;
 
 impl InvoiceStorage {
-    fn category_key(category: &InvoiceCategory) -> (soroban_sdk::Symbol, InvoiceCategory) {
+    pub fn metadata_customer_key(name: &String) -> crate::storage::DataKey {
+        crate::storage::DataKey::MetadataCustomer(name.clone())
+    }
+
+    pub fn metadata_tax_key(tax_id: &String) -> crate::storage::DataKey {
+        crate::storage::DataKey::MetadataTax(tax_id.clone())
+    }
+
+    pub fn category_key(category: &InvoiceCategory) -> (soroban_sdk::Symbol, InvoiceCategory) {
         (symbol_short!("cat_idx"), category.clone())
     }
 
     fn tag_key(tag: &String) -> (soroban_sdk::Symbol, String) {
         (symbol_short!("tag_idx"), tag.clone())
+    }
+
+    pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
+        Self::get_invoices_by_category(env, category).len()
+    }
+
+    pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
+        Self::get_invoices_by_tag(env, tag).len()
     }
 
     /// @notice Adds an invoice to the category index.

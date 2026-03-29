@@ -24,6 +24,10 @@ pub enum DataKey {
     Bid(BytesN<32>),
     /// Primary key for an Investment record. Keyed by investment ID.
     Investment(BytesN<32>),
+    /// Secondary index for Customer Name metadata
+    MetadataCustomer(String),
+    /// Secondary index for Tax ID metadata
+    MetadataTax(String),
 }
 
 pub struct StorageKeys;
@@ -97,6 +101,22 @@ impl Indexes {
 pub struct InvoiceStorage;
 
 impl InvoiceStorage {
+    pub fn metadata_customer_key(name: &String) -> DataKey {
+        DataKey::MetadataCustomer(name.clone())
+    }
+
+    pub fn metadata_tax_key(tax_id: &String) -> DataKey {
+        DataKey::MetadataTax(tax_id.clone())
+    }
+
+    pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
+        Self::get_invoices_by_category(env, category).len()
+    }
+
+    pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
+        Self::get_invoices_by_tag(env, tag).len()
+    }
+
     pub fn store_invoice(env: &Env, invoice: &Invoice) {
         let is_new = !env.storage().persistent().has(&DataKey::Invoice(invoice.id.clone()));
         env.storage().persistent().set(&DataKey::Invoice(invoice.id.clone()), invoice);
