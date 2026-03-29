@@ -1,5 +1,5 @@
 use quicklendx_contracts::{
-    InvoiceCategory, QuickLendXContract, QuickLendXContractClient,
+    types::InvoiceCategory, QuickLendXContract, QuickLendXContractClient,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},

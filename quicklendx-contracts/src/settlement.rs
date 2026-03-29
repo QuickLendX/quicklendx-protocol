@@ -48,12 +48,23 @@ pub struct Progress {
     pub status: InvoiceStatus,
 }
 
-/// Record a partial payment. If total reaches invoice total, settlement is finalized.
-///
+/// Record a partial payment for an invoice. 
+/// 
+/// If the total paid amount reaches the invoice total, the settlement is finalized.
+/// This method provides strictly ordered record persistence and idempotent deduplication.
+/// 
+/// # Arguments
+/// - `invoice_id`: Unique identifier for the invoice being paid.
+/// - `payment_amount`: The requested payment amount.
+/// - `transaction_id`: A unique identifier for the payment attempt (nonce).
+/// 
+/// # Returns
+/// - `Ok(())` on success, or a `QuickLendXError` on failure.
+/// 
 /// # Security
 /// - Requires business-owner authorization for every payment attempt.
 /// - Safely bounds applied value to the remaining due amount.
-/// - Preserves `total_paid <= amount` even when callers request an overpayment.
+/// - Deduplicates duplicate `transaction_id`s, returning current progress idempotently instead of an error.
 pub fn process_partial_payment(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -91,15 +102,23 @@ pub fn process_partial_payment(
 
 /// Record a payment attempt with capping, replay protection, and durable storage.
 ///
-/// - Rejects amount <= 0
-/// - Rejects missing invoices
-/// - Rejects payments to non-payable invoice states
-/// - Caps applied amount so `total_paid` never exceeds `total_due`
-/// - Enforces nonce uniqueness per `(invoice, payer, nonce)` if nonce is non-empty
-///
-/// # Security
-/// - The payer must be the verified invoice business and must authorize the call.
-/// - Stored payment records always reflect the applied amount, never the requested excess.
+/// This internal helper ensures that all payments are validated, authorized, and 
+/// persisted in arrival order (canonical indexing).
+/// 
+/// # Arguments
+/// - `invoice_id`: Unique identifier for the invoice.
+/// - `payer`: The address of the entity providing the funds.
+/// - `amount`: The requested amount to be applied.
+/// - `payment_nonce`: Replay protection nonce/transaction ID.
+/// 
+/// # Returns
+/// - `Ok(Progress)` reflecting the state after recording the payment.
+/// 
+/// # Security/Replay Rules
+/// - Rejects amount <= 0.
+/// - Caps applied amount so `total_paid` never exceeds `total_due`.
+/// - Enforces nonce uniqueness per `(invoice, payer, nonce)` if nonce is non-empty.
+/// - If a duplicate nonce is detected, it returns the current progress result (Idempotency).
 pub fn record_payment(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -128,7 +147,8 @@ pub fn record_payment(
         );
         let seen: bool = env.storage().persistent().get(&nonce_key).unwrap_or(false);
         if seen {
-            return Err(QuickLendXError::OperationNotAllowed);
+            // Deduplicate: If transaction_id is already seen, return current progress to ensure idempotency.
+            return get_invoice_progress(env, invoice_id);
         }
     }
 
@@ -206,15 +226,19 @@ pub fn record_payment(
     get_invoice_progress(env, invoice_id)
 }
 
-/// Settle invoice by applying a final payment amount from the business.
+/// Settle an invoice by applying a final payment amount from the business.
 ///
-/// This function preserves existing behavior by requiring the resulting total
-/// payment to satisfy full settlement conditions.
-///
-/// # Security
-/// - Requires an exact final payment equal to the remaining due amount.
-/// - Rejects explicit overpayment attempts instead of silently accepting excess input.
-/// - Keeps payout, accounting totals, and settlement events aligned to invoice principal.
+/// This method requires the resulting total payment to satisfy full settlement conditions.
+/// Unlike partial payments, this path typically expects an exact match for the remaining balance.
+/// 
+/// # Arguments
+/// - `invoice_id`: Unique identifier for the invoice.
+/// - `payment_amount`: The amount to pay for final settlement.
+/// 
+/// # Security/Validation
+/// - Rejects explicit overpayment attempts with `InvalidAmount`.
+/// - Requires the final total to meet or exceed both invoice and investment amounts.
+/// - Uses a reserved "settlement" nonce to prevent duplicate finalization attempts.
 pub fn settle_invoice(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -259,6 +283,10 @@ pub fn settle_invoice(
 }
 
 /// Returns aggregate payment progress for an invoice.
+///
+/// # Returns
+/// - `Ok(Progress)` containing `total_due`, `total_paid`, `remaining_due`, 
+///   `progress_percent`, `payment_count`, and `status`.
 pub fn get_invoice_progress(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -297,7 +325,17 @@ pub fn get_invoice_progress(
     })
 }
 
-/// Returns a single payment record by index.
+/// Returns the total number of payment records for a given invoice.
+///
+/// Represents the number of successful, uniquely recorded payment attempts.
+pub fn get_payment_count(env: &Env, invoice_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
+    ensure_invoice_exists(env, invoice_id)?;
+    Ok(get_payment_count_internal(env, invoice_id))
+}
+
+/// Returns a single payment record by its arrival index.
+///
+/// Indexes are zero-based and represent the canonical order in which payments were accepted.
 pub fn get_payment_record(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -308,6 +346,36 @@ pub fn get_payment_record(
         .persistent()
         .get(&SettlementDataKey::Payment(invoice_id.clone(), index))
         .ok_or(QuickLendXError::StorageKeyNotFound)
+}
+
+/// Returns a paginated list of ordered payment records for an invoice.
+///
+/// This method provides strict arrival-order guarantees for payment auditing.
+/// Limits output size to ensure predictable gas usage (max 100 per result).
+pub fn get_payment_records(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    offset: u32,
+    limit: u32,
+) -> Result<soroban_sdk::Vec<SettlementPaymentRecord>, QuickLendXError> {
+    ensure_invoice_exists(env, invoice_id)?;
+    let count = get_payment_count_internal(env, invoice_id);
+    let mut records = soroban_sdk::Vec::new(env);
+
+    if count == 0 || offset >= count {
+        return Ok(records);
+    }
+
+    let actual_limit = limit.min(100); // Enforce practical upper bound
+    let end = count.min(offset.saturating_add(actual_limit));
+
+    for i in offset..end {
+        if let Some(record) = env.storage().persistent().get(&SettlementDataKey::Payment(invoice_id.clone(), i)) {
+            records.push_back(record);
+        }
+    }
+    
+    Ok(records)
 }
 
 fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {

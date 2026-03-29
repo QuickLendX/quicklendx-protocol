@@ -33,6 +33,10 @@ mod settlement;
 mod storage;
 #[cfg(test)]
 mod test_init;
+#[cfg(test)]
+mod test_admin;
+#[cfg(test)]
+mod test_partial_payments;
 pub mod types;
 mod verification;
 mod vesting;
@@ -57,7 +61,9 @@ use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
+    get_invoice_progress, get_payment_count, get_payment_records,
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
+    Progress, SettlementPaymentRecord,
 };
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
@@ -83,6 +89,17 @@ fn cap_query_limit(limit: u32) -> u32 {
 
 #[contractimpl]
 impl QuickLendXContract {
+    /// Helper: Reject the zero address (null address).
+    /// GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF
+    fn require_valid_address(env: &Env, address: &Address) -> Result<(), QuickLendXError> {
+        let zero_address =
+            Address::from_string(&String::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"));
+        if address == &zero_address {
+            return Err(QuickLendXError::InvalidAddress);
+        }
+        Ok(())
+    }
+
     // ============================================================================
     // Admin Management Functions
     // ============================================================================
@@ -113,7 +130,17 @@ impl QuickLendXContract {
     }
 
     /// Initialize the admin address (deprecated: use initialize)
+    ///
+    /// # Warning
+    /// This function is deprecated and will be removed in a future version.
+    /// Use the unified `initialize` function instead to set up the full protocol.
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `admin` - The address to set as admin
+    #[deprecated(note = "use 'initialize' for full protocol setup")]
     pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        Self::require_valid_address(&env, &admin)?;
         AdminStorage::initialize(&env, &admin)
     }
 
@@ -283,6 +310,8 @@ impl QuickLendXContract {
         category: invoice::InvoiceCategory,
         tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        Self::require_valid_address(&env, &business)?;
+        Self::require_valid_address(&env, &currency)?;
         pause::PauseControl::require_not_paused(&env)?;
         // Validate input parameters
         if amount <= 0 {
@@ -348,6 +377,8 @@ impl QuickLendXContract {
         category: invoice::InvoiceCategory,
         tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        Self::require_valid_address(&env, &business)?;
+        Self::require_valid_address(&env, &currency)?;
         pause::PauseControl::require_not_paused(&env)?;
         // Only the business can upload their own invoice
         business.require_auth();
@@ -601,10 +632,7 @@ impl QuickLendXContract {
         InvoiceStorage::add_to_status_invoices(&env, &invoice.status, &invoice_id);
 
         // Emit event
-        env.events().publish(
-            (symbol_short!("updated"),),
-            (invoice_id, new_status.clone()),
-        );
+        crate::events::emit_invoice_status_updated(&env, invoice_id, new_status.clone());
 
         // Send notifications based on status change
         match new_status {
@@ -646,6 +674,137 @@ impl QuickLendXContract {
     pub fn clear_all_invoices(env: Env) -> Result<(), QuickLendXError> {
         use crate::invoice::InvoiceStorage;
         InvoiceStorage::clear_all(&env);
+        Ok(())
+    }
+
+    // ============================================================================
+    // Backup Management Functions
+    // ============================================================================
+
+    /// Create a new backup of all invoices (admin only).
+    pub fn create_backup(env: Env, admin: Address) -> Result<BytesN<32>, QuickLendXError> {
+        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        if current_admin != admin {
+            return Err(QuickLendXError::Unauthorized);
+        }
+        admin.require_auth();
+
+        let backup_id = backup::BackupStorage::generate_backup_id(&env);
+        let all_invoices = backup::BackupStorage::get_all_invoices(&env);
+        let count = all_invoices.len();
+        
+        let backup_record = backup::Backup {
+            backup_id: backup_id.clone(),
+            timestamp: env.ledger().timestamp(),
+            description: String::from_str(&env, "Auto-generated backup"),
+            invoice_count: count as u32,
+            status: backup::BackupStatus::Active,
+        };
+        
+        backup::BackupStorage::store_backup(&env, &backup_record, Some(&all_invoices))?;
+        backup::BackupStorage::store_backup_data(&env, &backup_id, &all_invoices);
+        backup::BackupStorage::add_to_backup_list(&env, &backup_id);
+        
+        // Clean up old backups based on retention policy
+        let removed = backup::BackupStorage::cleanup_old_backups(&env)?;
+        if removed > 0 {
+            crate::events::emit_backups_cleaned(&env, removed);
+        }
+        
+        crate::events::emit_backup_created(&env, &backup_id, count);
+        Ok(backup_id)
+    }
+
+    /// Get backup details.
+    pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<backup::Backup> {
+        backup::BackupStorage::get_backup(&env, &backup_id)
+    }
+
+    /// Set backup retention policy (admin only).
+    pub fn set_backup_retention_policy(
+        env: Env,
+        admin: Address,
+        max_backups: u32,
+        max_age_seconds: u64,
+        auto_cleanup_enabled: bool,
+    ) -> Result<(), QuickLendXError> {
+        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        if current_admin != admin {
+            return Err(QuickLendXError::Unauthorized);
+        }
+        admin.require_auth();
+
+        let policy = backup::BackupRetentionPolicy {
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+        };
+        backup::BackupStorage::set_retention_policy(&env, &policy);
+        crate::events::emit_retention_policy_updated(&env, max_backups, max_age_seconds, auto_cleanup_enabled);
+        Ok(())
+    }
+
+    /// Get all active backup IDs.
+    pub fn get_backups(env: Env) -> Vec<BytesN<32>> {
+        let all = backup::BackupStorage::get_all_backups(&env);
+        let mut active = Vec::new(&env);
+        for id in all.iter() {
+            if let Some(record) = backup::BackupStorage::get_backup(&env, &id) {
+                if record.status == backup::BackupStatus::Active {
+                    active.push_back(id);
+                }
+            }
+        }
+        active
+    }
+
+    /// Validate backup integrity.
+    pub fn validate_backup(env: Env, backup_id: BytesN<32>) -> bool {
+        let result = backup::BackupStorage::validate_backup(&env, &backup_id).is_ok();
+        crate::events::emit_backup_validated(&env, &backup_id, result);
+        result
+    }
+
+    /// Archive a backup, preventing it from being auto-cleaned (admin only).
+    pub fn archive_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        if current_admin != admin {
+            return Err(QuickLendXError::Unauthorized);
+        }
+        admin.require_auth();
+
+        let mut backup = backup::BackupStorage::get_backup(&env, &backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        
+        backup.status = backup::BackupStatus::Archived;
+        backup::BackupStorage::update_backup(&env, &backup)?;
+        crate::events::emit_backup_archived(&env, &backup_id);
+        Ok(())
+    }
+
+    /// Restore a backup (admin only). Replaces current invoice state.
+    pub fn restore_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        if current_admin != admin {
+            return Err(QuickLendXError::Unauthorized);
+        }
+        admin.require_auth();
+
+        backup::BackupStorage::validate_backup(&env, &backup_id)?;
+
+        let invoices = backup::BackupStorage::get_backup_data(&env, &backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+        // Clear existing invoices
+        Self::clear_all_invoices(env.clone())?;
+
+        // Restore invoices from backup
+        for invoice in invoices.iter() {
+            crate::invoice::InvoiceStorage::store_invoice(&env, &invoice);
+            crate::invoice::InvoiceStorage::add_to_status_invoices(&env, &invoice.status, &invoice.id);
+        }
+
+        crate::events::emit_backup_restored(&env, &backup_id, invoices.len());
         Ok(())
     }
 
@@ -710,6 +869,7 @@ impl QuickLendXContract {
         bid_amount: i128,
         expected_return: i128,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        Self::require_valid_address(&env, &investor)?;
         pause::PauseControl::require_not_paused(&env)?;
         // Authorization check: Only the investor can place their own bid
         investor.require_auth();
@@ -949,17 +1109,10 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         payment_amount: i128,
     ) -> Result<(), QuickLendXError> {
-        let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
-
-        let result = reentrancy::with_payment_guard(&env, || {
+        pause::PauseControl::require_not_paused(&env)?;
+        reentrancy::with_payment_guard(&env, || {
             do_settle_invoice(&env, &invoice_id, payment_amount)
-        });
-
-        if result.is_ok() {
-            // Success
-        }
-
-        result
+        })
     }
 
     /// Get the investment record for a funded invoice.
@@ -1016,7 +1169,10 @@ impl QuickLendXContract {
         payment_amount: i128,
         transaction_id: String,
     ) -> Result<(), QuickLendXError> {
-        do_process_partial_payment(&env, &invoice_id, payment_amount, transaction_id)
+        pause::PauseControl::require_not_paused(&env)?;
+        reentrancy::with_payment_guard(&env, || {
+            do_process_partial_payment(&env, &invoice_id, payment_amount, transaction_id)
+        })
     }
 
     /// Handle invoice default (admin only)
@@ -1448,6 +1604,33 @@ impl QuickLendXContract {
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         let grace = defaults::resolve_grace_period(&env, grace_period);
         invoice.check_and_handle_expiration(&env, grace)
+    }
+
+    // ============================================================================
+    // Settlement & Payment Functions
+    // ============================================================================
+
+    /// Get the current payment progress for an invoice.
+    pub fn get_invoice_progress(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<Progress, QuickLendXError> {
+        get_invoice_progress(&env, &invoice_id)
+    }
+
+    /// Get the number of payment records for an invoice.
+    pub fn get_payment_count(env: Env, invoice_id: BytesN<32>) -> Result<u32, QuickLendXError> {
+        get_payment_count(&env, &invoice_id)
+    }
+
+    /// Get paginated payment records for an invoice.
+    pub fn get_payment_records(
+        env: Env,
+        invoice_id: BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> Result<Vec<SettlementPaymentRecord>, QuickLendXError> {
+        get_payment_records(&env, &invoice_id, offset, limit)
     }
 
     // Category and Tag Management Functions

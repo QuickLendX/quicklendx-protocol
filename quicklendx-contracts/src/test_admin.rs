@@ -91,6 +91,61 @@ mod test_admin {
         );
     }
 
+    #[test]
+    fn test_initialize_prevents_initialize_admin() {
+        let (env, client) = setup();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let treasury = Address::generate(&env);
+        let params = crate::init::InitializationParams {
+            admin: admin.clone(),
+            treasury: treasury.clone(),
+            fee_bps: 200,
+            min_invoice_amount: 1_000_000,
+            max_due_date_days: 365,
+            grace_period_seconds: 604800,
+            initial_currencies: Vec::new(&env),
+        };
+
+        client.initialize(&params);
+
+        // Now try initialize_admin
+        let result = client.try_initialize_admin(&admin);
+        assert_eq!(
+            result,
+            Err(Ok(QuickLendXError::OperationNotAllowed)),
+            "initialize_admin must fail after initialize"
+        );
+    }
+
+    #[test]
+    fn test_initialize_admin_prevents_initialize() {
+        let (env, client) = setup();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        client.initialize_admin(&admin);
+
+        // Now try full initialize
+        let params = crate::init::InitializationParams {
+            admin: admin.clone(),
+            treasury: Address::generate(&env),
+            fee_bps: 200,
+            min_invoice_amount: 1_000_000,
+            max_due_date_days: 365,
+            grace_period_seconds: 604800,
+            initial_currencies: Vec::new(&env),
+        };
+
+        let result = client.try_initialize(&params);
+        assert_eq!(
+            result,
+            Err(Ok(QuickLendXError::OperationNotAllowed)),
+            "initialize must fail after initialize_admin"
+        );
+    }
+
     // ============================================================================
     // 2. Query Function Tests — get_current_admin
     // ============================================================================

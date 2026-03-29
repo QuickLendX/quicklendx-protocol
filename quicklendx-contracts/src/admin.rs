@@ -36,6 +36,10 @@ pub struct AdminStorage;
 impl AdminStorage {
     /// Initialize the admin address (can only be called once)
     ///
+    /// # Deprecation Notice
+    /// This function is deprecated in favor of the unified protocol initialization flow
+    /// using `initialize()`. Use this only for legacy purposes or standalone admin setup.
+    ///
     /// # Arguments
     /// * `env` - The contract environment
     /// * `admin` - The address to set as admin
@@ -165,20 +169,10 @@ impl AdminStorage {
 
 /// Emit event when admin is first initialized
 fn emit_admin_set(env: &Env, admin: &Address) {
-    env.events().publish(
-        (symbol_short!("adm_set"),),
-        (admin.clone(), env.ledger().timestamp()),
-    );
+    crate::events::emit_admin_set(env, admin);
 }
 
 /// Emit event when admin role is transferred
 fn emit_admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
-    env.events().publish(
-        (symbol_short!("adm_trf"),),
-        (
-            old_admin.clone(),
-            new_admin.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    crate::events::emit_admin_transferred(env, old_admin, new_admin);
 }

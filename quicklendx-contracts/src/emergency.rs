@@ -63,9 +63,13 @@ impl EmergencyWithdraw {
         env.storage()
             .instance()
             .set(&PENDING_WITHDRAWAL_KEY, &pending);
-        env.events().publish(
-            (symbol_short!("emg_init"),),
-            (token, amount, target, unlock_at, admin.clone()),
+        crate::events::emit_emergency_withdrawal_initiated(
+            env,
+            token,
+            amount,
+            target,
+            unlock_at,
+            admin.clone(),
         );
 
         Ok(())
@@ -105,14 +109,12 @@ impl EmergencyWithdraw {
         )?;
 
         env.storage().instance().remove(&PENDING_WITHDRAWAL_KEY);
-        env.events().publish(
-            (symbol_short!("emg_exec"),),
-            (
-                pending.token.clone(),
-                pending.amount,
-                pending.target.clone(),
-                admin.clone(),
-            ),
+        crate::events::emit_emergency_withdrawal_executed(
+            env,
+            pending.token.clone(),
+            pending.amount,
+            pending.target.clone(),
+            admin.clone(),
         );
 
         Ok(())
@@ -140,14 +142,12 @@ impl EmergencyWithdraw {
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         env.storage().instance().remove(&PENDING_WITHDRAWAL_KEY);
-        env.events().publish(
-            (symbol_short!("emg_cncl"),),
-            (
-                pending.token.clone(),
-                pending.amount,
-                pending.target.clone(),
-                admin.clone(),
-            ),
+        crate::events::emit_emergency_withdrawal_cancelled(
+            env,
+            pending.token.clone(),
+            pending.amount,
+            pending.target.clone(),
+            admin.clone(),
         );
 
         Ok(())
