@@ -1,0 +1,1 @@
+/Users/admin/stellar/quicklendx-protocol/target/debug/libquicklendx_contracts.rlib: /Users/admin/stellar/quicklendx-protocol/src/fees.rs /Users/admin/stellar/quicklendx-protocol/src/lib.rs /Users/admin/stellar/quicklendx-protocol/src/profits.rs /Users/admin/stellar/quicklendx-protocol/src/settlement.rs
