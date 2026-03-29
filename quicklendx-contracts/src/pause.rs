@@ -41,6 +41,7 @@ impl PauseControl {
     /// # Returns
     /// * `Ok(())` on success
     /// * `Err(QuickLendXError::NotAdmin)` if caller is not admin
+    pub fn set_paused(env: &Env, admin: &Address, paused: bool) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
 
         env.storage().instance().set(&PAUSED_KEY, &paused);
