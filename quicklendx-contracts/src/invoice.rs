@@ -1215,11 +1215,7 @@ impl InvoiceStorage {
             .unwrap_or(0)
     }
 
-    // ============================================================================
-// FIXED SECTIONS OF invoice.rs
-// Only the changed / new functions are shown. Drop these in place of the
-// originals. Everything else in the file stays the same.
-// ============================================================================
+
 
 // ---------------------------------------------------------------------------
 // 1. Invoice::new — add amount and due-date guards
