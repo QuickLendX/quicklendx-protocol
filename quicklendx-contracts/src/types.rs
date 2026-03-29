@@ -2,25 +2,24 @@
 //!
 //! This module defines all the fundamental types used throughout the contract,
 //! including invoices, bids, investments, and their associated enums and structs.
-//!
-//! # Security Notes
-//!
-//! - All types use `#[contracttype]` to ensure proper serialization for on-chain storage
-//! - Types are designed to be immutable where possible to prevent unauthorized modifications
-//! - Addresses are used for identity to leverage Soroban's built-in access control
 
 use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
 
 /// Invoice status enumeration representing the lifecycle of an invoice
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum InvoiceStatus {
-    Pending,
-    Verified,
-    Funded,
-    Paid,
-    Defaulted,
-    Cancelled,
+    Pending,   // Invoice uploaded, awaiting verification
+    Verified,  // Invoice verified and available for bidding
+    Funded,    // Invoice has been funded by an investor
+    Paid,      // Invoice has been paid and settled
+    Defaulted, // Invoice payment is overdue/defaulted
+    Cancelled, // Invoice has been cancelled by the business owner
+    Refunded,  // Invoice has been refunded
 }
 
 /// Bid status enumeration
@@ -31,6 +30,7 @@ pub enum BidStatus {
     Withdrawn,
     Accepted,
     Expired,
+    Cancelled,
 }
 
 /// Investment status enumeration
@@ -41,16 +41,17 @@ pub enum InvestmentStatus {
     Withdrawn,
     Completed,
     Defaulted,
+    Refunded,
 }
 
 /// Dispute status enumeration
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DisputeStatus {
-    None,
-    Disputed,
-    UnderReview,
-    Resolved,
+    None,        // No dispute exists
+    Disputed,    // Dispute has been created
+    UnderReview, // Dispute is under review
+    Resolved,    // Dispute has been resolved
 }
 
 /// Invoice category enumeration for classification
@@ -65,6 +66,10 @@ pub enum InvoiceCategory {
     Healthcare,
     Other,
 }
+
+// ---------------------------------------------------------------------------
+// Structs
+// ---------------------------------------------------------------------------
 
 /// Compact representation of a line item stored on-chain
 #[contracttype]
@@ -114,6 +119,16 @@ pub struct InvoiceRating {
     pub rated_at: u64,
 }
 
+/// Invoice rating statistics
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvoiceRatingStats {
+    pub average_rating: u32,
+    pub total_ratings: u32,
+    pub highest_rating: u32,
+    pub lowest_rating: u32,
+}
+
 /// Core invoice data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -124,15 +139,26 @@ pub struct Invoice {
     pub currency: Address,
     pub due_date: u64,
     pub status: InvoiceStatus,
+    pub created_at: u64,
     pub description: String,
+    pub metadata_customer_name: Option<String>,
+    pub metadata_customer_address: Option<String>,
+    pub metadata_tax_id: Option<String>,
+    pub metadata_notes: Option<String>,
+    pub metadata_line_items: Vec<LineItemRecord>,
     pub category: InvoiceCategory,
     pub tags: Vec<String>,
-    pub metadata: InvoiceMetadata,
-    pub dispute: Dispute,
-    pub payments: Vec<PaymentRecord>,
+    pub funded_amount: i128,
+    pub funded_at: Option<u64>,
+    pub investor: Option<Address>,
+    pub settled_at: Option<u64>,
+    pub average_rating: Option<u32>,
+    pub total_ratings: u32,
     pub ratings: Vec<InvoiceRating>,
-    pub created_at: u64,
-    pub updated_at: u64,
+    pub dispute_status: DisputeStatus,
+    pub dispute: Dispute,
+    pub total_paid: i128,
+    pub payment_history: Vec<PaymentRecord>,
 }
 
 /// Bid data structure
@@ -173,21 +199,12 @@ pub struct Investment {
     pub insurance: Vec<InsuranceCoverage>,
 }
 
-/// Platform fee configuration
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PlatformFee {
-    pub fee_bps: u32,
-    pub recipient: Address,
-    pub description: String,
-}
-
-/// Platform fee configuration
+/// Platform fee configuration stored on-chain
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeConfig {
-    pub verification_fee: PlatformFee,
-    pub settlement_fee: PlatformFee,
-    pub bid_fee: PlatformFee,
-    pub investment_fee: PlatformFee,
+    pub fee_bps: u32,
+    pub treasury_address: Option<Address>,
+    pub updated_at: u64,
+    pub updated_by: Address,
 }

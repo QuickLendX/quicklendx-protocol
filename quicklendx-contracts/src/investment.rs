@@ -22,76 +22,7 @@ pub const MAX_COVERAGE_PERCENTAGE: u32 = 100;
 /// with no economic cost to the insured party.
 pub const MIN_PREMIUM_AMOUNT: i128 = 1;
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InsuranceCoverage {
-    pub provider: Address,
-    pub coverage_amount: i128,
-    pub premium_amount: i128,
-    pub coverage_percentage: u32,
-    pub active: bool,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum InvestmentStatus {
-    Active,
-    Withdrawn,
-    Completed,
-    Defaulted,
-    Refunded,
-}
-
-impl InvestmentStatus {
-    /// Validate that a status transition is legal.
-    ///
-    /// ### Allowed transitions
-    /// | From      | To                              |
-    /// |-----------|----------------------------------|
-    /// | Active    | Completed, Defaulted, Refunded, Withdrawn |
-    /// | Withdrawn | (terminal – no further moves)   |
-    /// | Completed | (terminal)                      |
-    /// | Defaulted | (terminal)                      |
-    /// | Refunded  | (terminal)                      |
-    ///
-    /// ### Security
-    /// Calling code **must** invoke this before persisting a status change so
-    /// that no path (settlement, default, refund, or future code) can produce
-    /// an orphan `Active` investment or an impossible backward transition.
-    pub fn validate_transition(
-        from: &InvestmentStatus,
-        to: &InvestmentStatus,
-    ) -> Result<(), QuickLendXError> {
-        let allowed = match from {
-            InvestmentStatus::Active => matches!(
-                to,
-                InvestmentStatus::Completed
-                    | InvestmentStatus::Defaulted
-                    | InvestmentStatus::Refunded
-                    | InvestmentStatus::Withdrawn
-            ),
-            // All other states are terminal.
-            _ => false,
-        };
-        if allowed {
-            Ok(())
-        } else {
-            Err(QuickLendXError::InvalidStatus)
-        }
-    }
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Investment {
-    pub investment_id: BytesN<32>,
-    pub invoice_id: BytesN<32>,
-    pub investor: Address,
-    pub amount: i128,
-    pub funded_at: u64,
-    pub status: InvestmentStatus,
-    pub insurance: Vec<InsuranceCoverage>,
-}
+pub use crate::types::{InsuranceCoverage, Investment, InvestmentStatus};
 
 impl Investment {
     /// Compute the insurance premium for a given investment amount and coverage

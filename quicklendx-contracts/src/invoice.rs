@@ -59,90 +59,11 @@ pub(crate) fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLend
     Ok(String::from_str(env, normalized))
 }
 
-/// Invoice status enumeration
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum InvoiceStatus {
-    Pending,   // Invoice uploaded, awaiting verification
-    Verified,  // Invoice verified and available for bidding
-    Funded,    // Invoice has been funded by an investor
-    Paid,      // Invoice has been paid and settled
-    Defaulted, // Invoice payment is overdue/defaulted
-    Cancelled, // Invoice has been cancelled by the business owner
-    Refunded,  // Invoice has been refunded (prevents multiple refunds/releases)
-}
+pub use crate::types::{InvoiceCategory, InvoiceStatus, DisputeStatus, Dispute};
 
-/// Dispute status enumeration
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DisputeStatus {
-    None,        // No dispute exists
-    Disputed,    // Dispute has been created
-    UnderReview, // Dispute is under review
-    Resolved,    // Dispute has been resolved
-}
+pub use crate::types::{InvoiceRating, InvoiceRatingStats};
 
-/// Dispute structure
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Dispute {
-    pub created_by: Address,  // Address of the party who created the dispute
-    pub created_at: u64,      // Timestamp when dispute was created
-    pub reason: String,       // Reason for the dispute
-    pub evidence: String,     // Evidence provided by the disputing party
-    pub resolution: String,   // Resolution description (empty if not resolved)
-    pub resolved_by: Address, // Address of the party who resolved the dispute (zero address if not resolved)
-    pub resolved_at: u64,     // Timestamp when dispute was resolved (0 if not resolved)
-}
-
-/// Invoice category enumeration
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum InvoiceCategory {
-    Services,      // Professional services
-    Products,      // Physical products
-    Consulting,    // Consulting services
-    Manufacturing, // Manufacturing services
-    Technology,    // Technology services/products
-    Healthcare,    // Healthcare services
-    Other,         // Other categories
-}
-
-/// Invoice rating structure
-#[contracttype]
-#[derive(Clone, Debug)]
-pub struct InvoiceRating {
-    pub rating: u32,       // 1-5 stars
-    pub feedback: String,  // Feedback text
-    pub rated_by: Address, // Investor who provided the rating
-    pub rated_at: u64,     // Timestamp of rating
-}
-
-/// Invoice rating statistics
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InvoiceRatingStats {
-    pub average_rating: u32,
-    pub total_ratings: u32,
-    pub highest_rating: u32,
-    pub lowest_rating: u32,
-}
-
-/// Compact representation of a line item stored on-chain
-#[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LineItemRecord(pub String, pub i128, pub i128, pub i128);
-
-/// Metadata associated with an invoice
-#[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct InvoiceMetadata {
-    pub customer_name: String,
-    pub customer_address: String,
-    pub tax_id: String,
-    pub line_items: Vec<LineItemRecord>,
-    pub notes: String,
-}
+pub use crate::types::{LineItemRecord, InvoiceMetadata};
 
 impl InvoiceMetadata {
     pub fn validate(&self) -> Result<(), QuickLendXError> {
@@ -170,46 +91,9 @@ impl InvoiceMetadata {
     }
 }
 
-/// Individual payment record for an invoice
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PaymentRecord {
-    pub amount: i128,           // Amount paid in this transaction
-    pub timestamp: u64,         // When the payment was recorded
-    pub transaction_id: String, // External transaction reference
-}
+pub use crate::types::PaymentRecord;
 
-/// Core invoice data structure
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Invoice {
-    pub id: BytesN<32>,        // Unique invoice identifier
-    pub business: Address,     // Business that uploaded the invoice
-    pub amount: i128,          // Total invoice amount
-    pub currency: Address,     // Currency token address (XLM = Address::random())
-    pub due_date: u64,         // Due date timestamp
-    pub status: InvoiceStatus, // Current status of the invoice
-    pub created_at: u64,       // Creation timestamp
-    pub description: String,   // Invoice description/metadata
-    pub metadata_customer_name: Option<String>,
-    pub metadata_customer_address: Option<String>,
-    pub metadata_tax_id: Option<String>,
-    pub metadata_notes: Option<String>,
-    pub metadata_line_items: Vec<LineItemRecord>,
-    pub category: InvoiceCategory,           // Invoice category
-    pub tags: Vec<String>,                   // Invoice tags for better discoverability
-    pub funded_amount: i128,                 // Amount funded by investors
-    pub funded_at: Option<u64>,              // When the invoice was funded
-    pub investor: Option<Address>,           // Address of the investor who funded
-    pub settled_at: Option<u64>,             // When the invoice was settled
-    pub average_rating: Option<u32>,         // Average rating (1-5)
-    pub total_ratings: u32,                  // Total number of ratings
-    pub ratings: Vec<InvoiceRating>,         // List of all ratings
-    pub dispute_status: DisputeStatus,       // Current dispute status
-    pub dispute: Dispute,                    // Dispute details if any
-    pub total_paid: i128,                    // Aggregate amount paid towards the invoice
-    pub payment_history: Vec<PaymentRecord>, // History of partial payments
-}
+pub use crate::types::Invoice;
 
 // Use the main error enum from errors.rs
 use crate::audit::{
@@ -1000,6 +884,74 @@ impl InvoiceStorage {
             .unwrap_or_else(|| Vec::new(env))
     }
 
+    /// Get all invoices by category.
+    pub fn get_invoices_by_category(
+        env: &Env,
+        category: &InvoiceCategory,
+    ) -> Vec<BytesN<32>> {
+        env.storage()
+            .instance()
+            .get(&Self::category_key(category))
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    /// Get all invoices by category and status.
+    pub fn get_invoices_by_category_and_status(
+        env: &Env,
+        category: &InvoiceCategory,
+        status: &InvoiceStatus,
+    ) -> Vec<BytesN<32>> {
+        let mut invoices = Vec::new(env);
+        for invoice_id in Self::get_invoices_by_category(env, category).iter() {
+            if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
+                if &invoice.status == status {
+                    invoices.push_back(invoice_id);
+                }
+            }
+        }
+        invoices
+    }
+
+    /// Get invoices by normalized tag.
+    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
+        env.storage()
+            .instance()
+            .get(&Self::tag_key(tag))
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    /// Get invoices matching any of the given tags.
+    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
+        let mut combined = Vec::new(env);
+        for tag in tags.iter() {
+            let invoices = Self::get_invoices_by_tag(env, &tag);
+            for inv_id in invoices.iter() {
+                if !combined.iter().any(|existing| existing == inv_id) {
+                    combined.push_back(inv_id);
+                }
+            }
+        }
+        combined
+    }
+
+    /// Get all defined invoice categories.
+    pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
+        let categories = [
+            InvoiceCategory::Services,
+            InvoiceCategory::Products,
+            InvoiceCategory::Consulting,
+            InvoiceCategory::Manufacturing,
+            InvoiceCategory::Technology,
+            InvoiceCategory::Healthcare,
+            InvoiceCategory::Other,
+        ];
+        let mut result = Vec::new(env);
+        for category in categories.iter() {
+            result.push_back(category.clone());
+        }
+        result
+    }
+
     /// Add invoice to business invoices list
     fn add_to_business_invoices(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
         let key = (symbol_short!("business"), business.clone());
@@ -1072,6 +1024,32 @@ impl InvoiceStorage {
             }
         }
         high_rated_invoices
+    }
+
+    pub fn get_invoices_with_ratings_count(env: &Env) -> u32 {
+        let mut count = 0u32;
+        let all_statuses = [
+            InvoiceStatus::Pending,
+            InvoiceStatus::Verified,
+            InvoiceStatus::Funded,
+            InvoiceStatus::Paid,
+            InvoiceStatus::Defaulted,
+            InvoiceStatus::Cancelled,
+            InvoiceStatus::Refunded,
+        ];
+
+        for status in all_statuses.iter() {
+            let invoices = Self::get_invoices_by_status(env, status);
+            for invoice_id in invoices.iter() {
+                if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
+                    if invoice.total_ratings > 0 {
+                        count = count.saturating_add(1);
+                    }
+                }
+            }
+        }
+
+        count
     }
 
     fn add_to_metadata_index(

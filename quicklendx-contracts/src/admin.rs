@@ -213,9 +213,10 @@ impl AdminStorage {
         }
     }
 
-    /// Require that an address is the admin with comprehensive validation.
+    /// Require that an address is the admin with comprehensive validation and authorization.
     ///
     /// This function provides hardened admin verification:
+    /// - Requires explicit authorization from the address (signer check)
     /// - Checks if admin system is initialized
     /// - Verifies the address matches current admin
     /// - Returns specific error codes for different failure modes
@@ -225,7 +226,7 @@ impl AdminStorage {
     /// * `address` - The address to verify
     ///
     /// # Returns
-    /// * `Ok(())` if the address is the admin
+    /// * `Ok(())` if the address is the admin and authorized
     /// * `Err(QuickLendXError::NotAdmin)` if not admin
     /// * `Err(QuickLendXError::OperationNotAllowed)` if admin not initialized
     ///
@@ -235,6 +236,9 @@ impl AdminStorage {
     /// AdminStorage::require_admin(&env, &caller)?;
     /// ```
     pub fn require_admin(env: &Env, address: &Address) -> Result<(), QuickLendXError> {
+        // SECURITY: Require explicit authorization from the address
+        address.require_auth();
+
         // INVARIANT: Admin system must be initialized
         if !Self::is_initialized(env) {
             return Err(QuickLendXError::OperationNotAllowed);
@@ -262,10 +266,10 @@ impl AdminStorage {
     /// * `Err(QuickLendXError::OperationNotAllowed)` if admin not initialized
     pub fn require_current_admin(env: &Env) -> Result<Address, QuickLendXError> {
         let admin = Self::get_admin(env).ok_or(QuickLendXError::OperationNotAllowed)?;
-        admin.require_auth();
         Self::require_admin(env, &admin)?;
         Ok(admin)
     }
+
 
     /// Check if admin transfer is currently locked.
     ///

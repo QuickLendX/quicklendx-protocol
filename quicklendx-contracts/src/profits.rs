@@ -61,16 +61,7 @@ pub const MIN_VALID_AMOUNT: i128 = 0;
 // Data Types
 // ============================================================================
 
-/// Platform fee configuration stored on-chain
-#[contracttype]
-#[derive(Clone)]
-#[cfg_attr(test, derive(Debug))]
-pub struct PlatformFeeConfig {
-    pub fee_bps: u32,
-    pub treasury_address: Option<Address>,
-    pub updated_at: u64,
-    pub updated_by: Address,
-}
+pub use crate::types::PlatformFeeConfig;
 
 /// Complete breakdown of profit and fee calculation
 ///
