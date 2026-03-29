@@ -2,308 +2,341 @@
 
 ## Overview
 
-Complete dispute lifecycle management for invoice financing disputes. Enables business owners and investors to raise disputes on funded or settled invoices, with admin-controlled review and resolution process.
+Complete dispute lifecycle management for invoice financing disputes. Enables
+business owners and investors to raise disputes on invoices, with an
+admin-controlled review and resolution process.
+
+The central security property is **dispute locking**: once a dispute reaches
+the `Resolved` state it is **terminal and immutable**. No further state
+transitions are possible without an explicit policy-override path, preventing
+accidental or malicious overwrites of finalized resolutions.
+
+---
 
 ## Dispute Lifecycle
 
 ```
-Disputed → UnderReview → Resolved
+(none) ──create──▶ Disputed ──review──▶ UnderReview ──resolve──▶ Resolved
+                                                                     │
+                                                             TERMINAL / LOCKED
 ```
 
-1. **Disputed**: Dispute created by business or investor (initial state)
-2. **UnderReview**: Admin has acknowledged and is investigating
-3. **Resolved**: Admin has provided final resolution (terminal state)
+| Step | Transition | Actor | Notes |
+|------|-----------|-------|-------|
+| 1 | `None → Disputed` | Business or Investor | One dispute per invoice |
+| 2 | `Disputed → UnderReview` | Admin only | Forward-only |
+| 3 | `UnderReview → Resolved` | Admin only | **Terminal — locked** |
 
-## Data Structure
+Any attempt to call `resolve_dispute` on an already-`Resolved` dispute returns
+`DisputeNotUnderReview` because the status is no longer `UnderReview`. This is
+the locking mechanism — no special flag is needed; the state machine itself
+enforces immutability.
 
-### Dispute
+---
+
+## Data Structures
+
+### `DisputeStatus` (in `invoice.rs`)
+
+```rust
+pub enum DisputeStatus {
+    None,        // No dispute exists
+    Disputed,    // Dispute opened by business or investor
+    UnderReview, // Admin is investigating
+    Resolved,    // Admin has issued a final resolution (TERMINAL)
+}
+```
+
+### `Dispute` (in `invoice.rs`)
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `created_by` | `Address` | Dispute initiator (business or investor) |
-| `created_at` | `u64` | Creation timestamp |
-| `reason` | `String` | Dispute reason (1-1000 chars) |
-| `evidence` | `String` | Supporting evidence (1-2000 chars) |
-| `resolution` | `String` | Admin resolution text (1-2000 chars, empty until resolved) |
+| `created_at` | `u64` | Creation timestamp (write-once) |
+| `reason` | `String` | Dispute reason (1–1000 chars) |
+| `evidence` | `String` | Supporting evidence (1–2000 chars) |
+| `resolution` | `String` | Admin resolution text (empty until resolved) |
 | `resolved_by` | `Address` | Admin who resolved (placeholder until resolved) |
 | `resolved_at` | `u64` | Resolution timestamp (0 until resolved) |
 
-### DisputeStatus
+---
 
-```rust
-pub enum DisputeStatus {
-    Disputed,       // Initial state after creation
-    UnderReview,    // Admin reviewing
-    Resolved,       // Final terminal state
-}
-```
-
-## Contract Interface
+## API Functions
 
 ### User Functions
 
-#### `create_dispute(invoice_id: BytesN<32>, creator: Address, reason: String, evidence: String) -> Result<(), QuickLendXError>`
+#### `create_dispute(invoice_id, creator, reason, evidence) → Result<(), Error>`
 
-Creates a new dispute for a funded or settled invoice.
+Opens a dispute on an invoice.
 
-**Preconditions**:
-- Invoice must exist in storage
-- Creator must be either business owner or investor on the invoice
-- No existing dispute for this invoice (one dispute per invoice)
-- Reason must be 1-1000 characters
-- Evidence must be 1-2000 characters
+**Preconditions:**
+- `creator` must sign the transaction (`require_auth`)
+- Invoice must exist
+- No existing dispute on this invoice (`DisputeStatus::None`)
+- `creator` must be the invoice's business owner or its investor
+- `reason`: 1–1000 characters
+- `evidence`: 1–2000 characters
 
 **Errors:**
-- `DisputeAlreadyExists`: Dispute already exists for this invoice
-- `InvoiceNotAvailableForFunding`: Invoice not in valid state
-- `DisputeNotAuthorized`: Creator is not business or investor
-- `InvoiceNotFound`: Invoice does not exist
-- `InvalidDisputeReason`: Reason empty or exceeds 1000 chars
-- `InvalidDisputeEvidence`: Evidence empty or exceeds 2000 chars
+
+| Error | Condition |
+|-------|-----------|
+| `InvoiceNotFound` | Invoice does not exist |
+| `DisputeAlreadyExists` | A dispute already exists on this invoice |
+| `DisputeNotAuthorized` | Caller is neither business nor investor |
+| `InvalidDisputeReason` | Reason is empty or exceeds 1000 chars |
+| `InvalidDisputeEvidence` | Evidence is empty or exceeds 2000 chars |
+
+---
 
 ### Admin Functions
 
-#### `put_dispute_under_review(admin: Address, invoice_id: BytesN<32>) -> Result<(), QuickLendXError>`
+#### `put_dispute_under_review(invoice_id, admin) → Result<(), Error>`
 
-Moves dispute from Disputed to UnderReview status.
-
-**Preconditions:**
-- Caller must be admin
-- Dispute must exist
-- Dispute status must be Disputed
-
-**Errors:**
-- `Unauthorized`: Caller not admin
-- `NotAdmin`: Admin not configured
-- `DisputeNotFound`: No dispute for this invoice
-- `InvalidStatus`: Dispute not in Disputed status
-
-#### `resolve_dispute(admin: Address, invoice_id: BytesN<32>, resolution: String) -> Result<(), QuickLendXError>`
-
-Finalizes dispute with resolution text.
+Advances a dispute from `Disputed` to `UnderReview`.
 
 **Preconditions:**
-- Caller must be admin
-- Dispute must exist
-- Dispute status must be UnderReview
-- Resolution must be 1-2000 characters
+- `admin` must sign the transaction (`require_auth`)
+- `admin` must match the stored admin address
+- A dispute must exist on the invoice
+- Dispute must be in `Disputed` state
 
 **Errors:**
-- `Unauthorized`: Caller not admin
-- `NotAdmin`: Admin not configured
-- `DisputeNotFound`: No dispute for this invoice
-- `DisputeNotUnderReview`: Dispute not in UnderReview status
-- `DisputeAlreadyResolved`: Dispute already resolved
-- `InvalidDisputeEvidence`: Resolution empty or exceeds 2000 chars
+
+| Error | Condition |
+|-------|-----------|
+| `NotAdmin` | Caller is not the stored admin |
+| `InvoiceNotFound` | Invoice does not exist |
+| `DisputeNotFound` | No dispute exists on this invoice |
+| `InvalidStatus` | Dispute is not in `Disputed` state (includes `UnderReview` and `Resolved`) |
+
+---
+
+#### `resolve_dispute(invoice_id, admin, resolution) → Result<(), Error>`
+
+Finalizes a dispute with a resolution text. **This is the locking operation.**
+
+**Preconditions:**
+- `admin` must sign the transaction (`require_auth`)
+- `admin` must match the stored admin address
+- A dispute must exist on the invoice
+- Dispute must be in `UnderReview` state
+- `resolution`: 1–2000 characters
+
+**Locking invariant:** A second call on an already-`Resolved` dispute returns
+`DisputeNotUnderReview` because the status is no longer `UnderReview`. The
+`resolution`, `resolved_by`, and `resolved_at` fields are written atomically
+and cannot be overwritten.
+
+**Errors:**
+
+| Error | Condition |
+|-------|-----------|
+| `NotAdmin` | Caller is not the stored admin |
+| `InvoiceNotFound` | Invoice does not exist |
+| `DisputeNotFound` | No dispute exists on this invoice |
+| `DisputeNotUnderReview` | Dispute is not in `UnderReview` state (includes already-resolved disputes) |
+| `InvalidDisputeReason` | Resolution is empty or exceeds 2000 chars |
+
+---
 
 ### Query Functions
 
-#### `get_dispute_details(invoice_id: BytesN<32>) -> Option<Dispute>`
+#### `get_dispute_details(invoice_id) → Result<Option<Dispute>, Error>`
 
-Retrieves complete dispute information.
+Returns the full dispute record, or `None` if no dispute exists.
 
-Returns `None` if no dispute exists, otherwise returns complete dispute information.
+#### `get_invoice_dispute_status(invoice_id) → Result<DisputeStatus, Error>`
 
-**Note**: This function does not return errors - use `Option` pattern instead.
+Returns the current `DisputeStatus` (including `None`).
 
-#### `get_invoices_with_disputes() -> Vec<BytesN<32>>`
+#### `get_invoices_with_disputes() → Vec<BytesN<32>>`
 
-Returns all invoice IDs that have disputes in any state.
+Returns all invoice IDs that have any dispute (any status other than `None`).
 
-**Return Value**:
-- Vector of invoice IDs with active disputes
+#### `get_invoices_by_dispute_status(status) → Vec<BytesN<32>>`
 
-#### `get_invoices_by_dispute_status(status: DisputeStatus) -> Vec<BytesN<32>>`
+Returns invoice IDs filtered by a specific `DisputeStatus`.
+Passing `DisputeStatus::None` always returns an empty list.
 
-Returns invoice IDs filtered by specific dispute status.
+---
 
-**Parameters**:
-- `status`: Filter by dispute status (Disputed, UnderReview, or Resolved)
+## Security Model
 
-**Return Value**:
-- Vector of invoice IDs matching the status
+### Dispute Locking
 
-## Integration
+The `Resolved` state is **terminal**. The locking mechanism is the state
+machine itself:
 
-### Integration with Invoice Module
-
-Disputes are stored as part of the `Invoice` struct in the invoice module. The dispute-related fields on `Invoice` include:
-
-```rust
-pub struct Invoice {
-    // ... other fields ...
-    pub dispute_status: DisputeStatus,  // Tracks lifecycle
-    pub dispute: Option<Dispute>,       // Dispute details when present
-}
+```
+resolve_dispute checks: dispute_status == UnderReview
+  → if Resolved: returns DisputeNotUnderReview  ← LOCK
+  → if Disputed: returns DisputeNotUnderReview  ← LOCK
+  → if None:     returns DisputeNotFound
+  → if UnderReview: proceeds to write resolution
 ```
 
-When a dispute is created, the invoice's `dispute_status` is set to `DisputeStatus::Disputed`, preventing further funding operations on that invoice.
+No additional flag or mutex is needed. The forward-only state machine
+guarantees that once `Resolved` is written, no code path can overwrite it
+without an explicit policy-override function (which does not currently exist).
 
-### Authorization Model
+### Authorization
 
-**Create Dispute:**
-- Business owner of the invoice
-- Investor who funded the invoice
+| Operation | Required Role |
+|-----------|--------------|
+| `create_dispute` | Business owner or investor on the invoice |
+| `put_dispute_under_review` | Platform admin |
+| `resolve_dispute` | Platform admin |
+| All queries | Anyone (read-only) |
 
-**Review/Resolve:**
-- Platform admin only
+Every mutating function calls `require_auth()` on the caller before any state
+is read or written, preventing replay attacks.
 
-### Usage Example
+### Input Validation
+
+| Field | Min | Max | Error |
+|-------|-----|-----|-------|
+| `reason` | 1 char | 1000 chars | `InvalidDisputeReason` |
+| `evidence` | 1 char | 2000 chars | `InvalidDisputeEvidence` |
+| `resolution` | 1 char | 2000 chars | `InvalidDisputeReason` |
+
+### One-Dispute-Per-Invoice
+
+`create_dispute` checks `dispute_status == None` before writing. Any status
+other than `None` returns `DisputeAlreadyExists`, preventing storage-bloat
+attacks and ensuring a clean audit trail.
+
+### Dual-Check Authorization
+
+Admin operations perform two independent checks:
+1. `admin.require_auth()` — cryptographic signature verification
+2. `AdminStorage::require_admin(&env, &admin)` — role verification against
+   the stored admin address
+
+Both must pass. This prevents an attacker who knows the admin address from
+calling admin functions without the private key.
+
+---
+
+## `dispute.rs` Module
+
+The `dispute.rs` module provides shared types and helper logic:
 
 ```rust
-// Business creates dispute
-let invoice_id = /* 32-byte identifier */;
+// Validation helpers
+pub fn validate_reason_len(len: u32) -> Result<(), QuickLendXError>
+pub fn validate_evidence_len(len: u32) -> Result<(), QuickLendXError>
+pub fn validate_resolution_len(len: u32) -> Result<(), QuickLendXError>
+
+// State-machine helpers
+pub fn require_disputed(status: &DisputeStatus) -> Result<(), QuickLendXError>
+pub fn require_under_review(status: &DisputeStatus) -> Result<(), QuickLendXError>
+pub fn is_locked(status: &DisputeStatus) -> bool
+```
+
+The `is_locked` predicate can be used by future policy-override logic to gate
+any controlled exception path.
+
+---
+
+## Error Reference
+
+| Error | Code | Condition |
+|-------|------|-----------|
+| `InvoiceNotFound` | 1000 | Invoice does not exist |
+| `InvalidStatus` | 1401 | Invalid state transition (e.g. re-reviewing) |
+| `NotAdmin` | 1103 | Caller is not the stored admin |
+| `DisputeNotFound` | 1900 | No dispute exists on this invoice |
+| `DisputeAlreadyExists` | 1901 | Duplicate dispute creation attempt |
+| `DisputeNotAuthorized` | 1902 | Caller is not business or investor |
+| `DisputeAlreadyResolved` | 1903 | (reserved for future use) |
+| `DisputeNotUnderReview` | 1904 | Dispute is not in `UnderReview` state |
+| `InvalidDisputeReason` | 1905 | Reason/resolution validation failed |
+| `InvalidDisputeEvidence` | 1906 | Evidence validation failed |
+
+---
+
+## Usage Examples
+
+```rust
+// Business opens a dispute
 create_dispute(
     env.clone(),
     &invoice_id,
     &business_address,
     String::from_str(&env, "Payment not received after due date"),
-    String::from_str(&env, "Transaction ID: ABC123, Expected: 2025-01-15")
+    String::from_str(&env, "Transaction ID: ABC123, Expected: 2025-01-15"),
 )?;
 
 // Admin puts under review
-put_dispute_under_review(
-    env.clone(),
-    &admin_address,
-    &invoice_id
-)?;
+put_dispute_under_review(env.clone(), &invoice_id, &admin_address)?;
 
-// Admin resolves
+// Admin resolves (LOCKS the dispute)
 resolve_dispute(
     env.clone(),
-    &admin_address,
     &invoice_id,
-    String::from_str(&env, "Verified payment delay. Instructed business to release funds.")
+    &admin_address,
+    String::from_str(&env, "Verified payment delay. Instructed business to release funds."),
 )?;
 
-// Query dispute
-let dispute = get_dispute_details(env.clone(), &invoice_id);
-assert_eq!(dispute.unwrap().status, DisputeStatus::Resolved);
+// Second resolve attempt — returns DisputeNotUnderReview (locked)
+let err = resolve_dispute(env.clone(), &invoice_id, &admin_address, &new_text);
+assert_eq!(err, Err(QuickLendXError::DisputeNotUnderReview));
 
-// Get all disputed invoices
-let all_disputed = get_invoices_with_disputes(env.clone());
-
-// Get disputes by status
-let under_review = get_invoices_by_dispute_status(env.clone(), DisputeStatus::UnderReview);
+// Query
+let dispute = get_dispute_details(env.clone(), &invoice_id).unwrap();
+assert_eq!(dispute.unwrap().resolved_by, admin_address);
 ```
 
-## Validation Rules
+---
 
-### Field Length Constraints
+## Test Coverage
 
-| Field | Minimum | Maximum |
-|-------|---------|--------|
-| Reason | 1 char | 1000 chars |
-| Evidence | 1 char | 2000 chars |
-| Resolution | 1 char | 2000 chars |
+`src/test_dispute.rs` contains 43 test cases (TC-01 through TC-43):
 
-### State Transition Rules
+| Range | Area |
+|-------|------|
+| TC-01 – TC-10 | Dispute creation, authorization, boundary values |
+| TC-11 – TC-14 | `put_dispute_under_review` state machine |
+| TC-15 – TC-20 | `resolve_dispute` state machine and validation |
+| TC-21 – TC-26 | Query functions |
+| TC-27 – TC-29 | Multi-invoice isolation |
+| TC-30 – TC-43 | **Regression tests — dispute locking** |
 
-| Current Status | Allowed Transition | Required Role |
-|----------------|-------------------|---------------|
-| Disputed | UnderReview | Admin |
-| UnderReview | Resolved | Admin |
-| Resolved | None (terminal) | - |
+Key regression tests:
+- **TC-30**: Resolved dispute cannot be overwritten (core locking test)
+- **TC-31**: Resolved dispute cannot be re-opened via `put_dispute_under_review`
+- **TC-32**: `resolved_at` is set exactly once and never zero after resolution
+- **TC-33**: Cannot skip the `UnderReview` step
+- **TC-34/35**: Non-admin cannot resolve or advance disputes
+- **TC-38**: Double-resolution preserves original `resolved_by`/`resolved_at`
+- **TC-39**: Invalid invoice ID returns `InvoiceNotFound` for all operations
 
-### Invoice State Requirements
-
-| Invoice Status | Can Create Dispute |
-|----------------|-------------------|
-| Pending | ❌ |
-| Funded | ✅ |
-| Settled | ✅ |
-| Defaulted | ❌ |
-
-## Security Considerations
-
-**Authorization:**
-- Creator verification via `require_auth()` ensures only invoice participants can dispute
-- Admin-only review and resolution prevents unauthorized modifications
-- Dual-check system: cryptographic signature + role verification against stored admin
-- Forward-only state transitions prevent reverting to previous states
-
-**Data Integrity:**
-- One dispute per invoice prevents spam and storage bloat
-- Immutable creator and creation timestamp once dispute is opened
-- Resolution fields (`resolved_by`, `resolved_at`, `resolution`) set atomically on resolve
-- Status transitions enforced: cannot skip `UnderReview` or revert from `Resolved`
-
-**Input Validation:**
-- Length limits on reason (1-1000), evidence (1-2000), resolution (1-2000) prevent storage abuse
-- Empty strings rejected for all required fields
-- Invoice existence verified before dispute creation
-
-**Access Control:**
-- Admin address stored in instance storage under `ADMIN_KEY` symbol
-- Admin verification on every privileged operation (`put_dispute_under_review`, `resolve_dispute`)
-- Separate user and admin function namespaces with clear role boundaries
-- Business/investor can only create disputes, never advance or resolve them
-
-## Error Handling
-
-All operations return `Result<T, QuickLendXError>`:
-
-| Error | Code | Condition |
-|-------|------|-----------|
-| `InvoiceNotFound` | 1000 | Invoice does not exist |
-| `InvalidStatus` | 1003 | Invalid state transition |
-| `Unauthorized` | 1004 | Admin verification failed |
-| `NotAdmin` | 1005 | Admin not configured or caller mismatch |
-| `DisputeNotFound` | 1037 | No dispute exists on this invoice |
-| `DisputeAlreadyExists` | 1038 | Duplicate dispute creation attempt |
-| `DisputeNotAuthorized` | 1039 | Caller is not business or investor |
-| `DisputeAlreadyResolved` | 1040 | Attempting to resolve already-resolved dispute |
-| `DisputeNotUnderReview` | 1041 | Attempting to resolve without reviewing first |
-| `InvalidDisputeReason` | 1042 | Reason validation failed (empty or too long) |
-| `InvalidDisputeEvidence` | 1043 | Evidence/resolution validation failed (empty or too long) |
-
-## Query Patterns
-
-### Get Single Dispute
-```rust
-let maybe_dispute = get_dispute_details(env, &invoice_id);
-match maybe_dispute {
-    Some(dispute) => {
-        println!("Dispute status: {:?}", dispute.status);
-        println!("Reason: {}", dispute.reason);
-    },
-    None => println!("No dispute on this invoice"),
-}
-```
-
-### Get All Disputed Invoices
-```rust
-let disputed_invoices = get_invoices_with_disputes(env);
-for invoice_id in disputed_invoices.iter() {
-    println!("Invoice {:?} has a dispute", invoice_id);
-}
-```
-
-### Get Disputes by Status
-```rust
-let under_review = get_invoices_by_dispute_status(env, DisputeStatus::UnderReview);
-let resolved = get_invoices_by_dispute_status(env, DisputeStatus::Resolved);
-let disputed = get_invoices_by_dispute_status(env, DisputeStatus::Disputed);
+---
 
 ## Deployment Checklist
 
-- [ ] Initialize contract with admin address via `set_admin`
-- [ ] Verify admin authorization works correctly (test non-admin rejection)
+- [ ] Initialize contract with admin address via `set_admin` / `initialize`
+- [ ] Verify admin authorization works (test non-admin rejection)
 - [ ] Confirm dispute creation restricted to business/investor only
 - [ ] Test complete state machine: Disputed → UnderReview → Resolved
-- [ ] Validate field length constraints (reason 1-1000, evidence 1-2000, resolution 1-2000)
+- [ ] Verify locking: second `resolve_dispute` returns `DisputeNotUnderReview`
+- [ ] Validate field length constraints
 - [ ] Verify one-dispute-per-invoice enforcement
 - [ ] Test query functions return correct results for each status
-- [ ] Verify multi-invoice isolation (disputes don't interfere)
-- [ ] Document admin dispute resolution procedures
-- [ ] Set up monitoring for disputes stuck in UnderReview status
+- [ ] Verify multi-invoice isolation
+- [ ] Run `cargo test test_dispute` — all 43 tests must pass
 
-## Future Enhancements
+---
 
-- Dispute appeal mechanism
-- Automated dispute categorization
-- Multi-party disputes (beyond business/investor)
-- Dispute metrics and analytics
-- Integration with notification system
-- Evidence file attachments support
-- Dispute escalation timers
+## Security Assumptions
+
+1. The admin private key is kept secure. Compromise of the admin key allows
+   dispute resolution but not dispute creation (which requires business/investor
+   auth).
+2. The Soroban `require_auth()` mechanism correctly enforces cryptographic
+   signatures. This is a platform-level assumption.
+3. The `AdminStorage::require_admin` check is the sole source of truth for
+   admin identity. Admin key rotation via `transfer_admin` is atomic.
+4. There is no policy-override path today. Any future override must be
+   implemented as an explicit, separately audited function.
