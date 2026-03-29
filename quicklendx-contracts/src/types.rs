@@ -342,7 +342,7 @@ impl Invoice {
     pub fn remove_tag(&mut self, env: &Env, tag: String) -> Result<(), QuickLendXError> {
         self.business.require_auth();
         let normalized = crate::verification::normalize_tag(env, &tag)?;
-        
+
         let mut new_tags = soroban_sdk::Vec::new(env);
         let mut found = false;
 

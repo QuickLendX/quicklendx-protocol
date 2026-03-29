@@ -3,8 +3,8 @@ use crate::protocol_limits::{
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
 };
 use crate::storage::{DisputeStorage, InvoiceStorage};
-use crate::types::{Dispute, DisputeStatus, InvoiceStatus};
-use crate::QuickLendXError;
+use crate::types::{Dispute, DisputeStatus, InvoiceStatus, Invoice};
+use crate::errors::QuickLendXError;
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 pub struct DisputeResolution;
@@ -54,7 +54,7 @@ impl DisputeResolution {
             reason: reason.clone(),
             evidence: evidence.clone(),
             resolution: String::from_str(env, ""),
-            // Fixed address parsing: use Address::from_string directly if it's already a String or String::from_str then Address::from_string
+            // Fixed address parsing: use Address::from_string directly
             resolved_by: Address::from_string(&String::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF")),
             resolved_at: 0,
         };

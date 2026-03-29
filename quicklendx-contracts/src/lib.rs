@@ -90,7 +90,7 @@ use events::{
     emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
-use types::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceCategory, InsuranceCoverage};
+use types::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceCategory, InsuranceCoverage, PaymentRecord};
 use invoice::InvoiceStorage;
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
@@ -130,7 +130,7 @@ fn cap_query_limit(limit: u32) -> u32 {
 /// @param limit The requested result limit
 /// @return Result indicating validation success or failure
 /// @dev Prevents potential overflow and ensures reasonable query bounds
-fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError> {
+fn validate_query_params(offset: u32, _limit: u32) -> Result<(), QuickLendXError> {
     // Check for potential overflow in offset + limit calculation
     if offset > u32::MAX - MAX_QUERY_LIMIT {
         return Err(QuickLendXError::InvalidAmount);

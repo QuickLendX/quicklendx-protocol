@@ -1,5 +1,5 @@
-use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Symbol, Vec};
-use crate::types::{InvoiceCategory, InvoiceStatus, TimePeriod, PlatformMetrics, UserBehaviorMetrics, FinancialMetrics, PerformanceMetrics, BusinessReport};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Symbol, Vec as SorobanVec};
+use crate::types::{InvoiceCategory, InvoiceStatus, TimePeriod, PlatformMetrics, UserBehaviorMetrics, PerformanceMetrics, BusinessReport};
 use crate::errors::QuickLendXError;
 use crate::storage::{InvestmentStorage, InvoiceStorage};
 
@@ -8,9 +8,6 @@ pub struct AnalyticsStorage;
 
 impl AnalyticsStorage {
     fn platform_metrics_key() -> Symbol { symbol_short!("plt_met") }
-    fn performance_metrics_key() -> Symbol { symbol_short!("perf_met") }
-    fn user_behavior_key(user: &Address) -> (Symbol, Address) { (symbol_short!("usr_beh"), user.clone()) }
-    fn business_report_key(id: &BytesN<32>) -> (Symbol, BytesN<32>) { (symbol_short!("biz_rpt"), id.clone()) }
     // ... (other keys)
 
     pub fn generate_report_id(env: &Env) -> BytesN<32> {
@@ -39,8 +36,7 @@ impl AnalyticsCalculator {
 
         let total_invoices = (pending.len() + verified.len() + funded.len() + paid.len() + defaulted.len()) as u32;
         let total_investments = (funded.len() + paid.len() + defaulted.len()) as u32;
-        
-        // Simplified metrics
+
         Ok(PlatformMetrics {
             total_invoices,
             total_investments,
@@ -68,7 +64,7 @@ impl AnalyticsCalculator {
             success_rate: 0,
             default_rate: 0,
             last_activity: env.ledger().timestamp(),
-            preferred_categories: soroban_sdk::Vec::new(env),
+            preferred_categories: SorobanVec::new(env),
             risk_score: 0,
         })
     }
@@ -100,7 +96,7 @@ impl AnalyticsCalculator {
             average_funding_time: 0,
             success_rate: 0,
             default_rate: 0,
-            category_breakdown: soroban_sdk::Vec::new(env),
+            category_breakdown: SorobanVec::new(env),
             rating_average: None,
             total_ratings: 0,
             generated_at: env.ledger().timestamp(),
