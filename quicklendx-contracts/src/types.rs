@@ -421,6 +421,22 @@ impl Invoice {
         Ok(())
     }
 
+    pub fn add_tag(&mut self, env: &Env, tag: String) -> Result<(), QuickLendXError> {
+        self.business.require_auth();
+        crate::verification::validate_invoice_tags(env, &self.tags)?;
+        let normalized = crate::verification::normalize_tag(env, &tag)?;
+
+        // Check for duplicates
+        for existing_tag in self.tags.iter() {
+            if existing_tag == normalized {
+                return Err(QuickLendXError::InvalidTag);
+            }
+        }
+
+        self.tags.push_back(normalized);
+        Ok(())
+    }
+
     pub fn remove_tag(&mut self, env: &Env, tag: String) -> Result<(), QuickLendXError> {
         self.business.require_auth();
         let normalized = crate::verification::normalize_tag(env, &tag)?;
