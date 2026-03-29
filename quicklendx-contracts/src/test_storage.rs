@@ -13,13 +13,69 @@ use crate::bid::{Bid, BidStatus};
 use crate::investment::{Investment, InvestmentStatus};
 use crate::invoice::{
     Dispute, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceStatus, LineItemRecord,
-    PaymentRecord,
+    PaymentRecord, InoiceStorage, TOTAL_INCOICE_COUNT_KEY,
 };
 use crate::profits::{PlatformFee, PlatformFeeConfig};
 use crate::storage::{
     BidStorage, ConfigStorage, DataKey, Indexes, InvestmentStorage, InvoiceStorage, StorageKeys,
 };
 use crate::QuickLendXContract;
+
+/// Create a minimal valid `Invoice` stub directly (bypasses `Invoice::new`
+    /// which requires the full contract environment with audit logging).
+    fn make_invoice(env: &Env, idx: u32) -> Invoice {
+        use soroban_sdk::{vec, Address, BytesN, String};
+        use crate::invoice::{
+            Dispute, DisputeStatus, InvoiceCategory, InvoiceStatus, LineItemRecord,
+        };
+ 
+        let mut id_bytes = [0u8; 32];
+        id_bytes[28..32].copy_from_slice(&idx.to_be_bytes());
+        let id = BytesN::from_array(env, &id_bytes);
+ 
+        Invoice {
+            id,
+            business: Address::generate(env),
+            amount: 1_000_i128 * (idx as i128 + 1),
+            currency: Address::generate(env),
+            due_date: 9_999_999_999,
+            status: InvoiceStatus::Pending,
+            created_at: env.ledger().timestamp(),
+            description: String::from_str(env, "test invoice"),
+            metadata_customer_name: None,
+            metadata_customer_address: None,
+            metadata_tax_id: None,
+            metadata_notes: None,
+            metadata_line_items: soroban_sdk::Vec::new(env),
+            category: InvoiceCategory::Services,
+            tags: soroban_sdk::Vec::new(env),
+            funded_amount: 0,
+            funded_at: None,
+            investor: None,
+            settled_at: None,
+            average_rating: None,
+            total_ratings: 0,
+            ratings: vec![env],
+            dispute_status: DisputeStatus::None,
+            dispute: Dispute {
+                created_by: Address::generate(env),
+                created_at: 0,
+                reason: String::from_str(env, ""),
+                evidence: String::from_str(env, ""),
+                resolution: String::from_str(env, ""),
+                resolved_by: Address::generate(env),
+                resolved_at: 0,
+            },
+            total_paid: 0,
+            payment_history: vec![env],
+        }
+    }
+
+     fn setup_env() -> Env {
+        let env = Env::default();
+        env.ledger().set_timestamp(1_000_000);
+        env
+    }
 
 fn with_registered_contract<F: FnOnce()>(env: &Env, f: F) {
     let contract_id = env.register(QuickLendXContract, ());
@@ -1012,3 +1068,43 @@ fn test_storage_retrieval_consistency() {
         assert_eq!(invoice, retrieved1, "Retrieved should match stored");
     });
 }
+
+    #[test]
+    fn clear_all_removes_invoice_records() {
+        let env = setup_env();
+        let inv = make_invoice(&env, 0);
+        let id = inv.id.clone();
+        InvoiceStorage::store_invoice(&env, &inv);
+ 
+        assert!(InvoiceStorage::get_invoice(&env, &id).is_some());
+        InvoiceStorage::clear_all(&env);
+        assert!(InvoiceStorage::get_invoice(&env, &id).is_none());
+    }
+ 
+    #[test]
+    fn clear_all_empties_status_buckets() {
+        let env = setup_env();
+        let inv = make_invoice(&env, 1);
+        InvoiceStorage::store_invoice(&env, &inv);
+ 
+        InvoiceStorage::clear_all(&env);
+ 
+        let pending = InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Pending);
+        assert_eq!(pending.len(), 0, "pending bucket must be empty after clear_all");
+    }
+ 
+    #[test]
+    fn clear_all_empties_category_index() {
+        let env = setup_env();
+        let inv = make_invoice(&env, 2);
+        InvoiceStorage::store_invoice(&env, &inv);
+ 
+        InvoiceStorage::clear_all(&env);
+ 
+        // After clear the category index for Services must be empty.
+        let key = (soroban_sdk::symbol_short!("cat_idx"), InvoiceCategory::Services);
+        let bucket: Option<soroban_sdk::Vec<soroban_sdk::BytesN<32>>> =
+            env.storage().instance().get(&key);
+        let len = bucket.map(|v| v.len()).unwrap_or(0);
+        assert_eq!(len, 0, "category index must have no orphans after clear_all");
+    }
