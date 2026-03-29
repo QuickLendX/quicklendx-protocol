@@ -257,6 +257,135 @@ Strict boundary checks prevent "silent misconfiguration" where a typo could lead
 - **`InvalidFeeConfiguration`**: Map sum does not equal `total_amount`, or revenue shares do not sum to 10,000 BPS.
 - **`StorageKeyNotFound`**: Reading fee config before the fee system has been initialized.
 
+## FeeType Configuration Matrix
+
+### Overview
+
+Every `FeeType` variant is exercised independently through `update_fee_structure`.
+The matrix below captures all boundary and validity rules for each type.
+
+### FeeType Variants
+
+| Variant | Default in storage | Max-fee multiplier | Notes |
+|---|---|---|---|
+| `Platform` | Yes (bps=200, min=100, max=1_000_000) | 100× | General transaction overhead |
+| `Processing` | Yes (bps=50, min=50, max=500_000) | 100× | Specialized processing charge |
+| `Verification` | Yes (bps=100, min=100, max=100_000) | 100× | Identity/business verification |
+| `EarlyPayment` | **No** — inserted on first call | 500× | Incentive; wider ceiling |
+| `LatePayment` | **No** — inserted on first call | 500× | Penalty; subject to cross-fee floor rule |
+
+### BPS Boundaries (applies to all variants)
+
+| BPS value | Result | Error |
+|---|---|---|
+| 0 | Accepted (free / no-op rate) | — |
+| 1 – 999 | Accepted | — |
+| 1000 | Accepted (hard cap) | — |
+| ≥ 1001 | Rejected | `InvalidFeeBasisPoints` |
+
+### Min/Max Ordering Rules (applies to all variants)
+
+| Condition | Result | Error |
+|---|---|---|
+| `min_fee == max_fee` | Accepted (flat fee) | — |
+| `min_fee < max_fee` | Accepted | — |
+| `min_fee > max_fee` | Rejected | `InvalidAmount` |
+| `min_fee < 0` | Rejected | `InvalidAmount` |
+| `max_fee < 0` | Rejected | `InvalidAmount` |
+
+### Absolute Max-Fee Limit
+
+`max_fee > 10_000_000_000_000` (10 M stroops) is always rejected with `InvalidFeeConfiguration`.
+
+### Per-Type Max-Fee Threshold
+
+For a given `base_fee_bps`, the per-type ceiling is:
+
+| Type group | Formula | Example (bps=200) |
+|---|---|---|
+| Platform / Processing / Verification | `bps × 100 × 100` | 2_000_000 |
+| EarlyPayment / LatePayment | `bps × 500 × 100` | 10_000_000 |
+
+When `base_fee_bps = 0` the formula yields 0 and the per-type threshold guard is
+**skipped** (condition `calculated_max_threshold > 0` is false), so any
+`max_fee` up to the absolute protocol cap is accepted with a zero-bps structure.
+
+### Cross-Fee Floor Rule (LatePayment only)
+
+`LatePayment.min_fee` must be **≥** the currently stored `Platform.min_fee`.
+
+| Scenario | Result | Error |
+|---|---|---|
+| `LatePayment.min_fee >= Platform.min_fee` | Accepted | — |
+| `LatePayment.min_fee == Platform.min_fee` | Accepted (exact boundary) | — |
+| `LatePayment.min_fee < Platform.min_fee` | Rejected | `InvalidFeeConfiguration` |
+
+### Insert vs. Update Behaviour
+
+`update_fee_structure` performs an **upsert**:
+
+- If the `fee_type` already exists in storage the existing record is overwritten.
+- If the `fee_type` is absent a new record is appended.
+
+`Platform`, `Processing`, and `Verification` are inserted during
+`initialize_fee_system`, so their first user-driven call takes the **update**
+path. `EarlyPayment` and `LatePayment` are absent until explicitly created,
+so their first call takes the **insert** path; `get_fee_structure` returns
+`StorageKeyNotFound` before that point.
+
+### Isolation Guarantee
+
+Updating one `FeeType` must not alter any other type's `base_fee_bps`,
+`min_fee`, or `max_fee`. This is verified in
+`test_matrix_update_platform_preserves_others` and
+`test_matrix_insert_early_payment_preserves_existing_types`.
+
+### Test Coverage Map
+
+| Test name | Coverage |
+|---|---|
+| `test_matrix_platform_bps_zero_accepted` | Platform, bps=0 |
+| `test_matrix_platform_bps_at_cap_accepted` | Platform, bps=1000 |
+| `test_matrix_platform_bps_over_cap_rejected` | Platform, bps=1001 |
+| `test_matrix_processing_bps_zero_accepted` | Processing, bps=0 |
+| `test_matrix_processing_bps_at_cap_accepted` | Processing, bps=1000 |
+| `test_matrix_processing_bps_over_cap_rejected` | Processing, bps=1001 |
+| `test_matrix_verification_bps_zero_accepted` | Verification, bps=0 |
+| `test_matrix_verification_bps_at_cap_accepted` | Verification, bps=1000 |
+| `test_matrix_verification_bps_over_cap_rejected` | Verification, bps=1001 |
+| `test_matrix_early_payment_bps_zero_accepted` | EarlyPayment, bps=0, insert |
+| `test_matrix_early_payment_bps_at_cap_accepted` | EarlyPayment, bps=1000 |
+| `test_matrix_early_payment_bps_over_cap_rejected` | EarlyPayment, bps=1001 |
+| `test_matrix_late_payment_bps_zero_accepted` | LatePayment, bps=0, cross-floor |
+| `test_matrix_late_payment_bps_at_cap_accepted` | LatePayment, bps=1000 |
+| `test_matrix_late_payment_bps_over_cap_rejected` | LatePayment, bps=1001 |
+| `test_matrix_platform_returned_fields_complete` | Returned struct correctness |
+| `test_matrix_processing_returned_fields_complete` | Returned struct correctness |
+| `test_matrix_verification_returned_fields_complete` | Returned struct correctness |
+| `test_matrix_early_payment_returned_fields_complete` | Returned struct correctness |
+| `test_matrix_late_payment_returned_fields_complete` | Returned struct correctness |
+| `test_matrix_active_toggle_all_types` | is_active toggle, all 5 types |
+| `test_matrix_early_payment_insert_then_update` | Insert → update lifecycle |
+| `test_matrix_late_payment_insert_then_update` | Insert → update lifecycle |
+| `test_matrix_update_platform_preserves_others` | Isolation guarantee |
+| `test_matrix_insert_early_payment_preserves_existing_types` | Isolation guarantee |
+| `test_matrix_late_payment_cross_check_floor_enforced_on_insert` | Cross-fee floor rejection |
+| `test_matrix_late_payment_cross_check_floor_exact_equal_accepted` | Cross-fee floor boundary |
+| `test_matrix_flat_fee_all_types_accepted` | min == max for all 5 types |
+| `test_matrix_intermediate_bps_accepted_for_all_types` | bps ∈ {1,500,999} × all types |
+
+### Security Notes
+
+- **No partial writes**: all validation runs before any storage mutation; a
+  rejected call leaves the fee store unchanged.
+- **Checked arithmetic**: threshold and min-fee computations use
+  `saturating_mul` / `saturating_add`, preventing integer overflow panics.
+- **Auth gate**: every call requires `admin.require_auth()` — an attacker who
+  does not hold the admin key cannot mutate fee parameters.
+- **Event auditability**: every accepted call emits `fee_structure_updated`
+  (`fee_str` topic) containing the old and new BPS values for off-chain
+  monitoring.
+
 ## Migration and Upgrades
 
 The system is designed for backward compatibility, with new event structures providing more detail than legacy versions without breaking core settlement logic.
