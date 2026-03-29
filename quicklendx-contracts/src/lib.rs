@@ -2423,6 +2423,14 @@ impl QuickLendXContract {
         vesting::Vesting::releasable_amount(&env, &schedule).ok()
     }
 
+    /// Return the total vested (but not necessarily released) amount for a schedule at the
+    /// current ledger timestamp.  Returns `None` if the schedule does not exist or the stored
+    /// state is invalid.
+    pub fn get_vesting_vested(env: Env, id: u64) -> Option<i128> {
+        let schedule = vesting::Vesting::get_schedule(&env, id)?;
+        vesting::Vesting::vested_amount(&env, &schedule).ok()
+    }
+
     // ============================================================================
     // Analytics Functions
     // ============================================================================

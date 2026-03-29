@@ -94,6 +94,35 @@ The vesting flow also relies on ledger-time validation to keep token release sch
 
 These checks prevent schedules that would unlock immediately from stale timestamps, collapse into zero-duration timelines, or defer the entire vesting curve to an invalid cliff boundary.
 
+## Vesting Admin Threat Model
+
+### Admin Powers
+The protocol admin holds exclusive power to:
+1. **Create vesting schedules** — lock tokens and assign a beneficiary, cliff, and end time.
+2. **Transfer the admin role** — hand off all admin powers (including vesting creation) to a new address.
+
+No other address can create or modify schedules. Beneficiaries can only call `release_vested_tokens` on their own schedule.
+
+### Threat Scenarios and Mitigations
+
+| Threat | Mitigation |
+|--------|-----------|
+| Attacker creates a schedule to drain contract tokens | `require_auth` + `require_admin` gate `create_schedule`; non-admin calls are rejected |
+| Admin creates a zero-value or backdated schedule | Input validation rejects `total_amount <= 0`, `start_time < now`, `end_time <= start_time`, `cliff_time >= end_time` |
+| Admin creates a schedule with cliff == end (instant full unlock) | `cliff_time >= end_time` check rejects degenerate schedules |
+| Beneficiary releases tokens before cliff | `release()` returns `InvalidTimestamp` if `now < cliff_time`; not a silent no-op |
+| Beneficiary double-releases at the same timestamp | `released_amount` tracking makes repeated calls idempotent (`Ok(0)`) after full release |
+| Beneficiary releases more than total | `released_amount` is checked against `total_amount` after each release; overflow uses checked arithmetic |
+| Non-beneficiary releases someone else's tokens | `beneficiary` field compared to caller; mismatch returns `Unauthorized` |
+| Admin transfers role; old admin retains vesting power | `require_admin` reads the live admin key; after transfer the old address fails the check |
+| Arithmetic overflow in vesting calculation | `checked_mul` / `checked_add` / `checked_sub` used throughout; overflow returns `InvalidAmount` |
+| Stale/invalid stored schedule state | `validate_schedule_state` re-checks invariants before every arithmetic operation |
+
+### Not Mitigated
+- **Compromised admin key**: A stolen admin key can create arbitrary schedules. Mitigate at the key-management layer (multisig, hardware wallet).
+- **Consensus-level time manipulation**: Ledger timestamp is trusted as-is; extreme validator collusion could affect cliff/end boundaries.
+- **Token contract bugs**: `transfer_funds` delegates to the token contract; a malicious token can re-enter or fail silently.
+
 ## Timestamp Consistency Guarantees
 Settlement and adjacent lifecycle entrypoints enforce monotonic ledger-time assumptions to avoid
 temporal anomalies when validators, simulation environments, or test harnesses move time backward.

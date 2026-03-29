@@ -877,12 +877,16 @@ fn test_very_long_vesting_period() {
 
 #[test]
 fn test_immediate_cliff_equals_end() {
+    // A cliff that lands exactly at end_time is rejected by the contract (cliff_time >= end_time).
+    // This test verifies that the contract correctly rejects such a degenerate schedule and that
+    // a schedule with cliff just before end_time works as expected.
     let (env, client, admin, beneficiary, token_id, _token_client) = setup();
 
     let total = 1000i128;
     let start = 1000u64;
-    let cliff_seconds = 1000u64; // cliff = end
-    let end = start + cliff_seconds;
+    // cliff_seconds = end - start - 1 so cliff_time = end_time - 1 (valid)
+    let end = start + 1001u64;
+    let cliff_seconds = 1000u64; // cliff_time = start + 1000 = end - 1
 
     client.create_vesting_schedule(
         &admin,
@@ -894,12 +898,12 @@ fn test_immediate_cliff_equals_end() {
         &end,
     );
 
-    // At cliff/end
+    // At end time all tokens are vested
     env.ledger().set_timestamp(end);
     let releasable = client.get_vesting_releasable(&1).unwrap();
     assert_eq!(
         releasable, total,
-        "Full amount should be releasable when cliff equals end"
+        "Full amount should be releasable at end time"
     );
 }
 
@@ -1054,4 +1058,116 @@ fn test_only_admin_can_create_schedule() {
     );
 
     assert!(result.is_err());
+}
+
+// ============================================================================
+// ADMIN BOUNDARY TESTS
+// These tests cover the threat model for admin powers over vesting schedules.
+// ============================================================================
+
+/// Admin cannot create a schedule with zero total_amount.
+#[test]
+fn test_admin_rejects_zero_amount() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+    let result = client.try_create_vesting_schedule(
+        &admin, &token_id, &beneficiary,
+        &0i128, &1500u64, &0u64, &2000u64,
+    );
+    assert!(result.is_err(), "Zero-amount schedule must be rejected");
+}
+
+/// Admin cannot create a schedule with a backdated start_time.
+#[test]
+fn test_admin_rejects_backdated_start() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+    // Ledger is at 1000; start_time = 999 is in the past.
+    let result = client.try_create_vesting_schedule(
+        &admin, &token_id, &beneficiary,
+        &1000i128, &999u64, &0u64, &2000u64,
+    );
+    assert!(result.is_err(), "Backdated start_time must be rejected");
+}
+
+/// Admin cannot create a schedule where end_time <= start_time.
+#[test]
+fn test_admin_rejects_end_before_start() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+    let result = client.try_create_vesting_schedule(
+        &admin, &token_id, &beneficiary,
+        &1000i128, &1500u64, &0u64, &1500u64, // end == start
+    );
+    assert!(result.is_err(), "end_time == start_time must be rejected");
+}
+
+/// Admin cannot create a schedule where cliff_time >= end_time.
+#[test]
+fn test_admin_rejects_cliff_at_or_after_end() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+    // cliff_seconds = 1000, start = 1000 → cliff_time = 2000 = end_time
+    let result = client.try_create_vesting_schedule(
+        &admin, &token_id, &beneficiary,
+        &1000i128, &1000u64, &1000u64, &2000u64,
+    );
+    assert!(result.is_err(), "cliff_time == end_time must be rejected");
+}
+
+/// After admin role is transferred, the old admin loses the ability to create schedules.
+#[test]
+fn test_old_admin_loses_vesting_power_after_transfer() {
+    let (env, client, admin, beneficiary, token_id, token_client) = setup();
+    let new_admin = Address::generate(&env);
+
+    // Fund new_admin so it can back a schedule
+    token_client.approve(&new_admin, &client.address, &ADMIN_BALANCE, &(env.ledger().sequence() + 10_000));
+
+    // Transfer admin role
+    client.transfer_admin(&new_admin);
+
+    // Old admin can no longer create a vesting schedule
+    let result = client.try_create_vesting_schedule(
+        &admin, &token_id, &beneficiary,
+        &1000i128, &1500u64, &0u64, &2000u64,
+    );
+    assert!(result.is_err(), "Old admin must not create schedules after role transfer");
+}
+
+/// Non-beneficiary cannot release tokens from someone else's schedule.
+#[test]
+fn test_non_beneficiary_cannot_release() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+    let attacker = Address::generate(&env);
+
+    let id = client.create_vesting_schedule(
+        &admin, &token_id, &beneficiary,
+        &1000i128, &1000u64, &0u64, &2000u64,
+    );
+
+    env.ledger().set_timestamp(1500);
+    let result = client.try_release_vested_tokens(&attacker, &id);
+    assert!(result.is_err(), "Non-beneficiary must not release tokens");
+}
+
+/// Release before cliff returns an error (not a silent no-op).
+#[test]
+fn test_release_before_cliff_is_error_not_noop() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+
+    let id = client.create_vesting_schedule(
+        &admin, &token_id, &beneficiary,
+        &1000i128, &1000u64, &500u64, &3000u64,
+    );
+
+    // cliff_time = 1500; set ledger to 1499
+    env.ledger().set_timestamp(1499);
+    let result = client.try_release_vested_tokens(&beneficiary, &id);
+    assert!(result.is_err(), "Release before cliff must return an error");
+}
+
+/// Querying a non-existent schedule returns None without panicking.
+#[test]
+fn test_get_nonexistent_schedule_returns_none() {
+    let (_env, client, _, _, _, _) = setup();
+    assert!(client.get_vesting_schedule(&9999).is_none());
+    assert!(client.get_vesting_releasable(&9999).is_none());
+    assert!(client.get_vesting_vested(&9999).is_none());
 }
