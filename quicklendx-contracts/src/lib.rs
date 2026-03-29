@@ -2507,6 +2507,13 @@ impl QuickLendXContract {
         })
     }
 
+    /// Returns current platform performance metrics.
+    ///
+    /// Attempts to load cached metrics from storage first. If none are stored,
+    /// calculates them on-the-fly and falls back to a zero-value default if
+    /// calculation also fails (e.g. no data yet on a fresh contract).
+    ///
+    /// @return `PerformanceMetrics` — never panics; always returns a valid struct.
     pub fn get_performance_metrics(env: Env) -> analytics::PerformanceMetrics {
         analytics::AnalyticsStorage::get_performance_metrics(&env).unwrap_or_else(|| {
             analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
@@ -2522,6 +2529,19 @@ impl QuickLendXContract {
                     platform_efficiency: 0,
                 })
         })
+    }
+
+    /// Generates a business report for a given business and time period.
+    ///
+    /// Delegates calculation to `AnalyticsCalculator`, persists the result via
+    /// `AnalyticsStorage`, and returns it to the caller.
+    ///
+    /// @param business  The business address to report on.
+    /// @param period    The time period to aggregate data over.
+    /// @return `Ok(BusinessReport)` on success.
+    /// @error Propagates any error returned by `generate_business_report`.
+    pub fn generate_business_report(
+        env: Env,
         business: Address,
         period: analytics::TimePeriod,
     ) -> Result<analytics::BusinessReport, QuickLendXError> {
