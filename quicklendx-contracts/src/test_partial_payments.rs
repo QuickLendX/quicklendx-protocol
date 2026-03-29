@@ -4,6 +4,7 @@ mod tests {
     use crate::invoice::{InvoiceCategory, InvoiceStatus};
     use crate::settlement::{
         get_invoice_progress, get_payment_count, get_payment_record, get_payment_records,
+        record_payment,
     };
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{
@@ -62,7 +63,13 @@ mod tests {
         env: &Env,
         client: &QuickLendXContractClient,
     ) -> (BytesN<32>, Address) {
+        let admin = Address::generate(env);
+        client.set_admin(&admin);
+
         let business = Address::generate(env);
+        client.submit_kyc_application(&business, &String::from_str(env, "business-kyc"));
+        client.verify_business(&admin, &business);
+
         let currency = Address::generate(env);
         let due_date = env.ledger().timestamp() + 86_400;
         let invoice_id = client.store_invoice(

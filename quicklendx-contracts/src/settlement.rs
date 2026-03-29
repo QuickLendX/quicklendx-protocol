@@ -11,7 +11,7 @@ use crate::invoice::{
 // use crate::defaults::DEFAULT_GRACE_PERIOD;
 // use crate::events::TOPIC_INVOICE_SETTLED_FINAL;
 use crate::payments::transfer_funds;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
 const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
 
@@ -21,7 +21,7 @@ const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
 enum SettlementDataKey {
     PaymentCount(BytesN<32>),
     Payment(BytesN<32>, u32),
-    PaymentNonce(BytesN<32>, Address, String),
+    PaymentNonce(BytesN<32>, String),
 }
 
 /// Durable payment record stored per invoice/payment-index.
@@ -140,11 +140,7 @@ pub fn record_payment(
     payer.require_auth();
 
     if payment_nonce.len() > 0 {
-        let nonce_key = SettlementDataKey::PaymentNonce(
-            invoice_id.clone(),
-            payer.clone(),
-            payment_nonce.clone(),
-        );
+        let nonce_key = SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce.clone());
         let seen: bool = env.storage().persistent().get(&nonce_key).unwrap_or(false);
         if seen {
             // Deduplicate: If transaction_id is already seen, return current progress to ensure idempotency.
@@ -200,7 +196,7 @@ pub fn record_payment(
 
     if payment_nonce.len() > 0 {
         env.storage().persistent().set(
-            &SettlementDataKey::PaymentNonce(invoice_id.clone(), payer.clone(), payment_nonce),
+            &SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce),
             &true,
         );
     }
@@ -388,6 +384,14 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
 
     if invoice.total_paid < invoice.amount || invoice.total_paid < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
+    }
+
+    // Auto-release escrow funds to business if they are still held in the contract.
+    // This ensures the business receives the original funded amount during the settlement transition.
+    if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
+        if escrow.status == crate::payments::EscrowStatus::Held {
+            crate::payments::release_escrow(env, invoice_id)?;
+        }
     }
 
     let investor_address = invoice

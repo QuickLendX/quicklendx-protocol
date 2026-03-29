@@ -255,23 +255,65 @@ impl BidStorage {
         Ok(limit)
     }
 
-    /// Count currently active (Placed) bids for an investor across all invoices.
-    /// Expired bids are transitioned to `Expired` during this scan and do not count.
+    /// @notice Prunes expired bids from the investor's global index.
+    /// @dev This ensures that the investor's bid list doesn't grow unboundedly over time
+    /// with historical expired bids, maintaining O(active_bids) performance for limits.
+    /// @param env The Soroban environment.
+    /// @param investor The address of the investor.
+    /// @return newly_expired The number of bids that just transitioned to Expired.
+    fn refresh_investor_bids(env: &Env, investor: &Address) -> u32 {
+        let current_timestamp = env.ledger().timestamp();
+        let bid_ids = Self::get_bids_by_investor_all(env, investor);
+        let mut active = Vec::new(env);
+        let mut newly_expired = 0u32;
+
+        for bid_id in bid_ids.iter() {
+            if let Some(mut bid) = Self::get_bid(env, &bid_id) {
+                // Determine if this bid should remain in the investor's active index.
+                // We keep terminal states (Accepted, Withdrawn, Cancelled) in the index
+                // but prune Expired ones to keep the list size manageable.
+                if bid.status == BidStatus::Placed {
+                    if bid.is_expired(current_timestamp) {
+                        bid.status = BidStatus::Expired;
+                        Self::update_bid(env, &bid);
+                        emit_bid_expired(env, &bid);
+                        newly_expired = newly_expired.saturating_add(1);
+                        // Do not push to active -> prunes this expired bid
+                    } else {
+                        active.push_back(bid_id);
+                    }
+                } else if bid.status == BidStatus::Expired {
+                    // Prune already expired bids from the index
+                } else {
+                    // Keep terminal states: Accepted, Withdrawn, Cancelled
+                    active.push_back(bid_id);
+                }
+            }
+        }
+
+        // Only update storage if the list actually shrank
+        if active.len() < bid_ids.len() {
+            let key = Self::investor_bids_key(investor);
+            env.storage().instance().set(&key, &active);
+        }
+
+        newly_expired
+    }
+
+    /// @notice Count currently active (Placed) bids for an investor across all invoices.
+    /// @dev Expired bids are transitioned to `Expired` and removed from the index during this scan.
+    /// @param env The Soroban environment.
+    /// @param investor The address of the investor.
+    /// @return count The number of non-expired Placed bids.
     pub fn count_active_placed_bids_for_investor(env: &Env, investor: &Address) -> u32 {
+        let _ = Self::refresh_investor_bids(env, investor);
         let current_timestamp = env.ledger().timestamp();
         let bid_ids = Self::get_bids_by_investor_all(env, investor);
         let mut count = 0u32;
 
         for bid_id in bid_ids.iter() {
-            if let Some(mut bid) = Self::get_bid(env, &bid_id) {
-                if bid.status != BidStatus::Placed {
-                    continue;
-                }
-                if bid.is_expired(current_timestamp) {
-                    bid.status = BidStatus::Expired;
-                    Self::update_bid(env, &bid);
-                    emit_bid_expired(env, &bid);
-                } else {
+            if let Some(bid) = Self::get_bid(env, &bid_id) {
+                if bid.status == BidStatus::Placed && !bid.is_expired(current_timestamp) {
                     count = count.saturating_add(1);
                 }
             }
@@ -297,6 +339,11 @@ impl BidStorage {
                 .set(&Self::invoice_key(invoice_id), &bids);
         }
     }
+    /// @notice Scans and prunes expired bids from an invoice's bid list.
+    /// @dev Maintains O(N) where N is current bids on invoice. Pruning keeps N small.
+    /// @param env The Soroban environment.
+    /// @param invoice_id The unique identifier of the invoice.
+    /// @return expired_count Number of bids newly marked as Expired.
     fn refresh_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let current_timestamp = env.ledger().timestamp();
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
@@ -307,16 +354,16 @@ impl BidStorage {
             let bid_id = bid_ids.get(idx).unwrap();
             if let Some(mut bid) = Self::get_bid(env, &bid_id) {
                 // Invariant 1: Preservation — terminal bids are NEVER touched by cleanup.
-                // Accepted, Withdrawn, and Cancelled are immutable terminal states.
                 let is_terminal = bid.status == BidStatus::Accepted
                     || bid.status == BidStatus::Withdrawn
                     || bid.status == BidStatus::Cancelled;
+
                 if is_terminal {
                     active.push_back(bid_id);
                 // Invariant 2: Idempotency — already-Expired bids are silently skipped.
                 } else if bid.status == BidStatus::Expired {
                     // drop from active list; do not re-process
-                // Invariant 3: Deadline — only expire Placed bids past their deadline.
+                    // Invariant 3: Deadline — only expire Placed bids past their deadline.
                 } else if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
                     bid.status = BidStatus::Expired;
                     Self::update_bid(env, &bid);
@@ -329,9 +376,13 @@ impl BidStorage {
             }
             idx += 1;
         }
-        env.storage()
-            .instance()
-            .set(&Self::invoice_key(invoice_id), &active);
+
+        // Only update storage if the list actually shrank to save gas/fees
+        if active.len() < bid_ids.len() {
+            env.storage()
+                .instance()
+                .set(&Self::invoice_key(invoice_id), &active);
+        }
         expired
     }
 
@@ -592,10 +643,7 @@ impl BidStorage {
 
     /// Returns bid counts by status as `(placed, accepted, withdrawn, expired, cancelled)`.
     /// Useful for assertions in tests and analytics.
-    pub fn count_bids_by_status(
-        env: &Env,
-        invoice_id: &BytesN<32>,
-    ) -> (u32, u32, u32, u32, u32) {
+    pub fn count_bids_by_status(env: &Env, invoice_id: &BytesN<32>) -> (u32, u32, u32, u32, u32) {
         let records = Self::get_bid_records_for_invoice(env, invoice_id);
         let (mut placed, mut accepted, mut withdrawn, mut expired, mut cancelled) =
             (0u32, 0u32, 0u32, 0u32, 0u32);
