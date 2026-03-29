@@ -21,6 +21,12 @@ const MAX_ACTIVE_BIDS_PER_INVESTOR_KEY: Symbol = symbol_short!("mx_actbd");
 const DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 20;
 const SECONDS_PER_DAY: u64 = 86400;
 
+/// Sentinel value: when the stored limit equals this, enforcement is disabled.
+///
+/// The constant is named explicitly so that callers can compare against it
+/// without embedding a magic literal.
+pub const INVESTOR_BID_LIMIT_DISABLED: u32 = 0;
+
 /// Maximum number of bids allowed per invoice to prevent unbound storage growth
 pub const MAX_BIDS_PER_INVOICE: u32 = 50;
 
@@ -43,6 +49,33 @@ pub struct BidTtlConfig {
     /// compile-time default is in use.
     pub is_custom: bool,
 }
+
+/// Snapshot of the current investor active-bid limit configuration.
+///
+/// Returned by [`BidStorage::get_bid_limit_config`] so that off-chain clients,
+/// dashboards, and tests can inspect the complete policy in a single call.
+///
+/// ### Interpreting `limit`
+///
+/// | `limit` value | Meaning                                                    |
+/// |---------------|------------------------------------------------------------|
+/// | `0`           | Limit is **disabled** — any number of open bids is allowed |
+/// | `n > 0`       | At most `n` concurrently `Placed` bids per investor        |
+///
+/// Use [`BidStorage::is_investor_bid_limit_active`] for a simple boolean check.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BidLimitConfig {
+    /// Active limit value.  `0` means enforcement is disabled.
+    pub limit: u32,
+    /// Compile-time default (`DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR` = 20).
+    pub default_limit: u32,
+    /// `true` when `limit == 0` (enforcement disabled).
+    pub is_disabled: bool,
+    /// `true` when the admin has explicitly set a value (overriding the default).
+    pub is_custom: bool,
+}
+
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -240,6 +273,57 @@ impl BidStorage {
             .unwrap_or(DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR)
     }
 
+    /// Return a complete snapshot of the investor active-bid limit policy.
+    ///
+    /// Analogous to [`BidStorage::get_bid_ttl_config`] for TTL.  Intended
+    /// for off-chain dashboards, admin panels, and test assertions.
+    ///
+    pub fn get_bid_limit_config(env: &Env) -> BidLimitConfig {
+        let stored: Option<u32> = env.storage().instance().get(&MAX_ACTIVE_BIDS_PER_INVESTOR_KEY);
+        let limit = stored.unwrap_or(DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR);
+        BidLimitConfig {
+            limit,
+            default_limit: DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR,
+            is_disabled: limit == INVESTOR_BID_LIMIT_DISABLED,
+            is_custom: stored.is_some(),
+        }
+    }
+
+     /// Returns `true` when the investor active-bid limit is enforced.
+    ///
+    /// Returns `false` when the limit has been set to `0`
+    /// (`INVESTOR_BID_LIMIT_DISABLED`), meaning bids will **not** be rejected
+    /// for having too many open positions.
+    ///
+    /// ### Usage
+    ///
+    /// Prefer this over comparing `get_max_active_bids_per_investor() != 0`
+    /// directly, to keep the zero-is-disabled semantic in one place.
+    ///
+    /// ```ignore
+    /// if BidStorage::is_investor_bid_limit_active(&env) {
+    ///     // enforcement is on; check count
+    /// }
+    /// ```
+     pub fn is_investor_bid_limit_active(env: &Env) -> bool {
+        Self::get_max_active_bids_per_investor(env) != INVESTOR_BID_LIMIT_DISABLED
+    }
+
+    /// This function is **read-only** with respect to the limit policy itself.
+    /// Setting or changing the limit requires admin authority and goes through
+    /// [`BidStorage::set_max_active_bids_per_investor`].
+    pub fn investor_has_reached_bid_limit(env: &Env, investor: &Address) -> bool {
+        let limit = Self::get_max_active_bids_per_investor(env);
+ 
+        // Limit of 0 means "disabled" — never block a placement.
+        if limit == INVESTOR_BID_LIMIT_DISABLED {
+            return false;
+        }
+ 
+        let active = Self::count_active_placed_bids_for_investor(env, investor);
+        active >= limit
+    }
+
     /// Admin-only: set max number of active (Placed) bids per investor across all invoices.
     /// A value of 0 disables this limit.
     pub fn set_max_active_bids_per_investor(
@@ -253,6 +337,26 @@ impl BidStorage {
             .instance()
             .set(&MAX_ACTIVE_BIDS_PER_INVESTOR_KEY, &limit);
         Ok(limit)
+    }
+
+     /// Admin-only: reset the investor active-bid limit to the compile-time
+    /// default (`DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR` = 20).
+    ///
+    /// Removes the stored override so `get_bid_limit_config` reports
+    /// `is_custom = false` and `is_disabled = false`.
+    ///
+    /// Useful for reverting a previous `set_max_active_bids_per_investor(0)`
+    /// call when the unrestricted window should end.
+    pub fn reset_max_active_bids_per_investor(
+        env: &Env,
+        admin: &Address,
+    ) -> Result<u32, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(env, admin)?;
+        env.storage()
+            .instance()
+            .remove(&MAX_ACTIVE_BIDS_PER_INVESTOR_KEY);
+        Ok(DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR)
     }
 
     /// @notice Prunes expired bids from the investor's global index.

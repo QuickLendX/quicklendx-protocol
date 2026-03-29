@@ -1206,6 +1206,7 @@ impl InvoiceStorage {
 
         // Add to the new category index
         InvoiceStorage::add_category_index(env, &self.category, &self.id);
+        }
 
     /// Get total count of active invoices in the system
     pub fn get_total_invoice_count(env: &Env) -> u32 {
@@ -1214,4 +1215,5 @@ impl InvoiceStorage {
             .get(&TOTAL_INVOICE_COUNT_KEY)
             .unwrap_or(0)
     }
+}
 }

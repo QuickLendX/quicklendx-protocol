@@ -67,6 +67,55 @@ fn assert_contract_error<T>(
     assert_eq!(contract_err, expected);
 }
 
+    /// Create a deterministic 32-byte ID from a small integer seed.
+    /// The first byte is set to the seed so IDs are visually distinguishable
+    /// in failure output.
+    fn make_id(env: &Env, seed: u8) -> BytesN<32> {
+        let mut bytes = [0u8; 32];
+        bytes[0] = seed;
+        BytesN::from_array(env, &bytes)
+    }
+ 
+    /// Build a minimal `Placed` bid with a future expiration timestamp.
+    fn make_placed_bid(
+        env: &Env,
+        bid_seed: u8,
+        invoice_seed: u8,
+        investor: &Address,
+        now: u64,
+    ) -> Bid {
+        Bid {
+            bid_id: make_id(env, bid_seed),
+            invoice_id: make_id(env, invoice_seed),
+            investor: investor.clone(),
+            bid_amount: 1_000,
+            expected_return: 1_100,
+            timestamp: now,
+            status: BidStatus::Placed,
+            // Expires 7 days from now (default TTL)
+            expiration_timestamp: now + 7 * 86_400,
+        }
+    }
+ 
+    /// Store `count` placed bids for `investor` across distinct invoices and
+    /// return the bid IDs.
+    fn place_n_bids(
+        env: &Env,
+        investor: &Address,
+        count: u8,
+        now: u64,
+    ) -> Vec<BytesN<32>, soroban_sdk::Vec<BytesN<32>>> {
+        // Soroban Vec
+        let mut ids = soroban_sdk::Vec::new(env);
+        for i in 0..count {
+            let bid = make_placed_bid(env, 100 + i, 200 + i, investor, now);
+            BidStorage::store_bid(env, &bid);
+            BidStorage::add_bid_to_invoice(env, &bid.invoice_id, &bid.bid_id);
+            ids.push_back(bid.bid_id.clone());
+        }
+        ids
+    }
+
 // ============================================================================
 // Category 1: Status Gating - Invoice Verification Required
 // ============================================================================
@@ -1970,3 +2019,24 @@ fn test_cannot_accept_second_bid_after_first_accepted() {
     assert_eq!(invoice.funded_amount, 10_000);
     assert_eq!(invoice.investor, Some(investor1));
 }
+
+    /// Active count is 0 for a fresh investor even after many unrelated
+    /// investors' bids have been stored.
+    #[test]
+    fn test_active_count_zero_for_fresh_investor() {
+        let env = setup();
+        let now = 1_000_000u64;
+ 
+        // Other investors place bids
+        for _ in 0..5 {
+            let other = Address::generate(&env);
+            place_n_bids(&env, &other, 3, now);
+        }
+ 
+        let target = Address::generate(&env);
+        assert_eq!(
+            BidStorage::count_active_placed_bids_for_investor(&env, &target),
+            0,
+            "fresh investor must have 0 active bids"
+        );
+    }

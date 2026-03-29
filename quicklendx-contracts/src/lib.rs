@@ -2522,7 +2522,7 @@ impl QuickLendXContract {
         })
         business: Address,
         period: analytics::TimePeriod,
-    ) -> Result<analytics::BusinessReport, QuickLendXError> {
+     -> Result<analytics::BusinessReport, QuickLendXError> {
         let report =
             analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)?;
         analytics::AnalyticsStorage::store_business_report(&env, &report);
@@ -2911,4 +2911,5 @@ impl QuickLendXContract {
             });
         (platform, performance)
     }
+}
 }
