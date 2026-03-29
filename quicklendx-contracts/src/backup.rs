@@ -318,6 +318,9 @@ impl BackupStorage {
                 }
             }
         }
+        all_invoices
+    }
+
     /// Create a new backup of all invoices
     pub fn create_backup(env: &Env) -> Result<BytesN<32>, QuickLendXError> {
         let backup_id = Self::generate_backup_id(env);
