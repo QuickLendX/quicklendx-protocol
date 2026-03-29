@@ -375,7 +375,7 @@ pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
 pub fn get_dispute_details(
     env: &Env,
     invoice_id: &BytesN<32>,
-) -> Result<Option<crate::invoice::Dispute>, QuickLendXError> {
+) -> Result<Option<crate::types::Dispute>, QuickLendXError> {
     let _invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 

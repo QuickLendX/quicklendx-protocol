@@ -1,5 +1,5 @@
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
-use crate::types::{Invoice, InvoiceMetadata, InvoiceCategory, InvoiceStatus};
+pub use crate::types::{Invoice, InvoiceMetadata, InvoiceCategory, InvoiceStatus, Dispute, DisputeStatus};
 use crate::errors::QuickLendXError;
 
 // ... (Normalize tag function can stay if still needed, but check if it's in verification)
