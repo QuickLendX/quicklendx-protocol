@@ -14,6 +14,43 @@ pub const MAX_OVERDUE_SCAN_BATCH_LIMIT: u32 = 100;
 
 const OVERDUE_SCAN_CURSOR_KEY: soroban_sdk::Symbol = symbol_short!("ovd_scan");
 
+// ---------------------------------------------------------------------------
+// Single-shot default execution guard
+// ---------------------------------------------------------------------------
+
+/// @notice Persistent storage key for the per-invoice default execution guard.
+/// @dev Keyed by invoice ID so each invoice has an independent, immutable guard.
+///      Stored in persistent storage to survive ledger archival.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DefaultGuardKey {
+    /// Guard flag for a specific invoice.
+    DefaultExecuted(BytesN<32>),
+}
+
+/// @notice Returns `true` if the single-shot default guard has been set for `invoice_id`.
+/// @dev Reads from persistent storage; returns `false` when the key is absent (never executed).
+/// @param env  The Soroban environment.
+/// @param invoice_id  The invoice whose guard state is queried.
+pub fn is_default_executed(env: &Env, invoice_id: &BytesN<32>) -> bool {
+    env.storage()
+        .persistent()
+        .get::<DefaultGuardKey, bool>(&DefaultGuardKey::DefaultExecuted(invoice_id.clone()))
+        .unwrap_or(false)
+}
+
+/// @notice Atomically sets the single-shot guard for `invoice_id` to `true`.
+/// @dev Must be called **before** any side effects (events, storage mutations) to satisfy
+///      the Checks-Effects-Interactions pattern.  Once set, the flag is never cleared,
+///      making the guard immutable and preventing unauthorized resets.
+/// @param env  The Soroban environment.
+/// @param invoice_id  The invoice whose guard is being armed.
+fn set_default_executed(env: &Env, invoice_id: &BytesN<32>) {
+    env.storage()
+        .persistent()
+        .set(&DefaultGuardKey::DefaultExecuted(invoice_id.clone()), &true);
+}
+
 /// Result metadata returned by the bounded overdue invoice scanner.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -235,36 +272,64 @@ pub fn scan_funded_invoice_expirations(
 }
 
 /// @notice Applies the default transition after all time and status checks have passed.
-/// @dev This helper does not re-check the grace-period cutoff and must only be reached from
+/// @dev Implements a **single-shot execution guard** (Checks-Effects-Interactions pattern):
+///
+///   1. **Check** – `is_default_executed` returns early with `InvoiceAlreadyDefaulted` if the
+///      guard flag is already set, preventing any duplicate side effects regardless of how the
+///      invoice status may have been manipulated externally.
+///   2. **Effect** – `set_default_executed` persists the immutable guard flag *before* any
+///      storage mutations or event emissions, so a re-entrant or concurrent call will always
+///      see the flag and be rejected.
+///   3. **Interaction** – All side effects (status list updates, event emissions, insurance
+///      processing) happen only after the guard is armed.
+///
+/// The guard flag lives in persistent storage keyed by `invoice_id` and is **never cleared**,
+/// making it impossible for any caller to reset the guard and re-trigger side effects.
+///
+/// This helper does not re-check the grace-period cutoff; it must only be reached from
 /// validated call sites such as `mark_invoice_defaulted` or `check_and_handle_expiration`.
+///
+/// @param env        The Soroban environment.
+/// @param invoice_id The invoice to transition to `Defaulted`.
+/// @return `Ok(())` on success, or `Err(InvoiceAlreadyDefaulted)` if the guard is already set.
 pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+    // ── CHECKS ──────────────────────────────────────────────────────────────
+    // 1. Single-shot guard: reject immediately if this transition was already executed.
+    //    This is the primary duplicate-prevention mechanism and runs before any state read
+    //    so that even a status-reset attack cannot bypass it.
+    if is_default_executed(env, invoice_id) {
+        return Err(QuickLendXError::InvoiceAlreadyDefaulted);
+    }
+
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    // Check if already defaulted (no double default)
+    // 2. Status-level guard: belt-and-suspenders check against the invoice status.
     if invoice.status == InvoiceStatus::Defaulted {
         return Err(QuickLendXError::InvoiceAlreadyDefaulted);
     }
 
-    // Validate invoice is in funded status
+    // 3. Only funded invoices may be defaulted.
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    // Remove from funded status list
-    InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
+    // ── EFFECTS ─────────────────────────────────────────────────────────────
+    // Arm the immutable single-shot guard *before* any mutations or events.
+    // Any re-entrant or concurrent call will now see the flag and be rejected.
+    set_default_executed(env, invoice_id);
 
-    // Mark invoice as defaulted
+    // Update invoice status and storage lists.
+    InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
     invoice.mark_as_defaulted();
     InvoiceStorage::update_invoice(env, &invoice);
-
-    // Add to defaulted status list
     InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Defaulted, invoice_id);
 
-    // Emit expiration event
+    // ── INTERACTIONS ─────────────────────────────────────────────────────────
+    // Emit expiration event.
     emit_invoice_expired(env, &invoice);
 
-    // Update investment status and process insurance claims
+    // Update investment status and process insurance claims.
     if let Some(mut investment) = InvestmentStorage::get_investment_by_invoice(env, invoice_id) {
         investment.status = InvestmentStatus::Defaulted;
 
@@ -291,11 +356,8 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
         }
     }
 
-    // Emit default event
+    // Emit default event.
     emit_invoice_defaulted(env, &invoice);
-
-    // Send notification
-    // No notifications
 
     Ok(())
 }

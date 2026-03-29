@@ -1,0 +1,1 @@
+C:\Users\USER\Desktop\DRIPS\quicklendx-protocol\target\debug\libquicklendx_contracts.rlib: C:\Users\USER\Desktop\DRIPS\quicklendx-protocol\src\fees.rs C:\Users\USER\Desktop\DRIPS\quicklendx-protocol\src\lib.rs C:\Users\USER\Desktop\DRIPS\quicklendx-protocol\src\profits.rs C:\Users\USER\Desktop\DRIPS\quicklendx-protocol\src\settlement.rs

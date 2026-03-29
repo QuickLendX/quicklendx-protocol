@@ -104,17 +104,62 @@ When an invoice is defaulted:
 - **Events emitted:** `invoice_expired`, `invoice_defaulted`, and optionally `insurance_claimed`
 - **Notifications** are sent to relevant parties
 
+## Single-Shot Default Execution Guard
+
+### Overview
+
+`handle_default` uses a **single-shot execution guard** stored in persistent contract storage to prevent duplicate default transitions and repeated side effects. The guard is independent of the invoice status field, so it remains effective even if the status were somehow manipulated externally.
+
+### Storage Key
+
+```rust
+#[contracttype]
+pub enum DefaultGuardKey {
+    DefaultExecuted(BytesN<32>),
+}
+```
+
+Each invoice has its own guard entry keyed by `DefaultGuardKey::DefaultExecuted(invoice_id)`. The flag is a `bool` stored in **persistent** storage (survives ledger archival).
+
+### Checks-Effects-Interactions Pattern
+
+`handle_default` strictly follows CEI:
+
+```
+1. CHECK  – is_default_executed(invoice_id) → return Err(InvoiceAlreadyDefaulted) if true
+2. CHECK  – invoice status == Funded (belt-and-suspenders)
+3. EFFECT – set_default_executed(invoice_id)   ← guard armed BEFORE any mutation
+4. EFFECT – update invoice status + storage lists
+5. INTERACT – emit events, update investment, process insurance
+```
+
+Arming the guard before any state mutation means a re-entrant or concurrent call will always see the flag and be rejected before any side effects are duplicated.
+
+### Immutability
+
+`set_default_executed` writes `true` and is never called with `false`. There is no public API to clear the flag. Once set, the guard is permanent.
+
+### Public Helper
+
+```rust
+/// Returns true if the default transition has already been executed for this invoice.
+pub fn is_default_executed(env: &Env, invoice_id: &BytesN<32>) -> bool
+```
+
+Useful for off-chain monitoring and test assertions.
+
 ## Security
 
 - **Admin-only access:** Both `mark_invoice_defaulted` and `handle_default` require `require_auth` from the configured admin address
-- **No double default:** Attempting to default an already-defaulted invoice returns `InvoiceAlreadyDefaulted` (1049)
-- **Check ordering:** The defaulted-status check runs before the funded-status check so that double-default attempts receive the correct, specific error
+- **Single-shot guard:** `handle_default` checks `is_default_executed` before any state change; the immutable flag prevents duplicate side effects regardless of invoice status
+- **No double default:** Attempting to default an already-defaulted invoice returns `InvoiceAlreadyDefaulted` (1006)
+- **Check ordering:** The guard check runs first, then the status check, so double-default attempts always receive the correct specific error
 - **Grace period enforcement:** Invoices cannot be defaulted before `due_date + grace_period` has elapsed
 - **Overflow protection:** `grace_deadline` uses `saturating_add` to prevent timestamp overflow
 
 ## Test Coverage
 
-Tests are in `src/test_default.rs` (12 tests):
+Tests are in `src/test_default.rs`:
 
 | Test | Description |
 |------|-------------|
@@ -128,6 +173,12 @@ Tests are in `src/test_default.rs` (12 tests):
 | `test_default_status_transition` | Status lists updated correctly |
 | `test_default_investment_status_update` | Investment status changes to `Defaulted` |
 | `test_default_exactly_at_grace_deadline` | Boundary: cannot default at exact deadline, can at deadline+1 |
+| `test_guard_first_execution_succeeds` | Guard is unset before first call, set after; invoice transitions correctly |
+| `test_guard_rejects_duplicate_default` | Second `mark_invoice_defaulted` call rejected with `InvoiceAlreadyDefaulted` |
+| `test_guard_rejects_duplicate_via_handle_default` | `handle_default` also rejects duplicates via guard |
+| `test_guard_is_immutable_after_execution` | Guard flag remains `true` across multiple reads; re-default still rejected |
+| `test_guard_is_scoped_per_invoice` | Defaulting invoice A does not arm the guard for invoice B |
+| `test_guard_fires_before_status_check` | Guard check precedes status check; correct error returned |
 | `test_multiple_invoices_default_handling` | Independent invoices default independently |
 | `test_zero_grace_period_defaults_immediately_after_due_date` | Zero grace allows immediate default after due date |
 | `test_cannot_default_paid_invoice` | Paid invoices cannot be defaulted |
