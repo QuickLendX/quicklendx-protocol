@@ -10,6 +10,17 @@ use crate::errors::QuickLendXError;
 // Enums
 // ---------------------------------------------------------------------------
 
+/// Time period enumeration for analytics
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TimePeriod {
+    Daily,
+    Weekly,
+    Monthly,
+    Quarterly,
+    Yearly,
+}
+
 /// Invoice status enumeration representing the lifecycle of an invoice
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -71,6 +82,77 @@ pub enum InvoiceCategory {
 // ---------------------------------------------------------------------------
 // Structs
 // ---------------------------------------------------------------------------
+
+/// Platform-wide analytics metrics
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PlatformMetrics {
+    pub total_invoices: u32,
+    pub total_investments: u32,
+    pub total_volume: i128,
+    pub total_fees_collected: i128,
+    pub active_investors: u32,
+    pub verified_businesses: u32,
+    pub average_invoice_amount: i128,
+    pub average_investment_amount: i128,
+    pub platform_fee_rate: u32,
+    pub default_rate: i128,
+    pub success_rate: i128,
+    pub timestamp: u64,
+}
+
+/// User behavior and risk metrics
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UserBehaviorMetrics {
+    pub user_address: Address,
+    pub total_invoices_uploaded: u32,
+    pub total_investments_made: u32,
+    pub total_bids_placed: u32,
+    pub average_bid_amount: i128,
+    pub average_investment_amount: i128,
+    pub success_rate: u32,
+    pub default_rate: u32,
+    pub last_activity: u64,
+    pub preferred_categories: Vec<InvoiceCategory>,
+    pub risk_score: u32,
+}
+
+/// Platform performance and efficiency metrics
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PerformanceMetrics {
+    pub platform_uptime: u64,
+    pub average_settlement_time: u64,
+    pub average_verification_time: u64,
+    pub dispute_resolution_time: u64,
+    pub system_response_time: u32,
+    pub transaction_success_rate: u32,
+    pub error_rate: u32,
+    pub user_satisfaction_score: u32,
+    pub platform_efficiency: u32,
+}
+
+/// Comprehensive business performance report
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BusinessReport {
+    pub report_id: BytesN<32>,
+    pub business_address: Address,
+    pub period: TimePeriod,
+    pub start_date: u64,
+    pub end_date: u64,
+    pub invoices_uploaded: u32,
+    pub invoices_funded: u32,
+    pub total_volume: i128,
+    pub average_funding_time: u64,
+    pub success_rate: u32,
+    pub default_rate: u32,
+    pub category_breakdown: Vec<(InvoiceCategory, u32)>,
+    pub rating_average: Option<u32>,
+    pub total_ratings: u32,
+    pub generated_at: u64,
+}
 
 /// Compact representation of a line item stored on-chain
 #[contracttype]

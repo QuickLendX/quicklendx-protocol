@@ -70,7 +70,6 @@ mod test_types;
 mod test_vesting;
 pub mod types;
 pub use crate::types::*;
-pub use invoice::{InvoiceCategory, InvoiceStatus};
 mod verification;
 mod vesting;
 use admin::AdminStorage;
@@ -107,8 +106,6 @@ use verification::{
     BusinessVerificationStatus, BusinessVerificationStorage, InvestorRiskLevel, InvestorTier,
     InvestorVerification, InvestorVerificationStorage,
 };
-
-pub use crate::types::*;
 
 #[contract]
 pub struct QuickLendXContract;
@@ -2410,7 +2407,7 @@ impl QuickLendXContract {
     // ============================================================================
 
     /// Get user behavior metrics
-    pub fn get_user_behavior_metrics(env: Env, user: Address) -> analytics::UserBehaviorMetrics {
+    pub fn get_user_behavior_metrics(env: Env, user: Address) -> UserBehaviorMetrics {
         analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).unwrap()
     }
 
@@ -2434,7 +2431,7 @@ impl QuickLendXContract {
     // Analytics (contract-exported)
     // =========================================================================
 
-    pub fn get_platform_metrics(env: Env) -> analytics::PlatformMetrics {
+    pub fn get_platform_metrics(env: Env) -> PlatformMetrics {
         analytics::AnalyticsStorage::get_platform_metrics(&env).unwrap_or_else(|| {
             analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
                 .unwrap_or(analytics::PlatformMetrics {
@@ -2454,7 +2451,7 @@ impl QuickLendXContract {
         })
     }
 
-    pub fn get_performance_metrics(env: Env) -> analytics::PerformanceMetrics {
+    pub fn get_performance_metrics(env: Env) -> PerformanceMetrics {
         analytics::AnalyticsStorage::get_performance_metrics(&env).unwrap_or_else(|| {
             analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
                 .unwrap_or(analytics::PerformanceMetrics {
@@ -2474,8 +2471,8 @@ impl QuickLendXContract {
     pub fn generate_business_report(
         env: Env,
         business: Address,
-        period: analytics::TimePeriod,
-    ) -> Result<analytics::BusinessReport, QuickLendXError> {
+        period: TimePeriod,
+    ) -> Result<BusinessReport, QuickLendXError> {
         let report =
             analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)?;
         analytics::AnalyticsStorage::store_business_report(&env, &report);
@@ -2483,7 +2480,7 @@ impl QuickLendXContract {
     }
 
     /// Retrieve a stored business report by ID
-    pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<analytics::BusinessReport> {
+    pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<BusinessReport> {
         analytics::AnalyticsStorage::get_business_report(&env, &report_id)
     }
 
