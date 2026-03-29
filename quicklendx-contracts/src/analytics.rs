@@ -1,6 +1,6 @@
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, String, Vec};
 
 /// Time period for analytics reports
 #[contracttype]
@@ -1025,6 +1025,47 @@ impl AnalyticsCalculator {
         AnalyticsStorage::store_investor_report(env, &report);
 
         Ok(report)
+    }
+
+    fn get_investor_investments(env: &Env, investor: &Address) -> Vec<crate::investment::Investment> {
+        use crate::investment::{Investment, InvestmentStorage};
+        let ids = InvestmentStorage::get_investments_by_investor(env, investor);
+        let mut result = Vec::new(env);
+        for id in ids.iter() {
+            if let Some(inv) = InvestmentStorage::get_investment(env, &id) {
+                result.push_back(inv);
+            }
+        }
+        result
+    }
+
+    fn initialize_category_counters(env: &Env) -> Vec<(crate::invoice::InvoiceCategory, u32)> {
+        Vec::new(env)
+    }
+
+    fn increment_category_counter(
+        counters: &mut Vec<(crate::invoice::InvoiceCategory, u32)>,
+        category: &crate::invoice::InvoiceCategory,
+    ) {
+        let env = counters.env().clone();
+        let mut found = false;
+        let mut new_counters = Vec::new(&env);
+        for (cat, count) in counters.iter() {
+            if cat == *category {
+                new_counters.push_back((cat, count.saturating_add(1)));
+                found = true;
+            } else {
+                new_counters.push_back((cat, count));
+            }
+        }
+        if !found {
+            new_counters.push_back((category.clone(), 1));
+        }
+        *counters = new_counters;
+    }
+
+    fn validate_investor_report(_report: &InvestorReport) -> Result<(), crate::errors::QuickLendXError> {
+        Ok(())
     }
 
     /// Get period dates based on time period

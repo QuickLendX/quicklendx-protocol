@@ -1,16 +1,32 @@
-use crate::invoice::{Invoice, InvoiceStatus};
+use crate::admin::AdminStorage;
+use crate::invoice::{Dispute, DisputeStatus, Invoice, InvoiceStatus, InvoiceStorage};
 use crate::protocol_limits::{
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
 };
 use crate::QuickLendXError;
-use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DisputeStatus {
-    Open,
-    UnderReview,
-    Resolved,
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+fn assert_is_admin(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
+    AdminStorage::require_admin(env, admin)
+}
+
+fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
+    let key = symbol_short!("disp_idx");
+    let mut list: Vec<BytesN<32>> = env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env));
+    for id in list.iter() {
+        if id == *invoice_id { return; }
+    }
+    list.push_back(invoice_id.clone());
+    env.storage().instance().set(&key, &list);
+}
+
+fn get_dispute_index(env: &Env) -> Vec<BytesN<32>> {
+    let key = symbol_short!("disp_idx");
+    env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
 }
 
 // ---------------------------------------------------------------------------
@@ -25,22 +41,15 @@ pub fn create_dispute(
     reason: &String,
     evidence: &String,
 ) -> Result<(), QuickLendXError> {
-    // --- 1. Authentication: creator must sign the transaction ---
     creator.require_auth();
 
-    if env
-        .storage()
-        .persistent()
-        .has(&("dispute", invoice_id.clone()))
-    {
+    if env.storage().persistent().has(&("dispute", invoice_id.clone())) {
         return Err(QuickLendXError::DisputeAlreadyExists);
     }
 
-    // --- 4. Invoice must be in a state where disputes are meaningful ---
-    //    Disputes are relevant once the invoice has moved past initial upload:
-    //    Pending, Verified, Funded, or Paid all qualify.  Cancelled, Defaulted,
-    //    and Refunded are terminal failure/resolution states where raising a new
-    //    dispute adds no value.
+    let mut invoice: Invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFound)?;
+
     match invoice.status {
         InvoiceStatus::Pending
         | InvoiceStatus::Verified
@@ -49,17 +58,13 @@ pub fn create_dispute(
         _ => return Err(QuickLendXError::InvoiceNotAvailableForFunding),
     }
 
-    let is_authorized = creator == invoice.business
-        || invoice
-            .investor
-            .as_ref()
-            .map_or(false, |inv| creator == *inv);
+    let is_business = creator == &invoice.business;
+    let is_investor = invoice.investor.as_ref().map_or(false, |inv| creator == inv);
 
     if !is_business && !is_investor {
         return Err(QuickLendXError::DisputeNotAuthorized);
     }
 
-    // --- 6. Input validation ---
     if reason.len() == 0 || reason.len() > MAX_DISPUTE_REASON_LENGTH {
         return Err(QuickLendXError::InvalidDisputeReason);
     }
@@ -67,7 +72,6 @@ pub fn create_dispute(
         return Err(QuickLendXError::InvalidDisputeEvidence);
     }
 
-    // --- 7. Record the dispute on the invoice ---
     let now = env.ledger().timestamp();
     invoice.dispute_status = DisputeStatus::Disputed;
     invoice.dispute = Dispute {
@@ -76,14 +80,10 @@ pub fn create_dispute(
         reason: reason.clone(),
         evidence: evidence.clone(),
         resolution: String::from_str(env, ""),
-        resolved_by: Address::from_str(
-            env,
-            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-        ),
+        resolved_by: creator.clone(),
         resolved_at: 0,
     };
 
-    // --- 8. Persist and index ---
     InvoiceStorage::update_invoice(env, &invoice);
     add_to_dispute_index(env, invoice_id);
 
@@ -219,7 +219,7 @@ pub fn get_dispute_details(env: &Env, invoice_id: &BytesN<32>) -> Option<Dispute
     if invoice.dispute_status == DisputeStatus::None {
         return None;
     }
-    Some(invoice.dispute)
+    Some(invoice.dispute.clone())
 }
 
 /// @notice Returns all invoice IDs that have an active or historical dispute.
