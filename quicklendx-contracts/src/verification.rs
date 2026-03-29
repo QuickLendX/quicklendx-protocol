@@ -623,15 +623,14 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
     let mut buf = [0u8; 50];
     tag.copy_into_slice(&mut buf[..tag.len() as usize]);
     
-    let mut normalized_bytes = std::vec::Vec::new();
     let raw_slice = &buf[..tag.len() as usize];
-
-    for &b in raw_slice.iter() {
-        let lower = if b >= b'A' && b <= b'Z' { b + 32 } else { b };
-        normalized_bytes.push(lower);
+    let mut normalized_bytes = [0u8; 50];
+    for (i, &b) in raw_slice.iter().enumerate() {
+        normalized_bytes[i] = if b >= b'A' && b <= b'Z' { b + 32 } else { b };
     }
+    let normalized_slice = &normalized_bytes[..raw_slice.len()];
 
-    let normalized_str = String::from_str(env, std::str::from_utf8(&normalized_bytes).map_err(|_| QuickLendXError::InvalidTag)?);
+    let normalized_str = String::from_str(env, core::str::from_utf8(normalized_slice).map_err(|_| QuickLendXError::InvalidTag)?);
     let trimmed = normalized_str; // Simplification: in a full implementation, we'd handle leading/trailing whitespace bytes
     
     if trimmed.len() == 0 { return Err(QuickLendXError::InvalidTag); }
