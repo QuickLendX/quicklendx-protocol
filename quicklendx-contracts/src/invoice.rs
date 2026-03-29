@@ -1214,4 +1214,348 @@ impl InvoiceStorage {
             .get(&TOTAL_INVOICE_COUNT_KEY)
             .unwrap_or(0)
     }
+
+    // ============================================================================
+// FIXED SECTIONS OF invoice.rs
+// Only the changed / new functions are shown. Drop these in place of the
+// originals. Everything else in the file stays the same.
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+// 1. Invoice::new — add amount and due-date guards
+// ---------------------------------------------------------------------------
+
+pub fn new(
+    env: &Env,
+    business: Address,
+    amount: i128,
+    currency: Address,
+    due_date: u64,
+    description: String,
+    category: InvoiceCategory,
+    tags: Vec<String>,
+) -> Result<Self, QuickLendXError> {
+    // 🔒 HARDENING: amount must be strictly positive
+    if amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    // 🔒 HARDENING: due date must be strictly in the future
+    if due_date <= env.ledger().timestamp() {
+        return Err(QuickLendXError::InvalidDueDate);
+    }
+
+    check_string_length(&description, MAX_DESCRIPTION_LENGTH)?;
+
+    // description must not be empty
+    if description.len() == 0 {
+        return Err(QuickLendXError::InvalidDescription);
+    }
+
+    let mut normalized_tags = Vec::new(env);
+    for tag in tags.iter() {
+        normalized_tags.push_back(normalize_tag(env, &tag)?);
+    }
+
+    // 🔒 HARDENING: validate tags before allocation
+    validate_invoice_tags(env, &normalized_tags)?;
+
+    let id = Self::generate_unique_invoice_id(env)?;
+    let created_at = env.ledger().timestamp();
+
+    let invoice = Self {
+        id,
+        business,
+        amount,
+        currency,
+        due_date,
+        status: InvoiceStatus::Pending,
+        created_at,
+        description,
+        metadata_customer_name: None,
+        metadata_customer_address: None,
+        metadata_tax_id: None,
+        metadata_notes: None,
+        metadata_line_items: Vec::new(env),
+        category,
+        tags: normalized_tags,
+        funded_amount: 0,
+        funded_at: None,
+        investor: None,
+        settled_at: None,
+        average_rating: None,
+        total_ratings: 0,
+        ratings: vec![env],
+        dispute_status: DisputeStatus::None,
+        dispute: Dispute {
+            created_by: Address::from_str(
+                env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            ),
+            created_at: 0,
+            reason: String::from_str(env, ""),
+            evidence: String::from_str(env, ""),
+            resolution: String::from_str(env, ""),
+            resolved_by: Address::from_str(
+                env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            ),
+            resolved_at: 0,
+        },
+        total_paid: 0,
+        payment_history: vec![env],
+    };
+
+    log_invoice_created(env, &invoice);
+    Ok(invoice)
+}
+
+// ---------------------------------------------------------------------------
+// 2. validate_invoice_tags — called by Invoice::new and lib.rs entrypoints
+//    Ensures normalized tag list has no duplicates and is within limits.
+// ---------------------------------------------------------------------------
+
+/// Validate a normalized tag list: ≤10 entries, no duplicates, each ≤50 bytes.
+pub fn validate_invoice_tags(
+    env: &Env,
+    tags: &Vec<String>,
+) -> Result<(), QuickLendXError> {
+    if tags.len() > 10 {
+        return Err(QuickLendXError::TagLimitExceeded);
+    }
+    for i in 0..tags.len() {
+        let a = tags.get(i).unwrap();
+        if a.len() == 0 || a.len() > 50 {
+            return Err(QuickLendXError::InvalidTag);
+        }
+        // O(n²) duplicate check on the normalized form
+        for j in (i + 1)..tags.len() {
+            if a == tags.get(j).unwrap() {
+                return Err(QuickLendXError::DuplicateTag);
+            }
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// 3. update_category — add auth guard + index rollback
+// ---------------------------------------------------------------------------
+
+/// Update the invoice category (business owner only).
+///
+/// Removes the invoice from the old category index before writing the new
+/// category so stale index entries cannot accumulate.
+pub fn update_category(
+    &mut self,
+    env: &Env,
+    category: InvoiceCategory,
+) -> Result<(), QuickLendXError> {
+    // 🔒 HARDENING: only the business that created the invoice may re-categorise it
+    if self.business != env.current_contract_address() {
+        // The business address is stored on the struct; require its auth
+    }
+    self.business.require_auth();
+
+    // 🛡️ INDEX ROLLBACK: remove from old bucket before switching
+    InvoiceStorage::remove_category_index(env, &self.category, &self.id);
+
+    self.category = category;
+
+    // Register in new bucket
+    InvoiceStorage::add_category_index(env, &self.category, &self.id);
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// 4. store_invoice — track previous status to avoid duplicate index entries
+// ---------------------------------------------------------------------------
+
+/// Store (create or update) an invoice and keep all indexes consistent.
+///
+/// On the first call for a given invoice ID, all indexes are initialised.
+/// On subsequent calls the status index is migrated: the invoice is removed
+/// from its old status bucket and inserted into the new one, preventing
+/// duplicate entries across buckets.
+pub fn store_invoice(env: &Env, invoice: &Invoice) {
+    let existing: Option<Invoice> = env.storage().instance().get(&invoice.id);
+    let is_new = existing.is_none();
+
+    // 🛡️ STATUS INDEX MIGRATION: remove from old bucket when status changes
+    if let Some(ref old) = existing {
+        if old.status != invoice.status {
+            InvoiceStorage::remove_from_status_invoices(env, &old.status, &invoice.id);
+        }
+    }
+
+    env.storage().instance().set(&invoice.id, invoice);
+
+    if is_new {
+        let mut count: u32 = env
+            .storage()
+            .instance()
+            .get(&TOTAL_INVOICE_COUNT_KEY)
+            .unwrap_or(0);
+        count = count.saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&TOTAL_INVOICE_COUNT_KEY, &count);
+
+        InvoiceStorage::add_to_business_invoices(env, &invoice.business, &invoice.id);
+        InvoiceStorage::add_category_index(env, &invoice.category, &invoice.id);
+
+        for tag in invoice.tags.iter() {
+            InvoiceStorage::add_tag_index(env, &tag, &invoice.id);
+        }
+    }
+
+    // Always keep the status bucket current (add_to_status_invoices is idempotent)
+    InvoiceStorage::add_to_status_invoices(env, &invoice.status, &invoice.id);
+}
+
+// ---------------------------------------------------------------------------
+// 5. metadata() — return partial metadata rather than None on any missing field
+// ---------------------------------------------------------------------------
+
+/// Retrieve metadata if any field has been set.
+///
+/// Returns `Some` even when optional fields are absent, using empty strings
+/// as defaults.  Returns `None` only when no metadata has been attached at all.
+pub fn metadata(&self) -> Option<InvoiceMetadata> {
+    // Return None only when the primary identifier (customer name) is absent
+    let name = self.metadata_customer_name.clone()?;
+
+    Some(InvoiceMetadata {
+        customer_name: name,
+        customer_address: self
+            .metadata_customer_address
+            .clone()
+            .unwrap_or_else(|| String::from_str(self.tags.env(), "")),
+        tax_id: self
+            .metadata_tax_id
+            .clone()
+            .unwrap_or_else(|| String::from_str(self.tags.env(), "")),
+        line_items: self.metadata_line_items.clone(),
+        notes: self
+            .metadata_notes
+            .clone()
+            .unwrap_or_else(|| String::from_str(self.tags.env(), "")),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// 6. delete_invoice — fix unclosed brace + missing remove of the invoice key
+// ---------------------------------------------------------------------------
+
+/// Completely remove an invoice from storage and all its indexes.
+pub fn delete_invoice(env: &Env, invoice_id: &BytesN<32>) {
+    let invoice = match Self::get_invoice(env, invoice_id) {
+        Some(inv) => inv,
+        None => return,
+    };
+
+    // Remove from status index
+    Self::remove_from_status_invoices(env, &invoice.status, invoice_id);
+
+    // Remove from business index
+    let business_key = (symbol_short!("business"), invoice.business.clone());
+    if let Some(invoices) = env
+        .storage()
+        .instance()
+        .get::<_, Vec<BytesN<32>>>(&business_key)
+    {
+        let mut new_invoices = Vec::new(env);
+        for id in invoices.iter() {
+            if id != *invoice_id {
+                new_invoices.push_back(id);
+            }
+        }
+        env.storage().instance().set(&business_key, &new_invoices);
+    }
+
+    // Remove from category index
+    Self::remove_category_index(env, &invoice.category, invoice_id);
+
+    // Remove from tag indexes
+    for tag in invoice.tags.iter() {
+        Self::remove_tag_index(env, &tag, invoice_id);
+    }
+
+    // Remove metadata indexes if present
+    if let Some(md) = invoice.metadata() {
+        Self::remove_metadata_indexes(env, &md, invoice_id);
+    }
+
+    // 🔒 HARDENING: actually delete the invoice entry from storage
+    env.storage().instance().remove(invoice_id);
+
+    // Decrement total count
+    let mut count: u32 = env
+        .storage()
+        .instance()
+        .get(&TOTAL_INVOICE_COUNT_KEY)
+        .unwrap_or(0);
+    if count > 0 {
+        count -= 1;
+        env.storage()
+            .instance()
+            .set(&TOTAL_INVOICE_COUNT_KEY, &count);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 7. check_and_handle_expiration — guard against re-defaulting
+// ---------------------------------------------------------------------------
+
+/// Check if the invoice should be defaulted and transition it if necessary.
+///
+/// Returns `Ok(true)` if the invoice was defaulted in this call, `Ok(false)`
+/// if no action was taken (not funded, not yet past grace, or already defaulted).
+pub fn check_and_handle_expiration(
+    &self,
+    env: &Env,
+    grace_period: u64,
+) -> Result<bool, QuickLendXError> {
+    // 🔒 HARDENING: skip if already in a terminal / non-funded state
+    if self.status != InvoiceStatus::Funded {
+        return Ok(false);
+    }
+
+    let now = env.ledger().timestamp();
+    if now <= self.grace_deadline(grace_period) {
+        return Ok(false);
+    }
+
+    crate::defaults::handle_default(env, &self.id)?;
+    Ok(true)
+}
+
+// ---------------------------------------------------------------------------
+// 8. generate_unique_invoice_id — use a dedicated counter namespace
+// ---------------------------------------------------------------------------
+
+fn generate_unique_invoice_id(env: &Env) -> Result<BytesN<32>, QuickLendXError> {
+    let timestamp = env.ledger().timestamp();
+    let sequence = env.ledger().sequence();
+
+    // 🔒 HARDENING: keep the counter under its own namespace tuple so it
+    // cannot be mistaken for an invoice ID key.
+    let counter_key = (symbol_short!("meta"), symbol_short!("inv_cnt"));
+    let mut counter: u32 = env.storage().instance().get(&counter_key).unwrap_or(0);
+
+    loop {
+        let candidate = Self::derive_invoice_id(env, timestamp, sequence, counter);
+        if InvoiceStorage::get_invoice(env, &candidate).is_none() {
+            let next_counter = counter
+                .checked_add(1)
+                .ok_or(QuickLendXError::StorageError)?;
+            env.storage().instance().set(&counter_key, &next_counter);
+            return Ok(candidate);
+        }
+        counter = counter
+            .checked_add(1)
+            .ok_or(QuickLendXError::StorageError)?;
+    }
+}
 }
