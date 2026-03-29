@@ -89,8 +89,9 @@ use events::{
     emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
     emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
-use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
-use invoice::{Invoice, InvoiceMetadata, InvoiceStorage};
+use investment::{Investment, InvestmentStatus, InvestmentStorage};
+use types::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceCategory, InsuranceCoverage};
+use invoice::InvoiceStorage;
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{

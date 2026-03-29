@@ -54,6 +54,7 @@ impl DisputeResolution {
             reason: reason.clone(),
             evidence: evidence.clone(),
             resolution: String::from_str(env, ""),
+            // Fixed address parsing: use Address::from_string directly if it's already a String or String::from_str then Address::from_string
             resolved_by: Address::from_string(&String::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF")),
             resolved_at: 0,
         };
