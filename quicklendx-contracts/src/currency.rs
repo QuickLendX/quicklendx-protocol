@@ -41,12 +41,7 @@ impl CurrencyWhitelist {
         admin: &Address,
         currency: &Address,
     ) -> Result<(), QuickLendXError> {
-        let current_admin = AdminStorage::get_admin(env).ok_or(QuickLendXError::NotAdmin)?;
-        if *admin != current_admin {
-            return Err(QuickLendXError::NotAdmin);
-        }
-        // Auth handled by caller natively requiring auth on the admin argument
-        admin.require_auth();
+        AdminStorage::require_admin_auth(env, admin)?;
 
         let mut list = Self::get_whitelisted_currencies(env);
         if list.iter().any(|a| a == *currency) {
@@ -162,11 +157,7 @@ impl CurrencyWhitelist {
         admin: &Address,
         currencies: &Vec<Address>,
     ) -> Result<(), QuickLendXError> {
-        let current_admin = AdminStorage::get_admin(env).ok_or(QuickLendXError::NotAdmin)?;
-        if *admin != current_admin {
-            return Err(QuickLendXError::NotAdmin);
-        }
-        admin.require_auth();
+        AdminStorage::require_admin_auth(env, admin)?;
 
         let mut deduped: Vec<Address> = Vec::new(env);
         for currency in currencies.iter() {
@@ -208,32 +199,26 @@ impl CurrencyWhitelist {
         Self::get_whitelisted_currencies(env).len()
     }
 
-    /// Return a paginated slice of the whitelist (`offset..offset+limit`).
-    ///
-    /// # Parameters
-    /// - `env`    — Soroban execution environment.
-    /// - `offset` — Zero-based index of the first item to return.
-    /// - `limit`  — Maximum number of items to return.
-    ///
-    /// # Boundary behaviour
-    /// | Condition | Result |
-    /// |---|---|
-    /// | Empty whitelist | Returns empty `Vec` regardless of parameters |
-    /// | `offset >= len` | Returns empty `Vec` |
-    /// | `limit == 0` | Returns empty `Vec` |
-    /// | `offset + limit > len` | Returns items from `offset` to end |
-    /// | `offset + limit` overflows `u32` | Safe via `saturating_add`; returns empty |
-    /// | `u32::MAX` for either param | Handled without panic |
-    ///
-    /// # Security
-    /// Read-only; no authentication required.  Overflow-safe: the end index is
-    /// computed with `offset.saturating_add(limit).min(len)` to prevent integer
-    /// overflow panics when both parameters are near `u32::MAX`.
+    /// @notice Return a paginated slice of the whitelist with hard cap enforcement
+    /// @param env The contract environment
+    /// @param offset Starting index for pagination (0-based)
+    /// @param limit Maximum number of results to return (capped at MAX_QUERY_LIMIT)
+    /// @return Vector of whitelisted currency addresses
+    /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance
     pub fn get_whitelisted_currencies_paged(env: &Env, offset: u32, limit: u32) -> Vec<Address> {
+        // Import MAX_QUERY_LIMIT from parent module
+        const MAX_QUERY_LIMIT: u32 = 100;
+
+        // Validate query parameters for security
+        if offset > u32::MAX - MAX_QUERY_LIMIT {
+            return Vec::new(env);
+        }
+
+        let capped_limit = limit.min(MAX_QUERY_LIMIT);
         let list = Self::get_whitelisted_currencies(env);
         let mut page: Vec<Address> = Vec::new(env);
         let len = list.len();
-        let end = offset.saturating_add(limit).min(len);
+        let end = (offset + capped_limit).min(len);
         if offset >= len {
             return page;
         }

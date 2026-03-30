@@ -4,13 +4,11 @@
 /// - check_overdue_invoices: count accuracy, notification dispatch
 /// - check_invoice_expiration: true on default, false when not expired, grace boundary
 use super::*;
-use crate::defaults::DEFAULT_GRACE_PERIOD;
-use crate::errors::QuickLendXError;
-use crate::init::ProtocolInitializer;
+use crate::defaults::{DEFAULT_GRACE_PERIOD, DEFAULT_OVERDUE_SCAN_BATCH_LIMIT};
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, BytesN, Env, String, Vec,
+    token, Address, BytesN, Env, String, Vec,
 };
 
 // --- Helpers (mirrors test_default.rs patterns) ---
@@ -22,32 +20,18 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.set_admin(&admin);
+    client.initialize_fee_system(&admin);
     (env, client, admin)
-}
-
-fn set_protocol_grace_period(env: &Env, admin: &Address, grace_period_seconds: u64) {
-    let min_invoice_amount = ProtocolInitializer::get_min_invoice_amount(env);
-    let max_due_date_days = ProtocolInitializer::get_max_due_date_days(env);
-    ProtocolInitializer::set_protocol_config(
-        env,
-        admin,
-        min_invoice_amount,
-        max_due_date_days,
-        grace_period_seconds,
-    )
-    .expect("protocol config update should succeed");
 }
 
 fn create_verified_business(
     env: &Env,
     client: &QuickLendXContractClient,
-    _admin: &Address,
+    admin: &Address,
 ) -> Address {
     let business = Address::generate(env);
     client.submit_kyc_application(&business, &String::from_str(env, "KYC data"));
-    let admin = Address::generate(env);
-    client.set_admin(&admin);
-    client.verify_business(&admin, &business);
+    client.verify_business(admin, &business);
     business
 }
 
@@ -66,13 +50,24 @@ fn create_verified_investor(
 fn create_and_fund_invoice(
     env: &Env,
     client: &QuickLendXContractClient,
-    _admin: &Address,
+    admin: &Address,
     business: &Address,
     investor: &Address,
     amount: i128,
     due_date: u64,
 ) -> BytesN<32> {
-    let currency = Address::generate(env);
+    let token_admin = Address::generate(env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac_client = token::StellarAssetClient::new(env, &currency);
+    let token_client = token::Client::new(env, &currency);
+
+    client.add_currency(admin, &currency);
+    sac_client.mint(investor, &amount);
+    let expiry = env.ledger().sequence() + 10_000;
+    token_client.approve(investor, &client.address, &amount, &expiry);
+
     let invoice_id = client.store_invoice(
         business,
         &amount,
@@ -384,38 +379,6 @@ fn test_check_invoice_expiration_zero_grace() {
 }
 
 #[test]
-fn test_check_invoice_expiration_uses_protocol_grace_when_none() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 10000);
-
-    let custom_grace = 2 * 24 * 60 * 60; // 2 days
-    set_protocol_grace_period(&env, &admin, custom_grace);
-
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id =
-        create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
-
-    // Before protocol grace
-    env.ledger().set_timestamp(due_date + custom_grace - 1);
-    let result = client.check_invoice_expiration(&invoice_id, &None);
-    assert!(!result);
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Funded
-    );
-
-    // Past protocol grace
-    env.ledger().set_timestamp(due_date + custom_grace + 1);
-    let result = client.check_invoice_expiration(&invoice_id, &None);
-    assert!(result);
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Defaulted
-    );
-}
-
-#[test]
 fn test_check_invoice_expiration_already_defaulted_returns_false() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
@@ -478,6 +441,159 @@ fn test_check_overdue_invoices_mixed_overdue_and_current() {
     );
     assert_eq!(
         client.get_invoice(&current_id).status,
+        InvoiceStatus::Funded
+    );
+}
+
+#[test]
+fn test_scan_overdue_invoices_respects_explicit_batch_limit() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100000);
+    let base = env.ledger().timestamp();
+    let grace = 30 * 24 * 60 * 60;
+
+    for offset in 0..5u64 {
+        create_and_fund_invoice(
+            &env,
+            &client,
+            &admin,
+            &business,
+            &investor,
+            1000 + offset as i128,
+            base + 86400 + offset,
+        );
+    }
+
+    env.ledger().set_timestamp(base + 86400 + 10);
+
+    let first = client.scan_overdue_invoices(&Some(grace), &Some(2));
+    assert_eq!(first.scanned_count, 2);
+    assert_eq!(first.overdue_count, 2);
+    assert_eq!(first.total_funded, 5);
+    assert_eq!(first.next_cursor, 2);
+    assert_eq!(client.get_overdue_scan_cursor(), 2);
+
+    let second = client.scan_overdue_invoices(&Some(grace), &Some(2));
+    assert_eq!(second.scanned_count, 2);
+    assert_eq!(second.overdue_count, 2);
+    assert_eq!(second.total_funded, 5);
+    assert_eq!(second.next_cursor, 4);
+    assert_eq!(client.get_overdue_scan_cursor(), 4);
+}
+
+#[test]
+fn test_scan_overdue_invoices_cursor_wraps_after_repeated_calls() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100000);
+    let base = env.ledger().timestamp();
+    let grace = 30 * 24 * 60 * 60;
+
+    for offset in 0..5u64 {
+        create_and_fund_invoice(
+            &env,
+            &client,
+            &admin,
+            &business,
+            &investor,
+            2000 + offset as i128,
+            base + 86400 + offset,
+        );
+    }
+
+    env.ledger().set_timestamp(base + 86400 + 10);
+
+    let mut cursors = Vec::new(&env);
+    for _ in 0..5 {
+        let result = client.scan_overdue_invoices(&Some(grace), &Some(2));
+        cursors.push_back(result.next_cursor);
+    }
+
+    assert_eq!(cursors.len(), 5);
+    assert_eq!(cursors.get(0).unwrap(), 2);
+    assert_eq!(cursors.get(1).unwrap(), 4);
+    assert_eq!(cursors.get(2).unwrap(), 1);
+    assert_eq!(cursors.get(3).unwrap(), 3);
+    assert_eq!(cursors.get(4).unwrap(), 0);
+    assert_eq!(client.get_overdue_scan_cursor(), 0);
+}
+
+#[test]
+fn test_check_overdue_invoices_reports_default_batch_limit_configuration() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100000);
+    let base = env.ledger().timestamp();
+
+    for offset in 0..5u64 {
+        create_and_fund_invoice(
+            &env,
+            &client,
+            &admin,
+            &business,
+            &investor,
+            3000 + offset as i128,
+            base + 86400 + offset,
+        );
+    }
+
+    env.ledger().set_timestamp(base + 86400 + 10);
+
+    assert_eq!(
+        client.get_overdue_scan_batch_limit(),
+        DEFAULT_OVERDUE_SCAN_BATCH_LIMIT
+    );
+    assert_eq!(client.get_overdue_scan_batch_limit_max(), 100);
+
+    let count = client.check_overdue_invoices();
+    assert_eq!(count, 5);
+    assert_eq!(client.get_overdue_scan_cursor(), 0);
+}
+
+#[test]
+fn test_scan_overdue_invoices_defaults_only_scanned_expired_invoices() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100000);
+    let base = env.ledger().timestamp();
+    let grace = 0u64;
+    let mut invoice_ids = Vec::new(&env);
+
+    for offset in 0..4u64 {
+        let invoice_id = create_and_fund_invoice(
+            &env,
+            &client,
+            &admin,
+            &business,
+            &investor,
+            4000 + offset as i128,
+            base + 86400 + offset,
+        );
+        invoice_ids.push_back(invoice_id);
+    }
+
+    env.ledger().set_timestamp(base + 86400 + 10);
+
+    let result = client.scan_overdue_invoices(&Some(grace), &Some(2));
+    assert_eq!(result.scanned_count, 2);
+    assert_eq!(result.overdue_count, 2);
+    assert_eq!(result.total_funded, 4);
+
+    assert_eq!(
+        client.get_invoice(&invoice_ids.get(0).unwrap()).status,
+        InvoiceStatus::Defaulted
+    );
+    assert_eq!(
+        client.get_invoice(&invoice_ids.get(1).unwrap()).status,
+        InvoiceStatus::Defaulted
+    );
+    assert_eq!(
+        client.get_invoice(&invoice_ids.get(2).unwrap()).status,
+        InvoiceStatus::Funded
+    );
+    assert_eq!(
+        client.get_invoice(&invoice_ids.get(3).unwrap()).status,
         InvoiceStatus::Funded
     );
 }

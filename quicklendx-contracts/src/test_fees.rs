@@ -2,7 +2,7 @@ use super::*;
 use crate::{errors::QuickLendXError, fees::FeeType};
 use soroban_sdk::{
     testutils::{Address as _, MockAuth, MockAuthInvoke},
-    Address, Env, Map, String,
+    Address, Env, IntoVal, Map, String,
 };
 
 /// Helper function to set up admin for testing
@@ -26,6 +26,25 @@ fn setup_investor(env: &Env, client: &QuickLendXContractClient, admin: &Address)
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &1_000_000); // 1000 XLM limit
     investor
+}
+
+fn update_user_to_tier(
+    client: &QuickLendXContractClient,
+    user: &Address,
+    target_tier: crate::fees::VolumeTier,
+) {
+    match target_tier {
+        crate::fees::VolumeTier::Standard => {}
+        crate::fees::VolumeTier::Silver => {
+            client.update_user_transaction_volume(user, &100_000_000_000);
+        }
+        crate::fees::VolumeTier::Gold => {
+            client.update_user_transaction_volume(user, &500_000_000_000);
+        }
+        crate::fees::VolumeTier::Platinum => {
+            client.update_user_transaction_volume(user, &1_000_000_000_000);
+        }
+    }
 }
 
 /// Simple test to verify the module is loaded
@@ -132,11 +151,11 @@ fn test_custom_platform_fee_bps() {
     let admin = setup_admin(&env, &client);
 
     // Test setting custom fee BPS
-    let new_fee_bps = 500; // 5%
+    let new_fee_bps: i128 = 500; // 5%
     client.set_platform_fee(&new_fee_bps);
 
     let updated_config = client.get_platform_fee();
-    assert_eq!(updated_config.fee_bps, new_fee_bps);
+    assert_eq!(updated_config.fee_bps, new_fee_bps as u32);
     assert_eq!(updated_config.updated_by, admin);
 }
 
@@ -624,7 +643,10 @@ fn test_fee_parameter_validation() {
         .err()
         .expect("base_fee_bps > 1000 must return contract error");
     let invalid_bps_contract_error = invalid_bps_err.expect("expected contract invoke error");
-    assert_eq!(invalid_bps_contract_error, QuickLendXError::InvalidAmount);
+    assert_eq!(
+        invalid_bps_contract_error,
+        QuickLendXError::InvalidFeeBasisPoints
+    );
 
     // Invalid range: min_fee > max_fee.
     let min_gt_max = client.try_validate_fee_parameters(&200, &1001, &1000);
@@ -668,7 +690,10 @@ fn test_update_fee_structure_rejects_invalid_values() {
         .err()
         .expect("base_fee_bps > 1000 must be rejected");
     let invalid_bps_contract_error = invalid_bps_err.expect("expected contract invoke error");
-    assert_eq!(invalid_bps_contract_error, QuickLendXError::InvalidAmount);
+    assert_eq!(
+        invalid_bps_contract_error,
+        QuickLendXError::InvalidFeeBasisPoints
+    );
 
     let min_gt_max =
         client.try_update_fee_structure(&admin, &FeeType::Platform, &400, &5_001, &5_000, &true);
@@ -809,7 +834,7 @@ fn test_configure_treasury() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin_init(&env, &client);
+    let admin = setup_admin(&env, &client);
     let treasury = Address::generate(&env);
 
     // Initialize fee system (creates platform fee config needed by configure_treasury)
@@ -856,7 +881,7 @@ fn test_get_treasury_address_before_config() {
     env.mock_all_auths();
     let contract_id = env.register(crate::QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = setup_admin_init(&env, &client);
+    let admin = setup_admin(&env, &client);
 
     client.initialize_fee_system(&admin);
 
@@ -898,4 +923,79 @@ fn test_calculate_transaction_fees_late_payment_flag() {
         late_fees > base_fees,
         "Late payment must increase total fees"
     );
+}
+
+/// Volume-tier discounts should produce exact deterministic totals for the same amount.
+#[test]
+fn test_calculate_transaction_fees_exact_volume_tier_matrix() {
+    let amount = 10_000_i128;
+
+    let cases = [
+        (crate::fees::VolumeTier::Standard, 350_i128),
+        (crate::fees::VolumeTier::Silver, 333_i128),
+        (crate::fees::VolumeTier::Gold, 315_i128),
+        (crate::fees::VolumeTier::Platinum, 298_i128),
+    ];
+
+    for (tier, expected_fees) in cases {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(crate::QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let admin = setup_admin(&env, &client);
+        let user = setup_investor(&env, &client, &admin);
+        client.initialize_fee_system(&admin);
+        update_user_to_tier(&client, &user, tier.clone());
+
+        let volume_data = client.get_user_volume_data(&user);
+        assert_eq!(volume_data.current_tier, tier);
+
+        let fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
+        assert_eq!(fees, expected_fees);
+    }
+}
+
+/// Early discounts should be applied after the tier discount to the platform fee only.
+#[test]
+fn test_calculate_transaction_fees_gold_early_payment_ordering() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+    update_user_to_tier(&client, &user, crate::fees::VolumeTier::Gold);
+
+    let amount = 10_000_i128;
+    let fees = client.calculate_transaction_fees(&user, &amount, &true, &false);
+
+    // Platform: 200 -> 180 after Gold discount -> 162 after early-payment discount
+    // Processing: 50 -> 45
+    // Verification: 100 -> 90
+    assert_eq!(fees, 297);
+}
+
+/// Late-payment surcharges should only affect the LatePayment structure and should not
+/// receive volume-tier discounts.
+#[test]
+fn test_calculate_transaction_fees_platinum_late_payment_preserves_penalty() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+    update_user_to_tier(&client, &user, crate::fees::VolumeTier::Platinum);
+    client.update_fee_structure(&admin, &FeeType::LatePayment, &100, &50, &10_000, &true);
+
+    let amount = 10_000_i128;
+    let fees = client.calculate_transaction_fees(&user, &amount, &false, &true);
+
+    // Discounted standard fees: 170 + 43 + 85 = 298
+    // LatePayment: 100 + 20% surcharge = 120 (no tier discount)
+    assert_eq!(fees, 418);
 }
