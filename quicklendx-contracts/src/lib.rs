@@ -73,10 +73,9 @@ pub use invoice::{InvoiceCategory, InvoiceStatus};
 mod verification;
 mod vesting;
 use admin::AdminStorage;
-use bid::{Bid, BidStorage};
+use bid::BidStorage;
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
-    OverdueScanResult,
 };
 use errors::QuickLendXError;
 use escrow::{
@@ -88,7 +87,7 @@ use events::{
     emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
     emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
-use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
+use investment::{InvestmentStatus, InvestmentStorage};
 use invoice::{Invoice, InvoiceMetadata, InvoiceStorage};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
@@ -128,7 +127,7 @@ fn cap_query_limit(limit: u32) -> u32 {
 /// @param limit The requested result limit
 /// @return Result indicating validation success or failure
 /// @dev Prevents potential overflow and ensures reasonable query bounds
-fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError> {
+fn validate_query_params(offset: u32, _limit: u32) -> Result<(), QuickLendXError> {
     // Check for potential overflow in offset + limit calculation
     if offset > u32::MAX - MAX_QUERY_LIMIT {
         return Err(QuickLendXError::InvalidAmount);
@@ -140,13 +139,9 @@ fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError>
 }
 
 /// Map the contract-exported `types::BidStatus` filter to the bid-storage enum.
+/// Since both now use crate::types::BidStatus, this is an identity mapping.
 fn map_public_bid_status(s: BidStatus) -> bid::BidStatus {
-    match s {
-        BidStatus::Placed => bid::BidStatus::Placed,
-        BidStatus::Withdrawn => bid::BidStatus::Withdrawn,
-        BidStatus::Accepted => bid::BidStatus::Accepted,
-        BidStatus::Expired => bid::BidStatus::Expired,
-    }
+    s
 }
 
 #[contractimpl]

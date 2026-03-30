@@ -1,5 +1,7 @@
 use crate::errors::QuickLendXError;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
+// Re-export from crate::types so other modules can continue to import from crate::investment.
+pub use crate::types::{InsuranceCoverage, Investment, InvestmentStatus};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 // ─── Storage key for the global active-investment index ───────────────────────
 const ACTIVE_INDEX_KEY: Symbol = symbol_short!("act_inv");
@@ -22,25 +24,8 @@ pub const MAX_COVERAGE_PERCENTAGE: u32 = 100;
 /// with no economic cost to the insured party.
 pub const MIN_PREMIUM_AMOUNT: i128 = 1;
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InsuranceCoverage {
-    pub provider: Address,
-    pub coverage_amount: i128,
-    pub premium_amount: i128,
-    pub coverage_percentage: u32,
-    pub active: bool,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum InvestmentStatus {
-    Active,
-    Withdrawn,
-    Completed,
-    Defaulted,
-    Refunded,
-}
+// Local type definitions removed — InsuranceCoverage, InvestmentStatus, and
+// Investment are now imported from crate::types (the single source of truth).
 
 impl InvestmentStatus {
     /// Validate that a status transition is legal.
@@ -79,18 +64,6 @@ impl InvestmentStatus {
             Err(QuickLendXError::InvalidStatus)
         }
     }
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Investment {
-    pub investment_id: BytesN<32>,
-    pub invoice_id: BytesN<32>,
-    pub investor: Address,
-    pub amount: i128,
-    pub funded_at: u64,
-    pub status: InvestmentStatus,
-    pub insurance: Vec<InsuranceCoverage>,
 }
 
 impl Investment {

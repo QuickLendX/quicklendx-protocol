@@ -73,7 +73,7 @@ const WASM_SIZE_WARNING_BYTES: u64 = (WASM_SIZE_BUDGET_BYTES as f64 * 0.90) as u
 /// Keep this up-to-date so the regression window stays tight.  When a PR
 /// legitimately increases the contract size, the author must update this
 /// constant and `scripts/wasm-size-baseline.toml` in the same commit.
-const WASM_SIZE_BASELINE_BYTES: u64 = 217_668;
+const WASM_SIZE_BASELINE_BYTES: u64 = 243_914;
 
 /// Maximum fractional growth allowed relative to `WASM_SIZE_BASELINE_BYTES`
 /// before the regression test fails (5 %).

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, String, Vec};

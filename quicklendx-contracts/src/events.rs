@@ -1,5 +1,7 @@
+#![allow(deprecated)]
+
 use crate::bid::Bid;
-use crate::fees::{FeeStructure, FeeType};
+use crate::fees::FeeType;
 use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::payments::Escrow;
 use crate::profits::PlatformFeeConfig;

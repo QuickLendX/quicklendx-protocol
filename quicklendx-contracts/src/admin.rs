@@ -27,6 +27,8 @@
 //! - `ADMIN_INITIALIZED_KEY`: Initialization flag (prevents re-initialization)
 //! - `ADMIN_TRANSFER_LOCK_KEY`: Transfer lock (prevents concurrent transfers)
 
+#![allow(dead_code)]
+
 use crate::errors::QuickLendXError;
 use soroban_sdk::{symbol_short, Address, Env, Symbol};
 
