@@ -9,7 +9,6 @@ edition = "2021"
 # (add crate-type = ["cdylib"] temporarily or build in WSL/Linux if you need the .so artifact).
 crate-type = ["rlib", "cdylib"]
 # Keep an rlib target for integration tests and a cdylib target for contract/WASM builds.
-crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { version = "25.1.1", features = ["alloc"] }
