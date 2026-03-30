@@ -248,6 +248,11 @@ impl AdminStorage {
         Ok(())
     }
 
+    pub fn require_admin_auth(env: &Env, address: &Address) -> Result<(), QuickLendXError> {
+        address.require_auth();
+        Self::require_admin(env, address)
+    }
+
     /// Require admin authorization and return the verified admin address.
     ///
     /// This is a convenience function that combines authorization requirement

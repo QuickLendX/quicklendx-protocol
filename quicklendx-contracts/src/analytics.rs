@@ -1,6 +1,6 @@
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, String, Vec};
 
 /// Time period for analytics reports
 #[contracttype]
@@ -1025,6 +1025,50 @@ impl AnalyticsCalculator {
         AnalyticsStorage::store_investor_report(env, &report);
 
         Ok(report)
+    }
+
+    fn get_investor_investments(env: &Env, investor: &Address) -> Vec<crate::investment::Investment> {
+        let mut investments = Vec::new(env);
+        for investment_id in crate::investment::InvestmentStorage::get_investments_by_investor(env, investor)
+            .iter()
+        {
+            if let Some(investment) =
+                crate::investment::InvestmentStorage::get_investment(env, &investment_id)
+            {
+                investments.push_back(investment);
+            }
+        }
+        investments
+    }
+
+    fn initialize_category_counters(env: &Env) -> Vec<(InvoiceCategory, u32)> {
+        let mut counters = Vec::new(env);
+        for category in crate::invoice::InvoiceStorage::get_all_categories(env).iter() {
+            counters.push_back((category, 0u32));
+        }
+        counters
+    }
+
+    fn increment_category_counter(
+        counters: &mut Vec<(InvoiceCategory, u32)>,
+        category: &InvoiceCategory,
+    ) {
+        for i in 0..counters.len() {
+            let Some((existing_category, count)) = counters.get(i) else {
+                continue;
+            };
+            if existing_category == *category {
+                counters.set(i, (existing_category, count.saturating_add(1)));
+                return;
+            }
+        }
+    }
+
+    fn validate_investor_report(report: &InvestorReport) -> Result<(), QuickLendXError> {
+        if report.end_date < report.start_date {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+        Ok(())
     }
 
     /// Get period dates based on time period

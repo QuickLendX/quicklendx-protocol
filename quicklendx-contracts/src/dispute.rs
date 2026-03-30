@@ -1,17 +1,10 @@
-use crate::invoice::{Invoice, InvoiceStatus};
+use crate::admin::AdminStorage;
+use crate::invoice::{Dispute, DisputeStatus, Invoice, InvoiceStatus, InvoiceStorage};
 use crate::protocol_limits::{
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
 };
 use crate::QuickLendXError;
-use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DisputeStatus {
-    Open,
-    UnderReview,
-    Resolved,
-}
+use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
 // ---------------------------------------------------------------------------
 // Storage helpers
@@ -36,6 +29,9 @@ pub fn create_dispute(
         return Err(QuickLendXError::DisputeAlreadyExists);
     }
 
+    let mut invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFound)?;
+
     // --- 4. Invoice must be in a state where disputes are meaningful ---
     //    Disputes are relevant once the invoice has moved past initial upload:
     //    Pending, Verified, Funded, or Paid all qualify.  Cancelled, Defaulted,
@@ -49,13 +45,13 @@ pub fn create_dispute(
         _ => return Err(QuickLendXError::InvoiceNotAvailableForFunding),
     }
 
-    let is_authorized = creator == invoice.business
+    let is_authorized = *creator == invoice.business
         || invoice
             .investor
             .as_ref()
-            .map_or(false, |inv| creator == *inv);
+            .map_or(false, |inv| *creator == *inv);
 
-    if !is_business && !is_investor {
+    if !is_authorized {
         return Err(QuickLendXError::DisputeNotAuthorized);
     }
 
@@ -256,4 +252,30 @@ pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<
         }
     }
     result
+}
+
+fn dispute_index_key() -> (soroban_sdk::Symbol,) {
+    (symbol_short!("dsp_idx"),)
+}
+
+fn get_dispute_index(env: &Env) -> Vec<BytesN<32>> {
+    env.storage()
+        .instance()
+        .get(&dispute_index_key())
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
+    let mut index = get_dispute_index(env);
+    for existing in index.iter() {
+        if existing == *invoice_id {
+            return;
+        }
+    }
+    index.push_back(invoice_id.clone());
+    env.storage().instance().set(&dispute_index_key(), &index);
+}
+
+fn assert_is_admin(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
+    AdminStorage::require_admin(env, admin)
 }

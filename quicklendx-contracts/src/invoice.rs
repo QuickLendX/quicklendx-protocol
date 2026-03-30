@@ -732,7 +732,7 @@ impl Invoice {
         // 🔒 AUTH PROTECTION
         self.business.require_auth();
 
-        let env = self.tags.env();
+        let env = self.tags.env().clone();
         let normalized = normalize_tag(&env, &tag)?;
         let mut new_tags = Vec::new(&env);
         let mut found = false;
@@ -798,6 +798,14 @@ impl InvoiceStorage {
 
     fn tag_key(tag: &String) -> (soroban_sdk::Symbol, String) {
         (symbol_short!("tag_idx"), tag.clone())
+    }
+
+    fn metadata_customer_key(customer_name: &String) -> (soroban_sdk::Symbol, String) {
+        (symbol_short!("cust_idx"), customer_name.clone())
+    }
+
+    fn metadata_tax_key(tax_id: &String) -> (soroban_sdk::Symbol, String) {
+        (symbol_short!("tax_idx"), tax_id.clone())
     }
 
     /// @notice Adds an invoice to the category index.
@@ -1000,6 +1008,89 @@ impl InvoiceStorage {
             .unwrap_or_else(|| Vec::new(env))
     }
 
+    pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
+        env.storage()
+            .instance()
+            .get(&Self::category_key(category))
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn get_invoices_by_category_and_status(
+        env: &Env,
+        category: &InvoiceCategory,
+        status: &InvoiceStatus,
+    ) -> Vec<BytesN<32>> {
+        let category_invoices = Self::get_invoices_by_category(env, category);
+        let mut filtered = Vec::new(env);
+        for invoice_id in category_invoices.iter() {
+            if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
+                if invoice.status == *status {
+                    filtered.push_back(invoice_id);
+                }
+            }
+        }
+        filtered
+    }
+
+    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
+        let normalized = match normalize_tag(env, tag) {
+            Ok(tag) => tag,
+            Err(_) => return Vec::new(env),
+        };
+        env.storage()
+            .instance()
+            .get(&Self::tag_key(&normalized))
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
+        if tags.len() == 0 {
+            return Vec::new(env);
+        }
+
+        let mut iter = tags.iter();
+        let Some(first_tag) = iter.next() else {
+            return Vec::new(env);
+        };
+
+        let mut result = Self::get_invoices_by_tag(env, &first_tag);
+        for tag in iter {
+            let tag_matches = Self::get_invoices_by_tag(env, &tag);
+            let mut filtered = Vec::new(env);
+            for invoice_id in result.iter() {
+                if tag_matches.contains(&invoice_id) {
+                    filtered.push_back(invoice_id);
+                }
+            }
+            result = filtered;
+            if result.len() == 0 {
+                break;
+            }
+        }
+
+        result
+    }
+
+    pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
+        Self::get_invoices_by_category(env, category).len()
+    }
+
+    pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
+        Self::get_invoices_by_tag(env, tag).len()
+    }
+
+    pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
+        let mut categories = Vec::new(env);
+        categories.push_back(InvoiceCategory::Services);
+        categories.push_back(InvoiceCategory::Products);
+        categories.push_back(InvoiceCategory::Consulting);
+        categories.push_back(InvoiceCategory::Manufacturing);
+        categories.push_back(InvoiceCategory::Technology);
+        categories.push_back(InvoiceCategory::Healthcare);
+        categories.push_back(InvoiceCategory::Other);
+        categories
+    }
+
     /// Add invoice to business invoices list
     fn add_to_business_invoices(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
         let key = (symbol_short!("business"), business.clone());
@@ -1076,7 +1167,20 @@ impl InvoiceStorage {
 
         // 🛡️ INDEX ROLLBACK PROTECTION
         // Remove the invoice from the old category index before updating
-        InvoiceStorage::remove_category_index(env, &self.category, &self.id);
+    pub fn get_invoices_with_ratings_count(env: &Env) -> u32 {
+        let statuses = [InvoiceStatus::Funded, InvoiceStatus::Paid];
+        let mut count = 0u32;
+        for status in statuses.iter() {
+            for invoice_id in Self::get_invoices_by_status(env, status).iter() {
+                if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
+                    if invoice.average_rating.is_some() {
+                        count = count.saturating_add(1);
+                    }
+                }
+            }
+        }
+        count
+    }
 
     fn add_to_metadata_index(
         env: &Env,
@@ -1203,9 +1307,9 @@ impl InvoiceStorage {
                     .instance()
                     .set(&TOTAL_INVOICE_COUNT_KEY, &count);
             }
-
-        // Add to the new category index
-        InvoiceStorage::add_category_index(env, &self.category, &self.id);
+            env.storage().instance().remove(invoice_id);
+        }
+    }
 
     /// Get total count of active invoices in the system
     pub fn get_total_invoice_count(env: &Env) -> u32 {
