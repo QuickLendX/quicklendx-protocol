@@ -1199,19 +1199,38 @@ impl QuickLendXContract {
         })
     }
 
-    /// Handle invoice default (admin only)
-    /// This is the internal handler - use mark_invoice_defaulted for public API
+    /// Apply the default state transition for a funded invoice (admin only).
+    ///
+    /// Performs the same grace-period check as `mark_invoice_defaulted` using
+    /// the protocol-configured grace period (or `DEFAULT_GRACE_PERIOD` when not
+    /// configured). This prevents the admin from bypassing the time guard by
+    /// calling this entry point directly.
+    ///
+    /// # When to use each API
+    ///
+    /// | API | Grace-period check | Use when |
+    /// |-----|--------------------|----------|
+    /// | `mark_invoice_defaulted` | Explicit `Option<u64>` override | Caller wants to supply or override the grace period |
+    /// | `handle_default` | Protocol config / `DEFAULT_GRACE_PERIOD` | Caller wants the protocol-default grace period enforced automatically |
+    ///
+    /// Both paths converge on the same internal `do_handle_default` helper, so
+    /// the state transition (status update, events, insurance) is identical and
+    /// executed exactly once regardless of which entry point is used.
+    ///
+    /// # Errors
+    /// * `NotAdmin` - No admin configured or caller is not admin
+    /// * `InvoiceNotFound` - Invoice does not exist
+    /// * `InvoiceAlreadyDefaulted` - Invoice is already defaulted
+    /// * `InvalidStatus` - Invoice is not in Funded status
+    /// * `OperationNotAllowed` - Grace period has not expired yet
     pub fn handle_default(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
 
-        // Get the investment to track investor analytics
-        let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
-
-        let result = do_handle_default(&env, &invoice_id);
-
-        result
+        // Enforce the protocol-default grace period so this entry point cannot
+        // be used to bypass the time guard that mark_invoice_defaulted applies.
+        do_mark_invoice_defaulted(&env, &invoice_id, None)
     }
 
     /// Mark an invoice as defaulted (admin only)
