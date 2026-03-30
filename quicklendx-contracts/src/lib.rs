@@ -67,6 +67,8 @@ mod test_investment_terminal_states;
 #[cfg(test)]
 mod test_bid_validation;
 #[cfg(test)]
+mod test_escrow_consistency;
+#[cfg(test)]
 mod test_string_limits;
 #[cfg(test)]
 mod test_types;
