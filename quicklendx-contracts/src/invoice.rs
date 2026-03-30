@@ -720,10 +720,10 @@ impl Invoice {
         }
 
         self.tags.push_back(normalized.clone());
-        
+
         // Update Index for discoverability
         InvoiceStorage::add_tag_index(env, &normalized, &self.id);
-        
+
         Ok(())
     }
 
@@ -732,28 +732,31 @@ impl Invoice {
         // 🔒 AUTH PROTECTION
         self.business.require_auth();
 
-        let env = self.tags.env();
-        let normalized = normalize_tag(&env, &tag)?;
-        let mut new_tags = Vec::new(&env);
-        let mut found = false;
+        let normalized = {
+            let env = self.tags.env();
+            normalize_tag(&env, &tag)?
+        };
 
-        for existing_tag in self.tags.iter() {
-            if existing_tag != normalized {
-                new_tags.push_back(existing_tag.clone());
-            } else {
-                found = true;
+        let new_tags = {
+            let env = self.tags.env();
+            let mut nt = Vec::new(&env);
+            let mut found = false;
+            for existing_tag in self.tags.iter() {
+                if existing_tag != normalized {
+                    nt.push_back(existing_tag.clone());
+                } else {
+                    found = true;
+                }
             }
-        }
-
-        if !found {
-            return Err(crate::errors::QuickLendXError::InvalidTag);
-        }
+            if !found {
+                return Err(crate::errors::QuickLendXError::InvalidTag);
+            }
+            nt
+        };
 
         self.tags = new_tags;
-        
-        // Remove from Index
+        let env = self.tags.env();
         InvoiceStorage::remove_tag_index(&env, &normalized, &self.id);
-        
         Ok(())
     }
 
@@ -1054,6 +1057,108 @@ impl InvoiceStorage {
         env.storage().instance().set(&key, &new_invoices);
     }
 
+    fn metadata_customer_key(name: &String) -> (soroban_sdk::Symbol, String) {
+        (symbol_short!("icust"), name.clone())
+    }
+
+    fn metadata_tax_key(tax_id: &String) -> (soroban_sdk::Symbol, String) {
+        (symbol_short!("itax"), tax_id.clone())
+    }
+
+    pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
+        let key = Self::category_key(category);
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn get_invoices_by_category_and_status(
+        env: &Env,
+        category: &InvoiceCategory,
+        status: &InvoiceStatus,
+    ) -> Vec<BytesN<32>> {
+        let cat = Self::get_invoices_by_category(env, category);
+        let st = Self::get_invoices_by_status(env, status);
+        let mut out = Vec::new(env);
+        for id in cat.iter() {
+            for sid in st.iter() {
+                if id == sid {
+                    out.push_back(id);
+                    break;
+                }
+            }
+        }
+        out
+    }
+
+    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
+        let key = Self::tag_key(tag);
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
+        if tags.len() == 0 {
+            return Vec::new(env);
+        }
+        let first = Self::get_invoices_by_tag(env, &tags.get(0).unwrap());
+        if tags.len() == 1 {
+            return first;
+        }
+        let mut out = Vec::new(env);
+        for id in first.iter() {
+            let mut in_all = true;
+            let mut ti: u32 = 1;
+            while ti < tags.len() {
+                let t = tags.get(ti).unwrap();
+                let bucket = Self::get_invoices_by_tag(env, &t);
+                let mut found = false;
+                for bid in bucket.iter() {
+                    if bid == id {
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    in_all = false;
+                    break;
+                }
+                ti += 1;
+            }
+            if in_all {
+                out.push_back(id);
+            }
+        }
+        out
+    }
+
+    pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
+        Self::get_invoices_by_category(env, category).len() as u32
+    }
+
+    pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
+        Self::get_invoices_by_tag(env, tag).len() as u32
+    }
+
+    pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
+        let mut v = Vec::new(env);
+        for c in [
+            InvoiceCategory::Services,
+            InvoiceCategory::Products,
+            InvoiceCategory::Consulting,
+            InvoiceCategory::Manufacturing,
+            InvoiceCategory::Technology,
+            InvoiceCategory::Healthcare,
+            InvoiceCategory::Other,
+        ] {
+            v.push_back(c);
+        }
+        v
+    }
+
     /// Get invoices with ratings above a threshold
     pub fn get_invoices_with_rating_above(env: &Env, threshold: u32) -> Vec<BytesN<32>> {
         let mut high_rated_invoices = vec![env];
@@ -1199,6 +1304,8 @@ impl InvoiceStorage {
                     .instance()
                     .set(&TOTAL_INVOICE_COUNT_KEY, &count);
             }
+
+            env.storage().instance().remove(invoice_id);
         }
     }
 
