@@ -176,8 +176,8 @@ impl QuickLendXContract {
     /// # Version Format
     /// Version is a simple integer increment (e.g., 1, 2, 3...)
     /// Major versions indicate breaking changes that require migration.
-    pub fn get_version(_env: Env) -> u32 {
-        1u32
+    pub fn get_version(env: Env) -> u32 {
+        init::ProtocolInitializer::get_version(&env)
     }
 
     /// Get current protocol limits
