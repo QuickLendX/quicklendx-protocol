@@ -284,9 +284,51 @@ fn test_cancel_invoice_funded_returns_error() {
     let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
     client.accept_bid(&invoice_id, &bid_id);
 
+    let funded_before = client.get_invoice_count_by_status(&InvoiceStatus::Funded);
+    let cancelled_before = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
+    assert!(
+        client
+            .get_invoices_by_status(&InvoiceStatus::Funded)
+            .contains(&invoice_id),
+        "Funded invoice should be present in the funded status list before cancellation"
+    );
+
     // Try to cancel - should return error
     let result = client.try_cancel_invoice(&invoice_id);
-    assert!(result.is_err(), "Cannot cancel funded invoice");
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InvalidStatus,
+        "Funded invoices must reject cancellation with InvalidStatus"
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Failed cancellation must leave the invoice funded"
+    );
+    assert!(
+        client
+            .get_invoices_by_status(&InvoiceStatus::Funded)
+            .contains(&invoice_id),
+        "Failed cancellation must not remove the invoice from the funded status list"
+    );
+    assert!(
+        !client
+            .get_invoices_by_status(&InvoiceStatus::Cancelled)
+            .contains(&invoice_id),
+        "Failed cancellation must not add the invoice to the cancelled status list"
+    );
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Funded),
+        funded_before,
+        "Failed cancellation must preserve funded invoice counts"
+    );
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Cancelled),
+        cancelled_before,
+        "Failed cancellation must preserve cancelled invoice counts"
+    );
 }
 
 // ============================================================================
