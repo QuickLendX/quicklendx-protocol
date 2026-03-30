@@ -1073,6 +1073,20 @@ impl AnalyticsCalculator {
         Ok(report)
     }
 
+    fn get_investor_investments(env: &Env, investor: &Address) -> Vec<crate::investment::Investment> {
+        let mut investments = Vec::new(env);
+        for investment_id in crate::investment::InvestmentStorage::get_investments_by_investor(env, investor)
+            .iter()
+        {
+            if let Some(investment) =
+                crate::investment::InvestmentStorage::get_investment(env, &investment_id)
+            {
+                investments.push_back(investment);
+            }
+        }
+        investments
+    }
+
     /// Get period dates based on time period
     pub fn get_period_dates(current_timestamp: u64, period: TimePeriod) -> (u64, u64) {
         match period {

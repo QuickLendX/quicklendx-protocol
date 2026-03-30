@@ -73,7 +73,7 @@ pub use invoice::{InvoiceCategory, InvoiceStatus};
 mod verification;
 mod vesting;
 use admin::AdminStorage;
-use bid::{Bid, BidStorage};
+use bid::{Bid, BidStatus, BidStorage};
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
     OverdueScanResult,
@@ -140,12 +140,13 @@ fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError>
 }
 
 /// Map the contract-exported `types::BidStatus` filter to the bid-storage enum.
-fn map_public_bid_status(s: BidStatus) -> bid::BidStatus {
+fn map_public_bid_status(s: &BidStatus) -> bid::BidStatus {
     match s {
         BidStatus::Placed => bid::BidStatus::Placed,
         BidStatus::Withdrawn => bid::BidStatus::Withdrawn,
         BidStatus::Accepted => bid::BidStatus::Accepted,
         BidStatus::Expired => bid::BidStatus::Expired,
+        BidStatus::Cancelled => bid::BidStatus::Cancelled,
     }
 }
 
@@ -843,7 +844,7 @@ impl QuickLendXContract {
 
     /// Get bids filtered by status
     pub fn get_bids_by_status(env: Env, invoice_id: BytesN<32>, status: BidStatus) -> Vec<Bid> {
-        BidStorage::get_bids_by_status(&env, &invoice_id, map_public_bid_status(status))
+        BidStorage::get_bids_by_status(&env, &invoice_id, map_public_bid_status(&status))
     }
 
     /// Get bids filtered by investor
@@ -2209,7 +2210,7 @@ impl QuickLendXContract {
         let mut filtered = Vec::new(&env);
 
         for bid in all_bids.iter() {
-            let include = match status_filter {
+            let include = match &status_filter {
                 Some(s) => bid.status == map_public_bid_status(s),
                 None => true,
             };
@@ -2259,7 +2260,7 @@ impl QuickLendXContract {
 
         for bid_id in all_bid_ids.iter() {
             if let Some(bid) = BidStorage::get_bid(&env, &bid_id) {
-                let include = match status_filter {
+                let include = match &status_filter {
                     Some(s) => bid.status == map_public_bid_status(s),
                     None => true,
                 };
