@@ -28,7 +28,12 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     (env, client, admin)
 }
 
-fn set_protocol_grace_period(_env: &Env, _client: &QuickLendXContractClient, _admin: &Address, _grace_period_seconds: u64) {
+fn set_protocol_grace_period(
+    _env: &Env,
+    _client: &QuickLendXContractClient,
+    _admin: &Address,
+    _grace_period_seconds: u64,
+) {
     // Protocol config is set during initialization
     // This helper is kept for API compatibility but not used in current tests
 }
@@ -480,7 +485,10 @@ fn test_default_with_none_rejects_exactly_at_default_grace_deadline() {
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
     assert_eq!(contract_err, QuickLendXError::OperationNotAllowed);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
 }
 
 #[test]
@@ -504,12 +512,18 @@ fn test_check_invoice_expiration_respects_strict_protocol_grace_boundary() {
     env.ledger().set_timestamp(grace_deadline);
     let did_default_at_deadline = client.check_invoice_expiration(&invoice_id, &None);
     assert!(!did_default_at_deadline);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
 
     env.ledger().set_timestamp(grace_deadline + 1);
     let did_default_after_deadline = client.check_invoice_expiration(&invoice_id, &None);
     assert!(did_default_after_deadline);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Defaulted);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Defaulted
+    );
 }
 
 #[test]
@@ -678,8 +692,7 @@ fn test_grace_period_exactly_at_maximum_boundary() {
     let invoice = client.get_invoice(&invoice_id);
     // Exactly 30 days should be allowed (maximum boundary)
     let max_grace = 30 * 24 * 60 * 60; // 30 days - exactly at limit
-    env.ledger()
-        .set_timestamp(invoice.due_date + max_grace + 1);
+    env.ledger().set_timestamp(invoice.due_date + max_grace + 1);
 
     // Should succeed at exactly the maximum
     client.mark_invoice_defaulted(&invoice_id, &Some(max_grace));
@@ -718,7 +731,7 @@ fn test_grace_period_one_over_maximum_rejected() {
 #[test]
 fn test_resolve_grace_period_validation() {
     let (env, client, admin) = setup();
-    
+
     // Test 1: Valid override value
     let override_grace = 5 * 24 * 60 * 60; // 5 days
     let resolved = env.as_contract(&client.address, || {
@@ -837,7 +850,10 @@ fn test_check_invoice_expiration_with_invalid_grace_period() {
     assert_eq!(contract_err, QuickLendXError::InvalidTimestamp);
 
     // Invoice should not be defaulted
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
 }
 
 #[test]
@@ -855,7 +871,7 @@ fn test_check_overdue_invoices_propagates_grace_period_error() {
     // Set up protocol config with invalid grace period would require low-level access
     // For now, we test that check_overdue_invoices returns Result properly
     // The happy path is tested in other tests
-    
+
     // This test ensures the function signature accepts Result propagation
     let result = client.check_overdue_invoices();
     // Should succeed with default protocol config (returns count)

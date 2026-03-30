@@ -84,6 +84,10 @@ pub fn distribute_revenue(
 
 **Returns:** Tuple of `(treasury_amount, developer_amount, platform_amount)`
 
+**Idempotency (per settlement):** If the period’s revenue record exists and `pending_distribution == 0` (typically after a successful distribution), the call returns `OperationNotAllowed` (`OP_NA`). This blocks duplicate no-op distributions when `min_distribution_amount` is zero and avoids duplicate audit events. New fee collection in the same period increases `pending_distribution` again and a later call may succeed.
+
+**Treasury routing alignment:** If the platform fee treasury is configured (`configure_treasury`) and `treasury_share_bps > 0`, `RevenueConfig.treasury_address` must match that treasury. Otherwise distribution returns `InvalidFeeConfiguration` (`FEE_CFG`).
+
 **Distribution Logic:**
 1. Treasury amount = `pending * treasury_bps / 10,000`
 2. Developer amount = `pending * developer_bps / 10,000`
@@ -177,6 +181,8 @@ println!("Treasury share: {}%", config.treasury_share_bps / 100);
 3. **Minimum Threshold**: Prevents dust distributions that waste gas
 4. **Remainder Handling**: Platform receives rounding remainder to prevent fund loss
 5. **Period-Based Tracking**: Revenue is tracked per period to enable auditing
+6. **Settlement idempotency**: No second distribution while `pending_distribution == 0` for that period
+7. **Consistent treasury target**: When a platform treasury is set and the split sends a non-zero share to treasury, the configured revenue treasury address must match it
 
 ## Treasury Address Rotation
 
