@@ -231,7 +231,7 @@ impl InvoiceStorage {
     }
 
     pub fn remove_tag_index(env: &Env, tag: &String, id: &BytesN<32>) {
-        let key = (symbol_short!("inv_tag"), tag.clone());
+        let key = (soroban_sdk::symbol_short!("inv_tag"), tag.clone());
         if let Some(ids) = env.storage().persistent().get::<_, Vec<BytesN<32>>>(&key) {
             let mut updated = Vec::new(env);
             for existing in ids.iter() {
@@ -242,17 +242,9 @@ impl InvoiceStorage {
             env.storage().persistent().set(&key, &updated);
         }
     }
-        let mut cats = Vec::new(env);
-        cats.push_back(InvoiceCategory::Services);
-        cats.push_back(InvoiceCategory::Products);
-        cats.push_back(InvoiceCategory::Consulting);
-        cats.push_back(InvoiceCategory::Manufacturing);
-        cats.push_back(InvoiceCategory::Technology);
-        cats.push_back(InvoiceCategory::Healthcare);
-        cats.push_back(InvoiceCategory::Other);
-        cats
-    }
 
-    pub fn clear_all(_env: &Env) {
+    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
+        let key = (soroban_sdk::symbol_short!("inv_tag"), tag.clone());
+        env.storage().persistent().get(&key).unwrap_or_else(|| Vec::new(env))
     }
 }
