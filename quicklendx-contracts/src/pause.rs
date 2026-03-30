@@ -58,7 +58,9 @@ impl PauseControl {
     /// * `QuickLendXError::OperationNotAllowed` - if the protocol is paused
     pub fn require_not_paused(env: &Env) -> Result<(), QuickLendXError> {
         if Self::is_paused(env) {
-            return Err(QuickLendXError::ContractPaused);
+            Err(QuickLendXError::ContractPaused)
+        } else {
+            Ok(())
         }
         Ok(())
     }
