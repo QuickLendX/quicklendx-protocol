@@ -638,6 +638,20 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
     Ok(trimmed)
 }
 
+/// @notice Validate a bid against protocol rules and business constraints
+/// @dev Enforces minimum bid amounts (both absolute and percentage-based),
+///      invoice status checks, ownership validation, and investor capacity limits
+/// @param env The contract environment
+/// @param invoice The invoice being bid on
+/// @param bid_amount The amount being bid
+/// @param expected_return The expected return amount for the investor
+/// @param investor The address of the bidding investor
+/// @return Success if bid passes all validation rules
+/// @error InvalidAmount if bid amount is below minimum or exceeds invoice amount
+/// @error InvalidStatus if invoice is not in Verified state or is past due date
+/// @error Unauthorized if business tries to bid on own invoice
+/// @error OperationNotAllowed if investor already has an active bid on this invoice
+/// @error InsufficientCapacity if bid exceeds investor's remaining investment capacity
 pub fn validate_bid(
     env: &Env,
     invoice: &Invoice,
@@ -667,9 +681,18 @@ pub fn validate_bid(
 
     // 4. Protocol limits and bid size validation
     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
-    let _limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
-    let min_bid_amount = invoice.amount / 100; // 1% min bid
-    if bid_amount < min_bid_amount {
+    
+    // Calculate minimum bid amount using both absolute minimum and percentage-based minimum
+    let percent_min = invoice.amount
+        .saturating_mul(limits.min_bid_bps as i128)
+        .saturating_div(10_000);
+    let effective_min_bid = if percent_min > limits.min_bid_amount {
+        percent_min
+    } else {
+        limits.min_bid_amount
+    };
+    
+    if bid_amount < effective_min_bid {
         return Err(QuickLendXError::InvalidAmount);
     }
 
