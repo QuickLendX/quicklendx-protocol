@@ -544,7 +544,10 @@ fn test_count_investor_investments() {
         &ctx.investor,
         Some(InvestmentStatus::Completed),
     );
-    assert_eq!(all_paged.len(), 2);
+
+    assert_eq!(total_count, 10);
+    assert_eq!(active_count, 4);
+    assert_eq!(completed_count, 3);
 }
 
 /// Test: get_invoice_investment should ignore stale pointers where invoice_id does not match

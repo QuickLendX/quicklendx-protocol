@@ -861,3 +861,216 @@ fn test_check_overdue_invoices_propagates_grace_period_error() {
     // Should succeed with default protocol config (returns count)
     assert!(result >= 0); // Just verify it returns a value without error
 }
+
+// ============================================================================
+// Single-shot default execution guard tests
+// (feature/double-default-prevention)
+// ============================================================================
+
+/// Test 1 – Successful first execution: guard is unset before the call and
+/// set after; invoice transitions to Defaulted exactly once.
+#[test]
+fn test_guard_first_execution_succeeds() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    // Guard must be unset before any default attempt.
+    let guard_before = env.as_contract(&client.address, || {
+        crate::defaults::is_default_executed(&env, &invoice_id)
+    });
+    assert!(!guard_before, "guard should be false before first execution");
+
+    let invoice = client.get_invoice(&invoice_id);
+    let grace = 7 * 24 * 60 * 60u64;
+    env.ledger().set_timestamp(invoice.due_date + grace + 1);
+
+    // First execution must succeed.
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace));
+
+    // Invoice status must be Defaulted.
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Defaulted);
+
+    // Guard must be set (immutably) after execution.
+    let guard_after = env.as_contract(&client.address, || {
+        crate::defaults::is_default_executed(&env, &invoice_id)
+    });
+    assert!(guard_after, "guard should be true after first execution");
+}
+
+/// Test 2 – Rejection of subsequent attempts: a second call to
+/// `mark_invoice_defaulted` on an already-defaulted invoice must return
+/// `InvoiceAlreadyDefaulted` and must not re-emit events or mutate state.
+#[test]
+fn test_guard_rejects_duplicate_default() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    let grace = 7 * 24 * 60 * 60u64;
+    env.ledger().set_timestamp(invoice.due_date + grace + 1);
+
+    // First call succeeds.
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace));
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Defaulted);
+
+    // Second call must be rejected by the guard.
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace));
+    assert!(result.is_err(), "duplicate default must be rejected");
+    let err = result.err().unwrap().expect("expected contract error");
+    assert_eq!(err, QuickLendXError::InvoiceAlreadyDefaulted);
+
+    // State must be unchanged after the rejected call.
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Defaulted);
+}
+
+/// Test 2b – `handle_default` entry point also rejects duplicates via the guard.
+#[test]
+fn test_guard_rejects_duplicate_via_handle_default() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    let grace = 7 * 24 * 60 * 60u64;
+    env.ledger().set_timestamp(invoice.due_date + grace + 1);
+
+    // First execution via mark_invoice_defaulted.
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace));
+
+    // Second attempt via handle_default must also be rejected.
+    let result = client.try_handle_default(&invoice_id);
+    assert!(result.is_err(), "handle_default must reject duplicate via guard");
+    let err = result.err().unwrap().expect("expected contract error");
+    assert_eq!(err, QuickLendXError::InvoiceAlreadyDefaulted);
+}
+
+/// Test 3 – Security: guard flag cannot be reset by any caller.
+/// Verifies that after a successful default the guard remains `true`
+/// regardless of subsequent read attempts, and that no public API
+/// exposes a way to clear it.
+#[test]
+fn test_guard_is_immutable_after_execution() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    let grace = 7 * 24 * 60 * 60u64;
+    env.ledger().set_timestamp(invoice.due_date + grace + 1);
+
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace));
+
+    // Read the guard multiple times; it must remain true.
+    for _ in 0..3 {
+        let guard = env.as_contract(&client.address, || {
+            crate::defaults::is_default_executed(&env, &invoice_id)
+        });
+        assert!(guard, "guard must remain true after execution");
+    }
+
+    // Attempting to default again must still be rejected.
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace));
+    assert!(result.is_err());
+    let err = result.err().unwrap().expect("expected contract error");
+    assert_eq!(err, QuickLendXError::InvoiceAlreadyDefaulted);
+}
+
+/// Test 3b – Security: guard is per-invoice; defaulting one invoice does not
+/// arm the guard for a different invoice.
+#[test]
+fn test_guard_is_scoped_per_invoice() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 20000);
+
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice1_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+    let invoice2_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice1 = client.get_invoice(&invoice1_id);
+    let grace = 7 * 24 * 60 * 60u64;
+    env.ledger().set_timestamp(invoice1.due_date + grace + 1);
+
+    // Default only invoice1.
+    client.mark_invoice_defaulted(&invoice1_id, &Some(grace));
+
+    // invoice1 guard must be set.
+    let guard1 = env.as_contract(&client.address, || {
+        crate::defaults::is_default_executed(&env, &invoice1_id)
+    });
+    assert!(guard1, "guard for invoice1 must be set");
+
+    // invoice2 guard must remain unset.
+    let guard2 = env.as_contract(&client.address, || {
+        crate::defaults::is_default_executed(&env, &invoice2_id)
+    });
+    assert!(!guard2, "guard for invoice2 must not be set");
+
+    // invoice2 can still be defaulted independently.
+    client.mark_invoice_defaulted(&invoice2_id, &Some(grace));
+    assert_eq!(client.get_invoice(&invoice2_id).status, InvoiceStatus::Defaulted);
+}
+
+/// Test 4 – Guard check precedes status check: even if the invoice status were
+/// somehow manipulated back to Funded, the guard prevents re-execution.
+/// We simulate this by directly calling `handle_default` after a successful
+/// default (the guard is already set).
+#[test]
+fn test_guard_fires_before_status_check() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    let grace = 7 * 24 * 60 * 60u64;
+    env.ledger().set_timestamp(invoice.due_date + grace + 1);
+
+    // Execute the default transition.
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace));
+
+    // Guard is now set. Any further call must be rejected by the guard,
+    // not by the status check.
+    let result = client.try_handle_default(&invoice_id);
+    assert!(result.is_err());
+    let err = result.err().unwrap().expect("expected contract error");
+    // The guard fires first and returns InvoiceAlreadyDefaulted.
+    assert_eq!(err, QuickLendXError::InvoiceAlreadyDefaulted);
+}

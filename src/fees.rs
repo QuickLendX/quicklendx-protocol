@@ -1,27 +1,27 @@
-/// # Fees Module
-///
-/// Computes all protocol fees in the QuickLendX invoice-financing platform:
-/// origination, servicing, default, and early-repayment fees.
-///
-/// ## Design Principles
-///
-/// 1. **Checked arithmetic only** — every multiply/divide uses the `checked_*`
-///    family; overflow returns `None` rather than wrapping or panicking.
-/// 2. **Unsigned integers** — `u128` eliminates signed-integer edge cases
-///    (e.g., `i128::MIN.abs()` overflow).
-/// 3. **Basis-point precision** — rates are expressed in bps (1/100 of a
-///    percent, denominator 10_000) to avoid floating-point imprecision.
-/// 4. **Division last** — multiplications are completed before dividing to
-///    maximise precision and minimise intermediate rounding.
-///
-/// ## Fee Taxonomy
-///
-/// | Fee              | Applied to    | Max rate |
-/// |------------------|---------------|----------|
-/// | Origination      | face_value    | 500 bps  |
-/// | Servicing        | face_value    | 300 bps  |
-/// | Default penalty  | outstanding   | 2 000 bps|
-/// | Early repayment  | outstanding   | 500 bps  |
+//! # Fees Module
+//!
+//! Computes all protocol fees in the QuickLendX invoice-financing platform:
+//! origination, servicing, default, and early-repayment fees.
+//!
+//! ## Design Principles
+//!
+//! 1. **Checked arithmetic only** — every multiply/divide uses the `checked_*`
+//!    family; overflow returns `None` rather than wrapping or panicking.
+//! 2. **Unsigned integers** — `u128` eliminates signed-integer edge cases
+//!    (e.g., `i128::MIN.abs()` overflow).
+//! 3. **Basis-point precision** — rates are expressed in bps (1/100 of a
+//!    percent, denominator 10_000) to avoid floating-point imprecision.
+//! 4. **Division last** — multiplications are completed before dividing to
+//!    maximise precision and minimise intermediate rounding.
+//!
+//! ## Fee Taxonomy
+//!
+//! | Fee              | Applied to    | Max rate |
+//! |------------------|---------------|----------|
+//! | Origination      | face_value    | 500 bps  |
+//! | Servicing        | face_value    | 300 bps  |
+//! | Default penalty  | outstanding   | 2 000 bps|
+//! | Early repayment  | outstanding   | 500 bps  |
 
 /// Basis-point denominator.
 pub const BPS_DENOMINATOR: u128 = 10_000;
@@ -54,9 +54,7 @@ fn bps_fee(amount: u128, rate_bps: u128) -> Option<u128> {
     if rate_bps > BPS_DENOMINATOR {
         return None;
     }
-    amount
-        .checked_mul(rate_bps)?
-        .checked_div(BPS_DENOMINATOR)
+    amount.checked_mul(rate_bps)?.checked_div(BPS_DENOMINATOR)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -125,7 +123,10 @@ pub fn default_penalty(outstanding_amount: u128, default_penalty_bps: u128) -> O
 ///
 /// # Returns
 /// `Some(fee)` or `None` on invalid input / overflow.
-pub fn early_repayment_fee(outstanding_amount: u128, early_repayment_fee_bps: u128) -> Option<u128> {
+pub fn early_repayment_fee(
+    outstanding_amount: u128,
+    early_repayment_fee_bps: u128,
+) -> Option<u128> {
     if outstanding_amount == 0 || outstanding_amount > MAX_AMOUNT {
         return None;
     }
@@ -188,7 +189,10 @@ mod tests {
     #[test]
     fn test_origination_max_rate() {
         // 5% of 2_000_000 = 100_000
-        assert_eq!(origination_fee(2_000_000, MAX_ORIGINATION_BPS), Some(100_000));
+        assert_eq!(
+            origination_fee(2_000_000, MAX_ORIGINATION_BPS),
+            Some(100_000)
+        );
     }
 
     #[test]
@@ -251,7 +255,10 @@ mod tests {
     #[test]
     fn test_default_penalty_max_rate() {
         // 20% of 1_000_000 = 200_000
-        assert_eq!(default_penalty(1_000_000, MAX_DEFAULT_PENALTY_BPS), Some(200_000));
+        assert_eq!(
+            default_penalty(1_000_000, MAX_DEFAULT_PENALTY_BPS),
+            Some(200_000)
+        );
     }
 
     #[test]

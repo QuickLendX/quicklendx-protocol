@@ -320,4 +320,34 @@ impl BackupStorage {
         }
         all_invoices
     }
+
+    /// Create a new backup of all invoices
+    pub fn create_backup(env: &Env) -> Result<BytesN<32>, QuickLendXError> {
+        let backup_id = Self::generate_backup_id(env);
+        let invoices = Self::get_all_invoices(env);
+        let b = Backup {
+            backup_id: backup_id.clone(),
+            timestamp: env.ledger().timestamp(),
+            description: String::from_str(env, "Manual Backup"),
+            invoice_count: invoices.len() as u32,
+            status: BackupStatus::Active,
+        };
+        Self::store_backup(env, &b, Some(&invoices))?;
+        Self::store_backup_data(env, &backup_id, &invoices);
+        Self::add_to_backup_list(env, &backup_id);
+        let _ = Self::cleanup_old_backups(env);
+        Ok(backup_id)
+    }
+
+    /// Restore from a backup
+    pub fn restore_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+        Self::validate_backup(env, backup_id)?;
+        let invoices = Self::get_backup_data(env, backup_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        crate::invoice::InvoiceStorage::clear_all(env);
+        for inv in invoices.iter() {
+            crate::invoice::InvoiceStorage::store_invoice(env, &inv);
+        }
+        Ok(())
+    }
 }

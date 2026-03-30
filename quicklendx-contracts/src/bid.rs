@@ -4,7 +4,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_bid_expired, emit_bid_ttl_updated};
-
+pub use crate::types::{Bid, BidStatus};
 // ─── Bid TTL configuration ────────────────────────────────────────────────────
 //
 // TTL is stored in whole days and is admin-configurable within [MIN, MAX].
@@ -42,29 +42,6 @@ pub struct BidTtlConfig {
     /// `true` when the admin has explicitly set a TTL; `false` when the
     /// compile-time default is in use.
     pub is_custom: bool,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum BidStatus {
-    Placed,
-    Withdrawn,
-    Accepted,
-    Expired,
-    Cancelled,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Bid {
-    pub bid_id: BytesN<32>,
-    pub invoice_id: BytesN<32>,
-    pub investor: Address,
-    pub bid_amount: i128,
-    pub expected_return: i128,
-    pub timestamp: u64,
-    pub status: BidStatus,
-    pub expiration_timestamp: u64,
 }
 
 impl Bid {
