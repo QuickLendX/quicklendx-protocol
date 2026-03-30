@@ -990,14 +990,7 @@ fn test_calculate_transaction_fees_platinum_late_payment_preserves_penalty() {
 
     client.initialize_fee_system(&admin);
     update_user_to_tier(&client, &user, crate::fees::VolumeTier::Platinum);
-    client.update_fee_structure(
-        &admin,
-        &FeeType::LatePayment,
-        &100,
-        &50,
-        &10_000,
-        &true,
-    );
+    client.update_fee_structure(&admin, &FeeType::LatePayment, &100, &50, &10_000, &true);
 
     let amount = 10_000_i128;
     let fees = client.calculate_transaction_fees(&user, &amount, &false, &true);
