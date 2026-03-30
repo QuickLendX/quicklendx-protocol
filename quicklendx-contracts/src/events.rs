@@ -7,6 +7,47 @@ use crate::verification::InvestorVerification;
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Symbol};
 
 // ============================================================================
+// Event Emission Security & Retry Prevention
+//
+// ## Overview
+// All event emissions in QuickLendX follow a **state-based idempotency** pattern
+// that prevents duplicate event emission even if a transaction is retried after
+// failure. This is achieved by coupling event emission tightly to stateful
+// operations and state transitions.
+//
+// ## Design Pattern
+// 1. **State Transition Guard**: Events are emitted ONLY after successful state
+//    updates. On retry with unchanged state, upstream guards (e.g., `ensure_payable_status`,
+//    `require_status_not(Previous)`) reject the operation before reaching the
+//    emit function.
+//
+// 2. **Atomic State + Event**: State storage and event emission are not separated;
+//    they occur in immediate succession within the same transaction block.
+//
+// 3. **Timestamp Monotonicity**: All event timestamps come from `env.ledger().timestamp()`,
+//    which is immutable within a transaction and increases monotonically across ledgers.
+//    This ensures events are naturally ordered and detectable as duplicates by off-chain
+//    indexers that track (invoice_id, timestamp) pairs.
+//
+// 4. **No User-Controlled Nonces**: Nonces, if used for deduplication, are derived
+//    from on-chain state (e.g., payment counts), not user input, preventing forged
+//    duplicate prevention.
+//
+// ## Payload Completeness & Validation
+// - All payloads include a timestamp for off-chain ordering and duplicate detection.
+// - Critical identifiers (invoice_id, bid_id, escrow_id) are always included.
+// - Amounts are immutable at the time of state transition (business-rule enforced).
+// - Addresses are authenticated via `require_auth()` and included verbatim (no aliases).
+//
+// ## Security Assumptions
+// ✓ Soroban ledger timestamps are monotonically increasing and tamper-proof.
+// ✓ State transitions (e.g., `Pending -> Verified`) are atomic and durable.
+// ✓ `require_auth()` correctness is delegated to Soroban SDK (thoroughly tested).
+// ✓ Off-chain indexers implement idempotency checks at the (topic, payload) level.
+// ✗ Event emission order across parallel transactions is not guaranteed.
+//   (Impl: Consumers must handle out-of-order events with causality checks.)
+//
+// ============================================================================
 // Canonical Event Topics
 //
 // These compile-time constants define the **immutable** set of event topics
