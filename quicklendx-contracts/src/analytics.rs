@@ -314,42 +314,6 @@ impl AnalyticsCalculator {
         v.min(10000).max(0)
     }
 
-    fn initialize_category_counters(env: &Env) -> Vec<(InvoiceCategory, u32)> {
-        let mut v = Vec::new(env);
-        for c in [
-            InvoiceCategory::Services,
-            InvoiceCategory::Products,
-            InvoiceCategory::Consulting,
-            InvoiceCategory::Manufacturing,
-            InvoiceCategory::Technology,
-            InvoiceCategory::Healthcare,
-            InvoiceCategory::Other,
-        ] {
-            v.push_back((c, 0u32));
-        }
-        v
-    }
-
-    fn increment_category_counter(
-        counters: &mut Vec<(InvoiceCategory, u32)>,
-        category: &InvoiceCategory,
-    ) {
-        let len = counters.len();
-        let mut i: u32 = 0;
-        while i < len {
-            let (cat, count) = counters.get(i).unwrap();
-            if cat == *category {
-                counters.set(i, (cat, count.saturating_add(1)));
-                return;
-            }
-            i += 1;
-        }
-    }
-
-    fn validate_investor_report(_report: &InvestorReport) -> Result<(), QuickLendXError> {
-        Ok(())
-    }
-
     /// Calculate comprehensive platform metrics
     pub fn calculate_platform_metrics(env: &Env) -> Result<PlatformMetrics, QuickLendXError> {
         let current_timestamp = env.ledger().timestamp();
