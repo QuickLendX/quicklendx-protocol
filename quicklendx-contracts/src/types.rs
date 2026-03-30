@@ -417,7 +417,7 @@ impl Invoice {
 
     pub fn add_rating(
         &mut self,
-        env: &Env,
+        _env: &Env,
         rating: u32,
         feedback: String,
         rater: Address,

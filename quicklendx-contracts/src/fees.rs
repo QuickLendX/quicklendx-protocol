@@ -419,7 +419,7 @@ impl FeeManager {
         env: &Env,
         fee_type: &FeeType,
         min_fee: i128,
-        max_fee: i128,
+        _max_fee: i128,
     ) -> Result<(), QuickLendXError> {
         let fee_structures: Vec<FeeStructure> = match env
             .storage()

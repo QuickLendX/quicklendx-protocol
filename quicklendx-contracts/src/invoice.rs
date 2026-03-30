@@ -189,10 +189,10 @@ impl InvoiceStorage {
         categories
     }
 
-    pub fn clear_all(env: &Env) {
-        // Implementation for clearing all invoices - for testing only
-        // This would be dangerous in production
-        env.storage().persistent().remove_all();
+    pub fn clear_all(_env: &Env) {
+        // In Soroban, you cannot clear all storage at once.
+        // Specific keys must be removed individually.
+        // This is intentionally a no-op to avoid undefined behavior.
     }
 
     pub fn get_invoices_by_category_and_status(env: &Env, category: &InvoiceCategory, status: &InvoiceStatus) -> Vec<BytesN<32>> {

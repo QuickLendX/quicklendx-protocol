@@ -373,6 +373,11 @@ impl InvestmentStorage {
         }
         None
     }
+
+    pub fn get_investments_by_investor(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
+        let key = Indexes::investments_by_investor(investor);
+        env.storage().persistent().get(&key).unwrap_or_else(|| Vec::new(env))
+    }
 }
 
 // ---------------------------------------------------------------------------

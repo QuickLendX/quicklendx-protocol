@@ -1101,7 +1101,7 @@ impl QuickLendXContract {
             &investment.investor,
             &provider,
             coverage_percentage,
-            coverage_amount,
+            investment.amount,
             premium,
         );
         emit_insurance_premium_collected(&env, &investment_id, &provider, premium);
