@@ -69,30 +69,28 @@ mod test_types;
 #[cfg(test)]
 mod test_vesting;
 pub mod types;
-pub use crate::types::*;
+use crate::types::*;
 mod verification;
 mod vesting;
-use admin::AdminStorage;
-use bid::BidStorage;
-use defaults::{
+use crate::admin::AdminStorage;
+use crate::bid::BidStorage;
+use crate::defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
-    OverdueScanResult,
 };
-use errors::QuickLendXError;
-use escrow::{
+use crate::errors::QuickLendXError;
+use crate::escrow::{
     accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds,
 };
-use events::{
+use crate::events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_escrow_created,
     emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
     emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
     emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
-use investment::{Investment, InvestmentStatus, InvestmentStorage};
-use types::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceCategory, InsuranceCoverage, PaymentRecord};
-use invoice::InvoiceStorage;
-use payments::{create_escrow, release_escrow, EscrowStorage};
-use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
+use crate::investment::InvestmentStorage;
+use crate::invoice::InvoiceStorage;
+use crate::payments::{create_escrow, release_escrow, EscrowStorage};
+use crate::profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
@@ -1085,8 +1083,14 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        let coverage_amount =
-            investment.add_insurance(provider.clone(), coverage_percentage, premium)?;
+        let insurance = InsuranceCoverage {
+            provider: provider.clone(),
+            coverage_amount: investment.amount,
+            premium_amount: premium,
+            coverage_percentage,
+            active: true,
+        };
+        investment.add_insurance(insurance);
 
         InvestmentStorage::update_investment(&env, &investment);
 
@@ -1814,7 +1818,7 @@ impl QuickLendXContract {
     ) -> Result<bool, QuickLendXError> {
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        Ok(invoice.has_tag(tag))
+        Ok(invoice.has_tag(&env, tag))
     }
 
     // ========================================
@@ -2422,7 +2426,7 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         let ts = env.ledger().timestamp();
-        invoice.add_rating(rating, feedback, rater, ts)?;
+        invoice.add_rating(&env, rating, feedback, rater, ts)?;
         InvoiceStorage::update_invoice(&env, &invoice);
         Ok(())
     }
@@ -2480,8 +2484,8 @@ impl QuickLendXContract {
     }
 
     /// Retrieve a stored business report by ID
-    pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<BusinessReport> {
-        analytics::AnalyticsStorage::get_business_report(&env, &report_id)
+    pub fn get_business_report(env: Env, business: Address, report_id: BytesN<32>) -> Option<BusinessReport> {
+        analytics::AnalyticsStorage::get_business_report(&env, &business, &report_id)
     }
 
     /// Generate an investor report for a specific period

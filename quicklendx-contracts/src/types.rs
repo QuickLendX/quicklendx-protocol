@@ -3,7 +3,7 @@
 //! This module defines all the fundamental types used throughout the contract,
 //! including invoices, bids, investments, and their associated enums and structs.
 
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
 use crate::errors::QuickLendXError;
 
 // ---------------------------------------------------------------------------
@@ -388,9 +388,67 @@ impl Invoice {
         self.due_date.saturating_add(grace_period_seconds)
     }
 
-    pub fn check_and_handle_expiration(&self, _env: &Env, _grace_period: u64) -> Result<(), QuickLendXError> {
-        // Implementation logic...
+    pub fn is_available_for_funding(&self) -> bool {
+        self.status == InvoiceStatus::Verified && self.funded_amount == 0
+    }
+
+    pub fn mark_as_refunded(&mut self, _env: &Env, _actor: Address) {
+        self.status = InvoiceStatus::Refunded;
+    }
+
+    pub fn update_category(&mut self, category: InvoiceCategory) {
+        self.category = category;
+    }
+
+    pub fn get_tags(&self) -> Vec<String> {
+        self.tags.clone()
+    }
+
+    pub fn has_tag(&self, env: &Env, tag: String) -> bool {
+        if let Ok(normalized) = crate::verification::normalize_tag(env, &tag) {
+            for t in self.tags.iter() {
+                if t == normalized {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    pub fn add_rating(
+        &mut self,
+        env: &Env,
+        rating: u32,
+        feedback: String,
+        rater: Address,
+        ts: u64,
+    ) -> Result<(), QuickLendXError> {
+        if rating < 1 || rating > 5 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let new_rating = InvoiceRating {
+            rating,
+            feedback,
+            rated_by: rater,
+            rated_at: ts,
+        };
+
+        self.ratings.push_back(new_rating);
+
+        let mut total = 0u32;
+        for r in self.ratings.iter() {
+            total = total.saturating_add(r.rating);
+        }
+        self.total_ratings = self.ratings.len();
+        self.average_rating = Some(total / self.total_ratings);
+
         Ok(())
+    }
+
+    pub fn check_and_handle_expiration(&self, _env: &Env, _grace_period: u64) -> Result<bool, QuickLendXError> {
+        // Implementation logic...
+        Ok(false)
     }
 
     pub fn metadata(&self) -> Option<InvoiceMetadata> {
@@ -482,5 +540,13 @@ impl Investment {
         } else {
             None
         }
+    }
+
+    pub fn calculate_premium(amount: i128, bps: u32) -> i128 {
+        (amount.saturating_mul(bps as i128)).saturating_div(10000)
+    }
+
+    pub fn add_insurance(&mut self, insurance: InsuranceCoverage) {
+        self.insurance.push_back(insurance);
     }
 }

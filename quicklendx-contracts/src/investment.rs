@@ -1,5 +1,5 @@
-use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec};
-use crate::types::{Investment, InvestmentStatus};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, Vec};
+pub use crate::types::{Investment, InvestmentStatus};
 use crate::errors::QuickLendXError;
 
 impl InvestmentStatus {

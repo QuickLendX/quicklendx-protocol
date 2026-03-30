@@ -1,5 +1,6 @@
 use soroban_sdk::{Env, Address, Vec, BytesN, symbol_short};
-use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
+use crate::types::InvestmentStatus;
+use crate::storage::InvestmentStorage;
 
 /// Maximum number of records returned by paginated query endpoints.
 /// This constant ensures memory usage stays within reasonable bounds.

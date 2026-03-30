@@ -3,7 +3,8 @@
 
 use crate::errors::QuickLendXError;
 use crate::events::{emit_invoice_settled, emit_partial_payment};
-use crate::investment::{InvestmentStatus, InvestmentStorage};
+use crate::types::InvestmentStatus;
+use crate::storage::InvestmentStorage;
 use crate::invoice::InvoiceStorage;
 use crate::types::{Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord};
 // use crate::notifications::NotificationSystem;

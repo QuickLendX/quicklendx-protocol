@@ -3,9 +3,9 @@ use crate::protocol_limits::{
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
 };
 use crate::storage::{DisputeStorage, InvoiceStorage};
-use crate::types::{Dispute, DisputeStatus, InvoiceStatus, Invoice};
+use crate::types::{Dispute, DisputeStatus, InvoiceStatus};
 use crate::errors::QuickLendXError;
-use soroban_sdk::{Address, BytesN, Env, String, Vec};
+use soroban_sdk::{Address, BytesN, Env, String};
 
 pub struct DisputeResolution;
 

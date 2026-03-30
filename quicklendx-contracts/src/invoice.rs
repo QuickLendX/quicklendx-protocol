@@ -1,6 +1,5 @@
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
-pub use crate::types::{Invoice, InvoiceMetadata, InvoiceCategory, InvoiceStatus, Dispute, DisputeStatus};
-use crate::errors::QuickLendXError;
+pub use crate::types::{Invoice, InvoiceMetadata, InvoiceCategory, InvoiceStatus, Dispute};
 
 // ... (Normalize tag function can stay if still needed, but check if it's in verification)
 
@@ -37,6 +36,7 @@ impl InvoiceStorage {
         env.storage().persistent().set(&invoice.id, invoice);
         Self::add_to_status_index(env, &invoice.status, &invoice.id);
         Self::add_to_business_index(env, &invoice.business, &invoice.id);
+        Self::add_category_index(env, &invoice.category, &invoice.id);
     }
 
     pub fn get_invoice(env: &Env, id: &BytesN<32>) -> Option<Invoice> {
@@ -140,5 +140,119 @@ impl InvoiceStorage {
 
     pub fn add_to_status_invoices(env: &Env, status: &InvoiceStatus, id: &BytesN<32>) {
         Self::add_to_status_index(env, status, id);
+    }
+
+    pub fn add_category_index(env: &Env, category: &InvoiceCategory, id: &BytesN<32>) {
+        let key = (symbol_short!("inv_cat"), category.clone());
+        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or_else(|| Vec::new(env));
+        if !ids.iter().any(|existing| &existing == id) {
+            ids.push_back(id.clone());
+            env.storage().persistent().set(&key, &ids);
+        }
+    }
+
+    pub fn remove_category_index(env: &Env, category: &InvoiceCategory, id: &BytesN<32>) {
+        let key = (symbol_short!("inv_cat"), category.clone());
+        if let Some(ids) = env.storage().persistent().get::<_, Vec<BytesN<32>>>(&key) {
+            let mut updated = Vec::new(env);
+            for existing in ids.iter() {
+                if &existing != id {
+                    updated.push_back(existing);
+                }
+            }
+            env.storage().persistent().set(&key, &updated);
+        }
+    }
+
+    pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
+        let key = (symbol_short!("inv_cat"), category.clone());
+        env.storage().persistent().get(&key).unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
+        Self::get_invoices_by_category(env, category).len()
+    }
+
+    pub fn get_invoice_count_by_tag(_env: &Env, _tag: &String) -> u32 {
+        0
+    }
+
+    pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
+        let mut categories = Vec::new(env);
+        categories.push_back(InvoiceCategory::Services);
+        categories.push_back(InvoiceCategory::Products);
+        categories.push_back(InvoiceCategory::Consulting);
+        categories.push_back(InvoiceCategory::Manufacturing);
+        categories.push_back(InvoiceCategory::Technology);
+        categories.push_back(InvoiceCategory::Healthcare);
+        categories.push_back(InvoiceCategory::Other);
+        categories
+    }
+
+    pub fn clear_all(env: &Env) {
+        // Implementation for clearing all invoices - for testing only
+        // This would be dangerous in production
+        env.storage().persistent().remove_all();
+    }
+
+    pub fn get_invoices_by_category_and_status(env: &Env, category: &InvoiceCategory, status: &InvoiceStatus) -> Vec<BytesN<32>> {
+        let category_invoices = Self::get_invoices_by_category(env, category);
+        let status_invoices = Self::get_invoices_by_status(env, status);
+        let mut result = Vec::new(env);
+
+        for cat_id in category_invoices.iter() {
+            if status_invoices.iter().any(|stat_id| stat_id == cat_id) {
+                result.push_back(cat_id);
+            }
+        }
+        result
+    }
+
+    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
+        let mut result = Vec::new(env);
+        for tag in tags.iter() {
+            let tag_invoices = Self::get_invoices_by_tag(env, &tag);
+            for invoice_id in tag_invoices.iter() {
+                if !result.iter().any(|existing| existing == invoice_id) {
+                    result.push_back(invoice_id);
+                }
+            }
+        }
+        result
+    }
+
+    pub fn add_tag_index(env: &Env, tag: &String, id: &BytesN<32>) {
+        let key = (symbol_short!("inv_tag"), tag.clone());
+        let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or_else(|| Vec::new(env));
+        if !ids.iter().any(|existing| existing == *id) {
+            ids.push_back(id.clone());
+            env.storage().persistent().set(&key, &ids);
+        }
+    }
+
+    pub fn remove_tag_index(env: &Env, tag: &String, id: &BytesN<32>) {
+        let key = (symbol_short!("inv_tag"), tag.clone());
+        if let Some(ids) = env.storage().persistent().get::<_, Vec<BytesN<32>>>(&key) {
+            let mut updated = Vec::new(env);
+            for existing in ids.iter() {
+                if existing != *id {
+                    updated.push_back(existing);
+                }
+            }
+            env.storage().persistent().set(&key, &updated);
+        }
+    }
+        let mut cats = Vec::new(env);
+        cats.push_back(InvoiceCategory::Services);
+        cats.push_back(InvoiceCategory::Products);
+        cats.push_back(InvoiceCategory::Consulting);
+        cats.push_back(InvoiceCategory::Manufacturing);
+        cats.push_back(InvoiceCategory::Technology);
+        cats.push_back(InvoiceCategory::Healthcare);
+        cats.push_back(InvoiceCategory::Other);
+        cats
+    }
+
+    pub fn clear_all(_env: &Env) {
     }
 }

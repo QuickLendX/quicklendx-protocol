@@ -1,7 +1,8 @@
-use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Symbol, Vec as SorobanVec};
-use crate::types::{InvoiceCategory, InvoiceStatus, TimePeriod, PlatformMetrics, UserBehaviorMetrics, PerformanceMetrics, BusinessReport};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec as SorobanVec};
+pub use crate::types::{PlatformMetrics, PerformanceMetrics, UserBehaviorMetrics, BusinessReport};
+use crate::types::{InvoiceStatus, TimePeriod};
 use crate::errors::QuickLendXError;
-use crate::storage::{InvestmentStorage, InvoiceStorage};
+use crate::storage::{InvoiceStorage};
 
 pub struct AnalyticsCalculator;
 pub struct AnalyticsStorage;
@@ -17,6 +18,24 @@ impl AnalyticsStorage {
         id_bytes[0..8].copy_from_slice(&timestamp.to_be_bytes());
         id_bytes[8..12].copy_from_slice(&sequence.to_be_bytes());
         BytesN::from_array(env, &id_bytes)
+    }
+
+    pub fn get_platform_metrics(env: &Env) -> Option<PlatformMetrics> {
+        env.storage().persistent().get(&Self::platform_metrics_key())
+    }
+
+    pub fn get_performance_metrics(env: &Env) -> Option<PerformanceMetrics> {
+        env.storage().persistent().get(&symbol_short!("perf_met"))
+    }
+
+    pub fn store_business_report(env: &Env, report: &BusinessReport) {
+        let key = (symbol_short!("bus_rep"), report.business_address.clone(), report.report_id.clone());
+        env.storage().persistent().set(&key, report);
+    }
+
+    pub fn get_business_report(env: &Env, business: &Address, report_id: &BytesN<32>) -> Option<BusinessReport> {
+        let key = (symbol_short!("bus_rep"), business.clone(), report_id.clone());
+        env.storage().persistent().get(&key)
     }
 }
 
