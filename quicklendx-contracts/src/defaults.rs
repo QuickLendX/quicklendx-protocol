@@ -14,6 +14,50 @@ pub const MAX_OVERDUE_SCAN_BATCH_LIMIT: u32 = 100;
 
 const OVERDUE_SCAN_CURSOR_KEY: soroban_sdk::Symbol = symbol_short!("ovd_scan");
 
+/// Storage key for default transition guards.
+/// Format: (symbol_short!("def_guard"), invoice_id) -> bool
+const DEFAULT_TRANSITION_GUARD_KEY: soroban_sdk::Symbol = symbol_short!("def_guard");
+
+/// Transition guard to ensure default transitions are atomic and idempotent.
+/// Tracks whether a default transition has been initiated for a specific invoice.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransitionGuard {
+    /// Whether the default transition has been triggered
+    pub triggered: bool,
+}
+
+/// @notice Checks if a default transition guard exists for the given invoice.
+/// @dev Returns true if the guard is set (transition already attempted), false otherwise.
+/// @param env The contract environment.
+/// @param invoice_id The invoice ID to check.
+/// @return true if default transition has been guarded, false otherwise.
+fn is_default_transition_guarded(env: &Env, invoice_id: &BytesN<32>) -> bool {
+    env.storage()
+        .persistent()
+        .has(&(DEFAULT_TRANSITION_GUARD_KEY, invoice_id))
+}
+
+/// @notice Atomically checks and sets the default transition guard.
+/// @dev This ensures that only one default transition can be initiated per invoice.
+/// If the guard is already set, returns DuplicateDefaultTransition error.
+/// Otherwise, sets the guard and returns Ok(()).
+/// @param env The contract environment.
+/// @param invoice_id The invoice ID to guard.
+/// @return Ok(()) if guard was successfully set, Err(DuplicateDefaultTransition) if already guarded.
+fn check_and_set_default_guard(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+    let key = (DEFAULT_TRANSITION_GUARD_KEY, invoice_id);
+
+    // Check if guard is already set
+    if env.storage().persistent().has(&key) {
+        return Err(QuickLendXError::DuplicateDefaultTransition);
+    }
+
+    // Set the guard atomically
+    env.storage().persistent().set(&key, &true);
+    Ok(())
+}
+
 /// Result metadata returned by the bounded overdue invoice scanner.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -236,11 +280,16 @@ pub fn scan_funded_invoice_expirations(
 /// @notice Applies the default transition after all time and status checks have passed.
 /// @dev This helper does not re-check the grace-period cutoff and must only be reached from
 /// validated call sites such as `mark_invoice_defaulted` or `check_and_handle_expiration`.
+/// The transition guard ensures atomicity and idempotency of default operations.
+/// @security The guard prevents race conditions and duplicate side effects (analytics, state initialization).
 pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+    // Atomically check and set the transition guard to prevent duplicate defaults
+    check_and_set_default_guard(env, invoice_id)?;
+
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    // Check if already defaulted (no double default)
+    // Check if already defaulted (additional safety check)
     if invoice.status == InvoiceStatus::Defaulted {
         return Err(QuickLendXError::InvoiceAlreadyDefaulted);
     }

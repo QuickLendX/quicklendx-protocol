@@ -54,7 +54,8 @@ pub struct Progress {
 /// - @security Requires business-owner authorization for every payment attempt.
 /// - @security Safely bounds applied value to the remaining due amount.
 /// - @security Guards against replayed transaction identifiers per invoice.
-/// - Preserves `total_paid <= amount` even when callers request an overpayment.
+///
+/// Preserves `total_paid <= amount` even when callers request an overpayment.
 pub fn process_partial_payment(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -99,6 +100,7 @@ pub fn process_partial_payment(
 /// - Enforces nonce uniqueness per `(invoice, nonce)` if nonce is non-empty
 ///
 /// # Security
+///
 /// - The payer must be the verified invoice business and must authorize the call.
 /// - Stored payment records always reflect the applied amount, never the requested excess.
 pub fn record_payment(

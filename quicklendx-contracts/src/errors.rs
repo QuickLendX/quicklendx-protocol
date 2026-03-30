@@ -97,6 +97,9 @@ pub enum QuickLendXError {
     EmergencyWithdrawCancelled = 2104,
     EmergencyWithdrawAlreadyExists = 2105,
     EmergencyWithdrawInsufficientBalance = 2106,
+
+    // Transition guards (2200)
+    DuplicateDefaultTransition = 2200,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -177,6 +180,8 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::EmergencyWithdrawCancelled => symbol_short!("EMG_CNL"),
             QuickLendXError::EmergencyWithdrawAlreadyExists => symbol_short!("EMG_EX"),
             QuickLendXError::EmergencyWithdrawInsufficientBalance => symbol_short!("EMG_BAL"),
+            // Transition guards
+            QuickLendXError::DuplicateDefaultTransition => symbol_short!("DUP_DEF"),
         }
     }
 }

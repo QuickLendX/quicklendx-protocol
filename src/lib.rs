@@ -15,7 +15,6 @@
 /// Any computation that would overflow returns `None`; callers must handle
 /// this as an error condition. This eliminates silent wrapping overflow,
 /// underflow, and sign-extension bugs.
-
 pub mod fees;
 pub mod profits;
 pub mod settlement;

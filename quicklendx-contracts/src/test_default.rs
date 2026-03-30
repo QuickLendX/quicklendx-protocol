@@ -877,3 +877,153 @@ fn test_check_overdue_invoices_propagates_grace_period_error() {
     // Should succeed with default protocol config (returns count)
     assert!(result >= 0); // Just verify it returns a value without error
 }
+
+#[test]
+fn test_transition_guard_prevents_duplicate_default() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    let grace_period = 7 * 24 * 60 * 60;
+
+    // Move time past grace period
+    let default_time = invoice.due_date + grace_period + 1;
+    env.ledger().set_timestamp(default_time);
+
+    // First attempt should succeed
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Defaulted
+    );
+
+    // Second attempt should fail with DuplicateDefaultTransition
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, QuickLendXError::DuplicateDefaultTransition);
+}
+
+#[test]
+fn test_transition_guard_persists_across_calls() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    let grace_period = 7 * 24 * 60 * 60;
+
+    // Move time past grace period
+    let default_time = invoice.due_date + grace_period + 1;
+    env.ledger().set_timestamp(default_time);
+
+    // First default should succeed
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Defaulted
+    );
+
+    // Simulate multiple calls - all should fail
+    for _ in 0..3 {
+        let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        let contract_err = err.expect("expected contract error");
+        assert_eq!(contract_err, QuickLendXError::DuplicateDefaultTransition);
+    }
+}
+
+#[test]
+fn test_transition_guard_atomicity_during_partial_failure() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    let grace_period = 7 * 24 * 60 * 60;
+
+    // Move time past grace period
+    let default_time = invoice.due_date + grace_period + 1;
+    env.ledger().set_timestamp(default_time);
+
+    // First attempt should succeed and set the guard
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Defaulted
+    );
+
+    // Even if we try to call handle_default directly, it should fail due to guard
+    let result = env.as_contract(&client.address, || {
+        crate::defaults::handle_default(&env, &invoice_id)
+    });
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err(),
+        QuickLendXError::DuplicateDefaultTransition
+    );
+}
+
+#[test]
+fn test_transition_guard_different_invoices_independent() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 20000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Create two invoices
+    let invoice1_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+    let invoice2_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let grace_period = 7 * 24 * 60 * 60;
+    let default_time = due_date + grace_period + 1;
+    env.ledger().set_timestamp(default_time);
+
+    // Default first invoice
+    client.mark_invoice_defaulted(&invoice1_id, &Some(grace_period));
+    assert_eq!(
+        client.get_invoice(&invoice1_id).status,
+        InvoiceStatus::Defaulted
+    );
+
+    // Second invoice should still be defaultable
+    client.mark_invoice_defaulted(&invoice2_id, &Some(grace_period));
+    assert_eq!(
+        client.get_invoice(&invoice2_id).status,
+        InvoiceStatus::Defaulted
+    );
+
+    // But first invoice still guarded
+    let result = client.try_mark_invoice_defaulted(&invoice1_id, &Some(grace_period));
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, QuickLendXError::DuplicateDefaultTransition);
+}
