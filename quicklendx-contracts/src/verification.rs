@@ -619,28 +619,27 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
         return Err(QuickLendXError::InvalidTag); // Code 1035/1800
     }
 
-    // Convert to bytes for processing
+    // Stack-allocated buffer — no heap allocation needed in no_std context.
     let mut buf = [0u8; 50];
-    tag.copy_into_slice(&mut buf[..tag.len() as usize]);
+    let len = tag.len() as usize;
+    tag.copy_into_slice(&mut buf[..len]);
 
-    let mut normalized_bytes = std::vec::Vec::new();
-    let raw_slice = &buf[..tag.len() as usize];
-
-    for &b in raw_slice.iter() {
-        let lower = if b >= b'A' && b <= b'Z' { b + 32 } else { b };
-        normalized_bytes.push(lower);
+    // ASCII-lowercase in place: A-Z (0x41–0x5A) → a-z (add 0x20).
+    for b in buf[..len].iter_mut() {
+        if *b >= b'A' && *b <= b'Z' {
+            *b += 32;
+        }
     }
 
     let normalized_str = String::from_str(
         env,
-        std::str::from_utf8(&normalized_bytes).map_err(|_| QuickLendXError::InvalidTag)?,
+        core::str::from_utf8(&buf[..len]).map_err(|_| QuickLendXError::InvalidTag)?,
     );
-    let trimmed = normalized_str; // Simplification: in a full implementation, we'd handle leading/trailing whitespace bytes
 
-    if trimmed.len() == 0 {
+    if normalized_str.len() == 0 {
         return Err(QuickLendXError::InvalidTag);
     }
-    Ok(trimmed)
+    Ok(normalized_str)
 }
 
 pub fn validate_bid(
@@ -671,7 +670,6 @@ pub fn validate_bid(
     }
 
     // 4. Protocol limits and bid size validation
-    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
     let _limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
     let min_bid_amount = invoice.amount / 100; // 1% min bid
     if bid_amount < min_bid_amount {
@@ -907,6 +905,7 @@ pub fn verify_invoice_data(
 
 // Enhanced event emission functions for comprehensive audit trail
 fn emit_kyc_submitted(env: &Env, business: &Address) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("kyc_sub"),),
         (
@@ -918,6 +917,7 @@ fn emit_kyc_submitted(env: &Env, business: &Address) {
 }
 
 fn emit_business_verified(env: &Env, business: &Address, admin: &Address) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("bus_ver"),),
         (
@@ -930,6 +930,7 @@ fn emit_business_verified(env: &Env, business: &Address, admin: &Address) {
 }
 
 fn emit_business_rejected(env: &Env, business: &Address, admin: &Address, reason: &String) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("bus_rej"),),
         (
@@ -942,6 +943,7 @@ fn emit_business_rejected(env: &Env, business: &Address, admin: &Address, reason
 }
 
 fn emit_kyc_resubmitted(env: &Env, business: &Address) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("kyc_resub"),),
         (
