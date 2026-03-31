@@ -75,7 +75,7 @@ pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64,
 /// @dev Defaulting is allowed only when `ledger.timestamp() > due_date + resolved_grace_period`.
 /// Calls using a timestamp equal to the grace deadline must fail to avoid early liquidation.
 /// Grace resolution order is: explicit override, protocol config, then `DEFAULT_GRACE_PERIOD`.
-/// 
+///
 /// # Arguments
 /// * `env` - The environment
 /// * `invoice_id` - The invoice ID to mark as defaulted
@@ -115,7 +115,6 @@ pub fn mark_invoice_defaulted(
     // Proceed with default handling
     handle_default(env, invoice_id)
 }
-
 
 /// @notice Returns the funded-invoice scan cursor used by bounded overdue scans.
 /// @dev The cursor is normalized against the current funded-invoice count before use.
