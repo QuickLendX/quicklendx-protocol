@@ -1304,11 +1304,8 @@ impl InvoiceStorage {
                     .instance()
                     .set(&TOTAL_INVOICE_COUNT_KEY, &count);
             }
-<<<<<<< HEAD
-=======
 
             env.storage().instance().remove(invoice_id);
->>>>>>> main
         }
     }
 
