@@ -2,7 +2,54 @@
 
 ## Overview
 
-The Notifications module provides a comprehensive notification system for the QuickLendX protocol, enabling real-time communication between businesses, investors, and the platform. It supports notification creation, delivery tracking, user preferences, and statistics.
+The Notifications module provides a **hardened, idempotent notification system** for the QuickLendX protocol, enabling real-time communication between businesses, investors, and the platform. It supports notification creation, delivery tracking, user preferences, and statistics with guaranteed **no duplicate emission on retries**.
+
+## Architecture: Retry Prevention & Idempotency
+
+### Problem Statement
+Blockchain transactions may be retried due to:
+- Network timeouts
+- Temporary ledger congestion
+- Off-chain service failures (indexers, notification queues)
+
+Without idempotency guarantees, retries would emit duplicate notifications, confusing users and breaking analytics.
+
+### Solution: State-Based Idempotency
+
+All notification emissions follow a **state-transition-based idempotency pattern**:
+
+1. **State Guard**: Every lifecycle operation enforces a precondition check (e.g., `ensure_payable_status`).
+   - On retry with unchanged state, the guard rejects the operation before notification emission.
+   - Example: `settle_invoice` requires `status == Funded`; calling it twice silently rejects the second attempt.
+
+2. **Idempotency Key**: Each notification is tagged with `(invoice_id, notification_type, timestamp)`.
+   - If a retry attempts to create the same notification, the system detects the idempotency marker and returns the stored notification ID instead of creating a duplicate.
+   - Storage key: `DataKey::NotificationEmitted(invoice_id, notification_type, timestamp)`
+
+3. **Atomic State + Event**: Notification storage and event emission are atomic within a single transaction block.
+   - If one fails, the entire transaction fails and can be retried cleanly.
+
+### Payload Completeness & Security Assumptions
+
+All notification payloads include:
+- **Invoice ID**: Links notification to origin event (deduplication key)
+- **Recipient**: Authenticated address (via `require_auth()`)
+- **Notification Type**: Categorizes the event
+- **Priority**: Indicates urgency (Critical, High, Medium, Low)
+- **Timestamp**: `env.ledger().timestamp()` for off-chain ordering and duplicate detection
+
+**Security Assumptions:**
+- ✓ Ledger timestamps are monotonically increasing and tamper-proof
+- ✓ State transitions are atomic and durable
+- ✓ `require_auth()` authentication is Soroban-verified
+- ✓ Off-chain indexers implement (topic, payload) level idempotency checks
+- ✗ Event emission order across parallel transactions is **not** guaranteed (consumers must handle out-of-order events)
+
+---
+
+## Features
+
+- **Multi-type Notifications**: Support for all major lifecycle events (invoice, bid, payment, default, dispute)
 
 ## Features
 
@@ -98,9 +145,202 @@ pub struct NotificationPreferences {
 }
 ```
 
+## Features
+
+- **Hardened Lifecycle Coverage**: Notifications for all major lifecycle events (invoice upload, verification, funding, settlement, default, dispute, payment)
+- **Retry Prevention**: Built-in idempotency prevents duplicate notifications even if transactions are retried
+- **Priority Levels**: Critical, High, Medium, and Low priority tiers for filtering and routing
+- **Delivery Tracking**: Track notification status (Pending, Sent, Delivered, Read, Failed)
+- **User Preferences**: Customizable notification preferences per user (opt-in/opt-out by type and priority)
+- **Statistics**: Comprehensive notification statistics per user (total sent, delivered, read, failed)
+- **Timestamp Ordering**: Ledger-derived timestamps enable deterministic off-chain ordering and deduplication
+- **No Off-Chain Dependencies**: All idempotency logic is contract-side; no external state required
+
+## Security Properties
+
+### Guarantees
+1. **No Duplicate Emission on Retry**: If a transaction is retried before ledger finality, the same notification is not created twice.
+2. **Tamper-Proof Timestamps**: All timestamps are derived from `env.ledger().timestamp()`, which is immutable within a transaction.
+3. **Authentication**: Recipients are verified via `require_auth()` before routing notifications.
+4. **Authorization**: Only lifecycle operations authorized by business rules can trigger notifications.
+5. **Payload Completeness**: All payloads include invoice IDs, timestamps, and recipient addresses for off-chain validation.
+
+### Threat Model & Mitigations
+| Threat | Mitigation |
+|--------|-----------|
+| Duplicate notifications on retry | State-guard prevents operation re-execution; idempotency key prevents DB double-write |
+| Notification to unauthorized recipient | `require_auth()` checks; recipient verified before storage |
+| Out-of-order events | Timestamp ordering in off-chain indexer; causality checks on business logic |
+| Missing notifications | State transition is atomic; failure rolls back entire transaction |
+| Notification DOS flood | User preferences allow opt-out; priority filtering limits noise |
+
+---
+
+## Data Structures
+
+### NotificationType
+
+Defines the type of notification:
+
+```rust
+pub enum NotificationType {
+    InvoiceCreated,        // Business uploads invoice
+    InvoiceVerified,       // Admin verifies invoice
+    InvoiceStatusChanged,  // Invoice transitions state
+    BidReceived,           // Investor places bid
+    BidAccepted,           // Business accepts bid
+    PaymentReceived,       // Payment recorded
+    PaymentOverdue,        // Invoice past due date
+    InvoiceDefaulted,      // Invoice marked as default
+    SystemAlert,           // Admin/system alert
+    General,               // Miscellaneous
+}
+```
+
+### NotificationPriority
+
+Defines the priority level:
+
+```rust
+pub enum NotificationPriority {
+    Critical,  // Requires immediate attention (defaults, critical errors)
+    High,      // Important (bid accepted, settlement complete)
+    Medium,    // Standard (invoice verified, bid received)
+    Low,       // Informational (invoice created)
+}
+```
+
+### NotificationDeliveryStatus
+
+Tracks delivery status:
+
+```rust
+pub enum NotificationDeliveryStatus {
+    Pending,    // Created but not sent to delivery service
+    Sent,       // Sent to off-chain delivery system
+    Delivered,  // Confirmed delivery to recipient
+    Read,       // Read by recipient
+    Failed,     // Delivery failed permanently
+}
+```
+
+### Notification
+
+Core notification structure:
+
+```rust
+pub struct Notification {
+    pub id: BytesN<32>,                    // SHA256-based unique identifier
+    pub notification_type: NotificationType,
+    pub recipient: Address,                 // Verified recipient (require_auth)
+    pub title: String,                      // Max 255 bytes
+    pub message: String,                    // Max 4096 bytes
+    pub priority: NotificationPriority,
+    pub created_at: u64,                    // Ledger timestamp (tamper-proof)
+    pub delivery_status: NotificationDeliveryStatus,
+    pub delivered_at: Option<u64>,          // When delivery service confirmed
+    pub read_at: Option<u64>,               // When recipient read
+    pub related_invoice_id: Option<BytesN<32>>,  // Links to originating event
+    pub metadata: Map<String, String>,      // Extensible metadata
+}
+```
+
+### NotificationPreferences
+
+User notification preferences:
+
+```rust
+pub struct NotificationPreferences {
+    pub user: Address,
+    pub invoice_created: bool,              // Opt-in: invoice upload
+    pub invoice_verified: bool,             // Opt-in: admin verification
+    pub invoice_status_changed: bool,       // Opt-in: state transitions
+    pub bid_received: bool,                 // Opt-in: new bids
+    pub bid_accepted: bool,                 // Opt-in: bid acceptance
+    pub payment_received: bool,             // Opt-in: payment recording
+    pub payment_overdue: bool,              // Opt-in: overdue alerts
+    pub invoice_defaulted: bool,            // Opt-in: default notices
+    pub system_alerts: bool,                // Opt-in: system alerts
+    pub general: bool,                      // Opt-in: miscellaneous
+    pub minimum_priority: NotificationPriority,  // Filter by priority
+    pub updated_at: u64,                    // Last preference change
+}
+```
+
 ### NotificationStats
 
 User notification statistics:
+
+```rust
+pub struct NotificationStats {
+    pub total_sent: u32,       // Total notifications sent
+    pub total_delivered: u32,  // Successfully delivered
+    pub total_read: u32,       // Read by recipient
+    pub total_failed: u32,     // Delivery failures
+}
+```
+
+### Idempotency Key (Internal)
+
+```rust
+pub enum DataKey {
+    // ... other keys ...
+    /// (invoice_id, notification_type, created_at_timestamp)
+    /// Used to detect and prevent duplicate notifications on retry
+    NotificationEmitted(BytesN<32>, NotificationType, u64),
+}
+```
+
+---
+
+## Emission Lifecycle & Retry Prevention
+
+### Full Workflow with Retry Handling
+
+**Example: Invoice Verification Notification**
+
+```
+1. CONTRACT CALL: verify_invoice(invoice_id, admin_auth)
+   ├─ Check: admin authorized → require_auth(admin) ✓
+   ├─ Check: invoice status == Pending → ✓
+   ├─ Action: Update invoice.status to Verified
+   ├─ Action: Emit "inv_ver" event
+   ├─ Action: Call NotificationSystem::notify_invoice_verified
+   │  ├─ Check: user preferences allow notifications → ✓
+   │  ├─ Create Notification { ... created_at: T, related_invoice_id: ID, type: InvoiceVerified }
+   │  ├─ Check: idempotency key (ID, InvoiceVerified, T) not set → ✓
+   │  ├─ Set idempotency marker: DataKey::NotificationEmitted(ID, InvoiceVerified, T) = true
+   │  ├─ Store notification in persistent storage
+   │  └─ Emit "notif" event with notification details
+   └─ TRANSACTION COMMITTED ✓
+
+2. IF TRANSACTION RETRIED (e.g., network timeout):
+   ├─ CONTRACT CALL: verify_invoice(invoice_id, admin_auth)
+   ├─ Check: admin authorized → ✓
+   ├─ Check: invoice status == Pending → ✗ (now Verified from step 1)
+   ├─ Error: InvalidStatus → OPERATION FAILED (rejected before notification re-emission)
+   └─ TRANSACTION FAILED (safe to retry, no duplicate)
+
+   ** Alternative: If precondition check was skipped (bug) **
+   ├─ Notification creation reaches idempotency check
+   ├─ Check: idempotency key (ID, InvoiceVerified, T) is SET → ✓ detected
+   ├─ Return stored notification ID (skip storage & emit)
+   └─ TRANSACTION SUCCEEDS (no duplicate created)
+```
+
+### Idempotency Keys by Event Type
+
+| Event | Key | Duration | Retry Limit |
+|-------|-----|----------|------------|
+| InvoiceVerified | (invoice_id, Verified, timestamp) | Full ledger depth | 1 (state guard) |
+| BidAccepted | (invoice_id, BidAccepted, timestamp) | Full ledger depth | 1 (state guard) |
+| InvoiceSettled | (invoice_id, Settled, timestamp) | Full ledger depth | 1 (state guard) |
+| PaymentReceived | (invoice_id, Payment, timestamp) | Ledger depth | Multi (nonce-based) |
+| InvoiceDefaulted | (invoice_id, Defaulted, timestamp) | Full ledger depth | 1 (state guard) |
+
+---
+
+## Functions
 
 ```rust
 pub struct NotificationStats {

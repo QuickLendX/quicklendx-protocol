@@ -1,0 +1,1 @@
+/home/idealz/Drips-Projects/quicklendx-protocol/target/wasm32-unknown-unknown/release/quicklendx_contracts.wasm: /home/idealz/Drips-Projects/quicklendx-protocol/src/fees.rs /home/idealz/Drips-Projects/quicklendx-protocol/src/lib.rs /home/idealz/Drips-Projects/quicklendx-protocol/src/profits.rs /home/idealz/Drips-Projects/quicklendx-protocol/src/settlement.rs
