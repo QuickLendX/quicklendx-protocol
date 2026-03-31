@@ -2498,6 +2498,8 @@ impl QuickLendXContract {
                 },
             )
         })
+<<<<<<< HEAD
+=======
     }
 
     /// Build and persist a business report for the given period bucket.
@@ -2510,6 +2512,7 @@ impl QuickLendXContract {
             analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)?;
         analytics::AnalyticsStorage::store_business_report(&env, &report);
         Ok(report)
+>>>>>>> main
     }
 
     /// Retrieve a stored business report by ID
