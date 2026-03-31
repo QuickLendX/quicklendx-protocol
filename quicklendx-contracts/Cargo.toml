@@ -4,9 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
+<<<<<<< HEAD
 # Keep an rlib target for integration tests and a cdylib target for contract/WASM builds.
 # For WASM contract build use: cargo build --release --target wasm32-unknown-unknown
 crate-type = ["cdylib", "rlib"]
+=======
+# rlib + cdylib: rlib for integration tests; cdylib for WASM contract build
+# (`cargo build --release --target wasm32-unknown-unknown`).
+crate-type = ["rlib", "cdylib"]
+>>>>>>> main
 
 [dependencies]
 soroban-sdk = { version = "25.1.1", features = ["alloc"] }

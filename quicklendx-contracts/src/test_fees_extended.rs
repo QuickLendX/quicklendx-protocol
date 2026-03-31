@@ -513,12 +513,29 @@ fn test_fee_structures_unchanged_after_rejected_reinit() {
     client.initialize_fee_system(&admin);
 
     // A custom update after first init.
-    client.update_fee_structure(&admin, &crate::fees::FeeType::Platform, &300, &50, &5_000, &true);
-    assert_eq!(client.get_fee_structure(&crate::fees::FeeType::Platform).base_fee_bps, 300);
+    client.update_fee_structure(
+        &admin,
+        &crate::fees::FeeType::Platform,
+        &300,
+        &50,
+        &5_000,
+        &true,
+    );
+    assert_eq!(
+        client
+            .get_fee_structure(&crate::fees::FeeType::Platform)
+            .base_fee_bps,
+        300
+    );
 
     // Re-init attempt is rejected — custom update must be preserved.
     let _ = client.try_initialize_fee_system(&admin);
-    assert_eq!(client.get_fee_structure(&crate::fees::FeeType::Platform).base_fee_bps, 300);
+    assert_eq!(
+        client
+            .get_fee_structure(&crate::fees::FeeType::Platform)
+            .base_fee_bps,
+        300
+    );
 }
 
 /// configure_treasury rejects the contract address as InvalidAddress.
@@ -753,8 +770,8 @@ fn test_fee_structure_valid_bounds_accepted() {
     let result = client.try_update_fee_structure(
         &admin,
         &crate::fees::FeeType::Processing,
-        &200,  // 2% base fee
-        &100,  // min_fee
+        &200,     // 2% base fee
+        &100,     // min_fee
         &100_000, // max_fee (reasonable)
         &true,
     );
@@ -782,7 +799,7 @@ fn test_fee_structure_zero_min_fee_allowed() {
         &admin,
         &crate::fees::FeeType::EarlyPayment,
         &100,
-        &0,  // no minimum fee
+        &0, // no minimum fee
         &50_000,
         &true,
     );
@@ -807,9 +824,9 @@ fn test_fee_structure_zero_min_and_max_allowed() {
     let result = client.try_update_fee_structure(
         &admin,
         &crate::fees::FeeType::EarlyPayment,
-        &0,  // 0% base
-        &0,  // no minimum
-        &0,  // no maximum
+        &0,     // 0% base
+        &0,     // no minimum
+        &0,     // no maximum
         &false, // inactive
     );
 
@@ -874,7 +891,7 @@ fn test_cross_fee_late_payment_higher_min_than_platform() {
         &admin,
         &crate::fees::FeeType::Platform,
         &200,
-        &500,  // Platform min
+        &500, // Platform min
         &100_000,
         &true,
     );
@@ -884,7 +901,7 @@ fn test_cross_fee_late_payment_higher_min_than_platform() {
         &admin,
         &crate::fees::FeeType::LatePayment,
         &300,
-        &100,  // Lower than Platform's 500
+        &100, // Lower than Platform's 500
         &200_000,
         &true,
     );
