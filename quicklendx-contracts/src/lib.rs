@@ -625,7 +625,11 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    /// Cancel an invoice (business only, before funding)
+    /// @notice Cancels an invoice owned by the calling business before funding.
+    /// @param invoice_id The invoice identifier to cancel.
+    /// @dev Only `Pending` and `Verified` invoices can be cancelled. Validation
+    ///      runs before any status-index mutation so rejected cancellations leave
+    ///      invoice query buckets and counts unchanged.
     pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
@@ -637,11 +641,13 @@ impl QuickLendXContract {
         // Enforce KYC: a pending business must not cancel invoices.
         require_business_not_pending(&env, &invoice.business)?;
 
-        // Remove from old status list
-        InvoiceStorage::remove_from_status_invoices(&env, &invoice.status, &invoice_id);
+        let previous_status = invoice.status.clone();
 
-        // Cancel the invoice (only works if Pending or Verified)
+        // Validate and transition before mutating any status indexes.
         invoice.cancel(&env, invoice.business.clone())?;
+
+        // Remove from old status list
+        InvoiceStorage::remove_from_status_invoices(&env, &previous_status, &invoice_id);
 
         // Update storage
         InvoiceStorage::update_invoice(&env, &invoice);

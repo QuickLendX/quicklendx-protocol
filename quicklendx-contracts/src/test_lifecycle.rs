@@ -205,6 +205,68 @@ fn run_kyc_and_bid(
     (invoice_id, bid_id)
 }
 
+#[test]
+fn test_cannot_cancel_after_funding_preserves_lifecycle_indexes() {
+    let (env, client, admin) = make_env();
+    let contract_id = client.address.clone();
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let invoice_amount: i128 = 10_000;
+    let bid_amount: i128 = 9_000;
+    let currency = make_real_token(&env, &contract_id, &business, &investor, 20_000, 15_000);
+
+    let (invoice_id, bid_id) = run_kyc_and_bid(
+        &env,
+        &client,
+        &admin,
+        &business,
+        &investor,
+        &currency,
+        invoice_amount,
+        bid_amount,
+    );
+
+    client.accept_bid_and_fund(&invoice_id, &bid_id).unwrap();
+    assert_counts_invariant(&client);
+
+    let funded_before = client.get_invoice_count_by_status(&InvoiceStatus::Funded);
+    let cancelled_before = client.get_invoice_count_by_status(&InvoiceStatus::Cancelled);
+    assert!(
+        client
+            .get_invoices_by_status(&InvoiceStatus::Funded)
+            .contains(&invoice_id),
+        "Funded invoice should remain queryable before the cancellation attempt"
+    );
+
+    let result = client.try_cancel_invoice(&invoice_id);
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+    assert!(
+        client
+            .get_invoices_by_status(&InvoiceStatus::Funded)
+            .contains(&invoice_id),
+        "Rejected cancellation must leave the invoice in the funded list"
+    );
+    assert!(
+        !client
+            .get_invoices_by_status(&InvoiceStatus::Cancelled)
+            .contains(&invoice_id),
+        "Rejected cancellation must not place the invoice in the cancelled list"
+    );
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Funded),
+        funded_before
+    );
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Cancelled),
+        cancelled_before
+    );
+    assert_counts_invariant(&client);
+}
+
 // ─── test 1: full lifecycle (KYC → bid → fund → settle → rate) ────────────────
 
 /// Full invoice lifecycle:
