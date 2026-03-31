@@ -623,7 +623,7 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
     let mut buf = [0u8; 50];
     tag.copy_into_slice(&mut buf[..tag.len() as usize]);
 
-    let mut normalized_bytes = std::vec::Vec::new();
+    let mut normalized_bytes = alloc::vec::Vec::new();
     let raw_slice = &buf[..tag.len() as usize];
 
     for &b in raw_slice.iter() {
@@ -633,7 +633,7 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
 
     let normalized_str = String::from_str(
         env,
-        std::str::from_utf8(&normalized_bytes).map_err(|_| QuickLendXError::InvalidTag)?,
+        core::str::from_utf8(&normalized_bytes).map_err(|_| QuickLendXError::InvalidTag)?,
     );
     let trimmed = normalized_str; // Simplification: in a full implementation, we'd handle leading/trailing whitespace bytes
 
@@ -671,7 +671,6 @@ pub fn validate_bid(
     }
 
     // 4. Protocol limits and bid size validation
-    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
     let _limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
     let min_bid_amount = invoice.amount / 100; // 1% min bid
     if bid_amount < min_bid_amount {

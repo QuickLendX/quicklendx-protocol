@@ -31,7 +31,7 @@
 //! - `set_treasury()` - Update treasury address
 //! - Currency whitelist management functions
 
-use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY, ADMIN_KEY};
+use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
@@ -301,7 +301,7 @@ impl ProtocolInitializer {
     /// * `Ok(())` if all parameters are valid
     /// * `Err(QuickLendXError)` with specific error for invalid parameters
     fn validate_initialization_params(
-        env: &Env,
+        _env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // VALIDATION: Fee basis points (0% to 10%)

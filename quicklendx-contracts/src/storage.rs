@@ -278,7 +278,7 @@ impl InvoiceStorage {
 
     pub fn remove_from_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_customer(customer_name);
-        let mut ids: Vec<BytesN<32>> = env
+        let ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
             .get(&key)
@@ -307,7 +307,7 @@ impl InvoiceStorage {
 
     pub fn remove_from_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_tax_id(tax_id);
-        let mut ids: Vec<BytesN<32>> = env
+        let ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
             .get(&key)

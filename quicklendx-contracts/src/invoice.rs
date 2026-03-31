@@ -4,7 +4,7 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String,
 use crate::errors::QuickLendXError;
 use crate::protocol_limits::{
     check_string_length, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FEEDBACK_LENGTH,
-    MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
+    MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAX_ID_LENGTH,
     MAX_TRANSACTION_ID_LENGTH,
 };
 
