@@ -615,32 +615,38 @@ impl InvestorVerificationStorage {
 /// Normalizes a tag by trimming whitespace and converting to lowercase.
 /// Enforces length limits of 1-50 characters.
 pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError> {
-    if tag.len() == 0 || tag.len() > 50 {
-        return Err(QuickLendXError::InvalidTag); // Code 1035/1800
-    }
-
-    // Convert to bytes for processing
-    let mut buf = [0u8; 50];
-    tag.copy_into_slice(&mut buf[..tag.len() as usize]);
-
-    let mut normalized_bytes = std::vec::Vec::new();
-    let raw_slice = &buf[..tag.len() as usize];
-
-    for &b in raw_slice.iter() {
-        let lower = if b >= b'A' && b <= b'Z' { b + 32 } else { b };
-        normalized_bytes.push(lower);
-    }
-
-    let normalized_str = String::from_str(
-        env,
-        std::str::from_utf8(&normalized_bytes).map_err(|_| QuickLendXError::InvalidTag)?,
-    );
-    let trimmed = normalized_str; // Simplification: in a full implementation, we'd handle leading/trailing whitespace bytes
-
-    if trimmed.len() == 0 {
+    let len = tag.len() as usize;
+    if len > 50 {
         return Err(QuickLendXError::InvalidTag);
     }
-    Ok(trimmed)
+
+    let mut buf = [0u8; 50];
+    tag.copy_into_slice(&mut buf[..len]);
+
+    let mut start = 0usize;
+    while start < len && buf[start] == b' ' {
+        start += 1;
+    }
+
+    let mut end = len;
+    while end > start && buf[end - 1] == b' ' {
+        end -= 1;
+    }
+
+    if start >= end {
+        return Err(QuickLendXError::InvalidTag);
+    }
+
+    for b in buf[start..end].iter_mut() {
+        if *b >= b'A' && *b <= b'Z' {
+            *b += 32;
+        }
+    }
+
+    let normalized =
+        core::str::from_utf8(&buf[start..end]).map_err(|_| QuickLendXError::InvalidTag)?;
+
+    Ok(String::from_str(env, normalized))
 }
 
 pub fn validate_bid(
