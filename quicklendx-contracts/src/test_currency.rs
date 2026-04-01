@@ -6,7 +6,7 @@
 use super::*;
 use crate::invoice::InvoiceCategory;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::Address as _,
     Address, Env, String, Vec,
 };
 
@@ -235,7 +235,7 @@ fn test_set_currencies_deduplicates() {
 
 #[test]
 fn test_non_admin_cannot_set_currencies() {
-    let (env, client, admin) = setup();
+    let (env, client, _admin) = setup();
     let currency = Address::generate(&env);
     let mut list = Vec::new(&env);
     list.push_back(currency.clone());
@@ -341,11 +341,11 @@ fn test_pagination_offset_saturation() {
     let (env, client, admin) = setup();
     
     // Add exactly 5 currencies for predictable testing
-    let currencies: Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
+    let currencies: std::vec::Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
-    
+
     // Test offset at exact boundary (length)
     let result = client.get_whitelisted_currencies_paged(&5u32, &10u32);
     assert_eq!(result.len(), 0, "offset at exact length should return empty");
@@ -373,7 +373,7 @@ fn test_pagination_limit_saturation() {
     let (env, client, admin) = setup();
     
     // Add exactly 3 currencies
-    let currencies: Vec<Address> = (0..3).map(|_| Address::generate(&env)).collect();
+    let currencies: std::vec::Vec<Address> = (0..3).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
@@ -405,11 +405,11 @@ fn test_pagination_overflow_protection() {
     let (env, client, admin) = setup();
     
     // Add 10 currencies for comprehensive testing
-    let currencies: Vec<Address> = (0..10).map(|_| Address::generate(&env)).collect();
+    let currencies: std::vec::Vec<Address> = (0..10).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
-    
+
     // Test offset + limit overflow (should not panic)
     let result = client.get_whitelisted_currencies_paged(&u32::MAX, &u32::MAX);
     assert_eq!(result.len(), 0, "max offset + max limit should return empty without panic");
@@ -439,7 +439,7 @@ fn test_pagination_consistency_and_ordering() {
     let (env, client, admin) = setup();
     
     // Add currencies in a specific order
-    let currencies: Vec<Address> = (0..7).map(|_| Address::generate(&env)).collect();
+    let currencies: std::vec::Vec<Address> = (0..7).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
@@ -506,11 +506,11 @@ fn test_pagination_after_modifications() {
     let (env, client, admin) = setup();
     
     // Add initial currencies
-    let currencies: Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
+    let currencies: std::vec::Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
-    
+
     // Test pagination before modification
     let page_before = client.get_whitelisted_currencies_paged(&0u32, &3u32);
     assert_eq!(page_before.len(), 3, "should have 3 items before modification");
@@ -545,13 +545,13 @@ fn test_pagination_security_boundaries() {
     let (env, client, admin) = setup();
     
     // Add currencies as admin
-    let currencies: Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
+    let currencies: std::vec::Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
     
     // Test that pagination works for non-admin users (public read access)
-    let non_admin = Address::generate(&env);
+    let _non_admin = Address::generate(&env);
     env.mock_all_auths_allowing_non_root_auth();
     
     // Non-admin should be able to read paginated results
@@ -578,10 +578,10 @@ fn test_pagination_large_dataset_boundaries() {
     
     // Add a larger number of currencies to test performance boundaries
     let large_count = 50u32; // Reasonable size for testing
-    let currencies: Vec<Address> = (0..large_count).map(|_| Address::generate(&env)).collect();
-    
+    let currencies: std::vec::Vec<Address> = (0..large_count).map(|_| Address::generate(&env)).collect();
+
     // Add currencies in batches to test bulk operations
-    let batch_size = 10;
+    let batch_size = 10usize;
     for chunk in currencies.chunks(batch_size) {
         for currency in chunk {
             client.add_currency(&admin, currency);
@@ -629,11 +629,11 @@ fn test_pagination_concurrent_modification_boundaries() {
     let (env, client, admin) = setup();
     
     // Add initial dataset
-    let currencies: Vec<Address> = (0..10).map(|_| Address::generate(&env)).collect();
+    let currencies: std::vec::Vec<Address> = (0..10).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
-    
+
     // Simulate concurrent reads during modifications
     let initial_page = client.get_whitelisted_currencies_paged(&0u32, &5u32);
     assert_eq!(initial_page.len(), 5, "initial page should have 5 items");
@@ -682,7 +682,7 @@ fn test_pagination_address_handling_boundaries() {
     assert_eq!(result.len(), 1, "duplicate adds should result in single entry");
     
     // Test with many unique addresses
-    let unique_currencies: Vec<Address> = (0..15).map(|_| Address::generate(&env)).collect();
+    let unique_currencies: std::vec::Vec<Address> = (0..15).map(|_| Address::generate(&env)).collect();
     for currency in &unique_currencies {
         client.add_currency(&admin, currency);
     }
@@ -714,7 +714,7 @@ fn test_pagination_storage_efficiency() {
     assert_eq!(empty_result.len(), 0, "empty storage should return empty efficiently");
     
     // Add currencies and test storage growth
-    let currencies: Vec<Address> = (0..20).map(|_| Address::generate(&env)).collect();
+    let currencies: std::vec::Vec<Address> = (0..20).map(|_| Address::generate(&env)).collect();
     for (i, currency) in currencies.iter().enumerate() {
         client.add_currency(&admin, currency);
         

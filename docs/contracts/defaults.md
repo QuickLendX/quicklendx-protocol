@@ -2,35 +2,34 @@
 
 ## Overview
 
-The QuickLendX protocol implements configurable default handling for invoices that remain unpaid past their due date. A grace period mechanism gives businesses additional time before an invoice is formally marked as defaulted, protecting all parties while maintaining accountability.
+The QuickLendX protocol implements strict access control and status validation for manual invoice default marking. A configurable grace period mechanism gives businesses additional time before an invoice is formally marked as defaulted, protecting all parties while maintaining accountability.
 
 For the full default handling lifecycle and frontend integration guide, see [default-handling.md](./default-handling.md).
 
-## API Ordering and Overlap
+## Security Model
 
-The protocol exposes two admin-only entry points for defaulting an invoice. Both converge on the same internal state-transition helper (`do_handle_default`) so the outcome — status update, events, insurance processing — is identical and executed **exactly once**.
+### Access Control
 
-| Entry point | Grace-period check | When to use |
-|---|---|---|
-| `mark_invoice_defaulted(id, grace)` | Explicit `Option<u64>` override | Caller wants to supply or override the grace period |
-| `handle_default(id)` | Protocol config / `DEFAULT_GRACE_PERIOD` | Caller wants the protocol-default grace period enforced automatically |
+Manual default marking is **admin-only**:
+- Requires `require_auth` on the configured admin address
+- Non-admin callers receive `NotAdmin` error
+- Authorization is enforced at the contract entry point in `lib.rs`
 
-### No double-accounting guarantee
+### Status Validation
 
-Both entry points check `invoice.status == Defaulted` before making any state change and return `InvoiceAlreadyDefaulted` immediately if the invoice has already been processed. This means:
+Only invoices in **Funded** status can be manually defaulted:
+- Prevents premature default marking on unbacked invoices
+- Ensures investment relationship exists before default processing
+- Returns `InvoiceNotAvailableForFunding` for non-Funded invoices
 
-- Calling `handle_default` after `mark_invoice_defaulted` (or vice-versa) on the same invoice is safe — the second call is a no-op error, not a second state transition.
-- The funded-invoice list, investment status, and emitted events are updated exactly once regardless of which path is taken first.
+### Validation Order
 
-### Ordering invariant
+Manual default marking validates in the following strict order:
 
-```
-mark_invoice_defaulted  ──┐
-                           ├──► do_mark_invoice_defaulted ──► do_handle_default ──► state written once
-handle_default          ──┘
-```
-
-`handle_default` calls `do_mark_invoice_defaulted` (with `grace_period = None`) rather than `do_handle_default` directly, so it enforces the same time guard as `mark_invoice_defaulted`.
+1. **Invoice existence** - Must exist in storage
+2. **Already defaulted** - Prevents double-default (returns `InvoiceAlreadyDefaulted`)
+3. **Funded status** - Only `Funded` invoices eligible (returns `InvoiceNotAvailableForFunding`)
+4. **Grace period expiry** - Current time must exceed deadline (returns `OperationNotAllowed`)
 
 ## Core Functions
 
@@ -45,7 +44,7 @@ Public contract entry point for marking an invoice as defaulted.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `invoice_id` | `BytesN<32>` | The invoice to mark as defaulted |
-| `grace_period` | `Option<u64>` | Grace period override in seconds. If `None`, uses protocol config; falls back to `DEFAULT_GRACE_PERIOD` (7 days). |
+| `grace_period` | `Option<u64>` | Grace period in seconds. Defaults to 7 days (604,800s) if `None` |
 
 **Validation order:**
 
@@ -59,41 +58,74 @@ Public contract entry point for marking an invoice as defaulted.
 
 | Error | Code | Condition |
 |-------|------|-----------|
-| `NotAdmin` | 1005 | Caller is not the configured admin |
+| `NotAdmin` | 1103 | Caller is not the configured admin |
 | `InvoiceNotFound` | 1000 | Invoice ID does not exist |
-| `InvoiceAlreadyDefaulted` | 1049 | Invoice has already been defaulted |
-| `InvoiceNotAvailableForFunding` | 1047 | Invoice is not in `Funded` status |
-| `OperationNotAllowed` | 1009 | Grace period has not yet expired |
+| `InvoiceAlreadyDefaulted` | 1006 | Invoice has already been defaulted |
+| `InvoiceNotAvailableForFunding` | 1001 | Invoice is not in `Funded` status |
+| `OperationNotAllowed` | 1402 | Grace period has not yet expired |
 
 ### `handle_default(invoice_id)`
 
-Admin entry point that applies the default using the protocol-configured grace period.
+Lower-level contract entry point that performs the default without grace period checks. Also requires admin authorization.
 
 **Authorization:** Admin only.
 
-**Grace period:** Resolved from protocol config (`ProtocolInitializer::get_protocol_config`) or `DEFAULT_GRACE_PERIOD` (7 days) when not configured. Equivalent to calling `mark_invoice_defaulted(id, None)`.
-
 **Behavior:**
 
-1. Admin authentication check
-2. Grace-period expiry check (same as `mark_invoice_defaulted`)
-3. Validates invoice exists and is in `Funded` status
-4. Removes invoice from the `Funded` status list
-5. Sets invoice status to `Defaulted`
-6. Adds invoice to the `Defaulted` status list
-7. Emits `invoice_expired` and `invoice_defaulted` events
-8. Updates linked investment status to `Defaulted`
-9. Processes insurance claims if coverage exists
+1. Validates invoice exists and is in `Funded` status
+2. Removes invoice from the `Funded` status list
+3. Sets invoice status to `Defaulted`
+4. Adds invoice to the `Defaulted` status list
+5. Emits `invoice_expired` and `invoice_defaulted` events
+6. Updates linked investment status to `Defaulted`
+7. Processes insurance claims if coverage exists
+8. Sends default notification
+9. Updates investor analytics (failed investment)
+
+### Validation Helper Functions
+
+The module provides granular validation functions for external use:
+
+#### `validate_invoice_for_default(env, invoice_id)`
+
+Validates that an invoice exists and is eligible for default marking.
+
+**Returns:**
+- `Ok(())` if invoice is eligible
+- `Err(InvoiceNotFound)` if not found
+- `Err(InvoiceAlreadyDefaulted)` if already defaulted
+- `Err(InvoiceNotAvailableForFunding)` if not in Funded status
+
+#### `validate_grace_period_expired(env, invoice_id, grace_period)`
+
+Validates that the grace period has expired for an invoice.
+
+**Returns:**
+- `Ok(())` if grace period has expired
+- `Err(OperationNotAllowed)` if grace period has not expired
+
+#### `can_mark_as_defaulted(env, invoice_id, grace_period)`
+
+Read-only helper for UI pre-validation. Combines all checks.
+
+**Returns:**
+- `Ok(true)` if invoice can be defaulted
+- `Err(QuickLendXError)` with specific reason if cannot be defaulted
 
 ## Grace Period
 
 ### Configuration
 
-Grace period resolution order:
+The default grace period is defined in `src/defaults.rs`:
 
-1. `grace_period` argument (per-call override, `mark_invoice_defaulted` only)
+```rust
+pub const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days
+```
+
+Grace period resolution order:
+1. `grace_period` argument (per-call override)
 2. Protocol config (`ProtocolInitializer::get_protocol_config`)
-3. Default of 7 days (604,800 seconds)
+3. `DEFAULT_GRACE_PERIOD` (7 days)
 
 ### Calculation
 
@@ -126,19 +158,41 @@ When an invoice is defaulted:
 - **Status lists** are updated (removed from `Funded`, added to `Defaulted`)
 - **Investment status** is set to `Defaulted`
 - **Insurance claims** are processed automatically if coverage exists
+- **Investor analytics** are updated to reflect the failed investment
 - **Events emitted:** `invoice_expired`, `invoice_defaulted`, and optionally `insurance_claimed`
+- **Notifications** are sent to relevant parties
 
-## Security
+## Security Features
 
-- **Admin-only access:** Both `mark_invoice_defaulted` and `handle_default` require `require_auth` from the configured admin address
-- **No double default:** Attempting to default an already-defaulted invoice returns `InvoiceAlreadyDefaulted` (1049)
-- **Grace period enforcement:** Both entry points enforce `current_timestamp > due_date + grace_period` before any state change
-- **No bypass via `handle_default`:** `handle_default` routes through `do_mark_invoice_defaulted`, not directly to `do_handle_default`, so the time guard cannot be skipped
-- **Overflow protection:** `grace_deadline` uses `saturating_add` to prevent timestamp overflow
+### Admin-Only Access
+
+Both `mark_invoice_defaulted` and `handle_default` require `require_auth` from the configured admin address. This prevents unauthorized parties from triggering defaults.
+
+### No Double Default
+
+Attempting to default an already-defaulted invoice returns `InvoiceAlreadyDefaulted` (1006). This prevents duplicate default processing and ensures idempotent behavior.
+
+### Check Ordering
+
+The defaulted-status check runs before the funded-status check so that double-default attempts receive the correct, specific error.
+
+### Grace Period Enforcement
+
+Invoices cannot be defaulted before `due_date + grace_period` has elapsed. This protects borrowers during the grace period.
+
+### Overflow Protection
+
+`grace_deadline` uses `saturating_add` to prevent timestamp overflow when adding grace period to due date.
+
+### Idempotent Operations
+
+The validation functions can be safely called multiple times without side effects. Only `handle_default` performs state mutations.
 
 ## Test Coverage
 
-Tests are in `src/test_default.rs`:
+Tests are in `src/test_default.rs` and `src/test_errors.rs`:
+
+### Default Tests (`test_default.rs`)
 
 | Test | Description |
 |------|-------------|
@@ -155,15 +209,108 @@ Tests are in `src/test_default.rs`:
 | `test_multiple_invoices_default_handling` | Independent invoices default independently |
 | `test_zero_grace_period_defaults_immediately_after_due_date` | Zero grace allows immediate default after due date |
 | `test_cannot_default_paid_invoice` | Paid invoices cannot be defaulted |
-| `test_handle_default_respects_grace_period` | `handle_default` enforces the same time guard |
-| `test_handle_default_succeeds_after_grace_period` | `handle_default` succeeds once grace elapsed |
-| `test_no_double_accounting_handle_default_then_mark_defaulted` | No double-accounting: `handle_default` → `mark_invoice_defaulted` |
-| `test_no_double_accounting_mark_defaulted_then_handle_default` | No double-accounting: `mark_invoice_defaulted` → `handle_default` |
-| `test_both_paths_produce_identical_state` | Both entry points produce identical final state |
+| `test_mark_default_requires_admin_auth` | Admin authorization is enforced |
+| `test_validate_invoice_for_default_rejects_not_found` | Invalid invoice ID rejected |
+| `test_validate_invoice_for_default_rejects_cancelled` | Cancelled invoices rejected |
+| `test_validate_invoice_for_default_rejects_refunded` | Refunded invoices rejected |
+| `test_grace_period_exactly_one_second_before_deadline` | One second before deadline rejected |
+| `test_grace_period_one_second_after_deadline` | One second after deadline accepted |
+| `test_very_long_grace_period` | Very long grace periods work correctly |
+| `test_double_default_returns_same_error` | Idempotent error for double default |
+| `test_investment_status_transitions_on_default` | Investment status updates correctly |
+| `test_status_lists_updated_atomically` | Status lists transition correctly |
+| `test_grace_period_uses_protocol_config` | Protocol config is honored |
+| `test_per_call_grace_overrides_protocol_config` | Per-call override works |
+
+### Error Tests (`test_errors.rs`)
+
+| Test | Description |
+|------|-------------|
+| `test_manual_default_not_admin_error` | Non-admin returns NotAdmin error |
+| `test_manual_default_invoice_not_found_error` | Invalid ID returns InvoiceNotFound |
+| `test_manual_default_already_defaulted_error` | Double default returns InvoiceAlreadyDefaulted |
+| `test_manual_default_not_funded_error` | Non-funded returns InvoiceNotAvailableForFunding |
+| `test_manual_default_grace_period_not_expired_error` | Early default returns OperationNotAllowed |
+| `test_default_cannot_mark_pending_invoice` | Pending invoices rejected |
+| `test_default_cannot_mark_cancelled_invoice` | Cancelled invoices rejected |
+| `test_default_cannot_mark_paid_invoice` | Paid invoices rejected |
+| `test_default_cannot_mark_refunded_invoice` | Refunded invoices rejected |
+| `test_default_error_codes_are_correct` | Error codes match expected values |
+| `test_no_panic_on_invalid_invoice_in_default` | Invalid IDs return errors, no panics |
 
 Run tests:
 
 ```bash
 cd quicklendx-contracts
 cargo test test_default -- --nocapture
+cargo test test_errors -- --nocapture
 ```
+
+Run with coverage:
+
+```bash
+cargo test -- --nocapture
+```
+
+## Frontend Integration
+
+### Checking if Invoice Can Be Defaulted
+
+```typescript
+async function canMarkAsDefaulted(invoiceId: string): Promise<boolean> {
+  try {
+    const gracePeriod = 7 * 24 * 60 * 60; // 7 days
+    await contract.mark_invoiceDefaulted(invoiceId, gracePeriod);
+    return true;
+  } catch (error) {
+    if (error.code === 1006) { // InvoiceAlreadyDefaulted
+      return false; // Already defaulted
+    }
+    if (error.code === 1402) { // OperationNotAllowed
+      return false; // Grace period not expired
+    }
+    if (error.code === 1001) { // InvoiceNotAvailableForFunding
+      return false; // Not in Funded status
+    }
+    throw error; // Unexpected error
+  }
+}
+```
+
+### Error Handling
+
+```typescript
+try {
+  await contract.markInvoiceDefaulted(invoiceId, gracePeriod);
+} catch (error) {
+  switch (error.code) {
+    case 1103: // NotAdmin
+      console.error("Only admin can mark invoices as defaulted");
+      break;
+    case 1000: // InvoiceNotFound
+      console.error("Invoice does not exist");
+      break;
+    case 1006: // InvoiceAlreadyDefaulted
+      console.error("Invoice is already defaulted");
+      break;
+    case 1001: // InvoiceNotAvailableForFunding
+      console.error("Invoice must be in Funded status");
+      break;
+    case 1402: // OperationNotAllowed
+      console.error("Grace period has not expired");
+      break;
+  }
+}
+```
+
+## Audit Trail
+
+The following events are emitted during default operations:
+
+| Event | Description |
+|-------|-------------|
+| `invoice_expired` | Invoice has passed its due date + grace period |
+| `invoice_defaulted` | Invoice has been marked as defaulted |
+| `insurance_claimed` | Insurance claim processed for defaulted invoice |
+
+These events provide a complete audit trail for compliance and dispute resolution.

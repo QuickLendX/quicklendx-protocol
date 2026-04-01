@@ -15,8 +15,11 @@ Bids on an invoice are ranked by a deterministic algorithm so that businesses ca
 3. **Bid amount** – `bid_amount`  
    If profit and expected return are equal, higher bid amount ranks higher.
 
-4. **Timestamp (first-come)** – `timestamp`  
-   If all of the above are equal, the earlier bid (smaller timestamp) ranks higher.
+4. **Timestamp (recency preference)** – `timestamp`  
+   If all of the above are equal, the newer bid (larger timestamp) ranks higher.
+
+5. **Bid ID (deterministic final tie-breaker)** – `bid_id`  
+   If economics and timestamp are equal, lexicographically larger `bid_id` ranks higher.
 
 Comparison uses saturating arithmetic for profit to avoid overflow. The order is deterministic and does not depend on storage iteration order.
 
@@ -37,8 +40,16 @@ Returns all bids for the invoice that are in `Placed` status, sorted from best t
 - **Consistency**: `get_best_bid(invoice_id)` is equal to the first element of `get_ranked_bids(invoice_id)` when the latter is non-empty.
 - **Determinism**: Same set of bids always produces the same ranking; tie-breaks are fully specified above.
 
+## Regression Guarantees
+
+- Tie scenarios on each ordering layer (profit, expected return, bid amount,
+   timestamp, and bid ID) are covered by dedicated tests.
+- Insertion-order variance tests ensure `get_best_bid` remains identical to the
+   first element of `get_ranked_bids` even when tied bids are written in
+   different storage orders.
+
 ## Security and Testing
 
-- Ranking logic is unit-tested in `test_bid_ranking.rs` (empty list, single bid, multiple bids, equal bids, best-bid selection, non-existent invoice).
+- Ranking logic is unit-tested in `test_bid_ranking.rs` (empty list, single bid, multiple bids, equal bids, tie-layer regressions, best-vs-ranked invariant, non-existent invoice).
 - `compare_bids` uses `saturating_sub` for profit to avoid overflow (see `test_overflow.rs`).
 - No external or mutable state is used for ordering beyond bid fields and ledger timestamp for expiration.
