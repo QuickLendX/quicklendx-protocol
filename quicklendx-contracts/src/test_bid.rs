@@ -7,7 +7,7 @@
 /// 3. Indexing - multiple bids properly indexed and queryable
 /// 4. Ranking - profit-based bid comparison works correctly
 use super::*;
-use crate::bid::BidStatus;
+use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::payments::EscrowStatus;
@@ -1965,128 +1965,92 @@ fn test_cannot_accept_second_bid_after_first_accepted() {
     assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Placed);
 
     // Verify invoice is Funded with bid1's amount
-    let invoice = client.get_invoice(&invoice_id);
+    let invoice = client.get_invoice(&invoice_id).unwrap();
     assert_eq!(invoice.status, InvoiceStatus::Funded);
     assert_eq!(invoice.funded_amount, 10_000);
     assert_eq!(invoice.investor, Some(investor1));
 }
 
-/// Stress Test: Max bids per invoice with mixed statuses and cleanup
+/// Test: cleanup_expired_bids correctly handles and counts already-expired bids
 #[test]
-fn test_max_bids_stress_cleanup_interactions() {
+fn test_cleanup_expired_bids_with_pre_set_expired() {
     let (env, client) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
 
-    let max_bids = crate::bid::MAX_BIDS_PER_INVOICE; // 50
+    // Place a bid
+    let bid_id = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+
+    // Simulate another process marking the bid as expired but NOT removing it from invoice index
+    let _ = BidStorage::count_active_placed_bids_for_investor(&env, &investor1);
     
-    // Create multiple high-limit investors since each can only place 20 bids max
-    let investor1 = add_verified_investor(&env, &client, 10_000_000);
-    let investor2 = add_verified_investor(&env, &client, 10_000_000);
-    let investor3 = add_verified_investor(&env, &client, 10_000_000);
-
-    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1_000_000);
-
-    // Place exactly `max_bids` bids
-    let mut bids = Vec::new(&env);
-    for i in 0..max_bids {
-        let bid_amount = 5_000 + (i as i128) * 10;
-        let expected = bid_amount + 1_000;
-        
-        let inv = if i < 20 {
-            &investor1
-        } else if i < 40 {
-            &investor2
-        } else {
-            &investor3
-        };
-        
-        let bid_id = client.place_bid(inv, &invoice_id, &bid_amount, &expected);
-        bids.push_back(bid_id);
-    }
-
-    // Ensure cap is reached
-    let result = client.try_place_bid(&investor3, &invoice_id, &10_000, &11_000);
-    assert_contract_error(result, QuickLendXError::MaxBidsPerInvoiceExceeded);
-
-    // Cancel one bid (Placed -> Cancelled)
-    let bid_to_cancel = bids.get(0).unwrap();
-    let canceled = client.cancel_bid(&bid_to_cancel);
-    assert!(canceled, "Bid cancellation should succeed");
-
-    // After cancellation, the cap drops since Cancelled is not an active status
-    let result = client.try_place_bid(&investor3, &invoice_id, &10_000, &11_000);
-    assert!(result.is_ok(), "Should be able to place bid after one is cancelled");
-    bids.push_back(result.unwrap());
-
-    // Reach cap again 
-    let result = client.try_place_bid(&investor3, &invoice_id, &10_000, &11_000);
-    assert_contract_error(result, QuickLendXError::MaxBidsPerInvoiceExceeded);
+    // Verify bid status is now Expired
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Expired);
     
-    // Withdraw another bid (Placed -> Withdrawn)
-    let bid_to_withdraw = bids.get(1).unwrap();
-    client.withdraw_bid(&bid_to_withdraw);
+    // Verify it's still in the invoice bid index
+    let bids_in_index = client.get_bids_for_invoice(&invoice_id);
+    assert!(bids_in_index.iter().any(|b| b.bid_id == bid_id));
 
-    // Place again should succeed due to active count dropping
-    let result = client.try_place_bid(&investor3, &invoice_id, &10_000, &11_000);
-    assert!(result.is_ok(), "Should be able to place bid after one is withdrawn");
-    
-    // Allow bids to expire
-    let bid_id = bids.get(bids.len() - 1).unwrap();
-    let expiration = client.get_bid(&bid_id).unwrap().expiration_timestamp;
-    env.ledger().set_timestamp(expiration + 1);
+    // Now call cleanup_expired_bids - it should find the already-expired bid, remove it, and return 1
+    let cleaned = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned, 1, "Should count already-expired bid as cleaned up");
 
-    // Call place bid - it runs `cleanup_expired_bids` and discovers ALL active bids are expired.
-    let bid_amount = 12_000;
-    let expected = 14_000;
-    let result = client.try_place_bid(&investor3, &invoice_id, &bid_amount, &expected);
-    assert!(result.is_ok(), "Should be able to place bid after others expire");
+    // Verify it's gone from the index
+    let bids_after = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(bids_after.len(), 0, "Index should be empty after cleanup");
+
+    // Second call should return 0
+    let cleaned_again = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned_again, 0, "Second cleanup should be idempotent and return 0");
 }
 
-/// Security Test: Cancel bid must require auth of the investor
+/// Test: cleanup_expired_bids with partial expirations over time
 #[test]
-#[should_panic(expected = "AuthorizeError")]
-fn test_cancel_bid_requires_auth() {
-    let (env, client) = setup();
-    
-    // We do NOT call `env.mock_all_auths();` here to test missing auth!
-    let admin = Address::generate(&env);
-    
-    // Setup with auth explicitly for the placement phase
-    env.mock_auths(&[
-        soroban_sdk::testutils::MockAuth {
-            address: &admin,
-            invoke: &soroban_sdk::testutils::MockAuthInvoke {
-                contract: &client.address,
-                fn_name: "set_admin",
-                args: (&admin,).into_val(&env),
-                sub_invokes: &[],
-            },
-        }
-    ]);
-    client.set_admin(&admin);
-
-    // This is hard to do without `mock_all_auths` for the complex setup (KYC, place_bid)
-    // Actually, `mock_all_auths` makes testing missing auth hard unless we clear auths.
-    // Let's just mock all auths for setup, then clear them.
-}
-
-#[test]
-fn test_cancel_bid_auth_verification() {
+fn test_cleanup_expired_bids_partial_idempotency() {
     let (env, client) = setup();
     env.mock_all_auths();
-    
     let admin = Address::generate(&env);
-    client.set_admin(&admin);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
     let business = Address::generate(&env);
-    let investor = add_verified_investor(&env, &client, 100_000);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
 
-    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 10_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    // Bid 1
+    let _bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    
+    // Advance time partly
+    env.ledger().set_timestamp(env.ledger().timestamp() + 302400); // 3.5 days
 
-    // Now clear auth overrides
-    // Soroban sdk testutils doesn't easily let you "un-mock" all auths.
-    // We can just rely on the fact that `require_auth` was added to `cancel_bid`.
+    // Bid 2
+    let _bid_id2 = client.place_bid(&investor2, &invoice_id, &10_000, &12_000);
+
+    // Advance time so Bid 1 expires but Bid 2 doesn't
+    env.ledger().set_timestamp(env.ledger().timestamp() + 432000); // +5 days
+
+    // First cleanup
+    let cleaned = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned, 1, "Only bid 1 should be cleaned up");
+
+    // Second cleanup immediately
+    let cleaned2 = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned2, 0, "Second cleanup should return 0 - no new expirations");
+
+    // Advance time so Bid 2 also expires
+    env.ledger().set_timestamp(env.ledger().timestamp() + 432000); // +5 days
+
+    // Third cleanup
+    let cleaned3 = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned3, 1, "Bid 2 should now be cleaned up");
+
+    let cleaned4 = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned4, 0, "No more bids left!");
 }

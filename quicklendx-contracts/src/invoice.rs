@@ -568,6 +568,60 @@ impl Invoice {
         self.status = InvoiceStatus::Defaulted;
     }
 
+    /// Apply an admin-authorized status override used for recovery, backfills, and tests.
+    ///
+    /// The admin pathway is intentionally narrower than arbitrary mutation: only
+    /// lifecycle statuses that already have index/event support can be targeted.
+    /// The normal user-facing settlement and funding flows should still use
+    /// `accept_bid`, `settle_invoice`, and default handling entrypoints.
+    ///
+    /// # Errors
+    /// Returns [`QuickLendXError::InvalidStatus`] when the requested target status
+    /// is unsupported or when the invoice is already terminal (`Cancelled` or `Refunded`).
+    pub fn apply_admin_status_update(
+        &mut self,
+        env: &Env,
+        admin: &Address,
+        new_status: &InvoiceStatus,
+    ) -> Result<(), QuickLendXError> {
+        if matches!(
+            self.status,
+            InvoiceStatus::Cancelled | InvoiceStatus::Refunded
+        ) {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+
+        match new_status {
+            InvoiceStatus::Verified => {
+                if self.status != InvoiceStatus::Pending {
+                    return Err(QuickLendXError::InvalidStatus);
+                }
+                self.verify(env, admin.clone());
+            }
+            InvoiceStatus::Funded => {
+                if self.status != InvoiceStatus::Verified {
+                    return Err(QuickLendXError::InvalidStatus);
+                }
+                self.mark_as_funded(env, admin.clone(), self.amount, env.ledger().timestamp());
+            }
+            InvoiceStatus::Paid => {
+                if self.status != InvoiceStatus::Funded {
+                    return Err(QuickLendXError::InvalidStatus);
+                }
+                self.mark_as_paid(env, admin.clone(), env.ledger().timestamp());
+            }
+            InvoiceStatus::Defaulted => {
+                if self.status != InvoiceStatus::Funded {
+                    return Err(QuickLendXError::InvalidStatus);
+                }
+                self.mark_as_defaulted();
+            }
+            _ => return Err(QuickLendXError::InvalidStatus),
+        }
+
+        Ok(())
+    }
+
     /// Cancel the invoice (only if Pending or Verified, not Funded)
     pub fn cancel(&mut self, env: &Env, actor: Address) -> Result<(), QuickLendXError> {
         // Can only cancel if Pending or Verified (not yet funded)
@@ -799,8 +853,28 @@ impl InvoiceStorage {
         (symbol_short!("cat_idx"), category.clone())
     }
 
+    fn metadata_customer_key(customer_name: &String) -> (soroban_sdk::Symbol, String) {
+        (symbol_short!("md_cust"), customer_name.clone())
+    }
+
+    fn metadata_tax_key(tax_id: &String) -> (soroban_sdk::Symbol, String) {
+        (symbol_short!("md_tax"), tax_id.clone())
+    }
+
     fn tag_key(tag: &String) -> (soroban_sdk::Symbol, String) {
         (symbol_short!("tag_idx"), tag.clone())
+    }
+
+    pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
+        let mut categories = Vec::new(env);
+        categories.push_back(InvoiceCategory::Services);
+        categories.push_back(InvoiceCategory::Products);
+        categories.push_back(InvoiceCategory::Consulting);
+        categories.push_back(InvoiceCategory::Manufacturing);
+        categories.push_back(InvoiceCategory::Technology);
+        categories.push_back(InvoiceCategory::Healthcare);
+        categories.push_back(InvoiceCategory::Other);
+        categories
     }
 
     /// @notice Adds an invoice to the category index.
@@ -1003,6 +1077,89 @@ impl InvoiceStorage {
             .unwrap_or_else(|| Vec::new(env))
     }
 
+    pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
+        env.storage()
+            .instance()
+            .get(&Self::category_key(category))
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn get_invoices_by_category_and_status(
+        env: &Env,
+        category: &InvoiceCategory,
+        status: &InvoiceStatus,
+    ) -> Vec<BytesN<32>> {
+        let category_invoices = Self::get_invoices_by_category(env, category);
+        let mut filtered = Vec::new(env);
+        for invoice_id in category_invoices.iter() {
+            if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
+                if invoice.status == *status {
+                    filtered.push_back(invoice_id);
+                }
+            }
+        }
+        filtered
+    }
+
+    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
+        let normalized = match normalize_tag(env, tag) {
+            Ok(tag) => tag,
+            Err(_) => return Vec::new(env),
+        };
+        env.storage()
+            .instance()
+            .get(&Self::tag_key(&normalized))
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
+        if tags.len() == 0 {
+            return Vec::new(env);
+        }
+
+        let mut iter = tags.iter();
+        let Some(first_tag) = iter.next() else {
+            return Vec::new(env);
+        };
+
+        let mut result = Self::get_invoices_by_tag(env, &first_tag);
+        for tag in iter {
+            let tag_matches = Self::get_invoices_by_tag(env, &tag);
+            let mut filtered = Vec::new(env);
+            for invoice_id in result.iter() {
+                if tag_matches.contains(&invoice_id) {
+                    filtered.push_back(invoice_id);
+                }
+            }
+            result = filtered;
+            if result.len() == 0 {
+                break;
+            }
+        }
+
+        result
+    }
+
+    pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
+        Self::get_invoices_by_category(env, category).len()
+    }
+
+    pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
+        Self::get_invoices_by_tag(env, tag).len()
+    }
+
+    pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
+        let mut categories = Vec::new(env);
+        categories.push_back(InvoiceCategory::Services);
+        categories.push_back(InvoiceCategory::Products);
+        categories.push_back(InvoiceCategory::Consulting);
+        categories.push_back(InvoiceCategory::Manufacturing);
+        categories.push_back(InvoiceCategory::Technology);
+        categories.push_back(InvoiceCategory::Healthcare);
+        categories.push_back(InvoiceCategory::Other);
+        categories
+    }
+
     /// Add invoice to business invoices list
     fn add_to_business_invoices(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
         let key = (symbol_short!("business"), business.clone());
@@ -1057,108 +1214,6 @@ impl InvoiceStorage {
         env.storage().instance().set(&key, &new_invoices);
     }
 
-    fn metadata_customer_key(name: &String) -> (soroban_sdk::Symbol, String) {
-        (symbol_short!("icust"), name.clone())
-    }
-
-    fn metadata_tax_key(tax_id: &String) -> (soroban_sdk::Symbol, String) {
-        (symbol_short!("itax"), tax_id.clone())
-    }
-
-    pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
-        let key = Self::category_key(category);
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
-    }
-
-    pub fn get_invoices_by_category_and_status(
-        env: &Env,
-        category: &InvoiceCategory,
-        status: &InvoiceStatus,
-    ) -> Vec<BytesN<32>> {
-        let cat = Self::get_invoices_by_category(env, category);
-        let st = Self::get_invoices_by_status(env, status);
-        let mut out = Vec::new(env);
-        for id in cat.iter() {
-            for sid in st.iter() {
-                if id == sid {
-                    out.push_back(id);
-                    break;
-                }
-            }
-        }
-        out
-    }
-
-    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
-        let key = Self::tag_key(tag);
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
-    }
-
-    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
-        if tags.len() == 0 {
-            return Vec::new(env);
-        }
-        let first = Self::get_invoices_by_tag(env, &tags.get(0).unwrap());
-        if tags.len() == 1 {
-            return first;
-        }
-        let mut out = Vec::new(env);
-        for id in first.iter() {
-            let mut in_all = true;
-            let mut ti: u32 = 1;
-            while ti < tags.len() {
-                let t = tags.get(ti).unwrap();
-                let bucket = Self::get_invoices_by_tag(env, &t);
-                let mut found = false;
-                for bid in bucket.iter() {
-                    if bid == id {
-                        found = true;
-                        break;
-                    }
-                }
-                if !found {
-                    in_all = false;
-                    break;
-                }
-                ti += 1;
-            }
-            if in_all {
-                out.push_back(id);
-            }
-        }
-        out
-    }
-
-    pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
-        Self::get_invoices_by_category(env, category).len() as u32
-    }
-
-    pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
-        Self::get_invoices_by_tag(env, tag).len() as u32
-    }
-
-    pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
-        let mut v = Vec::new(env);
-        for c in [
-            InvoiceCategory::Services,
-            InvoiceCategory::Products,
-            InvoiceCategory::Consulting,
-            InvoiceCategory::Manufacturing,
-            InvoiceCategory::Technology,
-            InvoiceCategory::Healthcare,
-            InvoiceCategory::Other,
-        ] {
-            v.push_back(c);
-        }
-        v
-    }
-
     /// Get invoices with ratings above a threshold
     pub fn get_invoices_with_rating_above(env: &Env, threshold: u32) -> Vec<BytesN<32>> {
         let mut high_rated_invoices = vec![env];
@@ -1179,6 +1234,20 @@ impl InvoiceStorage {
         high_rated_invoices
     }
 
+    /// Count invoices that have received at least one rating.
+    pub fn get_invoices_with_ratings_count(env: &Env) -> u32 {
+        let mut count = 0u32;
+        for status in [InvoiceStatus::Funded, InvoiceStatus::Paid].iter() {
+            for invoice_id in Self::get_invoices_by_status(env, status).iter() {
+                if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
+                    if invoice.total_ratings > 0 {
+                        count = count.saturating_add(1);
+                    }
+                }
+            }
+        }
+        count
+    }
     fn add_to_metadata_index(
         env: &Env,
         key: &(soroban_sdk::Symbol, String),
