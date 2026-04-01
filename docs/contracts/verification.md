@@ -1,276 +1,204 @@
-# Verification System
+# verification.rs — Centralized Verification Guard System
 
-The QuickLendX verification module (`verification.rs`) provides KYC and compliance infrastructure for both businesses and investors. This document covers the investor verification flow, investment limits, risk assessment, and integration with the bidding system.
+## Overview
 
-> For business KYC specifically, see [business-kyc.md](./business-kyc.md).  
-> For detailed investor tier/limit mechanics, see [investor-kyc.md](./investor-kyc.md).
+`verification.rs` provides the **single source of truth** for actor verification
+enforcement across the QuickLendX protocol. Every restricted finance action
+(invoice upload, bid placement, settlement initiation, escrow release) must pass
+through a guard function in this module before execution.
 
-## Architecture Overview
+The module is **pure Rust** with no blockchain dependencies, making it fully
+testable and portable across environments.
+
+### Design Philosophy
+
+- **Deny-by-default** — every guard returns `Err` unless the actor is explicitly
+  `Verified`. Pending, Rejected, and unknown (no KYC record) actors are all
+  blocked.
+- **Checked arithmetic** — investment limit calculations use `checked_*`
+  operations; overflow returns `None` or `GuardError::ArithmeticOverflow`.
+- **Typed errors** — callers receive a `GuardError` or `TransitionError`
+  explaining *why* the action was denied, enabling precise audit trails.
+- **Exhaustive state transitions** — a 3x3 transition matrix is fully validated;
+  only 3 of 9 possible transitions are allowed.
+
+## KYC Verification Status
+
+Both business and investor actors share the same status enum:
 
 ```
-┌─────────────┐     submit_investor_kyc     ┌────────────────────────────┐
-│   Investor   │ ─────────────────────────▶  │  InvestorVerificationStorage│
-└─────────────┘                              │   status: Pending           │
-                                             └────────────┬───────────────┘
-                                                          │
-                          ┌───────────────────────────────┴───────────────────┐
-                          ▼                                                   ▼
-                   verify_investor                                   reject_investor
-                   ┌──────────────┐                                ┌──────────────┐
-                   │ risk_score   │                                │ status:      │
-                   │ tier         │                                │  Rejected    │
-                   │ risk_level   │                                │ reason: ...  │
-                   │ limit calc   │                                └──────────────┘
-                   │ status:      │
-                   │  Verified    │
-                   └──────┬───────┘
-                          │
-                          ▼
-                     place_bid
-                  ┌──────────────┐
-                  │ check status │
-                  │ check limit  │
-                  │ validate_bid │
-                  └──────────────┘
+VerificationStatus { Pending, Verified, Rejected }
 ```
 
-## Data Structures
+| Status   | Meaning                                | Restricted Actions |
+|----------|----------------------------------------|--------------------|
+| Pending  | KYC submitted, awaiting admin review   | Blocked            |
+| Verified | Admin-approved                         | Allowed            |
+| Rejected | Admin-rejected, must resubmit          | Blocked            |
+| *(none)* | No KYC record exists                   | Blocked            |
 
-### InvestorVerification
+## Guard Functions
 
-Complete on-chain record for each investor.
+### Business Guards
 
-```rust
-pub struct InvestorVerification {
-    pub investor: Address,
-    pub status: BusinessVerificationStatus,   // Pending | Verified | Rejected
-    pub verified_at: Option<u64>,
-    pub verified_by: Option<Address>,
-    pub kyc_data: String,
-    pub investment_limit: i128,
-    pub submitted_at: u64,
-    pub tier: InvestorTier,                    // Basic | Silver | Gold | Platinum | VIP
-    pub risk_level: InvestorRiskLevel,         // Low | Medium | High | VeryHigh
-    pub risk_score: u32,                       // 0-100
-    pub total_invested: i128,
-    pub total_returns: i128,
-    pub successful_investments: u32,
-    pub defaulted_investments: u32,
-    pub last_activity: u64,
-    pub rejection_reason: Option<String>,
-    pub compliance_notes: Option<String>,
+| Guard                        | Action Protected       | Required Status |
+|------------------------------|------------------------|-----------------|
+| `guard_invoice_upload`       | Upload new invoice     | Verified        |
+| `guard_settlement_initiation`| Initiate settlement    | Verified        |
+| `guard_escrow_release`       | Release escrowed funds | Verified        |
+
+All three delegate to `guard_business_action(status)` which enforces:
+
+```
+match status {
+    None         => Err(NotSubmitted)
+    Pending      => Err(VerificationPending)
+    Rejected     => Err(VerificationRejected)
+    Verified     => Ok(())
 }
 ```
 
-### Storage Keys
+### Investor Guards
 
-| Key Pattern | Description |
-|---|---|
-| `InvVer:{address}` | Individual investor verification record |
-| `PendInv` | List of pending investor addresses |
-| `VerInv` | List of verified investor addresses |
-| `RejInv` | List of rejected investor addresses |
-| `TierInv:{tier}` | List of investors by tier |
-| `RiskInv:{level}` | List of investors by risk level |
+| Guard                     | Action Protected   | Required Status | Extra Checks          |
+|---------------------------|--------------------|-----------------|-----------------------|
+| `guard_bid_placement`     | Place a bid        | Verified        | amount <= limit + cap |
+| `guard_investment_action` | Generic investment | Verified        | amount <= limit + cap |
 
-## Investor KYC Lifecycle
+Investor guards perform a 5-step check sequence:
 
-### 1. Submission — `submit_investor_kyc`
+1. **Verification status** — must be `Verified`
+2. **Zero-amount** — amount must be > 0
+3. **Effective limit** — `base_limit * tier_multiplier * risk_bps / 10_000`
+4. **Limit check** — `amount <= effective_limit`
+5. **Per-investment risk cap** — `amount <= cap` (if applicable)
 
-```rust
-pub fn submit_investor_kyc(env: Env, investor: Address, kyc_data: String)
-    -> Result<(), QuickLendXError>
-```
+Error priority follows this order: status errors are returned before amount errors.
 
-- Requires `investor.require_auth()`
-- Validates `kyc_data` length ≤ `MAX_KYC_DATA_LENGTH`
-- **Allowed transitions**: None → Pending, Rejected → Pending
-- **Blocked if**: status is `Pending` or `Verified`
-- Defaults: `tier = Basic`, `risk_level = High`, `risk_score = 100`
+## State Transition Rules
 
-### 2. Verification — `verify_investor`
+### Allowed Transitions
 
-```rust
-pub fn verify_investor(env: Env, investor: Address, investment_limit: i128)
-    -> Result<InvestorVerification, QuickLendXError>
-```
+| From     | To       | Trigger              |
+|----------|----------|----------------------|
+| Pending  | Verified | Admin approves KYC   |
+| Pending  | Rejected | Admin rejects KYC    |
+| Rejected | Pending  | Actor resubmits KYC  |
 
-- Requires `admin.require_auth()` and admin identity check
-- `investment_limit` must be > 0
-- Computes `risk_score` → `tier` → `risk_level` → `investment_limit`
-- Moves investor from pending list to verified list
-- Adds investor to the appropriate tier and risk-level lists
+### Blocked Transitions
 
-### 3. Rejection — `reject_investor`
+| From     | To       | Error              | Reason                        |
+|----------|----------|--------------------|-------------------------------|
+| Verified | *any*    | `AlreadyVerified`  | Verified is a terminal state  |
+| Pending  | Pending  | `AlreadyPending`   | Duplicate submission          |
+| Rejected | Verified | `InvalidTransition` | Must go through Pending first |
+| Rejected | Rejected | `InvalidTransition` | No-op is not allowed          |
 
-```rust
-pub fn reject_investor(env: Env, admin: Address, investor: Address, reason: String)
-    -> Result<(), QuickLendXError>
-```
+### Rejection Workflow
 
-- Requires `admin.require_auth()`
-- Sets status to `Rejected` with reason string
-- Moves investor from pending list to rejected list
-- Investor may resubmit KYC after rejection
+`validate_rejection_reason(reason)`:
+- Reason must be non-empty
+- Reason must not exceed `MAX_REJECTION_REASON_LENGTH` (512 bytes)
+- On resubmission (Rejected -> Pending), the reason is cleared
 
-### 4. Limit Update — `set_investment_limit`
+`validate_kyc_data(data)`:
+- KYC payload must be non-empty
+- Must not exceed `MAX_KYC_DATA_LENGTH` (4,096 bytes)
 
-```rust
-pub fn set_investment_limit(env: Env, admin: Address, investor: Address, new_limit: i128)
-    -> Result<(), QuickLendXError>
-```
+## Investor Tier System
 
-- Admin-only operation to adjust a verified investor's limit
-- Recalculates using tier and risk multipliers
-- Preserves admin-approved baseline and applies dynamic multipliers deterministically
+Tiers are computed from the investor's track record via `compute_tier()`:
 
-## Risk Assessment
+| Tier     | Multiplier | Required Invested | Required Successful |
+|----------|-----------|-------------------|---------------------|
+| Basic    | 1x        | —                 | —                   |
+| Silver   | 2x        | > 10,000          | > 3                 |
+| Gold     | 3x        | > 100,000         | > 10                |
+| Platinum | 5x        | > 1,000,000       | > 20                |
+| VIP      | 10x       | > 5,000,000       | > 50                |
 
-### Risk Score Calculation (`calculate_investor_risk_score`)
+Both thresholds (invested amount AND successful investment count) must be met.
 
-| Factor | Score Impact |
-|---|---|
-| KYC data < 100 chars | +30 (incomplete KYC) |
-| KYC data 100-499 chars | +20 (moderate) |
-| KYC data ≥ 500 chars | +10 (comprehensive) |
-| Default rate (% of total) | + default_rate |
-| Total invested > 1M | -20 |
-| Total invested > 100K | -10 |
+## Risk Level System
 
-Score is capped at 100.
+Risk levels are derived from a 0-100 score via `risk_level_from_score()`:
 
-### Tier Determination (`determine_investor_tier`)
+| Risk Level | Score Range | Limit Multiplier | Per-Investment Cap |
+|------------|-------------|-------------------|--------------------|
+| Low        | 0–25        | 100%              | None               |
+| Medium     | 26–50       | 75%               | None               |
+| High       | 51–75       | 50%               | 50,000             |
+| VeryHigh   | 76–100      | 25%               | 10,000             |
 
-| Tier | Risk Score | Total Invested | Successful Investments |
-|---|---|---|---|
-| VIP | ≤ 10 | > $5M | > 50 |
-| Platinum | ≤ 20 | > $1M | > 20 |
-| Gold | ≤ 40 | > $100K | > 10 |
-| Silver | ≤ 60 | > $10K | > 3 |
-| Basic | Any | Any | Any |
-
-### Risk Level Mapping (`determine_risk_level`)
-
-| Risk Score | Risk Level |
-|---|---|
-| 0–25 | Low |
-| 26–50 | Medium |
-| 51–75 | High |
-| 76–100 | VeryHigh |
-
-### Limit Calculation (`calculate_investment_limit`)
+## Effective Limit Formula
 
 ```
-final_limit = base_limit × tier_multiplier × risk_multiplier / 100
+effective_limit = base_limit * tier_multiplier * risk_multiplier_bps / BPS_DENOMINATOR
 ```
 
-| Tier | Multiplier |   | Risk Level | Multiplier |
-|---|---|---|---|---|
-| VIP | 10× |   | Low | 100% |
-| Platinum | 5× |   | Medium | 75% |
-| Gold | 3× |   | High | 50% |
-| Silver | 2× |   | VeryHigh | 25% |
-| Basic | 1× |   | | |
-
-`base_limit` is normalized to non-negative values before multiplier application.
-
-### Analytics Recalculation Safety
-
-When `update_investor_analytics` runs after settlement/default updates, it:
-
-- updates totals and success/default counters,
-- recalculates `risk_score`, `risk_level`, and `tier`,
-- **recovers the previously approved baseline limit** from the current derived limit,
-- reapplies multipliers using the updated profile.
-
-This prevents unintended resets to hardcoded limits during analytics refresh.
-
-## Bid Enforcement
-
-### In `place_bid` (lib.rs)
-
-The `place_bid` function enforces investor verification before any bid is accepted:
-
-1. Retrieves `InvestorVerification` — fails with `BusinessNotVerified` if none
-2. Checks `status`:
-   - `Verified` → proceeds; enforces `validate_investor_investment` (limit + risk caps)
-   - `Pending` → returns `KYCAlreadyPending`
-   - `Rejected` → returns `BusinessNotVerified`
-3. Calls `validate_bid` → `validate_investor_investment` for risk-level caps
-
-### In `validate_investor_investment` (verification.rs)
-
-Additional risk-level hard caps enforced independently of calculated limits:
-
-| Risk Level | Maximum per Investment |
-|---|---|
-| VeryHigh | $10,000 |
-| High | $50,000 |
-| Medium / Low | Up to calculated limit |
-
-## Query Functions
-
-### Status Lists
-
-```rust
-fn get_verified_investors(env: Env) -> Vec<Address>
-fn get_pending_investors(env: Env) -> Vec<Address>
-fn get_rejected_investors(env: Env) -> Vec<Address>
+Example: Gold tier, Medium risk, base_limit = 100,000:
+```
+100,000 * 3 * 7,500 / 10,000 = 225,000
 ```
 
-### By Tier and Risk Level
+## Security Assumptions and Controls
 
-```rust
-fn get_investors_by_tier(env: Env, tier: InvestorTier) -> Vec<Address>
-fn get_investors_by_risk_level(env: Env, risk_level: InvestorRiskLevel) -> Vec<Address>
-```
+1. **Deny-by-default**: Every non-Verified status is blocked. There is no
+   implicit trust — actors must be explicitly approved by an admin.
 
-### Individual Investor
+2. **Terminal Verified state**: Once verified, an actor cannot be reverted to
+   Pending or Rejected. This prevents social-engineering attacks where a
+   verified actor's status is downgraded and then re-verified with different
+   KYC data.
 
-```rust
-fn get_investor_verification(env: Env, investor: Address) -> Option<InvestorVerification>
-fn is_investor_verified(env: Env, investor: Address) -> bool
-fn get_investor_analytics(env: Env, investor: Address) -> Result<InvestorVerification, QuickLendXError>
-```
+3. **Checked arithmetic**: All limit computations use `checked_mul` and
+   `checked_div`. Overflow returns `ArithmeticOverflow` rather than wrapping
+   or panicking.
 
-## Analytics Tracking
+4. **Input size limits**: Rejection reasons (512B) and KYC payloads (4,096B)
+   are capped to prevent storage abuse.
 
-`update_investor_analytics` is called after investment settlement and default handling to update:
-- `total_invested`, `total_returns`
-- `successful_investments` / `defaulted_investments`
-- `last_activity` timestamp
+5. **Error ordering**: Status checks execute before amount checks. This ensures
+   unverified actors cannot probe investment limits.
 
-These fields feed back into risk scoring and tier determination on subsequent verifications.
+6. **Dual-threshold tier qualification**: Both the invested amount and
+   successful investment count must exceed the threshold. A single large
+   investment does not grant a higher tier.
 
-## Error Codes
+7. **Per-investment caps**: High and VeryHigh risk investors face hard caps per
+   individual investment, independent of their total limit. This limits
+   protocol exposure to high-risk actors.
 
-| Error | Code | Trigger |
-|---|---|---|
-| `KYCNotFound` | — | No verification record exists |
-| `KYCAlreadyPending` | — | Submitting while status is Pending |
-| `KYCAlreadyVerified` | — | Submitting or verifying while already Verified |
-| `BusinessNotVerified` | — | Placing bid while unverified or rejected |
-| `InvalidAmount` | — | Bid exceeds limit, or limit ≤ 0 |
-| `NotAdmin` | — | Non-admin calling admin-only function |
+## Related Tests
 
-## Security Notes
+Guard coverage is implemented in:
 
-1. **Auth enforcement**: `investor.require_auth()` on submission, `admin.require_auth()` on verify/reject/limit-update
-2. **Admin identity check**: Admin address is verified against stored admin before verification operations
-3. **Input validation**: KYC data and rejection reason strings are length-checked against protocol maximums
-4. **Risk cap**: Even if admin sets a high base limit, risk multipliers and hard caps constrain actual exposure
-5. **Resubmission guard**: Verified investors cannot resubmit; only rejected investors can retry
-6. **List consistency**: Investors are moved between pending/verified/rejected lists atomically during status transitions
+- `src/test_business_kyc.rs` — Business actor guard tests
+  - Negative tests for every guarded path (Pending, Rejected, NotSubmitted)
+  - All three business guard functions (invoice, settlement, escrow)
+  - State transition matrix (all 9 from/to combinations)
+  - Rejection reason validation (empty, boundary, over-limit)
+  - KYC data validation
+  - Full lifecycle test (submit -> reject -> resubmit -> verify)
+  - Deny-by-default property verification
+  - Error variant discrimination
 
-## Test Coverage
+- `src/test_investor_kyc.rs` — Investor actor guard tests
+  - Negative tests for every guarded path
+  - Investment limit enforcement across all 20 tier x risk combinations
+  - Per-investment risk cap enforcement (High, VeryHigh)
+  - Bid placement guard (status + limit + cap)
+  - Tier qualification with dual-threshold enforcement
+  - Risk score boundary testing (all 101 valid scores)
+  - Error priority verification (status before amount)
+  - Arithmetic overflow protection
+  - Full lifecycle test (submit -> reject -> resubmit -> verify -> bid)
+  - Edge cases: zero truncation, minimum amounts, maximum base limits
 
-| Test File | Tests | Coverage |
-|---|---|---|
-| `test_investor_kyc.rs` | 48 | KYC lifecycle, limit enforcement, bidding integration, status transitions, tier/risk queries, edge cases |
-| `test_limit.rs` | 6 | Invoice/bid amount limits, due-date limits, admin authorization |
-
-Run tests:
-```bash
-cargo test test_investor_kyc  # 48 tests
-cargo test test_limit         # 6 tests
-```
+- `src/verification.rs` (inline `#[cfg(test)] mod tests`) — Unit tests
+  - Tier multiplier values
+  - Risk multiplier and per-investment cap values
+  - Effective limit computation
+  - State transition validation
+  - Input validation (reason, KYC data)
+  - Tier computation logic

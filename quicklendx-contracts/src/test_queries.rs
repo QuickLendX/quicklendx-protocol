@@ -130,6 +130,84 @@ fn test_get_business_invoices_paged_limit_is_capped_to_max_query_limit() {
 }
 
 #[test]
+fn test_get_business_invoices_paged_status_filter_and_deterministic_ordering() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let business = Address::generate(&env);
+
+    let pending_1 = create_invoice(
+        &env,
+        &client,
+        &business,
+        1_000,
+        InvoiceCategory::Services,
+        false,
+    );
+    let verified_1 = create_invoice(
+        &env,
+        &client,
+        &business,
+        2_000,
+        InvoiceCategory::Services,
+        true,
+    );
+    let pending_2 = create_invoice(
+        &env,
+        &client,
+        &business,
+        3_000,
+        InvoiceCategory::Products,
+        false,
+    );
+
+    let verified_only = client.get_business_invoices_paged(
+        &business,
+        &Some(InvoiceStatus::Verified),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(verified_only.len(), 1, "Expected only verified invoices");
+    assert!(verified_only.contains(&verified_1));
+    assert!(!verified_only.contains(&pending_1));
+    assert!(!verified_only.contains(&pending_2));
+
+    let first_call = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    let second_call = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(first_call, second_call, "Ordering should be deterministic");
+
+    let page_0 = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &2u32,
+    );
+    let page_1 = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &2u32,
+        &2u32,
+    );
+
+    assert_eq!(page_0.len(), 2);
+    assert_eq!(page_1.len(), 1);
+    assert!(!page_0.contains(&page_1.get(0).unwrap()));
+}
+
+#[test]
 fn test_get_available_invoices_paged_filters_and_bounds() {
     let (env, client) = setup();
     env.mock_all_auths();
@@ -970,4 +1048,489 @@ fn test_investment_queries_comprehensive_workflow() {
         let investment = client.get_investment(&investment_id);
         assert_eq!(investment.status, crate::investment::InvestmentStatus::Active);
     }
+}
+
+// ============================================================================
+// Missing Record Resilience Tests
+// Ensures all query endpoints handle missing/non-existent records gracefully
+// without panicking or returning inconsistent results.
+// ============================================================================
+
+/// Returns a random BytesN<32> that is guaranteed to not exist in storage.
+fn random_id(env: &Env) -> BytesN<32> {
+    BytesN::random(env)
+}
+
+// ── get_invoice ───────────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_invoice_missing_returns_err() {
+    let (env, client) = setup();
+    let result = client.try_get_invoice(&random_id(&env));
+    assert!(result.is_err(), "get_invoice on missing ID must return Err, not panic");
+}
+
+// ── get_bid ───────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_bid_missing_returns_none() {
+    let (env, client) = setup();
+    let result = client.get_bid(&random_id(&env));
+    assert!(result.is_none(), "get_bid on missing ID must return None, not panic");
+}
+
+// ── get_investment ────────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_investment_missing_returns_err() {
+    let (env, client) = setup();
+    let result = client.try_get_investment(&random_id(&env));
+    assert!(result.is_err(), "get_investment on missing ID must return Err, not panic");
+}
+
+// ── get_invoice_investment ────────────────────────────────────────────────────
+
+#[test]
+fn test_get_invoice_investment_missing_returns_err() {
+    let (env, client) = setup();
+    let result = client.try_get_invoice_investment(&random_id(&env));
+    assert!(result.is_err(), "get_invoice_investment on missing invoice must return Err");
+}
+
+// ── get_bids_for_invoice ──────────────────────────────────────────────────────
+
+#[test]
+fn test_get_bids_for_invoice_missing_returns_empty() {
+    let (env, client) = setup();
+    let bids = client.get_bids_for_invoice(&random_id(&env));
+    assert_eq!(bids.len(), 0, "get_bids_for_invoice on missing invoice must return empty vec");
+}
+
+// ── get_best_bid ──────────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_best_bid_missing_invoice_returns_none() {
+    let (env, client) = setup();
+    let result = client.get_best_bid(&random_id(&env));
+    assert!(result.is_none(), "get_best_bid on missing invoice must return None");
+}
+
+#[test]
+fn test_get_best_bid_invoice_with_no_bids_returns_none() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+    let invoice_id = create_invoice(&env, &client, &business, 1000, InvoiceCategory::Services, false);
+    let result = client.get_best_bid(&invoice_id);
+    assert!(result.is_none(), "get_best_bid on invoice with no bids must return None");
+}
+
+// ── get_ranked_bids ───────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_ranked_bids_missing_invoice_returns_empty() {
+    let (env, client) = setup();
+    let bids = client.get_ranked_bids(&random_id(&env));
+    assert_eq!(bids.len(), 0, "get_ranked_bids on missing invoice must return empty vec");
+}
+
+#[test]
+fn test_get_ranked_bids_invoice_with_no_bids_returns_empty() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+    let invoice_id = create_invoice(&env, &client, &business, 1000, InvoiceCategory::Services, false);
+    let bids = client.get_ranked_bids(&invoice_id);
+    assert_eq!(bids.len(), 0, "get_ranked_bids on invoice with no bids must return empty vec");
+}
+
+// ── get_bids_by_status ────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_bids_by_status_missing_invoice_returns_empty() {
+    let (env, client) = setup();
+    let bids = client.get_bids_by_status(&random_id(&env), &BidStatus::Placed);
+    assert_eq!(bids.len(), 0, "get_bids_by_status on missing invoice must return empty vec");
+}
+
+// ── get_bids_by_investor ──────────────────────────────────────────────────────
+
+#[test]
+fn test_get_bids_by_investor_missing_invoice_returns_empty() {
+    let (env, client) = setup();
+    let investor = Address::generate(&env);
+    let bids = client.get_bids_by_investor(&random_id(&env), &investor);
+    assert_eq!(bids.len(), 0, "get_bids_by_investor on missing invoice must return empty vec");
+}
+
+#[test]
+fn test_get_bids_by_investor_no_bids_placed_returns_empty() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let invoice_id = create_invoice(&env, &client, &business, 1000, InvoiceCategory::Services, false);
+    let bids = client.get_bids_by_investor(&invoice_id, &investor);
+    assert_eq!(bids.len(), 0, "get_bids_by_investor with no bids must return empty vec");
+}
+
+// ── get_all_bids_by_investor ──────────────────────────────────────────────────
+
+#[test]
+fn test_get_all_bids_by_investor_no_bids_returns_empty() {
+    let (env, client) = setup();
+    let investor = Address::generate(&env);
+    let bids = client.get_all_bids_by_investor(&investor);
+    assert_eq!(bids.len(), 0, "get_all_bids_by_investor with no bids must return empty vec");
+}
+
+// ── get_business_invoices ─────────────────────────────────────────────────────
+
+#[test]
+fn test_get_business_invoices_unknown_business_returns_empty() {
+    let (env, client) = setup();
+    let unknown = Address::generate(&env);
+    let invoices = client.get_business_invoices(&unknown);
+    assert_eq!(invoices.len(), 0, "get_business_invoices for unknown business must return empty vec");
+}
+
+// ── get_investments_by_investor ───────────────────────────────────────────────
+
+#[test]
+fn test_get_investments_by_investor_unknown_investor_returns_empty() {
+    let (env, client) = setup();
+    let unknown = Address::generate(&env);
+    let investments = client.get_investments_by_investor(&unknown);
+    assert_eq!(investments.len(), 0, "get_investments_by_investor for unknown investor must return empty vec");
+}
+
+// ── get_escrow_details ────────────────────────────────────────────────────────
+
+#[test]
+fn test_get_escrow_details_missing_invoice_returns_err() {
+    let (env, client) = setup();
+    let result = client.try_get_escrow_details(&random_id(&env));
+    assert!(result.is_err(), "get_escrow_details on missing invoice must return Err");
+}
+
+// ── get_bid_history_paged ─────────────────────────────────────────────────────
+
+#[test]
+fn test_get_bid_history_paged_missing_invoice_returns_empty() {
+    let (env, client) = setup();
+    let bids = client.get_bid_history_paged(
+        &random_id(&env),
+        &Option::<BidStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(bids.len(), 0, "get_bid_history_paged on missing invoice must return empty vec");
+}
+
+// ── get_investor_bids_paged ───────────────────────────────────────────────────
+
+#[test]
+fn test_get_investor_bids_paged_unknown_investor_returns_empty() {
+    let (env, client) = setup();
+    let unknown = Address::generate(&env);
+    let bids = client.get_investor_bids_paged(
+        &unknown,
+        &Option::<BidStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(bids.len(), 0, "get_investor_bids_paged for unknown investor must return empty vec");
+}
+
+// ── cleanup_expired_bids on missing invoice ───────────────────────────────────
+
+#[test]
+fn test_cleanup_expired_bids_missing_invoice_returns_zero() {
+    let (env, client) = setup();
+    let count = client.cleanup_expired_bids(&random_id(&env));
+    assert_eq!(count, 0, "cleanup_expired_bids on missing invoice must return 0, not panic");
+}
+
+// ============================================================================
+// Investor Bid History Integrity Tests (Issue #579)
+//
+// Verifies that investor bid history is correct and isolated across multiple
+// invoices and mixed terminal statuses. No data leakage between investors.
+// ============================================================================
+
+fn add_verified_investor_q(env: &Env, client: &QuickLendXContractClient, limit: i128) -> Address {
+    let investor = Address::generate(env);
+    client.submit_investor_kyc(&investor, &String::from_str(env, "KYC"));
+    client.verify_investor(&investor, &limit);
+    investor
+}
+
+fn create_verified_invoice_q(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    business: &Address,
+    amount: i128,
+) -> BytesN<32> {
+    let currency = Address::generate(env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(env, "Invoice"),
+        &crate::invoice::InvoiceCategory::Services,
+        &Vec::new(env),
+    );
+    let _ = client.try_verify_invoice(&invoice_id);
+    invoice_id
+}
+
+/// Integrity: investor sees only their own bids — no leakage from other investors.
+#[test]
+fn test_investor_bid_history_no_data_leakage() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let investor_a = add_verified_investor_q(&env, &client, 100_000);
+    let investor_b = add_verified_investor_q(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice_q(&env, &client, &business, 50_000);
+
+    client.place_bid(&investor_a, &invoice_id, &10_000, &12_000);
+    client.place_bid(&investor_b, &invoice_id, &15_000, &18_000);
+
+    let a_bids = client.get_all_bids_by_investor(&investor_a);
+    let b_bids = client.get_all_bids_by_investor(&investor_b);
+
+    assert_eq!(a_bids.len(), 1, "investor_a must see exactly 1 bid");
+    assert_eq!(b_bids.len(), 1, "investor_b must see exactly 1 bid");
+
+    // Verify no cross-contamination
+    assert_eq!(a_bids.get(0).unwrap().investor, investor_a);
+    assert_eq!(b_bids.get(0).unwrap().investor, investor_b);
+}
+
+/// Integrity: bid history spans multiple invoices correctly.
+#[test]
+fn test_investor_bid_history_spans_multiple_invoices() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let investor = add_verified_investor_q(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let inv1 = create_verified_invoice_q(&env, &client, &business, 50_000);
+    let inv2 = create_verified_invoice_q(&env, &client, &business, 50_000);
+    let inv3 = create_verified_invoice_q(&env, &client, &business, 50_000);
+
+    let bid_1 = client.place_bid(&investor, &inv1, &10_000, &12_000);
+    let bid_2 = client.place_bid(&investor, &inv2, &15_000, &18_000);
+    let bid_3 = client.place_bid(&investor, &inv3, &20_000, &24_000);
+
+    let all_bids = client.get_all_bids_by_investor(&investor);
+    assert_eq!(all_bids.len(), 3, "Must return bids across all 3 invoices");
+
+    let has_bid = |id: &BytesN<32>| all_bids.iter().any(|b| &b.bid_id == id);
+    assert!(has_bid(&bid_1), "bid_1 must be in history");
+    assert!(has_bid(&bid_2), "bid_2 must be in history");
+    assert!(has_bid(&bid_3), "bid_3 must be in history");
+}
+
+/// Integrity: history includes bids in all terminal statuses (Placed, Withdrawn, Cancelled, Expired).
+#[test]
+fn test_investor_bid_history_includes_all_terminal_statuses() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let investor = add_verified_investor_q(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let inv1 = create_verified_invoice_q(&env, &client, &business, 100_000);
+    let inv2 = create_verified_invoice_q(&env, &client, &business, 100_000);
+    let inv3 = create_verified_invoice_q(&env, &client, &business, 100_000);
+    let inv4 = create_verified_invoice_q(&env, &client, &business, 100_000);
+
+    // Placed
+    let bid_placed = client.place_bid(&investor, &inv1, &10_000, &12_000);
+    // Withdrawn
+    let bid_withdrawn = client.place_bid(&investor, &inv2, &10_000, &12_000);
+    client.withdraw_bid(&bid_withdrawn);
+    // Cancelled
+    let bid_cancelled = client.place_bid(&investor, &inv3, &10_000, &12_000);
+    client.cancel_bid(&bid_cancelled);
+    // Expired
+    let bid_expired = client.place_bid(&investor, &inv4, &10_000, &12_000);
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604_801);
+    client.cleanup_expired_bids(&inv4);
+
+    let all_bids = client.get_all_bids_by_investor(&investor);
+    assert_eq!(all_bids.len(), 4, "History must include all 4 bids regardless of status");
+
+    let find = |id: &BytesN<32>| all_bids.iter().find(|b| &b.bid_id == id).unwrap().status.clone();
+    assert_eq!(find(&bid_placed), BidStatus::Placed);
+    assert_eq!(find(&bid_withdrawn), BidStatus::Withdrawn);
+    assert_eq!(find(&bid_cancelled), BidStatus::Cancelled);
+    assert_eq!(find(&bid_expired), BidStatus::Expired);
+}
+
+/// Integrity: two investors on same invoice — each sees only their own history.
+#[test]
+fn test_investor_bid_history_isolated_same_invoice() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let investor_a = add_verified_investor_q(&env, &client, 100_000);
+    let investor_b = add_verified_investor_q(&env, &client, 100_000);
+    let investor_c = add_verified_investor_q(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice_q(&env, &client, &business, 100_000);
+
+    client.place_bid(&investor_a, &invoice_id, &10_000, &12_000);
+    client.place_bid(&investor_b, &invoice_id, &15_000, &18_000);
+    client.place_bid(&investor_c, &invoice_id, &20_000, &24_000);
+
+    let a_bids = client.get_all_bids_by_investor(&investor_a);
+    let b_bids = client.get_all_bids_by_investor(&investor_b);
+    let c_bids = client.get_all_bids_by_investor(&investor_c);
+
+    assert_eq!(a_bids.len(), 1);
+    assert_eq!(b_bids.len(), 1);
+    assert_eq!(c_bids.len(), 1);
+
+    // No cross-contamination
+    assert_eq!(a_bids.get(0).unwrap().investor, investor_a);
+    assert_eq!(b_bids.get(0).unwrap().investor, investor_b);
+    assert_eq!(c_bids.get(0).unwrap().investor, investor_c);
+}
+
+/// Integrity: investor with no bids returns empty history.
+#[test]
+fn test_investor_bid_history_empty_for_new_investor() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let investor = Address::generate(&env);
+    let bids = client.get_all_bids_by_investor(&investor);
+    assert_eq!(bids.len(), 0, "New investor must have empty bid history");
+}
+
+/// Integrity: bid count matches history length across multiple invoices.
+#[test]
+fn test_investor_bid_count_matches_history_length() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let investor = add_verified_investor_q(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    for _ in 0..5 {
+        let inv = create_verified_invoice_q(&env, &client, &business, 50_000);
+        client.place_bid(&investor, &inv, &10_000, &12_000);
+    }
+
+    let all_bids = client.get_all_bids_by_investor(&investor);
+    assert_eq!(all_bids.len(), 5, "History length must match number of bids placed");
+}
+
+/// Integrity: withdrawing bids on multiple invoices — history reflects correct statuses.
+#[test]
+fn test_investor_bid_history_mixed_withdraw_across_invoices() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let investor = add_verified_investor_q(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let inv1 = create_verified_invoice_q(&env, &client, &business, 50_000);
+    let inv2 = create_verified_invoice_q(&env, &client, &business, 50_000);
+    let inv3 = create_verified_invoice_q(&env, &client, &business, 50_000);
+
+    let bid_1 = client.place_bid(&investor, &inv1, &10_000, &12_000);
+    let bid_2 = client.place_bid(&investor, &inv2, &10_000, &12_000);
+    let bid_3 = client.place_bid(&investor, &inv3, &10_000, &12_000);
+
+    // Withdraw bids on inv1 and inv3
+    client.withdraw_bid(&bid_1);
+    client.withdraw_bid(&bid_3);
+
+    let all_bids = client.get_all_bids_by_investor(&investor);
+    assert_eq!(all_bids.len(), 3);
+
+    let find = |id: &BytesN<32>| all_bids.iter().find(|b| &b.bid_id == id).unwrap().status.clone();
+    assert_eq!(find(&bid_1), BidStatus::Withdrawn);
+    assert_eq!(find(&bid_2), BidStatus::Placed);
+    assert_eq!(find(&bid_3), BidStatus::Withdrawn);
+}
+
+/// Integrity: two investors on different invoices — no cross-invoice leakage.
+#[test]
+fn test_investor_bid_history_no_cross_invoice_leakage() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let investor_a = add_verified_investor_q(&env, &client, 100_000);
+    let investor_b = add_verified_investor_q(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let inv1 = create_verified_invoice_q(&env, &client, &business, 50_000);
+    let inv2 = create_verified_invoice_q(&env, &client, &business, 50_000);
+
+    // investor_a bids on inv1 only
+    client.place_bid(&investor_a, &inv1, &10_000, &12_000);
+    // investor_b bids on inv2 only
+    client.place_bid(&investor_b, &inv2, &15_000, &18_000);
+
+    let a_bids = client.get_all_bids_by_investor(&investor_a);
+    let b_bids = client.get_all_bids_by_investor(&investor_b);
+
+    assert_eq!(a_bids.len(), 1);
+    assert_eq!(b_bids.len(), 1);
+
+    // investor_a's bid is on inv1
+    assert_eq!(a_bids.get(0).unwrap().invoice_id, inv1);
+    // investor_b's bid is on inv2
+    assert_eq!(b_bids.get(0).unwrap().invoice_id, inv2);
+}
+
+/// Integrity: expired bids on multiple invoices are reflected in history.
+#[test]
+fn test_investor_bid_history_expired_across_invoices() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let investor = add_verified_investor_q(&env, &client, 100_000);
+    let business = Address::generate(&env);
+
+    let inv1 = create_verified_invoice_q(&env, &client, &business, 50_000);
+    let inv2 = create_verified_invoice_q(&env, &client, &business, 50_000);
+
+    let bid_1 = client.place_bid(&investor, &inv1, &10_000, &12_000);
+    let bid_2 = client.place_bid(&investor, &inv2, &10_000, &12_000);
+
+    // Advance past expiration and clean up both invoices
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604_801);
+    client.cleanup_expired_bids(&inv1);
+    client.cleanup_expired_bids(&inv2);
+
+    let all_bids = client.get_all_bids_by_investor(&investor);
+    assert_eq!(all_bids.len(), 2, "History must still contain expired bids");
+
+    let find = |id: &BytesN<32>| all_bids.iter().find(|b| &b.bid_id == id).unwrap().status.clone();
+    assert_eq!(find(&bid_1), BidStatus::Expired);
+    assert_eq!(find(&bid_2), BidStatus::Expired);
 }

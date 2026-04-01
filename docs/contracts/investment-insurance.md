@@ -2,442 +2,387 @@
 
 ## Overview
 
-The investment insurance module enables investors to attach insurance coverage to their investments in the QuickLendX protocol. Insurance provides protection against investment loss with configurable coverage percentages and automatically calculated premiums.
+The investment insurance module enables investors to attach insurance coverage to their
+investments in the QuickLendX protocol.  Insurance provides configurable protection against
+investment loss with strictly validated parameters and automatically bounded premium/coverage
+math.
+
+---
 
 ## Architecture
 
 ### Core Components
 
-#### InsuranceCoverage Structure
+#### Constants (`investment.rs`)
+
+| Constant | Value | Purpose |
+|---|---|---|
+| `DEFAULT_INSURANCE_PREMIUM_BPS` | `200` | 2 % premium rate in basis points (1/10 000) |
+| `MIN_COVERAGE_PERCENTAGE` | `1` | Lowest valid coverage percentage (inclusive) |
+| `MAX_COVERAGE_PERCENTAGE` | `100` | Highest valid coverage percentage (inclusive) |
+| `MAX_TOTAL_COVERAGE_PERCENTAGE` | `100` | Highest cumulative percentage across all active policies |
+| `MIN_PREMIUM_AMOUNT` | `1` | Minimum acceptable premium in base currency units |
+
+#### `InsuranceCoverage` structure
+
 ```rust
 pub struct InsuranceCoverage {
-    pub provider: Address,           // Insurance provider address
-    pub coverage_amount: i128,       // Amount covered in base currency
-    pub premium_amount: i128,        // Premium charged in base currency
-    pub coverage_percentage: u32,    // Coverage as percentage (0-100)
-    pub active: bool,                // Whether coverage is currently active
+    pub provider:            Address,  // Insurance provider address
+    pub coverage_amount:     i128,     // Amount covered in base currency units
+    pub premium_amount:      i128,     // Premium charged in base currency units
+    pub coverage_percentage: u32,      // Coverage as integer percentage (1–100)
+    pub active:              bool,     // Whether this coverage record is active
 }
 ```
 
-#### Investment Structure (Extended)
+#### `Investment` structure (relevant excerpt)
+
 ```rust
 pub struct Investment {
     pub investment_id: BytesN<32>,
-    pub invoice_id: BytesN<32>,
-    pub investor: Address,
-    pub amount: i128,
-    pub funded_at: u64,
-    pub status: InvestmentStatus,
-    pub insurance: Vec<InsuranceCoverage>,  // Insurance records
+    pub invoice_id:    BytesN<32>,
+    pub investor:      Address,
+    pub amount:        i128,
+    pub funded_at:     u64,
+    pub status:        InvestmentStatus,
+    pub insurance:     Vec<InsuranceCoverage>,  // All insurance records (active + historical)
 }
 ```
 
-### Premium Calculation
+---
 
-Insurance premiums are calculated using basis points (1/10,000):
+## Premium Calculation
+
+Insurance premiums are calculated by `Investment::calculate_premium` using basis points:
 
 ```
-DEFAULT_INSURANCE_PREMIUM_BPS = 200  // 2% per annum
-coverage_amount = investment_amount * coverage_percentage / 100
-premium = coverage_amount * DEFAULT_INSURANCE_PREMIUM_BPS / 10_000
-
-// Minimum premium is 1 if coverage_amount > 0
+coverage_amount = investment_amount × coverage_percentage / 100
+premium         = coverage_amount   × DEFAULT_INSURANCE_PREMIUM_BPS / 10_000
 ```
+
+Both multiplications use `saturating_mul`; division uses `checked_div` to prevent
+overflow and division-by-zero panics.
+
+**Minimum premium floor:** if the computed `premium` is less than `MIN_PREMIUM_AMOUNT`
+but `coverage_amount > 0`, the function returns `MIN_PREMIUM_AMOUNT` (1) instead of 0.
+This ensures zero-premium insurance is impossible.
 
 **Example:**
-- Investment amount: 10,000 USDC
-- Coverage percentage: 80%
-- Coverage amount: 8,000 USDC
-- Premium: 160 USDC (2% of 8,000)
+
+| Investment | Coverage % | Coverage Amount | Premium |
+|---|---|---|---|
+| 10 000 USDC | 80 % | 8 000 USDC | 160 USDC |
+| 10 000 USDC | 100 % | 10 000 USDC | 200 USDC |
+| 10 000 USDC | 1 % | 100 USDC | 2 USDC |
+| 100 USDC | 1 % | 1 USDC | 1 USDC *(floor)* |
+
+---
 
 ## Public API
 
-### Add Insurance Coverage
-
-**Function:** `add_investment_insurance`
+### `add_investment_insurance`
 
 ```rust
 pub fn add_investment_insurance(
-    env: Env,
-    investment_id: BytesN<32>,
-    provider: Address,
+    env:                Env,
+    investment_id:      BytesN<32>,
+    provider:           Address,
     coverage_percentage: u32,
 ) -> Result<(), QuickLendXError>
 ```
 
 **Parameters:**
-- `investment_id`: Unique identifier of the investment
-- `provider`: Address of the insurance provider
-- `coverage_percentage`: Coverage as percentage (1-100)
 
-**Preconditions:**
-- Investment must exist and be in `Active` status
-- Coverage percentage must be between 1 and 100
-- Caller must be the investment owner (investor)
-- Investment cannot already have active insurance
+| Name | Type | Constraints |
+|---|---|---|
+| `investment_id` | `BytesN<32>` | Must identify an existing, Active investment |
+| `provider` | `Address` | Insurance provider; no whitelist enforced at contract level |
+| `coverage_percentage` | `u32` | `MIN_COVERAGE_PERCENTAGE (1)` ≤ value ≤ `MAX_COVERAGE_PERCENTAGE (100)` |
 
-**Behavior:**
-1. Validates coverage percentage
-2. Calculates coverage amount: `investment_amount * coverage_percentage / 100`
-3. Calculates premium using basis points formula
-4. Creates InsuranceCoverage record with `active = true`
-5. Stores insurance record in investment
-6. Emits `InsuranceAdded` event
-7. Emits `InsurancePremiumCollected` event
+**Validation order (fail-fast):**
 
-**Security Checks:**
-- `investor.require_auth()` - Only the investor can add insurance
-- Status validation - Only Active investments can be insured
-- Parameter validation - Coverage percentage bounds checked
+1. Investment must exist → `StorageKeyNotFound`
+2. Caller must be the investment owner → auth panic
+3. Investment status must be `Active` → `InvalidStatus`
+4. `coverage_percentage` must be in `[MIN_COVERAGE_PERCENTAGE, MAX_COVERAGE_PERCENTAGE]`
+   → `InvalidCoveragePercentage`
+5. Computed premium must be ≥ `MIN_PREMIUM_AMOUNT` (investment too small otherwise)
+   → `InvalidAmount`
+6. Existing active policies must remain at or below `MAX_TOTAL_COVERAGE_PERCENTAGE`
+    and the new policy must not push the active total above the cap
+    → `OperationNotAllowed`
+7. `add_insurance` re-validates all bounds independently (defense-in-depth)
 
-**Errors:**
-- `StorageKeyNotFound` - Investment does not exist
-- `InvalidStatus` - Investment is not in Active status
-- `InvalidCoveragePercentage` - Coverage percentage < 1 or > 100
-- `InvalidAmount` - Calculated premium is zero or invalid
-- `OperationNotAllowed` - Investment already has active insurance
+**On success:**
 
-### Query Insurance Coverage
+1. Computes `coverage_amount = amount × coverage_percentage / 100`
+2. Computes `premium` via `calculate_premium`
+3. Pushes an `InsuranceCoverage { active: true }` record onto the investment
+4. Persists the updated investment
+5. Emits `InsuranceAdded` event
+6. Emits `InsurancePremiumCollected` event
 
-**Function:** `query_investment_insurance`
+**Error table:**
+
+| Error | Condition |
+|---|---|
+| `StorageKeyNotFound` | Investment does not exist |
+| `InvalidStatus` | Investment is not in `Active` state |
+| `InvalidCoveragePercentage` | `coverage_percentage < 1` or `> 100` |
+| `InvalidAmount` | Computed premium is zero (investment amount too small), investment principal ≤ 0, coverage amount exceeds principal, or premium > coverage amount |
+| `OperationNotAllowed` | Existing active coverage is malformed or the new policy would make cumulative active coverage exceed `MAX_TOTAL_COVERAGE_PERCENTAGE` |
+
+---
+
+### `query_investment_insurance`
 
 ```rust
 pub fn query_investment_insurance(
-    env: Env,
+    env:           Env,
     investment_id: BytesN<32>,
 ) -> Result<Vec<InsuranceCoverage>, QuickLendXError>
 ```
 
-**Parameters:**
-- `investment_id`: Unique identifier of the investment to query
+Returns **all** insurance records (active and inactive) ordered by insertion time.
+No authorization required — read-only operation.
 
-**Returns:**
-- `Ok(Vec<InsuranceCoverage>)` - All insurance records (active and inactive)
-- `Err(StorageKeyNotFound)` - Investment does not exist
+**Errors:** `StorageKeyNotFound` if the investment does not exist.
 
-**Security Notes:**
-- No authorization required - Query function is read-only
-- Returns all insurance records regardless of state
-- Can be called by any address
-
-**Use Cases:**
-1. Display insurance status in UI
-2. Calculate total coverage for an investment
-3. Retrieve provider information
-4. Audit insurance premium history
+---
 
 ## Lifecycle
 
 ```
 Uninsured Investment (Active)
-        ↓
-    [Add Insurance]
-        ↓
-Insured Investment (Active + Insurance.active=true)
-        ↓
-  [On Default/Settlement]
-        ↓
-Insured Investment (Status Changed + Insurance.active=false)
+          │
+          ▼ add_investment_insurance(…)
+Insured Investment (Active + one or more `insurance[n].active = true`)
+          │
+          ▼ process_all_insurance_claims() on default
+Claimed   (all active records become `false`, provider/amount preserved)
+          │
+          ▼ add_investment_insurance(…)  [optional — new policy]
+Re-insured (Active + insurance[n+1].active = true)
 ```
 
 ### State Transitions
 
-1. **Initial State**: Investment created, no insurance
-   - `investment.insurance.len() = 0`
-   - `insurance.active = N/A`
+| # | State | `insurance.len()` | `active` flag |
+|---|---|---|---|
+| 1 | Investment created | 0 | N/A |
+| 2 | Insurance added | 1 | `true` |
+| 3 | Second active policy added within cap | 2 | `true` on both entries |
+| 4 | Invoice defaulted / claims processed | 2 | `false` on both entries |
+| 5 | Re-insured later | 3 | `true` on the new entry |
 
-2. **Insurance Added**: Investor attaches insurance
-   - `investment.insurance.len() = 1`
-   - `insurance.active = true`
-   - Premium is locked in coverage amount
-
-3. **Insurance Claimed**: Triggered by default or settlement
-   - `investment.insurance.len() = 1`
-   - `insurance.active = false`
-   - Provider address and coverage amount preserved
-
-## Events
-
-### InsuranceAdded
-Emitted when insurance is successfully added to an investment.
-
-```rust
-pub fn emit_insurance_added(
-    env: &Env,
-    investment_id: &BytesN<32>,
-    invoice_id: &BytesN<32>,
-    investor: &Address,
-    provider: &Address,
-    coverage_percentage: u32,
-    coverage_amount: i128,
-    premium_amount: i128,
-)
-```
-
-**Event Topics:** `("ins_add",)`
-
-**Data:**
-- investment_id: BytesN<32>
-- invoice_id: BytesN<32>
-- investor: Address
-- provider: Address
-- coverage_percentage: u32
-- coverage_amount: i128
-- premium_amount: i128
-
-### InsurancePremiumCollected
-Emitted when insurance premium is processed.
-
-```rust
-pub fn emit_insurance_premium_collected(
-    env: &Env,
-    investment_id: &BytesN<32>,
-    provider: &Address,
-    premium_amount: i128,
-)
-```
-
-**Event Topics:** `("ins_prm",)`
-
-**Data:**
-- investment_id: BytesN<32>
-- provider: Address
-- premium_amount: i128
-
-### InsuranceClaimed
-Emitted when insurance coverage is claimed (on default).
-
-```rust
-pub fn emit_insurance_claimed(
-    env: &Env,
-    investment_id: &BytesN<32>,
-    invoice_id: &BytesN<32>,
-    provider: &Address,
-    coverage_amount: i128,
-)
-```
-
-**Event Topics:** `("ins_clm",)`
-
-**Data:**
-- investment_id: BytesN<32>
-- invoice_id: BytesN<32>
-- provider: Address
-- coverage_amount: i128
+---
 
 ## Validation Rules
 
-### Coverage Percentage Validation
+### Coverage percentage
 
 ```
-✓ Valid:   1 ≤ coverage_percentage ≤ 100
-✗ Invalid: coverage_percentage < 1
-✗ Invalid: coverage_percentage > 100
+✓ Valid:   MIN_COVERAGE_PERCENTAGE (1) ≤ coverage_percentage ≤ MAX_COVERAGE_PERCENTAGE (100)
+✗ Invalid: coverage_percentage = 0        → InvalidCoveragePercentage
+✗ Invalid: coverage_percentage > 100      → InvalidCoveragePercentage
 ```
 
-### Premium Calculation Validation
+> **Why the explicit upper-bound check?**  Without it, a caller supplying
+> `coverage_percentage = 200` would compute `coverage_amount = 2 × principal`,
+> giving the claimant twice the invested amount — a direct over-coverage exploit.
+> The bound is enforced **before** any arithmetic in both `lib.rs` and `add_insurance`
+> (defense-in-depth).
+
+### Investment principal
 
 ```
-✓ coverage_amount > 0 → premium ≥ 1
-✓ coverage_amount = 0 → premium = 0
+✓ Valid:   investment.amount > 0
+✗ Invalid: investment.amount ≤ 0 → InvalidAmount
 ```
 
-### Investment Status Validation
+### Premium
 
 ```
-✓ Can add insurance:    InvestmentStatus::Active
-✗ Cannot add:           InvestmentStatus::Withdrawn
-✗ Cannot add:           InvestmentStatus::Completed
-✗ Cannot add:           InvestmentStatus::Defaulted
+✓ Valid:   premium ≥ MIN_PREMIUM_AMOUNT (1)
+✗ Invalid: premium < 1            → InvalidAmount   (zero-premium exploit)
+✗ Invalid: premium > coverage_amount → InvalidAmount (economic inversion)
 ```
 
-### Single Active Insurance Per Investment
+### Coverage-amount invariant
 
 ```
-✓ Can add:     When no active insurance exists
-✗ Cannot add:  When active insurance already exists
-
-Reason: Prevents overlapping coverage and simplifies settlement logic
+✓ Invariant: coverage_amount ≤ investment.amount
 ```
+
+Guaranteed analytically when `coverage_percentage ≤ 100`, but explicitly
+re-checked after arithmetic as a defense-in-depth safeguard.
+
+### Cumulative active insurance cap
+
+```
+✓ Can add:    When active coverage total + new policy ≤ MAX_TOTAL_COVERAGE_PERCENTAGE (100)
+✗ Cannot add: When cumulative active coverage would exceed 100 % → OperationNotAllowed
+```
+
+Inactive historical policies are excluded from the cumulative check, so a new
+policy can be added after earlier policies are claimed or manually deactivated.
+
+---
 
 ## Security Considerations
 
 ### Authorization
 
-1. **Add Insurance**: Only investment owner (investor) can add
-   - Enforced via `investor.require_auth()`
-   - Prevents unauthorized coverage attachment
+| Operation | Authorization |
+|---|---|
+| `add_investment_insurance` | `investor.require_auth()` — only the investment owner |
+| `query_investment_insurance` | None required — read-only |
 
-2. **Query Insurance**: No authorization required
-   - Read-only operation
-   - Anyone can query coverage details
+### Overflow and arithmetic safety
 
-### Data Integrity
+| Risk | Mitigation |
+|---|---|
+| Overflow in `coverage_amount` | `saturating_mul` — result saturates at `i128::MAX` |
+| Division by zero | `checked_div(100)` and `checked_div(10_000)` — `unwrap_or(0)` |
+| Over-coverage via large `coverage_percentage` | Explicit range check before arithmetic |
+| Negative investment amount | `self.amount > 0` guard in `add_insurance` |
+| Premium exceeding coverage | `premium ≤ coverage_amount` guard in `add_insurance` |
 
-1. **Immutable Coverage Terms**
-   - Once insurance is added, coverage amount cannot be modified
-   - Premium is calculated once at creation time
-
-2. **Atomic Operations**
-   - Insurance addition is atomic
-   - Either fully succeeds or fails - no partial states
-
-3. **Historical Records**
-   - Inactive insurance records are preserved
-   - Enables audit trail and historical analysis
-
-### Potential Vulnerabilities & Mitigations
+### Vulnerability matrix
 
 | Vulnerability | Mitigation |
 |---|---|
-| Unauthorized insurance addition | `investor.require_auth()` enforces caller identity |
-| Invalid coverage percentages | Input validation (1-100 range) |
-| Coverage on inactive investments | Status check before allowing addition |
-| Multiple active insurances | `has_active_insurance()` check prevents duplicates |
-| Integer overflow in premium calc | Uses `saturating_mul` and `checked_div` |
-| Stale coverage data | Vec<> is updated atomically with investment |
+| Unauthorized insurance addition | `investor.require_auth()` |
+| Over-coverage exploit (`coverage_percentage > 100`) | Explicit range check in `lib.rs` and `add_insurance` before any multiplication |
+| Zero-premium free insurance | `MIN_PREMIUM_AMOUNT` floor in `calculate_premium`; `premium < MIN_PREMIUM_AMOUNT` check in `add_insurance` |
+| Aggregate over-coverage across stacked policies | `total_active_coverage_percentage()` + `MAX_TOTAL_COVERAGE_PERCENTAGE` check before insertion |
+| Residual active coverage after default | `process_all_insurance_claims()` deactivates every active policy before persistence |
+| Insurance on settled/defaulted investment | Status check → `InvalidStatus` |
+| Negative or zero investment principal | Explicit `self.amount > 0` guard |
+| Economic inversion (premium > coverage) | `premium > coverage_amount` guard |
+| Integer overflow | `saturating_mul` + `checked_div` throughout |
+
+---
+
+## Security Notes
+
+- The cumulative cap is enforced on active percentages, not record count. This
+    keeps storage append-only for auditability while still preventing aggregate
+    coverage from exceeding principal.
+- The cap check uses saturating addition as defense in depth. Malformed stored
+    state cannot wrap into a smaller total and bypass validation.
+- Default handling now drains every active policy in one pass before the
+    investment is persisted. This prevents stale active coverage from remaining on
+    a defaulted investment.
+
+---
+
+## Verification
+
+Targeted regression coverage should include:
+
+- Multiple active policies that sum to exactly 100 %
+- Rejection when a new policy would push active total above 100 %
+- Historical inactive policies excluded from the active-cap calculation
+- Default processing deactivating all active policies, not only the first one
+
+---
 
 ## Storage Schema
 
-### Investment Storage Key
+### Investment record (insurance embedded)
+
 ```
-Key: investment_id (BytesN<32>)
+Key:   investment_id  (BytesN<32>)
 Value: Investment {
-    ...
-    insurance: Vec<InsuranceCoverage>
-}
+           …
+           insurance: Vec<InsuranceCoverage>
+       }
 ```
 
-### Investor Index Key
+### Investor index
+
 ```
-Key: ("invst_inv", investor_address)
+Key:   ("invst_inv", investor_address)
 Value: Vec<investment_id>
 ```
 
-### Invoice Index Key
+### Invoice index
+
 ```
-Key: ("inv_map", invoice_id)
+Key:   ("inv_map", invoice_id)
 Value: investment_id
 ```
 
+---
+
 ## Example Usage
 
-### Adding Insurance
+### Adding 80 % insurance coverage
 
 ```rust
-// Investor adds 80% insurance coverage
-let coverage_percentage = 80u32;
 client.add_investment_insurance(
     &investment_id,
     &insurance_provider_address,
-    &coverage_percentage
+    &80u32,
 )?;
-
-// Investment of 10,000 USDC:
-// - Coverage amount: 8,000 USDC
-// - Premium: 160 USDC (2%)
+// For a 10 000 USDC investment:
+//   coverage_amount = 8 000 USDC
+//   premium         =   160 USDC  (2 %)
 ```
 
-### Querying Insurance
+### Querying all insurance records
 
 ```rust
-// Get all insurance records for an investment
-let insurance_records = client.query_investment_insurance(&investment_id)?;
-
-for coverage in insurance_records {
-    println!("Provider: {}", coverage.provider);
-    println!("Coverage: {}%", coverage.coverage_percentage);
-    println!("Coverage Amount: {}", coverage.coverage_amount);
-    println!("Premium: {}", coverage.premium_amount);
-    println!("Active: {}", coverage.active);
+let records = client.query_investment_insurance(&investment_id)?;
+for cov in records.iter() {
+    // cov.coverage_percentage, cov.coverage_amount, cov.premium_amount, cov.active
 }
 ```
 
-### Checking Coverage Status
-
-```rust
-// Get full investment with insurance details
-let investment = client.get_investment(&investment_id)?;
-
-if investment.insurance.len() > 0 {
-    let coverage = investment.insurance.get(0)?;
-    println!("Total Coverage: {}", coverage.coverage_amount);
-    println!("Provider: {}", coverage.provider);
-}
-```
+---
 
 ## Testing
 
-### Test Coverage
+### Test file: `src/test_insurance.rs`
 
-The insurance module is tested with:
+The test suite is organised into 13 sections with ≥ 95 % branch coverage:
 
-1. **Lifecycle Tests** (`test_investment_insurance_lifecycle`)
-   - Insurance addition to active investments
-   - Duplicate insurance prevention
-   - Default handling with active insurance
+| # | Section | Key assertions |
+|---|---|---|
+| 1 | Bounds constants | Numeric values match documentation |
+| 2 | `calculate_premium` pure math | Typical cases, zero/negative/out-of-range inputs, min floor, overflow safety, invariants |
+| 3 | Authorization | Auth violation panics without `mock_all_auths` |
+| 4 | Status validation | All non-Active statuses → `InvalidStatus` |
+| 5 | Coverage-percentage validation | 0 and >100 → `InvalidCoveragePercentage`; 1 and 100 accepted |
+| 6 | Investment-amount validation | 0, negative, tiny-amount-rounds-to-0 → `InvalidAmount` |
+| 7 | Active-insurance guard | Duplicate active rejected; new policy accepted after deactivation |
+| 8 | Premium correctness | Stored `premium_amount` matches calculation; minimum floor |
+| 9 | Over-coverage prevention | `coverage_amount ≤ principal`; 101–u32::MAX rejected with specific error |
+| 10 | Query correctness | Empty for new investment; all historical entries returned; non-existent → error |
+| 11 | Claim logic | Deactivates coverage; returns provider + amount; second claim → None |
+| 12 | Cross-investment isolation | Adding insurance to A does not affect B |
+| 13 | Direct `add_insurance` unit tests | All validation paths without contract dispatch |
 
-2. **Query Tests** (`test_query_investment_insurance_single_coverage`)
-   - Empty insurance vector on new investment
-   - Insurance retrieval after addition
-   - Provider and coverage verification
-
-3. **Edge Case Tests** (`test_query_investment_insurance_nonexistent_investment`)
-   - Nonexistent investment handling
-   - Proper error propagation
-
-4. **Premium Calculation Tests** (`test_query_investment_insurance_premium_calculation`)
-   - Various coverage percentages (50%, 80%, 100%)
-   - Correct premium calculation (2% basis)
-
-5. **State Transition Tests** (`test_query_investment_insurance_inactive_coverage`)
-   - Active → Inactive transition on default
-   - Coverage amount preservation
-   - Query consistency
-
-### Running Tests
+### Running the tests
 
 ```bash
-# Run all insurance tests
-cargo test test_investment_insurance --lib
+# All insurance tests
+cargo test test_insurance --lib
 
-# Run specific test
-cargo test test_query_investment_insurance_single_coverage --lib
+# Specific test
+cargo test test_over_100_percent_rejected_with_specific_error --lib
 
-# Run with output
-cargo test test_investment_insurance_lifecycle --lib -- --nocapture
+# With log output
+cargo test test_insurance --lib -- --nocapture
 ```
 
-## Future Enhancements
-
-### Phase 2: Settlement Integration
-- Automatic payout to insurance providers on default
-- Multi-provider insurance support
-- Insurance fund management
-
-### Phase 3: Advanced Features
-- Variable premium rates based on risk tier
-- Multiple active insurances per investment
-- Partial insurance claims
-- Insurance provider reputation system
-
-### Phase 4: Governance
-- Dynamic insurance premium adjustment
-- Approved provider registry
-- Insurance claim dispute resolution
-- Risk-based coverage limits
+---
 
 ## Related Modules
 
-- **investment.rs** - Core investment data structures
-- **settlement.rs** - Handles invoice payment and default scenarios
-- **events.rs** - Event emission and logging
-- **errors.rs** - Error types and handling
-- **defaults.rs** - Default handling triggers insurance claims
-
-## References
-
-- [Invoice Lifecycle](./invoice-lifecycle.md)
-- [Settlement](./settlement.md)
-- [Default Handling](./default-handling.md)
-- [Protocol Limits](./protocol-limits.md)
+- [investment.rs](../../quicklendx-contracts/src/investment.rs) — Data structures and business logic
+- [settlement.rs](./settlement.md) — Triggers `process_insurance_claim` on default
+- [events.rs](../../quicklendx-contracts/src/events.rs) — `emit_insurance_added`, `emit_insurance_premium_collected`, `emit_insurance_claimed`
+- [errors.rs](../../quicklendx-contracts/src/errors.rs) — Error codes
+- [defaults.md](./default-handling.md) — Default-handling flow that invokes insurance claims

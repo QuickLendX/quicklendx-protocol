@@ -84,6 +84,10 @@ pub fn distribute_revenue(
 
 **Returns:** Tuple of `(treasury_amount, developer_amount, platform_amount)`
 
+**Idempotency (per settlement):** If the period’s revenue record exists and `pending_distribution == 0` (typically after a successful distribution), the call returns `OperationNotAllowed` (`OP_NA`). This blocks duplicate no-op distributions when `min_distribution_amount` is zero and avoids duplicate audit events. New fee collection in the same period increases `pending_distribution` again and a later call may succeed.
+
+**Treasury routing alignment:** If the platform fee treasury is configured (`configure_treasury`) and `treasury_share_bps > 0`, `RevenueConfig.treasury_address` must match that treasury. Otherwise distribution returns `InvalidFeeConfiguration` (`FEE_CFG`).
+
 **Distribution Logic:**
 1. Treasury amount = `pending * treasury_bps / 10,000`
 2. Developer amount = `pending * developer_bps / 10,000`
@@ -177,6 +181,112 @@ println!("Treasury share: {}%", config.treasury_share_bps / 100);
 3. **Minimum Threshold**: Prevents dust distributions that waste gas
 4. **Remainder Handling**: Platform receives rounding remainder to prevent fund loss
 5. **Period-Based Tracking**: Revenue is tracked per period to enable auditing
+6. **Settlement idempotency**: No second distribution while `pending_distribution == 0` for that period
+7. **Consistent treasury target**: When a platform treasury is set and the split sends a non-zero share to treasury, the configured revenue treasury address must match it
+
+## Treasury Address Rotation
+
+Routing fees to an incorrect address is an irreversible on-chain action. The protocol
+therefore requires a **two-step confirmation** before any treasury or fee-recipient
+address change takes effect.
+
+### Flow
+
+```
+Admin                         New Treasury Address
+  |                                   |
+  |-- initiate_treasury_rotation -->  |  (pending rotation stored, 7-day window)
+  |                                   |
+  |                 <-- confirm_treasury_rotation --  (new address proves ownership)
+  |                                   |
+  |              (rotation committed, old address replaced)
+```
+
+If the admin changes their mind, `cancel_treasury_rotation` can be called at any time
+before the new address confirms.
+
+### `initiate_treasury_rotation`
+
+```rust
+pub fn initiate_treasury_rotation(
+    env: Env,
+    new_address: Address,
+) -> Result<RecipientRotationRequest, QuickLendXError>
+```
+
+- Requires admin authorization.
+- Rejects if a rotation is already pending (`RotationAlreadyPending`).
+- Rejects if `new_address` equals the current treasury (`InvalidAddress`).
+- Stores a `RecipientRotationRequest` with a 7-day (`604,800 s`) confirmation deadline.
+- Emits `rot_init` event.
+
+### `confirm_treasury_rotation`
+
+```rust
+pub fn confirm_treasury_rotation(
+    env: Env,
+    new_address: Address,
+) -> Result<Address, QuickLendXError>
+```
+
+- Must be called **by the `new_address`** from the pending request.
+- Rejects if no rotation is pending (`RotationNotFound`).
+- Rejects if called by a different address (`Unauthorized`).
+- Rejects after the 7-day deadline (`RotationExpired`), and clears the pending state.
+- On success: writes `new_address` as the treasury, clears pending request, emits `rot_conf`.
+
+### `cancel_treasury_rotation`
+
+```rust
+pub fn cancel_treasury_rotation(env: Env) -> Result<(), QuickLendXError>
+```
+
+- Admin-only.
+- Rejects if nothing is pending (`RotationNotFound`).
+- Clears pending request without modifying the current treasury. Emits `rot_canc`.
+
+### `get_pending_treasury_rotation`
+
+```rust
+pub fn get_pending_treasury_rotation(env: Env) -> Option<RecipientRotationRequest>
+```
+
+Read-only query returning the pending rotation, if any.
+
+### `RecipientRotationRequest` struct
+
+```rust
+pub struct RecipientRotationRequest {
+    pub new_address: Address,
+    pub initiated_by: Address,
+    pub initiated_at: u64,
+    pub confirmation_deadline: u64,
+}
+```
+
+### Error codes
+
+| Error | Code | Meaning |
+|---|---|---|
+| `RotationAlreadyPending` | 1853 | A rotation is already waiting for confirmation |
+| `RotationNotFound` | 1854 | No pending rotation to confirm or cancel |
+| `RotationExpired` | 1855 | Confirmation deadline has passed |
+
+### Events
+
+| Topic | Fields | Trigger |
+|---|---|---|
+| `rot_init` | `(new_address, initiated_by, deadline, timestamp)` | Rotation initiated |
+| `rot_conf` | `(old_address, new_address, confirmed_at)` | Rotation confirmed |
+| `rot_canc` | `(cancelled_address, cancelled_by, timestamp)` | Rotation cancelled |
+
+### Security assumptions
+
+- **Ownership proof**: The new address must sign a transaction to confirm, preventing
+  misrouting to an address nobody controls.
+- **Time-bounded**: Unconfirmed requests expire after 7 days, preventing stale rotations.
+- **Single-pending**: Only one rotation at a time prevents confusion about the intended destination.
+- **Idempotent cancel**: Cancellation is always safe; it never silently overwrites state.
 
 ## Analytics
 

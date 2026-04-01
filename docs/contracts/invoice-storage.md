@@ -8,37 +8,62 @@ The Invoice Storage module provides comprehensive storage, indexing, and retriev
 
 ### Primary Storage
 
-Invoices are stored using a key-value pattern:
-- **Key**: `(Symbol("invoice"), invoice_id: BytesN<32>)`
+Invoices are stored in contract instance storage directly under their invoice ID:
+- **Storage class**: instance storage
+- **Key**: `invoice_id: BytesN<32>`
 - **Value**: `Invoice` struct
+
+### Deterministic Invoice ID Allocation
+
+Invoice IDs are allocated deterministically from the current ledger slot plus a
+monotonic instance-storage counter:
+
+- **Timestamp bytes**: `invoice_id[0..8]`
+- **Ledger sequence bytes**: `invoice_id[8..12]`
+- **Invoice counter bytes**: `invoice_id[12..16]`
+- **Reserved bytes**: `invoice_id[16..32]` are currently zero-filled
+
+The counter is stored in instance storage under `symbol_short!("inv_cnt")`.
+
+#### Collision Safety
+
+The allocator does not assume the first deterministic candidate is always free.
+Before minting an ID, the contract checks whether the candidate invoice key
+already exists in instance storage. If it does, the allocator probes the next
+counter value until it finds an unused key, then persists the next counter
+value.
+
+This protects against accidental invoice overwrite if:
+- a future refactor reuses a previously allocated counter
+- backup or restore logic rehydrates an older invoice key
+- tests or migrations seed invoice records before normal creation flow runs
+
+Security assumption: the normal invoice creation path must continue to use the
+allocator in `Invoice::new` rather than writing arbitrary invoice IDs directly.
 
 ### Indexes
 
 Multiple indexes are maintained for efficient querying:
 
 1. **Business Index**: Maps business address to their invoice IDs
-   - Key: `(Symbol("bus_inv"), business: Address)`
+   - Key: `(Symbol("business"), business: Address)`
    - Value: `Vec<BytesN<32>>`
 
 2. **Status Index**: Maps invoice status to invoice IDs
-   - Key: `(Symbol("stat_inv"), status: InvoiceStatus)`
+   - Key: `Symbol("pending" | "verified" | "funded" | "paid" | "default" | "canceld" | "refundd")`
    - Value: `Vec<BytesN<32>>`
+   - Note: cancelled/refunded keys are shortened to fit `symbol_short!`
 
 3. **Category Index**: Maps category to invoice IDs
-   - Key: `(Symbol("cat_inv"), category: InvoiceCategory)`
+   - Key: `(Symbol("cat_idx"), category: InvoiceCategory)`
    - Value: `Vec<BytesN<32>>`
 
 4. **Tag Index**: Maps tags to invoice IDs
-   - Key: `(Symbol("tag_inv"), tag: String)`
+   - Key: `(Symbol("tag_idx"), tag: String)`
    - Value: `Vec<BytesN<32>>`
 
-5. **Rating Index**: Tracks invoices with ratings
-   - Key: `Symbol("inv_ratings")`
-   - Value: `Vec<BytesN<32>>`
-
-6. **Metadata Indexes**:
-   - Customer Index: `(Symbol("meta_cust"), customer_name: String)`
-   - Tax ID Index: `(Symbol("meta_tax"), tax_id: String)`
+5. **Metadata Fields**: Customer/tax data is stored inline on the `Invoice`
+   record and updated together with the invoice payload.
 
 ## Data Structures
 
@@ -116,13 +141,13 @@ Stores a new invoice and creates all necessary indexes.
 pub fn store_invoice(env: &Env, invoice: &Invoice)
 ```
 
-**Operations:**
-1. Stores invoice in primary storage
-2. Adds to business index
-3. Adds to status index
-4. Adds to category index
-5. Adds to tag indexes (for each tag)
-6. Adds to metadata indexes (if metadata exists)
+**Operations in the normal create flow:**
+1. `Invoice::new` allocates a deterministic invoice ID and probes forward on collision
+2. `InvoiceStorage::store_invoice` stores the invoice in primary storage
+3. The invoice ID is appended to the business index
+4. The invoice ID is appended to the status index
+5. The invoice ID is appended to the category index
+6. The invoice ID is appended to each tag index
 
 **Example:**
 ```rust
@@ -139,6 +164,23 @@ let invoice = Invoice::new(
 
 InvoiceStorage::store_invoice(&env, &invoice);
 ```
+
+## Security Notes
+
+- Collision handling is storage-backed, not counter-trust-based: rewinding `inv_cnt`
+  cannot overwrite an existing invoice because the allocator checks the target key first.
+- Counter overflow returns `StorageError` instead of wrapping to zero.
+- This guarantee only holds if invoice creation continues to use `Invoice::new`
+  before `InvoiceStorage::store_invoice`. Direct raw writes to an existing invoice
+  key can still overwrite data.
+
+## Regression Coverage
+
+The invoice collision regression suite covers:
+
+1. High-throughput creation in a pinned ledger slot to confirm deterministic uniqueness.
+2. Counter rewind collisions to confirm the allocator skips the occupied key.
+3. Post-collision creation to confirm monotonic counter progression resumes at the next free ID.
 
 ### get_invoice
 
@@ -751,3 +793,45 @@ for id in verified_invoices.iter() {
 - [Invoice Metadata](./invoice-metadata.md) - Metadata structure and usage
 - [Bidding System](./bidding.md) - How invoices are bid on
 - [Storage Schema](./storage-schema.md) - Overall storage architecture
+
+## Invoice-to-Investment Mapping Consistency
+
+### Back-pointer Validation
+
+To prevent stale mapping pointers (where an index points to an entity that no longer
+exists or belongs to a different parent), `get_investment_by_invoice` performs a
+mandatory back-pointer check:
+
+```rust
+pub fn get_investment_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Investment> {
+    let index_key = Self::invoice_index_key(invoice_id);
+    let investment_id: Option<BytesN<32>> = env.storage().instance().get(&index_key);
+    investment_id
+        .and_then(|id| Self::get_investment(env, &id))
+        .filter(|inv| inv.invoice_id == *invoice_id) // Mandatory consistency check
+}
+```
+
+This filter ensures that even if a mapping index is corrupted or stale, the protocol
+will not return an incorrect investment record.
+
+### Unified Storage Cleanup
+
+`StorageManager::clear_all_mappings` provides a centralized way to reset protocol
+state, ensuring that when invoices are cleared (e.g., during a backup restore or
+system reset), all associated mapping counters and pointers are also invalidated.
+
+### Security Assumptions
+
+- **ID Uniqueness**: Invoice and Investment IDs are generated using a combination of
+  ledger timestamp and monotonic counters to ensure 32-byte uniqueness.
+- **Authorization**: All state-changing operations require `Address::require_auth()`.
+- **Migration Safety**: The back-pointer check provides a safety net during contract
+  upgrades where storage layouts or indexing strategies might change.
+
+### Verification
+
+Consistency is verified through:
+- **Unit Tests**: `src/test_investment_queries.rs` simulates stale pointer scenarios.
+- **Consistency Tests**: `src/test_investment_consistency.rs` verifies mapping
+  integrity across lifecycle events.

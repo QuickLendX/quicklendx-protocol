@@ -1,219 +1,182 @@
-use crate::QuickLendXError;
-use soroban_sdk::{contracttype, Address, Env, String, Vec};
+use crate::admin::AdminStorage;
+use crate::errors::QuickLendXError;
+use crate::invoice::{Dispute, DisputeStatus, InvoiceStatus, InvoiceStorage};
+use crate::protocol_limits::{
+    MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
+};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DisputeStatus {
-    Open,
-    UnderReview,
-    Resolved,
+fn dispute_index_key() -> soroban_sdk::Symbol {
+    symbol_short!("dispute")
 }
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Dispute {
-    pub invoice_id: u64,
-    pub creator: Address,
-    pub reason: String,
-    pub evidence: String,
-    pub status: DisputeStatus,
-    pub resolution: Option<String>,
-    pub created_at: u64,
-    pub resolved_at: Option<u64>,
+fn get_dispute_index(env: &Env) -> Vec<BytesN<32>> {
+    env.storage()
+        .instance()
+        .get(&dispute_index_key())
+        .unwrap_or_else(|| Vec::new(env))
 }
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum InvoiceStatus {
-    Funded,
-    Settled,
-    Defaulted,
+fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
+    let mut ids = get_dispute_index(env);
+    if !ids.iter().any(|id| id == *invoice_id) {
+        ids.push_back(invoice_id.clone());
+        env.storage().instance().set(&dispute_index_key(), &ids);
+    }
 }
 
-#[allow(dead_code)]
-const MAX_REASON_LENGTH: u32 = 500;
-#[allow(dead_code)]
-const MAX_EVIDENCE_LENGTH: u32 = 2000;
-#[allow(dead_code)]
-const MAX_RESOLUTION_LENGTH: u32 = 1000;
+fn zero_address(env: &Env) -> Address {
+    Address::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF")
+}
+
+
+fn add_to_dispute_index(_env: &Env, _invoice_id: &BytesN<32>) {}
+
+fn get_dispute_index(_env: &Env) -> Vec<BytesN<32>> {
+    Vec::new(_env)
+}
+
+fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> {
+    Ok(())
+}
 
 #[allow(dead_code)]
 pub fn create_dispute(
-    env: Env,
-    invoice_id: u64,
-    creator: Address,
-    reason: String,
-    evidence: String,
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    creator: &Address,
+    reason: &String,
+    evidence: &String,
 ) -> Result<(), QuickLendXError> {
     creator.require_auth();
 
-    if env.storage().persistent().has(&("dispute", invoice_id)) {
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+    if invoice.dispute_status != DisputeStatus::None {
         return Err(QuickLendXError::DisputeAlreadyExists);
     }
 
-    let invoice_status: Option<InvoiceStatus> = env
-        .storage()
-        .persistent()
-        .get(&("invoice_status", invoice_id));
-
-    match invoice_status {
-        Some(InvoiceStatus::Funded) | Some(InvoiceStatus::Settled) => {}
-        _ => return Err(QuickLendXError::InvoiceNotAvailableForFunding),
+    match invoice.status {
+        InvoiceStatus::Pending
+        | InvoiceStatus::Verified
+        | InvoiceStatus::Funded
+        | InvoiceStatus::Paid => {}
+        _ => return Err(QuickLendXError::InvalidStatus),
     }
 
-    let invoice_data: Option<(Address, Address, i128)> =
-        env.storage().persistent().get(&("invoice", invoice_id));
-
-    if let Some((business, investor, _)) = invoice_data {
-        if creator != business && creator != investor {
-            return Err(QuickLendXError::DisputeNotAuthorized);
-        }
-    } else {
-        return Err(QuickLendXError::InvoiceNotFound);
+    let is_business = *creator == invoice.business;
+    let is_investor = invoice
+        .investor
+        .as_ref()
+        .map_or(false, |investor| *creator == *investor);
+    if !is_business && !is_investor {
+        return Err(QuickLendXError::DisputeNotAuthorized);
     }
 
-    if reason.len() == 0 || reason.len() > MAX_REASON_LENGTH {
+    if reason.len() == 0 || reason.len() > MAX_DISPUTE_REASON_LENGTH {
         return Err(QuickLendXError::InvalidDisputeReason);
     }
-
-    if evidence.len() > MAX_EVIDENCE_LENGTH {
+    if evidence.len() == 0 || evidence.len() > MAX_DISPUTE_EVIDENCE_LENGTH {
         return Err(QuickLendXError::InvalidDisputeEvidence);
     }
 
-    let dispute = Dispute {
-        invoice_id,
-        creator: creator.clone(),
-        reason,
-        evidence,
-        status: DisputeStatus::Open,
-        resolution: None,
+    invoice.dispute_status = DisputeStatus::Disputed;
+    invoice.dispute = Dispute {
+        created_by: creator.clone(),
         created_at: env.ledger().timestamp(),
-        resolved_at: None,
+        reason: reason.clone(),
+        evidence: evidence.clone(),
+        resolution: String::from_str(env, ""),
+        resolved_by: zero_address(env),
+        resolved_at: 0,
     };
 
-    env.storage()
-        .persistent()
-        .set(&("dispute", invoice_id), &dispute);
-
+    InvoiceStorage::update_invoice(env, &invoice);
+    add_to_dispute_index(env, invoice_id);
     Ok(())
 }
 
 #[allow(dead_code)]
 pub fn put_dispute_under_review(
     env: &Env,
-    admin: Address,
-    invoice_id: u64,
+    admin: &Address,
+    invoice_id: &BytesN<32>,
 ) -> Result<(), QuickLendXError> {
-    admin.require_auth();
+    AdminStorage::require_admin(env, admin)?;
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    let stored_admin: Address = env
-        .storage()
-        .instance()
-        .get(&"admin")
-        .ok_or(QuickLendXError::NotAdmin)?;
-
-    if admin != stored_admin {
-        return Err(QuickLendXError::Unauthorized);
+    if invoice.dispute_status == DisputeStatus::None {
+        return Err(QuickLendXError::DisputeNotFound);
     }
-
-    let mut dispute: Dispute = env
-        .storage()
-        .persistent()
-        .get(&("dispute", invoice_id))
-        .ok_or(QuickLendXError::DisputeNotFound)?;
-
-    if dispute.status != DisputeStatus::Open {
+    if invoice.dispute_status != DisputeStatus::Disputed {
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    dispute.status = DisputeStatus::UnderReview;
-
-    env.storage()
-        .persistent()
-        .set(&("dispute", invoice_id), &dispute);
-
+    invoice.dispute_status = DisputeStatus::UnderReview;
+    InvoiceStorage::update_invoice(env, &invoice);
     Ok(())
 }
 
 #[allow(dead_code)]
 pub fn resolve_dispute(
     env: &Env,
-    admin: Address,
-    invoice_id: u64,
-    resolution: String,
+    admin: &Address,
+    invoice_id: &BytesN<32>,
+    resolution: &String,
 ) -> Result<(), QuickLendXError> {
-    admin.require_auth();
+    AdminStorage::require_admin(env, admin)?;
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    let stored_admin: Address = env
-        .storage()
-        .instance()
-        .get(&"admin")
-        .ok_or(QuickLendXError::NotAdmin)?;
-
-    if admin != stored_admin {
-        return Err(QuickLendXError::Unauthorized);
+    if invoice.dispute_status == DisputeStatus::None {
+        return Err(QuickLendXError::DisputeNotFound);
     }
-
-    let mut dispute: Dispute = env
-        .storage()
-        .persistent()
-        .get(&("dispute", invoice_id))
-        .ok_or(QuickLendXError::DisputeNotFound)?;
-
-    if dispute.status != DisputeStatus::UnderReview {
+    if invoice.dispute_status != DisputeStatus::UnderReview {
         return Err(QuickLendXError::DisputeNotUnderReview);
     }
-
-    if dispute.status == DisputeStatus::Resolved {
-        return Err(QuickLendXError::DisputeAlreadyResolved);
+    if resolution.len() == 0 || resolution.len() > MAX_DISPUTE_RESOLUTION_LENGTH {
+        return Err(QuickLendXError::InvalidDisputeReason);
     }
 
-    if resolution.len() == 0 || resolution.len() > MAX_RESOLUTION_LENGTH {
-        return Err(QuickLendXError::InvalidDisputeEvidence);
-    }
-
-    dispute.status = DisputeStatus::Resolved;
-    dispute.resolution = Some(resolution);
-    dispute.resolved_at = Some(env.ledger().timestamp());
-
-    env.storage()
-        .persistent()
-        .set(&("dispute", invoice_id), &dispute);
-
+    invoice.dispute_status = DisputeStatus::Resolved;
+    invoice.dispute.resolution = resolution.clone();
+    invoice.dispute.resolved_by = admin.clone();
+    invoice.dispute.resolved_at = env.ledger().timestamp();
+    InvoiceStorage::update_invoice(env, &invoice);
     Ok(())
 }
 
 #[allow(dead_code)]
-pub fn get_dispute_details(env: &Env, invoice_id: u64) -> Result<Dispute, QuickLendXError> {
-    env.storage()
-        .persistent()
-        .get(&("dispute", invoice_id))
-        .ok_or(QuickLendXError::DisputeNotFound)
+pub fn get_dispute_details(env: &Env, invoice_id: &BytesN<32>) -> Option<Dispute> {
+    let invoice = InvoiceStorage::get_invoice(env, invoice_id)?;
+    if invoice.dispute_status == DisputeStatus::None {
+        None
+    } else {
+        Some(invoice.dispute)
+    }
 }
 
 #[allow(dead_code)]
-pub fn get_disputes_by_status(
-    env: &Env,
-    status: DisputeStatus,
-    start: u64,
-    limit: u32,
-) -> Vec<Dispute> {
-    let mut disputes = Vec::new(env);
-    let max_limit = 50u32;
-    let query_limit = if limit > max_limit { max_limit } else { limit };
+pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
+    get_dispute_index(env)
+}
 
-    let end = start.saturating_add(query_limit as u64);
-    for i in start..end {
-        if let Some(dispute) = env
-            .storage()
-            .persistent()
-            .get::<_, Dispute>(&("dispute", i))
-        {
-            if dispute.status == status {
-                disputes.push_back(dispute);
+#[allow(dead_code)]
+pub fn get_invoices_by_dispute_status(
+    env: &Env,
+    status: &DisputeStatus,
+) -> Vec<BytesN<32>> {
+    let mut result = Vec::new(env);
+    for invoice_id in get_dispute_index(env).iter() {
+        if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
+            if invoice.dispute_status == *status {
+                result.push_back(invoice_id);
             }
         }
     }
-
-    disputes
+    result
 }
+//! Invoice disputes are represented on [`crate::invoice::Invoice`] and handled by contract
+//! entry points in `lib.rs`. This module is reserved for future dispute-specific helpers.
