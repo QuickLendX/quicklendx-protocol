@@ -53,6 +53,23 @@ const WHITELIST_KEY: Symbol = symbol_short!("curr_wl");
 /// Storage key for initialization lock (prevents concurrent initialization)
 const INIT_LOCK_KEY: Symbol = symbol_short!("init_lck");
 
+/// Storage key for the protocol version written at initialization time
+const PROTOCOL_VERSION_KEY: Symbol = symbol_short!("proto_ver");
+
+/// Current protocol version.
+///
+/// Increment this constant when deploying a new contract version.
+/// The value is written to storage during `initialize` so that
+/// `get_version` always reflects the version that was active when
+/// the contract was first set up, even after a WASM upgrade that
+/// bumps this constant.
+///
+/// # Upgrade policy
+/// - Patch releases (bug-fixes, no storage-schema changes): no bump required.
+/// - Minor releases (new fields, backward-compatible): bump recommended.
+/// - Major releases (breaking storage changes, migration required): bump mandatory.
+pub const PROTOCOL_VERSION: u32 = 1;
+
 // Configuration constants with secure defaults
 #[cfg(not(test))]
 const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
@@ -240,6 +257,12 @@ impl ProtocolInitializer {
                 .instance()
                 .set(&WHITELIST_KEY, &params.initial_currencies);
         }
+
+        // ATOMIC: Persist the protocol version so get_version is consistent
+        // with the version that was active at initialization time.
+        env.storage()
+            .instance()
+            .set(&PROTOCOL_VERSION_KEY, &PROTOCOL_VERSION);
 
         // COMMIT: Mark protocol as initialized (this is the atomic commit point)
         env.storage()
@@ -478,6 +501,27 @@ impl ProtocolInitializer {
 // ============================================================================
 
 impl ProtocolInitializer {
+    /// Get the protocol version stored at initialization time.
+    ///
+    /// Returns the `PROTOCOL_VERSION` constant that was compiled into the
+    /// contract when `initialize` was first called.  Falls back to the
+    /// current `PROTOCOL_VERSION` constant when the contract has not been
+    /// initialized yet (e.g. in a fresh test environment).
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    /// * `u32` - The stored protocol version, or `PROTOCOL_VERSION` if unset.
+    ///
+    /// @notice Always consistent with the version active at init time.
+    pub fn get_version(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&PROTOCOL_VERSION_KEY)
+            .unwrap_or(PROTOCOL_VERSION)
+    }
+
     /// Get the current fee in basis points.
     ///
     /// # Arguments

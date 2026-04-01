@@ -845,4 +845,64 @@ mod test_init {
         assert_eq!(fee_events.len(), 1, "Must have one fee event");
         assert_eq!(treasury_events.len(), 1, "Must have one treasury event");
     }
+
+    // ============================================================================
+    // 13. Version Consistency Tests
+    // ============================================================================
+
+    #[test]
+    fn test_get_version_before_init_returns_constant() {
+        let (_env, client) = setup();
+        assert_eq!(
+            client.get_version(),
+            crate::init::PROTOCOL_VERSION,
+            "get_version must return PROTOCOL_VERSION constant before init"
+        );
+    }
+
+    #[test]
+    fn test_get_version_after_init_matches_constant() {
+        let (_env, client, _params) = setup_initialized();
+        assert_eq!(
+            client.get_version(),
+            crate::init::PROTOCOL_VERSION,
+            "get_version must equal PROTOCOL_VERSION after init"
+        );
+    }
+
+    #[test]
+    fn test_get_version_stored_in_instance_storage() {
+        let (env, _client, _params) = setup_initialized();
+        assert_eq!(
+            crate::init::ProtocolInitializer::get_version(&env),
+            crate::init::PROTOCOL_VERSION,
+            "Stored version must match PROTOCOL_VERSION"
+        );
+    }
+
+    #[test]
+    fn test_get_version_consistent_before_and_after_init() {
+        let (env, client) = setup();
+        let before = client.get_version();
+        let params = create_valid_params(&env);
+        client.initialize(&params);
+        let after = client.get_version();
+        assert_eq!(
+            before, after,
+            "Version must be the same before and after init"
+        );
+    }
+
+    #[test]
+    fn test_reinit_does_not_change_version() {
+        let (_env, client, params) = setup_initialized();
+        let v1 = client.get_version();
+        // Idempotent re-init with same params must not alter version
+        let _ = client.try_initialize(&params);
+        assert_eq!(
+            client.get_version(),
+            v1,
+            "Version must not change on idempotent re-init"
+        );
+    }
 }
