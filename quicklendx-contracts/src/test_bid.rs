@@ -7,7 +7,7 @@
 /// 3. Indexing - multiple bids properly indexed and queryable
 /// 4. Ranking - profit-based bid comparison works correctly
 use super::*;
-use crate::bid::BidStatus;
+use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::payments::EscrowStatus;
@@ -1965,8 +1965,92 @@ fn test_cannot_accept_second_bid_after_first_accepted() {
     assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Placed);
 
     // Verify invoice is Funded with bid1's amount
-    let invoice = client.get_invoice(&invoice_id);
+    let invoice = client.get_invoice(&invoice_id).unwrap();
     assert_eq!(invoice.status, InvoiceStatus::Funded);
     assert_eq!(invoice.funded_amount, 10_000);
     assert_eq!(invoice.investor, Some(investor1));
+}
+
+/// Test: cleanup_expired_bids correctly handles and counts already-expired bids
+#[test]
+fn test_cleanup_expired_bids_with_pre_set_expired() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // Place a bid
+    let bid_id = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+
+    // Simulate another process marking the bid as expired but NOT removing it from invoice index
+    let _ = BidStorage::count_active_placed_bids_for_investor(&env, &investor1);
+    
+    // Verify bid status is now Expired
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Expired);
+    
+    // Verify it's still in the invoice bid index
+    let bids_in_index = client.get_bids_for_invoice(&invoice_id);
+    assert!(bids_in_index.iter().any(|b| b.bid_id == bid_id));
+
+    // Now call cleanup_expired_bids - it should find the already-expired bid, remove it, and return 1
+    let cleaned = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned, 1, "Should count already-expired bid as cleaned up");
+
+    // Verify it's gone from the index
+    let bids_after = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(bids_after.len(), 0, "Index should be empty after cleanup");
+
+    // Second call should return 0
+    let cleaned_again = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned_again, 0, "Second cleanup should be idempotent and return 0");
+}
+
+/// Test: cleanup_expired_bids with partial expirations over time
+#[test]
+fn test_cleanup_expired_bids_partial_idempotency() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // Bid 1
+    let _bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    
+    // Advance time partly
+    env.ledger().set_timestamp(env.ledger().timestamp() + 302400); // 3.5 days
+
+    // Bid 2
+    let _bid_id2 = client.place_bid(&investor2, &invoice_id, &10_000, &12_000);
+
+    // Advance time so Bid 1 expires but Bid 2 doesn't
+    env.ledger().set_timestamp(env.ledger().timestamp() + 432000); // +5 days
+
+    // First cleanup
+    let cleaned = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned, 1, "Only bid 1 should be cleaned up");
+
+    // Second cleanup immediately
+    let cleaned2 = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned2, 0, "Second cleanup should return 0 - no new expirations");
+
+    // Advance time so Bid 2 also expires
+    env.ledger().set_timestamp(env.ledger().timestamp() + 432000); // +5 days
+
+    // Third cleanup
+    let cleaned3 = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned3, 1, "Bid 2 should now be cleaned up");
+
+    let cleaned4 = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned4, 0, "No more bids left!");
 }
