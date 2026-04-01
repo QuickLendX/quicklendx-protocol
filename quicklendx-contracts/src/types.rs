@@ -25,7 +25,7 @@ pub enum InvoiceStatus {
 
 /// Bid status enumeration
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BidStatus {
     Placed,
     Withdrawn,

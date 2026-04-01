@@ -941,15 +941,8 @@ fn test_integer_division_rounding() {
 fn test_release_idempotency() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
 
-    let id = client.create_vesting_schedule(
-        &admin,
-        &token_id,
-        &beneficiary,
-        &1000,
-        &1000,
-        &0,
-        &2000,
-    );
+    let id =
+        client.create_vesting_schedule(&admin, &token_id, &beneficiary, &1000, &1000, &0, &2000);
 
     env.ledger().set_timestamp(1500);
 
@@ -967,15 +960,8 @@ fn test_multi_step_progression() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
 
     let total = 1000;
-    let id = client.create_vesting_schedule(
-        &admin,
-        &token_id,
-        &beneficiary,
-        &total,
-        &1000,
-        &0,
-        &2000,
-    );
+    let id =
+        client.create_vesting_schedule(&admin, &token_id, &beneficiary, &total, &1000, &0, &2000);
 
     env.ledger().set_timestamp(1250);
     let r1 = client.release_vested_tokens(&beneficiary, &id);
@@ -997,15 +983,8 @@ fn test_never_exceeds_total() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
 
     let total = 1000;
-    let id = client.create_vesting_schedule(
-        &admin,
-        &token_id,
-        &beneficiary,
-        &total,
-        &1000,
-        &0,
-        &2000,
-    );
+    let id =
+        client.create_vesting_schedule(&admin, &token_id, &beneficiary, &total, &1000, &0, &2000);
 
     env.ledger().set_timestamp(3000);
 
@@ -1022,15 +1001,8 @@ fn test_never_exceeds_total() {
 fn test_releasable_consistency() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
 
-    let id = client.create_vesting_schedule(
-        &admin,
-        &token_id,
-        &beneficiary,
-        &1000,
-        &1000,
-        &0,
-        &2000,
-    );
+    let id =
+        client.create_vesting_schedule(&admin, &token_id, &beneficiary, &1000, &1000, &0, &2000);
 
     env.ledger().set_timestamp(1500);
 

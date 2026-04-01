@@ -259,7 +259,7 @@ impl Vesting {
 
         let releasable = Self::releasable_amount(env, &schedule)?;
         if releasable <= 0 {
-            // Idempotent: nothing left to release (fully vested and released).
+            // Idempotent behavior: repeated calls return 0 instead of error
             return Ok(0);
         }
         let contract = env.current_contract_address();

@@ -130,6 +130,84 @@ fn test_get_business_invoices_paged_limit_is_capped_to_max_query_limit() {
 }
 
 #[test]
+fn test_get_business_invoices_paged_status_filter_and_deterministic_ordering() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    let business = Address::generate(&env);
+
+    let pending_1 = create_invoice(
+        &env,
+        &client,
+        &business,
+        1_000,
+        InvoiceCategory::Services,
+        false,
+    );
+    let verified_1 = create_invoice(
+        &env,
+        &client,
+        &business,
+        2_000,
+        InvoiceCategory::Services,
+        true,
+    );
+    let pending_2 = create_invoice(
+        &env,
+        &client,
+        &business,
+        3_000,
+        InvoiceCategory::Products,
+        false,
+    );
+
+    let verified_only = client.get_business_invoices_paged(
+        &business,
+        &Some(InvoiceStatus::Verified),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(verified_only.len(), 1, "Expected only verified invoices");
+    assert!(verified_only.contains(&verified_1));
+    assert!(!verified_only.contains(&pending_1));
+    assert!(!verified_only.contains(&pending_2));
+
+    let first_call = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    let second_call = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(first_call, second_call, "Ordering should be deterministic");
+
+    let page_0 = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &0u32,
+        &2u32,
+    );
+    let page_1 = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &2u32,
+        &2u32,
+    );
+
+    assert_eq!(page_0.len(), 2);
+    assert_eq!(page_1.len(), 1);
+    assert!(!page_0.contains(&page_1.get(0).unwrap()));
+}
+
+#[test]
 fn test_get_available_invoices_paged_filters_and_bounds() {
     let (env, client) = setup();
     env.mock_all_auths();

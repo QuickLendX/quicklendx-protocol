@@ -1,3 +1,4 @@
+use crate::errors::QuickLendXError;
 use crate::fees::FeeType;
 use crate::QuickLendXContract;
 use crate::QuickLendXContractClient;
@@ -417,9 +418,107 @@ fn test_double_distribution_same_period_fails() {
     let result = client.try_distribute_revenue(&admin, &current_period);
     assert!(result.is_ok());
 
-    // Second distribution fails — pending is now 0
+    // Second distribution fails — pending is now 0 (idempotency per settlement)
     let result = client.try_distribute_revenue(&admin, &current_period);
-    assert!(result.is_err(), "Double distribution should fail");
+    assert_eq!(
+        result.err().expect("expected error").expect("contract error"),
+        QuickLendXError::OperationNotAllowed
+    );
+}
+
+/// With `min_distribution_amount == 0`, a second distribute for the same period must still fail
+/// if no new fees were collected (regression: otherwise a no-op + duplicate event could occur).
+#[test]
+fn test_double_distribution_min_zero_fails_without_new_collections() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &2500, &2500, &false, &0);
+
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 100);
+    client.collect_transaction_fees(&user, &fees_by_type, &100);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+    client.distribute_revenue(&admin, &current_period);
+
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert_eq!(
+        result.err().expect("expected error").expect("contract error"),
+        QuickLendXError::OperationNotAllowed
+    );
+}
+
+/// New collections after a distribution replenish `pending_distribution`; a second settlement in
+/// the same period remains valid.
+#[test]
+fn test_second_distribution_same_period_after_new_collect() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &2500, &2500, &false, &1);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    let mut fees1 = Map::new(&env);
+    fees1.set(FeeType::Platform, 100);
+    client.collect_transaction_fees(&user, &fees1, &100);
+    client.distribute_revenue(&admin, &current_period);
+
+    let mut fees2 = Map::new(&env);
+    fees2.set(FeeType::Platform, 200);
+    client.collect_transaction_fees(&user, &fees2, &200);
+    let (t, d, p) = client.distribute_revenue(&admin, &current_period);
+    assert_eq!(t + d + p, 200);
+}
+
+/// When platform fee treasury routing is configured, revenue split’s treasury share must name
+/// the same address so admin cannot silently diverge recipients.
+#[test]
+fn test_distribute_revenue_rejects_treasury_mismatch_with_platform_routing() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let fee_treasury = Address::generate(&env);
+    let revenue_treasury_other = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_treasury(&fee_treasury);
+    client.configure_revenue_distribution(
+        &admin,
+        &revenue_treasury_other,
+        &5000,
+        &2500,
+        &2500,
+        &false,
+        &1,
+    );
+
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 100);
+    client.collect_transaction_fees(&user, &fees_by_type, &100);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert_eq!(
+        result.err().expect("expected error").expect("contract error"),
+        QuickLendXError::InvalidFeeConfiguration
+    );
 }
 
 // ============================================================================
