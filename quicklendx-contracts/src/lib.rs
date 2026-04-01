@@ -1,211 +1,3 @@
-<<<<<<< feature/dispute-resolution-finality
-#![cfg_attr(target_family = "wasm", no_std)]
-#[cfg(target_family = "wasm")]
-extern crate alloc;
-
-#[cfg(test)]
-mod scratch_events;
-#[cfg(test)]
-mod test_default;
-#[cfg(test)]
-mod test_fees;
-#[cfg(test)]
-mod test_fees_extended;
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
-
-mod admin;
-mod analytics;
-mod audit;
-mod backup;
-mod bid;
-mod currency;
-mod defaults;
-mod dispute;
-mod emergency;
-mod errors;
-mod escrow;
-mod events;
-mod fees;
-mod init;
-mod investment;
-mod investment_queries;
-mod invoice;
-mod notifications;
-mod pause;
-mod payments;
-mod profits;
-mod protocol_limits;
-mod reentrancy;
-mod settlement;
-mod storage;
-#[cfg(test)]
-#[cfg(test)]
-mod test_admin;
-#[cfg(test)]
-mod test_admin_simple;
-#[cfg(test)]
-mod test_admin_standalone;
-#[cfg(test)]
-mod test_dispute;
-#[cfg(test)]
-mod test_init;
-#[cfg(test)]
-mod test_investment_consistency;
-#[cfg(test)]
-mod test_investment_queries;
-#[cfg(test)]
-mod test_max_invoices_per_business;
-#[cfg(test)]
-mod test_overflow;
-#[cfg(test)]
-mod test_pause;
-#[cfg(test)]
-mod test_profit_fee;
-#[cfg(test)]
-mod test_refund;
-#[cfg(test)]
-mod test_storage;
-#[cfg(test)]
-mod test_string_limits;
-#[cfg(test)]
-mod test_types;
-#[cfg(test)]
-mod test_vesting;
-pub mod types;
-pub use invoice::{InvoiceCategory, InvoiceStatus};
-mod verification;
-mod vesting;
-use admin::AdminStorage;
-use bid::{Bid, BidStorage};
-use defaults::{
-    handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
-    OverdueScanResult,
-};
-use errors::QuickLendXError;
-use escrow::{
-    accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds,
-};
-use events::{
-    emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_escrow_created,
-    emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
-    emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
-};
-use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
-use invoice::{Invoice, InvoiceMetadata, InvoiceStorage};
-use payments::{create_escrow, release_escrow, EscrowStorage};
-use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
-use settlement::{
-    process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
-};
-use verification::{
-    calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
-    get_investor_verification as do_get_investor_verification, normalize_tag, reject_business,
-    reject_investor as do_reject_investor, require_business_not_pending,
-    require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
-    submit_kyc_application, validate_bid, validate_investor_investment, validate_invoice_metadata,
-    verify_business, verify_investor as do_verify_investor, verify_invoice_data,
-    BusinessVerificationStatus, BusinessVerificationStorage, InvestorRiskLevel, InvestorTier,
-    InvestorVerification, InvestorVerificationStorage,
-};
-
-pub use crate::types::*;
-
-#[contract]
-pub struct QuickLendXContract;
-
-/// Maximum number of records returned by paginated query endpoints.
-pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
-
-/// @notice Validates and caps query limit to prevent resource abuse
-/// @param limit The requested limit value
-/// @return The capped limit value, never exceeding MAX_QUERY_LIMIT
-/// @dev Returns 0 if limit is 0, enforcing empty result behavior
-#[inline]
-fn cap_query_limit(limit: u32) -> u32 {
-    investment_queries::InvestmentQueries::cap_query_limit(limit)
-}
-
-/// @notice Validates query parameters for security and resource protection
-/// @param offset The pagination offset
-/// @param limit The requested result limit
-/// @return Result indicating validation success or failure
-/// @dev Prevents potential overflow and ensures reasonable query bounds
-fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError> {
-    // Check for potential overflow in offset + limit calculation
-    if offset > u32::MAX - MAX_QUERY_LIMIT {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
-    // Limit is automatically capped by cap_query_limit, but we validate the input
-    // Note: limit=0 is allowed and results in empty response
-    Ok(())
-}
-
-/// Map the contract-exported `types::BidStatus` filter to the bid-storage enum.
-fn map_public_bid_status(s: BidStatus) -> bid::BidStatus {
-    match s {
-        BidStatus::Placed => bid::BidStatus::Placed,
-        BidStatus::Withdrawn => bid::BidStatus::Withdrawn,
-        BidStatus::Accepted => bid::BidStatus::Accepted,
-        BidStatus::Expired => bid::BidStatus::Expired,
-    }
-}
-
-#[contractimpl]
-impl QuickLendXContract {
-    // ============================================================================
-    // Admin Management Functions
-    // ============================================================================
-
-    /// Initialize the protocol with all required configuration (one-time setup)
-    pub fn initialize(env: Env, params: init::InitializationParams) -> Result<(), QuickLendXError> {
-        init::ProtocolInitializer::initialize(&env, &params)
-    }
-
-    /// Check if the protocol has been initialized
-    pub fn is_initialized(env: Env) -> bool {
-        init::ProtocolInitializer::is_initialized(&env)
-    }
-
-    /// Get the protocol/contract version
-    ///
-    /// Returns the version written during initialization, or the current
-    /// PROTOCOL_VERSION constant if the contract has not been initialized yet.
-    ///
-    /// # Returns
-    /// * `u32` - The protocol version number
-    ///
-    /// # Version Format
-    /// Version is a simple integer increment (e.g., 1, 2, 3...)
-    /// Major versions indicate breaking changes that require migration.
-    pub fn get_version(_env: Env) -> u32 {
-        1u32
-    }
-
-    /// Get current protocol limits
-    pub fn get_protocol_limits(env: Env) -> protocol_limits::ProtocolLimits {
-        protocol_limits::ProtocolLimitsContract::get_protocol_limits(env)
-    }
-
-    /// Initialize the admin address (deprecated: use initialize)
-    pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        AdminStorage::initialize(&env, &admin)
-    }
-
-    /// Transfer admin role to a new address
-    ///
-    /// # Arguments
-    /// * `env` - The contract environment
-    /// * `new_admin` - The new admin address
-    ///
-    /// # Returns
-    /// * `Ok(())` if transfer succeeds
-    /// * `Err(QuickLendXError::NotAdmin)` if caller is not current admin
-    ///
-    /// # Security
-    /// - Requires authorization from current admin
-    pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), QuickLendXError> {
         let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         AdminStorage::transfer_admin(&env, &current_admin, &new_admin)
     }
@@ -277,7 +69,7 @@ impl QuickLendXContract {
 
     /// Admin-only: configure default bid TTL (days). Bounds: 1..=30.
     pub fn set_bid_ttl_days(env: Env, days: u64) -> Result<u64, QuickLendXError> {
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = AdminStorage::require_current_admin(&env)?;
         bid::BidStorage::set_bid_ttl_days(&env, &admin, days)
     }
 
@@ -360,6 +152,7 @@ impl QuickLendXContract {
         admin: Address,
         currency: Address,
     ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_current_admin(&env)?;
         currency::CurrencyWhitelist::add_currency(&env, &admin, &currency)
     }
 
@@ -369,6 +162,7 @@ impl QuickLendXContract {
         admin: Address,
         currency: Address,
     ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_current_admin(&env)?;
         currency::CurrencyWhitelist::remove_currency(&env, &admin, &currency)
     }
 
@@ -382,7 +176,8 @@ impl QuickLendXContract {
         currency::CurrencyWhitelist::get_whitelisted_currencies(&env)
     }
 
-    /// Replace the entire currency whitelist atomically (admin only).
+    /// @notice Replace the entire currency whitelist atomically.
+    /// @dev Requires authenticated admin approval; no caller-address fallback is allowed.
     pub fn set_currencies(
         env: Env,
         admin: Address,
@@ -1388,7 +1183,8 @@ impl QuickLendXContract {
         BusinessVerificationStorage::get_admin(&env)
     }
 
-    /// Initialize protocol limits (admin only). Sets min amount, max due date days, grace period.
+    /// @notice Initialize protocol limits.
+    /// @dev Requires authenticated canonical admin approval before initializing or updating limits.
     pub fn initialize_protocol_limits(
         env: Env,
         admin: Address,
@@ -1396,6 +1192,10 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
+        let current_admin = AdminStorage::require_current_admin(&env)?;
+        if admin != current_admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
         let _ = protocol_limits::ProtocolLimitsContract::initialize(env.clone(), admin.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
@@ -1839,8 +1639,13 @@ impl QuickLendXContract {
     // Fee and Revenue Management Functions
     // ========================================
 
-    /// Initialize fee management system
+    /// @notice Initialize fee management storage.
+    /// @dev Requires authenticated canonical admin approval and rejects mismatched caller addresses.
     pub fn initialize_fee_system(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        let current_admin = AdminStorage::require_current_admin(&env)?;
+        if admin != current_admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
         fees::FeeManager::initialize(&env, &admin)
     }
 
@@ -1858,10 +1663,10 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    /// Update platform fee basis points (admin only)
+    /// @notice Update the platform fee basis points.
+    /// @dev Requires the stored admin to authenticate for the current invocation.
     pub fn update_platform_fee_bps(env: Env, new_fee_bps: u32) -> Result<(), QuickLendXError> {
-        let admin =
-            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = AdminStorage::require_current_admin(&env)?;
 
         let old_config = fees::FeeManager::get_platform_fee_config(&env)?;
         let old_fee_bps = old_config.fee_bps;
@@ -2934,8 +2739,7 @@ impl QuickLendXContract {
             });
         (platform, performance)
     }
-}
-=======
+
 /// QuickLendX Smart Contract Library
 ///
 /// This crate contains the core arithmetic modules for the QuickLendX
@@ -2972,4 +2776,3 @@ mod test_business_kyc;
 
 #[cfg(test)]
 mod test_investor_kyc;
->>>>>>> main
