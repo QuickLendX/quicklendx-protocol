@@ -1,3 +1,7 @@
+//! Fee management module for the QuickLendX protocol.
+//!
+//! Handles platform fee configuration, revenue tracking, volume-tier discounts,
+//! and treasury routing for all fee types supported by the protocol.
 use crate::errors::QuickLendXError;
 use crate::events;
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, Symbol, Vec};
@@ -6,6 +10,7 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, Symbol, Ve
 const MAX_FEE_BPS: u32 = 1000; // 10% hard cap for all fees
 #[allow(dead_code)]
 const MIN_FEE_BPS: u32 = 0;
+/// Basis-point denominator for percentage calculations (100% = 10,000 bps).
 const BPS_DENOMINATOR: i128 = 10_000;
 const DEFAULT_PLATFORM_FEE_BPS: u32 = 200; // 2%
 const MAX_PLATFORM_FEE_BPS: u32 = 1000; // 10%
@@ -419,7 +424,7 @@ impl FeeManager {
         env: &Env,
         fee_type: &FeeType,
         min_fee: i128,
-        max_fee: i128,
+        _max_fee: i128,
     ) -> Result<(), QuickLendXError> {
         let fee_structures: Vec<FeeStructure> = match env.storage().instance().get(&FEE_CONFIG_KEY)
         {

@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use crate::bid::Bid;
 use crate::fees::FeeType;
 use crate::invoice::{Invoice, InvoiceMetadata};

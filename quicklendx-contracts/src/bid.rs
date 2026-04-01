@@ -4,6 +4,8 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_bid_expired, emit_bid_ttl_updated};
+// Re-export from crate::types so other modules can continue to import from crate::bid.
+pub use crate::types::{Bid, BidStatus};
 
 // ─── Bid TTL configuration ────────────────────────────────────────────────────
 //

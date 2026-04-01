@@ -621,7 +621,7 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
         return Err(QuickLendXError::InvalidTag); // Code 1035/1800
     }
 
-    // Convert to bytes for processing
+    // Stack-allocated buffer — no heap allocation needed in no_std context.
     let mut buf = [0u8; 50];
     tag.copy_into_slice(&mut buf[..tag.len() as usize]);
     let mut normalized_bytes = [0u8; 50];
@@ -638,12 +638,11 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
         core::str::from_utf8(&normalized_bytes[..tag.len() as usize])
             .map_err(|_| QuickLendXError::InvalidTag)?,
     );
-    let trimmed = normalized_str; // Simplification: in a full implementation, we'd handle leading/trailing whitespace bytes
 
-    if trimmed.len() == 0 {
+    if normalized_str.len() == 0 {
         return Err(QuickLendXError::InvalidTag);
     }
-    Ok(trimmed)
+    Ok(normalized_str)
 }
 
 /// @notice Validate a bid against protocol rules and business constraints
@@ -933,6 +932,7 @@ pub fn verify_invoice_data(
 
 // Enhanced event emission functions for comprehensive audit trail
 fn emit_kyc_submitted(env: &Env, business: &Address) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("kyc_sub"),),
         (
@@ -944,6 +944,7 @@ fn emit_kyc_submitted(env: &Env, business: &Address) {
 }
 
 fn emit_business_verified(env: &Env, business: &Address, admin: &Address) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("bus_ver"),),
         (
@@ -956,6 +957,7 @@ fn emit_business_verified(env: &Env, business: &Address, admin: &Address) {
 }
 
 fn emit_business_rejected(env: &Env, business: &Address, admin: &Address, reason: &String) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("bus_rej"),),
         (
@@ -968,6 +970,7 @@ fn emit_business_rejected(env: &Env, business: &Address, admin: &Address, reason
 }
 
 fn emit_kyc_resubmitted(env: &Env, business: &Address) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("kyc_resub"),),
         (

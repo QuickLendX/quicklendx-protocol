@@ -42,6 +42,7 @@ pub enum InvestmentStatus {
     Withdrawn,
     Completed,
     Defaulted,
+    Refunded,
 }
 
 /// Dispute status enumeration

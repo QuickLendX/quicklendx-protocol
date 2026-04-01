@@ -123,6 +123,7 @@ pub fn process_partial_payment(
 /// - Rejects if payment count has reached MAX_PAYMENT_COUNT
 ///
 /// # Security
+///
 /// - The payer must be the verified invoice business and must authorize the call.
 /// - Stored payment records always reflect the applied amount, never the requested excess.
 pub fn record_payment(
