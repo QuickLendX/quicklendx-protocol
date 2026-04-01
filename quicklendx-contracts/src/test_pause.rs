@@ -243,7 +243,7 @@ fn test_pause_blocks_release_escrow_funds() {
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(&env, &client, &investor, 10_000);
     let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
-    
+
     // Debug: check if accept_bid fails
     let accept_res = client.try_accept_bid(&invoice_id, &bid_id);
     if let Err(err) = accept_res {
@@ -356,7 +356,7 @@ fn test_pause_blocks_settle_invoice() {
     verify_investor_for_test(&env, &client, &investor, 10_000);
     let _bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
     // Normally accept_bid_and_fund happens here
-    
+
     client.pause(&admin);
     let result = client.try_settle_invoice(&invoice_id, &1000i128);
     let err = result.err().expect("expected contract error");
@@ -384,7 +384,7 @@ fn test_pause_blocks_add_investment_insurance() {
     let _bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
     client.accept_bid_and_fund(&invoice_id, &_bid_id);
     client.release_escrow_funds(&invoice_id);
-    
+
     let investment = client.get_invoice_investment(&invoice_id);
     let provider = Address::generate(&env);
 

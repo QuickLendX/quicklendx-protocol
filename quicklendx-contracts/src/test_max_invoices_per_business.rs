@@ -9,7 +9,13 @@ use crate::{
 };
 use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 
-fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address, Address) {
+fn setup() -> (
+    Env,
+    QuickLendXContractClient<'static>,
+    Address,
+    Address,
+    Address,
+) {
     let env = Env::default();
     env.mock_all_auths();
 

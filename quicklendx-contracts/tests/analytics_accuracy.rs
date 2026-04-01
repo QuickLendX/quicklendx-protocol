@@ -1,4 +1,6 @@
-use quicklendx_contracts::{InvoiceCategory, InvoiceStatus, QuickLendXContract, QuickLendXContractClient};
+use quicklendx_contracts::{
+    InvoiceCategory, InvoiceStatus, QuickLendXContract, QuickLendXContractClient,
+};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env, String, Vec};
 
@@ -76,14 +78,7 @@ fn platform_metrics_defaulted_only_sparse_data_has_100pct_default() {
     let env = Env::default();
     let (client, _admin, business, currency) = setup_contract(&env);
 
-    let inv = create_invoice(
-        &env,
-        &client,
-        &business,
-        &currency,
-        1000,
-        "defaulted-only",
-    );
+    let inv = create_invoice(&env, &client, &business, &currency, 1000, "defaulted-only");
     client.update_invoice_status(&inv, &InvoiceStatus::Verified);
     client.update_invoice_status(&inv, &InvoiceStatus::Funded);
     client.update_invoice_status(&inv, &InvoiceStatus::Defaulted);

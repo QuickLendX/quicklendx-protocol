@@ -133,7 +133,7 @@ pub fn create_escrow(
     Ok(escrow_id)
 }
 
-/// Release escrow funds to business (contract → business). 
+/// Release escrow funds to business (contract → business).
 ///
 /// # Requirements
 /// - Escrow must be in `Held` status.
@@ -141,7 +141,7 @@ pub fn create_escrow(
 ///
 /// # Security
 /// - Idempotency: Once released, status becomes `Released`, preventing repeated transfers.
-/// - Atomic: Funds are transferred before updating status in storage; if transfer fails, 
+/// - Atomic: Funds are transferred before updating status in storage; if transfer fails,
 ///   the operation can be safely retried.
 ///
 /// # Errors

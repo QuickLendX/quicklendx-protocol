@@ -226,116 +226,114 @@ fn test_invoice_storage() {
     let env = Env::default();
     with_registered_contract(&env, || {
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
-            let business = Address::generate(&env);
-            let currency = Address::generate(&env);
+        let business = Address::generate(&env);
+        let currency = Address::generate(&env);
 
-            let metadata = InvoiceMetadata {
-                customer_name: String::from_str(&env, "ABC Corp"),
-                customer_address: String::from_str(&env, "123 Main St"),
-                tax_id: String::from_str(&env, "123456789"),
-                line_items: Vec::new(&env),
-                notes: String::from_str(&env, "Notes"),
-            };
+        let metadata = InvoiceMetadata {
+            customer_name: String::from_str(&env, "ABC Corp"),
+            customer_address: String::from_str(&env, "123 Main St"),
+            tax_id: String::from_str(&env, "123456789"),
+            line_items: Vec::new(&env),
+            notes: String::from_str(&env, "Notes"),
+        };
 
-            let dispute = Dispute {
-                created_by: Address::generate(&env),
-                created_at: 0,
-                reason: String::from_str(&env, ""),
-                evidence: String::from_str(&env, ""),
-                resolution: String::from_str(&env, ""),
-                resolved_by: Address::generate(&env),
-                resolved_at: 0,
-            };
+        let dispute = Dispute {
+            created_by: Address::generate(&env),
+            created_at: 0,
+            reason: String::from_str(&env, ""),
+            evidence: String::from_str(&env, ""),
+            resolution: String::from_str(&env, ""),
+            resolved_by: Address::generate(&env),
+            resolved_at: 0,
+        };
 
-            let invoice = Invoice {
-                id: invoice_id.clone(),
-                business: business.clone(),
-                amount: 10000,
-                currency: currency.clone(),
-                due_date: 1234567890,
-                status: InvoiceStatus::Pending,
-                created_at: 1234567890,
-                description: String::from_str(&env, "Consulting services"),
-                metadata_customer_name: Some(metadata.customer_name.clone()),
-                metadata_customer_address: Some(metadata.customer_address.clone()),
-                metadata_tax_id: Some(metadata.tax_id.clone()),
-                metadata_notes: Some(metadata.notes.clone()),
-                metadata_line_items: metadata.line_items.clone(),
-                category: InvoiceCategory::Consulting,
-                tags: Vec::new(&env),
-                funded_amount: 0,
-                funded_at: None,
-                investor: None,
-                settled_at: None,
-                average_rating: None,
-                total_ratings: 0,
-                ratings: Vec::new(&env),
-                dispute_status: crate::invoice::DisputeStatus::None,
-                dispute: dispute.clone(),
-                total_paid: 0,
-                payment_history: Vec::new(&env),
-            };
+        let invoice = Invoice {
+            id: invoice_id.clone(),
+            business: business.clone(),
+            amount: 10000,
+            currency: currency.clone(),
+            due_date: 1234567890,
+            status: InvoiceStatus::Pending,
+            created_at: 1234567890,
+            description: String::from_str(&env, "Consulting services"),
+            metadata_customer_name: Some(metadata.customer_name.clone()),
+            metadata_customer_address: Some(metadata.customer_address.clone()),
+            metadata_tax_id: Some(metadata.tax_id.clone()),
+            metadata_notes: Some(metadata.notes.clone()),
+            metadata_line_items: metadata.line_items.clone(),
+            category: InvoiceCategory::Consulting,
+            tags: Vec::new(&env),
+            funded_amount: 0,
+            funded_at: None,
+            investor: None,
+            settled_at: None,
+            average_rating: None,
+            total_ratings: 0,
+            ratings: Vec::new(&env),
+            dispute_status: crate::invoice::DisputeStatus::None,
+            dispute: dispute.clone(),
+            total_paid: 0,
+            payment_history: Vec::new(&env),
+        };
 
-            // Test storing invoice
-            InvoiceStorage::store(&env, &invoice);
+        // Test storing invoice
+        InvoiceStorage::store(&env, &invoice);
 
-            // Test retrieving invoice
-            let retrieved = InvoiceStorage::get(&env, &invoice_id).unwrap();
-            assert_eq!(retrieved, invoice);
+        // Test retrieving invoice
+        let retrieved = InvoiceStorage::get(&env, &invoice_id).unwrap();
+        assert_eq!(retrieved, invoice);
 
-            // Test getting a non-existent invoice
-            let non_existent_invoice_id = BytesN::from_array(&env, &[99; 32]);
-            assert!(InvoiceStorage::get(&env, &non_existent_invoice_id).is_none());
+        // Test getting a non-existent invoice
+        let non_existent_invoice_id = BytesN::from_array(&env, &[99; 32]);
+        assert!(InvoiceStorage::get(&env, &non_existent_invoice_id).is_none());
 
-            // Test getting invoices by business
-            let business_invoices = InvoiceStorage::get_by_business(&env, &business);
-            assert_eq!(business_invoices.len(), 1);
-            assert_eq!(business_invoices.get(0).unwrap(), invoice_id);
+        // Test getting invoices by business
+        let business_invoices = InvoiceStorage::get_by_business(&env, &business);
+        assert_eq!(business_invoices.len(), 1);
+        assert_eq!(business_invoices.get(0).unwrap(), invoice_id);
 
-            // Test getting invoices by a business with no invoices
-            let business_no_invoices = Address::generate(&env);
-            let empty_business_invoices =
-                InvoiceStorage::get_by_business(&env, &business_no_invoices);
-            assert!(empty_business_invoices.is_empty());
+        // Test getting invoices by a business with no invoices
+        let business_no_invoices = Address::generate(&env);
+        let empty_business_invoices = InvoiceStorage::get_by_business(&env, &business_no_invoices);
+        assert!(empty_business_invoices.is_empty());
 
-            // Test getting invoices by status
-            let pending_invoices = InvoiceStorage::get_by_status(&env, InvoiceStatus::Pending);
-            assert_eq!(pending_invoices.len(), 1);
-            assert_eq!(pending_invoices.get(0).unwrap(), invoice_id);
+        // Test getting invoices by status
+        let pending_invoices = InvoiceStorage::get_by_status(&env, InvoiceStatus::Pending);
+        assert_eq!(pending_invoices.len(), 1);
+        assert_eq!(pending_invoices.get(0).unwrap(), invoice_id);
 
-            // Test getting invoices by a status with no invoices
-            let funded_invoices = InvoiceStorage::get_by_status(&env, InvoiceStatus::Funded);
-            assert!(funded_invoices.is_empty());
+        // Test getting invoices by a status with no invoices
+        let funded_invoices = InvoiceStorage::get_by_status(&env, InvoiceStatus::Funded);
+        assert!(funded_invoices.is_empty());
 
-            // Test updating invoice status
-            let mut updated_invoice = invoice.clone();
-            updated_invoice.status = InvoiceStatus::Verified;
-            InvoiceStorage::update(&env, &updated_invoice);
+        // Test updating invoice status
+        let mut updated_invoice = invoice.clone();
+        updated_invoice.status = InvoiceStatus::Verified;
+        InvoiceStorage::update(&env, &updated_invoice);
 
-            let retrieved_updated = InvoiceStorage::get(&env, &invoice_id).unwrap();
-            assert_eq!(retrieved_updated.status, InvoiceStatus::Verified);
+        let retrieved_updated = InvoiceStorage::get(&env, &invoice_id).unwrap();
+        assert_eq!(retrieved_updated.status, InvoiceStatus::Verified);
 
-            // Check that indexes are updated
-            let verified_invoices = InvoiceStorage::get_by_status(&env, InvoiceStatus::Verified);
-            assert_eq!(verified_invoices.len(), 1);
-            assert_eq!(verified_invoices.get(0).unwrap(), invoice_id);
+        // Check that indexes are updated
+        let verified_invoices = InvoiceStorage::get_by_status(&env, InvoiceStatus::Verified);
+        assert_eq!(verified_invoices.len(), 1);
+        assert_eq!(verified_invoices.get(0).unwrap(), invoice_id);
 
-            let pending_invoices_after =
-                InvoiceStorage::get_by_status(&env, InvoiceStatus::Pending);
-            assert_eq!(pending_invoices_after.len(), 0);
+        let pending_invoices_after = InvoiceStorage::get_by_status(&env, InvoiceStatus::Pending);
+        assert_eq!(pending_invoices_after.len(), 0);
 
-            // Test updating invoice to the same status (should not change indexes)
-            InvoiceStorage::update(&env, &retrieved_updated); // Update with the same status
-            let verified_invoices_same_status =
-                InvoiceStorage::get_by_status(&env, InvoiceStatus::Verified);
-            assert_eq!(verified_invoices_same_status.len(), 1);
-            assert_eq!(verified_invoices_same_status.get(0).unwrap(), invoice_id);
+        // Test updating invoice to the same status (should not change indexes)
+        InvoiceStorage::update(&env, &retrieved_updated); // Update with the same status
+        let verified_invoices_same_status =
+            InvoiceStorage::get_by_status(&env, InvoiceStatus::Verified);
+        assert_eq!(verified_invoices_same_status.len(), 1);
+        assert_eq!(verified_invoices_same_status.get(0).unwrap(), invoice_id);
 
-            // Test invoice counter
-            let count1 = InvoiceStorage::next_count(&env);
-            let count2 = InvoiceStorage::next_count(&env);
-            assert_eq!(count1, 1);
-            assert_eq!(count2, 2);
+        // Test invoice counter
+        let count1 = InvoiceStorage::next_count(&env);
+        let count2 = InvoiceStorage::next_count(&env);
+        assert_eq!(count1, 1);
+        assert_eq!(count2, 2);
     });
 }
 
@@ -647,13 +645,31 @@ fn test_storage_key_collision_detection() {
 
         // Prove collision-free storage: store distinct values under each
         // variant using the same ID, then read back and verify isolation.
-        env.storage().persistent().set(&DataKey::Invoice(id.clone()), &1u32);
-        env.storage().persistent().set(&DataKey::Bid(id.clone()), &2u32);
-        env.storage().persistent().set(&DataKey::Investment(id.clone()), &3u32);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Invoice(id.clone()), &1u32);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Bid(id.clone()), &2u32);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Investment(id.clone()), &3u32);
 
-        let v_invoice: u32 = env.storage().persistent().get(&DataKey::Invoice(id.clone())).unwrap();
-        let v_bid: u32 = env.storage().persistent().get(&DataKey::Bid(id.clone())).unwrap();
-        let v_investment: u32 = env.storage().persistent().get(&DataKey::Investment(id.clone())).unwrap();
+        let v_invoice: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Invoice(id.clone()))
+            .unwrap();
+        let v_bid: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Bid(id.clone()))
+            .unwrap();
+        let v_investment: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Investment(id.clone()))
+            .unwrap();
 
         assert_eq!(v_invoice, 1, "Invoice slot must hold its own value");
         assert_eq!(v_bid, 2, "Bid slot must hold its own value");
