@@ -17,6 +17,11 @@ pub const MIN_COVERAGE_PERCENTAGE: u32 = 1;
 /// over-coverage exploit where a claimant could receive more than was invested.
 pub const MAX_COVERAGE_PERCENTAGE: u32 = 100;
 
+/// Maximum cumulative coverage percentage across all active policies on a
+/// single investment. Keeping the active total at or below 100% prevents
+/// stacked policies from producing aggregate coverage greater than principal.
+pub const MAX_TOTAL_COVERAGE_PERCENTAGE: u32 = 100;
+
 /// Minimum acceptable premium in base currency units. A zero-premium policy
 /// would represent free insurance — an unbounded liability for the provider
 /// with no economic cost to the insured party.
@@ -176,7 +181,11 @@ impl Investment {
     ///                                   minimum, `coverage_amount` is zero or
     ///                                   exceeds principal, or premium exceeds
     ///                                   coverage amount.
-    /// * [`OperationNotAllowed`]       – An active coverage entry already exists.
+    /// * [`OperationNotAllowed`]       – Existing active policies already meet or
+    ///                                   exceed the cumulative cap, or adding the
+    ///                                   requested policy would push total active
+    ///                                   coverage above
+    ///                                   [`MAX_TOTAL_COVERAGE_PERCENTAGE`].
     ///
     /// # Security
     /// All arithmetic bounds are re-checked inside this method so that it is
@@ -208,13 +217,21 @@ impl Investment {
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        // Only one active insurance policy is permitted per investment at a
-        // time.  Multiple concurrent active policies would complicate claim
-        // settlement and open double-coverage exploits.
-        for coverage in self.insurance.iter() {
-            if coverage.active {
-                return Err(QuickLendXError::OperationNotAllowed);
-            }
+        let active_coverage_percentage = self.total_active_coverage_percentage();
+
+        // Existing active coverage must already respect the aggregate cap.
+        // Refusing to add further policies if stored state is malformed avoids
+        // compounding an over-covered position.
+        if active_coverage_percentage > MAX_TOTAL_COVERAGE_PERCENTAGE {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
+        // Enforce the aggregate active-coverage cap so stacked policies can
+        // never exceed the investment principal.
+        if active_coverage_percentage.saturating_add(coverage_percentage)
+            > MAX_TOTAL_COVERAGE_PERCENTAGE
+        {
+            return Err(QuickLendXError::OperationNotAllowed);
         }
 
         let coverage_amount = self
@@ -248,13 +265,24 @@ impl Investment {
         Ok(coverage_amount)
     }
 
-    pub fn has_active_insurance(&self) -> bool {
+    /// Return the cumulative percentage across all active insurance policies.
+    ///
+    /// # Security
+    /// This total is the authoritative input for the cumulative-cap check in
+    /// [`Investment::add_insurance`]. Saturating addition prevents malformed
+    /// stored state from wrapping back into an apparently safe value.
+    pub fn total_active_coverage_percentage(&self) -> u32 {
+        let mut total = 0u32;
         for coverage in self.insurance.iter() {
             if coverage.active {
-                return true;
+                total = total.saturating_add(coverage.coverage_percentage);
             }
         }
-        false
+        total
+    }
+
+    pub fn has_active_insurance(&self) -> bool {
+        self.total_active_coverage_percentage() > 0
     }
 
     pub fn process_insurance_claim(&mut self) -> Option<(Address, i128)> {
@@ -271,6 +299,29 @@ impl Investment {
             }
         }
         None
+    }
+
+    /// Deactivate every active insurance policy and return all claim payouts.
+    ///
+    /// # Security
+    /// This method is used by default handling so that every active provider is
+    /// claimed exactly once. It prevents residual active coverage from being
+    /// left behind when multiple policies protect the same investment.
+    pub fn process_all_insurance_claims(&mut self, env: &Env) -> Vec<(Address, i128)> {
+        let mut claims = Vec::new(env);
+        let len = self.insurance.len();
+        for idx in 0..len {
+            if let Some(mut coverage) = self.insurance.get(idx) {
+                if coverage.active {
+                    coverage.active = false;
+                    let provider = coverage.provider.clone();
+                    let amount = coverage.coverage_amount;
+                    self.insurance.set(idx, coverage);
+                    claims.push_back((provider, amount));
+                }
+            }
+        }
+        claims
     }
 }
 

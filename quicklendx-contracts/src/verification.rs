@@ -5,6 +5,7 @@ use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
     MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_REJECTION_REASON_LENGTH, MAX_TAX_ID_LENGTH,
+    MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
 };
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
@@ -623,19 +624,24 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
     // Convert to bytes for processing
     let mut buf = [0u8; 50];
     tag.copy_into_slice(&mut buf[..tag.len() as usize]);
-    
-    let mut normalized_bytes = std::vec::Vec::new();
+    let mut normalized_bytes = [0u8; 50];
     let raw_slice = &buf[..tag.len() as usize];
 
-    for &b in raw_slice.iter() {
+    for (idx, &b) in raw_slice.iter().enumerate() {
         let lower = if b >= b'A' && b <= b'Z' { b + 32 } else { b };
-        normalized_bytes.push(lower);
+        normalized_bytes[idx] = lower;
     }
 
-    let normalized_str = String::from_str(env, std::str::from_utf8(&normalized_bytes).map_err(|_| QuickLendXError::InvalidTag)?);
+    let normalized_str = String::from_str(
+        env,
+        core::str::from_utf8(&normalized_bytes[..tag.len() as usize])
+            .map_err(|_| QuickLendXError::InvalidTag)?,
+    );
     let trimmed = normalized_str; // Simplification: in a full implementation, we'd handle leading/trailing whitespace bytes
-    
-    if trimmed.len() == 0 { return Err(QuickLendXError::InvalidTag); }
+
+    if trimmed.len() == 0 {
+        return Err(QuickLendXError::InvalidTag);
+    }
     Ok(trimmed)
 }
 
@@ -889,7 +895,7 @@ pub fn verify_invoice_data(
     let limits = crate::protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
     let max_horizon = (limits.max_due_date_days as u64).saturating_mul(86400);
     let max_due_date = current_timestamp.saturating_add(max_horizon);
-    
+
     if due_date > max_due_date {
         return Err(QuickLendXError::InvoiceDueDateInvalid); // Code 1008
     }
@@ -1035,7 +1041,7 @@ pub fn verify_investor(
         BusinessVerificationStatus::Pending | BusinessVerificationStatus::Rejected => {
             // Calculate risk score and determine tier
             let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
-validate_risk_score(risk_score)?;
+            validate_risk_score(risk_score)?;
             let tier = determine_investor_tier(env, investor, risk_score)?;
             let risk_level = determine_risk_level(risk_score);
 
