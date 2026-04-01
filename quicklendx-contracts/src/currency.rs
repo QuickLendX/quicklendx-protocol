@@ -127,12 +127,12 @@ impl CurrencyWhitelist {
     pub fn get_whitelisted_currencies_paged(env: &Env, offset: u32, limit: u32) -> Vec<Address> {
         // Import MAX_QUERY_LIMIT from parent module
         const MAX_QUERY_LIMIT: u32 = 100;
-        
+
         // Validate query parameters for security
         if offset > u32::MAX - MAX_QUERY_LIMIT {
             return Vec::new(env);
         }
-        
+
         let capped_limit = limit.min(MAX_QUERY_LIMIT);
         let list = Self::get_whitelisted_currencies(env);
         let mut page: Vec<Address> = Vec::new(env);
