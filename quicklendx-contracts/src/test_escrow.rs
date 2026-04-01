@@ -1109,3 +1109,245 @@ fn test_release_escrow_fails_if_refunded() {
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
 }
+
+// ============================================================================
+// Token Transfer Failure Tests
+//
+// These tests document and verify the contract's behavior when the underlying
+// Stellar token transfer fails or cannot proceed (zero balance, zero allowance,
+// partial allowance). In every failure case:
+//   - No escrow record is written.
+//   - Invoice and bid states are left unchanged.
+//   - The correct error variant is returned.
+// ============================================================================
+
+/// Accepting a bid fails with `InsufficientFunds` when the investor has no token balance.
+///
+/// # Security note
+/// The balance check in `transfer_funds` runs before the token call, so the
+/// token contract is never invoked and no partial state is written.
+#[test]
+fn test_accept_bid_fails_when_investor_has_zero_balance() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    // Create a token but do NOT mint any balance for the investor.
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    // Mint only to business (so invoice upload works), not to investor.
+    sac_client.mint(&business, &100_000i128);
+    let expiration = env.ledger().sequence() + 10_000;
+    token_client.approve(&business, &contract_id, &100_000i128, &expiration);
+    // Investor approves but has zero balance.
+    token_client.approve(&investor, &contract_id, &50_000i128, &expiration);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1_000);
+
+    let investor_balance_before = token_client.balance(&investor);
+    let contract_balance_before = token_client.balance(&contract_id);
+
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+
+    assert!(result.is_err(), "accept_bid must fail when investor has no balance");
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InsufficientFunds,
+        "Expected InsufficientFunds error"
+    );
+
+    // No funds moved.
+    assert_eq!(token_client.balance(&investor), investor_balance_before);
+    assert_eq!(token_client.balance(&contract_id), contract_balance_before);
+
+    // State unchanged.
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Verified);
+    assert_eq!(invoice.funded_amount, 0);
+    assert!(invoice.investor.is_none());
+
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Placed);
+
+    // No escrow record created.
+    assert!(client.try_get_escrow_details(&invoice_id).is_err());
+}
+
+/// Accepting a bid fails with `OperationNotAllowed` when the investor has not
+/// approved the contract to spend the required amount.
+///
+/// # Security note
+/// The allowance check in `transfer_funds` runs before `transfer_from`, so the
+/// token contract is never invoked and no partial state is written.
+#[test]
+fn test_accept_bid_fails_when_investor_has_zero_allowance() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    // Mint balance to investor but grant NO allowance to the contract.
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    sac_client.mint(&business, &100_000i128);
+    sac_client.mint(&investor, &100_000i128);
+
+    let expiration = env.ledger().sequence() + 10_000;
+    // Business approves so invoice upload works.
+    token_client.approve(&business, &contract_id, &100_000i128, &expiration);
+    // Investor deliberately grants zero allowance.
+    token_client.approve(&investor, &contract_id, &0i128, &expiration);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1_000);
+
+    let investor_balance_before = token_client.balance(&investor);
+    let contract_balance_before = token_client.balance(&contract_id);
+
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+
+    assert!(result.is_err(), "accept_bid must fail with zero allowance");
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::OperationNotAllowed,
+        "Expected OperationNotAllowed error"
+    );
+
+    // No funds moved.
+    assert_eq!(token_client.balance(&investor), investor_balance_before);
+    assert_eq!(token_client.balance(&contract_id), contract_balance_before);
+
+    // State unchanged.
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Verified);
+    assert_eq!(invoice.funded_amount, 0);
+
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Placed);
+
+    assert!(client.try_get_escrow_details(&invoice_id).is_err());
+}
+
+/// Accepting a bid fails with `OperationNotAllowed` when the investor's allowance
+/// is positive but less than the bid amount.
+///
+/// # Security note
+/// Partial allowance is rejected before the token call, preventing any transfer.
+#[test]
+fn test_accept_bid_fails_when_investor_has_partial_allowance() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    let amount = 10_000i128;
+    sac_client.mint(&business, &100_000i128);
+    sac_client.mint(&investor, &100_000i128);
+
+    let expiration = env.ledger().sequence() + 10_000;
+    token_client.approve(&business, &contract_id, &100_000i128, &expiration);
+    // Investor approves only half the required amount.
+    token_client.approve(&investor, &contract_id, &(amount / 2), &expiration);
+
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1_000);
+
+    let investor_balance_before = token_client.balance(&investor);
+    let contract_balance_before = token_client.balance(&contract_id);
+
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+
+    assert!(result.is_err(), "accept_bid must fail with partial allowance");
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::OperationNotAllowed,
+        "Expected OperationNotAllowed for partial allowance"
+    );
+
+    // No funds moved.
+    assert_eq!(token_client.balance(&investor), investor_balance_before);
+    assert_eq!(token_client.balance(&contract_id), contract_balance_before);
+
+    // State unchanged.
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Verified);
+    assert_eq!(client.get_bid(&bid_id).unwrap().status, BidStatus::Placed);
+    assert!(client.try_get_escrow_details(&invoice_id).is_err());
+}
+
+/// After a failed `accept_bid` (due to insufficient funds), the bid can be
+/// retried once the investor tops up their balance and allowance.
+///
+/// This verifies that no permanent state corruption occurs on failure.
+#[test]
+fn test_accept_bid_succeeds_after_topping_up_balance() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    let amount = 10_000i128;
+    sac_client.mint(&business, &100_000i128);
+    // Investor starts with insufficient balance.
+    sac_client.mint(&investor, &(amount - 1));
+
+    let expiration = env.ledger().sequence() + 10_000;
+    token_client.approve(&business, &contract_id, &100_000i128, &expiration);
+    token_client.approve(&investor, &contract_id, &100_000i128, &expiration);
+
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1_000);
+
+    // First attempt fails.
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InsufficientFunds
+    );
+
+    // Top up investor balance.
+    sac_client.mint(&investor, &1i128);
+
+    // Second attempt succeeds.
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+    assert!(result.is_ok(), "accept_bid should succeed after top-up");
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+    assert_eq!(invoice.funded_amount, amount);
+
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.status, EscrowStatus::Held);
+    assert_eq!(escrow.amount, amount);
+}

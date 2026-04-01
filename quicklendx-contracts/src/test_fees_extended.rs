@@ -1031,3 +1031,419 @@ fn test_multiple_fee_structures_concurrent_valid() {
     assert_eq!(processing.fee_type, crate::fees::FeeType::Processing);
     assert_eq!(verification.fee_type, crate::fees::FeeType::Verification);
 }
+
+// ============================================================================
+// VOLUME ACCUMULATION TESTS - CUMULATIVE TRACKING ACROSS TRANSACTIONS
+// ============================================================================
+
+/// Test volume accumulates correctly after single transaction
+#[test]
+fn test_volume_accumulates_single_transaction() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let initial_volume = client.get_user_volume_data(&user);
+    assert_eq!(initial_volume.total_volume, 0);
+    assert_eq!(initial_volume.transaction_count, 0);
+
+    // Simulate a transaction by updating volume
+    let transaction_amount = 50_000_i128;
+    let updated_volume = client.update_user_transaction_volume(&user, &transaction_amount).unwrap();
+
+    assert_eq!(updated_volume.total_volume, transaction_amount);
+    assert_eq!(updated_volume.transaction_count, 1);
+}
+
+/// Test volume accumulates correctly after multiple sequential transactions
+#[test]
+fn test_volume_accumulates_multiple_transactions() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let amount1 = 10_000_i128;
+    let amount2 = 20_000_i128;
+    let amount3 = 30_000_i128;
+
+    let vol1 = client.update_user_transaction_volume(&user, &amount1).unwrap();
+    assert_eq!(vol1.total_volume, amount1);
+    assert_eq!(vol1.transaction_count, 1);
+
+    let vol2 = client.update_user_transaction_volume(&user, &amount2).unwrap();
+    assert_eq!(vol2.total_volume, amount1 + amount2);
+    assert_eq!(vol2.transaction_count, 2);
+
+    let vol3 = client.update_user_transaction_volume(&user, &amount3).unwrap();
+    assert_eq!(vol3.total_volume, amount1 + amount2 + amount3);
+    assert_eq!(vol3.transaction_count, 3);
+}
+
+/// Test volume tracking persists across time
+#[test]
+fn test_volume_persists_after_state_retrieval() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let transaction_amount = 100_000_i128;
+    client.update_user_transaction_volume(&user, &transaction_amount).unwrap();
+
+    // Retrieve volume after time
+    let retrieved_volume = client.get_user_volume_data(&user);
+    assert_eq!(retrieved_volume.total_volume, transaction_amount);
+    assert_eq!(retrieved_volume.transaction_count, 1);
+
+    // Update again and verify cumulative storage
+    client.update_user_transaction_volume(&user, &transaction_amount).unwrap();
+    let final_volume = client.get_user_volume_data(&user);
+    assert_eq!(final_volume.total_volume, transaction_amount * 2);
+    assert_eq!(final_volume.transaction_count, 2);
+}
+
+/// Test very large volume accumulation without overflow
+#[test]
+fn test_volume_large_accumulation_no_overflow() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    // Add massive transactions
+    let huge_amount = 1_000_000_000_000_i128; // 1 trillion stroops
+    let vol1 = client.update_user_transaction_volume(&user, &huge_amount).unwrap();
+    assert_eq!(vol1.total_volume, huge_amount);
+
+    let vol2 = client.update_user_transaction_volume(&user, &huge_amount).unwrap();
+    assert_eq!(vol2.total_volume, huge_amount * 2);
+    assert_eq!(vol2.transaction_count, 2);
+}
+
+// ============================================================================
+// TIER TRANSITIONS - FEE DISCOUNT CHANGES BASED ON VOLUME
+// ============================================================================
+
+/// Test tier transitions from Standard to Silver at threshold
+#[test]
+fn test_tier_transition_standard_to_silver() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    // Initially at Standard (0% discount)
+    let initial = client.get_user_volume_data(&user);
+    assert_eq!(initial.current_tier, crate::fees::VolumeTier::Standard);
+
+    // Reach Silver threshold: 100_000_000_000
+    let silver_threshold = 100_000_000_000_i128;
+    client.update_user_transaction_volume(&user, &silver_threshold).unwrap();
+    let after_silver = client.get_user_volume_data(&user);
+    assert_eq!(after_silver.current_tier, crate::fees::VolumeTier::Silver);
+}
+
+/// Test tier transitions from Silver to Gold at threshold
+#[test]
+fn test_tier_transition_silver_to_gold() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    // Reach Silver first
+    client.update_user_transaction_volume(&user, &100_000_000_000_i128).unwrap();
+    let silver = client.get_user_volume_data(&user);
+    assert_eq!(silver.current_tier, crate::fees::VolumeTier::Silver);
+
+    // Continue to Gold threshold: 500_000_000_000
+    let additional = 400_000_000_000_i128;
+    client.update_user_transaction_volume(&user, &additional).unwrap();
+    let gold = client.get_user_volume_data(&user);
+    assert_eq!(gold.current_tier, crate::fees::VolumeTier::Gold);
+}
+
+/// Test tier transitions from Gold to Platinum at threshold
+#[test]
+fn test_tier_transition_gold_to_platinum() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    // Reach Gold first
+    client.update_user_transaction_volume(&user, &500_000_000_000_i128).unwrap();
+    let gold = client.get_user_volume_data(&user);
+    assert_eq!(gold.current_tier, crate::fees::VolumeTier::Gold);
+
+    // Continue to Platinum threshold: 1_000_000_000_000
+    let additional = 500_000_000_000_i128;
+    client.update_user_transaction_volume(&user, &additional).unwrap();
+    let platinum = client.get_user_volume_data(&user);
+    assert_eq!(platinum.current_tier, crate::fees::VolumeTier::Platinum);
+}
+
+/// Test tier never downgrades (monotonic)
+#[test]
+fn test_tier_monotonic_no_downgrade() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user1 = setup_investor(&env, &client, &admin);
+    let user2 = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    // User1 reaches Platinum
+    client.update_user_transaction_volume(&user1, &1_000_000_000_000_i128).unwrap();
+    let mut user1_tier = client.get_user_volume_data(&user1);
+    assert_eq!(user1_tier.current_tier, crate::fees::VolumeTier::Platinum);
+
+    // User2 reaches Gold
+    client.update_user_transaction_volume(&user2, &500_000_000_000_i128).unwrap();
+    let user2_tier = client.get_user_volume_data(&user2);
+    assert_eq!(user2_tier.current_tier, crate::fees::VolumeTier::Gold);
+
+    // Additional transactions don't change tier backwards
+    client.update_user_transaction_volume(&user1, &1_i128).unwrap();
+    user1_tier = client.get_user_volume_data(&user1);
+    assert_eq!(user1_tier.current_tier, crate::fees::VolumeTier::Platinum); // Still Platinum
+}
+
+/// Test fee discount increases with tier progression
+#[test]
+fn test_fee_discount_increases_with_tier() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let transaction_amount = 100_000_i128;
+
+    // Standard tier (0% discount)
+    let standard_fees = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+
+    // Upgrade to Silver (5% discount)
+    client.update_user_transaction_volume(&user, &100_000_000_000_i128).unwrap();
+    let silver_fees = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+
+    // Upgrade to Gold (10% discount)
+    client.update_user_transaction_volume(&user, &400_000_000_000_i128).unwrap();
+    let gold_fees = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+
+    // Upgrade to Platinum (15% discount)
+    client.update_user_transaction_volume(&user, &500_000_000_000_i128).unwrap();
+    let platinum_fees = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+
+    // Verify discount progression
+    assert!(standard_fees > silver_fees);
+    assert!(silver_fees > gold_fees);
+    assert!(gold_fees > platinum_fees);
+}
+
+// ============================================================================
+// SETTLEMENT AND REPEATED TRANSACTION TESTS
+// ============================================================================
+
+/// Test fee calculation remains consistent across multiple settlements
+#[test]
+fn test_fee_calculation_consistent_multiple_settlements() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let transaction_amount = 50_000_i128;
+
+    // Settlement 1
+    let fees1 = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+    client.update_user_transaction_volume(&user, &transaction_amount).unwrap();
+
+    // Settlement 2 (net new fees, tier unchanged)
+    let fees2 = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+
+    // Fees should be identical since tier hasn't changed
+    assert_eq!(fees1, fees2);
+}
+
+/// Test fee reduction after tier upgrade during settlement sequence
+#[test]
+fn test_fee_reduction_after_tier_upgrade_settlement() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    let transaction_amount = 50_000_i128;
+
+    // Settlement 1 at Standard tier
+    let fees_before_upgrade = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+
+    // Accumulate volume to reach Silver tier
+    client.update_user_transaction_volume(&user, &100_000_000_000_i128).unwrap();
+
+    // Settlement 2 at Silver tier
+    let fees_after_upgrade = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+
+    assert!(fees_after_upgrade < fees_before_upgrade);
+}
+
+/// Test cumulative volume and tier changes through settlement lifecycle
+#[test]
+fn test_cumulative_volume_through_settlement_lifecycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    // Settlement Round 1: Small transactions stay Standard tier
+    let round1_amount = 10_000_i128;
+    for _ in 0..5 {
+        client.update_user_transaction_volume(&user, &round1_amount).unwrap();
+    }
+    let vol_after_round1 = client.get_user_volume_data(&user);
+    assert_eq!(vol_after_round1.total_volume, round1_amount * 5);
+    assert_eq!(vol_after_round1.transaction_count, 5);
+    assert_eq!(vol_after_round1.current_tier, crate::fees::VolumeTier::Standard);
+
+    // Settlement Round 2: Larger transactions reach Silver
+    let round2_amount = 30_000_000_000_i128;
+    client.update_user_transaction_volume(&user, &round2_amount).unwrap();
+    let vol_after_round2 = client.get_user_volume_data(&user);
+    assert_eq!(vol_after_round2.total_volume, round1_amount * 5 + round2_amount);
+    assert_eq!(vol_after_round2.transaction_count, 6);
+    assert_eq!(vol_after_round2.current_tier, crate::fees::VolumeTier::Silver);
+
+    // Settlement Round 3: Continue reaching Gold
+    let round3_amount = 500_000_000_000_i128;
+    client.update_user_transaction_volume(&user, &round3_amount).unwrap();
+    let vol_after_round3 = client.get_user_volume_data(&user);
+    assert_eq!(vol_after_round3.total_volume, round1_amount * 5 + round2_amount + round3_amount);
+    assert_eq!(vol_after_round3.transaction_count, 7);
+    assert_eq!(vol_after_round3.current_tier, crate::fees::VolumeTier::Gold);
+}
+
+/// Test fee calculation determinism after multiple settlement updates
+#[test]
+fn test_fee_calculation_deterministic_after_settlements() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    // Simulate settlement sequence: reach Gold tier
+    client.update_user_transaction_volume(&user, &500_000_000_000_i128).unwrap();
+
+    let transaction_amount = 12_345_i128;
+
+    // Calculate fees multiple times at same tier
+    let calc1 = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+    let calc2 = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+    let calc3 = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+
+    assert_eq!(calc1, calc2);
+    assert_eq!(calc2, calc3);
+
+    // Add more volume but don't trigger tier change
+    client.update_user_transaction_volume(&user, &1_i128).unwrap();
+
+    let calc4 = client.calculate_transaction_fees(&user, &transaction_amount, &false, &false);
+    assert_eq!(calc1, calc4); // Should still be same (tier unchanged)
+}
+
+/// Test fee collection and revenue accumulation during settlement sequence
+#[test]
+fn test_revenue_accumulation_through_settlements() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+    let treasury = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &2500, &2500, &false, &1);
+
+    let settlement_amount = 10_000_i128;
+
+    // Settlement 1
+    let mut fees_map = Map::new(&env);
+    fees_map.set(FeeType::Platform, settlement_amount);
+    client.collect_transaction_fees(&user, &fees_map, &settlement_amount);
+    client.update_user_transaction_volume(&user, &settlement_amount).unwrap();
+
+    // Settlement 2
+    let mut fees_map2 = Map::new(&env);
+    fees_map2.set(FeeType::Platform, settlement_amount);
+    client.collect_transaction_fees(&user, &fees_map2, &settlement_amount);
+    client.update_user_transaction_volume(&user, &settlement_amount).unwrap();
+
+    // Verify volume accumulated
+    let final_volume = client.get_user_volume_data(&user);
+    assert_eq!(final_volume.total_volume, settlement_amount * 2);
+    assert_eq!(final_volume.transaction_count, 2);
+
+    // Verify revenue was collected for distribution
+    let current_period = env.ledger().timestamp() / 2_592_000;
+    let (treasury_amt, developer_amt, platform_amt) = client.distribute_revenue(&admin, &current_period);
+
+    // Total should be 20_000 (2 * 10_000)
+    let total_distributed = treasury_amt + developer_amt + platform_amt;
+    assert_eq!(total_distributed, settlement_amount * 2);
+    assert_eq!(treasury_amt, 10_000); // 50%
+    assert_eq!(developer_amt, 5_000);  // 25%
+    assert_eq!(platform_amt, 5_000);   // 25%
+}

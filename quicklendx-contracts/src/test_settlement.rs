@@ -2,6 +2,7 @@ use super::*;
 use crate::investment::InvestmentStatus;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::profits::calculate_profit;
+use crate::settlement::{get_invoice_progress, get_payment_count, get_payment_records, is_invoice_finalized};
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Events, Ledger},
@@ -100,6 +101,10 @@ fn has_event_with_topic(env: &Env, topic: soroban_sdk::Symbol) -> bool {
 
     false
 }
+
+// ============================================================================
+// Existing tests (preserved)
+// ============================================================================
 
 /// Test that unfunded invoices cannot be settled.
 #[test]
@@ -487,6 +492,180 @@ fn test_settle_invoice_exact_remaining_due_preserves_totals_and_emits_final_even
     );
 }
 
+// ============================================================================
+// Hardening tests
+// ============================================================================
+
+/// Double settlement attempt must be rejected after invoice is already paid.
+#[test]
+fn test_double_settle_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    client.settle_invoice(&invoice_id, &1_000);
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Paid);
+
+    // Second settle attempt must fail.
+    let result = client.try_settle_invoice(&invoice_id, &1_000);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+}
+
+/// Partial payment that completes the full amount auto-settles, then further
+/// partial payments are rejected.
+#[test]
+fn test_partial_payment_after_auto_settle_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    // Pay full amount via partial payment path => triggers auto-settlement.
+    client.process_partial_payment(&invoice_id, &1_000, &String::from_str(&env, "full-pay"));
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Paid);
+    assert_eq!(invoice.total_paid, 1_000);
+
+    // Further partial payment must be rejected.
+    let result = client.try_process_partial_payment(
+        &invoice_id,
+        &1,
+        &String::from_str(&env, "extra"),
+    );
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+}
+
+/// Settle attempt after partial-payment auto-settlement must fail.
+#[test]
+fn test_settle_after_auto_settle_via_partial_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    // Auto-settle via partial payments.
+    client.process_partial_payment(&invoice_id, &500, &String::from_str(&env, "p1"));
+    client.process_partial_payment(&invoice_id, &500, &String::from_str(&env, "p2"));
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Paid);
+
+    // Explicit settle_invoice must also be rejected.
+    let result = client.try_settle_invoice(&invoice_id, &1_000);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+}
+
+/// Settlement finalization flag is set after successful settlement.
+#[test]
+fn test_finalization_flag_is_set() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    // Before settlement: not finalized.
+    let finalized_before = env.as_contract(&contract_id, || {
+        is_invoice_finalized(&env, &invoice_id).unwrap()
+    });
+    assert!(!finalized_before);
+
+    client.settle_invoice(&invoice_id, &1_000);
+
+    // After settlement: finalized.
+    let finalized_after = env.as_contract(&contract_id, || {
+        is_invoice_finalized(&env, &invoice_id).unwrap()
+    });
+    assert!(finalized_after);
+}
+
+/// Accounting invariant: after settlement, total_paid == invoice.amount exactly.
+#[test]
+fn test_no_accounting_drift_after_multiple_partial_then_settle() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_amount = 1_000i128;
+    let invoice_id = setup_funded_invoice(
+        &env,
+        &client,
+        &business,
+        &investor,
+        &currency,
+        invoice_amount,
+        900,
+    );
+
+    // Make several partial payments.
+    env.ledger().set_timestamp(1_000);
+    client.process_partial_payment(&invoice_id, &100, &String::from_str(&env, "d1"));
+    env.ledger().set_timestamp(1_100);
+    client.process_partial_payment(&invoice_id, &200, &String::from_str(&env, "d2"));
+    env.ledger().set_timestamp(1_200);
+    client.process_partial_payment(&invoice_id, &100, &String::from_str(&env, "d3"));
+
+    let progress = env.as_contract(&contract_id, || {
+        get_invoice_progress(&env, &invoice_id).unwrap()
+    });
+    assert_eq!(progress.total_paid, 400);
+    assert_eq!(progress.remaining_due, 600);
+
+    // Final settlement with exact remaining due.
+    env.ledger().set_timestamp(1_300);
+    client.settle_invoice(&invoice_id, &600);
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_paid, invoice_amount, "total_paid must exactly equal invoice amount");
+    assert_eq!(invoice.status, InvoiceStatus::Paid);
+
+    // Verify durable payment records sum to total_due.
+    let count = env.as_contract(&contract_id, || {
+        get_payment_count(&env, &invoice_id).unwrap()
+    });
+    let records = env.as_contract(&contract_id, || {
+        get_payment_records(&env, &invoice_id, 0, count).unwrap()
+    });
+    let sum: i128 = (0..records.len())
+        .map(|i| records.get(i as u32).unwrap().amount)
+        .sum();
+    assert_eq!(sum, invoice_amount, "sum of all payment records must equal total_due");
+}
+
 #[test]
 fn test_settle_invoice_auto_releases_escrow() {
     let env = Env::default();
@@ -511,11 +690,11 @@ fn test_settle_invoice_auto_releases_escrow() {
     );
 
     let token_client = token::Client::new(&env, &currency);
-    
-    // Escrow should be Held initialy
+
+    // Escrow should be Held initially
     let escrow_before = client.get_escrow_details(&invoice_id);
     assert_eq!(escrow_before.status, crate::payments::EscrowStatus::Held);
-    
+
     let business_balance_before = token_client.balance(&business);
 
     // Settle invoice. This should trigger auto-release.
@@ -524,13 +703,225 @@ fn test_settle_invoice_auto_releases_escrow() {
     // After settlement, escrow status should be Released
     let escrow_after = client.get_escrow_details(&invoice_id);
     assert_eq!(escrow_after.status, crate::payments::EscrowStatus::Released);
-    
+
     // Business balance should reflect: initial + release_amount - settlement_amount
     // Since invoice_amount == settlement_amount AND release_amount == investment_amount (900):
     // final_balance = initial + 900 - 1000 = initial - 100
     let business_balance_after = token_client.balance(&business);
     assert_eq!(business_balance_after, business_balance_before + investment_amount - invoice_amount);
-    
+
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
+}
+
+/// Zero-amount settle attempt must be rejected.
+#[test]
+fn test_settle_with_zero_amount_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    let result = client.try_settle_invoice(&invoice_id, &0);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidAmount);
+}
+
+/// Negative-amount settle attempt must be rejected.
+#[test]
+fn test_settle_with_negative_amount_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    let result = client.try_settle_invoice(&invoice_id, &-500);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidAmount);
+}
+
+/// Settling a non-existent invoice must return InvoiceNotFound.
+#[test]
+fn test_settle_nonexistent_invoice() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let missing_id = BytesN::from_array(&env, &[42u8; 32]);
+    let result = client.try_settle_invoice(&missing_id, &1_000);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InvoiceNotFound
+    );
+}
+
+/// Payment too low for full settlement must be rejected without side effects.
+#[test]
+fn test_settle_with_insufficient_amount_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    // Try to settle with 500 (less than 1_000 due). Should fail because
+    // projected_total < invoice.amount.
+    let result = client.try_settle_invoice(&invoice_id, &500);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::PaymentTooLow);
+
+    // Invoice state must be unchanged.
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+    assert_eq!(invoice.total_paid, 0);
+}
+
+/// get_payment_records pagination returns correct slices.
+#[test]
+fn test_get_payment_records_pagination() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    // Make 5 partial payments.
+    for i in 0..5u32 {
+        let nonce = String::from_str(&env, &format!("page-{}", i));
+        env.ledger().set_timestamp(1_000 + i as u64 * 100);
+        client.process_partial_payment(&invoice_id, &100, &nonce);
+    }
+
+    // Page 1: records 0..3
+    let page1 = env.as_contract(&contract_id, || {
+        get_payment_records(&env, &invoice_id, 0, 3).unwrap()
+    });
+    assert_eq!(page1.len(), 3);
+    assert_eq!(page1.get(0).unwrap().amount, 100);
+
+    // Page 2: records 3..5
+    let page2 = env.as_contract(&contract_id, || {
+        get_payment_records(&env, &invoice_id, 3, 10).unwrap()
+    });
+    assert_eq!(page2.len(), 2);
+
+    // Beyond range: empty
+    let empty = env.as_contract(&contract_id, || {
+        get_payment_records(&env, &invoice_id, 10, 10).unwrap()
+    });
+    assert_eq!(empty.len(), 0);
+}
+
+/// Investment status transitions to Completed after settlement.
+#[test]
+fn test_investment_completed_after_settlement() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    let investment_before = client.get_invoice_investment(&invoice_id);
+    assert_eq!(investment_before.status, InvestmentStatus::Active);
+
+    client.settle_invoice(&invoice_id, &1_000);
+
+    let investment_after = client.get_invoice_investment(&invoice_id);
+    assert_eq!(investment_after.status, InvestmentStatus::Completed);
+}
+
+/// Partial payments with overpayment capping preserve correct balance flow.
+#[test]
+fn test_overpayment_capping_preserves_balance_integrity() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 500, 400);
+
+    let token_client = token::Client::new(&env, &currency);
+    let initial_business = token_client.balance(&business);
+
+    // Pay 300, then try to pay 400 (should be capped to 200).
+    client.process_partial_payment(&invoice_id, &300, &String::from_str(&env, "cap-a"));
+    client.process_partial_payment(&invoice_id, &400, &String::from_str(&env, "cap-b"));
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_paid, 500, "total_paid must be capped at total_due");
+    assert_eq!(invoice.status, InvoiceStatus::Paid);
+
+    // Business should have paid exactly 500 total (300 + 200 capped).
+    let final_business = token_client.balance(&business);
+    assert_eq!(initial_business - final_business, 500);
+}
+
+/// Progress percentage tracks accurately across multiple payments.
+#[test]
+fn test_progress_percentage_accuracy() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    // 25% payment.
+    client.process_partial_payment(&invoice_id, &250, &String::from_str(&env, "pct-1"));
+    let p1 = env.as_contract(&contract_id, || {
+        get_invoice_progress(&env, &invoice_id).unwrap()
+    });
+    assert_eq!(p1.progress_percent, 25);
+
+    // 50% payment (cumulative 75%).
+    client.process_partial_payment(&invoice_id, &500, &String::from_str(&env, "pct-2"));
+    let p2 = env.as_contract(&contract_id, || {
+        get_invoice_progress(&env, &invoice_id).unwrap()
+    });
+    assert_eq!(p2.progress_percent, 75);
+
+    // Remaining 25% (cumulative 100%).
+    client.process_partial_payment(&invoice_id, &250, &String::from_str(&env, "pct-3"));
+    let p3 = env.as_contract(&contract_id, || {
+        get_invoice_progress(&env, &invoice_id).unwrap()
+    });
+    assert_eq!(p3.progress_percent, 100);
+    assert_eq!(p3.remaining_due, 0);
 }

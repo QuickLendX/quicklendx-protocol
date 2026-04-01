@@ -42,6 +42,19 @@ fn persist_bid(env: &Env, bid: &Bid) {
     BidStorage::add_bid_to_invoice(env, &bid.invoice_id, &bid.bid_id);
 }
 
+fn assert_best_matches_first_ranked(env: &Env, invoice: &BytesN<32>) {
+    let ranked = BidStorage::rank_bids(env, invoice);
+    let best = BidStorage::get_best_bid(env, invoice);
+
+    if ranked.len() == 0 {
+        assert!(best.is_none());
+        return;
+    }
+
+    let best_bid = best.expect("best bid must exist when ranking is non-empty");
+    assert_eq!(best_bid.bid_id, ranked.get(0).unwrap().bid_id);
+}
+
 #[test]
 fn rank_bids_orders_by_profit_and_expected_return() {
     let env = Env::default();
@@ -210,4 +223,218 @@ fn get_best_bid_aligns_with_ranking_and_filters_non_placed() {
 
     let best = BidStorage::get_best_bid(&env, &invoice).unwrap();
     assert_eq!(best.bid_id, placed.bid_id);
+}
+
+#[test]
+fn best_bid_matches_first_ranked_on_expected_return_tie() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 5_000);
+    let invoice = invoice_id(&env, 5);
+
+    let investor1 = Address::generate(&env);
+    let investor2 = Address::generate(&env);
+
+    // Equal profit (1000), different expected_return.
+    let lower_expected = build_bid(
+        &env,
+        &invoice,
+        &investor1,
+        5_000,
+        6_000,
+        10,
+        BidStatus::Placed,
+        1,
+    );
+    let higher_expected = build_bid(
+        &env,
+        &invoice,
+        &investor2,
+        6_000,
+        7_000,
+        20,
+        BidStatus::Placed,
+        2,
+    );
+
+    persist_bid(&env, &lower_expected);
+    persist_bid(&env, &higher_expected);
+
+    let ranked = BidStorage::rank_bids(&env, &invoice);
+    assert_eq!(ranked.get(0).unwrap().bid_id, higher_expected.bid_id);
+    assert_best_matches_first_ranked(&env, &invoice);
+}
+
+#[test]
+fn best_bid_matches_first_ranked_on_bid_amount_tie_breaker() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 6_000);
+    let invoice = invoice_id(&env, 6);
+
+    let investor1 = Address::generate(&env);
+    let investor2 = Address::generate(&env);
+
+    // Equal profit and expected_return, different bid_amount.
+    let lower_amount = build_bid(
+        &env,
+        &invoice,
+        &investor1,
+        4_000,
+        6_000,
+        10,
+        BidStatus::Placed,
+        1,
+    );
+    let higher_amount = build_bid(
+        &env,
+        &invoice,
+        &investor2,
+        5_000,
+        6_000,
+        20,
+        BidStatus::Placed,
+        2,
+    );
+
+    persist_bid(&env, &lower_amount);
+    persist_bid(&env, &higher_amount);
+
+    let ranked = BidStorage::rank_bids(&env, &invoice);
+    assert_eq!(ranked.get(0).unwrap().bid_id, higher_amount.bid_id);
+    assert_best_matches_first_ranked(&env, &invoice);
+}
+
+#[test]
+fn best_bid_matches_first_ranked_on_timestamp_tie_breaker() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 7_000);
+    let invoice = invoice_id(&env, 7);
+
+    let investor1 = Address::generate(&env);
+    let investor2 = Address::generate(&env);
+
+    // Equal economics and bid amount, timestamp decides.
+    let older = build_bid(
+        &env,
+        &invoice,
+        &investor1,
+        5_000,
+        6_000,
+        10,
+        BidStatus::Placed,
+        1,
+    );
+    let newer = build_bid(
+        &env,
+        &invoice,
+        &investor2,
+        5_000,
+        6_000,
+        20,
+        BidStatus::Placed,
+        2,
+    );
+
+    persist_bid(&env, &older);
+    persist_bid(&env, &newer);
+
+    let ranked = BidStorage::rank_bids(&env, &invoice);
+    assert_eq!(ranked.get(0).unwrap().bid_id, newer.bid_id);
+    assert_best_matches_first_ranked(&env, &invoice);
+}
+
+#[test]
+fn best_bid_matches_first_ranked_on_bid_id_final_tie_breaker() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 8_000);
+    let invoice = invoice_id(&env, 8);
+
+    let investor = Address::generate(&env);
+
+    // Full tie except bid_id.
+    let lower_id = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        5_000,
+        6_000,
+        15,
+        BidStatus::Placed,
+        1,
+    );
+    let higher_id = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        5_000,
+        6_000,
+        15,
+        BidStatus::Placed,
+        9,
+    );
+
+    persist_bid(&env, &lower_id);
+    persist_bid(&env, &higher_id);
+
+    let ranked = BidStorage::rank_bids(&env, &invoice);
+    assert_eq!(ranked.get(0).unwrap().bid_id, higher_id.bid_id);
+    assert_best_matches_first_ranked(&env, &invoice);
+}
+
+#[test]
+fn best_bid_matches_first_ranked_independent_of_insertion_order_on_ties() {
+    // Dataset: equal profit and expected_return, timestamp/bid_id ties decide.
+    for &order in &[0u8, 1u8] {
+        let env = Env::default();
+        env.ledger().with_mut(|li| li.timestamp = 9_000);
+        let invoice = invoice_id(&env, 9u8.saturating_add(order));
+
+        let investor1 = Address::generate(&env);
+        let investor2 = Address::generate(&env);
+        let investor3 = Address::generate(&env);
+
+        let bid_a = build_bid(
+            &env,
+            &invoice,
+            &investor1,
+            5_000,
+            6_000,
+            10,
+            BidStatus::Placed,
+            1,
+        );
+        let bid_b = build_bid(
+            &env,
+            &invoice,
+            &investor2,
+            5_000,
+            6_000,
+            20,
+            BidStatus::Placed,
+            2,
+        );
+        let bid_c = build_bid(
+            &env,
+            &invoice,
+            &investor3,
+            5_000,
+            6_000,
+            20,
+            BidStatus::Placed,
+            9,
+        );
+
+        if order == 0 {
+            persist_bid(&env, &bid_a);
+            persist_bid(&env, &bid_b);
+            persist_bid(&env, &bid_c);
+        } else {
+            persist_bid(&env, &bid_c);
+            persist_bid(&env, &bid_b);
+            persist_bid(&env, &bid_a);
+        }
+
+        let ranked = BidStorage::rank_bids(&env, &invoice);
+        assert_eq!(ranked.get(0).unwrap().bid_id, bid_c.bid_id);
+        assert_best_matches_first_ranked(&env, &invoice);
+    }
 }

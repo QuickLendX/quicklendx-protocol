@@ -58,6 +58,7 @@ fn upload_basic_invoice(
 #[test]
 fn test_upload_invoice_enforces_max_invoices_per_business() {
     let (env, client, admin, business, currency) = setup();
+    client.update_limits_max_invoices(&admin, &10, &365, &86_400, &5);
 
     client.update_limits_max_invoices(&admin, &10i128, &365u64, &0u64, &3u32);
 
@@ -120,6 +121,7 @@ fn test_cancelled_invoices_free_up_slots() {
 #[test]
 fn test_paid_invoices_free_up_slots() {
     let (env, client, admin, business, currency) = setup();
+    client.update_limits_max_invoices(&admin, &10, &365, &86_400, &2);
 
     client.update_limits_max_invoices(&admin, &10i128, &365u64, &0u64, &2u32);
 
@@ -142,6 +144,7 @@ fn test_paid_invoices_free_up_slots() {
 #[test]
 fn test_limit_zero_disables_max_invoices_check() {
     let (env, client, admin, business, currency) = setup();
+    client.update_limits_max_invoices(&admin, &10, &365, &86_400, &0);
 
     // limit=0 means unlimited
     client.update_limits_max_invoices(&admin, &10i128, &365u64, &0u64, &0u32);
