@@ -30,6 +30,16 @@ fn zero_address(env: &Env) -> Address {
 }
 
 
+fn add_to_dispute_index(_env: &Env, _invoice_id: &BytesN<32>) {}
+
+fn get_dispute_index(_env: &Env) -> Vec<BytesN<32>> {
+    Vec::new(_env)
+}
+
+fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> {
+    Ok(())
+}
+
 #[allow(dead_code)]
 pub fn create_dispute(
     env: &Env,

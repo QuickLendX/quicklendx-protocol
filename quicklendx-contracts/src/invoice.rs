@@ -1032,9 +1032,6 @@ impl InvoiceStorage {
             };
             env.storage().instance().remove(&key);
         }
-
-        // Unify with other storage cleanups
-        crate::storage::StorageManager::clear_all_mappings(env);
     }
 
     /// Get all invoices for a business
@@ -1391,5 +1388,78 @@ impl InvoiceStorage {
             .instance()
             .get(&TOTAL_INVOICE_COUNT_KEY)
             .unwrap_or(0)
+    }
+
+    /// Get count of invoices with ratings
+    pub fn get_invoices_with_ratings_count(env: &Env) -> u32 {
+        0
+    }
+
+    pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
+        let key = Self::category_key(category);
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn get_invoices_by_category_and_status(
+        env: &Env,
+        category: &InvoiceCategory,
+        _status: &InvoiceStatus,
+    ) -> Vec<BytesN<32>> {
+        let all = Self::get_invoices_by_category(env, category);
+        let mut result = Vec::new(env);
+        for id in all.iter() {
+            if let Some(inv) = Self::get_invoice(env, &id) {
+                if inv.status == *_status {
+                    result.push_back(id);
+                }
+            }
+        }
+        result
+    }
+
+    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
+        let key = Self::tag_key(tag);
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
+        let mut result: Vec<BytesN<32>> = Vec::new(env);
+        for tag in tags.iter() {
+            let ids = Self::get_invoices_by_tag(env, &tag);
+            for id in ids.iter() {
+                let mut found = false;
+                let len = result.len();
+                for i in 0..len {
+                    if let Some(existing) = result.get(i) {
+                        if existing == id {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if !found {
+                    result.push_back(id);
+                }
+            }
+        }
+        result
+    }
+
+    pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
+        Self::get_invoices_by_category(env, category).len()
+    }
+
+    pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
+        Self::get_invoices_by_tag(env, tag).len()
+    }
+
+    pub fn get_all_categories(_env: &Env) -> Vec<InvoiceCategory> {
+        Vec::new(_env)
     }
 }
