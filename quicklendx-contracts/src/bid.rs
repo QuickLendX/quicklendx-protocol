@@ -21,7 +21,11 @@ const MAX_ACTIVE_BIDS_PER_INVESTOR_KEY: Symbol = symbol_short!("mx_actbd");
 const DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 20;
 const SECONDS_PER_DAY: u64 = 86400;
 
-/// Maximum number of bids allowed per invoice to prevent unbound storage growth
+/// @notice Maximum number of active bids allowed per invoice.
+/// @dev An active bid is one in the `Placed` status. Limiting this prevents unbounded
+/// storage growth, keeping state reads and iterations highly efficient and within
+/// Soroban compute limits. Bids transitioning to terminal states (like Expired, Cancelled)
+/// are excluded from this limit, so new bids can replace old ones.
 pub const MAX_BIDS_PER_INVOICE: u32 = 50;
 
 /// Snapshot of the current bid TTL configuration returned by `get_bid_ttl_config`.
@@ -343,15 +347,16 @@ impl BidStorage {
     /// @dev Maintains O(N) where N is current bids on invoice. Pruning keeps N small.
     /// @param env The Soroban environment.
     /// @param invoice_id The unique identifier of the invoice.
-    /// @return expired_count Number of bids newly marked as Expired.
+    /// @return cleaned_count Total number of bids that were either transitioned to `Expired` or
+    /// were already `Expired`/orphaned and remained in the index and have now been removed.
     fn refresh_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let current_timestamp = env.ledger().timestamp();
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
         let mut active = Vec::new(env);
-        let mut expired = 0u32;
-        let mut idx: u32 = 0;
-        while idx < bid_ids.len() {
-            let bid_id = bid_ids.get(idx).unwrap();
+        let mut cleaned_count = 0u32;
+        let mut changed = false;
+
+        for bid_id in bid_ids.iter() {
             if let Some(mut bid) = Self::get_bid(env, &bid_id) {
                 // Invariant 1: Preservation — terminal bids are NEVER touched by cleanup.
                 let is_terminal = bid.status == BidStatus::Accepted
@@ -360,32 +365,40 @@ impl BidStorage {
 
                 if is_terminal {
                     active.push_back(bid_id);
-                // Invariant 2: Idempotency — already-Expired bids are silently skipped.
-                } else if bid.status == BidStatus::Expired {
-                    // drop from active list; do not re-process
-                    // Invariant 3: Deadline — only expire Placed bids past their deadline.
                 } else if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
                     bid.status = BidStatus::Expired;
                     Self::update_bid(env, &bid);
                     emit_bid_expired(env, &bid);
-                    expired += 1;
+                    cleaned_count = cleaned_count.saturating_add(1);
+                    changed = true;
+                } else if bid.status == BidStatus::Expired {
+                    // Already expired but still in the index - clean it up
+                    cleaned_count = cleaned_count.saturating_add(1);
+                    changed = true;
                 } else {
                     // Placed but deadline not yet reached — keep active
                     active.push_back(bid_id);
                 }
+            } else {
+                // Orphaned bid ID (record missing) - clean it up
+                cleaned_count = cleaned_count.saturating_add(1);
+                changed = true;
             }
-            idx += 1;
         }
 
         // Only update storage if the list actually shrank to save gas/fees
-        if active.len() < bid_ids.len() {
+        if active.len() < bid_ids.len() || changed {
             env.storage()
                 .instance()
                 .set(&Self::invoice_key(invoice_id), &active);
         }
-        expired
+        cleaned_count
     }
 
+    /// Public interface to trigger cleanup of expired bids for a specific invoice.
+    ///
+    /// Returns the count of bids removed from the invoice index (including those newly expired).
+    /// This operation is idempotent and safe to call multiple times.
     pub fn cleanup_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         Self::refresh_expired_bids(env, invoice_id)
     }
@@ -559,6 +572,9 @@ impl BidStorage {
     /// Returns false if bid not found or already not Placed.
     pub fn cancel_bid(env: &Env, bid_id: &BytesN<32>) -> bool {
         if let Some(mut bid) = Self::get_bid(env, bid_id) {
+            // SECURITY FIX: User must authorize their own bid cancellation
+            bid.investor.require_auth();
+            
             if bid.status == BidStatus::Placed {
                 bid.status = BidStatus::Cancelled;
                 Self::update_bid(env, &bid);

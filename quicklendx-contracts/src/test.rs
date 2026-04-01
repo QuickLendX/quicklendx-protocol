@@ -106,6 +106,7 @@ pub fn create_funded_invoice(
     let amount = 1_000i128;
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &amount,
         &currency,
@@ -133,6 +134,7 @@ fn test_store_invoice() {
     let description = String::from_str(&env, "Test invoice for services");
 
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &amount,
         &currency,
@@ -165,6 +167,7 @@ fn test_store_invoice_validation() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -358,6 +361,7 @@ fn test_update_invoice_status() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -398,6 +402,7 @@ fn test_update_invoice_metadata_and_queries() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1_000,
         &currency,
@@ -460,6 +465,7 @@ fn test_invoice_metadata_validation() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1_000,
         &currency,
@@ -536,6 +542,7 @@ fn test_investor_verification_enforced() {
     client.verify_business(&admin, &business);
 
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1_000,
         &currency,
@@ -688,6 +695,7 @@ fn test_invoice_lifecycle() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -727,6 +735,7 @@ fn test_simple_bid_storage() {
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -783,6 +792,7 @@ fn test_unique_bid_id_generation() {
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -825,6 +835,7 @@ fn test_bid_expiration_cleanup() {
     client.set_admin(&admin);
 
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1_000,
         &currency,
@@ -874,6 +885,7 @@ fn test_bid_validation_rules() {
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -940,6 +952,7 @@ fn test_withdraw_bid() {
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -991,6 +1004,7 @@ fn test_get_bids_for_invoice() {
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &2000,
         &currency,
@@ -1062,6 +1076,7 @@ fn test_escrow_creation_on_bid_acceptance() {
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &bid_amount,
         &currency,
@@ -1118,6 +1133,7 @@ fn test_escrow_release_on_verification() {
 
     // Create invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &bid_amount,
         &currency,
@@ -1171,6 +1187,7 @@ fn test_escrow_refund() {
 
     // Create invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &bid_amount,
         &currency,
@@ -1228,6 +1245,7 @@ fn test_escrow_status_tracking() {
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &bid_amount,
         &currency,
@@ -1310,6 +1328,7 @@ fn test_escrow_double_operation_prevention() {
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &bid_amount,
         &currency,
@@ -1377,6 +1396,7 @@ fn test_add_invoice_rating() {
 
     // Create and fund an invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -1432,6 +1452,7 @@ fn test_add_invoice_rating_validation() {
 
     // Create invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -1500,6 +1521,7 @@ fn test_multiple_ratings() {
 
     // Create and fund invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -1550,6 +1572,7 @@ fn test_duplicate_rating_prevention() {
 
     // Create and fund invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -1686,6 +1709,7 @@ fn test_rating_statistics() {
 
     // Create and fund invoice
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -1736,6 +1760,7 @@ fn test_rating_on_unfunded_invoice() {
 
     // Create invoice but don't fund it
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -1832,6 +1857,7 @@ fn test_verify_invoice_requires_admin() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -3167,6 +3193,7 @@ fn test_check_overdue_invoices_triggers_notifications() {
     env.ledger().set_timestamp(base_time);
     let due_date = base_time + 1;
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -3288,6 +3315,7 @@ fn test_overdue_invoice_notifications() {
     // Create invoice with future due date first
     let future_due_date = env.ledger().timestamp() + 86400;
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1000,
         &currency,
@@ -3348,6 +3376,7 @@ fn test_invoice_expiration_triggers_default() {
 
     let due_date = env.ledger().timestamp() + 60;
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1_000,
         &currency,
@@ -3406,6 +3435,7 @@ fn test_partial_payments_trigger_settlement() {
 
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1_000,
         &currency,
@@ -3901,6 +3931,7 @@ fn test_investment_insurance_lifecycle() {
 
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1_000i128,
         &currency,
@@ -4018,6 +4049,7 @@ fn test_query_investment_insurance_single_coverage() {
 
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &5_000i128,
         &currency,
@@ -4118,6 +4150,7 @@ fn test_query_investment_insurance_premium_calculation() {
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_amount = 10_000i128;
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &invoice_amount,
         &currency,
@@ -4206,6 +4239,7 @@ fn test_query_investment_insurance_inactive_coverage() {
 
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &1_000i128,
         &currency,
@@ -4441,6 +4475,7 @@ fn test_invariants_after_full_lifecycle() {
     let amount = 10_000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &amount,
         &currency,
@@ -5181,6 +5216,7 @@ fn test_store_invoice_max_due_date_boundary() {
     // Test 1: Due date exactly at max boundary (365 days) should succeed
     let max_due_date = current_time + (365 * 86400);
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &amount,
         &currency,
@@ -5309,6 +5345,7 @@ fn test_custom_max_due_date_limits() {
     // Test 1: Due date exactly at custom max boundary (30 days) should succeed
     let max_due_date = current_time + (30 * 86400);
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &amount,
         &currency,
@@ -5374,6 +5411,7 @@ fn test_due_date_bounds_edge_cases() {
     // Test 1: Due date exactly 1 day ahead should succeed
     let one_day_due = current_time + 86400;
     let invoice_id = client.store_invoice(
+        admin,
         &business,
         &amount,
         &currency,

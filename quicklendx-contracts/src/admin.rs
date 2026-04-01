@@ -251,6 +251,7 @@ impl AdminStorage {
     /// Alias for [`Self::require_admin`] (call sites that use the `_auth` name).
     #[inline]
     pub fn require_admin_auth(env: &Env, address: &Address) -> Result<(), QuickLendXError> {
+        address.require_auth();
         Self::require_admin(env, address)
     }
 

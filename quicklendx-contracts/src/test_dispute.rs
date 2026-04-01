@@ -86,12 +86,14 @@ mod test_dispute {
     fn create_test_invoice(
         env: &Env,
         client: &QuickLendXContractClient,
+        admin: &Address,
         business: &Address,
         amount: i128,
     ) -> BytesN<32> {
         let currency = Address::generate(env);
         let due_date = env.ledger().timestamp() + 30 * 24 * 60 * 60;
         client.store_invoice(
+            admin,
             business,
             &amount,
             &currency,
@@ -111,7 +113,7 @@ mod test_dispute {
     fn test_create_dispute_by_business() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let reason = String::from_str(&env, "Invoice amount discrepancy");
         let evidence = String::from_str(&env, "Supporting documentation provided");
@@ -157,7 +159,7 @@ mod test_dispute {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
         let outsider = Address::generate(&env);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let result = client.try_create_dispute(
             &invoice_id,
@@ -182,7 +184,7 @@ mod test_dispute {
     fn test_create_dispute_duplicate_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -207,7 +209,7 @@ mod test_dispute {
     fn test_create_dispute_empty_reason_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let result = client.try_create_dispute(
             &invoice_id,
@@ -225,7 +227,7 @@ mod test_dispute {
     fn test_create_dispute_reason_too_long_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let long_reason = "a".repeat(1001);
         let result = client.try_create_dispute(
@@ -244,7 +246,7 @@ mod test_dispute {
     fn test_create_dispute_empty_evidence_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let result = client.try_create_dispute(
             &invoice_id,
@@ -262,7 +264,7 @@ mod test_dispute {
     fn test_create_dispute_evidence_too_long_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let long_evidence = "x".repeat(2001);
         let result = client.try_create_dispute(
@@ -281,7 +283,7 @@ mod test_dispute {
     fn test_create_dispute_reason_minimum_boundary() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let result = client.try_create_dispute(
             &invoice_id,
@@ -297,7 +299,7 @@ mod test_dispute {
     fn test_create_dispute_reason_maximum_boundary() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let max_reason = "x".repeat(1000);
         let result = client.try_create_dispute(
@@ -318,7 +320,7 @@ mod test_dispute {
     fn test_put_dispute_under_review_success() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -348,7 +350,7 @@ mod test_dispute {
     fn test_put_under_review_no_dispute_returns_not_found() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let result = client.try_put_dispute_under_review(&invoice_id, &admin);
         assert!(result.is_err());
@@ -362,7 +364,7 @@ mod test_dispute {
     fn test_put_under_review_already_under_review_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -387,7 +389,7 @@ mod test_dispute {
     fn test_put_under_review_resolved_dispute_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -421,7 +423,7 @@ mod test_dispute {
     fn test_resolve_dispute_success() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -446,7 +448,7 @@ mod test_dispute {
     fn test_complete_dispute_lifecycle() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         // Step 1: Create dispute
         let reason = String::from_str(&env, "Service quality issue");
@@ -492,7 +494,7 @@ mod test_dispute {
     fn test_resolve_dispute_skipping_review_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -525,7 +527,7 @@ mod test_dispute {
     fn test_resolve_already_resolved_dispute_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -560,7 +562,7 @@ mod test_dispute {
     fn test_resolve_dispute_empty_resolution_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -585,7 +587,7 @@ mod test_dispute {
     fn test_resolve_dispute_resolution_too_long_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -615,7 +617,7 @@ mod test_dispute {
     fn test_get_dispute_details_returns_none_when_no_dispute() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let result = client.get_dispute_details(&invoice_id);
         assert!(
@@ -819,7 +821,7 @@ mod test_dispute {
     fn test_complete_lifecycle_with_all_queries() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let reason = String::from_str(&env, "Payment delay");
         let evidence = String::from_str(&env, "Invoice was 30 days late");
