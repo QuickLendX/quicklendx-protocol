@@ -35,6 +35,16 @@ fn submit_investor_kyc(env: &Env, client: &QuickLendXContractClient, investor: &
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
 }
 
+fn verify_investor_for_test(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    investor: &Address,
+    limit: i128,
+) {
+    submit_investor_kyc(env, client, investor);
+    client.verify_investor(investor, &limit);
+}
+
 #[test]
 fn test_pause_blocks_user_and_invoice_state_mutations() {
     let env = Env::default();
@@ -224,7 +234,7 @@ fn test_pause_blocks_accept_bid_and_fund() {
     let result = client.try_accept_bid_and_fund(&invoice_id, &bid_id);
     let err = result.err().expect("expected contract error");
     let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed.into());
 }
 
 #[test]
@@ -426,7 +436,6 @@ fn test_pause_blocks_kyc_submission() {
     let contract_error = err.expect("expected contract invoke error");
     assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
 }
-
 
 #[test]
 fn test_pause_blocks_protocol_limits_update() {

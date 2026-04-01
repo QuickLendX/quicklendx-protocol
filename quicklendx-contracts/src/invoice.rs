@@ -3,7 +3,7 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String,
 
 use crate::errors::QuickLendXError;
 use crate::protocol_limits::{
-    check_string_length, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FEEDBACK_LENGTH,
+    check_invoice_limit, check_string_length, is_active_status, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FEEDBACK_LENGTH,
     MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
     MAX_TRANSACTION_ID_LENGTH,
 };
@@ -267,6 +267,10 @@ impl Invoice {
         tags: Vec<String>,
     ) -> Result<Self, QuickLendXError> {
         check_string_length(&description, MAX_DESCRIPTION_LENGTH)?;
+
+        // Enforce maximum active invoices per business (status-aware limit)
+        // This check is performed BEFORE any storage writes to prevent race conditions
+        check_invoice_limit(env, &business)?;
 
         // Normalize every tag before storage so the on-chain representation is always
         // in canonical form regardless of how the caller formatted the input.
@@ -568,6 +572,60 @@ impl Invoice {
         self.status = InvoiceStatus::Defaulted;
     }
 
+    /// Apply an admin-authorized status override used for recovery, backfills, and tests.
+    ///
+    /// The admin pathway is intentionally narrower than arbitrary mutation: only
+    /// lifecycle statuses that already have index/event support can be targeted.
+    /// The normal user-facing settlement and funding flows should still use
+    /// `accept_bid`, `settle_invoice`, and default handling entrypoints.
+    ///
+    /// # Errors
+    /// Returns [`QuickLendXError::InvalidStatus`] when the requested target status
+    /// is unsupported or when the invoice is already terminal (`Cancelled` or `Refunded`).
+    pub fn apply_admin_status_update(
+        &mut self,
+        env: &Env,
+        admin: &Address,
+        new_status: &InvoiceStatus,
+    ) -> Result<(), QuickLendXError> {
+        if matches!(
+            self.status,
+            InvoiceStatus::Cancelled | InvoiceStatus::Refunded
+        ) {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+
+        match new_status {
+            InvoiceStatus::Verified => {
+                if self.status != InvoiceStatus::Pending {
+                    return Err(QuickLendXError::InvalidStatus);
+                }
+                self.verify(env, admin.clone());
+            }
+            InvoiceStatus::Funded => {
+                if self.status != InvoiceStatus::Verified {
+                    return Err(QuickLendXError::InvalidStatus);
+                }
+                self.mark_as_funded(env, admin.clone(), self.amount, env.ledger().timestamp());
+            }
+            InvoiceStatus::Paid => {
+                if self.status != InvoiceStatus::Funded {
+                    return Err(QuickLendXError::InvalidStatus);
+                }
+                self.mark_as_paid(env, admin.clone(), env.ledger().timestamp());
+            }
+            InvoiceStatus::Defaulted => {
+                if self.status != InvoiceStatus::Funded {
+                    return Err(QuickLendXError::InvalidStatus);
+                }
+                self.mark_as_defaulted();
+            }
+            _ => return Err(QuickLendXError::InvalidStatus),
+        }
+
+        Ok(())
+    }
+
     /// Cancel the invoice (only if Pending or Verified, not Funded)
     pub fn cancel(&mut self, env: &Env, actor: Address) -> Result<(), QuickLendXError> {
         // Can only cancel if Pending or Verified (not yet funded)
@@ -799,16 +857,28 @@ impl InvoiceStorage {
         (symbol_short!("cat_idx"), category.clone())
     }
 
+    fn metadata_customer_key(customer_name: &String) -> (soroban_sdk::Symbol, String) {
+        (symbol_short!("md_cust"), customer_name.clone())
+    }
+
+    fn metadata_tax_key(tax_id: &String) -> (soroban_sdk::Symbol, String) {
+        (symbol_short!("md_tax"), tax_id.clone())
+    }
+
     fn tag_key(tag: &String) -> (soroban_sdk::Symbol, String) {
         (symbol_short!("tag_idx"), tag.clone())
     }
 
-    fn metadata_customer_key(customer_name: &String) -> (soroban_sdk::Symbol, String) {
-        (symbol_short!("cust_idx"), customer_name.clone())
-    }
-
-    fn metadata_tax_key(tax_id: &String) -> (soroban_sdk::Symbol, String) {
-        (symbol_short!("tax_idx"), tax_id.clone())
+    pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
+        let mut categories = Vec::new(env);
+        categories.push_back(InvoiceCategory::Services);
+        categories.push_back(InvoiceCategory::Products);
+        categories.push_back(InvoiceCategory::Consulting);
+        categories.push_back(InvoiceCategory::Manufacturing);
+        categories.push_back(InvoiceCategory::Technology);
+        categories.push_back(InvoiceCategory::Healthcare);
+        categories.push_back(InvoiceCategory::Other);
+        categories
     }
 
     /// @notice Adds an invoice to the category index.
@@ -1168,13 +1238,13 @@ impl InvoiceStorage {
         high_rated_invoices
     }
 
+    /// Count invoices that have received at least one rating.
     pub fn get_invoices_with_ratings_count(env: &Env) -> u32 {
-        let statuses = [InvoiceStatus::Funded, InvoiceStatus::Paid];
         let mut count = 0u32;
-        for status in statuses.iter() {
+        for status in [InvoiceStatus::Funded, InvoiceStatus::Paid].iter() {
             for invoice_id in Self::get_invoices_by_status(env, status).iter() {
                 if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
-                    if invoice.average_rating.is_some() {
+                    if invoice.total_ratings > 0 {
                         count = count.saturating_add(1);
                     }
                 }
@@ -1182,7 +1252,6 @@ impl InvoiceStorage {
         }
         count
     }
-
     fn add_to_metadata_index(
         env: &Env,
         key: &(soroban_sdk::Symbol, String),
@@ -1308,7 +1377,10 @@ impl InvoiceStorage {
                     .instance()
                     .set(&TOTAL_INVOICE_COUNT_KEY, &count);
             }
+        }
+    }
 
+            // Remove the main invoice record
             env.storage().instance().remove(invoice_id);
         }
     }
