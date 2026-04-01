@@ -34,7 +34,7 @@
 //! |----------------------------|----------------|---------------------------------------------|
 //! | `WASM_SIZE_BUDGET_BYTES`   | 262 144 B (256 KiB) | Hard failure threshold               |
 //! | `WASM_SIZE_WARNING_BYTES`  | ~235 929 B (90 %) | Warning zone upper edge               |
-//! | `WASM_SIZE_BASELINE_BYTES` | 217 668 B       | Last recorded optimised size           |
+//! | `WASM_SIZE_BASELINE_BYTES` | 241 218 B       | Last recorded optimised size           |
 //! | `WASM_REGRESSION_MARGIN`   | 0.05 (5 %)      | Max allowed growth vs baseline         |
 
 use std::path::PathBuf;
