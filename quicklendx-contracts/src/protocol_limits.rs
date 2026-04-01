@@ -2,6 +2,7 @@ use soroban_sdk::{contracttype, Address, Env, String};
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
+use crate::invoice::{InvoiceStatus, InvoiceStorage};
 
 #[allow(dead_code)]
 #[contracttype]
@@ -237,4 +238,97 @@ pub fn compute_min_bid_amount(invoice_amount: i128, limits: &ProtocolLimits) -> 
     } else {
         limits.min_bid_amount
     }
+}
+
+/// Maximum number of active invoices allowed per business
+pub const MAX_ACTIVE_INVOICES_PER_BUSINESS: u32 = 100;
+
+/// Determine if an invoice status is considered "active" for limit enforcement.
+///
+/// Active invoices are those that are still in the lifecycle and not yet resolved.
+/// Terminal statuses (Paid, Defaulted, Cancelled, Refunded) are not counted toward the limit.
+///
+/// # Arguments
+/// * `status` - The invoice status to classify
+///
+/// # Returns
+/// `true` if the status is active, `false` if terminal
+///
+/// # Security Note
+/// This function uses exhaustive matching without a wildcard arm to ensure
+/// compile-time errors when new InvoiceStatus variants are added without
+/// updating this classification. Silent misclassification would be a security regression.
+pub fn is_active_status(status: &InvoiceStatus) -> bool {
+    match status {
+        InvoiceStatus::Pending => true,
+        InvoiceStatus::Verified => true,
+        InvoiceStatus::Funded => true,
+        InvoiceStatus::Paid => false,
+        InvoiceStatus::Defaulted => false,
+        InvoiceStatus::Cancelled => false,
+        InvoiceStatus::Refunded => false,
+    }
+}
+
+/// Count the number of active invoices for a business.
+///
+/// This function reads all invoices for the given business from on-chain storage
+/// and counts only those with active statuses. The count is always computed
+/// from current storage state to prevent manipulation through cached values.
+///
+/// # Arguments
+/// * `env` - The contract environment
+/// * `business` - The business address to count invoices for
+///
+/// # Returns
+/// The number of active invoices for the business
+///
+/// # Security Note
+/// Always reads from on-chain storage at check time. No cached or pre-computed
+/// counts are used to prevent manipulation by callers.
+pub fn count_active_invoices(env: &Env, business: &Address) -> Result<u32, QuickLendXError> {
+    let invoices = InvoiceStorage::get_business_invoices(env, business)?;
+    let mut active_count = 0u32;
+    
+    for invoice_id in invoices.iter() {
+        if let Some(invoice) = InvoiceStorage::get_invoice(env, invoice_id) {
+            if is_active_status(&invoice.status) {
+                active_count = active_count.saturating_add(1);
+            }
+        }
+    }
+    
+    Ok(active_count)
+}
+
+/// Check if a business can submit a new invoice based on active invoice limits.
+///
+/// This function enforces the maximum number of active invoices per business.
+/// The check is performed BEFORE the new invoice is written to storage to prevent
+/// race conditions where concurrent submissions could both pass the check.
+///
+/// # Arguments
+/// * `env` - The contract environment
+/// * `business` - The business address attempting to submit an invoice
+///
+/// # Returns
+/// `Ok(())` if the business can submit a new invoice
+///
+/// # Errors
+/// Returns `QuickLendXError::MaxInvoicesPerBusinessExceeded` if the business
+/// has reached or exceeded the maximum number of active invoices
+///
+/// # Security Note
+/// - Uses `>=` comparison (not `>`) to prevent off-by-one errors
+/// - Check is performed before any storage writes
+/// - Count is read directly from on-chain storage
+pub fn check_invoice_limit(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+    let active_count = count_active_invoices(env, business)?;
+    let limit = MAX_ACTIVE_INVOICES_PER_BUSINESS;
+    
+    if active_count >= limit {
+        return Err(QuickLendXError::MaxInvoicesPerBusinessExceeded);
+    }
+    
+    Ok(())
 }

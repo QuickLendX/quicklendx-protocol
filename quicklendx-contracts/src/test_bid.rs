@@ -7,7 +7,7 @@
 /// 3. Indexing - multiple bids properly indexed and queryable
 /// 4. Ranking - profit-based bid comparison works correctly
 use super::*;
-use crate::bid::BidStatus;
+use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::payments::EscrowStatus;
@@ -17,12 +17,14 @@ use soroban_sdk::{
     Address, BytesN, Env, String, Vec,
 };
 
-// Helper: Setup contract with admin
-fn setup() -> (Env, QuickLendXContractClient<'static>) {
+fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    (env, client)
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+    (env, client, admin)
 }
 
 // Helper: Create verified investor - using same pattern as test.rs
@@ -37,7 +39,7 @@ fn add_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i1
 fn create_verified_invoice(
     env: &Env,
     client: &QuickLendXContractClient,
-    _admin: &Address,
+    admin: &Address,
     business: &Address,
     amount: i128,
 ) -> BytesN<32> {
@@ -45,6 +47,7 @@ fn create_verified_invoice(
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        admin,
         business,
         &amount,
         &currency,
@@ -74,7 +77,7 @@ fn assert_contract_error<T>(
 /// Core Test: Bid on pending (non-verified) invoice fails
 #[test]
 fn test_bid_placement_non_verified_invoice_fails() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -84,6 +87,7 @@ fn test_bid_placement_non_verified_invoice_fails() {
 
     // Create pending invoice (not verified)
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &10_000,
         &currency,
@@ -101,7 +105,7 @@ fn test_bid_placement_non_verified_invoice_fails() {
 /// Core Test: Bid on verified invoice succeeds
 #[test]
 fn test_bid_placement_verified_invoice_succeeds() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -123,7 +127,7 @@ fn test_bid_placement_verified_invoice_succeeds() {
 /// Core Test: Minimum bid amount enforced (absolute floor + percentage of invoice)
 #[test]
 fn test_bid_minimum_amount_enforced() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -156,7 +160,7 @@ fn test_bid_minimum_amount_enforced() {
 /// Core Test: Investment limit enforced
 #[test]
 fn test_bid_placement_respects_investment_limit() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -177,7 +181,7 @@ fn test_bid_placement_respects_investment_limit() {
 /// Core Test: Bid owner can withdraw own bid
 #[test]
 fn test_bid_withdrawal_by_owner_succeeds() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -202,7 +206,7 @@ fn test_bid_withdrawal_by_owner_succeeds() {
 /// Core Test: Only Placed bids can be withdrawn
 #[test]
 fn test_bid_withdrawal_only_placed_bids() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -224,7 +228,7 @@ fn test_bid_withdrawal_only_placed_bids() {
 /// Core Test: Accepted bids cannot be withdrawn
 #[test]
 fn test_bid_withdrawal_rejects_accepted_bid() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -246,7 +250,7 @@ fn test_bid_withdrawal_rejects_accepted_bid() {
 /// Core Test: Expired bids are refreshed then rejected during withdrawal
 #[test]
 fn test_bid_withdrawal_rejects_expired_bid_without_manual_cleanup() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -276,7 +280,7 @@ fn test_bid_withdrawal_rejects_expired_bid_without_manual_cleanup() {
 /// Core Test: Multiple bids indexed and queryable by status
 #[test]
 fn test_multiple_bids_indexing_and_query() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -317,7 +321,7 @@ fn test_multiple_bids_indexing_and_query() {
 
     #[test]
     fn test_default_bid_ttl_used_in_place_bid() {
-        let (env, client) = setup();
+        let (env, client, admin) = setup();
         env.mock_all_auths();
         let admin = Address::generate(&env);
         let _ = client.set_admin(&admin);
@@ -336,7 +340,7 @@ fn test_multiple_bids_indexing_and_query() {
 
     #[test]
     fn test_admin_can_update_ttl_and_bid_uses_new_value() {
-        let (env, client) = setup();
+        let (env, client, admin) = setup();
         env.mock_all_auths();
         let admin = Address::generate(&env);
         let _ = client.set_admin(&admin);
@@ -358,7 +362,7 @@ fn test_multiple_bids_indexing_and_query() {
 
     #[test]
     fn test_set_bid_ttl_bounds_enforced() {
-        let (env, client) = setup();
+        let (env, client, admin) = setup();
         env.mock_all_auths();
         let admin = Address::generate(&env);
         let _ = client.set_admin(&admin);
@@ -379,7 +383,7 @@ fn test_multiple_bids_indexing_and_query() {
 /// Core Test: Query by investor works correctly
 #[test]
 fn test_query_bids_by_investor() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -421,7 +425,7 @@ fn test_query_bids_by_investor() {
 /// Core Test: Best bid selection based on profit margin
 #[test]
 fn test_bid_ranking_by_profit() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -474,7 +478,7 @@ fn test_bid_ranking_by_profit() {
 /// Core Test: Best bid ignores withdrawn bids
 #[test]
 fn test_best_bid_excludes_withdrawn() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -506,7 +510,7 @@ fn test_best_bid_excludes_withdrawn() {
 /// Core Test: Bid expiration cleanup
 #[test]
 fn test_bid_expiration_and_cleanup() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -550,7 +554,7 @@ fn test_bid_expiration_and_cleanup() {
 /// Test: Bid uses default TTL (7 days) when placed
 #[test]
 fn test_bid_default_ttl_seven_days() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -574,7 +578,7 @@ fn test_bid_default_ttl_seven_days() {
 /// Test: cleanup_expired_bids returns count of removed bids
 #[test]
 fn test_cleanup_expired_bids_returns_count() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -628,7 +632,7 @@ fn test_cleanup_expired_bids_returns_count() {
 /// Test: cleanup_expired_bids is idempotent when called multiple times
 #[test]
 fn test_cleanup_expired_bids_idempotent() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -698,7 +702,7 @@ fn test_cleanup_expired_bids_idempotent() {
 /// Test: get_ranked_bids excludes expired bids
 #[test]
 fn test_get_ranked_bids_excludes_expired() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -741,7 +745,7 @@ fn test_get_ranked_bids_excludes_expired() {
 /// Test: get_best_bid excludes expired bids
 #[test]
 fn test_get_best_bid_excludes_expired() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -780,7 +784,7 @@ fn test_get_best_bid_excludes_expired() {
 /// Test: place_bid cleans up expired bids before placing new bid
 #[test]
 fn test_place_bid_cleans_up_expired_before_placing() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -824,7 +828,7 @@ fn test_place_bid_cleans_up_expired_before_placing() {
 /// Test: Partial expiration - only expired bids are cleaned up
 #[test]
 fn test_partial_expiration_cleanup() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -879,7 +883,7 @@ fn test_partial_expiration_cleanup() {
 /// Test: Cleanup is triggered when querying bids after expiration
 #[test]
 fn test_cleanup_triggered_on_query_after_expiration() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -922,7 +926,7 @@ fn test_cleanup_triggered_on_query_after_expiration() {
 /// Test: Cannot accept expired bid
 #[test]
 fn test_cannot_accept_expired_bid() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -946,7 +950,7 @@ fn test_cannot_accept_expired_bid() {
 /// Test: Bid at exact expiration boundary (not expired)
 #[test]
 fn test_bid_at_exact_expiration_not_expired() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -982,7 +986,7 @@ fn test_bid_at_exact_expiration_not_expired() {
 /// Test: Bid one second past expiration (expired)
 #[test]
 fn test_bid_one_second_past_expiration_expired() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1014,7 +1018,7 @@ fn test_bid_one_second_past_expiration_expired() {
 /// Test: Cleanup with no expired bids returns zero
 #[test]
 fn test_cleanup_with_no_expired_bids_returns_zero() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1038,7 +1042,7 @@ fn test_cleanup_with_no_expired_bids_returns_zero() {
 /// Test: Cleanup on invoice with no bids returns zero
 #[test]
 fn test_cleanup_on_invoice_with_no_bids() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1054,7 +1058,7 @@ fn test_cleanup_on_invoice_with_no_bids() {
 /// Test: Withdrawn bids are not affected by expiration cleanup
 #[test]
 fn test_withdrawn_bids_not_affected_by_expiration() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1099,7 +1103,7 @@ fn test_withdrawn_bids_not_affected_by_expiration() {
 /// Test: Cancelled bids are not affected by expiration cleanup
 #[test]
 fn test_cancelled_bids_not_affected_by_expiration() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1144,7 +1148,7 @@ fn test_cancelled_bids_not_affected_by_expiration() {
 /// Test: Mixed status bids - only Placed bids expire
 #[test]
 fn test_mixed_status_bids_only_placed_expire() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1188,7 +1192,7 @@ fn test_mixed_status_bids_only_placed_expire() {
 /// Test: Expiration cleanup is isolated per invoice
 #[test]
 fn test_expiration_cleanup_isolated_per_invoice() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1243,7 +1247,7 @@ fn test_expiration_cleanup_isolated_per_invoice() {
 /// Test: Expired bids removed from invoice bid list
 #[test]
 fn test_expired_bids_removed_from_invoice_list() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1280,7 +1284,7 @@ fn test_expired_bids_removed_from_invoice_list() {
 /// Test: Ranking after expiration returns empty list
 #[test]
 fn test_ranking_after_all_bids_expire() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1331,7 +1335,7 @@ fn test_ranking_after_all_bids_expire() {
 /// Test: Admin can set investment limit for verified investor
 #[test]
 fn test_set_investment_limit_succeeds() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1357,7 +1361,7 @@ fn test_set_investment_limit_succeeds() {
 /// Test: Non-admin cannot set investment limit
 #[test]
 fn test_set_investment_limit_non_admin_fails() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
 
     // Create an unverified investor (no admin setup)
@@ -1372,7 +1376,7 @@ fn test_set_investment_limit_non_admin_fails() {
 /// Test: Cannot set limit for unverified investor
 #[test]
 fn test_set_investment_limit_unverified_fails() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1390,7 +1394,7 @@ fn test_set_investment_limit_unverified_fails() {
 /// Test: Cannot set invalid investment limit
 #[test]
 fn test_set_investment_limit_invalid_amount_fails() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1414,7 +1418,7 @@ fn test_set_investment_limit_invalid_amount_fails() {
 /// Test: Updated limit is enforced in bid placement
 #[test]
 fn test_updated_limit_enforced_in_bidding() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1440,7 +1444,7 @@ fn test_updated_limit_enforced_in_bidding() {
 /// Test: cancel_bid transitions Placed → Cancelled
 #[test]
 fn test_cancel_bid_succeeds() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1460,7 +1464,7 @@ fn test_cancel_bid_succeeds() {
 /// Test: cancel_bid on already Withdrawn bid returns false
 #[test]
 fn test_cancel_bid_on_withdrawn_returns_false() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1478,7 +1482,7 @@ fn test_cancel_bid_on_withdrawn_returns_false() {
 /// Test: cancel_bid on already Cancelled bid returns false
 #[test]
 fn test_cancel_bid_on_cancelled_returns_false() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1496,7 +1500,7 @@ fn test_cancel_bid_on_cancelled_returns_false() {
 /// Test: cancel_bid on non-existent bid_id returns false
 #[test]
 fn test_cancel_bid_nonexistent_returns_false() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let fake_bid_id = BytesN::from_array(&env, &[0u8; 32]);
     let result = client.cancel_bid(&fake_bid_id);
@@ -1506,7 +1510,7 @@ fn test_cancel_bid_nonexistent_returns_false() {
 /// Test: cancelled bid excluded from ranking
 #[test]
 fn test_cancelled_bid_excluded_from_ranking() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1533,7 +1537,7 @@ fn test_cancelled_bid_excluded_from_ranking() {
 /// Test: get_all_bids_by_investor returns bids across multiple invoices
 #[test]
 fn test_get_all_bids_by_investor_cross_invoice() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1553,7 +1557,7 @@ fn test_get_all_bids_by_investor_cross_invoice() {
 /// Test: get_all_bids_by_investor returns empty for investor with no bids
 #[test]
 fn test_get_all_bids_by_investor_empty() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let investor = Address::generate(&env);
     let all_bids = client.get_all_bids_by_investor(&investor);
@@ -1567,7 +1571,7 @@ fn test_get_all_bids_by_investor_empty() {
 /// Test: Multiple investors place bids on same invoice - all bids are tracked
 #[test]
 fn test_multiple_investors_place_bids_on_same_invoice() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1631,7 +1635,7 @@ fn test_multiple_investors_place_bids_on_same_invoice() {
 /// Test: Multiple investors bids are correctly ranked by profit
 #[test]
 fn test_multiple_investors_bids_ranking_order() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1692,7 +1696,7 @@ fn test_multiple_investors_bids_ranking_order() {
 /// Test: Business accepts one bid, others remain Placed
 #[test]
 fn test_business_accepts_one_bid_others_remain_placed() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1748,7 +1752,7 @@ fn test_business_accepts_one_bid_others_remain_placed() {
 /// Test: Only one escrow is created when business accepts a bid
 #[test]
 fn test_only_one_escrow_created_for_accepted_bid() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1804,7 +1808,7 @@ fn test_only_one_escrow_created_for_accepted_bid() {
 /// Test: Non-accepted investors can withdraw their bids after one is accepted
 #[test]
 fn test_non_accepted_investors_can_withdraw_after_acceptance() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1875,7 +1879,7 @@ fn test_non_accepted_investors_can_withdraw_after_acceptance() {
 /// Test: get_bids_for_invoice returns all bids regardless of status
 #[test]
 fn test_get_bids_for_invoice_returns_all_bids() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1931,7 +1935,7 @@ fn test_get_bids_for_invoice_returns_all_bids() {
 /// Test: Cannot accept second bid after one is already accepted
 #[test]
 fn test_cannot_accept_second_bid_after_first_accepted() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let _ = client.set_admin(&admin);
@@ -1965,8 +1969,92 @@ fn test_cannot_accept_second_bid_after_first_accepted() {
     assert_eq!(client.get_bid(&bid_id2).unwrap().status, BidStatus::Placed);
 
     // Verify invoice is Funded with bid1's amount
-    let invoice = client.get_invoice(&invoice_id);
+    let invoice = client.get_invoice(&invoice_id).unwrap();
     assert_eq!(invoice.status, InvoiceStatus::Funded);
     assert_eq!(invoice.funded_amount, 10_000);
     assert_eq!(invoice.investor, Some(investor1));
+}
+
+/// Test: cleanup_expired_bids correctly handles and counts already-expired bids
+#[test]
+fn test_cleanup_expired_bids_with_pre_set_expired() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // Place a bid
+    let bid_id = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+
+    // Advance time past expiration
+    env.ledger().set_timestamp(env.ledger().timestamp() + 604800 + 1);
+
+    // Simulate another process marking the bid as expired but NOT removing it from invoice index
+    let _ = BidStorage::count_active_placed_bids_for_investor(&env, &investor1);
+    
+    // Verify bid status is now Expired
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Expired);
+    
+    // Verify it's still in the invoice bid index
+    let bids_in_index = client.get_bids_for_invoice(&invoice_id);
+    assert!(bids_in_index.iter().any(|b| b.bid_id == bid_id));
+
+    // Now call cleanup_expired_bids - it should find the already-expired bid, remove it, and return 1
+    let cleaned = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned, 1, "Should count already-expired bid as cleaned up");
+
+    // Verify it's gone from the index
+    let bids_after = client.get_bids_for_invoice(&invoice_id);
+    assert_eq!(bids_after.len(), 0, "Index should be empty after cleanup");
+
+    // Second call should return 0
+    let cleaned_again = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned_again, 0, "Second cleanup should be idempotent and return 0");
+}
+
+/// Test: cleanup_expired_bids with partial expirations over time
+#[test]
+fn test_cleanup_expired_bids_partial_idempotency() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+    let investor1 = add_verified_investor(&env, &client, 100_000);
+    let investor2 = add_verified_investor(&env, &client, 100_000);
+    let business = Address::generate(&env);
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 100_000);
+
+    // Bid 1
+    let _bid_id1 = client.place_bid(&investor1, &invoice_id, &10_000, &12_000);
+    
+    // Advance time partly
+    env.ledger().set_timestamp(env.ledger().timestamp() + 302400); // 3.5 days
+
+    // Bid 2
+    let _bid_id2 = client.place_bid(&investor2, &invoice_id, &10_000, &12_000);
+
+    // Advance time so Bid 1 expires but Bid 2 doesn't
+    env.ledger().set_timestamp(env.ledger().timestamp() + 432000); // +5 days
+
+    // First cleanup
+    let cleaned = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned, 1, "Only bid 1 should be cleaned up");
+
+    // Second cleanup immediately
+    let cleaned2 = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned2, 0, "Second cleanup should return 0 - no new expirations");
+
+    // Advance time so Bid 2 also expires
+    env.ledger().set_timestamp(env.ledger().timestamp() + 432000); // +5 days
+
+    // Third cleanup
+    let cleaned3 = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned3, 1, "Bid 2 should now be cleaned up");
+
+    let cleaned4 = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned4, 0, "No more bids left!");
 }
