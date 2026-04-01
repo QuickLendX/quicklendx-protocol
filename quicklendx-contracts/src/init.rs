@@ -31,7 +31,7 @@
 //! - `set_treasury()` - Update treasury address
 //! - Currency whitelist management functions
 
-use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY, ADMIN_KEY};
+use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
@@ -170,20 +170,15 @@ impl ProtocolInitializer {
     /// - Initialization lock prevents concurrent calls
     /// - Emits initialization event for audit trail
     pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
-        // SECURITY: Require authorization from the admin
+        // Administrative authorization for initial setup.
+        // This ensures the designated admin address has consented to the role.
         params.admin.require_auth();
 
-        // CONCURRENCY: Check and set initialization lock
-        if Self::is_initialization_locked(env) {
-            return Err(QuickLendXError::OperationNotAllowed);
+        // Zero-address guard
+        let zero = Address::from_string(&soroban_sdk::String::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"));
+        if params.admin == zero || params.treasury == zero {
+            return Err(QuickLendXError::InvalidAddress);
         }
-        Self::set_initialization_lock(env, true);
-
-        // Ensure cleanup on any failure
-        let result = Self::initialize_internal(env, params);
-        Self::set_initialization_lock(env, false);
-        result
-    }
 
     /// Internal initialization logic with comprehensive validation
     fn initialize_internal(
@@ -192,32 +187,26 @@ impl ProtocolInitializer {
     ) -> Result<(), QuickLendXError> {
         // Check if already initialized (re-initialization protection with idempotency)
         if Self::is_initialized(env) {
-            params.admin.require_auth();
-            // Check for idempotency: if initialized with exact same parameters, return Ok(())
-            let current_admin: Address = env
-                .storage()
-                .instance()
-                .get(&crate::admin::ADMIN_KEY)
-                .unwrap();
-            let current_treasury: Address = env.storage().instance().get(&TREASURY_KEY).unwrap();
-            let current_fee_bps: u32 = env.storage().instance().get(&FEE_BPS_KEY).unwrap();
-            let current_config: ProtocolConfig =
-                env.storage().instance().get(&PROTOCOL_CONFIG_KEY).unwrap();
-            let current_whitelist: Vec<Address> = env
-                .storage()
-                .instance()
-                .get(&WHITELIST_KEY)
-                .unwrap_or(Vec::new(env));
+            // Check for idempotency: if fully initialized with exact same parameters, return Ok(())
+            let current_admin: Option<Address> = env.storage().instance().get(&crate::admin::ADMIN_KEY);
+            let current_treasury: Option<Address> = env.storage().instance().get(&TREASURY_KEY);
+            let current_fee_bps: Option<u32> = env.storage().instance().get(&FEE_BPS_KEY);
+            let current_config: Option<ProtocolConfig> = env.storage().instance().get(&PROTOCOL_CONFIG_KEY);
+            let current_whitelist: Vec<Address> = env.storage().instance().get(&WHITELIST_KEY).unwrap_or(Vec::new(env));
 
-            if current_admin == params.admin
-                && current_treasury == params.treasury
-                && current_fee_bps == params.fee_bps
-                && current_config.min_invoice_amount == params.min_invoice_amount
-                && current_config.max_due_date_days == params.max_due_date_days
-                && current_config.grace_period_seconds == params.grace_period_seconds
-                && current_whitelist == params.initial_currencies
+            if let (Some(c_admin), Some(c_treasury), Some(c_fee), Some(c_conf)) = 
+                (current_admin, current_treasury, current_fee_bps, current_config) 
             {
-                return Ok(());
+                if c_admin == params.admin 
+                    && c_treasury == params.treasury
+                    && c_fee == params.fee_bps
+                    && c_conf.min_invoice_amount == params.min_invoice_amount
+                    && c_conf.max_due_date_days == params.max_due_date_days
+                    && c_conf.grace_period_seconds == params.grace_period_seconds
+                    && current_whitelist == params.initial_currencies
+                {
+                    return Ok(());
+                }
             }
 
             return Err(QuickLendXError::OperationNotAllowed);
@@ -305,10 +294,18 @@ impl ProtocolInitializer {
     ///
     /// @notice Returns true when the initialization flag is set.
     pub fn is_initialized(env: &Env) -> bool {
-        env.storage()
+        let proto_init = env.storage()
             .instance()
             .get(&PROTOCOL_INITIALIZED_KEY)
-            .unwrap_or(false)
+            .unwrap_or(false);
+        
+        // Also check if admin was initialized via legacy/phased flow
+        let admin_init = env.storage()
+            .instance()
+            .get(&ADMIN_INITIALIZED_KEY)
+            .unwrap_or(false);
+            
+        proto_init || admin_init
     }
 
     /// Validate initialization parameters with comprehensive checks.
@@ -324,7 +321,7 @@ impl ProtocolInitializer {
     /// * `Ok(())` if all parameters are valid
     /// * `Err(QuickLendXError)` with specific error for invalid parameters
     fn validate_initialization_params(
-        env: &Env,
+        _env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // VALIDATION: Fee basis points (0% to 10%)
@@ -606,17 +603,14 @@ fn emit_protocol_initialized(
     max_due_date_days: u64,
     grace_period_seconds: u64,
 ) {
-    env.events().publish(
-        (symbol_short!("proto_in"),),
-        (
-            admin.clone(),
-            treasury.clone(),
-            fee_bps,
-            min_invoice_amount,
-            max_due_date_days,
-            grace_period_seconds,
-            env.ledger().timestamp(),
-        ),
+    crate::events::emit_protocol_initialized(
+        env,
+        admin,
+        treasury,
+        fee_bps,
+        min_invoice_amount,
+        max_due_date_days,
+        grace_period_seconds,
     );
 }
 

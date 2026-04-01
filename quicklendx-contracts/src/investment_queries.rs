@@ -1,4 +1,4 @@
-use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
+use crate::investment::{InvestmentStatus, InvestmentStorage};
 use soroban_sdk::{symbol_short, Address, BytesN, Env, Vec};
 
 /// Maximum number of records returned by paginated query endpoints.

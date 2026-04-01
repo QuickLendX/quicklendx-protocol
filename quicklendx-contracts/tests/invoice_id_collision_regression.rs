@@ -1,6 +1,6 @@
 use core::convert::TryInto;
 
-use quicklendx_contracts::{InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
+use quicklendx_contracts::{types::InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Ledger},

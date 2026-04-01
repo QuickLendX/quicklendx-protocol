@@ -67,11 +67,40 @@ The implementation uses inclusive/exclusive boundaries correctly:
 
 ## Security Considerations
 
-1. **Admin authorization**: Schedule creation requires admin auth
-2. **Beneficiary authorization**: Release requires beneficiary auth
-3. **No over-release**: `released_amount` tracked to prevent double-spending
-4. **Overflow protection**: Checked arithmetic for calculations
-5. **Timestamp validation**: `end_time > start_time` enforced
+1. **Admin authorization**: Schedule creation requires admin auth; non-admin callers are rejected with `NotAdmin`
+2. **Beneficiary authorization**: Release requires beneficiary auth; non-beneficiary callers are rejected with `Unauthorized`
+3. **Cliff enforcement**: `release()` returns `InvalidTimestamp` (not a silent no-op) when called before `cliff_time`, so callers can distinguish "too early" from "fully released"
+4. **No over-release**: `released_amount` is tracked and validated after every release; overflow uses checked arithmetic
+5. **Overflow protection**: `checked_mul`, `checked_add`, `checked_sub` used throughout; overflow returns `InvalidAmount`
+6. **Timestamp validation**: `end_time > start_time` and `cliff_time < end_time` enforced at creation; backdated `start_time` rejected
+7. **State invariant re-check**: `validate_schedule_state` re-validates stored schedule before every arithmetic operation
+
+## Admin Threat Model
+
+### Admin Powers
+The protocol admin is the only address that can create vesting schedules. Specifically, admin can:
+- Lock any amount of any token into a new schedule for any beneficiary
+- Transfer the admin role to a new address (after which the old address loses all admin powers)
+
+### Threat Scenarios
+
+| Threat | Mitigation |
+|--------|-----------|
+| Non-admin creates a schedule | `require_auth` + `require_admin` gate; rejected with `NotAdmin` |
+| Admin creates zero-amount schedule | `total_amount <= 0` check; rejected with `InvalidAmount` |
+| Admin backdates `start_time` | `start_time < now` check; rejected with `InvalidTimestamp` |
+| Admin sets `end_time <= start_time` | Explicit check; rejected with `InvalidTimestamp` |
+| Admin sets `cliff_time >= end_time` (degenerate) | `cliff_time >= end_time` check; rejected with `InvalidTimestamp` |
+| Old admin retains power after role transfer | `require_admin` reads live admin key; old address fails after transfer |
+| Beneficiary releases before cliff | `release()` returns `InvalidTimestamp`; no state mutation occurs |
+| Beneficiary double-releases | `released_amount` tracking; second call returns `Ok(0)` |
+| Beneficiary releases more than total | Post-release `validate_schedule_state` catches `released_amount > total_amount` |
+| Non-beneficiary releases tokens | `beneficiary` field compared to caller; rejected with `Unauthorized` |
+
+### Not Mitigated
+- **Compromised admin key**: A stolen key can create arbitrary schedules. Mitigate at the key-management layer (multisig, hardware wallet).
+- **Consensus-level time manipulation**: Ledger timestamp is trusted; extreme validator collusion could affect cliff/end boundaries.
+- **Token contract bugs**: `transfer_funds` delegates to the token contract; a malicious token can re-enter or fail silently.
 
 ## Time Boundaries Table
 
@@ -116,10 +145,11 @@ Returns the vesting schedule by ID, if exists.
 ### `get_vesting_vested`
 
 ```rust
-pub fn vested_amount(env: &Env, schedule_id: u64) -> Result<i128, QuickLendXError>
+pub fn get_vesting_vested(env: Env, id: u64) -> Option<i128>
 ```
 
 Calculates total vested amount at current time using linear vesting from `start_time`.
+Returns `None` if the schedule does not exist or the stored state is invalid.
 
 ### `get_vesting_releasable`
 
@@ -132,10 +162,14 @@ Returns amount available for release: `max(vested - released, 0)`.
 ### `release_vested_tokens`
 
 ```rust
-pub fn release(env: &Env, beneficiary: &Address, id: u64) -> Result<i128, QuickLendXError>
+pub fn release_vested_tokens(env: Env, beneficiary: Address, id: u64) -> Result<i128, QuickLendXError>
 ```
 
 Transfers releasable tokens to beneficiary. Updates `released_amount`.
+
+- Returns `InvalidTimestamp` if called before `cliff_time` (not a silent no-op).
+- Returns `Ok(0)` if called after full release (idempotent).
+- Returns `Unauthorized` if caller is not the schedule beneficiary.
 
 ## Testing
 
@@ -147,7 +181,7 @@ cargo test vesting --lib
 
 ### Test Coverage
 
-- Before cliff: 0 releasable
+- Before cliff: 0 releasable; `release()` returns `InvalidTimestamp`
 - At cliff: positive releasable
 - After cliff, before end: partial release
 - At end time: full amount
@@ -156,3 +190,11 @@ cargo test vesting --lib
 - Off-by-one timestamp boundaries
 - Multiple partial releases
 - Integer division rounding
+- Admin boundary: non-admin rejected
+- Admin boundary: zero amount rejected
+- Admin boundary: backdated start rejected
+- Admin boundary: `end_time <= start_time` rejected
+- Admin boundary: `cliff_time >= end_time` rejected
+- Admin boundary: old admin loses power after role transfer
+- Non-beneficiary release rejected
+- Querying non-existent schedule returns `None`

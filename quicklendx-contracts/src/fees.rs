@@ -1,3 +1,7 @@
+//! Fee management module for the QuickLendX protocol.
+//!
+//! Handles platform fee configuration, revenue tracking, volume-tier discounts,
+//! and treasury routing for all fee types supported by the protocol.
 use crate::errors::QuickLendXError;
 use crate::events;
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, Symbol, Vec};
@@ -6,6 +10,7 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, Symbol, Ve
 const MAX_FEE_BPS: u32 = 1000; // 10% hard cap for all fees
 #[allow(dead_code)]
 const MIN_FEE_BPS: u32 = 0;
+/// Basis-point denominator for percentage calculations (100% = 10,000 bps).
 const BPS_DENOMINATOR: i128 = 10_000;
 const DEFAULT_PLATFORM_FEE_BPS: u32 = 200; // 2%
 const MAX_PLATFORM_FEE_BPS: u32 = 1000; // 10%
@@ -26,8 +31,7 @@ const FEES_INIT_KEY: Symbol = symbol_short!("fee_init");
 
 /// Fee types supported by the platform
 #[contracttype]
-#[derive(Clone, Eq, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FeeType {
     Platform,
     Processing,
@@ -38,8 +42,7 @@ pub enum FeeType {
 
 /// Volume tier for discounted fees
 #[contracttype]
-#[derive(Clone, Eq, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum VolumeTier {
     Standard,
     Silver,
@@ -421,7 +424,7 @@ impl FeeManager {
         env: &Env,
         fee_type: &FeeType,
         min_fee: i128,
-        max_fee: i128,
+        _max_fee: i128,
     ) -> Result<(), QuickLendXError> {
         let fee_structures: Vec<FeeStructure> = match env.storage().instance().get(&FEE_CONFIG_KEY)
         {
@@ -757,13 +760,11 @@ impl FeeManager {
         env.storage().instance().set(&key, &config);
 
         // Emit configuration event for audit trail
-        env.events().publish(
-            (symbol_short!("rev_cfg"),),
-            (
-                config.treasury_share_bps,
-                config.developer_share_bps,
-                config.platform_share_bps,
-            ),
+        crate::events::emit_platform_fee_config_updated(
+            env,
+            0, // Placeholder for old value if not available easily
+            config.platform_share_bps,
+            admin,
         );
 
         Ok(())
@@ -900,9 +901,12 @@ impl FeeManager {
         env.storage().instance().set(&revenue_key, &revenue_data);
 
         // Emit distribution event for transparency and auditing
-        env.events().publish(
-            (symbol_short!("rev_dst"),),
-            (period, treasury_amount, developer_amount, platform_amount),
+        crate::events::emit_revenue_distributed(
+            env,
+            period,
+            treasury_amount,
+            developer_amount,
+            platform_amount,
         );
 
         Ok((treasury_amount, developer_amount, platform_amount))
