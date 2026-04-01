@@ -84,9 +84,11 @@ fn setup_business(ctx: &TestContext, business: &Address) {
 
 #[cfg(test)]
 fn setup_investor(ctx: &TestContext, investor: &Address, limit: i128) {
-    ctx.client.submit_investor_kyc(investor, &"Test Investor".into());
+    ctx.client
+        .submit_investor_kyc(investor, &"Test Investor".into());
     ctx.client.verify_investor(&ctx.admin, investor);
-    ctx.client.set_investment_limit(&ctx.admin, investor, &limit);
+    ctx.client
+        .set_investment_limit(&ctx.admin, investor, &limit);
 }
 
 #[cfg(test)]
@@ -98,7 +100,7 @@ fn create_investment(
 ) -> BytesN<32> {
     let investment_id = BytesN::from_array(&ctx.env, &[0u8; 32]);
     let invoice_id = BytesN::from_array(&ctx.env, &[1u8; 32]);
-    
+
     let investment = Investment {
         investment_id: investment_id.clone(),
         invoice_id,
@@ -111,7 +113,7 @@ fn create_investment(
 
     // Store investment using storage layer
     crate::storage::InvestmentStorage::store(&ctx.env, &investment);
-    
+
     investment_id
 }
 
@@ -135,7 +137,11 @@ fn test_pagination_offset_equals_total_count() {
         &10u32,
     );
 
-    assert_eq!(result.len(), 0, "Offset equal to total count should return empty result");
+    assert_eq!(
+        result.len(),
+        0,
+        "Offset equal to total count should return empty result"
+    );
 }
 
 /// Test pagination boundary: offset exceeds total count
@@ -158,7 +164,11 @@ fn test_pagination_offset_exceeds_total_count() {
         &10u32,
     );
 
-    assert_eq!(result.len(), 0, "Offset exceeding total count should return empty result");
+    assert_eq!(
+        result.len(),
+        0,
+        "Offset exceeding total count should return empty result"
+    );
 }
 
 /// Test pagination boundary: limit is zero
@@ -239,14 +249,11 @@ fn test_overflow_safe_arithmetic_max_values() {
 #[test]
 fn test_saturating_arithmetic_boundary_calculations() {
     let env = Env::default();
-    
+
     // Test validate_pagination_params with edge cases
-    let (offset, limit, has_more) = InvestmentQueries::validate_pagination_params(
-        u32::MAX - 1,
-        u32::MAX,
-        10,
-    );
-    
+    let (offset, limit, has_more) =
+        InvestmentQueries::validate_pagination_params(u32::MAX - 1, u32::MAX, 10);
+
     assert_eq!(offset, 10, "Offset should be capped to total count");
     assert_eq!(limit, 0, "Limit should be 0 when offset >= total");
     assert_eq!(has_more, false, "Should not have more when at end");
@@ -256,16 +263,15 @@ fn test_saturating_arithmetic_boundary_calculations() {
 #[test]
 fn test_calculate_safe_bounds_overflow_protection() {
     let env = Env::default();
-    
+
     // Test with values that would overflow if not using saturating arithmetic
-    let (start, end) = InvestmentQueries::calculate_safe_bounds(
-        u32::MAX - 50,
-        100,
-        u32::MAX - 10,
-    );
-    
+    let (start, end) = InvestmentQueries::calculate_safe_bounds(u32::MAX - 50, 100, u32::MAX - 10);
+
     assert!(start <= end, "Start should never exceed end");
-    assert!(end <= u32::MAX - 10, "End should not exceed collection size");
+    assert!(
+        end <= u32::MAX - 10,
+        "End should not exceed collection size"
+    );
 }
 
 /// Test pagination with mixed investment statuses
@@ -301,8 +307,16 @@ fn test_pagination_with_status_filtering() {
     );
 
     // Should have 5 active investments total (0, 2, 4, 6, 8)
-    assert_eq!(active_page1.len(), 3, "First page should have 3 active investments");
-    assert_eq!(active_page2.len(), 2, "Second page should have 2 active investments");
+    assert_eq!(
+        active_page1.len(),
+        3,
+        "First page should have 3 active investments"
+    );
+    assert_eq!(
+        active_page2.len(),
+        2,
+        "Second page should have 2 active investments"
+    );
 }
 
 /// Test empty collection pagination
@@ -320,7 +334,11 @@ fn test_pagination_empty_collection() {
         &10u32,
     );
 
-    assert_eq!(result.len(), 0, "Empty collection should return empty result");
+    assert_eq!(
+        result.len(),
+        0,
+        "Empty collection should return empty result"
+    );
 }
 
 /// Test pagination with single item collection
@@ -372,7 +390,11 @@ fn test_large_offset_small_collection() {
         &10u32,
     );
 
-    assert_eq!(result.len(), 0, "Large offset on small collection should return empty");
+    assert_eq!(
+        result.len(),
+        0,
+        "Large offset on small collection should return empty"
+    );
 }
 
 /// Test cap_query_limit function directly
@@ -381,7 +403,7 @@ fn test_cap_query_limit_function() {
     // Test normal values
     assert_eq!(InvestmentQueries::cap_query_limit(50), 50);
     assert_eq!(InvestmentQueries::cap_query_limit(100), 100);
-    
+
     // Test values exceeding limit
     assert_eq!(
         InvestmentQueries::cap_query_limit(150),
@@ -473,7 +495,11 @@ fn test_pagination_consistency() {
         all_ids.push_back(id);
     }
 
-    assert_eq!(all_ids.len(), 15, "Should have all 15 unique items across pages");
+    assert_eq!(
+        all_ids.len(),
+        15,
+        "Should have all 15 unique items across pages"
+    );
 }
 
 /// Test arithmetic overflow protection in real scenarios
@@ -527,11 +553,7 @@ fn test_count_investor_investments() {
     }
 
     // Test counting with different filters
-    let total_count = InvestmentQueries::count_investor_investments(
-        &ctx.env,
-        &ctx.investor,
-        None,
-    );
+    let total_count = InvestmentQueries::count_investor_investments(&ctx.env, &ctx.investor, None);
 
     let active_count = InvestmentQueries::count_investor_investments(
         &ctx.env,
@@ -565,8 +587,11 @@ fn test_get_investment_by_invoice_stale_pointer_protection() {
 
     // 2. Corrupt storage: Point another invoice_id to this same investment_id
     let second_invoice_id = BytesN::from_array(&ctx.env, &[77u8; 32]);
-    let index_key = (soroban_sdk::symbol_short!("inv_map"), second_invoice_id.clone());
-    
+    let index_key = (
+        soroban_sdk::symbol_short!("inv_map"),
+        second_invoice_id.clone(),
+    );
+
     ctx.env.as_contract(&ctx.client.address, || {
         ctx.env.storage().instance().set(&index_key, &investment_id);
     });
@@ -578,5 +603,8 @@ fn test_get_investment_by_invoice_stale_pointer_protection() {
     // 4. Verify lookup for second invoice returns error (stale/invalid pointer)
     // because Investment.invoice_id (invoice_id) != second_invoice_id
     let result = ctx.client.try_get_invoice_investment(&second_invoice_id);
-    assert!(result.is_err(), "Should ignore stale pointer and return error");
+    assert!(
+        result.is_err(),
+        "Should ignore stale pointer and return error"
+    );
 }

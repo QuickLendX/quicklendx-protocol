@@ -68,11 +68,11 @@ mod test_admin {
         let client = QuickLendXContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
-        
+
         // Should panic without authorization
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let result = std::panic::catch_unwind(|| {
             client.initialize_admin(&admin);
-        }));
+        });
         assert!(result.is_err(), "Initialization without auth must fail");
     }
 
@@ -86,11 +86,11 @@ mod test_admin {
 
         // First initialization succeeds
         client.initialize_admin(&admin1);
-        
+
         // Second initialization fails
         let result = client.try_initialize_admin(&admin2);
         assert!(result.is_err(), "Double initialization must be rejected");
-        
+
         // Original admin remains
         assert_eq!(
             client.get_current_admin(),
@@ -123,7 +123,10 @@ mod test_admin {
         client.initialize_admin(&admin);
 
         let events = env.events().all();
-        assert!(events.events().len() > 0, "Initialization must emit event");
+        assert!(!events.is_empty(), "Initialization must emit event");
+
+        let event = &events[0];
+        assert_eq!(event.0, (soroban_sdk::symbol_short!("adm_init"),));
     }
 
     // ============================================================================
@@ -137,7 +140,7 @@ mod test_admin {
 
         let result = client.try_transfer_admin(&admin1, &admin2);
         assert!(result.is_ok(), "Admin transfer must succeed");
-        
+
         assert_eq!(
             client.get_current_admin(),
             Some(admin2),
@@ -162,7 +165,7 @@ mod test_admin {
         // Non-admin cannot transfer
         let result = client.try_transfer_admin(&non_admin, &admin2);
         assert!(result.is_err(), "Non-admin transfer must fail");
-        
+
         // Admin remains unchanged
         assert_eq!(
             client.get_current_admin(),
@@ -177,7 +180,7 @@ mod test_admin {
 
         let result = client.try_transfer_admin(&admin, &admin);
         assert!(result.is_err(), "Transfer to self must fail");
-        
+
         assert_eq!(
             client.get_current_admin(),
             Some(admin),
@@ -189,7 +192,7 @@ mod test_admin {
     fn test_transfer_admin_without_initialization_fails() {
         let (env, client) = setup();
         env.mock_all_auths();
-        
+
         let admin1 = Address::generate(&env);
         let admin2 = Address::generate(&env);
 
@@ -205,7 +208,12 @@ mod test_admin {
         client.transfer_admin(&admin1, &admin2);
 
         let events = env.events().all();
-        assert!(events.events().len() > 0, "Transfer must emit event");
+        let transfer_events: Vec<_> = events
+            .iter()
+            .filter(|e| e.0 == (soroban_sdk::symbol_short!("adm_trf"),))
+            .collect();
+
+        assert!(!transfer_events.is_empty(), "Transfer must emit event");
     }
 
     #[test]
@@ -221,7 +229,7 @@ mod test_admin {
         // Transfer from admin2 to admin3
         client.transfer_admin(&admin2, &admin3);
         assert_eq!(client.get_current_admin(), Some(admin3));
-        
+
         // admin1 can no longer transfer
         let result = client.try_transfer_admin(&admin1, &admin2);
         assert!(result.is_err(), "Old admin cannot transfer");
@@ -234,7 +242,7 @@ mod test_admin {
     #[test]
     fn test_get_admin_before_initialization() {
         let (env, client) = setup();
-        
+
         assert_eq!(
             client.get_current_admin(),
             None,
@@ -249,7 +257,7 @@ mod test_admin {
     #[test]
     fn test_get_admin_after_initialization() {
         let (env, client, admin) = setup_with_admin();
-        
+
         assert_eq!(
             client.get_current_admin(),
             Some(admin.clone()),
@@ -265,7 +273,7 @@ mod test_admin {
     fn test_is_admin_checks() {
         let (env, client, admin) = setup_with_admin();
         let non_admin = Address::generate(&env);
-        
+
         assert!(
             AdminStorage::is_admin(&env, &admin),
             "Admin address must return true"
@@ -280,7 +288,7 @@ mod test_admin {
     fn test_is_admin_before_initialization() {
         let (env, _client) = setup();
         let address = Address::generate(&env);
-        
+
         assert!(
             !AdminStorage::is_admin(&env, &address),
             "No address should be admin before initialization"
@@ -294,7 +302,7 @@ mod test_admin {
     #[test]
     fn test_require_admin_succeeds_for_admin() {
         let (env, _client, admin) = setup_with_admin();
-        
+
         let result = AdminStorage::require_admin(&env, &admin);
         assert!(result.is_ok(), "require_admin must succeed for admin");
     }
@@ -303,7 +311,7 @@ mod test_admin {
     fn test_require_admin_fails_for_non_admin() {
         let (env, _client, _admin) = setup_with_admin();
         let non_admin = Address::generate(&env);
-        
+
         let result = AdminStorage::require_admin(&env, &non_admin);
         assert_eq!(
             result,
@@ -316,7 +324,7 @@ mod test_admin {
     fn test_require_admin_fails_before_initialization() {
         let (env, _client) = setup();
         let address = Address::generate(&env);
-        
+
         let result = AdminStorage::require_admin(&env, &address);
         assert_eq!(
             result,
@@ -328,20 +336,16 @@ mod test_admin {
     #[test]
     fn test_require_current_admin_succeeds() {
         let (env, _client, admin) = setup_with_admin();
-        
+
         let result = AdminStorage::require_current_admin(&env);
         assert!(result.is_ok(), "require_current_admin must succeed");
-        assert_eq!(
-            result.unwrap(),
-            admin,
-            "Must return correct admin address"
-        );
+        assert_eq!(result.unwrap(), admin, "Must return correct admin address");
     }
 
     #[test]
     fn test_require_current_admin_fails_before_initialization() {
         let (env, _client) = setup();
-        
+
         let result = AdminStorage::require_current_admin(&env);
         assert_eq!(
             result,
@@ -358,13 +362,13 @@ mod test_admin {
     fn test_admin_operations_atomic() {
         let (env, client, admin1) = setup_with_admin();
         let admin2 = Address::generate(&env);
-        
+
         // Verify atomicity by checking state before and after
         assert!(AdminStorage::is_admin(&env, &admin1));
         assert!(!AdminStorage::is_admin(&env, &admin2));
-        
+
         client.transfer_admin(&admin1, &admin2);
-        
+
         // State should be completely switched
         assert!(!AdminStorage::is_admin(&env, &admin1));
         assert!(AdminStorage::is_admin(&env, &admin2));
@@ -374,14 +378,14 @@ mod test_admin {
     fn test_initialization_state_consistency() {
         let (env, client) = setup();
         env.mock_all_auths();
-        
+
         // Before initialization
         assert!(!AdminStorage::is_initialized(&env));
         assert_eq!(AdminStorage::get_admin(&env), None);
-        
+
         let admin = Address::generate(&env);
         client.initialize_admin(&admin);
-        
+
         // After initialization
         assert!(AdminStorage::is_initialized(&env));
         assert_eq!(AdminStorage::get_admin(&env), Some(admin));
@@ -394,11 +398,9 @@ mod test_admin {
     #[test]
     fn test_with_admin_auth_succeeds() {
         let (env, _client, admin) = setup_with_admin();
-        
-        let result = AdminStorage::with_admin_auth(&env, &admin, || {
-            Ok("success".to_string())
-        });
-        
+
+        let result = AdminStorage::with_admin_auth(&env, &admin, || Ok("success".to_string()));
+
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "success");
     }
@@ -407,23 +409,21 @@ mod test_admin {
     fn test_with_admin_auth_fails_for_non_admin() {
         let (env, _client, _admin) = setup_with_admin();
         let non_admin = Address::generate(&env);
-        
-        let result = AdminStorage::with_admin_auth(&env, &non_admin, || {
-            Ok("should not execute")
-        });
-        
+
+        let result = AdminStorage::with_admin_auth(&env, &non_admin, || Ok("should not execute"));
+
         assert_eq!(result, Err(QuickLendXError::NotAdmin));
     }
 
     #[test]
     fn test_with_current_admin_succeeds() {
         let (env, _client, admin) = setup_with_admin();
-        
+
         let result = AdminStorage::with_current_admin(&env, |current_admin| {
             assert_eq!(current_admin, &admin);
             Ok("success")
         });
-        
+
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "success");
     }
@@ -431,11 +431,9 @@ mod test_admin {
     #[test]
     fn test_with_current_admin_fails_before_initialization() {
         let (env, _client) = setup();
-        
-        let result = AdminStorage::with_current_admin(&env, |_| {
-            Ok("should not execute")
-        });
-        
+
+        let result = AdminStorage::with_current_admin(&env, |_| Ok("should not execute"));
+
         assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
     }
 
@@ -447,10 +445,10 @@ mod test_admin {
     fn test_set_admin_routes_to_initialize() {
         let (env, client) = setup();
         env.mock_all_auths();
-        
+
         let admin = Address::generate(&env);
         let result = client.try_set_admin(&admin);
-        
+
         assert!(result.is_ok(), "set_admin must route to initialize");
         assert_eq!(client.get_current_admin(), Some(admin));
         assert!(AdminStorage::is_initialized(&env));
@@ -460,9 +458,9 @@ mod test_admin {
     fn test_set_admin_routes_to_transfer() {
         let (env, client, admin1) = setup_with_admin();
         let admin2 = Address::generate(&env);
-        
+
         let result = client.try_set_admin(&admin2);
-        
+
         assert!(result.is_ok(), "set_admin must route to transfer");
         assert_eq!(client.get_current_admin(), Some(admin2));
     }
@@ -474,12 +472,12 @@ mod test_admin {
     #[test]
     fn test_multiple_rapid_transfers() {
         let (env, client, mut current_admin) = setup_with_admin();
-        
+
         // Perform multiple transfers in sequence
         for i in 0..5 {
             let new_admin = Address::generate(&env);
             client.transfer_admin(&current_admin, &new_admin);
-            
+
             assert_eq!(
                 client.get_current_admin(),
                 Some(new_admin.clone()),
@@ -494,7 +492,7 @@ mod test_admin {
     fn test_admin_state_after_failed_operations() {
         let (env, client, admin) = setup_with_admin();
         let non_admin = Address::generate(&env);
-        
+
         // Failed transfer should not change state
         let _result = client.try_transfer_admin(&non_admin, &admin);
         assert_eq!(
@@ -502,7 +500,7 @@ mod test_admin {
             Some(admin),
             "Failed transfer must not change admin"
         );
-        
+
         // Failed initialization should not change state
         let _result = client.try_initialize_admin(&non_admin);
         assert_eq!(
@@ -516,16 +514,28 @@ mod test_admin {
     fn test_event_emission_consistency() {
         let (env, client) = setup();
         env.mock_all_auths();
-        
+
         let admin1 = Address::generate(&env);
         let admin2 = Address::generate(&env);
-        
+
         // Initialize and transfer
         client.initialize_admin(&admin1);
         client.transfer_admin(&admin1, &admin2);
-        
+
         let events = env.events().all();
-        assert!(events.events().len() >= 2, "Must have init and transfer events");
+
+        // Should have initialization and transfer events
+        let init_events: Vec<_> = events
+            .iter()
+            .filter(|e| e.0 == (soroban_sdk::symbol_short!("adm_init"),))
+            .collect();
+        let transfer_events: Vec<_> = events
+            .iter()
+            .filter(|e| e.0 == (soroban_sdk::symbol_short!("adm_trf"),))
+            .collect();
+
+        assert_eq!(init_events.len(), 1, "Must have one init event");
+        assert_eq!(transfer_events.len(), 1, "Must have one transfer event");
     }
 
     // ============================================================================
@@ -536,27 +546,27 @@ mod test_admin {
     fn test_full_admin_lifecycle() {
         let (env, client) = setup();
         env.mock_all_auths();
-        
+
         // 1. Initial state
         assert!(!AdminStorage::is_initialized(&env));
         assert_eq!(AdminStorage::get_admin(&env), None);
-        
+
         // 2. Initialize admin
         let admin1 = Address::generate(&env);
         client.initialize_admin(&admin1);
         assert!(AdminStorage::is_initialized(&env));
         assert_eq!(AdminStorage::get_admin(&env), Some(admin1.clone()));
-        
+
         // 3. Transfer admin
         let admin2 = Address::generate(&env);
         client.transfer_admin(&admin1, &admin2);
         assert_eq!(AdminStorage::get_admin(&env), Some(admin2.clone()));
-        
+
         // 4. Verify old admin cannot operate
         let admin3 = Address::generate(&env);
         let result = client.try_transfer_admin(&admin1, &admin3);
         assert!(result.is_err());
-        
+
         // 5. Verify new admin can operate
         client.transfer_admin(&admin2, &admin3);
         assert_eq!(AdminStorage::get_admin(&env), Some(admin3));

@@ -356,7 +356,8 @@ impl AnalyticsCalculator {
 
         // Calculate total investments by counting invoices that have been funded at least once.
         // In this contract model, an invoice that is Paid or Defaulted must have been funded.
-        let total_investments = (funded_invoices.len() + paid_invoices.len() + defaulted_invoices.len()) as u32;
+        let total_investments =
+            (funded_invoices.len() + paid_invoices.len() + defaulted_invoices.len()) as u32;
 
         // Calculate total fees collected
         let mut total_fees = 0i128;
@@ -732,8 +733,6 @@ impl AnalyticsCalculator {
         // Calculate user satisfaction score (based on ratings)
         let mut total_rating = 0u32;
         let mut rating_count = 0u32;
-        let _invoices_with_ratings =
-            crate::invoice::InvoiceStorage::get_invoices_with_ratings_count(env);
 
         // Get paid invoices for rating calculation
         let paid_invoices =
@@ -913,8 +912,8 @@ impl AnalyticsCalculator {
         let (start_date, end_date) = Self::get_period_dates(current_timestamp, period.clone());
         let report_id = AnalyticsStorage::generate_report_id(env);
 
-        // Get investor's persisted investments in the selected period.
-        let all_investments = Self::get_investor_investments(env, investor);
+        let investment_ids =
+            crate::investment::InvestmentStorage::get_investments_by_investor(env, investor);
         let mut investments_made = 0u32;
         let mut total_invested = 0i128;
         let mut total_returns = 0i128;
@@ -922,39 +921,49 @@ impl AnalyticsCalculator {
         let mut defaulted_investments = 0u32;
         let mut preferred_categories = Self::initialize_category_counters(env);
 
-        for investment in all_investments.iter() {
+        for investment_id in investment_ids.iter() {
+            let Some(investment) =
+                crate::investment::InvestmentStorage::get_investment(env, &investment_id)
+            else {
+                continue;
+            };
             if investment.funded_at >= start_date && investment.funded_at <= end_date {
                 investments_made += 1;
                 total_invested = total_invested.saturating_add(investment.amount);
 
-                if let Some(invoice) =
-                    crate::invoice::InvoiceStorage::get_invoice(env, &investment.invoice_id)
-                {
-                    Self::increment_category_counter(&mut preferred_categories, &invoice.category);
-                }
+                    if let Some(invoice) =
+                        crate::invoice::InvoiceStorage::get_invoice(env, &investment.invoice_id)
+                    {
+                        Self::increment_category_counter(
+                            &mut preferred_categories,
+                            &invoice.category,
+                        );
+                    }
 
-                match investment.status {
-                    crate::investment::InvestmentStatus::Completed => {
-                        successful_investments += 1;
+                    match investment.status {
+                        crate::investment::InvestmentStatus::Completed => {
+                            successful_investments += 1;
 
-                        if let Some(invoice) =
-                            crate::invoice::InvoiceStorage::get_invoice(env, &investment.invoice_id)
-                        {
-                            let (profit, _) = crate::profits::calculate_profit(
+                            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(
                                 env,
-                                investment.amount,
-                                invoice.amount,
-                            );
-                            total_returns = total_returns
-                                .saturating_add(investment.amount.saturating_add(profit));
-                        } else {
-                            total_returns = total_returns.saturating_add(investment.amount);
+                                &investment.invoice_id,
+                            ) {
+                                let (profit, _) = crate::profits::calculate_profit(
+                                    env,
+                                    investment.amount,
+                                    invoice.amount,
+                                );
+                                total_returns = total_returns
+                                    .saturating_add(investment.amount.saturating_add(profit));
+                            } else {
+                                total_returns = total_returns.saturating_add(investment.amount);
+                            }
                         }
+                        crate::investment::InvestmentStatus::Defaulted => {
+                            defaulted_investments += 1;
+                        }
+                        _ => {}
                     }
-                    crate::investment::InvestmentStatus::Defaulted => {
-                        defaulted_investments += 1;
-                    }
-                    _ => {}
                 }
             }
         }
@@ -994,10 +1003,16 @@ impl AnalyticsCalculator {
 
         // Calculate portfolio diversity (simplified)
         let portfolio_diversity = if investments_made > 0 {
-            let unique_categories = preferred_categories
-                .iter()
-                .filter(|(_, count)| *count > 0)
-                .count() as u32;
+            let mut unique_categories = 0u32;
+            let plen = preferred_categories.len();
+            let mut pi: u32 = 0;
+            while pi < plen {
+                let (_, count) = preferred_categories.get(pi).unwrap();
+                if count > 0 {
+                    unique_categories = unique_categories.saturating_add(1);
+                }
+                pi += 1;
+            }
             (unique_categories.saturating_mul(10000)).saturating_div(investments_made) as i128
         } else {
             0
@@ -1021,50 +1036,55 @@ impl AnalyticsCalculator {
             generated_at: current_timestamp,
         };
 
-        Self::validate_investor_report(&report)?;
+        if !Self::validate_investor_report(&report) {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
         AnalyticsStorage::store_investor_report(env, &report);
 
         Ok(report)
     }
 
     fn get_investor_investments(env: &Env, investor: &Address) -> Vec<crate::investment::Investment> {
-        use crate::investment::{Investment, InvestmentStorage};
-        let ids = InvestmentStorage::get_investments_by_investor(env, investor);
-        let mut result = Vec::new(env);
-        for id in ids.iter() {
-            if let Some(inv) = InvestmentStorage::get_investment(env, &id) {
-                result.push_back(inv);
+        let mut investments = Vec::new(env);
+        for investment_id in crate::investment::InvestmentStorage::get_investments_by_investor(env, investor)
+            .iter()
+        {
+            if let Some(investment) =
+                crate::investment::InvestmentStorage::get_investment(env, &investment_id)
+            {
+                investments.push_back(investment);
             }
         }
-        result
+        investments
     }
 
-    fn initialize_category_counters(env: &Env) -> Vec<(crate::invoice::InvoiceCategory, u32)> {
-        Vec::new(env)
+    fn initialize_category_counters(env: &Env) -> Vec<(InvoiceCategory, u32)> {
+        let mut counters = Vec::new(env);
+        for category in crate::invoice::InvoiceStorage::get_all_categories(env).iter() {
+            counters.push_back((category, 0u32));
+        }
+        counters
     }
 
     fn increment_category_counter(
-        counters: &mut Vec<(crate::invoice::InvoiceCategory, u32)>,
-        category: &crate::invoice::InvoiceCategory,
+        counters: &mut Vec<(InvoiceCategory, u32)>,
+        category: &InvoiceCategory,
     ) {
-        let env = counters.env().clone();
-        let mut found = false;
-        let mut new_counters = Vec::new(&env);
-        for (cat, count) in counters.iter() {
-            if cat == *category {
-                new_counters.push_back((cat, count.saturating_add(1)));
-                found = true;
-            } else {
-                new_counters.push_back((cat, count));
+        for i in 0..counters.len() {
+            let Some((existing_category, count)) = counters.get(i) else {
+                continue;
+            };
+            if existing_category == *category {
+                counters.set(i, (existing_category, count.saturating_add(1)));
+                return;
             }
         }
-        if !found {
-            new_counters.push_back((category.clone(), 1));
-        }
-        *counters = new_counters;
     }
 
-    fn validate_investor_report(_report: &InvestorReport) -> Result<(), crate::errors::QuickLendXError> {
+    fn validate_investor_report(report: &InvestorReport) -> Result<(), QuickLendXError> {
+        if report.end_date < report.start_date {
+            return Err(QuickLendXError::InvalidStatus);
+        }
         Ok(())
     }
 
@@ -1297,7 +1317,7 @@ impl AnalyticsCalculator {
 
         Ok(InvestorPerformanceMetrics {
             total_investors: total_investors as u32,
-            verified_investors: verified_investors.len() as u32,
+            verified_investors: verified_investors.len(),
             pending_investors: pending_investors.len() as u32,
             rejected_investors: rejected_investors.len() as u32,
             investors_by_tier,
@@ -1309,5 +1329,33 @@ impl AnalyticsCalculator {
             top_performing_investors,
             generated_at: current_timestamp,
         })
+    }
+
+    fn get_investor_investment_ids(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
+        crate::investment::InvestmentStorage::get_investments_by_investor(env, investor)
+    }
+
+    fn initialize_category_counters(_env: &Env) -> Vec<(crate::invoice::InvoiceCategory, u32)> {
+        Vec::new(_env)
+    }
+
+    fn increment_category_counter(
+        categories: &mut Vec<(crate::invoice::InvoiceCategory, u32)>,
+        category: &crate::invoice::InvoiceCategory,
+    ) {
+        for i in 0..categories.len() {
+            if let Some((cat, count)) = categories.get(i) {
+                if cat == *category {
+                    let new_count = count + 1;
+                    categories.set(i, (category.clone(), new_count));
+                    return;
+                }
+            }
+        }
+        categories.push_back((category.clone(), 1));
+    }
+
+    fn validate_investor_report(_report: &InvestorReport) -> bool {
+        true
     }
 }
