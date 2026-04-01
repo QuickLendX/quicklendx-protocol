@@ -1,9 +1,11 @@
 use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
-use crate::invoice::{Invoice, InvoiceMetadata, InvoiceStatus};
+use crate::invoice::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
+    MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
     MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_REJECTION_REASON_LENGTH, MAX_TAX_ID_LENGTH,
+    MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
 };
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
@@ -622,18 +624,19 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
     // Convert to bytes for processing
     let mut buf = [0u8; 50];
     tag.copy_into_slice(&mut buf[..tag.len() as usize]);
-
-    let mut normalized_bytes = std::vec::Vec::new();
+    let mut normalized_bytes = [0u8; 50];
     let raw_slice = &buf[..tag.len() as usize];
 
-    for &b in raw_slice.iter() {
+    for (idx, &b) in raw_slice.iter().enumerate() {
         let lower = if b >= b'A' && b <= b'Z' { b + 32 } else { b };
-        normalized_bytes.push(lower);
+        normalized_bytes[idx] = lower;
     }
+    let normalized_slice = &normalized_bytes[..raw_slice.len()];
 
     let normalized_str = String::from_str(
         env,
-        std::str::from_utf8(&normalized_bytes).map_err(|_| QuickLendXError::InvalidTag)?,
+        core::str::from_utf8(&normalized_bytes[..tag.len() as usize])
+            .map_err(|_| QuickLendXError::InvalidTag)?,
     );
     let trimmed = normalized_str; // Simplification: in a full implementation, we'd handle leading/trailing whitespace bytes
 
@@ -1436,6 +1439,92 @@ pub fn validate_invoice_metadata(
 
     if computed_total != invoice_amount {
         return Err(QuickLendXError::InvoiceAmountInvalid);
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Dispute Evidence & Reason Validation
+// ============================================================================
+
+/// @notice Validate dispute reason string.
+/// @dev Rejects empty strings and strings exceeding MAX_DISPUTE_REASON_LENGTH (1000 chars).
+///      Prevents abusive on-chain storage growth from oversized payloads.
+/// @param reason The dispute reason to validate.
+/// @return Ok(()) if valid, Err(InvalidDisputeReason) otherwise.
+pub fn validate_dispute_reason(reason: &String) -> Result<(), QuickLendXError> {
+    if reason.len() == 0 {
+        return Err(QuickLendXError::InvalidDisputeReason);
+    }
+    if reason.len() > MAX_DISPUTE_REASON_LENGTH {
+        return Err(QuickLendXError::InvalidDisputeReason);
+    }
+    Ok(())
+}
+
+/// @notice Validate dispute evidence string.
+/// @dev Rejects empty strings and strings exceeding MAX_DISPUTE_EVIDENCE_LENGTH (2000 chars).
+///      Evidence is required to prevent frivolous disputes and bounded to limit storage.
+/// @param evidence The dispute evidence to validate.
+/// @return Ok(()) if valid, Err(InvalidDisputeEvidence) otherwise.
+pub fn validate_dispute_evidence(evidence: &String) -> Result<(), QuickLendXError> {
+    if evidence.len() == 0 {
+        return Err(QuickLendXError::InvalidDisputeEvidence);
+    }
+    if evidence.len() > MAX_DISPUTE_EVIDENCE_LENGTH {
+        return Err(QuickLendXError::InvalidDisputeEvidence);
+    }
+    Ok(())
+}
+
+/// @notice Validate dispute resolution string.
+/// @dev Rejects empty strings and strings exceeding MAX_DISPUTE_RESOLUTION_LENGTH (2000 chars).
+/// @param resolution The resolution text to validate.
+/// @return Ok(()) if valid, Err(InvalidDisputeReason) otherwise.
+pub fn validate_dispute_resolution(resolution: &String) -> Result<(), QuickLendXError> {
+    if resolution.len() == 0 {
+        return Err(QuickLendXError::InvalidDisputeReason);
+    }
+    if resolution.len() > MAX_DISPUTE_RESOLUTION_LENGTH {
+        return Err(QuickLendXError::InvalidDisputeReason);
+    }
+    Ok(())
+}
+
+/// @notice Validate that an invoice is eligible for dispute creation.
+/// @dev Only invoices in Pending, Verified, Funded, or Paid status can be disputed.
+///      The creator must be the business owner or the investor on the invoice.
+///      Only one dispute per invoice is allowed.
+/// @param invoice The invoice to check.
+/// @param creator The address attempting to create the dispute.
+/// @return Ok(()) if eligible, Err with appropriate error otherwise.
+pub fn validate_dispute_eligibility(
+    invoice: &Invoice,
+    creator: &Address,
+) -> Result<(), QuickLendXError> {
+    // Check invoice status allows disputes
+    match invoice.status {
+        InvoiceStatus::Pending
+        | InvoiceStatus::Verified
+        | InvoiceStatus::Funded
+        | InvoiceStatus::Paid => {}
+        _ => return Err(QuickLendXError::InvoiceNotAvailableForFunding),
+    }
+
+    // Check creator is authorized (business or investor)
+    let is_authorized = *creator == invoice.business
+        || invoice
+            .investor
+            .as_ref()
+            .map_or(false, |inv| *creator == *inv);
+    if !is_authorized {
+        return Err(QuickLendXError::DisputeNotAuthorized);
+    }
+
+    // Check no existing dispute
+    if invoice.dispute_status != DisputeStatus::None {
+        return Err(QuickLendXError::DisputeAlreadyExists);
     }
 
     Ok(())

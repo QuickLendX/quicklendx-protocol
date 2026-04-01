@@ -21,13 +21,11 @@ const MAX_ACTIVE_BIDS_PER_INVESTOR_KEY: Symbol = symbol_short!("mx_actbd");
 const DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 20;
 const SECONDS_PER_DAY: u64 = 86400;
 
-/// Sentinel value: when the stored limit equals this, enforcement is disabled.
-///
-/// The constant is named explicitly so that callers can compare against it
-/// without embedding a magic literal.
-pub const INVESTOR_BID_LIMIT_DISABLED: u32 = 0;
-
-/// Maximum number of bids allowed per invoice to prevent unbound storage growth
+/// @notice Maximum number of active bids allowed per invoice.
+/// @dev An active bid is one in the `Placed` status. Limiting this prevents unbounded
+/// storage growth, keeping state reads and iterations highly efficient and within
+/// Soroban compute limits. Bids transitioning to terminal states (like Expired, Cancelled)
+/// are excluded from this limit, so new bids can replace old ones.
 pub const MAX_BIDS_PER_INVOICE: u32 = 50;
 
 /// Snapshot of the current bid TTL configuration returned by `get_bid_ttl_config`.
@@ -447,15 +445,16 @@ impl BidStorage {
     /// @dev Maintains O(N) where N is current bids on invoice. Pruning keeps N small.
     /// @param env The Soroban environment.
     /// @param invoice_id The unique identifier of the invoice.
-    /// @return expired_count Number of bids newly marked as Expired.
+    /// @return cleaned_count Total number of bids that were either transitioned to `Expired` or
+    /// were already `Expired`/orphaned and remained in the index and have now been removed.
     fn refresh_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let current_timestamp = env.ledger().timestamp();
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
         let mut active = Vec::new(env);
-        let mut expired = 0u32;
-        let mut idx: u32 = 0;
-        while idx < bid_ids.len() {
-            let bid_id = bid_ids.get(idx).unwrap();
+        let mut cleaned_count = 0u32;
+        let mut changed = false;
+
+        for bid_id in bid_ids.iter() {
             if let Some(mut bid) = Self::get_bid(env, &bid_id) {
                 // Invariant 1: Preservation — terminal bids are NEVER touched by cleanup.
                 let is_terminal = bid.status == BidStatus::Accepted
@@ -464,32 +463,40 @@ impl BidStorage {
 
                 if is_terminal {
                     active.push_back(bid_id);
-                // Invariant 2: Idempotency — already-Expired bids are silently skipped.
-                } else if bid.status == BidStatus::Expired {
-                    // drop from active list; do not re-process
-                    // Invariant 3: Deadline — only expire Placed bids past their deadline.
                 } else if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
                     bid.status = BidStatus::Expired;
                     Self::update_bid(env, &bid);
                     emit_bid_expired(env, &bid);
-                    expired += 1;
+                    cleaned_count = cleaned_count.saturating_add(1);
+                    changed = true;
+                } else if bid.status == BidStatus::Expired {
+                    // Already expired but still in the index - clean it up
+                    cleaned_count = cleaned_count.saturating_add(1);
+                    changed = true;
                 } else {
                     // Placed but deadline not yet reached — keep active
                     active.push_back(bid_id);
                 }
+            } else {
+                // Orphaned bid ID (record missing) - clean it up
+                cleaned_count = cleaned_count.saturating_add(1);
+                changed = true;
             }
-            idx += 1;
         }
 
         // Only update storage if the list actually shrank to save gas/fees
-        if active.len() < bid_ids.len() {
+        if active.len() < bid_ids.len() || changed {
             env.storage()
                 .instance()
                 .set(&Self::invoice_key(invoice_id), &active);
         }
-        expired
+        cleaned_count
     }
 
+    /// Public interface to trigger cleanup of expired bids for a specific invoice.
+    ///
+    /// Returns the count of bids removed from the invoice index (including those newly expired).
+    /// This operation is idempotent and safe to call multiple times.
     pub fn cleanup_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         Self::refresh_expired_bids(env, invoice_id)
     }
@@ -560,8 +567,14 @@ impl BidStorage {
         }
         Ordering::Equal
     }
-    pub fn get_best_bid(env: &Env, invoice_id: &BytesN<32>) -> Option<Bid> {
-        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+
+    /// Select the best placed bid from a bid list using `compare_bids`.
+    ///
+    /// # Security
+    /// This helper is used by both `get_best_bid` and `rank_bids` so they
+    /// cannot drift on tie handling. Any ordering change flows through one
+    /// path, preserving the invariant that best bid == first ranked bid.
+    fn select_best_placed_bid(records: &Vec<Bid>) -> Option<Bid> {
         let mut best: Option<Bid> = None;
         let mut idx: u32 = 0;
         while idx < records.len() {
@@ -584,6 +597,42 @@ impl BidStorage {
         }
         best
     }
+
+    /// Return the index of the best bid inside `records` using `compare_bids`.
+    fn select_best_index(records: &Vec<Bid>) -> Option<u32> {
+        if records.len() == 0 {
+            return None;
+        }
+
+        let mut best_idx: u32 = 0;
+        let mut best_bid = records.get(0).unwrap();
+        let mut idx: u32 = 1;
+        while idx < records.len() {
+            let candidate = records.get(idx).unwrap();
+            if Self::compare_bids(&candidate, &best_bid) == Ordering::Greater {
+                best_idx = idx;
+                best_bid = candidate;
+            }
+            idx += 1;
+        }
+        Some(best_idx)
+    }
+
+    /// Return the highest-ranked placed bid for an invoice.
+    ///
+    /// # Invariant
+    /// When `rank_bids` is non-empty, this method always returns the same bid
+    /// as `rank_bids(...).get(0)`.
+    pub fn get_best_bid(env: &Env, invoice_id: &BytesN<32>) -> Option<Bid> {
+        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+        Self::select_best_placed_bid(&records)
+    }
+
+    /// Return all placed bids sorted from best to worst.
+    ///
+    /// # Invariant
+    /// If this function returns at least one bid, the first element equals the
+    /// value returned by `get_best_bid` for the same invoice and ledger state.
     pub fn rank_bids(env: &Env, invoice_id: &BytesN<32>) -> Vec<Bid> {
         let records = Self::get_bid_records_for_invoice(env, invoice_id);
         let mut remaining = Vec::new(env);
@@ -599,17 +648,8 @@ impl BidStorage {
         let mut ranked = Vec::new(env);
 
         while remaining.len() > 0 {
-            let mut best_idx: u32 = 0;
-            let mut best_bid = remaining.get(0).unwrap();
-            let mut search_idx: u32 = 1;
-            while search_idx < remaining.len() {
-                let candidate = remaining.get(search_idx).unwrap();
-                if Self::compare_bids(&candidate, &best_bid) == Ordering::Greater {
-                    best_idx = search_idx;
-                    best_bid = candidate;
-                }
-                search_idx += 1;
-            }
+            let best_idx = Self::select_best_index(&remaining).unwrap();
+            let best_bid = remaining.get(best_idx).unwrap();
             ranked.push_back(best_bid);
 
             let mut new_remaining = Vec::new(env);
@@ -630,6 +670,9 @@ impl BidStorage {
     /// Returns false if bid not found or already not Placed.
     pub fn cancel_bid(env: &Env, bid_id: &BytesN<32>) -> bool {
         if let Some(mut bid) = Self::get_bid(env, bid_id) {
+            // SECURITY FIX: User must authorize their own bid cancellation
+            bid.investor.require_auth();
+            
             if bid.status == BidStatus::Placed {
                 bid.status = BidStatus::Cancelled;
                 Self::update_bid(env, &bid);
