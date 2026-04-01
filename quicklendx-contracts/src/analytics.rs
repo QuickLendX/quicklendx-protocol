@@ -1317,7 +1317,7 @@ impl AnalyticsCalculator {
 
         Ok(InvestorPerformanceMetrics {
             total_investors: total_investors as u32,
-            verified_investors: verified_investors.len() as u32,
+            verified_investors: verified_investors.len(),
             pending_investors: pending_investors.len() as u32,
             rejected_investors: rejected_investors.len() as u32,
             investors_by_tier,

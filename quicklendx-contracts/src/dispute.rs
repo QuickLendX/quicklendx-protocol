@@ -40,6 +40,19 @@ fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> 
     Ok(())
 }
 
+/// @notice Create a dispute on an invoice (standalone storage variant).
+/// @dev Validates:
+///   - No duplicate dispute for the same invoice
+///   - Invoice exists and is in a disputable status (Pending/Verified/Funded/Paid)
+///   - Creator is the business owner or investor on the invoice
+///   - Reason is non-empty and <= MAX_DISPUTE_REASON_LENGTH (1000 chars)
+///   - Evidence is non-empty and <= MAX_DISPUTE_EVIDENCE_LENGTH (2000 chars)
+/// @param env The contract environment.
+/// @param invoice_id The invoice to dispute.
+/// @param creator The address creating the dispute (must be authorized).
+/// @param reason The dispute reason (1–1000 chars).
+/// @param evidence Supporting evidence (1–2000 chars).
+/// @return Ok(()) on success, Err with typed error on failure.
 #[allow(dead_code)]
 pub fn create_dispute(
     env: &Env,
