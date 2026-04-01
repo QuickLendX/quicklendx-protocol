@@ -355,10 +355,13 @@ fn test_invalid_status_error() {
     let business = create_verified_business(&env, &client, &admin);
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1000);
 
-    // Try to update status to invalid transition
-    let result = client.update_invoice_status(&invoice_id, &crate::invoice::InvoiceStatus::Paid);
-    // This might succeed or fail depending on implementation, but should not panic
-    let _ = result;
+    // Verified -> Paid must be rejected by the admin override pathway.
+    let result =
+        client.try_update_invoice_status(&invoice_id, &crate::invoice::InvoiceStatus::Paid);
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, QuickLendXError::InvalidStatus);
 }
 
 #[test]
