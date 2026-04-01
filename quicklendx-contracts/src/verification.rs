@@ -631,6 +631,7 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
         let lower = if b >= b'A' && b <= b'Z' { b + 32 } else { b };
         normalized_bytes[idx] = lower;
     }
+    let normalized_slice = &normalized_bytes[..raw_slice.len()];
 
     let normalized_str = String::from_str(
         env,

@@ -31,6 +31,7 @@ pub enum BidStatus {
     Withdrawn,
     Accepted,
     Expired,
+    Cancelled,
 }
 
 /// Investment status enumeration
