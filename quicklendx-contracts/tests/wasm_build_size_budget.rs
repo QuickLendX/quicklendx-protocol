@@ -34,7 +34,11 @@
 //! |----------------------------|----------------|---------------------------------------------|
 //! | `WASM_SIZE_BUDGET_BYTES`   | 262 144 B (256 KiB) | Hard failure threshold               |
 //! | `WASM_SIZE_WARNING_BYTES`  | ~235 929 B (90 %) | Warning zone upper edge               |
+<<<<<<< feature/default-handler-overlap
+//! | `WASM_SIZE_BASELINE_BYTES` | 244 588 B       | Last recorded optimised size           |
+=======
 //! | `WASM_SIZE_BASELINE_BYTES` | 241 218 B       | Last recorded optimised size           |
+>>>>>>> main
 //! | `WASM_REGRESSION_MARGIN`   | 0.05 (5 %)      | Max allowed growth vs baseline         |
 
 use std::path::PathBuf;
@@ -73,7 +77,11 @@ const WASM_SIZE_WARNING_BYTES: u64 = (WASM_SIZE_BUDGET_BYTES as f64 * 0.90) as u
 /// Keep this up-to-date so the regression window stays tight.  When a PR
 /// legitimately increases the contract size, the author must update this
 /// constant and `scripts/wasm-size-baseline.toml` in the same commit.
+<<<<<<< feature/default-handler-overlap
+const WASM_SIZE_BASELINE_BYTES: u64 = 244_588;
+=======
 const WASM_SIZE_BASELINE_BYTES: u64 = 241_218;
+>>>>>>> main
 
 /// Maximum fractional growth allowed relative to `WASM_SIZE_BASELINE_BYTES`
 /// before the regression test fails (5 %).
