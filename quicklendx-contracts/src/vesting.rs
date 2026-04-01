@@ -237,7 +237,9 @@ impl Vesting {
     ///
     /// # Security
     /// - Requires beneficiary authorization
-    /// - Enforces timelock/cliff and prevents over-release
+    /// - Enforces timelock/cliff: returns `InvalidTimestamp` if called before cliff
+    /// - Prevents over-release via `released_amount` tracking
+    /// - Idempotent after full release: returns `Ok(0)` when nothing remains
     pub fn release(env: &Env, beneficiary: &Address, id: u64) -> Result<i128, QuickLendXError> {
         beneficiary.require_auth();
 
@@ -246,6 +248,13 @@ impl Vesting {
 
         if &schedule.beneficiary != beneficiary {
             return Err(QuickLendXError::Unauthorized);
+        }
+
+        // Enforce cliff: reject early calls with a typed error so callers can distinguish
+        // "too early" from "already fully released".
+        let now = env.ledger().timestamp();
+        if now < schedule.cliff_time {
+            return Err(QuickLendXError::InvalidTimestamp);
         }
 
         let releasable = Self::releasable_amount(env, &schedule)?;

@@ -1,0 +1,928 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Checking quicklendx-contracts v0.1.0 (C:\Users\ADMIN\Desktop\midea-drips\quicklendx-protocol\quicklendx-contracts)
+error[E0428]: the name `__QuickLendXContract__create_backup__invoke_raw` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__create_backup__invoke_raw` redefined here
+   |
+   = note: `__QuickLendXContract__create_backup__invoke_raw` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__create_backup__invoke_raw_extern` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__create_backup__invoke_raw_extern` redefined here
+   |
+   = note: `__QuickLendXContract__create_backup__invoke_raw_extern` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__get_backup_details__invoke_raw` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__get_backup_details__invoke_raw` redefined here
+   |
+   = note: `__QuickLendXContract__get_backup_details__invoke_raw` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__get_backup_details__invoke_raw_extern` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__get_backup_details__invoke_raw_extern` redefined here
+   |
+   = note: `__QuickLendXContract__get_backup_details__invoke_raw_extern` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__set_backup_retention_policy__invoke_raw` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__set_backup_retention_policy__invoke_raw` redefined here
+   |
+   = note: `__QuickLendXContract__set_backup_retention_policy__invoke_raw` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__set_backup_retention_policy__invoke_raw_extern` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__set_backup_retention_policy__invoke_raw_extern` redefined here
+   |
+   = note: `__QuickLendXContract__set_backup_retention_policy__invoke_raw_extern` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__get_backups__invoke_raw` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__get_backups__invoke_raw` redefined here
+   |
+   = note: `__QuickLendXContract__get_backups__invoke_raw` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__get_backups__invoke_raw_extern` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__get_backups__invoke_raw_extern` redefined here
+   |
+   = note: `__QuickLendXContract__get_backups__invoke_raw_extern` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__validate_backup__invoke_raw` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__validate_backup__invoke_raw` redefined here
+   |
+   = note: `__QuickLendXContract__validate_backup__invoke_raw` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__validate_backup__invoke_raw_extern` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__validate_backup__invoke_raw_extern` redefined here
+   |
+   = note: `__QuickLendXContract__validate_backup__invoke_raw_extern` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__archive_backup__invoke_raw` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__archive_backup__invoke_raw` redefined here
+   |
+   = note: `__QuickLendXContract__archive_backup__invoke_raw` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__archive_backup__invoke_raw_extern` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__archive_backup__invoke_raw_extern` redefined here
+   |
+   = note: `__QuickLendXContract__archive_backup__invoke_raw_extern` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__restore_backup__invoke_raw` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__restore_backup__invoke_raw` redefined here
+   |
+   = note: `__QuickLendXContract__restore_backup__invoke_raw` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__restore_backup__invoke_raw_extern` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__restore_backup__invoke_raw_extern` redefined here
+   |
+   = note: `__QuickLendXContract__restore_backup__invoke_raw_extern` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__create_backup__spec` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__create_backup__spec` redefined here
+   |
+   = note: `__QuickLendXContract__create_backup__spec` must be defined only once in the type namespace of this module
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__get_backup_details__spec` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__get_backup_details__spec` redefined here
+   |
+   = note: `__QuickLendXContract__get_backup_details__spec` must be defined only once in the type namespace of this module
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__set_backup_retention_policy__spec` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__set_backup_retention_policy__spec` redefined here
+   |
+   = note: `__QuickLendXContract__set_backup_retention_policy__spec` must be defined only once in the type namespace of this module
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__get_backups__spec` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__get_backups__spec` redefined here
+   |
+   = note: `__QuickLendXContract__get_backups__spec` must be defined only once in the type namespace of this module
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__validate_backup__spec` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__validate_backup__spec` redefined here
+   |
+   = note: `__QuickLendXContract__validate_backup__spec` must be defined only once in the type namespace of this module
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__archive_backup__spec` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__archive_backup__spec` redefined here
+   |
+   = note: `__QuickLendXContract__archive_backup__spec` must be defined only once in the type namespace of this module
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__restore_backup__spec` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__restore_backup__spec` redefined here
+   |
+   = note: `__QuickLendXContract__restore_backup__spec` must be defined only once in the type namespace of this module
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused imports: `Symbol` and `symbol_short`
+ --> src\events.rs:7:34
+  |
+7 | use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+  |                                  ^^^^^^^^^^^^                                ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `MAX_TAG_LENGTH`
+ --> src\invoice.rs:7:40
+  |
+7 |     MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
+  |                                        ^^^^^^^^^^^^^^
+
+warning: unused imports: `BytesN` and `Vec`
+  --> src\types.rs:12:42
+   |
+12 | use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
+   |                                          ^^^^^^          ^^^
+
+warning: unused imports: `Dispute as InvoiceDispute`, `DisputeStatus as InvoiceDisputeStatus`, `Invoice as InvoiceData`, `InvoiceCategory as InvoiceCategoryData`, `InvoiceMetadata as InvoiceMetadataData`, `InvoiceRating as InvoiceRatingData`, `InvoiceStatus as InvoiceStatusData`, `LineItemRecord as LineItemRecordData`, and `PaymentRecord as InvoicePaymentRecord`
+  --> src\types.rs:15:5
+   |
+15 |     Dispute as InvoiceDispute, DisputeStatus as InvoiceDisputeStatus, Invoice as InvoiceData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^
+16 |     InvoiceCategory as InvoiceCategoryData, InvoiceMetadata as InvoiceMetadataData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+17 |     InvoiceRating as InvoiceRatingData, InvoiceStatus as InvoiceStatusData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+18 |     LineItemRecord as LineItemRecordData, PaymentRecord as InvoicePaymentRecord,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Bid as BidData` and `BidStatus as BidStatusData`
+  --> src\types.rs:20:18
+   |
+20 | use crate::bid::{Bid as BidData, BidStatus as BidStatusData};
+   |                  ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `InsuranceCoverage as InsuranceCoverageData`, `Investment as InvestmentData`, and `InvestmentStatus as InvestmentStatusData`
+  --> src\types.rs:22:5
+   |
+22 |     InsuranceCoverage as InsuranceCoverageData, Investment as InvestmentData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+23 |     InvestmentStatus as InvestmentStatusData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0592]: duplicate definitions with name `create_backup`
+    --> src\lib.rs:1632:5
+     |
+ 685 |     pub fn create_backup(env: Env, admin: Address) -> Result<BytesN<32>, QuickLendXError> {
+     |     ------------------------------------------------------------------------------------- other definition for `create_backup`
+...
+1632 |     pub fn create_backup(env: Env, admin: Address) -> Result<BytesN<32>, QuickLendXError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate definitions for `create_backup`
+
+error[E0592]: duplicate definitions with name `get_backup_details`
+    --> src\lib.rs:1639:5
+     |
+ 719 |     pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<backup::Backup> {
+     |     ------------------------------------------------------------------------------------ other definition for `get_backup_details`
+...
+1639 |     pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<backup::Backup> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate definitions for `get_backup_details`
+
+error[E0592]: duplicate definitions with name `set_backup_retention_policy`
+    --> src\lib.rs:1644:5
+     |
+ 724 | /     pub fn set_backup_retention_policy(
+ 725 | |         env: Env,
+ 726 | |         admin: Address,
+ 727 | |         max_backups: u32,
+ 728 | |         max_age_seconds: u64,
+ 729 | |         auto_cleanup_enabled: bool,
+ 730 | |     ) -> Result<(), QuickLendXError> {
+     | |____________________________________- other definition for `set_backup_retention_policy`
+...
+1644 | /     pub fn set_backup_retention_policy(
+1645 | |         env: Env,
+1646 | |         admin: Address,
+1647 | |         max_backups: u32,
+1648 | |         retention_days: u64,
+1649 | |         auto_cleanup: bool,
+1650 | |     ) -> Result<(), QuickLendXError> {
+     | |____________________________________^ duplicate definitions for `set_backup_retention_policy`
+
+error[E0592]: duplicate definitions with name `get_backups`
+    --> src\lib.rs:1657:5
+     |
+ 748 |     pub fn get_backups(env: Env) -> Vec<BytesN<32>> {
+     |     ----------------------------------------------- other definition for `get_backups`
+...
+1657 |     pub fn get_backups(env: Env) -> Vec<BytesN<32>> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate definitions for `get_backups`
+
+error[E0592]: duplicate definitions with name `validate_backup`
+    --> src\lib.rs:1662:5
+     |
+ 753 |     pub fn validate_backup(env: Env, backup_id: BytesN<32>) -> bool {
+     |     --------------------------------------------------------------- other definition for `validate_backup`
+...
+1662 |     pub fn validate_backup(env: Env, backup_id: BytesN<32>) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate definitions for `validate_backup`
+
+error[E0592]: duplicate definitions with name `archive_backup`
+    --> src\lib.rs:1667:5
+     |
+ 760 |       pub fn archive_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), QuickLendXError> {
+     |       ----------------------------------------------------------------------------------------------------- other definition for `archive_backup`
+...
+1667 | /     pub fn archive_backup(
+1668 | |         env: Env,
+1669 | |         admin: Address,
+1670 | |         backup_id: BytesN<32>,
+1671 | |     ) -> Result<(), QuickLendXError> {
+     | |____________________________________^ duplicate definitions for `archive_backup`
+
+error[E0592]: duplicate definitions with name `restore_backup`
+    --> src\lib.rs:1678:5
+     |
+ 777 |       pub fn restore_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), QuickLendXError> {
+     |       ----------------------------------------------------------------------------------------------------- other definition for `restore_backup`
+...
+1678 | /     pub fn restore_backup(
+1679 | |         env: Env,
+1680 | |         admin: Address,
+1681 | |         backup_id: BytesN<32>,
+1682 | |     ) -> Result<(), QuickLendXError> {
+     | |____________________________________^ duplicate definitions for `restore_backup`
+
+error[E0592]: duplicate definitions with name `spec_xdr_create_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `spec_xdr_create_backup`
+   | other definition for `spec_xdr_create_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `spec_xdr_get_backup_details`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `spec_xdr_get_backup_details`
+   | other definition for `spec_xdr_get_backup_details`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `spec_xdr_set_backup_retention_policy`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `spec_xdr_set_backup_retention_policy`
+   | other definition for `spec_xdr_set_backup_retention_policy`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `spec_xdr_get_backups`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `spec_xdr_get_backups`
+   | other definition for `spec_xdr_get_backups`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `spec_xdr_validate_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `spec_xdr_validate_backup`
+   | other definition for `spec_xdr_validate_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `spec_xdr_archive_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `spec_xdr_archive_backup`
+   | other definition for `spec_xdr_archive_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `spec_xdr_restore_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `spec_xdr_restore_backup`
+   | other definition for `spec_xdr_restore_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `create_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `create_backup`
+   | other definition for `create_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractargs` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `get_backup_details`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `get_backup_details`
+   | other definition for `get_backup_details`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractargs` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `set_backup_retention_policy`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `set_backup_retention_policy`
+   | other definition for `set_backup_retention_policy`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractargs` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `get_backups`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `get_backups`
+   | other definition for `get_backups`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractargs` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `validate_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `validate_backup`
+   | other definition for `validate_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractargs` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `archive_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `archive_backup`
+   | other definition for `archive_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractargs` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `restore_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `restore_backup`
+   | other definition for `restore_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractargs` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `create_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `create_backup`
+   | other definition for `create_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `try_create_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `try_create_backup`
+   | other definition for `try_create_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `get_backup_details`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `get_backup_details`
+   | other definition for `get_backup_details`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `try_get_backup_details`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `try_get_backup_details`
+   | other definition for `try_get_backup_details`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `set_backup_retention_policy`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `set_backup_retention_policy`
+   | other definition for `set_backup_retention_policy`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `try_set_backup_retention_policy`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `try_set_backup_retention_policy`
+   | other definition for `try_set_backup_retention_policy`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `get_backups`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `get_backups`
+   | other definition for `get_backups`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `try_get_backups`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `try_get_backups`
+   | other definition for `try_get_backups`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `validate_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `validate_backup`
+   | other definition for `validate_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `try_validate_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `try_validate_backup`
+   | other definition for `try_validate_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `archive_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `archive_backup`
+   | other definition for `archive_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `try_archive_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `try_archive_backup`
+   | other definition for `try_archive_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `restore_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `restore_backup`
+   | other definition for `restore_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `try_restore_backup`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `try_restore_backup`
+   | other definition for `try_restore_backup`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:264:22
+    |
+264 |         env.events().publish(
+    |                      ^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:311:22
+    |
+311 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:348:14
+    |
+348 |             .publish((symbol_short!("pref_up"),), (user.clone(),));
+    |              ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:541:18
+    |
+541 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:559:18
+    |
+559 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:851:18
+    |
+851 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:862:18
+    |
+862 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:874:18
+    |
+874 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:886:18
+    |
+886 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:134:22
+    |
+134 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:215:22
+    |
+215 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\lib.rs:361:22
+    |
+361 |         env.events().publish(
+    |                      ^^^^^^^
+
+error[E0599]: no function or associated item named `create_backup` found for struct `BackupStorage` in the current scope
+    --> src\lib.rs:1635:32
+     |
+1635 |         backup::BackupStorage::create_backup(&env)
+     |                                ^^^^^^^^^^^^^ function or associated item not found in `BackupStorage`
+     |
+    ::: src\backup.rs:51:1
+     |
+  51 | pub struct BackupStorage;
+     | ------------------------ function or associated item `create_backup` not found for this struct
+     |
+help: there is an associated function `update_backup` with a similar name
+    --> src\backup.rs:143:5
+     |
+ 143 |     pub fn update_backup(env: &Env, backup: &Backup) -> Result<(), QuickLendXError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0061]: this function takes 2 arguments but 4 arguments were supplied
+    --> src\lib.rs:1653:9
+     |
+1653 |         backup::BackupStorage::set_retention_policy(&env, max_backups, retention_days, auto_cleanup)
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^       -----------  --------------  ------------ unexpected argument #4 of type `bool`
+     |                                                           |            |
+     |                                                           |            unexpected argument #3 of type `u64`
+     |                                                           expected `&BackupRetentionPolicy`, found `u32`
+     |
+note: associated function defined here
+    --> src\backup.rs:91:12
+     |
+  91 |     pub fn set_retention_policy(env: &Env, policy: &BackupRetentionPolicy) {
+     |            ^^^^^^^^^^^^^^^^^^^^            ------------------------------
+help: remove the extra arguments
+     |
+1653 -         backup::BackupStorage::set_retention_policy(&env, max_backups, retention_days, auto_cleanup)
+1653 +         backup::BackupStorage::set_retention_policy(&env, /* &BackupRetentionPolicy */)
+     |
+
+error[E0308]: mismatched types
+    --> src\lib.rs:1653:9
+     |
+1650 |     ) -> Result<(), QuickLendXError> {
+     |          --------------------------- expected `std::result::Result<(), QuickLendXError>` because of return type
+...
+1653 |         backup::BackupStorage::set_retention_policy(&env, max_backups, retention_days, auto_cleanup)
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Result<(), QuickLendXError>`, found `()`
+     |
+     = note:   expected enum `std::result::Result<(), QuickLendXError>`
+             found unit type `()`
+help: try adding an expression at the end of the block
+     |
+1653 ~         backup::BackupStorage::set_retention_policy(&env, max_backups, retention_days, auto_cleanup);
+1654 +         Ok(())
+     |
+
+error[E0599]: no function or associated item named `archive_backup` found for struct `BackupStorage` in the current scope
+    --> src\lib.rs:1674:32
+     |
+1674 |         backup::BackupStorage::archive_backup(&env, &backup_id)
+     |                                ^^^^^^^^^^^^^^ function or associated item not found in `BackupStorage`
+     |
+    ::: src\backup.rs:51:1
+     |
+  51 | pub struct BackupStorage;
+     | ------------------------ function or associated item `archive_backup` not found for this struct
+
+error[E0599]: no function or associated item named `restore_backup` found for struct `BackupStorage` in the current scope
+    --> src\lib.rs:1685:32
+     |
+1685 |         backup::BackupStorage::restore_backup(&env, &backup_id)
+     |                                ^^^^^^^^^^^^^^ function or associated item not found in `BackupStorage`
+     |
+    ::: src\backup.rs:51:1
+     |
+  51 | pub struct BackupStorage;
+     | ------------------------ function or associated item `restore_backup` not found for this struct
+     |
+help: there is an associated function `store_backup` with a similar name
+    --> src\backup.rs:122:5
+     |
+ 122 | /     pub fn store_backup(
+ 123 | |         env: &Env,
+ 124 | |         backup: &Backup,
+ 125 | |         invoices: Option<&Vec<Invoice>>,
+ 126 | |     ) -> Result<(), QuickLendXError> {
+     | |____________________________________^
+
+error[E0034]: multiple applicable items in scope
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ multiple `spec_xdr_create_backup` found
+   |
+note: candidate #1 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0034]: multiple applicable items in scope
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ multiple `spec_xdr_get_backup_details` found
+   |
+note: candidate #1 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0034]: multiple applicable items in scope
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ multiple `spec_xdr_set_backup_retention_policy` found
+   |
+note: candidate #1 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0034]: multiple applicable items in scope
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ multiple `spec_xdr_get_backups` found
+   |
+note: candidate #1 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0034]: multiple applicable items in scope
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ multiple `spec_xdr_validate_backup` found
+   |
+note: candidate #1 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0034]: multiple applicable items in scope
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ multiple `spec_xdr_archive_backup` found
+   |
+note: candidate #1 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0034]: multiple applicable items in scope
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ multiple `spec_xdr_restore_backup` found
+   |
+note: candidate #1 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused variable: `limits`
+   --> src\verification.rs:621:9
+    |
+621 |     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_limits`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+Some errors have detailed explanations: E0034, E0061, E0308, E0428, E0592, E0599.
+For more information about an error, try `rustc --explain E0034`.
+warning: `quicklendx-contracts` (lib) generated 19 warnings
+error: could not compile `quicklendx-contracts` (lib) due to 75 previous errors; 19 warnings emitted

@@ -176,7 +176,7 @@ fn test_only_admin_can_update_platform_fee() {
         invoke: &MockAuthInvoke {
             contract: &contract_id,
             fn_name: "set_platform_fee",
-            args: (300i128,).into_val(&env),
+            args: (300u32,).into_val(&env),
             sub_invokes: &[],
         },
     };
@@ -201,7 +201,7 @@ fn test_only_admin_can_update_platform_fee() {
         invoke: &MockAuthInvoke {
             contract: &contract_id,
             fn_name: "set_platform_fee",
-            args: (300i128,).into_val(&env),
+            args: (300u32,).into_val(&env),
             sub_invokes: &[],
         },
     };

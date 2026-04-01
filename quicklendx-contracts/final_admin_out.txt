@@ -1,0 +1,2252 @@
+﻿cargo : warning: unused 
+import: `FeeStructure`
+At line:1 char:1
++ cargo test --package 
+quicklendx-contracts --lib 
+"test_admin::" 2>&1 | ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
+    + CategoryInfo          
+    : NotSpecified: (warni  
+  ng: unused import: `Fee   
+ Structure`:String) [],     
+RemoteException
+    + FullyQualifiedErrorId 
+    : NativeCommandError
+ 
+ --> src\events.rs:2:28
+  |
+2 | ...e, FeeStructure};
+  |       ^^^^^^^^^^^^
+  |
+  = note: 
+`#[warn(unused_imports)]` 
+(part of `#[warn(unused)]`) 
+on by default
+
+warning: unused import: 
+`MAX_TAG_LENGTH`
+ --> src\invoice.rs:7:40
+  |
+7 | ...H, MAX_TAG_LENGTH, 
+M...
+  |       ^^^^^^^^^^^^^^
+
+warning: unused import: 
+`IntoVal`
+ --> src\test_init.rs:6:33
+  |
+6 | ...Env, IntoVal, Vec};
+  |         ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\admin.rs:172:18
+    |
+172 | ...s().publish(
+    |        ^^^^^^^
+    |
+    = note: 
+`#[warn(deprecated)]` on by 
+default
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\admin.rs:180:18
+    |
+180 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+  --> src\emergency.rs:66:22
+   |
+66 | ...ts().publish(
+   |         ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> 
+src\emergency.rs:108:22
+    |
+108 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> 
+src\emergency.rs:143:22
+    |
+143 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:106:18
+    |
+106 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:129:18
+    |
+129 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:149:18
+    |
+149 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:173:18
+    |
+173 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:191:18
+    |
+191 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:207:18
+    |
+207 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:235:18
+    |
+235 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:271:18
+    |
+271 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:299:18
+    |
+299 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:329:18
+    |
+329 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:348:18
+    |
+348 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:369:18
+    |
+369 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:391:18
+    |
+391 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:426:18
+    |
+426 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:452:18
+    |
+452 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:472:18
+    |
+472 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:497:18
+    |
+497 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:522:18
+    |
+522 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:547:18
+    |
+547 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:571:18
+    |
+571 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:589:18
+    |
+589 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:616:18
+    |
+616 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:645:18
+    |
+645 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:673:18
+    |
+673 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:702:18
+    |
+702 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:728:18
+    |
+728 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:754:18
+    |
+754 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:777:18
+    |
+777 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:800:18
+    |
+800 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:813:18
+    |
+813 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:826:18
+    |
+826 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:838:18
+    |
+838 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:857:18
+    |
+857 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:874:18
+    |
+874 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:891:18
+    |
+891 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:904:10
+    |
+904 | ...   .publish((sym...
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:925:18
+    |
+925 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:948:18
+    |
+948 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:966:18
+    |
+966 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\events.rs:992:18
+    |
+992 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+    --> 
+src\events.rs:1010:18
+     |
+1010 | ...s().publish(
+     |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+    --> 
+src\events.rs:1036:18
+     |
+1036 | ...s().publish(
+     |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+    --> 
+src\events.rs:1076:18
+     |
+1076 | ...s().publish(
+     |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+    --> 
+src\events.rs:1099:18
+     |
+1099 | ...s().publish(
+     |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\fees.rs:559:22
+    |
+559 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\fees.rs:685:22
+    |
+685 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\init.rs:294:18
+    |
+294 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> 
+src\notifications.rs:264:22
+    |
+264 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> 
+src\notifications.rs:311:22
+    |
+311 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> 
+src\notifications.rs:348:14
+    |
+348 | ...   .publish((sym...
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> 
+src\settlement.rs:473:18
+    |
+473 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> 
+src\settlement.rs:491:18
+    |
+491 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> 
+src\verification.rs:851:18
+    |
+851 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> 
+src\verification.rs:862:18
+    |
+862 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> 
+src\verification.rs:874:18
+    |
+874 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> 
+src\verification.rs:886:18
+    |
+886 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\vesting.rs:134:22
+    |
+134 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\vesting.rs:215:22
+    |
+215 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\lib.rs:341:22
+    |
+341 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated 
+method `soroban_sdk::events:
+:Events::publish`: use the 
+#[contractevent] macro on a 
+contract event type
+   --> src\lib.rs:613:22
+    |
+613 | ...s().publish(
+    |        ^^^^^^^
+
+warning: variable does not 
+need to be mutable
+   --> src\storage.rs:275:13
+    |
+275 | ...et mut ids: Vec<...
+    |       ----^^^
+    |       |
+    |       help: remove 
+this `mut`
+    |
+    = note: 
+`#[warn(unused_mut)]` (part 
+of `#[warn(unused)]`) on by 
+default
+
+warning: variable does not 
+need to be mutable
+   --> src\storage.rs:304:13
+    |
+304 | ...et mut ids: Vec<...
+    |       ----^^^
+    |       |
+    |       help: remove 
+this `mut`
+
+warning: unused variable: 
+`env`
+   --> 
+src\test_init.rs:192:10
+    |
+192 | ...let (env, client...
+    |         ^^^ help: if 
+this is intentional, prefix 
+it with an underscore: 
+`_env`
+    |
+    = note: 
+`#[warn(unused_variables)]` 
+(part of `#[warn(unused)]`) 
+on by default
+
+warning: unused variable: 
+`env`
+   --> 
+src\test_init.rs:275:10
+    |
+275 | ...let (env, client...
+    |         ^^^ help: if 
+this is intentional, prefix 
+it with an underscore: 
+`_env`
+
+warning: unused variable: 
+`current_admin`
+   --> 
+src\test_init.rs:316:9
+    |
+316 | ...et current_admin = 
+...
+    |       ^^^^^^^^^^^^^ 
+help: if this is 
+intentional, prefix it with 
+an underscore: 
+`_current_admin`
+
+warning: unused variable: 
+`limits`
+   --> 
+src\verification.rs:621:9
+    |
+621 | ...et limits = Prot...
+    |       ^^^^^^ help: if 
+this is intentional, prefix 
+it with an underscore: 
+`_limits`
+
+warning: multiple 
+associated functions are 
+never used
+   --> 
+src\analytics.rs:178:8
+    |
+177 | impl AnalyticsStorage 
+{
+    | --------------------- 
+associated functions in 
+this implementation
+178 |     fn 
+platform_metrics_key() -> 
+(soroba...
+    |        
+^^^^^^^^^^^^^^^^^^^^
+...
+182 |     fn 
+performance_metrics_key() 
+-> (sor...
+    |        
+^^^^^^^^^^^^^^^^^^^^^^^
+...
+186 |     fn 
+user_behavior_key(user: 
+&Address)...
+    |        
+^^^^^^^^^^^^^^^^^
+...
+198 |     fn investor_analyt
+ics_key(investor: ...
+    |        
+^^^^^^^^^^^^^^^^^^^^^^
+...
+202 |     fn 
+investor_performance_key() 
+-> (so...
+    |        
+^^^^^^^^^^^^^^^^^^^^^^^^
+...
+211 |     pub fn 
+store_platform_metrics(env: 
+&...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^
+...
+217 |     pub fn 
+get_platform_metrics(env: 
+&En...
+    |            
+^^^^^^^^^^^^^^^^^^^^
+...
+221 |     pub fn store_perfo
+rmance_metrics(env...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+227 |     pub fn get_perform
+ance_metrics(env: ...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^
+...
+233 |     pub fn 
+store_user_behavior(env: 
+&Env...
+    |            
+^^^^^^^^^^^^^^^^^^^
+...
+239 |     pub fn 
+store_business_report(env: 
+&E...
+    |            
+^^^^^^^^^^^^^^^^^^^^^
+...
+251 |     pub fn 
+store_investor_report(env: 
+&E...
+    |            
+^^^^^^^^^^^^^^^^^^^^^
+...
+263 |     pub fn store_inves
+tor_analytics(env:...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^
+...
+269 |     pub fn 
+get_investor_analytics(env: 
+&...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^
+...
+275 |     pub fn store_inves
+tor_performance(en...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+281 |     pub fn get_investo
+r_performance(env:...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: 
+`#[warn(dead_code)]` (part 
+of `#[warn(unused)]`) on by 
+default
+
+warning: associated 
+functions `calculate_investo
+r_analytics` and `calc_inves
+tor_perf_metrics` are never 
+used
+    --> 
+src\analytics.rs:1049:12
+     |
+ 300 | impl 
+AnalyticsCalculator {
+     | 
+------------------------ 
+associated functions in 
+this implementation
+...
+1049 |     pub fn calculate_
+investor_analytics(
+     |            
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1141 |     pub fn 
+calc_investor_perf_metrics(
+     |            
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated 
+functions 
+`get_audit_entry`, 
+`query_audit_logs`, 
+`get_audit_stats`, `validate
+_invoice_audit_integrity`, 
+`get_all_audit_entries`, 
+and `matches_filter` are 
+never used
+   --> src\audit.rs:191:12
+    |
+168 | impl AuditStorage {
+    | ----------------- 
+associated functions in 
+this implementation
+...
+191 |     pub fn 
+get_audit_entry(env: &Env, 
+audit_id...
+    |            
+^^^^^^^^^^^^^^^
+...
+226 |     pub fn 
+query_audit_logs(
+    |            
+^^^^^^^^^^^^^^^^
+...
+269 |     pub fn 
+get_audit_stats(env: &Env) 
+-> Audit...
+    |            
+^^^^^^^^^^^^^^^
+...
+304 |     pub fn validate_in
+voice_audit_integrity(
+    |            ^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
+...
+368 |     fn 
+get_all_audit_entries(env: 
+&Env) -> Vec...
+    |        
+^^^^^^^^^^^^^^^^^^^^^
+...
+376 |     fn 
+matches_filter(entry: 
+&AuditLogEntry, f...
+    |        ^^^^^^^^^^^^^^
+
+warning: function 
+`log_payment_processed` is 
+never used
+   --> src\audit.rs:514:8
+    |
+514 | ...fn 
+log_payment_processed(
+    |       
+^^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`log_invoice_uploaded` is 
+never used
+   --> src\audit.rs:548:8
+    |
+548 | ...fn 
+log_invoice_uploaded(en...
+    |       
+^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`log_invoice_verified` is 
+never used
+   --> src\audit.rs:562:8
+    |
+562 | ...fn 
+log_invoice_verified(en...
+    |       
+^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`log_invoice_cancelled` is 
+never used
+   --> src\audit.rs:576:8
+    |
+576 | ...fn 
+log_invoice_cancelled(en...
+    |       
+^^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`log_bid_placed` is never 
+used
+   --> src\audit.rs:590:8
+    |
+590 | pub fn log_bid_placed(
+    |        ^^^^^^^^^^^^^^
+
+warning: function 
+`log_bid_accepted` is never 
+used
+   --> src\audit.rs:610:8
+    |
+610 | ...fn 
+log_bid_accepted(en...
+    |       ^^^^^^^^^^^^^^^^
+
+warning: function 
+`log_bid_withdrawn` is 
+never used
+   --> src\audit.rs:624:8
+    |
+624 | ...fn 
+log_bid_withdrawn(en...
+    |       
+^^^^^^^^^^^^^^^^^
+
+warning: function 
+`log_escrow_created` is 
+never used
+   --> src\audit.rs:638:8
+    |
+638 | ...fn 
+log_escrow_created(
+    |       
+^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`log_settlement_completed` 
+is never used
+   --> src\audit.rs:658:8
+    |
+658 | ...fn log_settlement_c
+ompleted(en...
+    |       
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`RETENTION_POLICY_KEY` is 
+never used
+ --> src\backup.rs:5:7
+  |
+5 | const 
+RETENTION_POLICY_KEY: s...
+  |       
+^^^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`BACKUP_COUNTER_KEY` is 
+never used
+ --> src\backup.rs:6:7
+  |
+6 | const 
+BACKUP_COUNTER_KEY: s...
+  |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`BACKUP_LIST_KEY` is never 
+used
+ --> src\backup.rs:7:7
+  |
+7 | const BACKUP_LIST_KEY: 
+s...
+  |       ^^^^^^^^^^^^^^^
+
+warning: constant 
+`BACKUP_DATA_KEY` is never 
+used
+ --> src\backup.rs:8:7
+  |
+8 | const BACKUP_DATA_KEY: 
+s...
+  |       ^^^^^^^^^^^^^^^
+
+warning: constant `MAX_BACKU
+P_DESCRIPTION_LENGTH` is 
+never used
+ --> src\backup.rs:9:7
+  |
+9 | const MAX_BACKUP_DESCRIP
+TION_LENGTH: u...
+  |       ^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^
+
+warning: struct 
+`BackupStorage` is never 
+constructed
+  --> src\backup.rs:51:12
+   |
+51 | ...ct BackupStorage;
+   |       ^^^^^^^^^^^^^
+
+warning: multiple 
+associated functions are 
+never used
+   --> src\backup.rs:55:8
+    |
+ 53 | impl BackupStorage {
+    | ------------------ 
+associated functions in 
+this implementation
+ 54 |     /// @notice 
+Validate backup metad...
+ 55 |     fn 
+validate_backup_metadata(
+    |        
+^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 77 |     pub fn is_valid_ba
+ckup_id(backup_...
+    |            
+^^^^^^^^^^^^^^^^^^
+...
+ 83 |     pub fn 
+get_retention_policy(env: 
+...
+    |            
+^^^^^^^^^^^^^^^^^^^^
+...
+ 91 |     pub fn 
+set_retention_policy(env: 
+...
+    |            
+^^^^^^^^^^^^^^^^^^^^
+...
+ 96 |     pub fn 
+generate_backup_id(env: 
+&E...
+    |            
+^^^^^^^^^^^^^^^^^^
+...
+122 |     pub fn 
+store_backup(
+    |            
+^^^^^^^^^^^^
+...
+138 |     pub fn 
+get_backup(env: &Env, 
+back...
+    |            ^^^^^^^^^^
+...
+143 |     pub fn 
+update_backup(env: &Env, 
+b...
+    |            
+^^^^^^^^^^^^^
+...
+150 |     pub fn 
+get_all_backups(env: 
+&Env)...
+    |            
+^^^^^^^^^^^^^^^
+...
+158 |     pub fn 
+add_to_backup_list(env: 
+&E...
+    |            
+^^^^^^^^^^^^^^^^^^
+...
+170 |     pub fn remove_from
+_backup_list(en...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^
+...
+182 |     pub fn 
+store_backup_data(env: 
+&En...
+    |            
+^^^^^^^^^^^^^^^^^
+...
+188 |     pub fn 
+get_backup_data(env: 
+&Env,...
+    |            
+^^^^^^^^^^^^^^^
+...
+194 |     pub fn 
+purge_backup(env: &Env, 
+ba...
+    |            
+^^^^^^^^^^^^
+...
+202 |     pub fn 
+validate_backup(env: 
+&Env,...
+    |            
+^^^^^^^^^^^^^^^
+...
+227 |     pub fn 
+cleanup_old_backups(env: 
+&...
+    |            
+^^^^^^^^^^^^^^^^^^^
+...
+294 |     pub fn 
+get_all_invoices(env: 
+&Env...
+    |            
+^^^^^^^^^^^^^^^^
+
+warning: associated 
+functions 
+`get_bid_ttl_config`, 
+`reset_bid_ttl_to_default`, 
+`set_max_active_bids_per_inv
+estor`, `count_active_bids_b
+y_investor`, 
+`assert_bid_invariants`, 
+and `count_bids_by_status` 
+are never used
+   --> src\bid.rs:172:12
+    |
+ 89 | impl BidStorage {
+    | --------------- 
+associated functions in 
+this implementation
+...
+172 |     pub fn 
+get_bid_ttl_config(env: 
+&Env) -> Bi...
+    |            
+^^^^^^^^^^^^^^^^^^
+...
+224 |     pub fn reset_bid_t
+tl_to_default(env: &Env,...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^
+...
+245 |     pub fn set_max_act
+ive_bids_per_investor(
+    |            ^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
+...
+503 |     pub fn count_activ
+e_bids_by_investor(env: ...
+    |            ^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
+...
+565 |     pub fn 
+assert_bid_invariants(
+    |            
+^^^^^^^^^^^^^^^^^^^^^
+...
+595 |     pub fn 
+count_bids_by_status(
+    |            
+^^^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`TOPIC_PAYMENT_RECORDED` is 
+never used
+  --> src\events.rs:55:11
+   |
+55 | ...st 
+TOPIC_PAYMENT_RECORDED: S...
+   |       
+^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `TOPIC_INV
+OICE_SETTLED_FINAL` is 
+never used
+  --> src\events.rs:59:11
+   |
+59 | ...st TOPIC_INVOICE_SET
+TLED_FINAL: S...
+   |       
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`TOPIC_BID_PLACED` is never 
+used
+  --> src\events.rs:63:11
+   |
+63 | ...st 
+TOPIC_BID_PLACED: S...
+   |       ^^^^^^^^^^^^^^^^
+
+warning: constant 
+`TOPIC_BID_ACCEPTED` is 
+never used
+  --> src\events.rs:67:11
+   |
+67 | ...st 
+TOPIC_BID_ACCEPTED: S...
+   |       
+^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`TOPIC_BID_WITHDRAWN` is 
+never used
+  --> src\events.rs:71:11
+   |
+71 | ...st 
+TOPIC_BID_WITHDRAWN: S...
+   |       
+^^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`TOPIC_BID_EXPIRED` is 
+never used
+  --> src\events.rs:75:11
+   |
+75 | ...st 
+TOPIC_BID_EXPIRED: S...
+   |       ^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`TOPIC_ESCROW_CREATED` is 
+never used
+  --> src\events.rs:79:11
+   |
+79 | ...st 
+TOPIC_ESCROW_CREATED: S...
+   |       
+^^^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`TOPIC_ESCROW_RELEASED` is 
+never used
+  --> src\events.rs:83:11
+   |
+83 | ...st 
+TOPIC_ESCROW_RELEASED: S...
+   |       
+^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`TOPIC_ESCROW_REFUNDED` is 
+never used
+  --> src\events.rs:87:11
+   |
+87 | ...st 
+TOPIC_ESCROW_REFUNDED: S...
+   |       
+^^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`emit_payment_recorded` is 
+never used
+   --> src\events.rs:292:8
+    |
+292 | ...fn 
+emit_payment_recorded(
+    |       
+^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_invo
+ice_settled_final` is never 
+used
+   --> src\events.rs:322:8
+    |
+322 | ...fn 
+emit_invoice_settled_final(
+    |       
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`emit_backup_created` is 
+never used
+   --> src\events.rs:799:8
+    |
+799 | ...fn 
+emit_backup_created(en...
+    |       
+^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`emit_backup_restored` is 
+never used
+   --> src\events.rs:812:8
+    |
+812 | ...fn 
+emit_backup_restored(en...
+    |       
+^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`emit_backup_validated` is 
+never used
+   --> src\events.rs:825:8
+    |
+825 | ...fn 
+emit_backup_validated(en...
+    |       
+^^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`emit_backup_archived` is 
+never used
+   --> src\events.rs:837:8
+    |
+837 | ...fn 
+emit_backup_archived(en...
+    |       
+^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_rete
+ntion_policy_updated` is 
+never used
+   --> src\events.rs:851:8
+    |
+851 | ...fn emit_retention_p
+olicy_updated(
+    |       ^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^
+
+warning: function 
+`emit_backups_cleaned` is 
+never used
+   --> src\events.rs:873:8
+    |
+873 | ...fn 
+emit_backups_cleaned(en...
+    |       
+^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`emit_audit_validation` is 
+never used
+   --> src\events.rs:890:8
+    |
+890 | ...fn 
+emit_audit_validation(en...
+    |       
+^^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`emit_audit_query` is never 
+used
+   --> src\events.rs:902:8
+    |
+902 | ...fn 
+emit_audit_query(en...
+    |       ^^^^^^^^^^^^^^^^
+
+warning: function 
+`emit_dispute_created` is 
+never used
+   --> src\events.rs:986:8
+    |
+986 | ...fn 
+emit_dispute_created(
+    |       
+^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`emit_dispute_under_review` 
+is never used
+    --> src\events.rs:1009:8
+     |
+1009 | ...fn emit_dispute_un
+der_review(en...
+     |       
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`emit_dispute_resolved` is 
+never used
+    --> src\events.rs:1030:8
+     |
+1030 | ...fn 
+emit_dispute_resolved(
+     |       
+^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`ROTATION_TTL_SECONDS` is 
+never used
+  --> src\fees.rs:12:7
+   |
+12 | const 
+ROTATION_TTL_SECONDS: u...
+   |       
+^^^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`ROTATION_KEY` is never used
+  --> src\fees.rs:21:7
+   |
+21 | const ROTATION_KEY: 
+S...
+   |       ^^^^^^^^^^^^
+
+warning: associated 
+functions `initiate_treasury
+_rotation`, `confirm_treasur
+y_rotation`, 
+`cancel_treasury_rotation`, 
+and `get_pending_rotation` 
+are never used
+   --> src\fees.rs:770:12
+    |
+151 | impl FeeManager {
+    | --------------- 
+associated functions in 
+this implementation
+...
+770 |     pub fn 
+initiate_treasury_rotation(
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+810 |     pub fn 
+confirm_treasury_rotation(
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+847 |     pub fn 
+cancel_treasury_rotation(
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^
+...
+867 |     pub fn 
+get_pending_rotation(env: 
+&En...
+    |            
+^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_M
+IN_INVOICE_AMOUNT` is never 
+used
+  --> src\init.rs:51:7
+   |
+51 | const 
+DEFAULT_MIN_INVOICE_AMOUNT: 
+i...
+   |       
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`DEFAULT_MAX_DUE_DATE_DAYS` 
+is never used
+  --> src\init.rs:52:7
+   |
+52 | const 
+DEFAULT_MAX_DUE_DATE_DAYS: 
+u...
+   |       
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_G
+RACE_PERIOD_SECONDS` is 
+never used
+  --> src\init.rs:53:7
+   |
+53 | const DEFAULT_GRACE_PER
+IOD_SECONDS: u...
+   |       
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant 
+`DEFAULT_FEE_BPS` is never 
+used
+  --> src\init.rs:54:7
+   |
+54 | const DEFAULT_FEE_BPS: 
+u...
+   |       ^^^^^^^^^^^^^^^
+
+warning: associated 
+functions 
+`get_active_investment_ids` 
+and `validate_no_orphan_inve
+stments` are never used
+   --> 
+src\investment.rs:412:12
+    |
+279 | impl 
+InvestmentStorage {
+    | 
+---------------------- 
+associated functions in 
+this implementation
+...
+412 |     pub fn get_active_
+investment_ids(env: &E...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+430 |     pub fn validate_no
+_orphan_investments(en...
+    |            ^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+
+warning: associated 
+functions `get_invoices_with
+_rating_above`, `get_busines
+s_invoices_with_rating_above
+`, 
+`get_invoice_rating_stats`, 
+`delete_invoice`, and 
+`get_total_invoice_count` 
+are never used
+    --> 
+src\invoice.rs:1040:12
+     |
+ 785 | impl InvoiceStorage {
+     | ------------------- 
+associated functions in 
+this implementation
+...
+1040 |     pub fn get_invoic
+es_with_rating_above(env: 
+&Env, ...
+     |            ^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^
+...
+1060 |     pub fn get_busine
+ss_invoices_with_rating_abov
+e(
+     |            ^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^
+...
+1097 |     pub fn 
+get_invoice_rating_stats(
+     |            
+^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1302 |     pub fn 
+delete_invoice(env: &Env, 
+invoice_id: &Byt...
+     |            
+^^^^^^^^^^^^^^
+...
+1349 |     pub fn get_total_
+invoice_count(env: &Env) -> 
+u32 {
+     |            
+^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated 
+functions 
+`get_notification`, `update_
+notification_status`, 
+`update_user_preferences`, 
+and `get_user_notification_s
+tats` are never used
+   --> 
+src\notifications.rs:284:12
+    |
+226 | impl 
+NotificationSystem {
+    | 
+----------------------- 
+associated functions in 
+this implementation
+...
+284 |     pub fn 
+get_notification(env: &Env, 
+no...
+    |            
+^^^^^^^^^^^^^^^^
+...
+290 |     pub fn 
+update_notification_status(
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+338 |     pub fn 
+update_user_preferences(
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^
+...
+352 |     pub fn get_user_no
+tification_stats(en...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple 
+associated functions are 
+never used
+   --> 
+src\notifications.rs:404:12
+    |
+402 | impl 
+NotificationSystem {
+    | 
+----------------------- 
+associated functions in 
+this implementation
+403 |     /// Create 
+invoice created notification
+404 |     pub fn 
+notify_invoice_created(
+    |            
+^^^^^^^^^^^^^^^^^^^^^^
+...
+428 |     pub fn 
+notify_invoice_verified(
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^
+...
+452 |     pub fn notify_invo
+ice_status_changed(
+    |            ^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
+...
+546 |     pub fn 
+notify_bid_received(
+    |            
+^^^^^^^^^^^^^^^^^^^
+...
+568 |     pub fn 
+notify_bid_accepted(
+    |            
+^^^^^^^^^^^^^^^^^^^
+...
+593 |     pub fn 
+notify_payment_received(
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^
+...
+633 |     pub fn 
+notify_invoice_defaulted(
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`make_breakdown` is never 
+used
+   --> src\profits.rs:514:8
+    |
+514 |     fn make_breakdown(
+    |        ^^^^^^^^^^^^^^
+
+warning: constant 
+`MAX_TAG_LENGTH` is never 
+used
+  --> 
+src\protocol_limits.rs:45:11
+   |
+45 | ...st MAX_TAG_LENGTH: 
+u...
+   |       ^^^^^^^^^^^^^^
+
+warning: function 
+`compute_min_bid_amount` is 
+never used
+   --> 
+src\protocol_limits.rs:206:8
+    |
+206 | ...fn 
+compute_min_bid_amount(in...
+    |       
+^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct 
+`StorageKeys` is never 
+constructed
+  --> src\storage.rs:38:12
+   |
+38 | pub struct StorageKeys;
+   |            ^^^^^^^^^^^
+
+warning: associated 
+functions `platform_fees`, 
+`invoice_count`, 
+`bid_count`, and 
+`investment_count` are 
+never used
+  --> src\storage.rs:62:12
+   |
+60 | impl StorageKeys {
+   | ---------------- 
+associated functions in 
+this implementation
+61 |     /// Key for 
+platform fee c...
+62 |     pub fn 
+platform_fees() -> ...
+   |            
+^^^^^^^^^^^^^
+...
+67 |     pub fn 
+invoice_count() -> ...
+   |            
+^^^^^^^^^^^^^
+...
+72 |     pub fn bid_count() 
+-> Symb...
+   |            ^^^^^^^^^
+...
+77 |     pub fn 
+investment_count() ...
+   |            
+^^^^^^^^^^^^^^^^
+
+warning: struct `Indexes` 
+is never constructed
+  --> src\storage.rs:83:12
+   |
+83 | pub struct Indexes;
+   |            ^^^^^^^
+
+warning: multiple 
+associated functions are 
+never used
+   --> src\storage.rs:87:12
+    |
+ 85 | impl Indexes {
+    | ------------ 
+associated functions in 
+this implementation
+ 86 |     /// Index: 
+invoices by business a...
+ 87 |     pub fn invoices_by
+_business(busin...
+    |            
+^^^^^^^^^^^^^^^^^^^^
+...
+ 92 |     pub fn invoices_by
+_status(status:...
+    |            
+^^^^^^^^^^^^^^^^^^
+...
+106 |     pub fn bids_by_inv
+oice(invoice_id...
+    |            
+^^^^^^^^^^^^^^^
+...
+111 |     pub fn bids_by_inv
+estor(investor:...
+    |            
+^^^^^^^^^^^^^^^^
+...
+116 |     pub fn 
+bids_by_status(status: 
+Bid...
+    |            
+^^^^^^^^^^^^^^
+...
+128 |     pub fn investments
+_by_invoice(inv...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^
+...
+133 |     pub fn investments
+_by_investor(in...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^
+...
+138 |     pub fn investments
+_by_status(stat...
+    |            
+^^^^^^^^^^^^^^^^^^^^^
+...
+150 |     pub fn 
+invoices_by_customer(
+    |            
+^^^^^^^^^^^^^^^^^^^^
+...
+157 |     pub fn invoices_by
+_tax_id(tax_id:...
+    |            
+^^^^^^^^^^^^^^^^^^
+
+warning: struct 
+`InvoiceStorage` is never 
+constructed
+   --> src\storage.rs:163:12
+    |
+163 | ...ct InvoiceStorage;
+    |       ^^^^^^^^^^^^^^
+
+warning: multiple 
+associated functions are 
+never used
+   --> src\storage.rs:167:12
+    |
+165 | impl InvoiceStorage {
+    | ------------------- 
+associated functions in 
+this implementation
+166 |     /// Store an 
+invoice
+167 |     pub fn store(env: 
+&Env, invoice: &In...
+    |            ^^^^^
+...
+179 |     pub fn 
+get_by_business(env: &Env, 
+bu...
+    |            
+^^^^^^^^^^^^^^^
+...
+187 |     pub fn 
+get_by_status(env: &Env, 
+stat...
+    |            
+^^^^^^^^^^^^^
+...
+196 |     pub fn get(env: 
+&Env, invoice_id: &B...
+    |            ^^^
+...
+201 |     pub fn 
+update(env: &Env, invoice: 
+&I...
+    |            ^^^^^^
+...
+228 |     fn 
+add_to_business_index(env: 
+&Env, ...
+    |        
+^^^^^^^^^^^^^^^^^^^^^
+...
+239 |     fn 
+add_to_status_index(env: 
+&Env, st...
+    |        
+^^^^^^^^^^^^^^^^^^^
+...
+250 |     fn remove_from_sta
+tus_index(env: &En...
+    |        
+^^^^^^^^^^^^^^^^^^^^^^^^
+...
+260 |     pub fn 
+add_to_customer_index(env: 
+&E...
+    |            
+^^^^^^^^^^^^^^^^^^^^^
+...
+273 |     pub fn remove_from
+_customer_index(en...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+289 |     pub fn 
+add_to_tax_id_index(env: 
+&Env...
+    |            
+^^^^^^^^^^^^^^^^^^^
+...
+302 |     pub fn remove_from
+_tax_id_index(env:...
+    |            
+^^^^^^^^^^^^^^^^^^^^^^^^
+...
+319 |     pub fn 
+next_count(env: &Env) -> 
+u64 {
+    |            ^^^^^^^^^^
+
+warning: struct 
+`BidStorage` is never 
+constructed
+   --> src\storage.rs:334:12
+    |
+334 | pub struct BidStorage;
+    |            ^^^^^^^^^^
+
+warning: multiple 
+associated functions are 
+never used
+   --> src\storage.rs:338:12
+    |
+336 | impl BidStorage {
+    | --------------- 
+associated functions in 
+this implementation
+337 |     /// Store a bid
+338 |     pub fn store(env: 
+&Env, bid: &...
+    |            ^^^^^
+...
+348 |     pub fn get(env: 
+&Env, bid_id: ...
+    |            ^^^
+...
+353 |     pub fn 
+update(env: &Env, bid: ...
+    |            ^^^^^^
+...
+366 |     pub fn 
+get_by_invoice(env: &En...
+    |            
+^^^^^^^^^^^^^^
+...
+374 |     pub fn 
+get_by_investor(env: &E...
+    |            
+^^^^^^^^^^^^^^^
+...
+382 |     pub fn 
+get_by_status(env: &Env...
+    |            
+^^^^^^^^^^^^^
+...
+390 |     fn 
+add_to_invoice_index(env: 
+&...
+    |        
+^^^^^^^^^^^^^^^^^^^^
+...
+401 |     fn 
+add_to_investor_index(env: 
+...
+    |        
+^^^^^^^^^^^^^^^^^^^^^
+...
+412 |     fn 
+add_to_status_index(env: 
+&E...
+    |        
+^^^^^^^^^^^^^^^^^^^
+...
+423 |     fn remove_from_sta
+tus_index(en...
+    |        
+^^^^^^^^^^^^^^^^^^^^^^^^
+...
+434 |     pub fn 
+next_count(env: &Env) -...
+    |            ^^^^^^^^^^
+
+warning: struct 
+`InvestmentStorage` is 
+never constructed
+   --> src\storage.rs:449:12
+    |
+449 | ...ct 
+InvestmentStorage;
+    |       
+^^^^^^^^^^^^^^^^^
+
+warning: multiple 
+associated functions are 
+never used
+   --> src\storage.rs:453:12
+    |
+451 | impl 
+InvestmentStorage {
+    | 
+---------------------- 
+associated functions in 
+this implementation
+452 |     /// Store an 
+investment
+453 |     pub fn store(env: 
+&Env, invest...
+    |            ^^^^^
+...
+465 |     pub fn get(env: 
+&Env, investme...
+    |            ^^^
+...
+470 |     pub fn 
+update(env: &Env, inves...
+    |            ^^^^^^
+...
+493 |     pub fn 
+get_by_invoice(env: &En...
+    |            
+^^^^^^^^^^^^^^
+...
+501 |     pub fn 
+get_by_investor(env: &E...
+    |            
+^^^^^^^^^^^^^^^
+...
+509 |     pub fn 
+get_by_status(env: &Env...
+    |            
+^^^^^^^^^^^^^
+...
+517 |     fn 
+add_to_invoice_index(env: 
+&...
+    |        
+^^^^^^^^^^^^^^^^^^^^
+...
+528 |     fn 
+add_to_investor_index(env: 
+...
+    |        
+^^^^^^^^^^^^^^^^^^^^^
+...
+539 |     fn 
+add_to_status_index(env: 
+&E...
+    |        
+^^^^^^^^^^^^^^^^^^^
+...
+550 |     fn remove_from_sta
+tus_index(en...
+    |        
+^^^^^^^^^^^^^^^^^^^^^^^^
+...
+561 |     pub fn 
+next_count(env: &Env) -...
+    |            ^^^^^^^^^^
+
+warning: struct 
+`ConfigStorage` is never 
+constructed
+   --> src\storage.rs:576:12
+    |
+576 | ...ct ConfigStorage;
+    |       ^^^^^^^^^^^^^
+
+warning: associated 
+functions 
+`set_platform_fees` and 
+`get_platform_fees` are 
+never used
+   --> src\storage.rs:580:12
+    |
+578 | impl ConfigStorage {
+    | ------------------ 
+associated functions in 
+this implementation
+579 |     /// Store 
+platform fee conf...
+580 |     pub fn 
+set_platform_fees(en...
+    |            
+^^^^^^^^^^^^^^^^^
+...
+587 |     pub fn 
+get_platform_fees(en...
+    |            
+^^^^^^^^^^^^^^^^^
+
+warning: associated 
+function 
+`is_business_verified` is 
+never used
+
+running 0 tests
+   --> 
+src\verification.rs:227:12
+    |
+ 72 | impl 
+BusinessVerificationStorage 
+{
+    | ----------------------
+---------- associated 
+function in this 
+implementation
+...
+227 |     pub fn 
+is_business_verified(env...
+    |            
+^^^^^^^^^^^^^^^^^^^^
+
+warning: associated 
+constants 
+`INVESTOR_HISTORY_KEY` and 
+`INVESTOR_ANALYTICS_KEY` 
+are never used
+   --> 
+src\verification.rs:358:11
+    |
+353 | impl 
+InvestorVerificationStorage 
+{
+    | ----------------------
+---------- associated 
+constants in this 
+implementation
+...
+358 |     const 
+INVESTOR_HISTORY_KEY: &'s...
+    |           
+^^^^^^^^^^^^^^^^^^^^
+359 |     #[cfg(test)]
+360 |     const 
+INVESTOR_ANALYTICS_KEY: &...
+    |           
+^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `require_b
+usiness_verification` is 
+never used
+   --> 
+src\verification.rs:769:8
+    |
+769 | ...fn require_business
+_verification(en...
+    |       ^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^
+
+warning: function `recover_b
+ase_limit_from_current_limit
+` is never used
+    --> 
+src\verification.rs:1168:4
+     |
+1168 | fn recover_base_limit
+_from_current_limit(
+     |    ^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`update_investor_analytics` 
+is never used
+    --> 
+src\verification.rs:1189:8
+     |
+1189 | ...fn 
+update_investor_analytics(
+     |       
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function 
+`get_investor_analytics` is 
+never used
+    --> 
+src\verification.rs:1242:8
+     |
+1242 | ...fn 
+get_investor_analytics(
+     |       
+^^^^^^^^^^^^^^^^^^^^^^
+
+warning: 
+`quicklendx-contracts` (lib 
+test) generated 148 
+warnings (run `cargo fix 
+--lib -p 
+quicklendx-contracts 
+--tests` to apply 9 
+suggestions)
+    Finished `test` profile 
+[unoptimized + debuginfo] 
+target(s) in 0.43s
+     Running unittests 
+src\lib.rs (target\debug\dep
+s\quicklendx_contracts-bb77a
+733cf24da30.exe)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s
+

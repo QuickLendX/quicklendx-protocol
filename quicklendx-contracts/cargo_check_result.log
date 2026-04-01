@@ -1,0 +1,478 @@
+    Checking quicklendx-contracts v0.1.0 (C:\Users\ADMIN\Desktop\midea-drips\quicklendx-protocol\quicklendx-contracts)
+error[E0252]: the name `contracttype` is defined multiple times
+  --> src\types.rs:34:19
+   |
+12 | use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
+   |                   --------------
+   |                   |
+   |                   previous import of the macro `contracttype` here
+   |                   help: remove unnecessary import
+...
+34 | use soroban_sdk::{contracttype, Address, String};
+   |                   ^^^^^^^^^^^^ `contracttype` reimported here
+   |
+   = note: `contracttype` must be defined only once in the macro namespace of this module
+
+error[E0252]: the name `Address` is defined multiple times
+  --> src\types.rs:34:33
+   |
+12 | use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
+   |                                 ---------
+   |                                 |
+   |                                 previous import of the type `Address` here
+   |                                 help: remove unnecessary import
+...
+34 | use soroban_sdk::{contracttype, Address, String};
+   |                                 ^^^^^^^ `Address` reimported here
+   |
+   = note: `Address` must be defined only once in the type namespace of this module
+
+error[E0252]: the name `String` is defined multiple times
+  --> src\types.rs:34:42
+   |
+12 | use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
+   |                                                  --------
+   |                                                  |
+   |                                                  previous import of the type `String` here
+   |                                                  help: remove unnecessary import
+...
+34 | use soroban_sdk::{contracttype, Address, String};
+   |                                          ^^^^^^ `String` reimported here
+   |
+   = note: `String` must be defined only once in the type namespace of this module
+
+error[E0428]: the name `__QuickLendXContract__process_partial_payment__invoke_raw` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__process_partial_payment__invoke_raw` redefined here
+   |
+   = note: `__QuickLendXContract__process_partial_payment__invoke_raw` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__process_partial_payment__invoke_raw_slice` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__process_partial_payment__invoke_raw_slice` redefined here
+   |
+   = note: `__QuickLendXContract__process_partial_payment__invoke_raw_slice` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__process_partial_payment__invoke_raw_extern` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__process_partial_payment__invoke_raw_extern` redefined here
+   |
+   = note: `__QuickLendXContract__process_partial_payment__invoke_raw_extern` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__settle_invoice__invoke_raw` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__settle_invoice__invoke_raw` redefined here
+   |
+   = note: `__QuickLendXContract__settle_invoice__invoke_raw` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__settle_invoice__invoke_raw_slice` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__settle_invoice__invoke_raw_slice` redefined here
+   |
+   = note: `__QuickLendXContract__settle_invoice__invoke_raw_slice` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__settle_invoice__invoke_raw_extern` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__settle_invoice__invoke_raw_extern` redefined here
+   |
+   = note: `__QuickLendXContract__settle_invoice__invoke_raw_extern` must be defined only once in the value namespace of this module
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__process_partial_payment__spec` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__process_partial_payment__spec` redefined here
+   |
+   = note: `__QuickLendXContract__process_partial_payment__spec` must be defined only once in the type namespace of this module
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0428]: the name `__QuickLendXContract__settle_invoice__spec` is defined multiple times
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ `__QuickLendXContract__settle_invoice__spec` redefined here
+   |
+   = note: `__QuickLendXContract__settle_invoice__spec` must be defined only once in the type namespace of this module
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused imports: `Symbol` and `symbol_short`
+ --> src\events.rs:7:34
+  |
+7 | use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+  |                                  ^^^^^^^^^^^^                                ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `MAX_TAG_LENGTH`
+ --> src\invoice.rs:7:40
+  |
+7 |     MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
+  |                                        ^^^^^^^^^^^^^^
+
+warning: unused import: `IntoVal`
+ --> src\test_init.rs:6:33
+  |
+6 | use soroban_sdk::{Address, Env, IntoVal, Vec};
+  |                                 ^^^^^^^
+
+warning: unused imports: `BytesN` and `Vec`
+  --> src\types.rs:12:42
+   |
+12 | use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
+   |                                          ^^^^^^          ^^^
+
+warning: unused imports: `Dispute as InvoiceDispute`, `DisputeStatus as InvoiceDisputeStatus`, `Invoice as InvoiceData`, `InvoiceCategory as InvoiceCategoryData`, `InvoiceMetadata as InvoiceMetadataData`, `InvoiceRating as InvoiceRatingData`, `InvoiceStatus as InvoiceStatusData`, `LineItemRecord as LineItemRecordData`, and `PaymentRecord as InvoicePaymentRecord`
+  --> src\types.rs:15:5
+   |
+15 |     Dispute as InvoiceDispute, DisputeStatus as InvoiceDisputeStatus, Invoice as InvoiceData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^
+16 |     InvoiceCategory as InvoiceCategoryData, InvoiceMetadata as InvoiceMetadataData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+17 |     InvoiceRating as InvoiceRatingData, InvoiceStatus as InvoiceStatusData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+18 |     LineItemRecord as LineItemRecordData, PaymentRecord as InvoicePaymentRecord,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Bid as BidData` and `BidStatus as BidStatusData`
+  --> src\types.rs:20:18
+   |
+20 | use crate::bid::{Bid as BidData, BidStatus as BidStatusData};
+   |                  ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `InsuranceCoverage as InsuranceCoverageData`, `Investment as InvestmentData`, and `InvestmentStatus as InvestmentStatusData`
+  --> src\types.rs:22:5
+   |
+22 |     InsuranceCoverage as InsuranceCoverageData, Investment as InvestmentData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+23 |     InvestmentStatus as InvestmentStatusData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Address`, `String`, and `contracttype`
+  --> src\types.rs:34:19
+   |
+34 | use soroban_sdk::{contracttype, Address, String};
+   |                   ^^^^^^^^^^^^  ^^^^^^^  ^^^^^^
+
+error[E0592]: duplicate definitions with name `process_partial_payment`
+    --> src\lib.rs:1609:5
+     |
+1164 | /     pub fn process_partial_payment(
+1165 | |         env: Env,
+1166 | |         invoice_id: BytesN<32>,
+1167 | |         payment_amount: i128,
+1168 | |         transaction_id: String,
+1169 | |     ) -> Result<(), QuickLendXError> {
+     | |____________________________________- other definition for `process_partial_payment`
+...
+1609 | /     pub fn process_partial_payment(
+1610 | |         env: Env,
+1611 | |         invoice_id: BytesN<32>,
+1612 | |         payment_amount: i128,
+1613 | |         transaction_id: String,
+1614 | |     ) -> Result<(), QuickLendXError> {
+     | |____________________________________^ duplicate definitions for `process_partial_payment`
+
+error[E0592]: duplicate definitions with name `settle_invoice`
+    --> src\lib.rs:1622:5
+     |
+1098 | /     pub fn settle_invoice(
+1099 | |         env: Env,
+1100 | |         invoice_id: BytesN<32>,
+1101 | |         payment_amount: i128,
+1102 | |     ) -> Result<(), QuickLendXError> {
+     | |____________________________________- other definition for `settle_invoice`
+...
+1622 | /     pub fn settle_invoice(
+1623 | |         env: Env,
+1624 | |         invoice_id: BytesN<32>,
+1625 | |         payment_amount: i128,
+1626 | |     ) -> Result<(), QuickLendXError> {
+     | |____________________________________^ duplicate definitions for `settle_invoice`
+
+error[E0592]: duplicate definitions with name `spec_xdr_settle_invoice`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `spec_xdr_settle_invoice`
+   | other definition for `spec_xdr_settle_invoice`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `spec_xdr_process_partial_payment`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `spec_xdr_process_partial_payment`
+   | other definition for `spec_xdr_process_partial_payment`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `process_partial_payment`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `process_partial_payment`
+   | other definition for `process_partial_payment`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractargs` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `settle_invoice`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `settle_invoice`
+   | other definition for `settle_invoice`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractargs` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `process_partial_payment`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `process_partial_payment`
+   | other definition for `process_partial_payment`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `try_process_partial_payment`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `try_process_partial_payment`
+   | other definition for `try_process_partial_payment`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `settle_invoice`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `settle_invoice`
+   | other definition for `settle_invoice`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `try_settle_invoice`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | duplicate definitions for `try_settle_invoice`
+   | other definition for `try_settle_invoice`
+   |
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:264:22
+    |
+264 |         env.events().publish(
+    |                      ^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:311:22
+    |
+311 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:348:14
+    |
+348 |             .publish((symbol_short!("pref_up"),), (user.clone(),));
+    |              ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:541:18
+    |
+541 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:559:18
+    |
+559 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:851:18
+    |
+851 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:862:18
+    |
+862 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:874:18
+    |
+874 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:886:18
+    |
+886 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:134:22
+    |
+134 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:215:22
+    |
+215 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\lib.rs:361:22
+    |
+361 |         env.events().publish(
+    |                      ^^^^^^^
+
+error[E0034]: multiple applicable items in scope
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ multiple `spec_xdr_settle_invoice` found
+   |
+note: candidate #1 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0034]: multiple applicable items in scope
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ multiple `spec_xdr_process_partial_payment` found
+   |
+note: candidate #1 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `QuickLendXContract`
+  --> src\lib.rs:90:1
+   |
+90 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^
+   = note: this error originates in the attribute macro `soroban_sdk::contractspecfn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused variable: `limits`
+   --> src\verification.rs:621:9
+    |
+621 |     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_limits`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src\storage.rs:275:13
+    |
+275 |         let mut ids: Vec<BytesN<32>> = env
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src\storage.rs:304:13
+    |
+304 |         let mut ids: Vec<BytesN<32>> = env
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `env`
+   --> src\test_init.rs:192:10
+    |
+192 |     let (env, client) = setup();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `env`
+   --> src\test_init.rs:275:10
+    |
+275 |     let (env, client) = setup();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `current_admin`
+   --> src\test_init.rs:316:9
+    |
+316 |     let current_admin = client.get_current_admin().unwrap();
+    |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_current_admin`
+
+warning: unused variable: `env`
+   --> src\test_admin.rs:781:14
+    |
+781 |         let (env, client) = setup();
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `business`
+   --> src\test_partial_payments.rs:263:26
+    |
+263 |         let (invoice_id, business, _investor, _currency) =
+    |                          ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `limits`
+   --> src\verification.rs:621:9
+    |
+621 |     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_limits`
+
+Some errors have detailed explanations: E0034, E0252, E0428, E0592.
+For more information about an error, try `rustc --explain E0034`.
+warning: `quicklendx-contracts` (lib) generated 20 warnings (7 duplicates)
+error: could not compile `quicklendx-contracts` (lib) due to 25 previous errors; 20 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+warning: `quicklendx-contracts` (lib test) generated 28 warnings (12 duplicates)
+error: could not compile `quicklendx-contracts` (lib test) due to 25 previous errors; 28 warnings emitted

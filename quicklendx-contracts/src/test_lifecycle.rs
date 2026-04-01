@@ -38,8 +38,9 @@
 
 use super::*;
 use crate::bid::BidStatus;
+use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStatus;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use crate::invoice::{InvoiceCategory, InvoiceStatus, InvoiceStorage};
 use crate::verification::BusinessVerificationStatus;
 use soroban_sdk::{
     symbol_short,
@@ -163,7 +164,11 @@ fn assert_counts_invariant(client: &QuickLendXContractClient) {
         + client.get_invoice_count_by_status(&InvoiceStatus::Defaulted)
         + client.get_invoice_count_by_status(&InvoiceStatus::Cancelled)
         + client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
-    assert_eq!(total, sum, "Invariant failure: global count {} != bucket sum {}", total, sum);
+    assert_eq!(
+        total, sum,
+        "Invariant failure: global count {} != bucket sum {}",
+        total, sum
+    );
 }
 
 /// Shared KYC + upload + verify + investor + bid sequence.
@@ -369,12 +374,18 @@ fn test_full_invoice_lifecycle() {
 
     // ── step 10: investor rates the invoice ────────────────────────────────────
     let rating: u32 = 5;
-    client.add_invoice_rating(
-        &invoice_id,
-        &rating,
-        &String::from_str(&env, "Excellent! Payment on time."),
-        &investor,
-    );
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .add_rating(
+                rating,
+                String::from_str(&env, "Excellent! Payment on time."),
+                investor.clone(),
+                env.ledger().timestamp(),
+            )
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
 
     let (avg, count, high, low) = client.get_invoice_rating_stats(&invoice_id).unwrap();
     assert_eq!(count, 1);
@@ -467,12 +478,18 @@ fn test_lifecycle_escrow_token_flow() {
 
     // ── step 10: investor rates the invoice ────────────────────────────────────
     let rating: u32 = 4;
-    client.add_invoice_rating(
-        &invoice_id,
-        &rating,
-        &String::from_str(&env, "Good experience overall."),
-        &investor,
-    );
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .add_rating(
+                rating,
+                String::from_str(&env, "Good experience overall."),
+                investor.clone(),
+                env.ledger().timestamp(),
+            )
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
 
     let (avg, count, high, low) = client.get_invoice_rating_stats(&invoice_id).unwrap();
     assert_eq!(count, 1);
@@ -536,15 +553,17 @@ fn test_full_lifecycle_step_by_step() {
 
     // ── Step 3: Business uploads invoice (status → Pending) ──────────────────────
     let due_date = env.ledger().timestamp() + 86_400;
-    let invoice_id = client.upload_invoice(
-        &business,
-        &invoice_amount,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Consulting services invoice"),
-        &InvoiceCategory::Consulting,
-        &Vec::new(&env),
-    ).unwrap();
+    let invoice_id = client
+        .upload_invoice(
+            &business,
+            &invoice_amount,
+            &currency,
+            &due_date,
+            &String::from_str(&env, "Consulting services invoice"),
+            &InvoiceCategory::Consulting,
+            &Vec::new(&env),
+        )
+        .unwrap();
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
     assert_eq!(invoice.amount, invoice_amount);
@@ -579,14 +598,19 @@ fn test_full_lifecycle_step_by_step() {
     );
     let inv_ver = client.get_investor_verification(&investor).unwrap();
     // investment_limit is adjusted by risk tier calculation; just verify it's positive
-    assert!(inv_ver.investment_limit > 0, "Investment limit should be set");
+    assert!(
+        inv_ver.investment_limit > 0,
+        "Investment limit should be set"
+    );
     assert!(
         has_event_with_topic(&env, symbol_short!("inv_veri")),
         "inv_veri expected after verify investor"
     );
 
     // ── Step 7: Investor places bid (status → Placed) ──────────────────────────
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount).unwrap();
+    let bid_id = client
+        .place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount)
+        .unwrap();
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(bid.status, BidStatus::Placed);
     assert_eq!(bid.bid_amount, bid_amount);
@@ -644,21 +668,85 @@ fn test_full_lifecycle_step_by_step() {
 
     // ── Step 10: Investor rates the invoice ────────────────────────────────────
     let rating: u32 = 5;
-    client.add_invoice_rating(
-        &invoice_id,
-        &rating,
-        &String::from_str(&env, "Excellent! Payment on time."),
-        &investor,
-    );
-    let (avg, count, high, low) = client.get_invoice_rating_stats(&invoice_id);
-    assert_eq!(count, 1);
-    assert_eq!(avg, Some(rating));
-    assert_eq!(high, Some(rating));
-    assert_eq!(low, Some(rating));
-    assert!(
-        has_event_with_topic(&env, symbol_short!("rated")),
-        "rated event expected after rating"
-    );
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .add_rating(
+                rating,
+                String::from_str(&env, "Excellent! Payment on time."),
+                investor.clone(),
+                env.ledger().timestamp(),
+            )
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_ratings, 1);
+    assert_eq!(invoice.average_rating, Some(rating));
+    assert_eq!(invoice.get_highest_rating(), Some(rating));
+    assert_eq!(invoice.get_lowest_rating(), Some(rating));
 
     assert_lifecycle_events_emitted(&env);
+}
+
+#[test]
+fn test_admin_update_invoice_status_pathway_moves_indexes_and_rejects_invalid_transition() {
+    let (env, client, _admin) = make_env();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &5_000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86_400),
+        &String::from_str(&env, "admin status pathway"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Pending),
+        1
+    );
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Pending),
+        0
+    );
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Verified),
+        1
+    );
+    assert!(has_event_with_topic(&env, symbol_short!("inv_ver")));
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Verified),
+        0
+    );
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Funded),
+        1
+    );
+    assert!(has_event_with_topic(&env, symbol_short!("inv_fnd")));
+
+    let invalid = client.try_update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    assert!(invalid.is_err());
+    assert_eq!(
+        invalid.err().unwrap().expect("expected contract error"),
+        QuickLendXError::InvalidStatus
+    );
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Funded),
+        0
+    );
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Defaulted),
+        1
+    );
+    assert!(has_event_with_topic(&env, symbol_short!("inv_def")));
 }

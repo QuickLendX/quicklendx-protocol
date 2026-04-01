@@ -47,6 +47,10 @@ impl AdminStorage {
     /// - Uses atomic check-and-set to prevent race conditions
     /// - Emits audit event for transparency
     ///
+    /// # Deprecation Notice
+    /// This function is deprecated in favor of the unified protocol initialization flow
+    /// using `initialize()`. Use this only for legacy purposes or standalone admin setup.
+    ///
     /// # Arguments
     /// * `env` - The contract environment
     /// * `admin` - The address to set as admin
@@ -251,6 +255,7 @@ impl AdminStorage {
     /// Alias for [`Self::require_admin`] (call sites that use the `_auth` name).
     #[inline]
     pub fn require_admin_auth(env: &Env, address: &Address) -> Result<(), QuickLendXError> {
+        address.require_auth();
         Self::require_admin(env, address)
     }
 
@@ -333,23 +338,13 @@ impl AdminStorage {
 // ============================================================================
 
 /// Emit event when admin is first initialized
-fn emit_admin_initialized(env: &Env, admin: &Address) {
-    env.events().publish(
-        (symbol_short!("adm_init"),),
-        (admin.clone(), env.ledger().timestamp()),
-    );
+fn emit_admin_set(env: &Env, admin: &Address) {
+    crate::events::emit_admin_set(env, admin);
 }
 
 /// Emit event when admin role is transferred
 fn emit_admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
-    env.events().publish(
-        (symbol_short!("adm_trf"),),
-        (
-            old_admin.clone(),
-            new_admin.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    crate::events::emit_admin_transferred(env, old_admin, new_admin);
 }
 
 // ============================================================================

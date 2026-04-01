@@ -1,0 +1,842 @@
+warning: unused imports: `Symbol` and `symbol_short`
+ --> src\events.rs:7:34
+  |
+7 | ...t, symbol_short, Address, BytesN, Env, String, Symbol};
+  |       ^^^^^^^^^^^^                                ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `MAX_TAG_LENGTH`
+ --> src\invoice.rs:7:40
+  |
+7 | ...H, MAX_TAG_LENGTH, M...
+  |       ^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:264:22
+    |
+264 | ...s().publish(
+    |        ^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:311:22
+    |
+311 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:348:14
+    |
+348 | ...   .publish((sym...
+    |        ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:541:18
+    |
+541 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:559:18
+    |
+559 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:851:18
+    |
+851 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:862:18
+    |
+862 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:874:18
+    |
+874 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:886:18
+    |
+886 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:134:22
+    |
+134 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:215:22
+    |
+215 | ...s().publish(
+    |        ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\lib.rs:359:22
+    |
+359 | ...s().publish(
+    |        ^^^^^^^
+
+warning: unused variable: `limits`
+   --> src\verification.rs:621:9
+    |
+621 | ...et limits = Prot...
+    |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_limits`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: multiple associated functions are never used
+   --> src\analytics.rs:178:8
+    |
+177 | impl AnalyticsStorage {
+    | --------------------- associated functions in this implementation
+178 |     fn platform_metrics_key() -> (soroba...
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+182 |     fn performance_metrics_key() -> (sor...
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+...
+186 |     fn user_behavior_key(user: &Address)...
+    |        ^^^^^^^^^^^^^^^^^
+...
+198 |     fn investor_analytics_key(investor: ...
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+...
+202 |     fn investor_performance_key() -> (so...
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+211 |     pub fn store_platform_metrics(env: &...
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+217 |     pub fn get_platform_metrics(env: &En...
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+221 |     pub fn store_performance_metrics(env...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+227 |     pub fn get_performance_metrics(env: ...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+233 |     pub fn store_user_behavior(env: &Env...
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+239 |     pub fn store_business_report(env: &E...
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+251 |     pub fn store_investor_report(env: &E...
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+263 |     pub fn store_investor_analytics(env:...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+269 |     pub fn get_investor_analytics(env: &...
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+275 |     pub fn store_investor_performance(en...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+281 |     pub fn get_investor_performance(env:...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated functions `calculate_investor_analytics` and `calc_investor_perf_metrics` are never used
+    --> src\analytics.rs:1049:12
+     |
+ 300 | impl AnalyticsCalculator {
+     | ------------------------ associated functions in this implementation
+...
+1049 |     pub fn calculate_investor_analytics(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1141 |     pub fn calc_investor_perf_metrics(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_audit_entry`, `query_audit_logs`, `get_audit_stats`, `validate_invoice_audit_integrity`, `get_all_audit_entries`, and `matches_filter` are never used
+   --> src\audit.rs:191:12
+    |
+168 | impl AuditStorage {
+    | ----------------- associated functions in this implementation
+...
+191 |     pub fn get_audit_entry(env: &Env, audit_id...
+    |            ^^^^^^^^^^^^^^^
+...
+226 |     pub fn query_audit_logs(
+    |            ^^^^^^^^^^^^^^^^
+...
+269 |     pub fn get_audit_stats(env: &Env) -> Audit...
+    |            ^^^^^^^^^^^^^^^
+...
+304 |     pub fn validate_invoice_audit_integrity(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+368 |     fn get_all_audit_entries(env: &Env) -> Vec...
+    |        ^^^^^^^^^^^^^^^^^^^^^
+...
+376 |     fn matches_filter(entry: &AuditLogEntry, f...
+    |        ^^^^^^^^^^^^^^
+
+warning: function `log_payment_processed` is never used
+   --> src\audit.rs:514:8
+    |
+514 | ...fn log_payment_processed(
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_invoice_uploaded` is never used
+   --> src\audit.rs:548:8
+    |
+548 | ...fn log_invoice_uploaded(en...
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_invoice_verified` is never used
+   --> src\audit.rs:562:8
+    |
+562 | ...fn log_invoice_verified(en...
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_invoice_cancelled` is never used
+   --> src\audit.rs:576:8
+    |
+576 | ...fn log_invoice_cancelled(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_bid_placed` is never used
+   --> src\audit.rs:590:8
+    |
+590 | pub fn log_bid_placed(
+    |        ^^^^^^^^^^^^^^
+
+warning: function `log_bid_accepted` is never used
+   --> src\audit.rs:610:8
+    |
+610 | ...fn log_bid_accepted(en...
+    |       ^^^^^^^^^^^^^^^^
+
+warning: function `log_bid_withdrawn` is never used
+   --> src\audit.rs:624:8
+    |
+624 | ...fn log_bid_withdrawn(en...
+    |       ^^^^^^^^^^^^^^^^^
+
+warning: function `log_escrow_created` is never used
+   --> src\audit.rs:638:8
+    |
+638 | ...fn log_escrow_created(
+    |       ^^^^^^^^^^^^^^^^^^
+
+warning: function `log_settlement_completed` is never used
+   --> src\audit.rs:658:8
+    |
+658 | ...fn log_settlement_completed(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_bid_ttl_config`, `reset_bid_ttl_to_default`, `set_max_active_bids_per_investor`, `count_active_bids_by_investor`, `assert_bid_invariants`, and `count_bids_by_status` are never used
+   --> src\bid.rs:172:12
+    |
+ 89 | impl BidStorage {
+    | --------------- associated functions in this implementation
+...
+172 |     pub fn get_bid_ttl_config(env: &Env) -> Bi...
+    |            ^^^^^^^^^^^^^^^^^^
+...
+224 |     pub fn reset_bid_ttl_to_default(env: &Env,...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+245 |     pub fn set_max_active_bids_per_investor(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+503 |     pub fn count_active_bids_by_investor(env: ...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+565 |     pub fn assert_bid_invariants(
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+595 |     pub fn count_bids_by_status(
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `PaymentRecorded` is never constructed
+  --> src\events.rs:81:12
+   |
+81 | ...ct PaymentRecorded {
+   |       ^^^^^^^^^^^^^^^
+
+warning: struct `InvoiceSettledFinal` is never constructed
+  --> src\events.rs:91:12
+   |
+91 | ...ct InvoiceSettledFinal {
+   |       ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `AuditValidation` is never constructed
+   --> src\events.rs:327:12
+    |
+327 | ...ct AuditValidation {
+    |       ^^^^^^^^^^^^^^^
+
+warning: struct `AuditQuery` is never constructed
+   --> src\events.rs:335:12
+    |
+335 | ...ct AuditQuery {
+    |       ^^^^^^^^^^
+
+warning: struct `DisputeCreated` is never constructed
+   --> src\events.rs:367:12
+    |
+367 | ...ct DisputeCreated {
+    |       ^^^^^^^^^^^^^^
+
+warning: struct `DisputeUnderReview` is never constructed
+   --> src\events.rs:376:12
+    |
+376 | ...ct DisputeUnderReview {
+    |       ^^^^^^^^^^^^^^^^^^
+
+warning: struct `DisputeResolved` is never constructed
+   --> src\events.rs:384:12
+    |
+384 | ...ct DisputeResolved {
+    |       ^^^^^^^^^^^^^^^
+
+warning: function `emit_payment_recorded` is never used
+   --> src\events.rs:590:8
+    |
+590 | ...fn emit_payment_recorded(
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_invoice_settled_final` is never used
+   --> src\events.rs:607:8
+    |
+607 | ...fn emit_invoice_settled_final(
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_audit_validation` is never used
+   --> src\events.rs:946:8
+    |
+946 | ...fn emit_audit_validation(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_audit_query` is never used
+   --> src\events.rs:955:8
+    |
+955 | ...fn emit_audit_query(en...
+    |       ^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_created` is never used
+    --> src\events.rs:1015:8
+     |
+1015 | ...fn emit_dispute_created(
+     |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_under_review` is never used
+    --> src\events.rs:1030:8
+     |
+1030 | ...fn emit_dispute_under_review(en...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_resolved` is never used
+    --> src\events.rs:1039:8
+     |
+1039 | ...fn emit_dispute_resolved(
+     |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ROTATION_TTL_SECONDS` is never used
+  --> src\fees.rs:12:7
+   |
+12 | const ROTATION_TTL_SECONDS: u...
+   |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ROTATION_KEY` is never used
+  --> src\fees.rs:21:7
+   |
+21 | const ROTATION_KEY: S...
+   |       ^^^^^^^^^^^^
+
+warning: associated functions `initiate_treasury_rotation`, `confirm_treasury_rotation`, `cancel_treasury_rotation`, and `get_pending_rotation` are never used
+   --> src\fees.rs:769:12
+    |
+149 | impl FeeManager {
+    | --------------- associated functions in this implementation
+...
+769 |     pub fn initiate_treasury_rotation(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+809 |     pub fn confirm_treasury_rotation(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+846 |     pub fn cancel_treasury_rotation(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+866 |     pub fn get_pending_rotation(env: &En...
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MIN_INVOICE_AMOUNT` is never used
+  --> src\init.rs:49:7
+   |
+49 | const DEFAULT_MIN_INVOICE_AMOUNT: i...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MAX_DUE_DATE_DAYS` is never used
+  --> src\init.rs:52:7
+   |
+52 | const DEFAULT_MAX_DUE_DATE_DAYS: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_GRACE_PERIOD_SECONDS` is never used
+  --> src\init.rs:53:7
+   |
+53 | const DEFAULT_GRACE_PERIOD_SECONDS: u...
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_FEE_BPS` is never used
+  --> src\init.rs:54:7
+   |
+54 | const DEFAULT_FEE_BPS: u...
+   |       ^^^^^^^^^^^^^^^
+
+warning: associated functions `get_active_investment_ids` and `validate_no_orphan_investments` are never used
+   --> src\investment.rs:412:12
+    |
+279 | impl InvestmentStorage {
+    | ---------------------- associated functions in this implementation
+...
+412 |     pub fn get_active_investment_ids(env: &E...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+430 |     pub fn validate_no_orphan_investments(en...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_invoices_with_rating_above`, `get_business_invoices_with_rating_above`, `get_invoice_rating_stats`, `delete_invoice`, and `get_total_invoice_count` are never used
+    --> src\invoice.rs:1040:12
+     |
+ 785 | impl InvoiceStorage {
+     | ------------------- associated functions in this implementation
+...
+1040 |     pub fn get_invoices_with_rating_above(env: &Env, ...
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1060 |     pub fn get_business_invoices_with_rating_above(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1097 |     pub fn get_invoice_rating_stats(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1302 |     pub fn delete_invoice(env: &Env, invoice_id: &Byt...
+     |            ^^^^^^^^^^^^^^
+...
+1349 |     pub fn get_total_invoice_count(env: &Env) -> u32 {
+     |            ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_notification`, `update_notification_status`, `update_user_preferences`, and `get_user_notification_stats` are never used
+   --> src\notifications.rs:284:12
+    |
+226 | impl NotificationSystem {
+    | ----------------------- associated functions in this implementation
+...
+284 |     pub fn get_notification(env: &Env, no...
+    |            ^^^^^^^^^^^^^^^^
+...
+290 |     pub fn update_notification_status(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+338 |     pub fn update_user_preferences(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+352 |     pub fn get_user_notification_stats(en...
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src\notifications.rs:404:12
+    |
+402 | impl NotificationSystem {
+    | ----------------------- associated functions in this implementation
+403 |     /// Create invoice created notification
+404 |     pub fn notify_invoice_created(
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+428 |     pub fn notify_invoice_verified(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+452 |     pub fn notify_invoice_status_changed(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+546 |     pub fn notify_bid_received(
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+568 |     pub fn notify_bid_accepted(
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+593 |     pub fn notify_payment_received(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+633 |     pub fn notify_invoice_defaulted(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_TAG_LENGTH` is never used
+  --> src\protocol_limits.rs:45:11
+   |
+45 | ...st MAX_TAG_LENGTH: u...
+   |       ^^^^^^^^^^^^^^
+
+warning: function `compute_min_bid_amount` is never used
+   --> src\protocol_limits.rs:206:8
+    |
+206 | ...fn compute_min_bid_amount(in...
+    |       ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_payment_count` is never used
+   --> src\settlement.rs:331:8
+    |
+331 | ...fn get_payment_count(en...
+    |       ^^^^^^^^^^^^^^^^^
+
+warning: function `get_payment_records` is never used
+   --> src\settlement.rs:355:8
+    |
+355 | ...fn get_payment_records(
+    |       ^^^^^^^^^^^^^^^^^^^
+
+warning: associated function `is_business_verified` is never used
+   --> src\verification.rs:227:12
+    |
+ 72 | impl BusinessVerificationStorage {
+    | -------------------------------- associated function in this implementation
+...
+227 |     pub fn is_business_verified(env...
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `require_business_verification` is never used
+   --> src\verification.rs:769:8
+    |
+769 | ...fn require_business_verification(en...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `recover_base_limit_from_current_limit` is never used
+    --> src\verification.rs:1168:4
+     |
+1168 | fn recover_base_limit_from_current_limit(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `update_investor_analytics` is never used
+    --> src\verification.rs:1189:8
+     |
+1189 | ...fn update_investor_analytics(
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_investor_analytics` is never used
+    --> src\verification.rs:1242:8
+     |
+1242 | ...fn get_investor_analytics(
+     |       ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `quicklendx-contracts` (lib) generated 62 warnings (run `cargo fix --lib -p quicklendx-contracts` to apply 3 suggestions)
+   Compiling quicklendx-contracts v0.1.0 (C:\Users\ADMIN\Desktop\midea-drips\quicklendx-protocol\quicklendx-contracts)
+error[E0308]: mismatched types
+   --> tests\invoice_id_collision_regression.rs:63:9
+    |
+ 57 |     client.store_invoice(
+    |            ------------- arguments to this method are incorrect
+...
+ 63 |         &InvoiceCategory::Services,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `InvoiceCategory`, found a different `InvoiceCategory`
+    |
+    = note: expected reference `&quicklendx_contracts::invoice::InvoiceCategory`
+               found reference `&InvoiceCategory`
+note: method defined here
+   --> C:\Users\ADMIN\Desktop\midea-drips\quicklendx-protocol\quicklendx-contracts\src\lib.rs:301:12
+    |
+301 |     pub fn store_invoice(
+    |            ^^^^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> tests\backup_retention_validation.rs:35:9
+    |
+ 29 |     client.store_invoice(
+    |            ------------- arguments to this method are incorrect
+...
+ 35 |         &InvoiceCategory::Services,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `InvoiceCategory`, found a different `InvoiceCategory`
+    |
+    = note: expected reference `&quicklendx_contracts::invoice::InvoiceCategory`
+               found reference `&InvoiceCategory`
+note: method defined here
+   --> C:\Users\ADMIN\Desktop\midea-drips\quicklendx-protocol\quicklendx-contracts\src\lib.rs:301:12
+    |
+301 |     pub fn store_invoice(
+    |            ^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `quicklendx-contracts` (test "invoice_id_collision_regression") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `quicklendx-contracts` (test "backup_retention_validation") due to 1 previous error
+warning: unused imports: `Symbol` and `symbol_short`
+ --> src\events.rs:7:34
+  |
+7 | use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+  |                                  ^^^^^^^^^^^^                                ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `MAX_TAG_LENGTH`
+ --> src\invoice.rs:7:40
+  |
+7 |     MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
+  |                                        ^^^^^^^^^^^^^^
+
+warning: unused import: `IntoVal`
+ --> src\test_init.rs:6:33
+  |
+6 | use soroban_sdk::{Address, Env, IntoVal, Vec};
+  |                                 ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:264:22
+    |
+264 |         env.events().publish(
+    |                      ^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:311:22
+    |
+311 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:348:14
+    |
+348 |             .publish((symbol_short!("pref_up"),), (user.clone(),));
+    |              ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:541:18
+    |
+541 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:559:18
+    |
+559 |     env.events().publish(
+    |                  ^^^^^^^
+
+error[E0599]: no method named `get_invoice_progress` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:327:33
+    |
+327 |         let progress_1 = client.get_invoice_progress(&invoice_id);
+    |                                 ^^^^^^^^^^^^^^^^^^^^
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_invoice_progress` not found for this struct
+    |
+help: there is a method `get_invoice` with a similar name
+    |
+327 -         let progress_1 = client.get_invoice_progress(&invoice_id);
+327 +         let progress_1 = client.get_invoice(&invoice_id);
+    |
+
+error[E0599]: no method named `get_invoice_progress` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:333:33
+    |
+333 |         let progress_2 = client.get_invoice_progress(&invoice_id);
+    |                                 ^^^^^^^^^^^^^^^^^^^^
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_invoice_progress` not found for this struct
+    |
+help: there is a method `get_invoice` with a similar name
+    |
+333 -         let progress_2 = client.get_invoice_progress(&invoice_id);
+333 +         let progress_2 = client.get_invoice(&invoice_id);
+    |
+
+error[E0599]: no method named `get_payment_count` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:351:28
+    |
+351 |         let count = client.get_payment_count(&invoice_id);
+    |                            ^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_count` not found for this struct
+
+error[E0599]: no method named `get_payment_records` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:354:30
+    |
+354 |         let records = client.get_payment_records(&invoice_id, &0, &10);
+    |                              ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_records` not found for this struct
+
+error[E0599]: no method named `get_payment_records` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:375:29
+    |
+375 |         let page_1 = client.get_payment_records(&invoice_id, &0, &5);
+    |                             ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_records` not found for this struct
+
+error[E0599]: no method named `get_payment_records` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:379:29
+    |
+379 |         let page_2 = client.get_payment_records(&invoice_id, &5, &5);
+    |                             ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_records` not found for this struct
+
+error[E0599]: no method named `get_payment_records` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:383:29
+    |
+383 |         let page_3 = client.get_payment_records(&invoice_id, &10, &100);
+    |                             ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_records` not found for this struct
+
+error[E0599]: no method named `get_payment_records` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:386:33
+    |
+386 |         let page_empty = client.get_payment_records(&invoice_id, &15, &5);
+    |                                 ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_records` not found for this struct
+
+error[E0599]: no method named `get_payment_records` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:399:30
+    |
+399 |         let records = client.get_payment_records(&invoice_id, &0, &10);
+    |                              ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_records` not found for this struct
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:851:18
+    |
+851 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:862:18
+    |
+862 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:874:18
+    |
+874 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:886:18
+    |
+886 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:134:22
+    |
+134 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:215:22
+    |
+215 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\lib.rs:359:22
+    |
+359 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: variable does not need to be mutable
+   --> src\storage.rs:275:13
+    |
+275 |         let mut ids: Vec<BytesN<32>> = env
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src\storage.rs:304:13
+    |
+304 |         let mut ids: Vec<BytesN<32>> = env
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `env`
+   --> src\test_init.rs:192:10
+    |
+192 |     let (env, client) = setup();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `env`
+   --> src\test_init.rs:275:10
+    |
+275 |     let (env, client) = setup();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `current_admin`
+   --> src\test_init.rs:316:9
+    |
+316 |     let current_admin = client.get_current_admin().unwrap();
+    |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_current_admin`
+
+warning: unused variable: `env`
+   --> src\test_admin.rs:781:14
+    |
+781 |         let (env, client) = setup();
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `business`
+   --> src\test_partial_payments.rs:263:26
+    |
+263 |         let (invoice_id, business, _investor, _currency) =
+    |                          ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `limits`
+   --> src\verification.rs:621:9
+    |
+621 |     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_limits`
+
+For more information about this error, try `rustc --explain E0599`.
+warning: `quicklendx-contracts` (lib test) generated 23 warnings
+error: could not compile `quicklendx-contracts` (lib test) due to 9 previous errors; 23 warnings emitted
