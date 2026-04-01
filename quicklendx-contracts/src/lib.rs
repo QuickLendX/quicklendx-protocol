@@ -2006,7 +2006,9 @@ impl QuickLendXContract {
     /// @param offset Starting index for pagination (0-based)
     /// @param limit Maximum number of results to return (capped at MAX_QUERY_LIMIT)
     /// @return Vector of invoice IDs matching the criteria
-    /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance
+    /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance.
+    /// Results are deterministically ordered by (created_at ASC, invoice_id ASC)
+    /// so repeated calls with identical state always produce the same pages.
     pub fn get_business_invoices_paged(
         env: Env,
         business: Address,
@@ -2028,10 +2030,26 @@ impl QuickLendXContract {
             if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
                 if let Some(status) = &status_filter {
                     if invoice.status == *status {
-                        filtered.push_back(invoice_id);
+                        filtered.push_back((invoice.created_at, invoice_id));
                     }
                 } else {
-                    filtered.push_back(invoice_id);
+                    filtered.push_back((invoice.created_at, invoice_id));
+                }
+            }
+        }
+
+        // Deterministic in-place ordering to guarantee stable pagination across repeated calls.
+        // Primary key: created_at ascending, tie-breaker: invoice_id byte order ascending.
+        let len = filtered.len();
+        for i in 0..len {
+            for j in 0..len - i - 1 {
+                let left = filtered.get(j).unwrap();
+                let right = filtered.get(j + 1).unwrap();
+                let should_swap = left.0 > right.0
+                    || (left.0 == right.0 && left.1.to_array() > right.1.to_array());
+                if should_swap {
+                    filtered.set(j, right);
+                    filtered.set(j + 1, left);
                 }
             }
         }
@@ -2043,7 +2061,7 @@ impl QuickLendXContract {
         let end = start.saturating_add(capped_limit).min(len_u32);
         let mut idx = start;
         while idx < end {
-            if let Some(invoice_id) = filtered.get(idx) {
+            if let Some((_, invoice_id)) = filtered.get(idx) {
                 result.push_back(invoice_id);
             }
             idx += 1;
