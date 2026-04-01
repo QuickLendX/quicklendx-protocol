@@ -1077,6 +1077,89 @@ impl InvoiceStorage {
             .unwrap_or_else(|| Vec::new(env))
     }
 
+    pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
+        env.storage()
+            .instance()
+            .get(&Self::category_key(category))
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn get_invoices_by_category_and_status(
+        env: &Env,
+        category: &InvoiceCategory,
+        status: &InvoiceStatus,
+    ) -> Vec<BytesN<32>> {
+        let category_invoices = Self::get_invoices_by_category(env, category);
+        let mut filtered = Vec::new(env);
+        for invoice_id in category_invoices.iter() {
+            if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
+                if invoice.status == *status {
+                    filtered.push_back(invoice_id);
+                }
+            }
+        }
+        filtered
+    }
+
+    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
+        let normalized = match normalize_tag(env, tag) {
+            Ok(tag) => tag,
+            Err(_) => return Vec::new(env),
+        };
+        env.storage()
+            .instance()
+            .get(&Self::tag_key(&normalized))
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
+        if tags.len() == 0 {
+            return Vec::new(env);
+        }
+
+        let mut iter = tags.iter();
+        let Some(first_tag) = iter.next() else {
+            return Vec::new(env);
+        };
+
+        let mut result = Self::get_invoices_by_tag(env, &first_tag);
+        for tag in iter {
+            let tag_matches = Self::get_invoices_by_tag(env, &tag);
+            let mut filtered = Vec::new(env);
+            for invoice_id in result.iter() {
+                if tag_matches.contains(&invoice_id) {
+                    filtered.push_back(invoice_id);
+                }
+            }
+            result = filtered;
+            if result.len() == 0 {
+                break;
+            }
+        }
+
+        result
+    }
+
+    pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
+        Self::get_invoices_by_category(env, category).len()
+    }
+
+    pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
+        Self::get_invoices_by_tag(env, tag).len()
+    }
+
+    pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
+        let mut categories = Vec::new(env);
+        categories.push_back(InvoiceCategory::Services);
+        categories.push_back(InvoiceCategory::Products);
+        categories.push_back(InvoiceCategory::Consulting);
+        categories.push_back(InvoiceCategory::Manufacturing);
+        categories.push_back(InvoiceCategory::Technology);
+        categories.push_back(InvoiceCategory::Healthcare);
+        categories.push_back(InvoiceCategory::Other);
+        categories
+    }
+
     /// Add invoice to business invoices list
     fn add_to_business_invoices(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
         let key = (symbol_short!("business"), business.clone());
@@ -1129,108 +1212,6 @@ impl InvoiceStorage {
         }
 
         env.storage().instance().set(&key, &new_invoices);
-    }
-
-    fn metadata_customer_key(name: &String) -> (soroban_sdk::Symbol, String) {
-        (symbol_short!("icust"), name.clone())
-    }
-
-    fn metadata_tax_key(tax_id: &String) -> (soroban_sdk::Symbol, String) {
-        (symbol_short!("itax"), tax_id.clone())
-    }
-
-    pub fn get_invoices_by_category(env: &Env, category: &InvoiceCategory) -> Vec<BytesN<32>> {
-        let key = Self::category_key(category);
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
-    }
-
-    pub fn get_invoices_by_category_and_status(
-        env: &Env,
-        category: &InvoiceCategory,
-        status: &InvoiceStatus,
-    ) -> Vec<BytesN<32>> {
-        let cat = Self::get_invoices_by_category(env, category);
-        let st = Self::get_invoices_by_status(env, status);
-        let mut out = Vec::new(env);
-        for id in cat.iter() {
-            for sid in st.iter() {
-                if id == sid {
-                    out.push_back(id);
-                    break;
-                }
-            }
-        }
-        out
-    }
-
-    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
-        let key = Self::tag_key(tag);
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
-    }
-
-    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
-        if tags.len() == 0 {
-            return Vec::new(env);
-        }
-        let first = Self::get_invoices_by_tag(env, &tags.get(0).unwrap());
-        if tags.len() == 1 {
-            return first;
-        }
-        let mut out = Vec::new(env);
-        for id in first.iter() {
-            let mut in_all = true;
-            let mut ti: u32 = 1;
-            while ti < tags.len() {
-                let t = tags.get(ti).unwrap();
-                let bucket = Self::get_invoices_by_tag(env, &t);
-                let mut found = false;
-                for bid in bucket.iter() {
-                    if bid == id {
-                        found = true;
-                        break;
-                    }
-                }
-                if !found {
-                    in_all = false;
-                    break;
-                }
-                ti += 1;
-            }
-            if in_all {
-                out.push_back(id);
-            }
-        }
-        out
-    }
-
-    pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
-        Self::get_invoices_by_category(env, category).len() as u32
-    }
-
-    pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
-        Self::get_invoices_by_tag(env, tag).len() as u32
-    }
-
-    pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
-        let mut v = Vec::new(env);
-        for c in [
-            InvoiceCategory::Services,
-            InvoiceCategory::Products,
-            InvoiceCategory::Consulting,
-            InvoiceCategory::Manufacturing,
-            InvoiceCategory::Technology,
-            InvoiceCategory::Healthcare,
-            InvoiceCategory::Other,
-        ] {
-            v.push_back(c);
-        }
-        v
     }
 
     /// Get invoices with ratings above a threshold

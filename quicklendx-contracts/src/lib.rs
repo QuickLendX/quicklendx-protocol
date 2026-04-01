@@ -65,7 +65,7 @@ pub use invoice::{InvoiceCategory, InvoiceStatus};
 mod verification;
 mod vesting;
 use admin::AdminStorage;
-use bid::{Bid, BidStorage};
+use bid::{Bid, BidStatus, BidStorage};
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
     OverdueScanResult,
@@ -139,6 +139,7 @@ fn map_public_bid_status(s: BidStatus) -> bid::BidStatus {
         BidStatus::Withdrawn => bid::BidStatus::Withdrawn,
         BidStatus::Accepted => bid::BidStatus::Accepted,
         BidStatus::Expired => bid::BidStatus::Expired,
+        BidStatus::Cancelled => bid::BidStatus::Cancelled,
     }
 }
 
@@ -2190,8 +2191,8 @@ impl QuickLendXContract {
         let mut filtered = Vec::new(&env);
 
         for bid in all_bids.iter() {
-            let include = match status_filter {
-                Some(s) => bid.status == map_public_bid_status(s),
+            let include = match &status_filter {
+                Some(s) => bid.status == map_public_bid_status(s.clone()),
                 None => true,
             };
             if include {
@@ -2240,8 +2241,8 @@ impl QuickLendXContract {
 
         for bid_id in all_bid_ids.iter() {
             if let Some(bid) = BidStorage::get_bid(&env, &bid_id) {
-                let include = match status_filter {
-                    Some(s) => bid.status == map_public_bid_status(s),
+                let include = match &status_filter {
+                    Some(s) => bid.status == map_public_bid_status(s.clone()),
                     None => true,
                 };
                 if include {
