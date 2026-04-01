@@ -52,6 +52,7 @@ fn test_pause_blocks_user_and_invoice_state_mutations() {
     let due_date = env.ledger().timestamp() + 86_400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1_000i128,
         &currency,
@@ -215,6 +216,7 @@ fn test_pause_blocks_accept_bid_and_fund() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -242,6 +244,7 @@ fn test_pause_blocks_release_escrow_funds() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -275,6 +278,7 @@ fn test_pause_blocks_refund_escrow_funds() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -303,6 +307,7 @@ fn test_pause_blocks_cancel_bid() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -330,6 +335,7 @@ fn test_pause_blocks_update_invoice_category() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -354,6 +360,7 @@ fn test_pause_blocks_settle_invoice() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -381,6 +388,7 @@ fn test_pause_blocks_add_investment_insurance() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -448,6 +456,7 @@ fn test_pause_blocks_tag_management() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,

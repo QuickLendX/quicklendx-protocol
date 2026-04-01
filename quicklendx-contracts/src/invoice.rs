@@ -790,17 +790,10 @@ impl Invoice {
         // 🔒 AUTH PROTECTION
         self.business.require_auth();
 
-<<<<<<< feature/542-max-invoice-limit-status-aware
-        let env = self.business.env(); // Use business env instead of tags env
-        let normalized = normalize_tag(&env, &tag)?;
-        let mut new_tags = Vec::new(&env);
-        let mut found = false;
-=======
         let normalized = {
             let env = self.tags.env();
             normalize_tag(&env, &tag)?
         };
->>>>>>> main
 
         let new_tags = {
             let env = self.tags.env();
@@ -1245,8 +1238,6 @@ impl InvoiceStorage {
         high_rated_invoices
     }
 
-<<<<<<< feature/542-max-invoice-limit-status-aware
-=======
     /// Count invoices that have received at least one rating.
     pub fn get_invoices_with_ratings_count(env: &Env) -> u32 {
         let mut count = 0u32;
@@ -1261,7 +1252,6 @@ impl InvoiceStorage {
         }
         count
     }
->>>>>>> main
     fn add_to_metadata_index(
         env: &Env,
         key: &(soroban_sdk::Symbol, String),
@@ -1390,16 +1380,12 @@ impl InvoiceStorage {
         }
     }
 
-<<<<<<< feature/542-max-invoice-limit-status-aware
-    /// Get total count of active invoices in system
-=======
             // Remove the main invoice record
             env.storage().instance().remove(invoice_id);
         }
     }
 
     /// Get total count of active invoices in the system
->>>>>>> main
     pub fn get_total_invoice_count(env: &Env) -> u32 {
         env.storage()
             .instance()

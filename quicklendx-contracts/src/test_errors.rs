@@ -55,6 +55,7 @@ fn create_verified_invoice(
     client.add_currency(admin, &currency);
     let due_date = env.ledger().timestamp() + 86400;
     let invoice_id = client.store_invoice(
+        admin,
         business,
         &amount,
         &currency,
@@ -88,6 +89,7 @@ fn create_funded_invoice(
     tok.approve(investor, &client.address, &amount, &expiry);
     let due_date = env.ledger().timestamp() + 86400;
     let invoice_id = client.store_invoice(
+        admin,
         business,
         &amount,
         &currency,
@@ -123,6 +125,7 @@ fn test_invoice_amount_invalid_error() {
 
     // Test zero amount
     let result = client.try_store_invoice(
+        &admin,
         &business,
         &0,
         &currency,
@@ -138,6 +141,7 @@ fn test_invoice_amount_invalid_error() {
 
     // Test negative amount
     let result = client.try_store_invoice(
+        &admin,
         &business,
         &-100,
         &currency,
@@ -164,6 +168,7 @@ fn test_invoice_due_date_invalid_error() {
 
     // Test due date in the past
     let result = client.try_store_invoice(
+        &admin,
         &business,
         &1000,
         &currency,
@@ -187,6 +192,7 @@ fn test_invoice_not_verified_error() {
 
     // Create invoice but don't verify it
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000,
         &currency,
@@ -236,6 +242,7 @@ fn test_invalid_description_error() {
 
     // Test empty description
     let result = client.try_store_invoice(
+        &admin,
         &business,
         &1000,
         &currency,
@@ -388,8 +395,35 @@ fn test_business_not_verified_error() {
 }
 
 #[test]
-fn test_no_panics_on_error_conditions() {
+fn test_store_invoice_unauthorized_fails() {
     let (env, client, _admin) = setup();
+    let not_admin = Address::generate(&env);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Try to call store_invoice as non-admin
+    let result = client.try_store_invoice(
+        &not_admin,
+        &business,
+        &1000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, QuickLendXError::NotAdmin);
+}
+
+#[test]
+fn test_no_panics_on_error_conditions() {
+    let (env, client, admin) = setup();
 
     // Test various error conditions that should not panic
     let invalid_id = BytesN::from_array(&env, &[0u8; 32]);
@@ -406,6 +440,7 @@ fn test_no_panics_on_error_conditions() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let _ = client.try_store_invoice(
+        &admin,
         &business,
         &0, // Invalid amount
         &currency,
@@ -418,6 +453,7 @@ fn test_no_panics_on_error_conditions() {
     // Set ledger timestamp to non-zero so past date make sense
     env.ledger().set_timestamp(10_000);
     let _ = client.try_store_invoice(
+        &admin,
         &business,
         &1000,
         &currency,

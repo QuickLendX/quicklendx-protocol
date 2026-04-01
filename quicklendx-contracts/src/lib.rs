@@ -141,7 +141,7 @@ fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError>
 }
 
 /// Map the contract-exported `types::BidStatus` filter to the bid-storage enum.
-fn map_public_bid_status(s: BidStatus) -> bid::BidStatus {
+fn map_public_bid_status(s: &BidStatus) -> bid::BidStatus {
     match s {
         BidStatus::Placed => bid::BidStatus::Placed,
         BidStatus::Withdrawn => bid::BidStatus::Withdrawn,
@@ -452,6 +452,7 @@ impl QuickLendXContract {
     /// * `InvalidDescription` if description is empty
     pub fn store_invoice(
         env: Env,
+        admin: Address,
         business: Address,
         amount: i128,
         currency: Address,
@@ -833,7 +834,7 @@ impl QuickLendXContract {
 
     /// Get bids filtered by status
     pub fn get_bids_by_status(env: Env, invoice_id: BytesN<32>, status: BidStatus) -> Vec<Bid> {
-        BidStorage::get_bids_by_status(&env, &invoice_id, map_public_bid_status(status))
+        BidStorage::get_bids_by_status(&env, &invoice_id, map_public_bid_status(&status))
     }
 
     /// Get bids filtered by investor
