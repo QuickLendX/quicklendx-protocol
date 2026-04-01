@@ -407,11 +407,7 @@ impl ProtocolInitializer {
     /// # Returns
     /// * `Ok(())` if update succeeds
     /// * `Err(QuickLendXError)` if validation fails or not admin
-    pub fn set_fee_config(
-        env: &Env,
-        admin: &Address,
-        fee_bps: u32,
-    ) -> Result<(), QuickLendXError> {
+    pub fn set_fee_config(env: &Env, admin: &Address, fee_bps: u32) -> Result<(), QuickLendXError> {
         AdminStorage::with_admin_auth(env, admin, || {
             // Validate fee
             if fee_bps < MIN_FEE_BPS || fee_bps > MAX_FEE_BPS {
@@ -606,10 +602,6 @@ fn emit_fee_config_updated(env: &Env, admin: &Address, fee_bps: u32) {
 fn emit_treasury_updated(env: &Env, admin: &Address, treasury: &Address) {
     env.events().publish(
         (symbol_short!("trsr_upd"),),
-        (
-            admin.clone(),
-            treasury.clone(),
-            env.ledger().timestamp(),
-        ),
+        (admin.clone(), treasury.clone(), env.ledger().timestamp()),
     );
 }

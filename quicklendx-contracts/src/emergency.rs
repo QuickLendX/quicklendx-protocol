@@ -102,7 +102,7 @@ impl EmergencyWithdraw {
         amount: i128,
         target: Address,
     ) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin_auth(env, admin)?;
+        AdminStorage::require_admin(env, admin)?;
 
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -169,7 +169,7 @@ impl EmergencyWithdraw {
     /// * `EmergencyWithdrawCancelled` if withdrawal was cancelled
     /// * Transfer errors (e.g. `InsufficientFunds`) if contract balance is insufficient
     pub fn execute(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin_auth(env, admin)?;
+        AdminStorage::require_admin(env, admin)?;
 
         let pending: PendingEmergencyWithdrawal = env
             .storage()
@@ -236,7 +236,7 @@ impl EmergencyWithdraw {
     /// * `EmergencyWithdrawNotFound` if no pending withdrawal exists
     /// * `EmergencyWithdrawCancelled` if withdrawal is already cancelled
     pub fn cancel(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin_auth(env, admin)?;
+        AdminStorage::require_admin(env, admin)?;
 
         let mut pending: PendingEmergencyWithdrawal = env
             .storage()

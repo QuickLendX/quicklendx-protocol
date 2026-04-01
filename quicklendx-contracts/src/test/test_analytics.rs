@@ -18,19 +18,26 @@ use soroban_sdk::{
 
 fn setup_contract(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address) {
     let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(env, &contract_id);
-    let admin = Address::generate(env);
-    let business = Address::generate(env);
-    env.mock_all_auths();
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
     client.set_admin(&admin);
-    (client, admin, business)
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+
+    (env, client, admin, business, currency)
 }
 
-fn create_invoice(
+fn upload_invoice(
     env: &Env,
     client: &QuickLendXContractClient,
     business: &Address,
+    currency: &Address,
     amount: i128,
+    category: InvoiceCategory,
     description: &str,
 ) -> BytesN<32> {
     let currency = Address::generate(env);
@@ -38,10 +45,10 @@ fn create_invoice(
     client.store_invoice(
         business,
         &amount,
-        &currency,
-        &due_date,
+        currency,
+        &(env.ledger().timestamp() + 86_400),
         &String::from_str(env, description),
-        &InvoiceCategory::Services,
+        &category,
         &Vec::new(env),
     )
 }
@@ -67,13 +74,9 @@ fn test_platform_metrics_empty_data() {
 }
 
 #[test]
-fn test_platform_metrics_with_invoices() {
+fn test_platform_metrics_empty_summary_defaults() {
     let env = Env::default();
-    let (client, _admin, business) = setup_contract(&env);
-
-    create_invoice(&env, &client, &business, 1000, "Invoice A");
-    create_invoice(&env, &client, &business, 2000, "Invoice B");
-    create_invoice(&env, &client, &business, 3000, "Invoice C");
+    let (platform, performance) = crate::get_analytics_summary(env);
 
     let metrics = client.get_platform_metrics().unwrap();
     assert_eq!(metrics.total_invoices, 3);
@@ -82,19 +85,27 @@ fn test_platform_metrics_with_invoices() {
 }
 
 #[test]
-fn test_platform_metrics_after_status_changes() {
-    let env = Env::default();
-    let (client, _admin, business) = setup_contract(&env);
+fn test_platform_metrics_with_multiple_invoices() {
+    let (env, client, _admin, business, currency) = setup();
 
-    let inv1 = create_invoice(&env, &client, &business, 1000, "Status inv 1");
-    let inv2 = create_invoice(&env, &client, &business, 2000, "Status inv 2");
-
-    // Verify and fund inv1
-    client.update_invoice_status(&inv1, &InvoiceStatus::Verified);
-    client.update_invoice_status(&inv1, &InvoiceStatus::Funded);
-
-    // Mark inv2 as paid
-    client.update_invoice_status(&inv2, &InvoiceStatus::Paid);
+    upload_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        1_000,
+        InvoiceCategory::Services,
+        "Invoice A",
+    );
+    upload_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        2_000,
+        InvoiceCategory::Technology,
+        "Invoice B",
+    );
 
     let metrics = client.get_platform_metrics().unwrap();
     assert_eq!(metrics.total_invoices, 2);
@@ -216,112 +227,140 @@ fn test_user_behavior_new_user() {
 }
 
 #[test]
-fn test_user_behavior_with_invoices() {
-    let env = Env::default();
-    env.ledger().set_timestamp(1_000_000);
-    let (client, _admin, business) = setup_contract(&env);
+fn test_user_behavior_metrics_tracks_uploaded_invoices() {
+    let (env, client, _admin, business, currency) = setup();
 
-    create_invoice(&env, &client, &business, 1000, "Behavior inv 1");
-    create_invoice(&env, &client, &business, 2000, "Behavior inv 2");
+    upload_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        1_000,
+        InvoiceCategory::Services,
+        "Behavior invoice 1",
+    );
+    upload_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        2_500,
+        InvoiceCategory::Consulting,
+        "Behavior invoice 2",
+    );
 
-    let behavior = client.get_user_behavior_metrics(&business);
-    assert_eq!(behavior.total_invoices_uploaded, 2);
-    assert!(behavior.last_activity > 0);
+    let metrics = crate::get_user_behavior_metrics(env.clone(), business.clone());
+    assert_eq!(metrics.user_address, business);
+    assert_eq!(metrics.total_invoices_uploaded, 2);
+    assert_eq!(metrics.total_investments_made, 0);
+    assert_eq!(metrics.risk_score, 25);
+    assert!(metrics.last_activity > 0);
 }
 
-// ============================================================================
-// FINANCIAL METRICS TESTS
-// ============================================================================
-
 #[test]
-fn test_financial_metrics_empty_data() {
-    let env = Env::default();
-    let (client, _admin, _business) = setup_contract(&env);
+fn test_financial_metrics_respects_period_filter_and_categories() {
+    let (env, client, _admin, business, currency) = setup();
 
-    let metrics = client.get_financial_metrics(&TimePeriod::AllTime);
-    assert_eq!(metrics.total_volume, 0);
-    assert_eq!(metrics.total_fees, 0);
-    assert_eq!(metrics.total_profits, 0);
-    assert_eq!(metrics.average_return_rate, 0);
-}
+    let old_invoice = upload_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        1_000,
+        InvoiceCategory::Services,
+        "Old invoice",
+    );
+    let mut old = InvoiceStorage::get_invoice(&env, &old_invoice).unwrap();
+    old.created_at = env.ledger().timestamp() - (31 * 24 * 60 * 60);
+    InvoiceStorage::store_invoice(&env, &old);
 
-#[test]
-fn test_financial_metrics_with_invoices_all_time() {
-    let env = Env::default();
-    env.ledger().set_timestamp(1_000_000);
-    let (client, _admin, business) = setup_contract(&env);
+    upload_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        2_500,
+        InvoiceCategory::Technology,
+        "Recent invoice",
+    );
 
-    create_invoice(&env, &client, &business, 5000, "Financial inv 1");
-    create_invoice(&env, &client, &business, 3000, "Financial inv 2");
+    let monthly = crate::get_financial_metrics(env.clone(), TimePeriod::Monthly);
+    assert_eq!(monthly.total_volume, 2_500);
 
-    let metrics = client.get_financial_metrics(&TimePeriod::AllTime);
-    assert_eq!(metrics.total_volume, 8000);
-    // Volume by category should have Services category with 8000
-    let mut services_volume = 0i128;
-    for (cat, vol) in metrics.volume_by_category.iter() {
-        if cat == InvoiceCategory::Services {
-            services_volume = vol;
+    let mut technology_volume = 0i128;
+    for (category, volume) in monthly.volume_by_category.iter() {
+        if category == InvoiceCategory::Technology {
+            technology_volume = volume;
         }
     }
-    assert_eq!(services_volume, 8000);
+    assert_eq!(technology_volume, 2_500);
+
+    let all_time = crate::get_financial_metrics(env, TimePeriod::AllTime);
+    assert_eq!(all_time.total_volume, 3_500);
 }
 
 #[test]
-fn test_financial_metrics_period_boundary() {
-    let env = Env::default();
-    // Set timestamp to 2 days in
-    env.ledger().set_timestamp(2 * 86400);
-    let (client, _admin, business) = setup_contract(&env);
+fn test_performance_metrics_reflect_paid_and_defaulted_invoices() {
+    let (env, client, _admin, business, currency) = setup();
 
-    // Create invoice — its created_at will be the current timestamp (2 days)
-    create_invoice(&env, &client, &business, 1000, "Period boundary");
+    let paid_invoice = upload_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        1_000,
+        InvoiceCategory::Services,
+        "Paid invoice",
+    );
+    let defaulted_invoice = upload_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        2_000,
+        InvoiceCategory::Services,
+        "Defaulted invoice",
+    );
 
-    // Daily period looks at last 24h → should include (since created_at == now, AllTime includes now)
-    let daily = client.get_financial_metrics(&TimePeriod::Daily);
-    // The invoice is at timestamp 2*86400, daily start = 2*86400 - 86400 = 86400
-    // Invoice created_at (2*86400) >= start (86400) && <= end (2*86400) → included
-    assert_eq!(daily.total_volume, 1000);
+    client.update_invoice_status(&paid_invoice, &InvoiceStatus::Paid);
+    client.update_invoice_status(&defaulted_invoice, &InvoiceStatus::Defaulted);
 
-    // AllTime always includes everything
-    let all_time = client.get_financial_metrics(&TimePeriod::AllTime);
-    assert_eq!(all_time.total_volume, 1000);
+    let metrics = AnalyticsCalculator::calculate_performance_metrics(&env).unwrap();
+    assert_eq!(metrics.transaction_success_rate, 5_000);
+    assert_eq!(metrics.error_rate, 5_000);
 }
 
-// ============================================================================
-// BUSINESS REPORT TESTS
-// ============================================================================
-
 #[test]
-fn test_business_report_empty() {
-    let env = Env::default();
-    env.ledger().set_timestamp(1_000_000);
-    let (client, _admin, business) = setup_contract(&env);
+fn test_business_report_generation_matches_invoice_state() {
+    let (env, client, _admin, business, currency) = setup();
 
-    let report = client.generate_business_report(&business, &TimePeriod::AllTime);
+    let funded = upload_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        1_000,
+        InvoiceCategory::Services,
+        "Funded invoice",
+    );
+    client.update_invoice_status(&funded, &InvoiceStatus::Funded);
+
+    let paid = upload_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        2_000,
+        InvoiceCategory::Technology,
+        "Paid invoice",
+    );
+    client.update_invoice_status(&paid, &InvoiceStatus::Paid);
+
+    let report =
+        crate::generate_business_report(env.clone(), business.clone(), TimePeriod::AllTime)
+            .unwrap();
+
     assert_eq!(report.business_address, business);
-    assert_eq!(report.invoices_uploaded, 0);
-    assert_eq!(report.invoices_funded, 0);
-    assert_eq!(report.total_volume, 0);
-    assert_eq!(report.success_rate, 0);
-    assert_eq!(report.default_rate, 0);
-    assert!(report.rating_average.is_none());
-    assert_eq!(report.period, TimePeriod::AllTime);
-}
-
-#[test]
-fn test_business_report_with_invoices() {
-    let env = Env::default();
-    env.ledger().set_timestamp(1_000_000);
-    let (client, _admin, business) = setup_contract(&env);
-
-    let inv1 = create_invoice(&env, &client, &business, 1000, "Biz report inv 1");
-    let _inv2 = create_invoice(&env, &client, &business, 2000, "Biz report inv 2");
-
-    // Fund one invoice
-    client.update_invoice_status(&inv1, &InvoiceStatus::Verified);
-    client.update_invoice_status(&inv1, &InvoiceStatus::Funded);
-
-    let report = client.generate_business_report(&business, &TimePeriod::AllTime);
     assert_eq!(report.invoices_uploaded, 2);
     assert_eq!(report.invoices_funded, 1);
     assert_eq!(report.total_volume, 3000);
