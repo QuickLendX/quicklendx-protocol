@@ -251,26 +251,20 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     if let Some(mut investment) = InvestmentStorage::get_investment_by_invoice(env, invoice_id) {
         investment.status = InvestmentStatus::Defaulted;
 
-        let claim_details = investment
-            .process_insurance_claim()
-            .and_then(|(provider, amount)| {
-                if amount > 0 {
-                    Some((provider, amount))
-                } else {
-                    None
-                }
-            });
+        let claim_details = investment.process_all_insurance_claims(env);
 
         InvestmentStorage::update_investment(env, &investment);
 
-        if let Some((provider, coverage_amount)) = claim_details {
-            emit_insurance_claimed(
-                env,
-                &investment.investment_id,
-                &investment.invoice_id,
-                &provider,
-                coverage_amount,
-            );
+        for (provider, coverage_amount) in claim_details.iter() {
+            if coverage_amount > 0 {
+                emit_insurance_claimed(
+                    env,
+                    &investment.investment_id,
+                    &investment.invoice_id,
+                    &provider,
+                    coverage_amount,
+                );
+            }
         }
     }
 

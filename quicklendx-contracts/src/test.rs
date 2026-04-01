@@ -3955,30 +3955,46 @@ fn test_investment_insurance_lifecycle() {
     let contract_error = err.expect("expected contract invoke error");
     assert_eq!(contract_error, QuickLendXError::InvalidCoveragePercentage);
 
-    let coverage_percentage = 60u32;
-    client.add_investment_insurance(&investment_id, &provider, &coverage_percentage);
+    let coverage_percentage_a = 60u32;
+    client.add_investment_insurance(&investment_id, &provider, &coverage_percentage_a);
 
-    let duplicate_provider = Address::generate(&env);
+    let second_provider = Address::generate(&env);
+    let coverage_percentage_b = 40u32;
+    client.add_investment_insurance(&investment_id, &second_provider, &coverage_percentage_b);
+
+    let excess_provider = Address::generate(&env);
     let duplicate_attempt =
-        client.try_add_investment_insurance(&investment_id, &duplicate_provider, &30u32);
+        client.try_add_investment_insurance(&investment_id, &excess_provider, &1u32);
     let err = duplicate_attempt.err().expect("expected contract error");
     let contract_error = err.expect("expected contract invoke error");
     assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
 
     let insured_investment = client.get_invoice_investment(&invoice_id);
     let investment_amount = insured_investment.amount;
-    assert_eq!(insured_investment.insurance.len(), 1);
+    assert_eq!(insured_investment.insurance.len(), 2);
     let insurance = insured_investment
         .insurance
         .get(0)
         .expect("expected insurance entry");
     assert!(insurance.active);
     assert_eq!(insurance.provider, provider);
-    assert_eq!(insurance.coverage_percentage, coverage_percentage);
-    let expected_coverage = investment_amount * coverage_percentage as i128 / 100;
-    assert_eq!(insurance.coverage_amount, expected_coverage);
-    let expected_premium = Investment::calculate_premium(investment_amount, coverage_percentage);
-    assert_eq!(insurance.premium_amount, expected_premium);
+    assert_eq!(insurance.coverage_percentage, coverage_percentage_a);
+    let expected_coverage_a = investment_amount * coverage_percentage_a as i128 / 100;
+    assert_eq!(insurance.coverage_amount, expected_coverage_a);
+    let expected_premium_a = Investment::calculate_premium(investment_amount, coverage_percentage_a);
+    assert_eq!(insurance.premium_amount, expected_premium_a);
+
+    let second_insurance = insured_investment
+        .insurance
+        .get(1)
+        .expect("expected second insurance entry");
+    assert!(second_insurance.active);
+    assert_eq!(second_insurance.provider, second_provider);
+    assert_eq!(second_insurance.coverage_percentage, coverage_percentage_b);
+    let expected_coverage_b = investment_amount * coverage_percentage_b as i128 / 100;
+    assert_eq!(second_insurance.coverage_amount, expected_coverage_b);
+    let expected_premium_b = Investment::calculate_premium(investment_amount, coverage_percentage_b);
+    assert_eq!(second_insurance.premium_amount, expected_premium_b);
 
     let stored_invoice = client.get_invoice(&invoice_id);
     env.ledger().set_timestamp(stored_invoice.due_date + 1);
@@ -3987,13 +4003,19 @@ fn test_investment_insurance_lifecycle() {
 
     let after_default = client.get_invoice_investment(&invoice_id);
     assert_eq!(after_default.status, InvestmentStatus::Defaulted);
-    assert_eq!(after_default.insurance.len(), 1);
+    assert_eq!(after_default.insurance.len(), 2);
     let insurance_after = after_default
         .insurance
         .get(0)
         .expect("expected insurance entry after claim");
     assert!(!insurance_after.active);
-    assert_eq!(insurance_after.coverage_amount, expected_coverage);
+    assert_eq!(insurance_after.coverage_amount, expected_coverage_a);
+    let second_after_default = after_default
+        .insurance
+        .get(1)
+        .expect("expected second insurance entry after claim");
+    assert!(!second_after_default.active);
+    assert_eq!(second_after_default.coverage_amount, expected_coverage_b);
 }
 
 #[test]
