@@ -733,8 +733,6 @@ impl AnalyticsCalculator {
         // Calculate user satisfaction score (based on ratings)
         let mut total_rating = 0u32;
         let mut rating_count = 0u32;
-        let _invoices_with_ratings =
-            crate::invoice::InvoiceStorage::get_invoices_with_ratings_count(env);
 
         // Get paid invoices for rating calculation
         let paid_invoices =
@@ -914,8 +912,8 @@ impl AnalyticsCalculator {
         let (start_date, end_date) = Self::get_period_dates(current_timestamp, period.clone());
         let report_id = AnalyticsStorage::generate_report_id(env);
 
-        // Get investor's persisted investments in the selected period.
-        let all_investment_ids = Self::get_investor_investment_ids(env, investor);
+        let investment_ids =
+            crate::investment::InvestmentStorage::get_investments_by_investor(env, investor);
         let mut investments_made = 0u32;
         let mut total_invested = 0i128;
         let mut total_returns = 0i128;
@@ -923,13 +921,15 @@ impl AnalyticsCalculator {
         let mut defaulted_investments = 0u32;
         let mut preferred_categories = Self::initialize_category_counters(env);
 
-        for investment_id in all_investment_ids.iter() {
-            if let Some(investment) =
+        for investment_id in investment_ids.iter() {
+            let Some(investment) =
                 crate::investment::InvestmentStorage::get_investment(env, &investment_id)
-            {
-                if investment.funded_at >= start_date && investment.funded_at <= end_date {
-                    investments_made += 1;
-                    total_invested = total_invested.saturating_add(investment.amount);
+            else {
+                continue;
+            };
+            if investment.funded_at >= start_date && investment.funded_at <= end_date {
+                investments_made += 1;
+                total_invested = total_invested.saturating_add(investment.amount);
 
                     if let Some(invoice) =
                         crate::invoice::InvoiceStorage::get_invoice(env, &investment.invoice_id)
@@ -1003,10 +1003,16 @@ impl AnalyticsCalculator {
 
         // Calculate portfolio diversity (simplified)
         let portfolio_diversity = if investments_made > 0 {
-            let unique_categories = preferred_categories
-                .iter()
-                .filter(|(_, count)| *count > 0)
-                .count() as u32;
+            let mut unique_categories = 0u32;
+            let plen = preferred_categories.len();
+            let mut pi: u32 = 0;
+            while pi < plen {
+                let (_, count) = preferred_categories.get(pi).unwrap();
+                if count > 0 {
+                    unique_categories = unique_categories.saturating_add(1);
+                }
+                pi += 1;
+            }
             (unique_categories.saturating_mul(10000)).saturating_div(investments_made) as i128
         } else {
             0
@@ -1036,6 +1042,50 @@ impl AnalyticsCalculator {
         AnalyticsStorage::store_investor_report(env, &report);
 
         Ok(report)
+    }
+
+    fn get_investor_investments(env: &Env, investor: &Address) -> Vec<crate::investment::Investment> {
+        let mut investments = Vec::new(env);
+        for investment_id in crate::investment::InvestmentStorage::get_investments_by_investor(env, investor)
+            .iter()
+        {
+            if let Some(investment) =
+                crate::investment::InvestmentStorage::get_investment(env, &investment_id)
+            {
+                investments.push_back(investment);
+            }
+        }
+        investments
+    }
+
+    fn initialize_category_counters(env: &Env) -> Vec<(InvoiceCategory, u32)> {
+        let mut counters = Vec::new(env);
+        for category in crate::invoice::InvoiceStorage::get_all_categories(env).iter() {
+            counters.push_back((category, 0u32));
+        }
+        counters
+    }
+
+    fn increment_category_counter(
+        counters: &mut Vec<(InvoiceCategory, u32)>,
+        category: &InvoiceCategory,
+    ) {
+        for i in 0..counters.len() {
+            let Some((existing_category, count)) = counters.get(i) else {
+                continue;
+            };
+            if existing_category == *category {
+                counters.set(i, (existing_category, count.saturating_add(1)));
+                return;
+            }
+        }
+    }
+
+    fn validate_investor_report(report: &InvestorReport) -> Result<(), QuickLendXError> {
+        if report.end_date < report.start_date {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+        Ok(())
     }
 
     /// Get period dates based on time period

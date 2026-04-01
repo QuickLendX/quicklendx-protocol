@@ -35,6 +35,16 @@ fn submit_investor_kyc(env: &Env, client: &QuickLendXContractClient, investor: &
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
 }
 
+fn verify_investor_for_test(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    investor: &Address,
+    limit: i128,
+) {
+    submit_investor_kyc(env, client, investor);
+    client.verify_investor(investor, &limit);
+}
+
 #[test]
 fn test_pause_blocks_user_and_invoice_state_mutations() {
     let env = Env::default();
@@ -42,6 +52,7 @@ fn test_pause_blocks_user_and_invoice_state_mutations() {
     let due_date = env.ledger().timestamp() + 86_400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1_000i128,
         &currency,
@@ -205,6 +216,7 @@ fn test_pause_blocks_accept_bid_and_fund() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -222,7 +234,7 @@ fn test_pause_blocks_accept_bid_and_fund() {
     let result = client.try_accept_bid_and_fund(&invoice_id, &bid_id);
     let err = result.err().expect("expected contract error");
     let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed.into());
 }
 
 #[test]
@@ -232,6 +244,7 @@ fn test_pause_blocks_release_escrow_funds() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -265,6 +278,7 @@ fn test_pause_blocks_refund_escrow_funds() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -293,6 +307,7 @@ fn test_pause_blocks_cancel_bid() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -320,6 +335,7 @@ fn test_pause_blocks_update_invoice_category() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -344,6 +360,7 @@ fn test_pause_blocks_settle_invoice() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -371,6 +388,7 @@ fn test_pause_blocks_add_investment_insurance() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,
@@ -438,6 +456,7 @@ fn test_pause_blocks_tag_management() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
+        &admin,
         &business,
         &1000i128,
         &currency,

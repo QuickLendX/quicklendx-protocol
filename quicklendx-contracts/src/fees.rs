@@ -818,10 +818,15 @@ impl FeeManager {
     ///
     /// # Safety invariants enforced
     /// - Revenue config must exist and shares must sum to 10_000 bps.
-    /// - Pending distribution must meet the minimum threshold.
+    /// - If [`Self::get_treasury_address`] is set and `treasury_share_bps > 0`, the revenue
+    ///   config’s `treasury_address` must match that routing target (same on-chain fee treasury).
+    /// - Idempotency: when `pending_distribution == 0`, the call returns
+    ///   [`QuickLendXError::OperationNotAllowed`] so a period cannot be “re-settled” until new
+    ///   fees are collected (avoids duplicate events / no-op distributions when
+    ///   `min_distribution_amount == 0`).
+    /// - Pending distribution must meet the minimum threshold when it is positive.
     /// - Post-distribution sum must equal the original pending amount (accounting invariant).
     /// - Each distributed amount must be non-negative.
-    /// - Double-distribution is prevented (pending set to 0 after distribution).
     pub fn distribute_revenue(
         env: &Env,
         admin: &Address,
@@ -841,12 +846,24 @@ impl FeeManager {
             config.platform_share_bps,
         )?;
 
+        if config.treasury_share_bps > 0 {
+            if let Some(fee_treasury) = Self::get_treasury_address(env) {
+                if fee_treasury != config.treasury_address {
+                    return Err(QuickLendXError::InvalidFeeConfiguration);
+                }
+            }
+        }
+
         let revenue_key = (REVENUE_KEY, period);
         let mut revenue_data: RevenueData = env
             .storage()
             .instance()
             .get(&revenue_key)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+        if revenue_data.pending_distribution == 0 {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
 
         if revenue_data.pending_distribution < config.min_distribution_amount {
             return Err(QuickLendXError::InvalidAmount);
