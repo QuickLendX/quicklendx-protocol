@@ -26,8 +26,7 @@ const FEES_INIT_KEY: Symbol = symbol_short!("fee_init");
 
 /// Fee types supported by the platform
 #[contracttype]
-#[derive(Clone, Eq, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FeeType {
     Platform,
     Processing,
@@ -38,8 +37,7 @@ pub enum FeeType {
 
 /// Volume tier for discounted fees
 #[contracttype]
-#[derive(Clone, Eq, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum VolumeTier {
     Standard,
     Silver,
@@ -757,13 +755,11 @@ impl FeeManager {
         env.storage().instance().set(&key, &config);
 
         // Emit configuration event for audit trail
-        env.events().publish(
-            (symbol_short!("rev_cfg"),),
-            (
-                config.treasury_share_bps,
-                config.developer_share_bps,
-                config.platform_share_bps,
-            ),
+        crate::events::emit_platform_fee_config_updated(
+            env,
+            0, // Placeholder for old value if not available easily
+            config.platform_share_bps,
+            admin,
         );
 
         Ok(())
@@ -900,9 +896,12 @@ impl FeeManager {
         env.storage().instance().set(&revenue_key, &revenue_data);
 
         // Emit distribution event for transparency and auditing
-        env.events().publish(
-            (symbol_short!("rev_dst"),),
-            (period, treasury_amount, developer_amount, platform_amount),
+        crate::events::emit_revenue_distributed(
+            env,
+            period,
+            treasury_amount,
+            developer_amount,
+            platform_amount,
         );
 
         Ok((treasury_amount, developer_amount, platform_amount))

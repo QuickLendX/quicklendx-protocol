@@ -175,6 +175,7 @@ pub struct Investment {
 }
 
 /// Platform fee configuration
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFee {
@@ -183,7 +184,6 @@ pub struct PlatformFee {
     pub description: String,
 }
 
-/// Platform fee configuration
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeConfig {
@@ -192,3 +192,4 @@ pub struct PlatformFeeConfig {
     pub bid_fee: PlatformFee,
     pub investment_fee: PlatformFee,
 }
+
