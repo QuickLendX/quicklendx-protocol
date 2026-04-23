@@ -80,7 +80,7 @@ Each invoice is limited to `MAX_PAYMENT_COUNT` (1,000) discrete payment records.
 | `get_invoice_progress` | `(env, invoice_id) -> Progress` | Aggregate settlement progress |
 | `get_payment_count` | `(env, invoice_id) -> u32` | Total number of payment records |
 | `get_payment_record` | `(env, invoice_id, index) -> SettlementPaymentRecord` | Single record by index |
-| `get_payment_records` | `(env, invoice_id, from, limit) -> Vec<SettlementPaymentRecord>` | Paginated record slice |
+| `get_payment_records` | `(env, invoice_id, from, limit) -> Vec<SettlementPaymentRecord>` | Paginated record slice (ordered ASC) |
 | `is_invoice_finalized` | `(env, invoice_id) -> bool` | Whether settlement is complete |
 
 ## Events
@@ -89,15 +89,16 @@ Settlement emits:
 - `pay_rec` (PaymentRecorded): `(invoice_id, payer, applied_amount, total_paid, status)`
 - `inv_stlf` (InvoiceSettledFinal): `(invoice_id, final_amount, paid_at)`
 
-Backward-compatible events still emitted:
-
-- `inv_pp` (partial payment event)
-- `inv_set` (existing settlement event)
-
 ## Security Considerations
 
 ### Replay/Idempotency
-- Non-empty nonce is enforced unique per `(invoice, payer, nonce)`.
+- Non-empty nonce is enforced unique per `(invoice, nonce)`.
+- Duplicate payment attempts with the same nonce return the current `Progress` without mutating state (idempotent behavior).
+
+### Ordering and Pagination
+- Payments are stored with a strictly increasing index `[0..payment_count)`.
+- `get_payment_records` returns records in chronological order (oldest first).
+- Pagination supports arbitrary `from` offsets and enforces `MAX_QUERY_LIMIT` (100) per page.
 - Duplicate nonce attempts are rejected with `OperationNotAllowed`.
 - Nonces are scoped per invoice — the same nonce can be used on different invoices.
 
