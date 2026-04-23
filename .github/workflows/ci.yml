@@ -63,16 +63,12 @@ jobs:
           cargo test --test wasm_build_size_budget --verbose
 
       - name: Run Cargo tests
-        if: false # temporarily disabled; legacy test suite currently not compiling
         run: |
           source $HOME/.cargo/env
-          cd quicklendx-contracts
           cargo test --verbose
 
       - name: Test coverage (minimum 95%)
-        if: false # temporarily disabled alongside test step
         run: |
           source $HOME/.cargo/env
-          cd quicklendx-contracts
           cargo install cargo-llvm-cov
           cargo llvm-cov --lib --fail-under 95
