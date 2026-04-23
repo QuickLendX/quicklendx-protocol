@@ -377,24 +377,15 @@ pub fn get_payment_records(
     let total = get_payment_count_internal(env, invoice_id);
     let mut records = Vec::new(env);
 
-    let end = from.saturating_add(limit).min(total);
-    let mut idx = from;
-    while idx < end {
+    let actual_limit = limit.min(crate::MAX_QUERY_LIMIT); // Enforce practical upper bound for gas safety
+    let end = from.saturating_add(actual_limit).min(total);
+
+    for idx in from..end {
         if let Some(record) = env
             .storage()
             .persistent()
             .get(&SettlementDataKey::Payment(invoice_id.clone(), idx))
         {
-            records.push_back(record);
-        }
-        idx += 1;
-    }
-
-    let actual_limit = limit.min(100); // Enforce practical upper bound
-    let end = count.min(offset.saturating_add(actual_limit));
-
-    for i in offset..end {
-        if let Some(record) = env.storage().persistent().get(&SettlementDataKey::Payment(invoice_id.clone(), i)) {
             records.push_back(record);
         }
     }
