@@ -69,6 +69,7 @@ fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError>
 | `get_bid_history_paged`            | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
 | `get_investor_bids_paged`          | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
 | `get_whitelisted_currencies_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_payment_records`            | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
 
 ### Business Invoice Query Ordering
 
