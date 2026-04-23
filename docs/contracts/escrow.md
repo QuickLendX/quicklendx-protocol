@@ -80,6 +80,21 @@ pub struct Escrow {
 *   `Released`: Funds have been released to the business.
 *   `Refunded`: Funds have been returned to the investor.
 
+## Atomicity Guarantees
+
+`accept_bid_and_fund` is designed to be fully atomic. When a token transfer fails, **no partial state is written**:
+
+| Failure mode | Invoice | Bid | Escrow record | Investment | Funds |
+|---|---|---|---|---|---|
+| Insufficient investor balance | `Verified` (unchanged) | `Placed` (unchanged) | not created | not created | unchanged |
+| Zero investor allowance | `Verified` (unchanged) | `Placed` (unchanged) | not created | not created | unchanged |
+| Partial investor allowance | `Verified` (unchanged) | `Placed` (unchanged) | not created | not created | unchanged |
+| Mismatched bid/invoice pair | `Verified` (unchanged) | `Placed` (unchanged) | not created | not created | unchanged |
+
+**Why this is safe in Soroban:** The escrow record, bid status update, invoice status update, and investment record are all written **after** `transfer_from` succeeds (see `payments::create_escrow`). If the token call returns an error, the function returns early and the host discards all storage writes for that invocation. There is no partial-commit risk.
+
+**Retry safety:** After any failure, the bid and invoice are left in their pre-call state. The same `(invoice_id, bid_id)` pair can be retried once the investor has sufficient balance and allowance.
+
 ## Invariants
 
 The protocol enforces several critical invariants to ensure security and consistency of the escrow lifecycle:
@@ -88,6 +103,42 @@ The protocol enforces several critical invariants to ensure security and consist
 2.  **Creation Guard**: Escrow can only be created if the invoice is in `Verified` status and no existing escrow is found for the invoice ID.
 3.  **Duplicate Rejection**: Any attempt to create a second escrow for an invoice that already has one will be rejected with the `InvoiceAlreadyFunded` error.
 4.  **Release/Refund Mutex**: An escrow can be either released or refunded, but never both. The final status `Released` or `Refunded` is terminal.
+5.  **Write-after-transfer**: Storage state (escrow, bid, invoice, investment) is only mutated after the token transfer confirms success. No orphan records exist on failure.
+
+## One-Escrow-Per-Invoice Security Invariant
+
+Each invoice maps to **at most one** escrow record for its entire lifetime. This invariant is
+enforced at two independent layers to prevent escrow overwrite/poisoning attacks:
+
+### Layer 1 – `load_accept_bid_context` (outer guard)
+
+Before any funds move, `accept_bid_and_fund` calls `load_accept_bid_context`, which checks:
+
+- `EscrowStorage::get_escrow_by_invoice(invoice_id).is_some()` → returns `InvalidStatus`
+- `InvestmentStorage::get_investment_by_invoice(invoice_id).is_some()` → returns `InvalidStatus`
+- `invoice.funded_amount != 0 || invoice.funded_at.is_some() || invoice.investor.is_some()` → returns `InvalidStatus`
+
+### Layer 2 – `payments::create_escrow` (inner guard)
+
+Even if the outer guard is bypassed, `create_escrow` re-checks
+`EscrowStorage::get_escrow_by_invoice` **before** the token transfer and returns
+`InvoiceAlreadyFunded` if a record already exists. The escrow record is only written
+**after** the token transfer succeeds, so a failed transfer leaves no partial state.
+
+### Attack Vectors Mitigated
+
+| Attack | Mitigation |
+|--------|-----------|
+| Double `accept_bid` on same invoice | Layer 1: invoice status is `Funded` after first accept |
+| Direct `create_escrow` call after funding | Layer 2: storage-level duplicate check |
+| Post-release re-funding | Layer 2: escrow record persists with `Released` status |
+| Post-refund re-funding | Layer 2: escrow record persists with `Refunded` status |
+| Cross-invoice storage collision | Per-invoice storage key `(symbol_short!("escrow"), invoice_id)` |
+
+### Test Coverage
+
+All attack vectors above are covered in `src/test_escrow_uniqueness.rs` (issue #791).
+Run with: `cargo test test_escrow_uniqueness`
 
 ## Key Functions
 

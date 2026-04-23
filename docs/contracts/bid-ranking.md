@@ -1,91 +1,124 @@
-# Bid Ranking and Best Bid Selection
+# Bid Ranking — Deterministic Tie-Breaker Specification
 
 ## Overview
 
-Bids on an invoice are ranked by a deterministic algorithm so that businesses can select the best offer. The contract exposes `get_best_bid` (single best bid) and `get_ranked_bids` (all placed bids in rank order).
+QuickLendX uses a deterministic, multi-level comparator (`BidStorage::compare_bids`) to rank
+competing bids for an invoice. Determinism is a hard requirement in Soroban execution: every
+validator node must produce the same ranking for the same ledger state, regardless of the order
+in which bids were submitted or stored.
 
-## Ranking Criteria (in order)
+## Tie-Breaker Priority
 
-1. **Profit (absolute)** – `expected_return - bid_amount`  
-   Higher profit ranks higher. Favors offers that give the investor more return per unit of funding.
+When two bids are compared, the following criteria are applied in order. The first criterion
+that differs between the two bids determines the winner.
 
-2. **Expected return** – `expected_return`  
-   If profit is equal, higher expected return ranks higher.
+| Priority | Criterion | Winner |
+|----------|-----------|--------|
+| 1 | **Profit** (`expected_return − bid_amount`) | Higher profit |
+| 2 | **Expected return** | Higher expected return |
+| 3 | **Bid amount** | Higher bid amount |
+| 4 | **Timestamp** | Newer (higher) timestamp |
+| 5 | **Bid ID** (lexicographic byte order) | Higher bid ID |
 
-3. **Bid amount** – `bid_amount`  
-   If profit and expected return are equal, higher bid amount ranks higher.
+The bid ID is a deterministic, monotonically-generated 32-byte value that encodes a timestamp
+and a counter (see `EscrowStorage::generate_unique_escrow_id` for the analogous pattern). Because
+no two bids can share the same ID, the comparator never returns `Equal` for two distinct bids.
 
-4. **Timestamp (recency preference)** – `timestamp`  
-   If all of the above are equal, the newer bid (larger timestamp) ranks higher.
+## Key Functions
 
-5. **Bid ID (deterministic final tie-breaker)** – `bid_id`  
-   If economics and timestamp are equal, lexicographically larger `bid_id` ranks higher.
+### `BidStorage::compare_bids(bid1, bid2) -> Ordering`
 
-Comparison uses saturating arithmetic for profit to avoid overflow. The order is deterministic and does not depend on storage iteration order.
+Deterministically compares two bids using the five-level priority above.
 
-## Entrypoints
-
-### `get_best_bid(env, invoice_id) -> Option<Bid>`
-
-Returns the single highest-ranked bid for the invoice that is in `Placed` status. Returns `None` if the invoice does not exist, has no bids, or has no placed bids (e.g. all withdrawn or expired).
-
-### `get_ranked_bids(env, invoice_id) -> Vec<Bid>`
-
-Returns all bids for the invoice that are in `Placed` status, sorted from best to worst. Expired bids are refreshed before ranking; withdrawn, accepted, and expired bids are excluded. Returns an empty vector for a non-existent invoice or when there are no placed bids.
-
-### `cleanup_expired_bids(env, invoice_id) -> u32`
-
-Scans and prunes expired bids from an invoice's bid list. Transitions `Placed` bids that have passed their expiration timestamp to `Expired` status. Removes already-expired or orphaned bid records from the index. Returns the count of cleaned items. This operation is idempotent and safe to call multiple times.
-
-## Behavior
-
-- **Only Placed bids** are considered. Withdrawn, accepted, and expired bids are excluded from ranking and from `get_best_bid`.
-- **Expiration**: Before ranking, the contract refreshes expired bids (updates status to `Expired`). So ranked results always reflect current placement status.
-- **Consistency**: `get_best_bid(invoice_id)` is equal to the first element of `get_ranked_bids(invoice_id)` when the latter is non-empty.
-- **Determinism**: Same set of bids always produces the same ranking; tie-breaks are fully specified above.
-
-## Security Invariants
-
-### Invariant 1: Best-Bid Equals First Ranked
+```rust
+/// @notice Deterministically compares two bids.
+/// @dev Ordering priority: (1) profit, (2) expected_return, (3) bid_amount,
+/// (4) timestamp with newer bids first, (5) bid_id as final stable tiebreaker.
+pub fn compare_bids(bid1: &Bid, bid2: &Bid) -> Ordering
 ```
-∀ invoice_id: rank_bids(invoice_id).len() > 0 
-  → get_best_bid(invoice_id) == rank_bids(invoice_id).get(0)
+
+**Security properties:**
+- Reflexive: `compare_bids(a, a) == Equal`
+- Antisymmetric: `compare_bids(a, b) == Greater` iff `compare_bids(b, a) == Less`
+- Transitive: if `a > b` and `b > c` then `a > c`
+- Total: for any two distinct bids, exactly one of `Greater` or `Less` is returned
+
+### `BidStorage::rank_bids(env, invoice_id) -> Vec<Bid>`
+
+Returns all `Placed` bids for an invoice sorted from best to worst using `compare_bids`.
+Non-`Placed` bids (Withdrawn, Accepted, Expired, Cancelled) are excluded.
+
+**Invariant:** If the result is non-empty, `result[0]` equals the value returned by
+`get_best_bid` for the same invoice and ledger state.
+
+### `BidStorage::get_best_bid(env, invoice_id) -> Option<Bid>`
+
+Returns the single highest-ranked `Placed` bid. Uses the same `compare_bids` comparator
+as `rank_bids` so the two functions cannot drift on tie handling.
+
+**Invariant:** `get_best_bid(env, id) == rank_bids(env, id).get(0)` always holds.
+
+## State Machine
+
+Only `Placed` bids participate in ranking:
+
 ```
-This invariant is maintained even after:
-- Bid expiration (high-ranked bid expires, next-best becomes best)
-- Cleanup operations (partial or full expiration cleanup)
-- Multiple cleanup calls (idempotent behavior)
-- Mixed bid statuses (Placed/Withdrawn/Accepted/Expired/Cancelled)
+Placed    ──► included in rank_bids / get_best_bid
+Withdrawn ──► excluded
+Accepted  ──► excluded
+Expired   ──► excluded
+Cancelled ──► excluded
+```
 
-### Invariant 2: Expiration Cleanup Preservation
-Terminal statuses (`Accepted`, `Withdrawn`, `Cancelled`) are **never mutated** by cleanup. Only `Placed` bids can transition to `Expired`.
+## Security Assumptions
 
-### Invariant 3: Stable Ordering
-The ranking algorithm uses only immutable bid fields and the ledger timestamp. No external state affects ordering, ensuring reproducible results across validators.
+1. **Determinism**: The comparator is a pure function of bid fields. No randomness, no
+   ledger-state reads, no node-dependent values. Every validator produces the same result.
 
-### Invariant 4: Idempotent Cleanup
-Running `cleanup_expired_bids` multiple times at the same timestamp produces the same result. Already-expired bids are silently handled.
+2. **Stability**: `get_best_bid` and `rank_bids` share the same comparator path
+   (`select_best_placed_bid` / `select_best_index`). A change to one automatically
+   applies to the other.
 
-## Regression Tests Coverage
+3. **Fairness**: The bid-ID tiebreaker is lexicographic on a deterministic byte sequence.
+   It does not favour any particular investor address or submission time beyond what is
+   already captured by the timestamp tier.
 
-### Tie Scenarios
-- Profit equality → expected_return order
-- Profit + expected_return equality → bid_amount order
-- All economics equal → timestamp order (newer wins)
-- Full tie → bid_id lexicographic order (larger wins)
-- Insertion-order variance (different storage order yields same result)
+4. **No equal outcomes**: Because bid IDs are unique, `compare_bids` never returns `Equal`
+   for two distinct bids. This prevents any ambiguity in best-bid selection.
 
-### Expiration and Cleanup Scenarios (NEW)
-- Best bid remains correct after highest bid expires
-- Expired bids excluded from rank_bids after cleanup
-- Mixed bid statuses correctly filtered (only Placed considered)
-- Partial expiration cleanup maintains invariant
-- All bids expired → both return empty
-- Multiple cleanup calls are idempotent
+5. **Insertion-order independence**: The selection sort used in `rank_bids` and the linear
+   scan in `select_best_placed_bid` both iterate over the full bid list and apply
+   `compare_bids` to every pair. The result is identical regardless of the order in which
+   bids were stored.
 
-## Security and Testing
+## Test Coverage
 
-- Ranking logic is unit-tested in `test_bid_ranking.rs` (empty list, single bid, multiple bids, equal bids, tie-layer regressions, best-vs-ranked invariant, non-existent invoice).
-- Expiration and cleanup scenarios tested in `test_bid_ranking.rs` (see `best_bid_matches_ranked_after_expiration`, `rank_bids_excludes_expired_after_cleanup`, `best_bid_matches_ranked_with_mixed_statuses`, `cleanup_after_partial_expiration_maintains_invariant`, `best_bid_returns_none_when_all_expired`, `best_bid_matches_ranked_idempotent_cleanup`).
-- `compare_bids` uses `saturating_sub` for profit to avoid overflow (see `test_overflow.rs`).
-- No external or mutable state is used for ordering beyond bid fields and ledger timestamp for expiration.
+All invariants above are codified in `src/test_bid_ranking_tiebreaker.rs` (issue #811).
+
+| Test group | Tests | What is verified |
+|------------|-------|-----------------|
+| Tier 1 – Profit | 3 | Higher profit wins; 3-bid descending order |
+| Tier 2 – Expected return | 3 | Higher expected_return wins; insertion-order independence |
+| Tier 3 – Bid amount | 3 | Higher bid_amount wins; insertion-order independence |
+| Tier 4 – Timestamp | 4 | Newer timestamp wins; 3-bid descending; insertion-order independence |
+| Tier 5 – Bid ID | 4 | Higher bid_id wins; 3-bid descending; insertion-order independence |
+| Reflexivity / symmetry | 3 | Reflexive, antisymmetric, transitive |
+| Non-Placed exclusion | 6 | Withdrawn, Accepted, Expired, Cancelled excluded; empty result |
+| best == first-ranked | 5 | Invariant holds at every tie level |
+| Large / stress | 2 | 10 bids distinct profits; 5 full-tie bids by bid_id |
+| Cross-invoice isolation | 1 | Bids on different invoices do not interfere |
+| Single bid | 1 | Single bid is its own best and sole ranked entry |
+| **Total** | **35** | **35 passed, 0 failed** |
+
+## Running the Tests
+
+```bash
+cd quicklendx-contracts
+cargo test --lib test_bid_ranking_tiebreaker
+```
+
+Expected output:
+```
+running 35 tests
+test result: ok. 35 passed; 0 failed; 0 ignored
+```

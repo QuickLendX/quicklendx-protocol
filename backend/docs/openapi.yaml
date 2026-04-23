@@ -1,0 +1,76 @@
+openapi: 3.0.3
+info:
+  title: QuickLendX Backend API
+  description: API for the QuickLendX decentralized invoice financing platform.
+  version: 1.0.0
+paths:
+  /api/status:
+    get:
+      summary: Get system status
+      description: |
+        Reports the current operational status of the platform, including
+        maintenance mode, degraded performance signals, and indexing lag.
+        This endpoint is designed to be lightweight and safe to cache.
+      operationId: getStatus
+      responses:
+        '200':
+          description: OK
+          headers:
+            Cache-Control:
+              description: Cache policy for status banners
+              schema:
+                type: string
+                example: public, max-age=30
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '500':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    Status:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [operational, degraded, maintenance]
+          description: Overall system health status
+        maintenance:
+          type: boolean
+          description: Whether the system is currently in maintenance mode
+        degraded:
+          type: boolean
+          description: Whether the system is running in a degraded state (e.g. high lag)
+        index_lag:
+          type: integer
+          description: Number of ledgers the indexer is behind the current blockchain height
+        last_ledger:
+          type: integer
+          description: The last ledger successfully indexed by the backend
+        timestamp:
+          type: string
+          format: date-time
+          description: RFC3339 timestamp of the report
+        version:
+          type: string
+          description: Current backend version
+      required:
+        - status
+        - maintenance
+        - degraded
+        - index_lag
+        - last_ledger
+        - timestamp
+        - version
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
