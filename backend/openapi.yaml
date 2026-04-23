@@ -1,0 +1,256 @@
+openapi: 3.0.0
+info:
+  title: QuickLendX Protocol API
+  description: Backend API service for the QuickLendX invoice factoring protocol.
+  version: 1.0.0
+  contact:
+    name: QuickLendX Team
+    url: https://github.com/QuickLendX/quicklendx-protocol
+
+servers:
+  - url: http://localhost:3001/api/v1
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Returns the status of the API service and connectivity.
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  version:
+                    type: string
+                    example: 1.0.0
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /invoices:
+    get:
+      summary: List invoices
+      description: Retrieve a list of invoices with optional filtering.
+      parameters:
+        - name: business
+          in: query
+          schema:
+            type: string
+          description: Filter by business address
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/InvoiceStatus'
+      responses:
+        '200':
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+
+  /invoices/{id}:
+    get:
+      summary: Get invoice by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invoice details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '404':
+          description: Invoice not found
+
+  /bids:
+    get:
+      summary: List bids
+      parameters:
+        - name: invoice_id
+          in: query
+          schema:
+            type: string
+        - name: investor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of bids
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Bid'
+
+  /settlements:
+    get:
+      summary: List settlements
+      parameters:
+        - name: invoice_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of settlements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Settlement'
+
+  /settlements/{id}:
+    get:
+      summary: Get settlement by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Settlement details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settlement'
+        '404':
+          description: Settlement not found
+
+  /invoices/{id}/disputes:
+    get:
+      summary: List disputes for an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of disputes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Dispute'
+
+components:
+  schemas:
+    InvoiceStatus:
+      type: string
+      enum: [Pending, Verified, Funded, Paid, Defaulted, Cancelled]
+
+    InvoiceCategory:
+      type: string
+      enum: [Services, Products, Consulting, Manufacturing, Technology, Healthcare, Other]
+
+    LineItem:
+      type: object
+      properties:
+        description: { type: string }
+        quantity: { type: integer, format: int128 }
+        unit_price: { type: integer, format: int128 }
+        total: { type: integer, format: int128 }
+
+    InvoiceMetadata:
+      type: object
+      properties:
+        customer_name: { type: string }
+        customer_address: { type: string }
+        tax_id: { type: string }
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItem'
+        notes: { type: string }
+
+    Invoice:
+      type: object
+      properties:
+        id: { type: string }
+        business: { type: string }
+        amount: { type: integer, format: int128 }
+        currency: { type: string }
+        due_date: { type: integer, format: int64 }
+        status: { $ref: '#/components/schemas/InvoiceStatus' }
+        description: { type: string }
+        category: { $ref: '#/components/schemas/InvoiceCategory' }
+        tags:
+          type: array
+          items: { type: string }
+        metadata: { $ref: '#/components/schemas/InvoiceMetadata' }
+        created_at: { type: integer, format: int64 }
+        updated_at: { type: integer, format: int64 }
+
+    BidStatus:
+      type: string
+      enum: [Placed, Withdrawn, Accepted, Expired, Cancelled]
+
+    Bid:
+      type: object
+      properties:
+        bid_id: { type: string }
+        invoice_id: { type: string }
+        investor: { type: string }
+        bid_amount: { type: integer, format: int128 }
+        expected_return: { type: integer, format: int128 }
+        timestamp: { type: integer, format: int64 }
+        status: { $ref: '#/components/schemas/BidStatus' }
+        expiration_timestamp: { type: integer, format: int64 }
+
+    SettlementStatus:
+      type: string
+      enum: [Pending, Paid, Defaulted]
+
+    Settlement:
+      type: object
+      properties:
+        id: { type: string }
+        invoice_id: { type: string }
+        amount: { type: integer, format: int128 }
+        payer: { type: string }
+        recipient: { type: string }
+        timestamp: { type: integer, format: int64 }
+        status: { $ref: '#/components/schemas/SettlementStatus' }
+
+    DisputeStatus:
+      type: string
+      enum: [None, Disputed, UnderReview, Resolved]
+
+    Dispute:
+      type: object
+      properties:
+        id: { type: string }
+        invoice_id: { type: string }
+        initiator: { type: string }
+        reason: { type: string }
+        status: { $ref: '#/components/schemas/DisputeStatus' }
+        created_at: { type: integer, format: int64 }
+        resolved_at: { type: integer, format: int64 }
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
