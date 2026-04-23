@@ -40,7 +40,6 @@ mod reentrancy;
 mod settlement;
 mod storage;
 #[cfg(test)]
-#[cfg(test)]
 mod test_admin;
 #[cfg(test)]
 mod test_admin_simple;
