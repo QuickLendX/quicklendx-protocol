@@ -1027,3 +1027,304 @@ fn test_transition_guard_different_invoices_independent() {
     let contract_err = err.expect("expected contract error");
     assert_eq!(contract_err, QuickLendXError::DuplicateDefaultTransition);
 }
+
+// ============================================================================
+// Finality and cross-state ordering tests
+//
+// These tests verify that default handling is final and cannot double-account
+// with refunds, settlements, or partial payments. See
+// `docs/contracts/defaults.md` for the full cross-state ordering rules.
+// ============================================================================
+
+// Helper: Create and fund an invoice, additionally pre-funding the business
+// with enough balance and approval to complete a full settlement. Used only
+// by tests that exercise the settle path before defaulting.
+fn create_and_fund_invoice_with_business_funds(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    admin: &Address,
+    business: &Address,
+    investor: &Address,
+    amount: i128,
+    due_date: u64,
+) -> BytesN<32> {
+    let token_admin = Address::generate(env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac_client = token::StellarAssetClient::new(env, &currency);
+    let token_client = token::Client::new(env, &currency);
+
+    client.add_currency(admin, &currency);
+
+    // Mint tokens to investor so they can bid.
+    sac_client.mint(investor, &amount);
+    let expiry = env.ledger().sequence() + 10_000;
+    token_client.approve(investor, &client.address, &amount, &expiry);
+
+    // Additionally mint to the business so it can fund a settlement that
+    // pays the investor return plus platform fee.
+    sac_client.mint(business, &(amount + 2000));
+    token_client.approve(business, &client.address, &(amount + 2000), &expiry);
+
+    let invoice_id = client.store_invoice(
+        business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(env, "Test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount + 100));
+    client.accept_bid(&invoice_id, &bid_id);
+
+    invoice_id
+}
+
+/// Refunded invoices cannot be defaulted even after the grace period elapses.
+///
+/// Finality rule: once an invoice leaves `Funded` for `Refunded`, the status
+/// guard in `mark_invoice_defaulted` rejects any default attempt before any
+/// state mutation, preventing duplicate investment accounting (investor was
+/// already made whole via the refund path).
+#[test]
+fn test_cannot_default_refunded_invoice() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    // Move the invoice to Refunded via the business-initiated refund path.
+    client.refund_escrow_funds(&invoice_id, &business);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Refunded
+    );
+
+    // Move time past the grace period so the grace-period check cannot be
+    // confused with the status check we are targeting.
+    let grace_period = 7 * 24 * 60 * 60;
+    env.ledger().set_timestamp(due_date + grace_period + 1);
+
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, QuickLendXError::InvoiceNotAvailableForFunding);
+
+    // Status must be unchanged by the failed default attempt.
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Refunded
+    );
+}
+
+/// Paid (settled) invoices cannot be defaulted, even after the grace period.
+///
+/// Finality rule: once settlement moves the invoice to `Paid`, neither
+/// `settle_invoice` nor `mark_invoice_defaulted` can transition it further.
+/// This guards against a double-accounting scenario where the investor
+/// receives their principal+return via settlement and then has their
+/// investment reprocessed as a defaulted/insurance claim.
+#[test]
+fn test_cannot_default_after_settlement() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice_with_business_funds(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    // Settle to move the invoice to Paid.
+    client.settle_invoice(&invoice_id, &amount);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Paid);
+
+    // Move time past the grace period so the failure can only come from the
+    // status check, not the grace-period check.
+    let grace_period = 7 * 24 * 60 * 60;
+    env.ledger().set_timestamp(due_date + grace_period + 1);
+
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, QuickLendXError::InvoiceNotAvailableForFunding);
+
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Paid);
+}
+
+/// Defaulting an invoice does not touch escrow state or move funds.
+///
+/// Finality rule: `handle_default` never calls into `escrow::refund_escrow_funds`
+/// or `payments::release_escrow`. Escrow disposition after a default is handled
+/// through a separate insurance/claims path, so the escrow status must stay
+/// `Held` and the investor's on-chain balance must be unchanged by the
+/// default transition itself.
+#[test]
+fn test_default_leaves_escrow_held() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    // Snapshot escrow and investor balance before default.
+    let escrow_before = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow_before.status, crate::payments::EscrowStatus::Held);
+    let invoice = client.get_invoice(&invoice_id);
+    let token_client = token::Client::new(&env, &invoice.currency);
+    let investor_balance_before = token_client.balance(&investor);
+
+    // Move past grace period and default.
+    let grace_period = 7 * 24 * 60 * 60;
+    env.ledger()
+        .set_timestamp(invoice.due_date + grace_period + 1);
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Defaulted
+    );
+
+    // Escrow must still be Held — defaulting does not automatically refund
+    // or release. Claims flow through a separate path.
+    let escrow_after = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow_after.status, crate::payments::EscrowStatus::Held);
+    assert_eq!(escrow_after.amount, escrow_before.amount);
+
+    // Investor's on-chain balance must be unchanged: no automatic refund.
+    assert_eq!(
+        token_client.balance(&investor),
+        investor_balance_before,
+        "investor balance must not change on default (no automatic refund)"
+    );
+}
+
+/// A second default attempt against an already-defaulted invoice must not
+/// modify any state. The public entry point short-circuits on the
+/// already-defaulted status check and returns `InvoiceAlreadyDefaulted`
+/// before any analytics or investment update can run a second time.
+#[test]
+fn test_second_default_attempt_does_not_change_state() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let grace_period = 7 * 24 * 60 * 60;
+    env.ledger().set_timestamp(due_date + grace_period + 1);
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+
+    // Snapshot post-default state.
+    let invoice_snapshot = client.get_invoice(&invoice_id);
+    let investment_snapshot = client.get_invoice_investment(&invoice_id);
+    assert_eq!(invoice_snapshot.status, InvoiceStatus::Defaulted);
+
+    // Second default attempt must be rejected by the already-defaulted
+    // status check at the public entry point.
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, QuickLendXError::InvoiceAlreadyDefaulted);
+
+    // Invoice fields that the default path mutates must be unchanged.
+    let invoice_after = client.get_invoice(&invoice_id);
+    assert_eq!(invoice_after.status, invoice_snapshot.status);
+    assert_eq!(invoice_after.funded_amount, invoice_snapshot.funded_amount);
+    assert_eq!(invoice_after.investor, invoice_snapshot.investor);
+    assert_eq!(invoice_after.total_paid, invoice_snapshot.total_paid);
+
+    // Investment must not have been reprocessed (status and amount are the
+    // two fields the default handler touches).
+    let investment_after = client.get_invoice_investment(&invoice_id);
+    assert_eq!(investment_after.status, investment_snapshot.status);
+    assert_eq!(investment_after.amount, investment_snapshot.amount);
+}
+
+/// Partial payments against a defaulted invoice must be rejected without
+/// any funds moving or any payment being recorded.
+#[test]
+fn test_cannot_partial_pay_defaulted_invoice() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let grace_period = 7 * 24 * 60 * 60;
+    env.ledger().set_timestamp(due_date + grace_period + 1);
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+
+    let result = client.try_process_partial_payment(
+        &invoice_id,
+        &100,
+        &String::from_str(&env, "post-default"),
+    );
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, QuickLendXError::InvalidStatus);
+
+    let invoice_after = client.get_invoice(&invoice_id);
+    assert_eq!(invoice_after.status, InvoiceStatus::Defaulted);
+    assert_eq!(
+        invoice_after.total_paid, 0,
+        "no payment must be recorded against a defaulted invoice"
+    );
+}
+
+/// Full settlement against a defaulted invoice must be rejected before any
+/// funds move and before the Paid status would conflict with Defaulted.
+#[test]
+fn test_cannot_settle_defaulted_invoice() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let grace_period = 7 * 24 * 60 * 60;
+    env.ledger().set_timestamp(due_date + grace_period + 1);
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+
+    let result = client.try_settle_invoice(&invoice_id, &1000);
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, QuickLendXError::InvalidStatus);
+
+    let invoice_after = client.get_invoice(&invoice_id);
+    assert_eq!(invoice_after.status, InvoiceStatus::Defaulted);
+    assert_eq!(
+        invoice_after.total_paid, 0,
+        "no payment must be recorded against a defaulted invoice via settle"
+    );
+}
