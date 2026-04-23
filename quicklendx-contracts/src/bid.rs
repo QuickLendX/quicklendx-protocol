@@ -4,8 +4,6 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_bid_expired, emit_bid_ttl_updated};
-// Re-export from crate::types so other modules can continue to import from crate::bid.
-pub use crate::types::{Bid, BidStatus};
 
 // ─── Bid TTL configuration ────────────────────────────────────────────────────
 //
@@ -29,6 +27,9 @@ const SECONDS_PER_DAY: u64 = 86400;
 /// Soroban compute limits. Bids transitioning to terminal states (like Expired, Cancelled)
 /// are excluded from this limit, so new bids can replace old ones.
 pub const MAX_BIDS_PER_INVOICE: u32 = 50;
+
+/// Sentinel value meaning the investor active-bid limit is disabled (no cap).
+pub const INVESTOR_BID_LIMIT_DISABLED: u32 = 0;
 
 /// Snapshot of the current bid TTL configuration returned by `get_bid_ttl_config`.
 ///
