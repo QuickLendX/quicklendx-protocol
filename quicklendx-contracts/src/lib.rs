@@ -47,3 +47,6 @@ mod test_escrow_state_machine;
 
 #[cfg(test)]
 mod test_bid_ranking_tiebreaker;
+
+#[cfg(test)]
+mod test_invoice_id_collision_regression;
