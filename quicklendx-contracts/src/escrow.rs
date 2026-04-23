@@ -158,14 +158,6 @@ pub fn accept_bid_and_fund(
 /// Can be triggered by the Admin or the Business owner of the invoice.
 /// Invoice must be in Funded status.
 ///
-/// # Finality
-/// The `invoice.status != InvoiceStatus::Funded` check makes refund a
-/// one-shot operation: once an invoice becomes `Refunded`, `Paid`, or
-/// `Defaulted`, this function returns `InvalidStatus` without moving any
-/// funds. Combined with `payments::refund_escrow` only operating on escrows
-/// in `Held` state, this prevents double refunds even under concurrent or
-/// retried calls.
-///
 /// # Errors
 /// * `InvoiceNotFound`, `StorageKeyNotFound`, `InvalidStatus`, `Unauthorized`, `NotAdmin`
 pub fn refund_escrow_funds(
