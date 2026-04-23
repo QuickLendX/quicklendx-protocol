@@ -99,6 +99,62 @@ paths:
                 items:
                   $ref: '#/components/schemas/Bid'
 
+  /settlements:
+    get:
+      summary: List settlements
+      parameters:
+        - name: invoice_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of settlements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Settlement'
+
+  /settlements/{id}:
+    get:
+      summary: Get settlement by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Settlement details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settlement'
+        '404':
+          description: Settlement not found
+
+  /invoices/{id}/disputes:
+    get:
+      summary: List disputes for an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of disputes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Dispute'
+
 components:
   schemas:
     InvoiceStatus:
@@ -162,6 +218,36 @@ components:
         timestamp: { type: integer, format: int64 }
         status: { $ref: '#/components/schemas/BidStatus' }
         expiration_timestamp: { type: integer, format: int64 }
+
+    SettlementStatus:
+      type: string
+      enum: [Pending, Paid, Defaulted]
+
+    Settlement:
+      type: object
+      properties:
+        id: { type: string }
+        invoice_id: { type: string }
+        amount: { type: integer, format: int128 }
+        payer: { type: string }
+        recipient: { type: string }
+        timestamp: { type: integer, format: int64 }
+        status: { $ref: '#/components/schemas/SettlementStatus' }
+
+    DisputeStatus:
+      type: string
+      enum: [None, Disputed, UnderReview, Resolved]
+
+    Dispute:
+      type: object
+      properties:
+        id: { type: string }
+        invoice_id: { type: string }
+        initiator: { type: string }
+        reason: { type: string }
+        status: { $ref: '#/components/schemas/DisputeStatus' }
+        created_at: { type: integer, format: int64 }
+        resolved_at: { type: integer, format: int64 }
 
   securitySchemes:
     bearerAuth:

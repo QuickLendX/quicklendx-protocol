@@ -79,6 +79,46 @@ describe("QuickLendX API Skeleton Tests", () => {
     });
   });
 
+  describe("Settlement API (v1)", () => {
+    it("should list settlements", async () => {
+      const res = await request(app).get("/api/v1/settlements");
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThan(0);
+    });
+
+    it("should get settlement by ID", async () => {
+      const id = "0xsettle123";
+      const res = await request(app).get(`/api/v1/settlements/${id}`);
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(id);
+    });
+
+    it("should return 404 for non-existent settlement", async () => {
+      const res = await request(app).get("/api/v1/settlements/nonexistent");
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe("SETTLEMENT_NOT_FOUND");
+    });
+
+    it("should filter settlements by invoice_id", async () => {
+      const invoice_id = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+      const res = await request(app).get(`/api/v1/settlements?invoice_id=${invoice_id}`);
+      expect(res.status).toBe(200);
+      expect(res.body.every((s: any) => s.invoice_id === invoice_id)).toBe(true);
+    });
+  });
+
+  describe("Dispute API (v1)", () => {
+    it("should list disputes for an invoice", async () => {
+      const id = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+      const res = await request(app).get(`/api/v1/invoices/${id}/disputes`);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThan(0);
+      expect(res.body[0].invoice_id).toBe(id);
+    });
+  });
+
   describe("Error Handling", () => {
     it("should return 404 for unknown routes", async () => {
       const res = await request(app).get("/api/v1/unknown-route");
@@ -116,11 +156,16 @@ describe("QuickLendX API Skeleton Tests", () => {
       expect(res.status).toBe(200);
     });
 
-    it("should handle unknown IP in rate limiter", async () => {
-      const res = await request(app)
-        .get("/health")
-        .set("X-Simulate-No-IP", "true");
-      expect(res.status).toBe(200);
+    it("should return 429 when rate limit is exceeded", async () => {
+      // Consume all points for a specific IP
+      const testIp = "127.0.0.1";
+      for (let i = 0; i < 1000; i++) {
+        await rateLimiter.consume(testIp);
+      }
+
+      const res = await request(app).get("/health").set("X-Forwarded-For", testIp);
+      expect(res.status).toBe(429);
+      expect(res.body.error.code).toBe("RATE_LIMIT_EXCEEDED");
     });
   });
 });

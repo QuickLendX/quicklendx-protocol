@@ -30,6 +30,12 @@ export enum DisputeStatus {
   Resolved = "Resolved",
 }
 
+export enum SettlementStatus {
+  Pending = "Pending",
+  Paid = "Paid",
+  Defaulted = "Defaulted",
+}
+
 export enum InvoiceCategory {
   Services = "Services",
   Products = "Products",
@@ -79,4 +85,24 @@ export interface Bid {
   timestamp: number;
   status: BidStatus;
   expiration_timestamp: number;
+}
+
+export interface Settlement {
+  id: string;
+  invoice_id: string;
+  amount: string;
+  payer: string;
+  recipient: string;
+  timestamp: number;
+  status: SettlementStatus;
+}
+
+export interface Dispute {
+  id: string;
+  invoice_id: string;
+  initiator: string;
+  reason: string;
+  status: DisputeStatus;
+  created_at: number;
+  resolved_at?: number;
 }

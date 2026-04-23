@@ -7,10 +7,13 @@ import v1Routes from "./routes/v1";
 
 const app = express();
 
+app.set("trust proxy", true);
+
 // Security Middleware
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
+app.set("trust proxy", true);
 
 // Test middleware to simulate no IP for coverage
 app.use((req, res, next) => {
