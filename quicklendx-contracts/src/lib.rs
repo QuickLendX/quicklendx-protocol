@@ -10,6 +10,8 @@ mod test_default;
 mod test_fees;
 #[cfg(test)]
 mod test_fees_extended;
+#[cfg(test)]
+mod test_kyc_lifecycle_enforcement;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 mod admin;
