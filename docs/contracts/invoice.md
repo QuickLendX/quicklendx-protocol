@@ -1,90 +1,119 @@
-# Invoice Categories, Tags, and Due Date Validation
+# Invoice Module — ID Generation & Collision Prevention
 
 ## Overview
 
-The QuickLendX protocol supports invoice categorization and tagging to improve discoverability, filtering, and organization of invoices. Additionally, the protocol enforces due date bounds and strict authorization checks to ensure system security and risk management.
+Every invoice in QuickLendX is identified by a deterministic, collision-resistant
+32-byte ID. The ID encodes the ledger state at creation time plus a per-contract
+monotonic counter, making it unique across all ledger slots and all concurrent
+allocations within the same slot.
 
-## Features
+## Invoice ID Layout (32 bytes)
 
-### Invoice Categories
-Invoices can be assigned to one of the following predefined categories:
-- **Services**, **Products**, **Consulting**, **Manufacturing**, **Technology**, **Healthcare**, **Other**.
+```
+ Byte offset  │ Width  │ Field       │ Description
+──────────────┼────────┼─────────────┼──────────────────────────────────────────
+  0 ..  8     │ 8 B    │ timestamp   │ Ledger timestamp (u64, big-endian)
+  8 .. 12     │ 4 B    │ sequence    │ Ledger sequence number (u32, big-endian)
+ 12 .. 16     │ 4 B    │ counter     │ Monotonic per-contract counter (u32, BE)
+ 16 .. 32     │ 16 B   │ reserved    │ Zeroed — reserved for future use
+```
 
-Each invoice must have exactly one category, which can be updated after creation by the authorized owner.
+### Why three fields?
 
-### Due Date Bounds Validation
-Strict bounds are enforced to prevent excessive risk:
-- **Maximum Due Date**: Configurable via protocol limits (default: 365 days).
-- **Minimum Due Date**: Must be greater than the current ledger timestamp.
-- **Validation**: Applied during both `store_invoice` and `upload_invoice`.
+| Scenario | Distinguishing field |
+|----------|---------------------|
+| Two invoices in the same ledger slot | `counter` |
+| Two invoices in different ledger slots, same sequence | `timestamp` |
+| Two invoices at the same timestamp, different blocks | `sequence` |
+| Two invoices in completely different ledger states | `timestamp` + `sequence` |
 
-### Invoice Tags (Normalized)
-- **Maximum Tags**: 10 per invoice.
-- **Normalization**: All tags are trimmed of whitespace and converted to lowercase (ASCII) before storage or indexing.
-- **Duplicate Prevention**: Detection occurs on the *normalized* form.
+Because no two distinct invoices can share all three fields simultaneously,
+collisions are structurally impossible under normal operation.
 
----
+## Counter Storage
 
-## Security and Permissions Matrix
+The counter is stored in contract **instance storage** under the key
+`symbol_short!("inv_cnt")`. It starts at `0` for a fresh contract and
+increments by exactly `1` for each allocation.
 
-The following table defines which identities are authorized to invoke specific mutation functions.
+```
+StorageKeys::investment_count() → symbol_short!("inv_cnt")
+```
 
-| Function | Required Signer | Enforcement Mechanism |
-| :--- | :--- | :--- |
-| `store_invoice` | `business` | `business.require_auth()` |
-| `upload_invoice` | `business` | `business.require_auth()` + Verification |
-| `update_invoice_category` | `invoice.business` | `self.business.require_auth()` |
-| `add_invoice_tag` | `invoice.business` | `self.business.require_auth()` |
-| `remove_invoice_tag` | `invoice.business` | `self.business.require_auth()` |
-| `verify_invoice` | `admin` | `admin.require_auth()` |
+## Collision Prevention Algorithm
 
-> **Authorization Flow**: The contract retrieves the original `business` address stored in the `InvoiceData`. It calls Soroban's `require_auth()` on that specific address to ensure only the creator can modify the metadata.
+```
+1. Read current counter value C from instance storage (default 0).
+2. Construct candidate ID from (timestamp, sequence, C).
+3. If candidate ID already exists in persistent storage → increment C, goto 2.
+4. Store invoice under candidate ID.
+5. Write C + 1 back to instance storage.
+```
 
----
+Step 3 is the **collision skip**: even if the counter is rewound by external
+storage manipulation, the allocator will never overwrite an existing invoice.
 
-## Tag Normalization Logic
+## Security Assumptions
 
-Normalization is applied at creation, addition, and lookup to ensure index consistency.
+1. **Collision resistance**: Two invoices cannot share the same ID because the
+   counter is strictly monotonic within a ledger slot, and the timestamp +
+   sequence distinguish different slots.
 
-| Input | Stored/Indexed Form |
-| :--- | :--- |
-| `"Technology"` | `"technology"` |
-| `" tech "` | `"tech"` |
-| `"URGENT"` | `"urgent"` |
+2. **No predictable overwrite**: A counter rewind (e.g., via a storage bug or
+   deliberate manipulation) cannot silently overwrite an existing invoice. The
+   allocator detects the occupied slot and advances the counter.
 
-### Duplicate Prevention Examples
-- `["tech", "Tech"]` in one call $\rightarrow$ **Error**: `InvalidTag` (normalized duplicate).
-- `add_invoice_tag("tech")` then `add_invoice_tag("TECH")` $\rightarrow$ **No-op** (idempotent).
+3. **Determinism**: Given the same ledger state (timestamp + sequence) and the
+   same counter value, the generated ID is always identical. This makes IDs
+   reproducible and auditable.
 
----
+4. **Reserved bytes are zeroed**: Bytes 16–31 are always `0x00`. Any non-zero
+   value in this range indicates a corrupted or externally-crafted ID.
 
-## API Functions
+5. **No cross-entity collisions**: The `DataKey::Invoice(id)` storage key wraps
+   the invoice ID with a discriminant tag, so an invoice ID and a bid ID with
+   the same 32-byte value produce distinct storage keys.
 
-### Query Functions
-- `get_invoices_by_category(category: InvoiceCategory)`
-- `get_invoices_by_tag(tag: String)`: Case-insensitive via normalization.
-- `get_invoices_by_tags(tags: Vec<String>)`: Supports AND logic.
-- `get_invoice_count_by_tag(tag: String)`
+## Test Coverage
 
-### Mutation Functions
-- `update_invoice_category(invoice_id, new_category)`: O(1) index update.
-- `add_invoice_tag(invoice_id, tag)`: Validates length (1-50) and count ($\le 10$).
-- `remove_invoice_tag(invoice_id, tag)`
+All invariants above are codified in
+`src/test_invoice_id_collision_regression.rs` (issue #821).
 
----
+| Test | What is verified |
+|------|-----------------|
+| `ids_unique_within_same_ledger_slot` | 24 IDs in one slot are all distinct |
+| `counter_segment_encodes_big_endian` | Counter bytes are big-endian at 0, 1, 255, 256, MAX |
+| `ids_unique_across_different_timestamps` | Same counter, different timestamps → distinct |
+| `ids_unique_across_different_sequence_numbers` | Same timestamp, different sequences → distinct |
+| `ids_unique_across_five_ledger_slots` | 5 distinct slots, counter=0 each → all distinct |
+| `reserved_bytes_always_zeroed` | Bytes 16–31 are 0x00 for all boundary inputs |
+| `counter_increments_strictly_by_one` | Counter advances by exactly 1 per allocation |
+| `counter_starts_at_zero_for_fresh_contract` | Fresh contract counter = 0 |
+| `counter_rewind_skips_occupied_slot` | Rewind to 0 → next ID uses counter 1 |
+| `multiple_counter_rewinds_skip_all_occupied_slots` | 3 occupied slots skipped correctly |
+| `allocator_resumes_monotonically_after_collision_skip` | Post-skip IDs are 1, 2, 3 |
+| `different_businesses_same_slot_get_distinct_ids` | Per-contract counter isolates businesses |
+| `id_generation_is_deterministic` | Same inputs → same ID every time |
+| `id_generation_is_environment_independent` | Two Env instances, same state → same ID |
+| `id_at_zero_boundary` | All-zero inputs → all-zero ID |
+| `id_at_max_boundary` | MAX inputs → correct encoding, reserved bytes zeroed |
+| `id_counter_min_and_max_are_distinct` | counter=0 ≠ counter=MAX |
+| `timestamp_segment_reflects_ledger_timestamp` | 5 timestamp boundary values |
+| `sequence_segment_reflects_ledger_sequence` | 5 sequence boundary values |
+| `ids_differing_only_in_counter_are_distinct` | 10 consecutive counter values |
+| `ids_differing_only_in_timestamp_are_distinct` | Timestamp-only difference |
+| `ids_differing_only_in_sequence_are_distinct` | Sequence-only difference |
+| **Total** | **22 passed, 0 failed** |
 
-## Error Handling Reference
+## Running the Tests
 
-| Error Code | Error Name | Description |
-| :--- | :--- | :--- |
-| 1002 | Unauthorized | Caller does not match the stored business address |
-| 1008 | InvoiceDueDateInvalid | Date is in the past or exceeds max bounds |
-| 1035 | InvalidTag | Tag length outside 1-50 character range |
-| 1036 | TagLimitExceeded | More than 10 tags per invoice |
-| 1800 | InvalidTag (Normal) | Tag is empty or a duplicate after normalization |
+```bash
+cd quicklendx-contracts
+cargo test --lib test_invoice_id_collision_regression
+```
 
----
-
-## Testing and Performance
-- **Index Efficiency**: O(1) lookup for categories and tags.
-- **Coverage**: Implementation includes unit tests for auth bypass attempts, normalization edge cases, and index integrity during updates.
+Expected output:
+```
+running 22 tests
+test result: ok. 22 passed; 0 failed; 0 ignored
+```

@@ -102,6 +102,11 @@ pub enum QuickLendXError {
     /// (e.g. the token contract panicked or returned an error).
     /// Callers should treat this as a hard failure; no funds moved.
     TokenTransferFailed = 2200,
+
+    /// The protocol is in maintenance mode (read-only).
+    /// Write operations are blocked until maintenance ends.
+    /// Query the maintenance reason via `get_maintenance_reason`.
+    MaintenanceModeActive = 2201,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -183,6 +188,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::EmergencyWithdrawAlreadyExists => symbol_short!("EMG_EX"),
             QuickLendXError::EmergencyWithdrawInsufficientBalance => symbol_short!("EMG_BAL"),
             QuickLendXError::TokenTransferFailed => symbol_short!("TKN_FAIL"),
+            QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
         }
     }
 }
