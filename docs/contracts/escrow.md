@@ -80,6 +80,21 @@ pub struct Escrow {
 *   `Released`: Funds have been released to the business.
 *   `Refunded`: Funds have been returned to the investor.
 
+## Atomicity Guarantees
+
+`accept_bid_and_fund` is designed to be fully atomic. When a token transfer fails, **no partial state is written**:
+
+| Failure mode | Invoice | Bid | Escrow record | Investment | Funds |
+|---|---|---|---|---|---|
+| Insufficient investor balance | `Verified` (unchanged) | `Placed` (unchanged) | not created | not created | unchanged |
+| Zero investor allowance | `Verified` (unchanged) | `Placed` (unchanged) | not created | not created | unchanged |
+| Partial investor allowance | `Verified` (unchanged) | `Placed` (unchanged) | not created | not created | unchanged |
+| Mismatched bid/invoice pair | `Verified` (unchanged) | `Placed` (unchanged) | not created | not created | unchanged |
+
+**Why this is safe in Soroban:** The escrow record, bid status update, invoice status update, and investment record are all written **after** `transfer_from` succeeds (see `payments::create_escrow`). If the token call returns an error, the function returns early and the host discards all storage writes for that invocation. There is no partial-commit risk.
+
+**Retry safety:** After any failure, the bid and invoice are left in their pre-call state. The same `(invoice_id, bid_id)` pair can be retried once the investor has sufficient balance and allowance.
+
 ## Invariants
 
 The protocol enforces several critical invariants to ensure security and consistency of the escrow lifecycle:
@@ -88,6 +103,7 @@ The protocol enforces several critical invariants to ensure security and consist
 2.  **Creation Guard**: Escrow can only be created if the invoice is in `Verified` status and no existing escrow is found for the invoice ID.
 3.  **Duplicate Rejection**: Any attempt to create a second escrow for an invoice that already has one will be rejected with the `InvoiceAlreadyFunded` error.
 4.  **Release/Refund Mutex**: An escrow can be either released or refunded, but never both. The final status `Released` or `Refunded` is terminal.
+5.  **Write-after-transfer**: Storage state (escrow, bid, invoice, investment) is only mutated after the token transfer confirms success. No orphan records exist on failure.
 
 ## Key Functions
 
