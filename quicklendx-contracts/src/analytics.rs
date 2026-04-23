@@ -933,39 +933,38 @@ impl AnalyticsCalculator {
                 investments_made += 1;
                 total_invested = total_invested.saturating_add(investment.amount);
 
-                    if let Some(invoice) =
-                        crate::invoice::InvoiceStorage::get_invoice(env, &investment.invoice_id)
-                    {
-                        Self::increment_category_counter(
-                            &mut preferred_categories,
-                            &invoice.category,
-                        );
-                    }
+                if let Some(invoice) =
+                    crate::invoice::InvoiceStorage::get_invoice(env, &investment.invoice_id)
+                {
+                    Self::increment_category_counter(
+                        &mut preferred_categories,
+                        &invoice.category,
+                    );
+                }
 
-                    match investment.status {
-                        crate::investment::InvestmentStatus::Completed => {
-                            successful_investments += 1;
+                match investment.status {
+                    crate::investment::InvestmentStatus::Completed => {
+                        successful_investments += 1;
 
-                            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(
+                        if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(
+                            env,
+                            &investment.invoice_id,
+                        ) {
+                            let (profit, _) = crate::profits::calculate_profit(
                                 env,
-                                &investment.invoice_id,
-                            ) {
-                                let (profit, _) = crate::profits::calculate_profit(
-                                    env,
-                                    investment.amount,
-                                    invoice.amount,
-                                );
-                                total_returns = total_returns
-                                    .saturating_add(investment.amount.saturating_add(profit));
-                            } else {
-                                total_returns = total_returns.saturating_add(investment.amount);
-                            }
+                                investment.amount,
+                                invoice.amount,
+                            );
+                            total_returns = total_returns
+                                .saturating_add(investment.amount.saturating_add(profit));
+                        } else {
+                            total_returns = total_returns.saturating_add(investment.amount);
                         }
-                        crate::investment::InvestmentStatus::Defaulted => {
-                            defaulted_investments += 1;
-                        }
-                        _ => {}
                     }
+                    crate::investment::InvestmentStatus::Defaulted => {
+                        defaulted_investments += 1;
+                    }
+                    _ => {}
                 }
             }
         }
