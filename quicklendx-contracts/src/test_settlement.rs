@@ -2,7 +2,9 @@ use super::*;
 use crate::investment::InvestmentStatus;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::profits::calculate_profit;
-use crate::settlement::{get_invoice_progress, get_payment_count, get_payment_records, is_invoice_finalized};
+use crate::settlement::{
+    get_invoice_progress, get_payment_count, get_payment_records, is_invoice_finalized,
+};
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Events, Ledger},
@@ -544,11 +546,8 @@ fn test_partial_payment_after_auto_settle_is_rejected() {
     assert_eq!(invoice.total_paid, 1_000);
 
     // Further partial payment must be rejected.
-    let result = client.try_process_partial_payment(
-        &invoice_id,
-        &1,
-        &String::from_str(&env, "extra"),
-    );
+    let result =
+        client.try_process_partial_payment(&invoice_id, &1, &String::from_str(&env, "extra"));
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
 }
@@ -650,7 +649,10 @@ fn test_no_accounting_drift_after_multiple_partial_then_settle() {
     client.settle_invoice(&invoice_id, &600);
 
     let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.total_paid, invoice_amount, "total_paid must exactly equal invoice amount");
+    assert_eq!(
+        invoice.total_paid, invoice_amount,
+        "total_paid must exactly equal invoice amount"
+    );
     assert_eq!(invoice.status, InvoiceStatus::Paid);
 
     // Verify durable payment records sum to total_due.
@@ -663,7 +665,10 @@ fn test_no_accounting_drift_after_multiple_partial_then_settle() {
     let sum: i128 = (0..records.len())
         .map(|i| records.get(i as u32).unwrap().amount)
         .sum();
-    assert_eq!(sum, invoice_amount, "sum of all payment records must equal total_due");
+    assert_eq!(
+        sum, invoice_amount,
+        "sum of all payment records must equal total_due"
+    );
 }
 
 #[test]
@@ -708,7 +713,10 @@ fn test_settle_invoice_auto_releases_escrow() {
     // Since invoice_amount == settlement_amount AND release_amount == investment_amount (900):
     // final_balance = initial + 900 - 1000 = initial - 100
     let business_balance_after = token_client.balance(&business);
-    assert_eq!(business_balance_after, business_balance_before + investment_amount - invoice_amount);
+    assert_eq!(
+        business_balance_after,
+        business_balance_before + investment_amount - invoice_amount
+    );
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
@@ -870,8 +878,7 @@ fn test_overpayment_capping_preserves_balance_integrity() {
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
     let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
-    let invoice_id =
-        setup_funded_invoice(&env, &client, &business, &investor, &currency, 500, 400);
+    let invoice_id = setup_funded_invoice(&env, &client, &business, &investor, &currency, 500, 400);
 
     let token_client = token::Client::new(&env, &currency);
     let initial_business = token_client.balance(&business);
@@ -881,7 +888,10 @@ fn test_overpayment_capping_preserves_balance_integrity() {
     client.process_partial_payment(&invoice_id, &400, &String::from_str(&env, "cap-b"));
 
     let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.total_paid, 500, "total_paid must be capped at total_due");
+    assert_eq!(
+        invoice.total_paid, 500,
+        "total_paid must be capped at total_due"
+    );
     assert_eq!(invoice.status, InvoiceStatus::Paid);
 
     // Business should have paid exactly 500 total (300 + 200 capped).
@@ -924,4 +934,285 @@ fn test_progress_percentage_accuracy() {
     });
     assert_eq!(p3.progress_percent, 100);
     assert_eq!(p3.remaining_due, 0);
+}
+
+// ============================================================================
+// Finality and cross-state ordering tests
+//
+// These tests verify that settlement is one-way: once an invoice reaches a
+// terminal status (Paid, Defaulted, Refunded, Cancelled), neither
+// `settle_invoice` nor `process_partial_payment` can transition it further,
+// and no tokens move on rejected retries. See
+// `docs/contracts/defaults.md` for the full cross-state ordering rules.
+// ============================================================================
+
+/// A defaulted invoice cannot be settled via `settle_invoice`. The status
+/// guard runs before any token transfer, so the investor's balance must be
+/// unchanged by the rejected attempt.
+#[test]
+fn test_cannot_settle_defaulted_invoice_through_settle_invoice() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    // Move past due_date + grace period and default the invoice.
+    let invoice = client.get_invoice(&invoice_id);
+    let grace_period = 7 * 24 * 60 * 60;
+    env.ledger()
+        .set_timestamp(invoice.due_date + grace_period + 1);
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Defaulted
+    );
+
+    // Snapshot investor balance before the rejected settle attempt.
+    let token_client = token::Client::new(&env, &currency);
+    let investor_balance_before = token_client.balance(&investor);
+
+    let result = client.try_settle_invoice(&invoice_id, &1_000);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+    let invoice_after = client.get_invoice(&invoice_id);
+    assert_eq!(invoice_after.status, InvoiceStatus::Defaulted);
+    assert_eq!(invoice_after.total_paid, 0);
+
+    // No tokens moved on the rejected settle.
+    assert_eq!(
+        token_client.balance(&investor),
+        investor_balance_before,
+        "investor balance must not change on a rejected settle of a defaulted invoice"
+    );
+}
+
+/// Partial payment against a defaulted invoice must be rejected before any
+/// payment is recorded. `payment_count` must stay at 0.
+#[test]
+fn test_cannot_partial_pay_defaulted_invoice() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    // Default the invoice.
+    let invoice = client.get_invoice(&invoice_id);
+    let grace_period = 7 * 24 * 60 * 60;
+    env.ledger()
+        .set_timestamp(invoice.due_date + grace_period + 1);
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+
+    let result = client.try_process_partial_payment(
+        &invoice_id,
+        &100,
+        &String::from_str(&env, "post-default"),
+    );
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+    let invoice_after = client.get_invoice(&invoice_id);
+    assert_eq!(invoice_after.total_paid, 0);
+    assert_eq!(invoice_after.status, InvoiceStatus::Defaulted);
+
+    let payment_count = env.as_contract(&contract_id, || {
+        get_payment_count(&env, &invoice_id).unwrap()
+    });
+    assert_eq!(
+        payment_count, 0,
+        "no payment record must be persisted against a defaulted invoice"
+    );
+}
+
+/// Partial payments against a fully-settled (Paid) invoice must be rejected.
+/// Complements `test_partial_payment_after_auto_settle_is_rejected` by
+/// reaching `Paid` via the explicit `settle_invoice` path instead of via
+/// auto-settle from a partial payment.
+#[test]
+fn test_cannot_partial_pay_after_settlement() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    client.settle_invoice(&invoice_id, &1_000);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Paid);
+
+    let result =
+        client.try_process_partial_payment(&invoice_id, &100, &String::from_str(&env, "post-paid"));
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+    let invoice_after = client.get_invoice(&invoice_id);
+    assert_eq!(invoice_after.status, InvoiceStatus::Paid);
+    assert_eq!(invoice_after.total_paid, 1_000);
+}
+
+/// A second `settle_invoice` call after a successful settlement must not
+/// move any tokens a second time. Balances after the rejected retry must
+/// match the post-settlement snapshot exactly.
+#[test]
+fn test_no_double_transfer_on_double_settle_attempt() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_amount = 1_000i128;
+    let investment_amount = 900i128;
+    let invoice_id = setup_funded_invoice(
+        &env,
+        &client,
+        &business,
+        &investor,
+        &currency,
+        invoice_amount,
+        investment_amount,
+    );
+
+    let token_client = token::Client::new(&env, &currency);
+    let business_balance_before = token_client.balance(&business);
+    let investor_balance_before = token_client.balance(&investor);
+    let contract_balance_before = token_client.balance(&contract_id);
+
+    // First settlement succeeds.
+    client.settle_invoice(&invoice_id, &invoice_amount);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Paid);
+
+    let (investor_return, platform_fee) = calculate_profit(&env, investment_amount, invoice_amount);
+
+    let business_balance_mid = token_client.balance(&business);
+    let investor_balance_mid = token_client.balance(&investor);
+    let contract_balance_mid = token_client.balance(&contract_id);
+
+    // Business net delta = investment_amount (escrow auto-release credits the
+    // business) minus invoice_amount (business pays investor_return + platform_fee).
+    // Investor received `investor_return`, contract received `platform_fee`.
+    assert_eq!(
+        business_balance_mid,
+        business_balance_before + investment_amount - invoice_amount,
+        "business net delta after settle = investment_amount (escrow release) \
+         minus invoice_amount (total payout)",
+    );
+    assert_eq!(
+        investor_balance_mid - investor_balance_before,
+        investor_return
+    );
+    // Contract net delta = platform_fee credit (route_platform_fee sends to the
+    // contract when no treasury is configured) minus investment_amount
+    // (release_escrow drained the held escrow back to the business before the
+    // fee was routed). `contract_balance_before` was snapshotted after
+    // setup_funded_invoice, so it already includes the held escrow.
+    assert_eq!(
+        contract_balance_mid - contract_balance_before,
+        platform_fee - investment_amount,
+    );
+
+    // Second settle attempt must be rejected.
+    let result = client.try_settle_invoice(&invoice_id, &invoice_amount);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+    // Balances after the rejected second settle match the mid snapshot
+    // exactly — no second transfer happened.
+    assert_eq!(token_client.balance(&business), business_balance_mid);
+    assert_eq!(token_client.balance(&investor), investor_balance_mid);
+    assert_eq!(token_client.balance(&contract_id), contract_balance_mid);
+
+    // total_paid must reflect exactly one settlement, not two.
+    assert_eq!(client.get_invoice(&invoice_id).total_paid, invoice_amount);
+}
+
+/// The persistent `Finalized` flag must remain `true` across repeated
+/// failed retry attempts after a successful settlement. This guards against
+/// a race where a retry loop could re-enter settlement if the flag were
+/// cleared or mutated by the rejected call.
+#[test]
+fn test_finalization_flag_stable_after_failed_retries() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    client.settle_invoice(&invoice_id, &1_000);
+    assert!(env.as_contract(&contract_id, || {
+        is_invoice_finalized(&env, &invoice_id).unwrap()
+    }));
+
+    for _ in 0..3 {
+        let result = client.try_settle_invoice(&invoice_id, &1_000);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+        assert!(
+            env.as_contract(&contract_id, || {
+                is_invoice_finalized(&env, &invoice_id).unwrap()
+            }),
+            "Finalized flag must remain true across rejected retries"
+        );
+
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.total_paid, 1_000);
+        assert_eq!(invoice.status, InvoiceStatus::Paid);
+    }
+}
+
+/// A refunded invoice cannot be settled via `settle_invoice`. The status
+/// guard rejects the call before any storage or token mutation.
+#[test]
+fn test_cannot_settle_refunded_invoice_through_settle_invoice() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    // Move the invoice to Refunded. `client.refund_escrow_funds` is the same
+    // API exercised by `test_refund.rs` and accepts the business owner.
+    client.refund_escrow_funds(&invoice_id, &business);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Refunded
+    );
+
+    let result = client.try_settle_invoice(&invoice_id, &1_000);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Refunded
+    );
 }

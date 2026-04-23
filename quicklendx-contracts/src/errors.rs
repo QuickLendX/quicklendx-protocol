@@ -8,7 +8,7 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum QuickLendXError {
-    // Invoice lifecycle (1000–1006)
+    // Invoice lifecycle (1000–1007)
     InvoiceNotFound = 1000,
     InvoiceNotAvailableForFunding = 1001,
     InvoiceAlreadyFunded = 1002,
@@ -16,6 +16,7 @@ pub enum QuickLendXError {
     InvoiceDueDateInvalid = 1004,
     InvoiceNotFunded = 1005,
     InvoiceAlreadyDefaulted = 1006,
+    DuplicateDefaultTransition = 1007,
 
     // Authorization (1100–1103)
     Unauthorized = 1100,
@@ -115,6 +116,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvoiceDueDateInvalid => symbol_short!("INV_DI"),
             QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NFD"),
             QuickLendXError::InvoiceAlreadyDefaulted => symbol_short!("INV_AD"),
+            QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             // Authorization
             QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),

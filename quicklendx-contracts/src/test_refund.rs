@@ -10,7 +10,10 @@ use super::*;
 use crate::invoice::InvoiceCategory;
 use crate::payments::EscrowStatus;
 #[cfg(test)]
-use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, BytesN, Env, String, Vec,
+};
 
 // ============================================================================
 // Helper Functions (Reused from test_escrow.rs pattern)
@@ -290,7 +293,10 @@ fn test_refund_updates_internal_states_correctly() {
     // 3. Bid status should update to Cancelled
     let bids = client.get_bids_for_invoice(&invoice_id);
     assert_eq!(bids.len(), 1);
-    assert_eq!(bids.get(0).unwrap().status, crate::bid::BidStatus::Cancelled);
+    assert_eq!(
+        bids.get(0).unwrap().status,
+        crate::bid::BidStatus::Cancelled
+    );
 
     // 4. Investment status should update to Refunded
     env.as_contract(&client.address, || {
@@ -411,7 +417,10 @@ fn test_refund_succeeds_after_balance_restored() {
 
     // Second refund attempt succeeds.
     let result = client.try_refund_escrow_funds(&invoice_id, &business);
-    assert!(result.is_ok(), "refund should succeed after balance restored");
+    assert!(
+        result.is_ok(),
+        "refund should succeed after balance restored"
+    );
 
     // Investor received funds.
     assert_eq!(
@@ -426,4 +435,186 @@ fn test_refund_succeeds_after_balance_restored() {
     // Invoice is now Refunded.
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Refunded);
+}
+
+// ============================================================================
+// Finality and cross-state ordering tests
+//
+// These tests verify that refund handling is final and cannot double-account
+// with defaults, settlements, or repeated refunds. See
+// `docs/contracts/defaults.md` for the full cross-state ordering rules.
+// ============================================================================
+
+/// Defaulted invoices cannot be refunded. Once the default transition has
+/// occurred, the invoice status is `Defaulted` (not `Funded`), so
+/// `refund_escrow_funds` rejects the call before any funds move. The escrow
+/// record must remain `Held` so it can be handled through the separate
+/// insurance-claim path.
+#[test]
+fn test_cannot_refund_defaulted_invoice() {
+    let (env, client, admin) = setup();
+    let (invoice_id, business, _investor, _amount, _currency) =
+        create_funded_invoice(&env, &client, &admin);
+
+    // Move time past due_date + grace period and mark the invoice defaulted.
+    let invoice = client.get_invoice(&invoice_id);
+    let grace_period = 7 * 24 * 60 * 60;
+    env.ledger()
+        .set_timestamp(invoice.due_date + grace_period + 1);
+    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Defaulted
+    );
+
+    // Refund must now be rejected with InvalidStatus.
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+    // Invoice still Defaulted.
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Defaulted
+    );
+
+    // Escrow must remain Held so the insurance/claim flow can still resolve
+    // it — the default path never refunds automatically.
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(
+        escrow.status,
+        EscrowStatus::Held,
+        "escrow must remain Held after a rejected refund on a defaulted invoice"
+    );
+}
+
+/// Paid (settled) invoices cannot be refunded. Finality rule: once settlement
+/// moves the invoice to `Paid`, refund is rejected before any funds move, so
+/// the investor cannot be paid out twice (once via settlement profit,
+/// once via escrow refund).
+#[test]
+fn test_cannot_refund_paid_invoice() {
+    let (env, client, admin) = setup();
+    let (invoice_id, business, _investor, amount, _currency) =
+        create_funded_invoice(&env, &client, &admin);
+
+    // Settle the invoice. `setup_token` already mints 100_000 to the business,
+    // which is enough to cover the 10_000 settlement plus platform fee.
+    client.settle_invoice(&invoice_id, &amount);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Paid);
+
+    // Refund after settlement must be rejected.
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+    // Invoice still Paid.
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Paid);
+}
+
+/// A second refund attempt after a successful first refund must not move
+/// any tokens and must not mutate the already-Refunded state. This is the
+/// canonical "no double refund" guarantee: the investor's on-chain balance
+/// must increase by exactly `amount`, never by `2 * amount`.
+#[test]
+fn test_double_refund_does_not_double_transfer_funds() {
+    let (env, client, admin) = setup();
+    let (invoice_id, business, investor, amount, currency) =
+        create_funded_invoice(&env, &client, &admin);
+    let token_client = token::Client::new(&env, &currency);
+
+    let investor_balance_before = token_client.balance(&investor);
+
+    // First refund succeeds.
+    client.refund_escrow_funds(&invoice_id, &business);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Refunded
+    );
+    assert_eq!(
+        token_client.balance(&investor),
+        investor_balance_before + amount,
+        "first refund must credit the investor exactly once"
+    );
+
+    // Second refund attempt must be rejected with InvalidStatus (invoice
+    // is no longer Funded).
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+    // Investor balance must not have doubled.
+    assert_eq!(
+        token_client.balance(&investor),
+        investor_balance_before + amount,
+        "investor balance must not change across a rejected second refund"
+    );
+
+    // Escrow record must still be Refunded (not re-processed).
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.status, EscrowStatus::Refunded);
+}
+
+/// Refunded invoices cannot be settled. Finality rule: once the invoice is
+/// `Refunded`, `settle_invoice` rejects the call with `InvalidStatus` before
+/// any funds move or any payment record is stored.
+#[test]
+fn test_cannot_settle_refunded_invoice() {
+    let (env, client, admin) = setup();
+    let (invoice_id, business, _investor, amount, _currency) =
+        create_funded_invoice(&env, &client, &admin);
+
+    client.refund_escrow_funds(&invoice_id, &business);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Refunded
+    );
+
+    // Settle attempt on a refunded invoice must fail.
+    let result = client.try_settle_invoice(&invoice_id, &amount);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+    // Invoice still Refunded.
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Refunded
+    );
+}
+
+/// Refunded invoices cannot be defaulted, even after the grace period has
+/// expired. This is the refund-side counterpart of
+/// `test_default::test_cannot_default_refunded_invoice`; keeping it in both
+/// test files gives clean independent regression signals per module.
+#[test]
+fn test_cannot_default_refunded_invoice_crossmodule() {
+    let (env, client, admin) = setup();
+    let (invoice_id, business, _investor, _amount, _currency) =
+        create_funded_invoice(&env, &client, &admin);
+
+    // Move the invoice to Refunded.
+    client.refund_escrow_funds(&invoice_id, &business);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Refunded
+    );
+
+    // Move time past due_date + grace period to isolate the status check
+    // from the grace-period check.
+    let invoice = client.get_invoice(&invoice_id);
+    let grace_period = 7 * 24 * 60 * 60;
+    env.ledger()
+        .set_timestamp(invoice.due_date + grace_period + 1);
+
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InvoiceNotAvailableForFunding
+    );
+
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Refunded
+    );
 }
