@@ -86,12 +86,14 @@ mod test_dispute {
     fn create_test_invoice(
         env: &Env,
         client: &QuickLendXContractClient,
+        admin: &Address,
         business: &Address,
         amount: i128,
     ) -> BytesN<32> {
         let currency = Address::generate(env);
         let due_date = env.ledger().timestamp() + 30 * 24 * 60 * 60;
         client.store_invoice(
+            admin,
             business,
             &amount,
             &currency,
@@ -111,7 +113,7 @@ mod test_dispute {
     fn test_create_dispute_by_business() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let reason = String::from_str(&env, "Invoice amount discrepancy");
         let evidence = String::from_str(&env, "Supporting documentation provided");
@@ -157,7 +159,7 @@ mod test_dispute {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
         let outsider = Address::generate(&env);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let result = client.try_create_dispute(
             &invoice_id,
@@ -182,7 +184,7 @@ mod test_dispute {
     fn test_create_dispute_duplicate_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -207,7 +209,7 @@ mod test_dispute {
     fn test_create_dispute_empty_reason_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let result = client.try_create_dispute(
             &invoice_id,
@@ -225,7 +227,7 @@ mod test_dispute {
     fn test_create_dispute_reason_too_long_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let long_reason = "a".repeat(1001);
         let result = client.try_create_dispute(
@@ -244,7 +246,7 @@ mod test_dispute {
     fn test_create_dispute_empty_evidence_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let result = client.try_create_dispute(
             &invoice_id,
@@ -262,7 +264,7 @@ mod test_dispute {
     fn test_create_dispute_evidence_too_long_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let long_evidence = "x".repeat(2001);
         let result = client.try_create_dispute(
@@ -281,7 +283,7 @@ mod test_dispute {
     fn test_create_dispute_reason_minimum_boundary() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let result = client.try_create_dispute(
             &invoice_id,
@@ -297,7 +299,7 @@ mod test_dispute {
     fn test_create_dispute_reason_maximum_boundary() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let max_reason = "x".repeat(1000);
         let result = client.try_create_dispute(
@@ -318,7 +320,7 @@ mod test_dispute {
     fn test_put_dispute_under_review_success() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -348,7 +350,7 @@ mod test_dispute {
     fn test_put_under_review_no_dispute_returns_not_found() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let result = client.try_put_dispute_under_review(&invoice_id, &admin);
         assert!(result.is_err());
@@ -362,7 +364,7 @@ mod test_dispute {
     fn test_put_under_review_already_under_review_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -387,7 +389,7 @@ mod test_dispute {
     fn test_put_under_review_resolved_dispute_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -421,7 +423,7 @@ mod test_dispute {
     fn test_resolve_dispute_success() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -446,7 +448,7 @@ mod test_dispute {
     fn test_complete_dispute_lifecycle() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         // Step 1: Create dispute
         let reason = String::from_str(&env, "Service quality issue");
@@ -492,7 +494,7 @@ mod test_dispute {
     fn test_resolve_dispute_skipping_review_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -525,7 +527,7 @@ mod test_dispute {
     fn test_resolve_already_resolved_dispute_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -560,7 +562,7 @@ mod test_dispute {
     fn test_resolve_dispute_empty_resolution_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -585,7 +587,7 @@ mod test_dispute {
     fn test_resolve_dispute_resolution_too_long_rejected() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         client.create_dispute(
             &invoice_id,
@@ -615,7 +617,7 @@ mod test_dispute {
     fn test_get_dispute_details_returns_none_when_no_dispute() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let result = client.get_dispute_details(&invoice_id);
         assert!(
@@ -819,7 +821,7 @@ mod test_dispute {
     fn test_complete_lifecycle_with_all_queries() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let reason = String::from_str(&env, "Payment delay");
         let evidence = String::from_str(&env, "Invoice was 30 days late");
@@ -861,5 +863,460 @@ mod test_dispute {
         assert_eq!(dispute.evidence, evidence);
         assert_eq!(dispute.resolution, resolution);
         assert_eq!(dispute.resolved_by, admin);
+    }
+
+    // -----------------------------------------------------------------------
+    // Regression Tests — Dispute Locking
+    // -----------------------------------------------------------------------
+
+    /// [TC-30] REGRESSION: Resolved dispute cannot be overwritten by a second
+    /// `resolve_dispute` call.
+    ///
+    /// # Security Note
+    /// This is the core locking invariant.  The `Resolved` state is terminal;
+    /// any attempt to call `resolve_dispute` again must return
+    /// `DisputeNotUnderReview` because the status is no longer `UnderReview`.
+    #[test]
+    fn test_regression_resolved_dispute_is_locked() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "Original reason"),
+            &String::from_str(&env, "Original evidence"),
+        );
+        client.put_dispute_under_review(&invoice_id, &admin);
+        client.resolve_dispute(
+            &invoice_id,
+            &admin,
+            &String::from_str(&env, "Original resolution"),
+        );
+
+        // Verify terminal state
+        assert_eq!(
+            client.get_invoice(&invoice_id).dispute_status,
+            DisputeStatus::Resolved
+        );
+
+        // Attempt overwrite — must fail
+        let overwrite = client.try_resolve_dispute(
+            &invoice_id,
+            &admin,
+            &String::from_str(&env, "Overwrite attempt"),
+        );
+        assert!(overwrite.is_err(), "Resolved dispute must be locked");
+        let err = overwrite.unwrap_err().expect("expected contract error");
+        assert_eq!(
+            err,
+            QuickLendXError::DisputeNotUnderReview,
+            "Overwrite must return DisputeNotUnderReview"
+        );
+
+        // Original resolution must be unchanged
+        let dispute = client
+            .get_dispute_details(&invoice_id)
+            .expect("Dispute must still exist");
+        assert_eq!(
+            dispute.resolution,
+            String::from_str(&env, "Original resolution"),
+            "Resolution must not be overwritten"
+        );
+    }
+
+    /// [TC-31] REGRESSION: Resolved dispute cannot be re-opened via
+    /// `put_dispute_under_review`.
+    ///
+    /// # Security Note
+    /// Prevents an admin from cycling a resolved dispute back to `UnderReview`
+    /// and then issuing a different resolution.
+    #[test]
+    fn test_regression_resolved_dispute_cannot_reopen() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+        client.put_dispute_under_review(&invoice_id, &admin);
+        client.resolve_dispute(
+            &invoice_id,
+            &admin,
+            &String::from_str(&env, "Final resolution"),
+        );
+
+        // Attempt to re-open — must fail
+        let reopen = client.try_put_dispute_under_review(&invoice_id, &admin);
+        assert!(reopen.is_err(), "Resolved dispute must not be re-opened");
+        let err = reopen.unwrap_err().expect("expected contract error");
+        assert_eq!(
+            err,
+            QuickLendXError::InvalidStatus,
+            "Re-opening a Resolved dispute must return InvalidStatus"
+        );
+    }
+
+    /// [TC-32] REGRESSION: `resolved_at` timestamp is set exactly once and
+    /// is never zero after resolution.
+    #[test]
+    fn test_regression_resolved_at_is_set_once() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+
+        // Before resolution: resolved_at must be 0
+        let before = client
+            .get_dispute_details(&invoice_id)
+            .expect("Dispute must exist");
+        assert_eq!(before.resolved_at, 0, "resolved_at must be 0 before resolution");
+
+        client.put_dispute_under_review(&invoice_id, &admin);
+        client.resolve_dispute(
+            &invoice_id,
+            &admin,
+            &String::from_str(&env, "Resolution text"),
+        );
+
+        // After resolution: resolved_at must be non-zero
+        let after = client
+            .get_dispute_details(&invoice_id)
+            .expect("Dispute must exist");
+        assert!(after.resolved_at > 0, "resolved_at must be set after resolution");
+        assert_eq!(after.resolved_by, admin, "resolved_by must be the admin");
+    }
+
+    /// [TC-33] REGRESSION: `resolve_dispute` on a `Disputed` (not yet under
+    /// review) invoice must return `DisputeNotUnderReview`, not silently succeed.
+    ///
+    /// # Security Note
+    /// Prevents skipping the mandatory review step.
+    #[test]
+    fn test_regression_cannot_skip_review_step() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+
+        // Status is Disputed — resolve must fail
+        let result = client.try_resolve_dispute(
+            &invoice_id,
+            &admin,
+            &String::from_str(&env, "Skipped review"),
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err().expect("expected contract error");
+        assert_eq!(err, QuickLendXError::DisputeNotUnderReview);
+
+        // Status must remain Disputed
+        assert_eq!(
+            client.get_invoice(&invoice_id).dispute_status,
+            DisputeStatus::Disputed,
+            "Status must not change after failed resolve"
+        );
+    }
+
+    /// [TC-34] REGRESSION: Non-admin cannot resolve a dispute even if they
+    /// know the invoice ID.
+    #[test]
+    fn test_regression_non_admin_cannot_resolve() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let attacker = Address::generate(&env);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+        client.put_dispute_under_review(&invoice_id, &admin);
+
+        let result = client.try_resolve_dispute(
+            &invoice_id,
+            &attacker,
+            &String::from_str(&env, "Attacker resolution"),
+        );
+        assert!(result.is_err(), "Non-admin must not resolve a dispute");
+    }
+
+    /// [TC-35] REGRESSION: Non-admin cannot advance a dispute to `UnderReview`.
+    #[test]
+    fn test_regression_non_admin_cannot_put_under_review() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+        let attacker = Address::generate(&env);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+
+        let result = client.try_put_dispute_under_review(&invoice_id, &attacker);
+        assert!(result.is_err(), "Non-admin must not advance dispute");
+    }
+
+    /// [TC-36] REGRESSION: `put_dispute_under_review` on an invoice with no
+    /// dispute must return `DisputeNotFound`.
+    #[test]
+    fn test_regression_review_no_dispute_returns_not_found() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+
+        let result = client.try_put_dispute_under_review(&invoice_id, &admin);
+        assert!(result.is_err());
+        let err = result.unwrap_err().expect("expected contract error");
+        assert_eq!(err, QuickLendXError::DisputeNotFound);
+    }
+
+    /// [TC-37] REGRESSION: `resolve_dispute` on an invoice with no dispute
+    /// must return `DisputeNotFound`.
+    #[test]
+    fn test_regression_resolve_no_dispute_returns_not_found() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+
+        let result = client.try_resolve_dispute(
+            &invoice_id,
+            &admin,
+            &String::from_str(&env, "resolution"),
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err().expect("expected contract error");
+        assert_eq!(err, QuickLendXError::DisputeNotFound);
+    }
+
+    /// [TC-38] REGRESSION: Double-resolution attempt preserves the original
+    /// `resolved_by` and `resolved_at` fields unchanged.
+    #[test]
+    fn test_regression_double_resolution_preserves_original_fields() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+        client.put_dispute_under_review(&invoice_id, &admin);
+        client.resolve_dispute(
+            &invoice_id,
+            &admin,
+            &String::from_str(&env, "First resolution"),
+        );
+
+        let first = client
+            .get_dispute_details(&invoice_id)
+            .expect("Dispute must exist");
+
+        // Second attempt must fail
+        let _ = client.try_resolve_dispute(
+            &invoice_id,
+            &admin,
+            &String::from_str(&env, "Second resolution"),
+        );
+
+        // Fields must be identical to the first resolution
+        let after = client
+            .get_dispute_details(&invoice_id)
+            .expect("Dispute must exist");
+        assert_eq!(after.resolution, first.resolution);
+        assert_eq!(after.resolved_by, first.resolved_by);
+        assert_eq!(after.resolved_at, first.resolved_at);
+    }
+
+    /// [TC-39] REGRESSION: Invalid dispute ID (non-existent invoice) must
+    /// return `InvoiceNotFound` for all dispute operations.
+    #[test]
+    fn test_regression_invalid_invoice_id_all_operations() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let fake_id = BytesN::from_array(&env, &[0xFFu8; 32]);
+
+        let create_result = client.try_create_dispute(
+            &fake_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+        assert!(create_result.is_err());
+        assert_eq!(
+            create_result.unwrap_err().expect("expected contract error"),
+            QuickLendXError::InvoiceNotFound
+        );
+
+        let review_result = client.try_put_dispute_under_review(&fake_id, &admin);
+        assert!(review_result.is_err());
+        assert_eq!(
+            review_result.unwrap_err().expect("expected contract error"),
+            QuickLendXError::InvoiceNotFound
+        );
+
+        let resolve_result = client.try_resolve_dispute(
+            &fake_id,
+            &admin,
+            &String::from_str(&env, "resolution"),
+        );
+        assert!(resolve_result.is_err());
+        assert_eq!(
+            resolve_result.unwrap_err().expect("expected contract error"),
+            QuickLendXError::InvoiceNotFound
+        );
+    }
+
+    /// [TC-40] REGRESSION: Evidence boundary — exactly 2000 chars must succeed;
+    /// 2001 chars must fail.
+    #[test]
+    fn test_regression_evidence_boundary_values() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+
+        // 2000 chars — must succeed
+        let id1 = create_test_invoice(&env, &client, &business, 100_000);
+        let max_evidence = "e".repeat(2000);
+        let ok = client.try_create_dispute(
+            &id1,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, max_evidence.as_str()),
+        );
+        assert!(ok.is_ok(), "2000-char evidence must be accepted");
+
+        // 2001 chars — must fail
+        let id2 = create_test_invoice(&env, &client, &business, 110_000);
+        let over_evidence = "e".repeat(2001);
+        let err = client.try_create_dispute(
+            &id2,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, over_evidence.as_str()),
+        );
+        assert!(err.is_err());
+        assert_eq!(
+            err.unwrap_err().expect("expected contract error"),
+            QuickLendXError::InvalidDisputeEvidence
+        );
+    }
+
+    /// [TC-41] REGRESSION: Resolution boundary — exactly 2000 chars must
+    /// succeed; 2001 chars must fail.
+    #[test]
+    fn test_regression_resolution_boundary_values() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+
+        // 2000 chars — must succeed
+        let id1 = create_test_invoice(&env, &client, &business, 100_000);
+        client.create_dispute(
+            &id1,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+        client.put_dispute_under_review(&id1, &admin);
+        let max_resolution = "r".repeat(2000);
+        let ok = client.try_resolve_dispute(
+            &id1,
+            &admin,
+            &String::from_str(&env, max_resolution.as_str()),
+        );
+        assert!(ok.is_ok(), "2000-char resolution must be accepted");
+
+        // 2001 chars — must fail
+        let id2 = create_test_invoice(&env, &client, &business, 110_000);
+        client.create_dispute(
+            &id2,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+        client.put_dispute_under_review(&id2, &admin);
+        let over_resolution = "r".repeat(2001);
+        let err = client.try_resolve_dispute(
+            &id2,
+            &admin,
+            &String::from_str(&env, over_resolution.as_str()),
+        );
+        assert!(err.is_err());
+        assert_eq!(
+            err.unwrap_err().expect("expected contract error"),
+            QuickLendXError::InvalidDisputeReason
+        );
+    }
+
+    /// [TC-42] REGRESSION: `get_dispute_details` returns `None` for an invoice
+    /// that exists but has no dispute.
+    #[test]
+    fn test_regression_get_details_no_dispute_returns_none() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
+
+        let result = client.get_dispute_details(&invoice_id);
+        assert!(
+            result.is_none(),
+            "get_dispute_details must return None when no dispute exists"
+        );
+    }
+
+    /// [TC-43] REGRESSION: Dispute state is isolated per invoice — resolving
+    /// one does not affect another.
+    #[test]
+    fn test_regression_resolution_isolation_across_invoices() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+
+        let id1 = create_test_invoice(&env, &client, &business, 100_000);
+        let id2 = create_test_invoice(&env, &client, &business, 200_000);
+
+        let reason = String::from_str(&env, "reason");
+        let evidence = String::from_str(&env, "evidence");
+        client.create_dispute(&id1, &business, &reason, &evidence);
+        client.create_dispute(&id2, &business, &reason, &evidence);
+
+        // Fully resolve id1
+        client.put_dispute_under_review(&id1, &admin);
+        client.resolve_dispute(&id1, &admin, &String::from_str(&env, "Resolved id1"));
+
+        // id2 must still be Disputed
+        assert_eq!(
+            client.get_invoice(&id2).dispute_status,
+            DisputeStatus::Disputed,
+            "id2 must remain Disputed after id1 is resolved"
+        );
+
+        // id2 must still be resolvable through the normal path
+        client.put_dispute_under_review(&id2, &admin);
+        client.resolve_dispute(&id2, &admin, &String::from_str(&env, "Resolved id2"));
+        assert_eq!(
+            client.get_invoice(&id2).dispute_status,
+            DisputeStatus::Resolved
+        );
     }
 }

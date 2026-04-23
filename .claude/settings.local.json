@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /c/Users/Covez/Desktop/quicklendx-protocol/quicklendx-contracts/src/test*.rs)",
+      "Bash(grep -l \"setup\\\\|Setup\" /c/Users/Covez/Desktop/quicklendx-protocol/quicklendx-contracts/src/test_*.rs)",
+      "Bash(cargo check:*)",
+      "Bash(where cargo:*)",
+      "Bash(echo PATH=$PATH)",
+      "Bash(ls /c/Users/Covez/.rustup/toolchains/*/bin/cargo.exe)",
+      "Read(//c/Program Files/Rust/bin/**)",
+      "Bash(export PATH=\"$HOME/.cargo/bin:$PATH\")",
+      "Bash(cargo --version)",
+      "Bash(rustc --version)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Program Files \\(x86\\)/**)",
+      "Bash(where link.exe)",
+      "Bash(ls \"/c/Program Files/Microsoft Visual Studio/2022/\"*/VC/Tools/MSVC/*/bin/Hostx64/x64/link.exe)",
+      "Bash(ls \"/c/Program Files \\(x86\\)/Microsoft Visual Studio/\"*/VC/Tools/MSVC/*/bin/Hostx64/x64/link.exe)",
+      "Bash(rustup target:*)",
+      "Bash(rustup toolchain:*)",
+      "Bash(cargo +stable-x86_64-pc-windows-gnu check)",
+      "Bash(cargo +stable-x86_64-pc-windows-gnu test test_dispute)",
+      "Bash(find '/c/Program Files' '/c/Program Files \\(x86\\)' -name link.exe -path */MSVC/*)",
+      "Bash(rustup component:*)",
+      "Bash(pacman -S mingw-w64-x86_64-gcc)",
+      "Read(//mingw64/bin/**)",
+      "Bash(where winget:*)",
+      "Bash(where choco:*)",
+      "Bash(winget install:*)",
+      "Read(//c/msys64/mingw64/bin/**)",
+      "Bash(/c/msys64/usr/bin/pacman.exe -S --noconfirm mingw-w64-x86_64-toolchain)",
+      "Bash(export PATH=\"/c/msys64/mingw64/bin:$HOME/.cargo/bin:$PATH\")",
+      "Bash(cargo +stable-x86_64-pc-windows-gnu test test_dispute -- --nocapture)",
+      "Bash(cargo +stable-x86_64-pc-windows-gnu test --lib test_dispute)",
+      "Bash(cargo +stable-x86_64-pc-windows-gnu test --lib)",
+      "Bash(cargo test:*)"
+    ]
+  }
+}

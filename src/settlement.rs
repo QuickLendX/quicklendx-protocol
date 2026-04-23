@@ -1,26 +1,26 @@
-/// # Settlement Module
-///
-/// Handles the core arithmetic for invoice settlement in the QuickLendX protocol.
-///
-/// ## Security Model
-///
-/// All arithmetic operations use checked math (`checked_add`, `checked_sub`,
-/// `checked_mul`, `checked_div`) to prevent silent overflow/underflow. Any
-/// operation that would overflow returns `None`, which callers must handle as
-/// an error. Amounts are represented as `u128` (unsigned 128-bit integers) to
-/// support large invoice values while eliminating sign-related edge cases.
-///
-/// ## Precision
-///
-/// Internal computations use basis-point (bps) scaling (1 bps = 0.01%).
-/// All division is performed last to minimize rounding error.
-///
-/// ## Invariants
-///
-/// - `face_value` ≥ `funded_amount` (discount never exceeds face value)
-/// - `funded_amount` > 0 for any active invoice
-/// - Fee percentages are expressed in basis points: 0–10_000 (0%–100%)
-
+//! # Settlement Module
+//!
+//! Handles the core arithmetic for invoice settlement in the QuickLendX protocol.
+//!
+//! ## Security Model
+//!
+//! All arithmetic operations use checked math (`checked_add`, `checked_sub`,
+//! `checked_mul`, `checked_div`) to prevent silent overflow/underflow. Any
+//! operation that would overflow returns `None`, which callers must handle as
+//! an error. Amounts are represented as `u128` (unsigned 128-bit integers) to
+//! support large invoice values while eliminating sign-related edge cases.
+//!
+//! ## Precision
+//!
+//! Internal computations use basis-point (bps) scaling (1 bps = 0.01%).
+//! All division is performed last to minimize rounding error.
+//!
+//! ## Invariants
+//!
+//! - `face_value` ≥ `funded_amount` (discount never exceeds face value)
+//! - `funded_amount` > 0 for any active invoice
+//! - Fee percentages are expressed in basis points: 0–10_000 (0%–100%)
+//!
 /// Basis-point denominator (10_000 = 100%).
 pub const BPS_DENOMINATOR: u128 = 10_000;
 
@@ -52,7 +52,7 @@ pub struct SettlementResult {
 /// - `funded_amount`   — Amount the investor disbursed (≤ face_value).
 /// - `protocol_fee_bps`— Protocol fee in basis points (0–10_000).
 /// - `late_penalty_bps`— Late-payment penalty in basis points (0–5_000); pass
-///                       `0` for on-time payments.
+///   `0` for on-time payments.
 ///
 /// # Returns
 /// `Some(SettlementResult)` on success, `None` on arithmetic overflow/underflow
@@ -153,8 +153,7 @@ mod tests {
         fee_bps: u128,
         penalty_bps: u128,
     ) -> SettlementResult {
-        compute_settlement(face, funded, fee_bps, penalty_bps)
-            .expect("expected valid settlement")
+        compute_settlement(face, funded, fee_bps, penalty_bps).expect("expected valid settlement")
     }
 
     // ── Basic happy-path tests ────────────────────────────────────────────────

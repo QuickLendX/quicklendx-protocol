@@ -306,6 +306,25 @@ pub fn get_grace_period_seconds(env: &Env) -> u64
 
 Returns the grace period in seconds (defaults to 86,400).
 
+---
+
+#### `get_version`
+
+```rust
+pub fn get_version(env: &Env) -> u32
+```
+
+Returns the protocol version stored at initialization time, or the compiled-in
+`PROTOCOL_VERSION` constant if the contract has not been initialized yet.
+
+**Upgrade policy**
+
+| Change type | Action |
+|---|---|
+| Patch (bug-fix, no storage-schema change) | No bump required |
+| Minor (new fields, backward-compatible) | Bump recommended |
+| Major (breaking storage changes, migration required) | Bump mandatory |
+
 ## Events
 
 All initialization and configuration changes emit events for audit trails:
