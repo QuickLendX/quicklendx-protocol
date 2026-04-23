@@ -89,6 +89,41 @@ The protocol enforces several critical invariants to ensure security and consist
 3.  **Duplicate Rejection**: Any attempt to create a second escrow for an invoice that already has one will be rejected with the `InvoiceAlreadyFunded` error.
 4.  **Release/Refund Mutex**: An escrow can be either released or refunded, but never both. The final status `Released` or `Refunded` is terminal.
 
+## One-Escrow-Per-Invoice Security Invariant
+
+Each invoice maps to **at most one** escrow record for its entire lifetime. This invariant is
+enforced at two independent layers to prevent escrow overwrite/poisoning attacks:
+
+### Layer 1 – `load_accept_bid_context` (outer guard)
+
+Before any funds move, `accept_bid_and_fund` calls `load_accept_bid_context`, which checks:
+
+- `EscrowStorage::get_escrow_by_invoice(invoice_id).is_some()` → returns `InvalidStatus`
+- `InvestmentStorage::get_investment_by_invoice(invoice_id).is_some()` → returns `InvalidStatus`
+- `invoice.funded_amount != 0 || invoice.funded_at.is_some() || invoice.investor.is_some()` → returns `InvalidStatus`
+
+### Layer 2 – `payments::create_escrow` (inner guard)
+
+Even if the outer guard is bypassed, `create_escrow` re-checks
+`EscrowStorage::get_escrow_by_invoice` **before** the token transfer and returns
+`InvoiceAlreadyFunded` if a record already exists. The escrow record is only written
+**after** the token transfer succeeds, so a failed transfer leaves no partial state.
+
+### Attack Vectors Mitigated
+
+| Attack | Mitigation |
+|--------|-----------|
+| Double `accept_bid` on same invoice | Layer 1: invoice status is `Funded` after first accept |
+| Direct `create_escrow` call after funding | Layer 2: storage-level duplicate check |
+| Post-release re-funding | Layer 2: escrow record persists with `Released` status |
+| Post-refund re-funding | Layer 2: escrow record persists with `Refunded` status |
+| Cross-invoice storage collision | Per-invoice storage key `(symbol_short!("escrow"), invoice_id)` |
+
+### Test Coverage
+
+All attack vectors above are covered in `src/test_escrow_uniqueness.rs` (issue #791).
+Run with: `cargo test test_escrow_uniqueness`
+
 ## Key Functions
 
 ### `accept_bid_and_fund`
