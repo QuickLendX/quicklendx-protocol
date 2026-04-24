@@ -31,7 +31,7 @@
 //! - `set_treasury()` - Update treasury address
 //! - Currency whitelist management functions
 
-use crate::admin::AdminStorage;
+use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY};
 use crate::errors::QuickLendXError;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
@@ -175,10 +175,15 @@ impl ProtocolInitializer {
         params.admin.require_auth();
 
         // Zero-address guard
-        let zero = Address::from_string(&soroban_sdk::String::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"));
+        let zero = Address::from_str(
+            env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        );
         if params.admin == zero || params.treasury == zero {
             return Err(QuickLendXError::InvalidAddress);
         }
+        Self::initialize_internal(env, params)
+    }
 
     /// Internal initialization logic with comprehensive validation
     fn initialize_internal(
