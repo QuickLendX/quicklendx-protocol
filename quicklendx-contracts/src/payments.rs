@@ -91,6 +91,13 @@ impl EscrowStorage {
 
 /// Create escrow: transfer `amount` from investor to contract and store escrow record.
 ///
+/// ## One-Escrow-Per-Invoice Guard
+/// If an escrow record already exists for `invoice_id` (regardless of its status),
+/// this function returns [`QuickLendXError::InvoiceAlreadyFunded`] **before** any
+/// token transfer occurs. This is the innermost uniqueness guard; see also
+/// `escrow::load_accept_bid_context` for the outer guard and `test_escrow_uniqueness.rs`
+/// for the full attack-vector test suite.
+///
 /// # Returns
 /// * `Ok(escrow_id)` - The new escrow ID
 ///
