@@ -29,9 +29,8 @@
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 // Removed ToString import; not needed in Soroban environment.
 
-use crate::invoice::{Invoice, InvoiceStatus};
+use crate::types::{Bid, BidStatus, Invoice, InvoiceStatus, Investment, InvestmentStatus};
 use crate::profits::PlatformFeeConfig;
-use crate::types::{Bid, BidStatus, Investment, InvestmentStatus};
 
 /// Storage keys for the contract
 pub struct StorageKeys;
@@ -177,12 +176,22 @@ impl InvoiceStorage {
         }
     }
 
+    /// Alias for store - store a new invoice
+    pub fn store_invoice(env: &Env, invoice: &Invoice) {
+        Self::store(env, invoice)
+    }
+
     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
         let key = Indexes::invoices_by_business(business);
         env.storage()
             .persistent()
             .get(&key)
             .unwrap_or(Vec::new(env))
+    }
+
+    /// Alias for get_by_business - retrieve invoices by business address
+    pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
+        Self::get_by_business(env, business)
     }
 
     pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
@@ -193,11 +202,21 @@ impl InvoiceStorage {
             .unwrap_or(Vec::new(env))
     }
 
+    /// Alias for get_by_status - retrieve invoices by status
+    pub fn get_invoices_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
+        Self::get_by_status(env, status)
+    }
+
     /// Get an invoice by ID
     pub fn get(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
         env.storage()
             .persistent()
             .get(&DataKey::Invoice(invoice_id.clone()))
+    }
+
+    /// Alias for get - retrieve invoice by ID
+    pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
+        Self::get(env, invoice_id)
     }
 
     /// Update an invoice
@@ -228,6 +247,53 @@ impl InvoiceStorage {
             .persistent()
             .set(&DataKey::Invoice(invoice.id.clone()), invoice);
     }
+
+    /// Alias for update - update an existing invoice
+    pub fn update_invoice(env: &Env, invoice: &Invoice) {
+        Self::update(env, invoice)
+    }
+
+    /// Get next invoice count
+    pub fn next_count(env: &Env) -> u64 {
+        let current: u64 = env
+            .storage()
+            .persistent()
+            .get(&StorageKeys::invoice_count())
+            .unwrap_or(0);
+        let next = current.saturating_add(1);
+        env.storage()
+            .persistent()
+            .set(&StorageKeys::invoice_count(), &next);
+        next
+    }
+
+    /// Clear all invoice data
+    pub fn clear_all(env: &Env) {
+        // Delegate to the storage manager's clear_all_mappings function
+        // This clears all persistent storage mappings
+        StorageManager::clear_all_mappings(env);
+    }
+
+    /// Get invoices with rating above threshold
+    /// Note: This is a placeholder implementation - in a real system you would need to iterate through all invoices
+    /// and check their ratings. For now, we return an empty vector.
+    pub fn get_invoices_with_rating_above(env: &Env, _min_rating: u32) -> Vec<BytesN<32>> {
+        // TODO: Implement proper rating-based querying
+        // This would require either:
+        // 1. An index on ratings (complex to maintain)
+        // 2. Iterating through all invoices (expensive but possible for small datasets)
+        // 3. Storing ratings in a separate indexed structure
+        Vec::new(env)
+    }
+
+    /// Get invoices with ratings count threshold
+    /// Note: This is a placeholder implementation - in a real system you would need to iterate through all invoices
+    /// and count their ratings. For now, we return an empty vector.
+    pub fn get_invoices_with_ratings_count(env: &Env, _min_count: u32) -> Vec<BytesN<32>> {
+        // TODO: Implement proper rating count-based querying
+        Vec::new(env)
+    }
+}
 
     /// Add invoice to business index
     fn add_to_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
