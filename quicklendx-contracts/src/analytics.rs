@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::errors::QuickLendXError;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use crate::types::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, String, Vec};
 
 /// Time period for analytics reports
@@ -936,20 +936,16 @@ impl AnalyticsCalculator {
                 if let Some(invoice) =
                     crate::invoice::InvoiceStorage::get_invoice(env, &investment.invoice_id)
                 {
-                    Self::increment_category_counter(
-                        &mut preferred_categories,
-                        &invoice.category,
-                    );
+                    Self::increment_category_counter(&mut preferred_categories, &invoice.category);
                 }
 
                 match investment.status {
                     crate::investment::InvestmentStatus::Completed => {
                         successful_investments += 1;
 
-                        if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(
-                            env,
-                            &investment.invoice_id,
-                        ) {
+                        if let Some(invoice) =
+                            crate::invoice::InvoiceStorage::get_invoice(env, &investment.invoice_id)
+                        {
                             let (profit, _) = crate::profits::calculate_profit(
                                 env,
                                 investment.amount,
@@ -1045,10 +1041,13 @@ impl AnalyticsCalculator {
         Ok(report)
     }
 
-    fn get_investor_investments(env: &Env, investor: &Address) -> Vec<crate::investment::Investment> {
+    fn get_investor_investments(
+        env: &Env,
+        investor: &Address,
+    ) -> Vec<crate::investment::Investment> {
         let mut investments = Vec::new(env);
-        for investment_id in crate::investment::InvestmentStorage::get_investments_by_investor(env, investor)
-            .iter()
+        for investment_id in
+            crate::investment::InvestmentStorage::get_investments_by_investor(env, investor).iter()
         {
             if let Some(investment) =
                 crate::investment::InvestmentStorage::get_investment(env, &investment_id)

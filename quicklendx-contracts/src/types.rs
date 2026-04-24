@@ -193,4 +193,3 @@ pub struct PlatformFeeConfig {
     pub bid_fee: PlatformFee,
     pub investment_fee: PlatformFee,
 }
-

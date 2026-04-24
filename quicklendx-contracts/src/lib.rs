@@ -81,12 +81,13 @@ use events::{
     emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
-use invoice::{Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
+use storage::InvoiceStorage;
+use types::{Invoice, InvoiceMetadata, InvoiceStatus};
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
     get_investor_verification as do_get_investor_verification, reject_business,
@@ -672,7 +673,7 @@ impl QuickLendXContract {
 
     /// Clear all invoices from storage (admin only, used for restore operations)
     pub fn clear_all_invoices(env: Env) -> Result<(), QuickLendXError> {
-        use crate::invoice::InvoiceStorage;
+        use crate::storage::InvoiceStorage;
         InvoiceStorage::clear_all(&env);
         Ok(())
     }
@@ -1142,8 +1143,7 @@ impl QuickLendXContract {
         investor: Address,
         investment_limit: i128,
     ) -> Result<(), QuickLendXError> {
-        let admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         let verification = do_verify_investor(&env, &admin, &investor, investment_limit)?;
         emit_investor_verified(&env, &verification);
         Ok(())
@@ -1175,8 +1175,7 @@ impl QuickLendXContract {
         investor: Address,
         new_limit: i128,
     ) -> Result<(), QuickLendXError> {
-        let admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         verification::set_investment_limit(&env, &admin, &investor, new_limit)
     }
 
@@ -1679,8 +1678,7 @@ impl QuickLendXContract {
 
     /// Configure treasury address for platform fee routing (admin only)
     pub fn configure_treasury(env: Env, treasury_address: Address) -> Result<(), QuickLendXError> {
-        let admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
 
         let _treasury_config =
             fees::FeeManager::configure_treasury(&env, &admin, treasury_address.clone())?;
@@ -1693,8 +1691,7 @@ impl QuickLendXContract {
 
     /// Update platform fee basis points (admin only)
     pub fn update_platform_fee_bps(env: Env, new_fee_bps: u32) -> Result<(), QuickLendXError> {
-        let admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
 
         let old_config = fees::FeeManager::get_platform_fee_config(&env)?;
         let old_fee_bps = old_config.fee_bps;
@@ -1789,8 +1786,7 @@ impl QuickLendXContract {
         min_distribution_amount: i128,
     ) -> Result<(), QuickLendXError> {
         // Verify admin
-        let stored_admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let stored_admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         if admin != stored_admin {
             return Err(QuickLendXError::NotAdmin);
         }

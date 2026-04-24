@@ -1,12 +1,11 @@
 use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
-use crate::invoice::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
     MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_REJECTION_REASON_LENGTH, MAX_TAX_ID_LENGTH,
-    MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
 };
+use crate::types::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 #[contracttype]
@@ -688,9 +687,10 @@ pub fn validate_bid(
 
     // 4. Protocol limits and bid size validation
     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
-    
+
     // Calculate minimum bid amount using both absolute minimum and percentage-based minimum
-    let percent_min = invoice.amount
+    let percent_min = invoice
+        .amount
         .saturating_mul(limits.min_bid_bps as i128)
         .saturating_div(10_000);
     let effective_min_bid = if percent_min > limits.min_bid_amount {
@@ -698,7 +698,7 @@ pub fn validate_bid(
     } else {
         limits.min_bid_amount
     };
-    
+
     if bid_amount < effective_min_bid {
         return Err(QuickLendXError::InvalidAmount);
     }

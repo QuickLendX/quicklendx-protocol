@@ -29,9 +29,9 @@
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 // Removed ToString import; not needed in Soroban environment.
 
-use crate::types::{Bid, BidStatus, Investment, InvestmentStatus};
 use crate::invoice::{Invoice, InvoiceStatus};
 use crate::profits::PlatformFeeConfig;
+use crate::types::{Bid, BidStatus, Investment, InvestmentStatus};
 
 /// Storage keys for the contract
 pub struct StorageKeys;
