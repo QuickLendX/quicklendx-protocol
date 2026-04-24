@@ -23,6 +23,7 @@ to prevent resource abuse and ensure predictable performance characteristics.
 **All paginated endpoints enforce a hard cap of `MAX_QUERY_LIMIT = 100` records per query.**
 
 This limit cannot be bypassed by:
+
 - Passing `limit > MAX_QUERY_LIMIT` (automatically capped)
 - Using overflow attacks with large offset values (validated and rejected)
 - Combining parameters to exceed resource bounds (comprehensive validation)
@@ -60,37 +61,49 @@ fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError>
 
 ## Paginated Endpoints with Hard Cap Enforcement
 
-| Endpoint | Hard Cap Applied | Validation |
-|---|---|---|
-| `get_business_invoices_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
-| `get_investor_investments_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
-| `get_available_invoices_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
-| `get_bid_history_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
-| `get_investor_bids_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| Endpoint                           | Hard Cap Applied   | Validation             |
+| ---------------------------------- | ------------------ | ---------------------- |
+| `get_business_invoices_paged`      | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_investor_investments_paged`   | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_available_invoices_paged`     | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_bid_history_paged`            | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_investor_bids_paged`          | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
 | `get_whitelisted_currencies_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_payment_records`            | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+
+### Business Invoice Query Ordering
+
+`get_business_invoices_paged` applies status filtering first, then deterministically orders
+results by `(created_at ASC, invoice_id ASC)` before pagination.
+
+Security and consistency implications:
+
+- Repeated calls with identical contract state return identical page boundaries.
+- Status-filtered pagination remains deterministic and does not leak cross-status entries.
+- Tie-breaking by `invoice_id` avoids validator-dependent ordering when timestamps match.
 
 ---
 
 ## Resilience Guarantees by Endpoint
 
-| Endpoint | Missing record behaviour |
-|---|---|
-| `get_invoice(id)` | Returns `Err(InvoiceNotFound)` |
-| `get_bid(id)` | Returns `None` |
-| `get_investment(id)` | Returns `Err(StorageKeyNotFound)` |
-| `get_invoice_investment(id)` | Returns `Err(StorageKeyNotFound)` |
-| `get_bids_for_invoice(id)` | Returns empty `Vec` |
-| `get_best_bid(id)` | Returns `None` |
-| `get_ranked_bids(id)` | Returns empty `Vec` |
-| `get_bids_by_status(id, status)` | Returns empty `Vec` |
-| `get_bids_by_investor(id, investor)` | Returns empty `Vec` |
-| `get_all_bids_by_investor(investor)` | Returns empty `Vec` |
-| `get_business_invoices(business)` | Returns empty `Vec` |
-| `get_investments_by_investor(investor)` | Returns empty `Vec` |
-| `get_escrow_details(id)` | Returns `Err(StorageKeyNotFound)` |
-| `get_bid_history_paged(id, ...)` | Returns empty `Vec` (capped) |
-| `get_investor_bids_paged(investor, ...)` | Returns empty `Vec` (capped) |
-| `cleanup_expired_bids(id)` | Returns `0` |
+| Endpoint                                 | Missing record behaviour          |
+| ---------------------------------------- | --------------------------------- |
+| `get_invoice(id)`                        | Returns `Err(InvoiceNotFound)`    |
+| `get_bid(id)`                            | Returns `None`                    |
+| `get_investment(id)`                     | Returns `Err(StorageKeyNotFound)` |
+| `get_invoice_investment(id)`             | Returns `Err(StorageKeyNotFound)` |
+| `get_bids_for_invoice(id)`               | Returns empty `Vec`               |
+| `get_best_bid(id)`                       | Returns `None`                    |
+| `get_ranked_bids(id)`                    | Returns empty `Vec`               |
+| `get_bids_by_status(id, status)`         | Returns empty `Vec`               |
+| `get_bids_by_investor(id, investor)`     | Returns empty `Vec`               |
+| `get_all_bids_by_investor(investor)`     | Returns empty `Vec`               |
+| `get_business_invoices(business)`        | Returns empty `Vec`               |
+| `get_investments_by_investor(investor)`  | Returns empty `Vec`               |
+| `get_escrow_details(id)`                 | Returns `Err(StorageKeyNotFound)` |
+| `get_bid_history_paged(id, ...)`         | Returns empty `Vec` (capped)      |
+| `get_investor_bids_paged(investor, ...)` | Returns empty `Vec` (capped)      |
+| `cleanup_expired_bids(id)`               | Returns `0`                       |
 
 ---
 
@@ -127,6 +140,7 @@ fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError>
 ---
 
 ## Running Tests
+
 ```bash
 cd quicklendx-contracts
 cargo test test_queries

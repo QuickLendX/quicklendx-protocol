@@ -100,10 +100,29 @@ The caller must pass the admin address and that address must match the stored ad
 
 ## Security Considerations
 
+### Authentication Model
+
+Every state-mutating function follows a two-layer auth check:
+
+1. **Storage check** — `AdminStorage::get_admin(env)` retrieves the stored admin address.  If no admin is set the call fails with `NotAdmin`.
+2. **Runtime auth** — `admin.require_auth()` forces the Soroban host to verify the transaction was signed by that address.  Both checks must pass; bypassing one is not sufficient.
+
+Functions that enforce this pattern:
+
+| Function | Storage check | `require_auth` |
+|---|---|---|
+| `add_currency` | ✅ | ✅ |
+| `remove_currency` | ✅ | ✅ |
+| `set_currencies` | ✅ | ✅ |
+| `clear_currencies` | ✅ | ✅ |
+
+> **Security note (PR #524):** `add_currency` and `set_currencies` previously relied on an implicit auth comment rather than an explicit `require_auth()` call.  Both functions now call `admin.require_auth()` unconditionally, closing the gap between the comment and enforced runtime behaviour.
+
 ### Write Operations
 - Every write requires `admin.require_auth()` + admin storage verification
 - No user can modify the whitelist without proper admin credentials
 - Use `set_currencies` for bulk updates to avoid partial state inconsistencies
+- `set_currencies` deduplicates before writing — passing duplicate addresses does not inflate the list
 
 ### Read Operations
 - Pagination queries are public and require no authentication
@@ -112,7 +131,7 @@ The caller must pass the admin address and that address must match the stored ad
 - No information leakage beyond intended whitelist data
 
 ### Boundary Safety
-- All arithmetic operations use overflow-safe methods
+- **Overflow fix (PR #524):** The original `(offset + limit)` expression was replaced with `offset.saturating_add(limit)` to prevent integer overflow panics when both parameters are large (e.g. `u32::MAX`).
 - Large offset/limit values handled gracefully without panics
 - Empty whitelist scenarios handled consistently
 - Memory usage bounded by actual result size, not input parameters
@@ -126,50 +145,47 @@ The caller must pass the admin address and that address must match the stored ad
 
 ## Testing Coverage
 
-Comprehensive boundary tests ensure robust behavior:
+`src/test_currency.rs` provides exhaustive coverage across all validation paths.
 
-### Empty Whitelist Tests
-- Various offset/limit combinations with empty whitelist
-- Consistency with `currency_count()` returning 0
-- Proper handling of maximum parameter values
+### Core flow tests
 
-### Offset Saturation Tests  
-- Offset at exact whitelist length boundary
-- Offset beyond whitelist length
-- Maximum u32 offset values
-- Near-maximum offset with various limits
+| Test | What it validates |
+|---|---|
+| `test_get_whitelisted_currencies_empty_by_default` | Fresh whitelist is empty; `is_allowed_currency` returns false |
+| `test_get_whitelisted_currencies_after_add_and_remove` | Add two, verify both present; remove one, verify state |
+| `test_is_allowed_currency_true_false_paths` | Allowed / disallowed / removed paths |
+| `test_add_remove_currency_admin_only` | Full add-then-remove lifecycle |
+| `test_non_admin_cannot_add_currency` | Non-admin `try_add_currency` returns error |
+| `test_non_admin_cannot_remove_currency` | Non-admin `try_remove_currency` returns error |
+| `test_invoice_with_non_whitelisted_currency_fails_when_whitelist_set` | `store_invoice` rejects non-whitelisted currency |
+| `test_invoice_with_whitelisted_currency_succeeds` | `store_invoice` accepts whitelisted currency |
+| `test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set` | `place_bid` enforces currency check at bid time |
+| `test_add_currency_idempotent` | Duplicate `add_currency` does not grow the list |
+| `test_remove_currency_when_missing_is_noop` | Second removal of absent currency succeeds (no-op) |
+| `test_set_currencies_replaces_whitelist` | Old entries removed; new entries present after `set_currencies` |
+| `test_set_currencies_deduplicates` | Duplicate addresses in input list stored once |
+| `test_non_admin_cannot_set_currencies` | Non-admin `try_set_currencies` returns error |
+| `test_clear_currencies_allows_all` | After clear: count = 0; any token accepted (backward-compat) |
+| `test_non_admin_cannot_clear_currencies` | Non-admin `try_clear_currencies` returns error |
+| `test_currency_count` | Count increments on add, decrements on remove |
+| `test_get_whitelisted_currencies_paged` | Basic pagination: two pages over 3 items; out-of-range returns empty |
 
-### Limit Saturation Tests
-- Zero limit behavior
-- Limit larger than available items
-- Maximum u32 limit values
-- Limit exactly matching available items
+### Pagination boundary tests
 
-### Overflow Protection Tests
-- Offset + limit arithmetic overflow scenarios
-- Maximum value combinations for both parameters
-- Boundary arithmetic edge cases
-
-### Consistency Tests
-- Ordering preservation across pagination calls
-- No duplicate items across non-overlapping pages
-- Consistent results between full and paginated reads
-
-### Modification Tests
-- Pagination behavior after adding/removing currencies
-- Boundary changes after whitelist modifications
-- Clear operation effects on pagination
-
-### Performance Tests
-- Large dataset pagination efficiency
-- Memory usage with various page sizes
-- Iteration patterns across large whitelists
-
-### Security Tests
-- Public read access verification
-- No information leakage beyond bounds
-- Consistent behavior across multiple calls
-- No side effects from read operations
+| Test | Edge cases covered |
+|---|---|
+| `test_pagination_empty_whitelist_boundaries` | `(0,0)`, `(0,10)`, `(u32::MAX,10)`, `(0,u32::MAX)` on empty list |
+| `test_pagination_offset_saturation` | Offset at len, len+1, `u32::MAX`, `u32::MAX-1`; len-1 returns 1 item |
+| `test_pagination_limit_saturation` | Limit 0, limit > count, `u32::MAX`, exact, exact-1 |
+| `test_pagination_overflow_protection` | `(u32::MAX, u32::MAX)`, large offset + normal limit, `offset + limit > u32::MAX` via `u32::MAX/2` combo |
+| `test_pagination_consistency_and_ordering` | 7-item list; three pages reconstruct full list in order; overlapping page aligns correctly |
+| `test_pagination_single_item_edge_cases` | `(0,1)` returns item; `(0,10)` returns item; `(1,1)` is empty; `(0,0)` is empty |
+| `test_pagination_after_modifications` | Remove 2 of 5; paginated count matches new total; clear resets to empty |
+| `test_pagination_security_boundaries` | Public read confirmed; paginated total matches full read; all items match |
+| `test_pagination_large_dataset_boundaries` | 50-item set; page-by-page loop retrieves all 50; boundary and past-end offsets empty |
+| `test_pagination_concurrent_modification_boundaries` | Remove 2 of 10; re-paginate; paginated count == `currency_count()` |
+| `test_pagination_address_handling_boundaries` | Duplicate add stays at 1; 15 unique added; no duplicates in paginated output |
+| `test_pagination_storage_efficiency` | Pagination correct at each of 20 growth steps; boundary empty at each step; clear resets |
 
 ## Supported Use Cases
 

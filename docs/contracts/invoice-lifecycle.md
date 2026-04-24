@@ -2,6 +2,11 @@
 
 This document describes the invoice lifecycle management functionality in the QuickLendX protocol, including invoice upload, verification/approval, and cancellation.
 
+> Note
+> `update_invoice_status` is an admin-only recovery/backfill pathway. It is not a
+> replacement for the normal `accept_bid`, `settle_invoice`, or overdue-default
+> flows, and it intentionally avoids escrow and payment side effects.
+
 ## Overview
 
 The invoice lifecycle consists of the following states:
@@ -114,7 +119,55 @@ Allows a business to cancel their own invoice before it has been funded by an in
 - `InvalidStatus` - Invoice is already funded, paid, defaulted, or cancelled
 
 ---
-### 4. `refund_escrow_funds`
+### 4. `update_invoice_status`
+
+Allows the configured admin to move an invoice through a limited recovery path
+when tests, migrations, or operational repair require a manual state correction.
+
+**Authorization**: Admin only (requires authentication)
+
+**Parameters**:
+- `env: Env` - Contract environment
+- `invoice_id: BytesN<32>` - ID of the invoice to update
+- `new_status: InvoiceStatus` - Target lifecycle status
+
+**Returns**: `Result<(), QuickLendXError>` - Success or error
+
+**Supported transitions**:
+- `Pending` → `Verified`
+- `Verified` → `Funded`
+- `Funded` → `Paid`
+- `Funded` → `Defaulted`
+
+**Unsupported transitions**:
+- Any transition targeting `Pending`, `Cancelled`, or `Refunded`
+- Any transition from terminal invoices (`Cancelled`, `Refunded`)
+- Any transition that skips the supported recovery path, such as `Verified` → `Paid`
+
+**Index updates**:
+- Removes the invoice ID from the previous status bucket before persisting
+- Adds the invoice ID to the new status bucket after persisting
+- Keeps `get_invoices_by_status` and `get_invoice_count_by_status` aligned
+
+**Events Emitted**:
+- `inv_ver` when moving to `Verified`
+- `inv_fnd` when moving to `Funded`
+- `inv_set` when moving to `Paid` through the admin override path
+- `inv_def` when moving to `Defaulted`
+
+**Security Notes**:
+- The function requires the stored admin address and fails with `NotAdmin` if none is configured
+- Manual `Paid` updates emit the canonical settlement event with zeroed settlement values because no payment transfer is executed by this pathway
+- Manual `Funded` updates are bookkeeping-only and do not create escrow or investment records
+- Production flows should prefer `verify_invoice`, `accept_bid`, `settle_invoice`, and `mark_invoice_defaulted`
+
+**Failure Cases**:
+- `NotAdmin` - No admin configured
+- `InvoiceNotFound` - Invoice does not exist
+- `InvalidStatus` - Unsupported target status or invalid transition
+
+---
+### 5. `refund_escrow_funds`
 
 Allows an admin or the business owner to refund a funded invoice, returning funds to the investor.
 
@@ -161,6 +214,7 @@ Allows an admin or the business owner to refund a funded invoice, returning fund
 
 ### Admin/Oracle
 - Can verify invoices
+- Can run the constrained `update_invoice_status` recovery path
 - Can reject verification
 - Can set admin address
 
@@ -238,6 +292,9 @@ cancel_invoice(env, invoice_id)?;
 ## Security Considerations
 
 1. **Authentication**: All state-changing operations require proper authentication
+2. **Recovery pathway isolation**: `update_invoice_status` is admin-only and does not move funds
+3. **Index consistency**: Status-list removals/additions happen in the same override operation
+4. **Canonical events**: Admin overrides emit the same lifecycle topics used by normal flows so indexers do not need a separate schema
    - `upload_invoice`: Business must authenticate
    - `verify_invoice`: Admin must authenticate
    - `cancel_invoice`: Business owner must authenticate

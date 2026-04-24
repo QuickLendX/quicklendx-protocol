@@ -31,7 +31,7 @@
 //! - `set_treasury()` - Update treasury address
 //! - Currency whitelist management functions
 
-use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY, ADMIN_KEY};
+use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
@@ -52,6 +52,23 @@ const WHITELIST_KEY: Symbol = symbol_short!("curr_wl");
 
 /// Storage key for initialization lock (prevents concurrent initialization)
 const INIT_LOCK_KEY: Symbol = symbol_short!("init_lck");
+
+/// Storage key for the protocol version written at initialization time
+const PROTOCOL_VERSION_KEY: Symbol = symbol_short!("proto_ver");
+
+/// Current protocol version.
+///
+/// Increment this constant when deploying a new contract version.
+/// The value is written to storage during `initialize` so that
+/// `get_version` always reflects the version that was active when
+/// the contract was first set up, even after a WASM upgrade that
+/// bumps this constant.
+///
+/// # Upgrade policy
+/// - Patch releases (bug-fixes, no storage-schema changes): no bump required.
+/// - Minor releases (new fields, backward-compatible): bump recommended.
+/// - Major releases (breaking storage changes, migration required): bump mandatory.
+pub const PROTOCOL_VERSION: u32 = 1;
 
 // Configuration constants with secure defaults
 #[cfg(not(test))]
@@ -153,20 +170,15 @@ impl ProtocolInitializer {
     /// - Initialization lock prevents concurrent calls
     /// - Emits initialization event for audit trail
     pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
-        // SECURITY: Require authorization from the admin
+        // Administrative authorization for initial setup.
+        // This ensures the designated admin address has consented to the role.
         params.admin.require_auth();
 
-        // CONCURRENCY: Check and set initialization lock
-        if Self::is_initialization_locked(env) {
-            return Err(QuickLendXError::OperationNotAllowed);
+        // Zero-address guard
+        let zero = Address::from_string(&soroban_sdk::String::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"));
+        if params.admin == zero || params.treasury == zero {
+            return Err(QuickLendXError::InvalidAddress);
         }
-        Self::set_initialization_lock(env, true);
-
-        // Ensure cleanup on any failure
-        let result = Self::initialize_internal(env, params);
-        Self::set_initialization_lock(env, false);
-        result
-    }
 
     /// Internal initialization logic with comprehensive validation
     fn initialize_internal(
@@ -175,32 +187,26 @@ impl ProtocolInitializer {
     ) -> Result<(), QuickLendXError> {
         // Check if already initialized (re-initialization protection with idempotency)
         if Self::is_initialized(env) {
-            params.admin.require_auth();
-            // Check for idempotency: if initialized with exact same parameters, return Ok(())
-            let current_admin: Address = env
-                .storage()
-                .instance()
-                .get(&crate::admin::ADMIN_KEY)
-                .unwrap();
-            let current_treasury: Address = env.storage().instance().get(&TREASURY_KEY).unwrap();
-            let current_fee_bps: u32 = env.storage().instance().get(&FEE_BPS_KEY).unwrap();
-            let current_config: ProtocolConfig =
-                env.storage().instance().get(&PROTOCOL_CONFIG_KEY).unwrap();
-            let current_whitelist: Vec<Address> = env
-                .storage()
-                .instance()
-                .get(&WHITELIST_KEY)
-                .unwrap_or(Vec::new(env));
+            // Check for idempotency: if fully initialized with exact same parameters, return Ok(())
+            let current_admin: Option<Address> = env.storage().instance().get(&crate::admin::ADMIN_KEY);
+            let current_treasury: Option<Address> = env.storage().instance().get(&TREASURY_KEY);
+            let current_fee_bps: Option<u32> = env.storage().instance().get(&FEE_BPS_KEY);
+            let current_config: Option<ProtocolConfig> = env.storage().instance().get(&PROTOCOL_CONFIG_KEY);
+            let current_whitelist: Vec<Address> = env.storage().instance().get(&WHITELIST_KEY).unwrap_or(Vec::new(env));
 
-            if current_admin == params.admin
-                && current_treasury == params.treasury
-                && current_fee_bps == params.fee_bps
-                && current_config.min_invoice_amount == params.min_invoice_amount
-                && current_config.max_due_date_days == params.max_due_date_days
-                && current_config.grace_period_seconds == params.grace_period_seconds
-                && current_whitelist == params.initial_currencies
+            if let (Some(c_admin), Some(c_treasury), Some(c_fee), Some(c_conf)) = 
+                (current_admin, current_treasury, current_fee_bps, current_config) 
             {
-                return Ok(());
+                if c_admin == params.admin 
+                    && c_treasury == params.treasury
+                    && c_fee == params.fee_bps
+                    && c_conf.min_invoice_amount == params.min_invoice_amount
+                    && c_conf.max_due_date_days == params.max_due_date_days
+                    && c_conf.grace_period_seconds == params.grace_period_seconds
+                    && current_whitelist == params.initial_currencies
+                {
+                    return Ok(());
+                }
             }
 
             return Err(QuickLendXError::OperationNotAllowed);
@@ -252,6 +258,12 @@ impl ProtocolInitializer {
                 .set(&WHITELIST_KEY, &params.initial_currencies);
         }
 
+        // ATOMIC: Persist the protocol version so get_version is consistent
+        // with the version that was active at initialization time.
+        env.storage()
+            .instance()
+            .set(&PROTOCOL_VERSION_KEY, &PROTOCOL_VERSION);
+
         // COMMIT: Mark protocol as initialized (this is the atomic commit point)
         env.storage()
             .instance()
@@ -282,10 +294,18 @@ impl ProtocolInitializer {
     ///
     /// @notice Returns true when the initialization flag is set.
     pub fn is_initialized(env: &Env) -> bool {
-        env.storage()
+        let proto_init = env.storage()
             .instance()
             .get(&PROTOCOL_INITIALIZED_KEY)
-            .unwrap_or(false)
+            .unwrap_or(false);
+        
+        // Also check if admin was initialized via legacy/phased flow
+        let admin_init = env.storage()
+            .instance()
+            .get(&ADMIN_INITIALIZED_KEY)
+            .unwrap_or(false);
+            
+        proto_init || admin_init
     }
 
     /// Validate initialization parameters with comprehensive checks.
@@ -301,7 +321,7 @@ impl ProtocolInitializer {
     /// * `Ok(())` if all parameters are valid
     /// * `Err(QuickLendXError)` with specific error for invalid parameters
     fn validate_initialization_params(
-        env: &Env,
+        _env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // VALIDATION: Fee basis points (0% to 10%)
@@ -410,11 +430,7 @@ impl ProtocolInitializer {
     /// # Returns
     /// * `Ok(())` if update succeeds
     /// * `Err(QuickLendXError)` if validation fails or not admin
-    pub fn set_fee_config(
-        env: &Env,
-        admin: &Address,
-        fee_bps: u32,
-    ) -> Result<(), QuickLendXError> {
+    pub fn set_fee_config(env: &Env, admin: &Address, fee_bps: u32) -> Result<(), QuickLendXError> {
         AdminStorage::with_admin_auth(env, admin, || {
             // Validate fee
             if fee_bps < MIN_FEE_BPS || fee_bps > MAX_FEE_BPS {
@@ -485,6 +501,27 @@ impl ProtocolInitializer {
 // ============================================================================
 
 impl ProtocolInitializer {
+    /// Get the protocol version stored at initialization time.
+    ///
+    /// Returns the `PROTOCOL_VERSION` constant that was compiled into the
+    /// contract when `initialize` was first called.  Falls back to the
+    /// current `PROTOCOL_VERSION` constant when the contract has not been
+    /// initialized yet (e.g. in a fresh test environment).
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    /// * `u32` - The stored protocol version, or `PROTOCOL_VERSION` if unset.
+    ///
+    /// @notice Always consistent with the version active at init time.
+    pub fn get_version(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&PROTOCOL_VERSION_KEY)
+            .unwrap_or(PROTOCOL_VERSION)
+    }
+
     /// Get the current fee in basis points.
     ///
     /// # Arguments
@@ -566,17 +603,14 @@ fn emit_protocol_initialized(
     max_due_date_days: u64,
     grace_period_seconds: u64,
 ) {
-    env.events().publish(
-        (symbol_short!("proto_in"),),
-        (
-            admin.clone(),
-            treasury.clone(),
-            fee_bps,
-            min_invoice_amount,
-            max_due_date_days,
-            grace_period_seconds,
-            env.ledger().timestamp(),
-        ),
+    crate::events::emit_protocol_initialized(
+        env,
+        admin,
+        treasury,
+        fee_bps,
+        min_invoice_amount,
+        max_due_date_days,
+        grace_period_seconds,
     );
 }
 
@@ -612,10 +646,6 @@ fn emit_fee_config_updated(env: &Env, admin: &Address, fee_bps: u32) {
 fn emit_treasury_updated(env: &Env, admin: &Address, treasury: &Address) {
     env.events().publish(
         (symbol_short!("trsr_upd"),),
-        (
-            admin.clone(),
-            treasury.clone(),
-            env.ledger().timestamp(),
-        ),
+        (admin.clone(), treasury.clone(), env.ledger().timestamp()),
     );
 }

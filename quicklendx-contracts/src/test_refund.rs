@@ -136,7 +136,7 @@ fn test_business_can_trigger_refund() {
     });
 
     let bid = client.get_bids_for_invoice(&invoice_id).get(0).unwrap();
-    assert_eq!(bid.status, BidStatus::Cancelled);
+    assert_eq!(bid.status, crate::bid::BidStatus::Cancelled);
 }
 
 #[test]
@@ -290,7 +290,7 @@ fn test_refund_updates_internal_states_correctly() {
     // 3. Bid status should update to Cancelled
     let bids = client.get_bids_for_invoice(&invoice_id);
     assert_eq!(bids.len(), 1);
-    assert_eq!(bids.get(0).unwrap().status, BidStatus::Cancelled);
+    assert_eq!(bids.get(0).unwrap().status, crate::bid::BidStatus::Cancelled);
 
     // 4. Investment status should update to Refunded
     env.as_contract(&client.address, || {
@@ -299,4 +299,131 @@ fn test_refund_updates_internal_states_correctly() {
                 .unwrap();
         assert_eq!(investment.status, InvestmentStatus::Refunded);
     });
+}
+
+// ============================================================================
+// Token Transfer Failure Tests – Refund Path
+//
+// These tests document and verify the contract's behavior when the underlying
+// Stellar token transfer fails during a refund. In every failure case:
+//   - The escrow status remains `Held` (retryable).
+//   - Invoice, bid, and investment states are left unchanged.
+//   - The correct error variant is returned.
+// ============================================================================
+
+/// `refund_escrow_funds` fails with `InsufficientFunds` when the contract's
+/// token balance has been drained externally (invariant violation scenario).
+///
+/// # Security note
+/// The balance check in `transfer_funds` runs before the token call, so the
+/// escrow status is never updated to `Refunded` and the operation is retryable.
+#[test]
+fn test_refund_fails_when_contract_has_insufficient_balance() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let (invoice_id, business, investor, amount, currency) =
+        create_funded_invoice(&env, &client, &admin);
+
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    // Drain the contract's balance to simulate an invariant violation.
+    // We do this by burning the contract's tokens directly via the SAC admin.
+    let contract_balance = token_client.balance(&contract_id);
+    // Burn all contract tokens (SAC burn requires the holder to auth; use mock_all_auths).
+    sac_client.burn(&contract_id, &contract_balance);
+
+    assert_eq!(
+        token_client.balance(&contract_id),
+        0,
+        "Contract balance should be zero after burn"
+    );
+
+    let investor_balance_before = token_client.balance(&investor);
+
+    // Refund should fail because the contract has no balance to return.
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
+    assert!(
+        result.is_err(),
+        "refund_escrow_funds must fail when contract has no balance"
+    );
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InsufficientFunds,
+        "Expected InsufficientFunds error"
+    );
+
+    // No funds moved to investor.
+    assert_eq!(
+        token_client.balance(&investor),
+        investor_balance_before,
+        "Investor balance must not change on failed refund"
+    );
+
+    // Escrow status must remain Held (retryable).
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(
+        escrow.status,
+        EscrowStatus::Held,
+        "Escrow must remain Held after failed refund"
+    );
+
+    // Invoice must remain Funded.
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Invoice must remain Funded after failed refund"
+    );
+}
+
+/// After a failed refund (due to drained contract balance), the refund succeeds
+/// once the contract balance is restored.
+///
+/// This verifies that the escrow `Held` state is truly retryable.
+#[test]
+fn test_refund_succeeds_after_balance_restored() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let (invoice_id, business, investor, amount, currency) =
+        create_funded_invoice(&env, &client, &admin);
+
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    // Drain contract balance.
+    let contract_balance = token_client.balance(&contract_id);
+    sac_client.burn(&contract_id, &contract_balance);
+
+    // First refund attempt fails.
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InsufficientFunds
+    );
+
+    // Restore contract balance by minting directly to the contract address.
+    sac_client.mint(&contract_id, &amount);
+
+    let investor_balance_before = token_client.balance(&investor);
+
+    // Second refund attempt succeeds.
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
+    assert!(result.is_ok(), "refund should succeed after balance restored");
+
+    // Investor received funds.
+    assert_eq!(
+        token_client.balance(&investor),
+        investor_balance_before + amount
+    );
+
+    // Escrow is now Refunded.
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.status, EscrowStatus::Refunded);
+
+    // Invoice is now Refunded.
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Refunded);
 }

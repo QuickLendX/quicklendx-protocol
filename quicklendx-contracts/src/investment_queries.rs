@@ -1,5 +1,5 @@
-use soroban_sdk::{Env, Address, Vec, BytesN, symbol_short};
-use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
+use crate::investment::{InvestmentStatus, InvestmentStorage};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, Vec};
 
 /// Maximum number of records returned by paginated query endpoints.
 /// This constant ensures memory usage stays within reasonable bounds.
@@ -34,13 +34,13 @@ impl InvestmentQueries {
     }
 
     /// Caps query limit to prevent excessive memory usage and ensure consistent performance.
-    /// 
+    ///
     /// # Arguments
     /// * `limit` - Requested limit (will be capped to MAX_QUERY_LIMIT)
-    /// 
+    ///
     /// # Returns
     /// * Capped limit value, guaranteed to be <= MAX_QUERY_LIMIT
-    /// 
+    ///
     /// # Security Notes
     /// - Uses saturating arithmetic to prevent overflow
     /// - Enforces maximum limit to prevent DoS attacks via large queries
@@ -50,39 +50,43 @@ impl InvestmentQueries {
     }
 
     /// Validates pagination parameters for safety and correctness.
-    /// 
+    ///
     /// # Arguments
     /// * `offset` - Starting position in the result set
     /// * `limit` - Maximum number of records to return
     /// * `total_count` - Total number of available records
-    /// 
+    ///
     /// # Returns
     /// * Tuple of (validated_offset, validated_limit, has_more)
-    /// 
+    ///
     /// # Security Notes
     /// - Uses saturating arithmetic to prevent overflow
     /// - Ensures offset doesn't exceed available data
     /// - Caps limit to prevent excessive memory usage
-    pub fn validate_pagination_params(offset: u32, limit: u32, total_count: u32) -> (u32, u32, bool) {
+    pub fn validate_pagination_params(
+        offset: u32,
+        limit: u32,
+        total_count: u32,
+    ) -> (u32, u32, bool) {
         let capped_limit = Self::cap_query_limit(limit);
         let safe_offset = offset.min(total_count);
         let remaining = total_count.saturating_sub(safe_offset);
         let actual_limit = capped_limit.min(remaining);
         let has_more = safe_offset.saturating_add(actual_limit) < total_count;
-        
+
         (safe_offset, actual_limit, has_more)
     }
 
     /// Safely calculates pagination bounds with overflow protection.
-    /// 
+    ///
     /// # Arguments
     /// * `offset` - Starting position
     /// * `limit` - Number of records requested
     /// * `collection_size` - Size of the collection being paginated
-    /// 
+    ///
     /// # Returns
     /// * Tuple of (start_index, end_index) both guaranteed to be within bounds
-    /// 
+    ///
     /// # Security Notes
     /// - All arithmetic operations use saturating variants
     /// - Bounds are guaranteed to be within [0, collection_size]
@@ -95,17 +99,17 @@ impl InvestmentQueries {
     }
 
     /// Retrieves paginated investments for a specific investor with overflow-safe arithmetic.
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Soroban environment
     /// * `investor` - Investor address to query
     /// * `status_filter` - Optional status filter
     /// * `offset` - Starting position (0-based)
     /// * `limit` - Maximum records to return (capped to MAX_QUERY_LIMIT)
-    /// 
+    ///
     /// # Returns
     /// * Vector of investment IDs matching the criteria
-    /// 
+    ///
     /// # Security Notes
     /// - Uses saturating arithmetic throughout to prevent overflow
     /// - Validates all bounds before array access
@@ -128,7 +132,7 @@ impl InvestmentQueries {
                     Some(status) => investment.status == *status,
                     None => true,
                 };
-                
+
                 if matches_filter {
                     filtered.push_back(investment_id);
                 }
@@ -138,30 +142,30 @@ impl InvestmentQueries {
         // Apply pagination with overflow-safe arithmetic
         let collection_size = filtered.len() as u32;
         let (start, end) = Self::calculate_safe_bounds(offset, limit, collection_size);
-        
+
         let mut result = Vec::new(env);
         let mut idx = start;
-        
+
         while idx < end {
             if let Some(investment_id) = filtered.get(idx) {
                 result.push_back(investment_id);
             }
             idx = idx.saturating_add(1);
         }
-        
+
         result
     }
 
     /// Counts total investments for an investor with optional status filter.
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Soroban environment
     /// * `investor` - Investor address
     /// * `status_filter` - Optional status filter
-    /// 
+    ///
     /// # Returns
     /// * Total count of matching investments
-    /// 
+    ///
     /// # Security Notes
     /// - Uses saturating arithmetic for count operations
     /// - Handles storage access failures gracefully
@@ -179,7 +183,7 @@ impl InvestmentQueries {
                     Some(status) => investment.status == *status,
                     None => true,
                 };
-                
+
                 if matches_filter {
                     count = count.saturating_add(1);
                 }

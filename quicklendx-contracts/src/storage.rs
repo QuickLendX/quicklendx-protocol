@@ -29,8 +29,7 @@
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 // Removed ToString import; not needed in Soroban environment.
 
-use crate::bid::{Bid, BidStatus};
-use crate::investment::{Investment, InvestmentStatus};
+use crate::types::{Bid, BidStatus, Investment, InvestmentStatus};
 use crate::invoice::{Invoice, InvoiceStatus};
 use crate::profits::PlatformFeeConfig;
 
@@ -278,7 +277,7 @@ impl InvoiceStorage {
 
     pub fn remove_from_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_customer(customer_name);
-        let mut ids: Vec<BytesN<32>> = env
+        let ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
             .get(&key)
@@ -307,7 +306,7 @@ impl InvoiceStorage {
 
     pub fn remove_from_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_tax_id(tax_id);
-        let mut ids: Vec<BytesN<32>> = env
+        let ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
             .get(&key)
@@ -613,15 +612,19 @@ impl StorageManager {
     /// WARNING: This is a destructive operation.
     pub fn clear_all_mappings(env: &Env) {
         // Clear counters
-        env.storage().persistent().remove(&StorageKeys::invoice_count());
+        env.storage()
+            .persistent()
+            .remove(&StorageKeys::invoice_count());
         env.storage().persistent().remove(&StorageKeys::bid_count());
-        env.storage().persistent().remove(&StorageKeys::investment_count());
+        env.storage()
+            .persistent()
+            .remove(&StorageKeys::investment_count());
 
         // Note: In a real protocol, we would need a way to discover all keys.
         // Since we can't iterate, we clear the known "singleton" or "root" keys
         // that point to lists or maps of other data.
-        
-        // Clearing these effectively "orphans" the data, which is what 
+
+        // Clearing these effectively "orphans" the data, which is what
         // a "clear" operation does in this context (e.g. for testing/restore).
     }
 }

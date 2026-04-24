@@ -42,7 +42,7 @@ impl PauseControl {
     /// * `Ok(())` on success
     /// * `Err(QuickLendXError::NotAdmin)` if caller is not admin
     pub fn set_paused(env: &Env, admin: &Address, paused: bool) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin_auth(env, admin)?;
+        AdminStorage::require_admin(env, admin)?;
 
         env.storage().instance().set(&PAUSED_KEY, &paused);
         Ok(())
@@ -56,9 +56,12 @@ impl PauseControl {
     ///
     /// # Panics
     /// * `QuickLendXError::OperationNotAllowed` - if the protocol is paused
-    pub fn require_not_paused(env: &Env) {
+    pub fn require_not_paused(env: &Env) -> Result<(), QuickLendXError> {
         if Self::is_paused(env) {
-            return Err(QuickLendXError::ContractPaused);
+            Err(QuickLendXError::ContractPaused)
+        } else {
+            Ok(())
         }
+        Ok(())
     }
 }

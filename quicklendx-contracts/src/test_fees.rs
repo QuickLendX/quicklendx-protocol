@@ -176,7 +176,7 @@ fn test_only_admin_can_update_platform_fee() {
         invoke: &MockAuthInvoke {
             contract: &contract_id,
             fn_name: "set_platform_fee",
-            args: (300i128,).into_val(&env),
+            args: (300u32,).into_val(&env),
             sub_invokes: &[],
         },
     };
@@ -201,7 +201,7 @@ fn test_only_admin_can_update_platform_fee() {
         invoke: &MockAuthInvoke {
             contract: &contract_id,
             fn_name: "set_platform_fee",
-            args: (300i128,).into_val(&env),
+            args: (300u32,).into_val(&env),
             sub_invokes: &[],
         },
     };
@@ -990,14 +990,7 @@ fn test_calculate_transaction_fees_platinum_late_payment_preserves_penalty() {
 
     client.initialize_fee_system(&admin);
     update_user_to_tier(&client, &user, crate::fees::VolumeTier::Platinum);
-    client.update_fee_structure(
-        &admin,
-        &FeeType::LatePayment,
-        &100,
-        &50,
-        &10_000,
-        &true,
-    );
+    client.update_fee_structure(&admin, &FeeType::LatePayment, &100, &50, &10_000, &true);
 
     let amount = 10_000_i128;
     let fees = client.calculate_transaction_fees(&user, &amount, &false, &true);
