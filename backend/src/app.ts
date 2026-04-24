@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { errorHandler } from "./middleware/error-handler";
+import { requestLimitsMiddleware } from "./middleware/request-limits";
 import v1Routes from "./routes/v1";
 
 const app = express();
@@ -12,7 +13,7 @@ app.set("trust proxy", true);
 // Security Middleware
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 app.set("trust proxy", true);
 
 // Test middleware to simulate no IP for coverage
@@ -25,6 +26,9 @@ app.use((req, res, next) => {
 
 // Rate Limiting
 app.use(rateLimitMiddleware);
+
+// Request size limits (body already limited by express.json above, this adds query/header limits)
+app.use(requestLimitsMiddleware);
 
 // Routes
 app.use("/api/v1", v1Routes);
