@@ -1753,3 +1753,133 @@ fn test_accept_bid_and_fund_mismatched_pair_rejected_atomically() {
     assert!(client.try_get_escrow_details(&invoice_id_a).is_err());
     assert!(client.try_get_escrow_details(&invoice_id_b).is_err());
 }
+
+// ============================================================================
+// Release Escrow Funds — Insufficient Contract Balance
+//
+// These tests verify that when the contract's token balance is drained after
+// escrow creation, release_escrow_funds fails cleanly with InsufficientFunds
+// and leaves all state unchanged (retryable).
+// ============================================================================
+
+/// `release_escrow_funds` fails with `InsufficientFunds` when the contract's
+/// token balance has been drained externally (invariant violation scenario).
+///
+/// # Security note
+/// The balance check in `transfer_funds` runs before the token call, so the
+/// escrow status is never updated to `Released` and the operation is retryable.
+#[test]
+fn test_release_escrow_funds_insufficient_contract_balance() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    let amount = 5_000i128;
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 500);
+
+    // Fund the invoice (creates escrow and moves tokens to contract)
+    client.accept_bid_and_fund(&invoice_id, &bid_id);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(token_client.balance(&contract_id), amount);
+
+    // Drain the contract's token balance to simulate an invariant violation.
+    let contract_balance = token_client.balance(&contract_id);
+    sac_client.burn(&contract_id, &contract_balance);
+    assert_eq!(token_client.balance(&contract_id), 0, "Contract balance should be zero after burn");
+
+    let business_balance_before = token_client.balance(&business);
+
+    // Release should fail because the contract has no balance to send.
+    let result = client.try_release_escrow_funds(&invoice_id);
+    assert!(result.is_err(), "release_escrow_funds must fail when contract has no balance");
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InsufficientFunds,
+        "Expected InsufficientFunds error"
+    );
+
+    // No funds moved to business.
+    assert_eq!(
+        token_client.balance(&business),
+        business_balance_before,
+        "Business balance must not change on failed release"
+    );
+
+    // Escrow status must remain Held (retryable).
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.status, EscrowStatus::Held, "Escrow must remain Held after failed release");
+
+    // Invoice must remain Funded.
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Invoice must remain Funded after failed release"
+    );
+}
+
+/// After a failed release (due to drained contract balance), the release succeeds
+/// once the contract balance is restored.
+///
+/// This verifies that the escrow `Held` state is truly retryable.
+#[test]
+fn test_release_escrow_funds_retry_after_balance_restored() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    let amount = 5_000i128;
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 500);
+
+    // Fund the invoice
+    client.accept_bid_and_fund(&invoice_id, &bid_id);
+
+    // Drain contract balance.
+    let contract_balance = token_client.balance(&contract_id);
+    sac_client.burn(&contract_id, &contract_balance);
+
+    // First release attempt fails.
+    let result = client.try_release_escrow_funds(&invoice_id);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InsufficientFunds
+    );
+
+    // Restore contract balance by minting directly to the contract address.
+    sac_client.mint(&contract_id, &amount);
+
+    let business_balance_before = token_client.balance(&business);
+
+    // Second release attempt succeeds.
+    let result = client.try_release_escrow_funds(&invoice_id);
+    assert!(result.is_ok(), "release should succeed after balance restored");
+
+    // Business received funds.
+    assert_eq!(
+        token_client.balance(&business),
+        business_balance_before + amount
+    );
+
+    // Escrow status updated.
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.status, EscrowStatus::Released);
+
+    // Invoice remains Funded (release_escrow_funds does not change invoice status;
+    // that is handled by the caller such as verify_invoice).
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+}

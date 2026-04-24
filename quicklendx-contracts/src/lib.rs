@@ -2740,6 +2740,9 @@ mod test_overdue_expiration;
 mod test_escrow;
 
 #[cfg(test)]
+mod test_payments;
+
+#[cfg(test)]
 mod test_escrow_refund;
 #[cfg(test)]
 mod test_escrow_uniqueness;
