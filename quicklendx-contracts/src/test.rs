@@ -2539,24 +2539,28 @@ fn test_manual_cleanup_backups() {
     assert_eq!(backups.len(), 3);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+// Auth harness: mock_all_auths() is placed at the top of each test so that
+// every require_auth() call (business, admin, investor) is satisfied by the
+// Soroban test environment without weakening any production authorization
+// logic.  Production code is unchanged; only the test setup is corrected.
+#[test]
 fn test_audit_trail_creation() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    // This mirrors real invoker boundaries: each address still needs to be
+    // the correct role (admin, business, investor) — mock_all_auths() only
+    // removes the cryptographic signature requirement in the test harness.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    // Allow unauthenticated calls for test simplicity
-    env.mock_all_auths();
-
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let amount = 1000i128;
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-    // Verify business setup
-    env.mock_all_auths();
+    // Set admin and verify business before uploading invoice.
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
@@ -2581,24 +2585,21 @@ fn test_audit_trail_creation() {
     // Audit fields validation has been updated in the contract API
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_audit_integrity_validation() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    // Allow unauthenticated calls for test simplicity
-    env.mock_all_auths();
-
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let amount = 1000i128;
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-    // Verify business setup
-    env.mock_all_auths();
+    // Set admin and verify business before uploading invoice.
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
@@ -2620,24 +2621,21 @@ fn test_audit_integrity_validation() {
     assert!(is_valid);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_audit_query_functionality() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    // Allow unauthenticated calls for test simplicity
-    env.mock_all_auths();
-
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let amount = 1000i128;
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-    // Verify business setup
-    env.mock_all_auths();
+    // Set admin and verify business before uploading invoice.
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
@@ -2689,24 +2687,21 @@ fn test_audit_query_functionality() {
     assert_eq!(results.get(0).unwrap().invoice_id, invoice_id1);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_audit_statistics() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    // Allow unauthenticated calls for test simplicity
-    env.mock_all_auths();
-
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let amount = 1000i128;
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-    // Verify business setup
-    env.mock_all_auths();
+    // Set admin and verify business before uploading invoice.
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
@@ -3478,18 +3473,26 @@ fn test_partial_payments_trigger_settlement() {
 
 // Dispute Resolution System Tests (from main)
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_create_dispute() {
     let env = Env::default();
+    // Satisfy all require_auth() checks (business.require_auth in upload_invoice,
+    // creator.require_auth in create_dispute) without weakening production logic.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
+
+    // Set admin and verify business so upload_invoice passes KYC checks.
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create and verify invoice
     let invoice_id = client.upload_invoice(
@@ -3523,18 +3526,39 @@ fn test_create_dispute() {
     assert_eq!(dispute.resolution, String::from_str(&env, ""));
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_create_dispute_as_investor() {
     let env = Env::default();
+    // Satisfy all require_auth() checks (business, investor, creator) without
+    // weakening production authorization logic.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
-    let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
+
+    // Set admin, verify business and investor so KYC checks pass.
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor KYC"));
+    client.verify_investor(&investor, &(amount * 2));
+
+    // Register a real token so place_bid / accept_bid can transfer funds.
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&investor, &(amount * 10));
+    let expiry = env.ledger().sequence() + 10_000;
+    tok.approve(&investor, &contract_id, &(amount * 10), &expiry);
+
     let description = String::from_str(&env, "Test invoice");
 
     // Create, verify, and fund invoice
@@ -3572,19 +3596,29 @@ fn test_create_dispute_as_investor() {
     assert_eq!(dispute.evidence, evidence);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_unauthorized_dispute_creation() {
     let env = Env::default();
+    // mock_all_auths() satisfies require_auth() for the setup calls (upload_invoice,
+    // verify_invoice).  The unauthorized dispute attempt is tested via try_create_dispute
+    // which checks business-logic authorization (creator must be business or investor),
+    // not cryptographic auth — so the error is still returned correctly.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let unauthorized = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
+
+    // Set admin and verify business so upload_invoice passes KYC checks.
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create and verify invoice
     let invoice_id = client.upload_invoice(
@@ -3607,18 +3641,25 @@ fn test_unauthorized_dispute_creation() {
     assert!(result.is_err());
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_duplicate_dispute_prevention() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for setup and first dispute creation.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
+
+    // Set admin and verify business so upload_invoice passes KYC checks.
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create and verify invoice
     let invoice_id = client.upload_invoice(
@@ -3647,23 +3688,25 @@ fn test_duplicate_dispute_prevention() {
     assert!(result.is_err());
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_dispute_under_review() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
 
-    // Set admin
-    env.mock_all_auths();
+    // Set admin and verify business so upload_invoice passes KYC checks.
     client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create, verify invoice and create dispute
     let invoice_id = client.upload_invoice(
@@ -3690,23 +3733,25 @@ fn test_dispute_under_review() {
     assert_eq!(dispute_status, DisputeStatus::UnderReview);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_resolve_dispute() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
 
-    // Set admin
-    env.mock_all_auths();
+    // Set admin and verify business so upload_invoice passes KYC checks.
     client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create, verify invoice and create dispute
     let invoice_id = client.upload_invoice(
@@ -3748,19 +3793,28 @@ fn test_resolve_dispute() {
     assert!(dispute.resolved_at > 0);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_get_invoices_with_disputes() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
+    let admin = Address::generate(&env);
     let business1 = Address::generate(&env);
     let business2 = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
+
+    // Set admin and verify both businesses so upload_invoice passes KYC checks.
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business1, &String::from_str(&env, "KYC data 1"));
+    client.verify_business(&admin, &business1);
+    client.submit_kyc_application(&business2, &String::from_str(&env, "KYC data 2"));
+    client.verify_business(&admin, &business2);
 
     // Create invoices
     let invoice_id1 = client.upload_invoice(
@@ -3801,23 +3855,25 @@ fn test_get_invoices_with_disputes() {
     assert!(disputed_invoices.contains(&invoice_id2));
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_get_invoices_by_dispute_status() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
 
-    // Set admin
-    env.mock_all_auths();
+    // Set admin and verify business so upload_invoice passes KYC checks.
     client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create, verify invoice and create dispute
     let invoice_id = client.upload_invoice(
@@ -3860,18 +3916,27 @@ fn test_get_invoices_by_dispute_status() {
     assert_eq!(resolved_invoices.get(0).unwrap(), invoice_id);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_dispute_validation() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for setup calls (upload_invoice).
+    // The validation errors tested here are business-logic errors (empty reason/evidence),
+    // not auth errors, so they are still returned correctly under mock_all_auths().
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
+
+    // Set admin and verify business so upload_invoice passes KYC checks.
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create and verify invoice
     let invoice_id = client.upload_invoice(

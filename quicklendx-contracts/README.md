@@ -1093,6 +1093,108 @@ The protocol includes comprehensive fuzz testing for critical operations:
 
 See [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md) for detailed security analysis.
 
+## 🧪 Test Harness Authorization Guide
+
+### Overview
+
+Soroban's `require_auth()` enforces that the address passed to a contract function
+has cryptographically signed the transaction. In the test environment this is
+simulated with `env.mock_all_auths()`, which tells the host to accept every
+authorization check without a real signature. **This does not weaken production
+security** — `mock_all_auths()` is only available under the `testutils` feature
+flag and has no effect in deployed WASM.
+
+### Why tests were disabled
+
+Several audit-trail and dispute-resolution tests were commented out with
+`// TODO: Fix authorization issues in test environment`. The root causes were:
+
+1. **`upload_invoice`** calls `business.require_auth()` — tests that called it
+   without `mock_all_auths()` active would panic.
+2. **`create_dispute`** calls `creator.require_auth()` — same issue.
+3. **`set_admin`** / `verify_business` / `verify_investor` all require auth —
+   calling them before `mock_all_auths()` was set up caused failures.
+4. Some tests called `mock_all_auths()` mid-test (after the first contract call),
+   which was too late.
+
+### Fix applied (PR #816)
+
+Every previously-disabled test now follows this pattern:
+
+```rust
+#[test]
+fn test_example() {
+    let env = Env::default();
+    // Place mock_all_auths() FIRST, before any contract call.
+    // This satisfies every require_auth() check for the duration of the test
+    // without changing any production authorization logic.
+    env.mock_all_auths();
+
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Set up admin and KYC-verify actors before calling guarded entry points.
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+
+    let business = Address::generate(&env);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
+
+    // Now call the auth-gated entry point normally.
+    let invoice_id = client.upload_invoice(&business, /* ... */);
+    // ...
+}
+```
+
+### Key rules for writing auth-aware tests
+
+| Rule | Reason |
+|------|--------|
+| Call `env.mock_all_auths()` **before** `env.register(...)` or any client call | The mock must be active before the first host call |
+| Always call `set_admin` before any admin-only operation | `require_admin` checks the stored admin address, not just auth |
+| KYC-verify businesses and investors before `upload_invoice` / `place_bid` | Production code enforces KYC independently of auth |
+| For tests that exercise investor bid flows, register a real token and mint/approve | `place_bid` / `accept_bid` perform token transfers |
+| `mock_all_auths()` does **not** bypass business-logic checks | Role checks (`NotAdmin`, `BusinessNotVerified`, `DisputeNotAuthorized`) still fire |
+
+### Existing test helpers
+
+The following public helpers in `src/test.rs` encapsulate the correct setup
+pattern and should be reused in new tests:
+
+```rust
+// Sets up env + contract + admin (calls mock_all_auths internally)
+pub fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address, Address);
+
+// KYC-verifies a new business address
+pub fn setup_verified_business(env, client, admin) -> Address;
+
+// KYC-verifies a new investor address with a given limit
+pub fn setup_verified_investor(env, client, limit) -> Address;
+
+// Registers a Stellar asset contract, mints tokens, and approves the contract
+pub fn setup_token(env, business, investor, contract_id) -> Address;
+
+// Creates a fully funded invoice (business + investor + token + bid + accept)
+pub fn create_funded_invoice(env, client, admin)
+    -> (BytesN<32>, Address, Address, Address, Address);
+```
+
+### Security invariants preserved
+
+- `require_auth()` calls in production code are **unchanged**.
+- `mock_all_auths()` is **only** compiled under `#[cfg(test)]` via the
+  `soroban-sdk` `testutils` feature — it cannot appear in deployed WASM.
+- Role checks (`AdminStorage::require_admin`, KYC guards, ownership checks) are
+  **not** bypassed by `mock_all_auths()` and continue to be exercised by the
+  tests.
+- Tests that verify *rejection* of unauthorized actors (e.g.
+  `test_unauthorized_dispute_creation`) still use `try_create_dispute` and
+  assert `is_err()` — the business-logic authorization error is returned
+  regardless of `mock_all_auths()`.
+
+
+
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
