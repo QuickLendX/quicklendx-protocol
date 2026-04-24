@@ -34,6 +34,8 @@ mod storage;
 #[cfg(test)]
 mod test_admin;
 #[cfg(test)]
+mod test_audit;
+#[cfg(test)]
 mod test_bid_ranking;
 #[cfg(test)]
 mod test_business_kyc;
@@ -2323,6 +2325,19 @@ impl QuickLendXContract {
 
     pub fn get_audit_entry(env: Env, audit_id: BytesN<32>) -> Option<audit::AuditLogEntry> {
         audit::AuditStorage::get_audit_entry(&env, &audit_id)
+    }
+
+    /// Get all audit entry IDs for a given operation type.
+    pub fn get_audit_entries_by_operation(
+        env: Env,
+        operation: audit::AuditOperation,
+    ) -> Vec<BytesN<32>> {
+        audit::AuditStorage::get_audit_entries_by_operation(&env, &operation)
+    }
+
+    /// Get all audit entry IDs attributed to a given actor address.
+    pub fn get_audit_entries_by_actor(env: Env, actor: Address) -> Vec<BytesN<32>> {
+        audit::AuditStorage::get_audit_entries_by_actor(&env, &actor)
     }
 
     pub fn query_audit_logs(
