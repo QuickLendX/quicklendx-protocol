@@ -88,7 +88,7 @@ impl AdminStorage {
         env.storage().instance().set(&ADMIN_INITIALIZED_KEY, &true);
 
         // AUDIT: Emit initialization event
-        emit_admin_initialized(env, admin);
+        crate::events::emit_admin_initialized(env, admin);
 
         Ok(())
     }
