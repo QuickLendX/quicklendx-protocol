@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
+import { loadSheddingMiddleware } from "./middleware/load-shedding";
 import { errorHandler } from "./middleware/error-handler";
 import v1Routes from "./routes/v1";
 
@@ -25,6 +26,9 @@ app.use((req, res, next) => {
 
 // Rate Limiting
 app.use(rateLimitMiddleware);
+
+// Load Shedding (concurrency cap + per-request timeout)
+app.use(loadSheddingMiddleware);
 
 // Routes
 app.use("/api/v1", v1Routes);
