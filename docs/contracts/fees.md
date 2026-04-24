@@ -449,3 +449,69 @@ The test suite achieves **95%+ code coverage** for the fees module:
 2. **Time-decay discounts**: Implement volume reset periods (annual reconciliation).
 3. **Per-tier analytics**: Track fee savings and platform impact by tier.
 4. **Custom fee structures**: Admin-configurable per-invoice-type fee schedules.
+
+---
+
+## Fee Configuration Bounds and Rounding Safety
+
+This section documents the hard invariants enforced by the contract and validated by the test suite in `test_fees_extended.rs` and `test_profit_fee.rs`.
+
+### Hard Bounds
+
+| Property | Value | Error on violation |
+|:---|:---|:---|
+| Maximum `fee_bps` | 1000 (10%) | `InvalidFeeBasisPoints` |
+| Minimum `fee_bps` | 0 | — |
+| `min_fee` | ≥ 0 | `InvalidAmount` |
+| `max_fee` | ≥ `min_fee` | `InvalidAmount` |
+| Absolute `max_fee` cap | 10,000,000,000,000 stroops | `InvalidFeeConfiguration` |
+
+### Profit/Fee Invariants
+
+For every call to `calculate_profit(investment_amount, payment_amount)`:
+
+1. **No dust**: `investor_return + platform_fee == payment_amount` (exact, no remainder)
+2. **Non-negative fee**: `platform_fee >= 0`
+3. **Fee bounded by profit**: `platform_fee <= max(0, payment_amount - investment_amount)`
+4. **Principal preserved**: `investor_return >= 0`; when `payment_amount >= investment_amount`, `investor_return >= investment_amount`
+5. **Zero fee on no-profit**: when `payment_amount <= investment_amount`, `platform_fee == 0`
+
+### Rounding Strategy
+
+All fee arithmetic uses **integer floor division** (Rust's default `/` for `i128`):
+
+```
+platform_fee = floor(gross_profit * fee_bps / BPS_DENOMINATOR)
+             = (gross_profit * fee_bps) / 10_000   // integer division
+```
+
+Consequences:
+- The platform absorbs any fractional remainder (never the investor).
+- The smallest profit that yields `fee=1` at 2% (200 bps) is `profit=50` (since `50*200/10000 = 1`).
+- `profit=49` at 2% yields `fee=0` (since `49*200/10000 = 0.98`, truncated to 0).
+
+### Rounding Boundary Examples
+
+| `fee_bps` | `gross_profit` | `platform_fee` | Notes |
+|---:|---:|---:|:---|
+| 200 | 1 | 0 | `1*200/10000 = 0.02 → 0` |
+| 200 | 49 | 0 | `49*200/10000 = 0.98 → 0` |
+| 200 | 50 | 1 | `50*200/10000 = 1.0 → 1` |
+| 200 | 9999 | 199 | `9999*200/10000 = 199.98 → 199` |
+| 1000 | 100 | 10 | `100*1000/10000 = 10.0 → 10` |
+| 999 | 10000 | 999 | `10000*999/10000 = 999.0 → 999` |
+| 1 | 9999 | 0 | `9999*1/10000 = 0.9999 → 0` |
+| 1 | 10000 | 1 | `10000*1/10000 = 1.0 → 1` |
+
+### Overflow Safety
+
+- All intermediate arithmetic uses `i128` (max ≈ 1.7 × 10³⁸).
+- Saturating multiplication is used where overflow is possible.
+- The test `test_overflow_safety_large_amounts` validates amounts at `i128::MAX / 2` satisfy the no-dust invariant.
+
+### Security Notes
+
+- **No hidden fee extraction**: fee is computed solely from `gross_profit * fee_bps / 10_000`; no additional charges are possible.
+- **Deterministic**: identical inputs always produce identical outputs (no randomness, no timestamp dependency in the formula).
+- **Admin-gated config**: only the admin address can change `fee_bps`; all changes emit an auditable event.
+- **Immediate effect**: fee config changes apply to the very next `calculate_profit` call with no delay or buffering.
