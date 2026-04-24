@@ -1,10 +1,20 @@
 import request from "supertest";
 import app from "../index";
+import { adminControlService } from "../services/adminControlService";
+import { auditLogService } from "../services/auditLogService";
 import { statusService, StatusService } from "../services/statusService";
+
+const OPERATIONS_TOKEN = "test-operations-token";
 
 describe("Status API", () => {
   beforeEach(() => {
+    process.env.QLX_SUPPORT_TOKEN = "test-support-token";
+    process.env.QLX_OPERATIONS_TOKEN = OPERATIONS_TOKEN;
+    process.env.QLX_SUPER_ADMIN_TOKEN = "test-super-admin-token";
+
     // Reset service state before each test
+    adminControlService.reset();
+    auditLogService.clear();
     statusService.setMaintenanceMode(false);
     statusService.updateLastIndexedLedger(100000);
     statusService.setMockCurrentLedger(100005); // 5 ledgers lag
@@ -20,8 +30,11 @@ describe("Status API", () => {
   });
 
   it("should return maintenance status when maintenance mode is enabled", async () => {
-    await request(app).post("/api/admin/maintenance").send({ enabled: true });
-    
+    await request(app)
+      .post("/api/admin/maintenance")
+      .set("Authorization", `Bearer ${OPERATIONS_TOKEN}`)
+      .send({ enabled: true });
+
     const res = await request(app).get("/api/status");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("maintenance");
@@ -30,7 +43,7 @@ describe("Status API", () => {
 
   it("should return degraded status when index lag is high", async () => {
     statusService.setMockCurrentLedger(100100); // 100 ledgers lag
-    
+
     const res = await request(app).get("/api/status");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("degraded");
@@ -41,6 +54,7 @@ describe("Status API", () => {
   it("should return 400 for invalid maintenance toggle", async () => {
     const res = await request(app)
       .post("/api/admin/maintenance")
+      .set("Authorization", `Bearer ${OPERATIONS_TOKEN}`)
       .send({ enabled: "not-a-boolean" });
     expect(res.status).toBe(400);
   });
@@ -53,7 +67,9 @@ describe("Status API", () => {
   });
 
   it("should handle service errors gracefully", async () => {
-    jest.spyOn(statusService, "getStatus").mockRejectedValueOnce(new Error("Test error"));
+    jest
+      .spyOn(statusService, "getStatus")
+      .mockRejectedValueOnce(new Error("Test error"));
     const res = await request(app).get("/api/status");
     expect(res.status).toBe(500);
     expect(res.body.error).toBe("Internal server error");
@@ -86,5 +102,3 @@ describe("Status API", () => {
     expect(StatusSchema.parse(validData)).toEqual(validData);
   });
 });
-
-
