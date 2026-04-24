@@ -155,6 +155,80 @@ paths:
                 items:
                   $ref: '#/components/schemas/Dispute'
 
+  /notifications/preferences/{userId}:
+    get:
+      summary: Get user notification preferences
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: User notification preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserNotificationPreferences'
+        '404':
+          description: User preferences not found
+    put:
+      summary: Update user notification preferences
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNotificationPreferences'
+      responses:
+        '200':
+          description: Preferences updated successfully
+        '400':
+          description: Invalid request data
+
+  /notifications/unsubscribe/{userId}:
+    post:
+      summary: Unsubscribe user from email notifications
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: Successfully unsubscribed
+
+  /events:
+    post:
+      summary: Process blockchain events for notifications
+      description: Internal endpoint for indexer to post events that trigger notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/Event'
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/Event'
+      responses:
+        '200':
+          description: Events processed successfully
+        '500':
+          description: Internal server error
+
 components:
   schemas:
     InvoiceStatus:
@@ -248,6 +322,54 @@ components:
         status: { $ref: '#/components/schemas/DisputeStatus' }
         created_at: { type: integer, format: int64 }
         resolved_at: { type: integer, format: int64 }
+
+    NotificationType:
+      type: string
+      enum: [invoice_funded, payment_received, dispute_opened, dispute_resolved]
+
+    UserNotificationPreferences:
+      type: object
+      properties:
+        email_enabled: { type: boolean }
+        email_address: { type: string, format: email }
+        notifications:
+          type: object
+          properties:
+            invoice_funded: { type: boolean }
+            payment_received: { type: boolean }
+            dispute_opened: { type: boolean }
+            dispute_resolved: { type: boolean }
+
+    UpdateNotificationPreferences:
+      type: object
+      properties:
+        email_enabled: { type: boolean }
+        email_address: { type: string, format: email }
+        notifications:
+          type: object
+          properties:
+            invoice_funded: { type: boolean }
+            payment_received: { type: boolean }
+            dispute_opened: { type: boolean }
+            dispute_resolved: { type: boolean }
+
+    Event:
+      type: object
+      properties:
+        type: { type: string }
+        id: { type: string }
+        timestamp: { type: integer, format: int64 }
+        invoice_id: { type: string }
+        business: { type: string }
+        investor: { type: string }
+        amount: { type: string }
+        payer: { type: string }
+        initiator: { type: string }
+        resolved_by: { type: string }
+      required:
+        - type
+        - id
+        - timestamp
 
   securitySchemes:
     bearerAuth:
