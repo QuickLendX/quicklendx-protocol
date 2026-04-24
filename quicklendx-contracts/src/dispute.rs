@@ -29,17 +29,6 @@ fn zero_address(env: &Env) -> Address {
     Address::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF")
 }
 
-
-fn add_to_dispute_index(_env: &Env, _invoice_id: &BytesN<32>) {}
-
-fn get_dispute_index(_env: &Env) -> Vec<BytesN<32>> {
-    Vec::new(_env)
-}
-
-fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> {
-    Ok(())
-}
-
 /// @notice Create a dispute on an invoice (standalone storage variant).
 /// @dev Validates:
 ///   - No duplicate dispute for the same invoice
@@ -191,5 +180,3 @@ pub fn get_invoices_by_dispute_status(
     }
     result
 }
-//! Invoice disputes are represented on [`crate::invoice::Invoice`] and handled by contract
-//! entry points in `lib.rs`. This module is reserved for future dispute-specific helpers.

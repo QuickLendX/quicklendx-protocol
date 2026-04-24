@@ -582,6 +582,16 @@ mod test_init {
     }
 
     #[test]
+    fn test_set_fee_config_non_admin_fails_and_preserves_state() {
+        let (env, client, params) = setup_initialized();
+        let non_admin = Address::generate(&env);
+
+        let result = client.try_set_fee_config(&non_admin, &300u32);
+        assert_eq!(result, Err(Ok(QuickLendXError::NotAdmin)));
+        assert_eq!(client.get_fee_bps(), params.fee_bps);
+    }
+
+    #[test]
     fn test_set_treasury_succeeds() {
         let (env, client, params) = setup_initialized();
         let new_treasury = Address::generate(&env);
@@ -606,6 +616,17 @@ mod test_init {
             Err(Ok(QuickLendXError::InvalidAddress)),
             "Treasury same as admin must fail"
         );
+    }
+
+    #[test]
+    fn test_set_treasury_non_admin_fails_and_preserves_state() {
+        let (env, client, params) = setup_initialized();
+        let non_admin = Address::generate(&env);
+        let attacker_treasury = Address::generate(&env);
+
+        let result = client.try_set_treasury(&non_admin, &attacker_treasury);
+        assert_eq!(result, Err(Ok(QuickLendXError::NotAdmin)));
+        assert_eq!(client.get_treasury(), Some(params.treasury));
     }
 
     // ============================================================================

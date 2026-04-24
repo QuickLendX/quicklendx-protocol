@@ -180,6 +180,16 @@ impl ProtocolInitializer {
             return Err(QuickLendXError::InvalidAddress);
         }
 
+        if Self::is_initialization_locked(env) {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
+        Self::set_initialization_lock(env, true);
+        let result = Self::initialize_internal(env, params);
+        Self::set_initialization_lock(env, false);
+        result
+    }
+
     /// Internal initialization logic with comprehensive validation
     fn initialize_internal(
         env: &Env,
