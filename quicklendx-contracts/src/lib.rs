@@ -56,6 +56,8 @@ mod test_refund;
 #[cfg(test)]
 mod test_storage;
 #[cfg(test)]
+mod test_protocol_limits_boundary;
+#[cfg(test)]
 mod test_string_limits;
 #[cfg(test)]
 mod test_types;
