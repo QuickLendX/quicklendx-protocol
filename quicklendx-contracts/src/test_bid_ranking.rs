@@ -1,6 +1,9 @@
 //! Deterministic bid ranking tests.
 use crate::bid::{Bid, BidStatus, BidStorage};
-use soroban_sdk::{testutils::{Address as _, Ledger}, Address, BytesN, Env};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Address, BytesN, Env,
+};
 
 fn invoice_id(env: &Env, seed: u8) -> BytesN<32> {
     let mut bytes = [0u8; 32];

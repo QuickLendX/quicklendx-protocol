@@ -55,7 +55,7 @@ mod test_profit_fee;
 mod test_refund;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_storage;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_string_limits;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_types;
@@ -312,23 +312,7 @@ impl QuickLendXContract {
         tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        // Validate input parameters
-        if amount <= 0 {
-            return Err(QuickLendXError::InvalidAmount);
-        }
-
-        let current_timestamp = env.ledger().timestamp();
-        if due_date <= current_timestamp {
-            return Err(QuickLendXError::InvoiceDueDateInvalid);
-        }
-
-        // Validate amount and due date using protocol limits
-        // Validate due date is not too far in the future using protocol limits
-        protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
-
-        if description.len() == 0 {
-            return Err(QuickLendXError::InvalidDescription);
-        }
+        verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
 
         currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
 
@@ -1142,8 +1126,7 @@ impl QuickLendXContract {
         investor: Address,
         investment_limit: i128,
     ) -> Result<(), QuickLendXError> {
-        let admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         let verification = do_verify_investor(&env, &admin, &investor, investment_limit)?;
         emit_investor_verified(&env, &verification);
         Ok(())
@@ -1175,8 +1158,7 @@ impl QuickLendXContract {
         investor: Address,
         new_limit: i128,
     ) -> Result<(), QuickLendXError> {
-        let admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         verification::set_investment_limit(&env, &admin, &investor, new_limit)
     }
 
@@ -1679,8 +1661,7 @@ impl QuickLendXContract {
 
     /// Configure treasury address for platform fee routing (admin only)
     pub fn configure_treasury(env: Env, treasury_address: Address) -> Result<(), QuickLendXError> {
-        let admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
 
         let _treasury_config =
             fees::FeeManager::configure_treasury(&env, &admin, treasury_address.clone())?;
@@ -1693,8 +1674,7 @@ impl QuickLendXContract {
 
     /// Update platform fee basis points (admin only)
     pub fn update_platform_fee_bps(env: Env, new_fee_bps: u32) -> Result<(), QuickLendXError> {
-        let admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
 
         let old_config = fees::FeeManager::get_platform_fee_config(&env)?;
         let old_fee_bps = old_config.fee_bps;
@@ -1789,8 +1769,7 @@ impl QuickLendXContract {
         min_distribution_amount: i128,
     ) -> Result<(), QuickLendXError> {
         // Verify admin
-        let stored_admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let stored_admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         if admin != stored_admin {
             return Err(QuickLendXError::NotAdmin);
         }
@@ -2761,6 +2740,9 @@ mod test_min_invoice_amount;
 mod test_profit_fee_formula;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_revenue_split;
+
+#[cfg(test)]
+mod test_input_matrix;
 
 // ============================================================================
 // Analytics Functions missing from exports

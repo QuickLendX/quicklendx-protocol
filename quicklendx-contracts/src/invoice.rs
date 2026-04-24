@@ -100,13 +100,7 @@ impl Invoice {
         self.status = InvoiceStatus::Verified;
     }
 
-    pub fn mark_as_funded(
-        &mut self,
-        _env: &Env,
-        investor: Address,
-        amount: i128,
-        timestamp: u64,
-    ) {
+    pub fn mark_as_funded(&mut self, _env: &Env, investor: Address, amount: i128, timestamp: u64) {
         self.status = InvoiceStatus::Funded;
         self.funded_amount = amount;
         self.funded_at = Some(timestamp);
@@ -220,11 +214,7 @@ impl Invoice {
         self.set_metadata(env, Some(metadata))
     }
 
-    pub fn clear_metadata(
-        &mut self,
-        env: &Env,
-        caller: &Address,
-    ) -> Result<(), QuickLendXError> {
+    pub fn clear_metadata(&mut self, env: &Env, caller: &Address) -> Result<(), QuickLendXError> {
         if self.business != *caller {
             return Err(QuickLendXError::Unauthorized);
         }
@@ -362,5 +352,8 @@ fn eq_trimmed_lower_ascii(lhs: &String, rhs: &String) -> bool {
 }
 
 fn zero_address(env: &Env) -> Address {
-    Address::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF")
+    Address::from_str(
+        env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    )
 }

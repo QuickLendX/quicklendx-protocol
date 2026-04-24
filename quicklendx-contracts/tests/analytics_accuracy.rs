@@ -1,5 +1,4 @@
 #![cfg(feature = "legacy-tests")]
-
 #![cfg(feature = "legacy-tests")]
 
 use quicklendx_contracts::{

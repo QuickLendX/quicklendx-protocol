@@ -1,8 +1,6 @@
 #![cfg(feature = "legacy-tests")]
 
-use quicklendx_contracts::{
-    types::InvoiceCategory, QuickLendXContract, QuickLendXContractClient,
-};
+use quicklendx_contracts::{types::InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Address, BytesN, Env, String, Vec,

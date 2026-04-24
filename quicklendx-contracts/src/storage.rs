@@ -29,9 +29,9 @@
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 // Removed ToString import; not needed in Soroban environment.
 
-use crate::types::{Bid, BidStatus, Investment, InvestmentStatus};
 use crate::invoice::{Invoice, InvoiceStatus};
 use crate::profits::PlatformFeeConfig;
+use crate::types::{Bid, BidStatus, Investment, InvestmentStatus};
 
 /// Storage keys for the contract
 pub struct StorageKeys;
@@ -485,7 +485,10 @@ impl InvoiceStorage {
         let mut matches = Vec::new(env);
         for invoice_id in Self::get_all_invoice_ids(env).iter() {
             if let Some(invoice) = Self::get(env, &invoice_id) {
-                if invoice.average_rating.map_or(false, |rating| rating > threshold) {
+                if invoice
+                    .average_rating
+                    .map_or(false, |rating| rating > threshold)
+                {
                     matches.push_back(invoice_id);
                 }
             }
