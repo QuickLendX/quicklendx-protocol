@@ -431,4 +431,24 @@ impl QuickLendXContract {
         backup.status = BackupStatus::Archived;
         BackupStorage::update_backup(&env, &backup)
     }
+
+    /// Manually trigger retention-policy cleanup (admin only).
+    ///
+    /// Applies the current [`BackupRetentionPolicy`] immediately and returns
+    /// the number of active backups that were purged.  Archived backups are
+    /// never removed by this operation.
+    pub fn cleanup_backups(env: Env, admin: Address) -> Result<u32, QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        BackupStorage::cleanup_old_backups(&env)
+    }
+
+    /// Return all invoice IDs belonging to a specific business address.
+    pub fn get_invoices_by_business(env: Env, business: Address) -> Vec<BytesN<32>> {
+        InvoiceStorage::get_business_invoices(&env, &business)
+    }
+
+    /// Return all invoice IDs that currently have the given status.
+    pub fn get_invoices_by_status(env: Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
+        InvoiceStorage::get_invoices_by_status(&env, status)
+    }
 }

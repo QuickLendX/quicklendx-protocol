@@ -34,3 +34,6 @@ mod test;
 
 #[cfg(test)]
 mod test_store_invoice_auth;
+
+#[cfg(test)]
+mod test_backup_safety;
