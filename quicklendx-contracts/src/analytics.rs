@@ -1336,27 +1336,4 @@ impl AnalyticsCalculator {
         crate::investment::InvestmentStorage::get_investments_by_investor(env, investor)
     }
 
-    fn initialize_category_counters(_env: &Env) -> Vec<(crate::invoice::InvoiceCategory, u32)> {
-        Vec::new(_env)
-    }
-
-    fn increment_category_counter(
-        categories: &mut Vec<(crate::invoice::InvoiceCategory, u32)>,
-        category: &crate::invoice::InvoiceCategory,
-    ) {
-        for i in 0..categories.len() {
-            if let Some((cat, count)) = categories.get(i) {
-                if cat == *category {
-                    let new_count = count + 1;
-                    categories.set(i, (category.clone(), new_count));
-                    return;
-                }
-            }
-        }
-        categories.push_back((category.clone(), 1));
-    }
-
-    fn validate_investor_report(_report: &InvestorReport) -> bool {
-        true
-    }
 }

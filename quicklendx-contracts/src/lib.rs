@@ -29,7 +29,6 @@ mod profits;
 mod protocol_limits;
 mod reentrancy;
 mod settlement;
-#[cfg(test)]
 mod storage;
 #[cfg(test)]
 mod test_admin;

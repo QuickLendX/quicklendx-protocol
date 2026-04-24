@@ -473,6 +473,12 @@ pub struct InvoiceStatusUpdated {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminInitialized {
+    pub admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtocolInitialized {
     pub admin: Address,
     pub treasury: Address,
@@ -791,6 +797,13 @@ pub fn emit_escrow_created(env: &Env, escrow: &Escrow) {
         investor: escrow.investor.clone(),
         business: escrow.business.clone(),
         amount: escrow.amount,
+    }
+    .publish(env);
+}
+
+pub fn emit_admin_initialized(env: &Env, admin: &Address) {
+    AdminInitialized {
+        admin: admin.clone(),
     }
     .publish(env);
 }
