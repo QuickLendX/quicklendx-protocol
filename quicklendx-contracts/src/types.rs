@@ -191,3 +191,24 @@ pub struct PlatformFeeConfig {
     pub bid_fee: PlatformFee,
     pub investment_fee: PlatformFee,
 }
+
+/// Search ranking levels for invoice search results
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum SearchRank {
+    /// Exact match on invoice ID (highest priority)
+    ExactId = 3,
+    /// Partial match on description or customer name
+    PartialMatch = 2,
+    /// No match but included for completeness (lowest priority)
+    Other = 1,
+}
+
+/// Search result with ranking information
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct SearchResult {
+    pub invoice_id: BytesN<32>,
+    pub rank: SearchRank,
+    pub created_at: u64,
+}
