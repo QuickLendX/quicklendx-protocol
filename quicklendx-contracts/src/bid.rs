@@ -361,11 +361,23 @@ impl BidStorage {
     }
 
     /// @notice Prunes expired bids from the investor's global index.
-    /// @dev This ensures that the investor's bid list doesn't grow unboundedly over time
-    /// with historical expired bids, maintaining O(active_bids) performance for limits.
-    /// @param env The Soroban environment.
-    /// @param investor The address of the investor.
-    /// @return newly_expired The number of bids that just transitioned to Expired.
+    ///
+    /// # Purpose
+    /// Maintains the investor's bid list to prevent unbounded growth with historical expired bids.
+    /// Ensures that investor active-bid limit checks (e.g., MAX_ACTIVE_BIDS_PER_INVESTOR) operate
+    /// in O(active_bids) time, not O(all_historical_bids).
+    ///
+    /// # Invariants
+    /// - Terminal bids (Accepted, Withdrawn, Cancelled) are kept in the index for historical audit
+    /// - Expired bids are pruned to keep the list size manageable
+    /// - Placed (non-expired) bids are preserved
+    /// - The index after refresh accurately reflects countable active bids for rate-limiting
+    ///
+    /// # Parameters
+    /// @param env The Soroban environment
+    /// @param investor The address of the investor
+    ///
+    /// @return newly_expired The number of bids that transitioned from Placed to Expired in this call
     fn refresh_investor_bids(env: &Env, investor: &Address) -> u32 {
         let current_timestamp = env.ledger().timestamp();
         let bid_ids = Self::get_bids_by_investor_all(env, investor);
@@ -406,10 +418,23 @@ impl BidStorage {
     }
 
     /// @notice Count currently active (Placed) bids for an investor across all invoices.
-    /// @dev Expired bids are transitioned to `Expired` and removed from the index during this scan.
-    /// @param env The Soroban environment.
-    /// @param investor The address of the investor.
-    /// @return count The number of non-expired Placed bids.
+    ///
+    /// # Purpose
+    /// Returns the count of non-expired Placed bids for rate limiting and bid management.
+    /// Used by bidding logic to enforce MAX_ACTIVE_BIDS_PER_INVESTOR.
+    ///
+    /// # Invariants
+    /// - Includes only Placed bids that have not yet reached their expiration timestamp
+    /// - Excludes terminal states (Accepted, Withdrawn, Cancelled) and Expired bids
+    /// - The count is always <= the investor's active bid limit (if enforced)
+    ///
+    /// # Side Effects
+    /// - Calls refresh_investor_bids, which may update the investor's bid index to prune expired bids
+    /// - Does NOT modify bid statuses (transitions happen within refresh_investor_bids)
+    ///
+    /// @param env The Soroban environment
+    /// @param investor The address of the investor
+    /// @return count The number of non-expired Placed bids across all invoices
     pub fn count_active_placed_bids_for_investor(env: &Env, investor: &Address) -> u32 {
         let _ = Self::refresh_investor_bids(env, investor);
         let current_timestamp = env.ledger().timestamp();
@@ -446,10 +471,22 @@ impl BidStorage {
     }
     /// @notice Scans and prunes expired bids from an invoice's bid list.
     /// @dev Maintains O(N) where N is current bids on invoice. Pruning keeps N small.
-    /// @param env The Soroban environment.
+    /// 
+    /// # Invariants
+    /// - Invariant 1: Terminal bids (Accepted, Withdrawn, Cancelled) are NEVER modified or removed
+    /// - Invariant 2: Active Placed bids are preserved if not yet expired
+    /// - Invariant 3: Expired/orphaned bids are removed from the index to prevent unbounded growth
+    /// - Invariant 4: The operation is idempotent — calling multiple times on same state yields same result
+    /// - Invariant 5: Cleanup is bounded by O(N) compute and storage changes
+    ///
+    /// # Security Properties
+    /// - Cleanup cannot corrupt active bid records; terminal states are always preserved
+    /// - Cleanup cannot trigger DoS via unbounded iteration (index size capped at MAX_BIDS_PER_INVOICE)
+    /// - Cleanup is deterministic: same ledger timestamp + bid set → same result always
+    ///
+    /// @param env The Soroban environment (for timestamp, storage access).
     /// @param invoice_id The unique identifier of the invoice.
-    /// @return cleaned_count Total number of bids that were either transitioned to `Expired` or
-    /// were already `Expired`/orphaned and remained in the index and have now been removed.
+    /// @return cleaned_count Total number of bids cleaned (transitioned to Expired or already Expired bids removed from index).
     fn refresh_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let current_timestamp = env.ledger().timestamp();
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
@@ -496,10 +533,40 @@ impl BidStorage {
         cleaned_count
     }
 
-    /// Public interface to trigger cleanup of expired bids for a specific invoice.
+    /// @notice Public interface to trigger cleanup of expired bids for a specific invoice.
     ///
-    /// Returns the count of bids removed from the invoice index (including those newly expired).
-    /// This operation is idempotent and safe to call multiple times.
+    /// # Purpose
+    /// Removes expired bids from an invoice's bid list to prevent storage bloat.
+    /// Can be called proactively by off-chain indexers or triggered during on-chain operations.
+    ///
+    /// # Idempotency Guarantee
+    /// This operation is fully idempotent: calling it multiple times on the same invoice
+    /// and ledger timestamp will always:
+    /// - Return 0 on subsequent calls (nothing new to clean)
+    /// - Leave the index state unchanged
+    /// - Never corrupt terminal bid records
+    ///
+    /// # DoS Safety
+    /// - Cleanup is O(N) where N = number of bids on invoice (capped at MAX_BIDS_PER_INVOICE)
+    /// - No unbounded allocations or recursive calls
+    /// - No external calls; purely state transition
+    /// - Gas cost scales predictably with bid count
+    ///
+    /// # Terminal Bid Preservation
+    /// Accepted, Withdrawn, and Cancelled bids are NEVER touched by cleanup,
+    /// even if they have passed their expiration timestamp. Only Placed bids
+    /// can transition to Expired and be pruned.
+    ///
+    /// # Returns
+    /// The count of bids cleaned (including newly expired and already-expired bids removed).
+    /// On the second call with unchanged ledger time, returns 0.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let cleaned = BidStorage::cleanup_expired_bids(&env, &invoice_id);
+    /// // First call: returns 3 (3 expired Placed bids transitioned and removed)
+    /// // Second call: returns 0 (idempotent; nothing left to clean)
+    /// ```
     pub fn cleanup_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         Self::refresh_expired_bids(env, invoice_id)
     }

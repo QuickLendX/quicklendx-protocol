@@ -42,6 +42,8 @@ mod test_cancel_refund;
 #[cfg(test)]
 mod test_emergency_withdraw;
 #[cfg(test)]
+mod test_expired_bids_cleanup;
+#[cfg(test)]
 mod test_init;
 #[cfg(test)]
 mod test_max_invoices_per_business;
