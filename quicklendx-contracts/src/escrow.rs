@@ -2,6 +2,19 @@
 //!
 //! Called from the public API with a reentrancy guard. Validates invoice/bid state,
 //! creates escrow via payments, and updates bid, invoice, and investment state.
+//!
+//! ## One-Escrow-Per-Invoice Invariant
+//! Each invoice may have **at most one** escrow record across its entire lifetime.
+//! This is enforced at two independent layers:
+//!
+//! 1. **`load_accept_bid_context`** – checks `EscrowStorage::get_escrow_by_invoice`
+//!    and `InvestmentStorage::get_investment_by_invoice` before any state changes.
+//! 2. **`payments::create_escrow`** – re-checks `get_escrow_by_invoice` before the
+//!    token transfer, so the guard holds even if the higher-level check is bypassed.
+//!
+//! Any duplicate attempt returns [`QuickLendXError::InvoiceAlreadyFunded`] or
+//! [`QuickLendXError::InvalidStatus`] and leaves all state unchanged.
+//! See `test_escrow_uniqueness.rs` for the full attack-vector test suite.
 
 use crate::admin::AdminStorage;
 use crate::bid::{BidStatus, BidStorage};

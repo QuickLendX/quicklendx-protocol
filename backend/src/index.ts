@@ -1,20 +1,59 @@
-import app from "./app";
+import express from "express";
+import cors from "cors";
 import dotenv from "dotenv";
+import { statusService } from "./services/statusService";
 
 dotenv.config();
 
-const PORT = process.env.PORT || 3001;
+const app = express();
+const port = process.env.PORT || 3001;
 
-const server = app.listen(PORT, () => {
-  console.log(`[Server] QuickLendX API running at http://localhost:${PORT}`);
-  console.log(`[Server] Health check: http://localhost:${PORT}/health`);
-  console.log(`[Server] API v1: http://localhost:${PORT}/api/v1`);
+app.use(cors());
+app.use(express.json());
+
+/**
+ * @openapi
+ * /api/status:
+ *   get:
+ *     summary: Get system status
+ *     description: Reports maintenance, degraded mode, and index lag.
+ *     responses:
+ *       200:
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Status'
+ */
+app.get("/api/status", async (req, res) => {
+  try {
+    const status = await statusService.getStatus();
+    
+    // Cache safely: 30 seconds max age
+    res.setHeader("Cache-Control", "public, max-age=30");
+    res.json(status);
+  } catch (error) {
+    console.error("Status check failed:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
-// Graceful shutdown
-process.on("SIGTERM", () => {
-  console.log("SIGTERM signal received: closing HTTP server");
-  server.close(() => {
-    console.log("HTTP server closed");
+// Admin-only (internal/secured) endpoint to toggle maintenance mode
+// In a real app, this would be protected by API key or Auth
+app.post("/api/admin/maintenance", (req, res) => {
+  const { enabled } = req.body;
+  if (typeof enabled !== "boolean") {
+    return res.status(400).json({ error: "Invalid enabled flag" });
+  }
+  
+  statusService.setMaintenanceMode(enabled);
+  res.json({ success: true, maintenance: enabled });
+});
+
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Backend server running at http://localhost:${port}`);
   });
-});
+}
+
+export default app;
