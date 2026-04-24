@@ -26,9 +26,11 @@ fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
 }
 
 fn zero_address(env: &Env) -> Address {
-    Address::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF")
+    Address::from_str(
+        env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    )
 }
-
 
 fn add_to_dispute_index(_env: &Env, _invoice_id: &BytesN<32>) {}
 
@@ -177,10 +179,7 @@ pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
 }
 
 #[allow(dead_code)]
-pub fn get_invoices_by_dispute_status(
-    env: &Env,
-    status: &DisputeStatus,
-) -> Vec<BytesN<32>> {
+pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<BytesN<32>> {
     let mut result = Vec::new(env);
     for invoice_id in get_dispute_index(env).iter() {
         if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
@@ -191,5 +190,5 @@ pub fn get_invoices_by_dispute_status(
     }
     result
 }
-//! Invoice disputes are represented on [`crate::invoice::Invoice`] and handled by contract
-//! entry points in `lib.rs`. This module is reserved for future dispute-specific helpers.
+// Invoice disputes are represented on [`crate::invoice::Invoice`] and handled by contract
+// entry points in `lib.rs`. This module is reserved for future dispute-specific helpers.
