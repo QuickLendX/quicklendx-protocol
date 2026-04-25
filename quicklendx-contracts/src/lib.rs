@@ -95,6 +95,10 @@ mod test_types;
 mod test_vesting;
 #[cfg(test)]
 mod test_notifications;
+#[cfg(test)]
+mod test_escrow;
+#[cfg(test)]
+mod test_queries;
 pub mod types;
 pub use invoice::{InvoiceCategory, InvoiceStatus};
 mod verification;
