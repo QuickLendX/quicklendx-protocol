@@ -1,0 +1,45 @@
+name: Backend CI
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'backend/**'
+  pull_request:
+    branches: ["main"]
+    paths:
+      - 'backend/**'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  test:
+    name: Test and Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Type check
+        run: npx tsc --noEmit
+        working-directory: backend
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+        working-directory: backend
+
+      - name: Run performance regression tests
+        run: npx jest "perf/perf.test.ts" --no-coverage
+        working-directory: backend
