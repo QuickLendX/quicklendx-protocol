@@ -271,3 +271,70 @@ fn test_initialize_rejects_invalid_limit_combination_before_state_commit() {
     assert!(!client.is_initialized());
     assert_eq!(client.get_current_admin(), None);
 }
+
+// ---------------------------------------------------------------------------
+// Investor Active Bid Limit Tests — Issue #782
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_admin_can_set_max_active_bids_per_investor() {
+    let (env, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    // Set a custom limit
+    client.set_max_active_bids_per_investor(&admin, &15u32);
+
+    // Verify the limit was set
+    let limit = client.get_max_active_bids_per_investor();
+    assert_eq!(limit, 15);
+}
+
+#[test]
+fn test_max_active_bids_per_investor_default_value() {
+    let (env, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    // Before setting, should return default (20)
+    let default_limit = client.get_max_active_bids_per_investor();
+    assert_eq!(default_limit, 20);
+}
+
+#[test]
+fn test_non_admin_cannot_set_max_active_bids_per_investor() {
+    let (env, client, admin, non_admin, _) = setup();
+    client.set_admin(&admin);
+
+    // Non-admin should not be able to set the limit
+    let result = client.try_set_max_active_bids_per_investor(&non_admin, &10u32);
+    assert!(result.is_err());
+
+    // Limit should remain at default
+    let limit = client.get_max_active_bids_per_investor();
+    assert_eq!(limit, 20);
+}
+
+#[test]
+fn test_max_active_bids_per_investor_can_be_disabled() {
+    let (env, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    // Set to 0 to disable the limit
+    client.set_max_active_bids_per_investor(&admin, &0u32);
+
+    let limit = client.get_max_active_bids_per_investor();
+    assert_eq!(limit, 0);
+}
+
+#[test]
+fn test_max_active_bids_per_investor_can_be_updated() {
+    let (env, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    // Set initial limit
+    client.set_max_active_bids_per_investor(&admin, &10u32);
+    assert_eq!(client.get_max_active_bids_per_investor(), 10);
+
+    // Update to new limit
+    client.set_max_active_bids_per_investor(&admin, &25u32);
+    assert_eq!(client.get_max_active_bids_per_investor(), 25);
+}

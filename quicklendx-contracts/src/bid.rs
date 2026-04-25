@@ -739,7 +739,32 @@ impl BidStorage {
     }
 
     /// Cancel a placed bid by bid_id. Only transitions Placed → Cancelled.
-    /// Returns false if bid not found or already not Placed.
+    ///
+    /// # Purpose
+    /// Allows investors to cancel their own bids before they are accepted.
+    /// This is critical for bid churn attack prevention - cancelled bids immediately
+    /// free up both active bid slots and portfolio exposure capacity.
+    ///
+    /// # Security Guarantees
+    /// - Only the bid owner can cancel (investor.require_auth())
+    /// - Only Placed bids can be cancelled (terminal states are immutable)
+    /// - Cancellation immediately frees capacity for new bids
+    /// - No partial cancellations - full bid amount is released
+    ///
+    /// # Attack Vectors Prevented
+    /// - **Unauthorized cancellation**: Only the investor can cancel their own bids
+    /// - **State manipulation**: Cannot cancel bids in terminal states (double-spend prevention)
+    /// - **Bid churn**: Cancellation is atomic and immediately frees capacity
+    ///
+    /// # Parameters
+    /// - `env`: The contract environment
+    /// - `bid_id`: The ID of the bid to cancel
+    ///
+    /// # Returns
+    /// `true` if the bid was successfully cancelled, `false` if bid not found or not in Placed state
+    ///
+    /// # Errors
+    /// - Authorization failure if caller is not the bid investor
     pub fn cancel_bid(env: &Env, bid_id: &BytesN<32>) -> bool {
         if let Some(mut bid) = Self::get_bid(env, bid_id) {
             // SECURITY FIX: User must authorize their own bid cancellation
@@ -785,7 +810,25 @@ impl BidStorage {
     }
 
     /// Calculate the sum of all currently active (Placed) bid amounts for a given investor.
-    /// Used for checking against the investor's total investment limit.
+    ///
+    /// # Purpose
+    /// Returns the total exposure from all non-expired Placed bids for portfolio cap enforcement.
+    /// Used by validate_investor_investment to ensure total exposure stays within investment_limit.
+    ///
+    /// # Security Guarantees
+    /// - Uses saturating arithmetic to prevent overflow attacks
+    /// - Only includes Placed bids that have not expired
+    /// - Excludes terminal states (Accepted, Withdrawn, Cancelled) and Expired bids
+    /// - Reads directly from storage for accurate current state
+    ///
+    /// # Attack Vectors Prevented
+    /// - **Overflow attacks**: Saturating addition prevents integer overflow
+    /// - **Stale state exploitation**: Always reads current storage, no caching
+    /// - **Partial fill manipulation**: Only counts Placed bids, not partially filled bids
+    ///
+    /// @param env The Soroban environment
+    /// @param investor The address of the investor
+    /// @return total_amount The sum of all active bid amounts
     pub fn get_active_bid_amount_sum_for_investor(env: &Env, investor: &Address) -> i128 {
         let all_bids = Self::get_all_bids_by_investor(env, investor);
         let current_timestamp = env.ledger().timestamp();

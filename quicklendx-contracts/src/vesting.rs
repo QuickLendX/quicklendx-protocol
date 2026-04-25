@@ -20,23 +20,10 @@ const VESTING_KEY: Symbol = symbol_short!("vest");
 pub enum VestingEvent {
     /// Emitted when a new vesting schedule is created.
     #[tag(symbol_short!("vest_new"))]
-    NewSchedule {
-        id: u64,
-        beneficiary: Address,
-        token: Address,
-        total_amount: i128,
-        start_time: u64,
-        cliff_time: u64,
-        end_time: u64,
-    },
+    NewSchedule(u64, Address, Address, i128, u64, u64, u64),
     /// Emitted when tokens are released from a vesting schedule.
     #[tag(symbol_short!("vest_rel"))]
-    Released {
-        id: u64,
-        beneficiary: Address,
-        token: Address,
-        amount: i128,
-    },
+    Released(u64, Address, Address, i128),
 }
 
 /// Vesting schedule stored on-chain.
