@@ -1,5 +1,5 @@
 use crate::errors::QuickLendXError;
-use crate::invoice::Invoice;
+use crate::types::Invoice;
 use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, Vec};
 
 const RETENTION_POLICY_KEY: soroban_sdk::Symbol = symbol_short!("bkup_pol");

@@ -2,7 +2,8 @@ use soroban_sdk::{contracttype, Address, Env, String};
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use crate::invoice::{InvoiceStatus, InvoiceStorage};
+use crate::storage::InvoiceStorage;
+use crate::types::InvoiceStatus;
 
 #[allow(dead_code)]
 #[contracttype]

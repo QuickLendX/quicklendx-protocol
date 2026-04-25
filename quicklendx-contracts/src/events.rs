@@ -2,9 +2,9 @@
 
 use crate::bid::Bid;
 use crate::fees::FeeType;
-use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::payments::Escrow;
 use crate::profits::PlatformFeeConfig;
+use crate::types::{Invoice, InvoiceMetadata};
 use crate::verification::InvestorVerification;
 use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
 

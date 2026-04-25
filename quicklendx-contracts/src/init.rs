@@ -188,6 +188,10 @@ impl ProtocolInitializer {
         Self::initialize_internal(env, params)
     }
 
+        // Delegate to internal initialization logic
+        Self::initialize_internal(env, params)
+    }
+
     /// Internal initialization logic with comprehensive validation
     fn initialize_internal(
         env: &Env,

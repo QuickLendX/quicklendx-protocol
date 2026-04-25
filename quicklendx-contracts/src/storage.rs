@@ -177,12 +177,22 @@ impl InvoiceStorage {
         }
     }
 
+    /// Alias for store - store a new invoice
+    pub fn store_invoice(env: &Env, invoice: &Invoice) {
+        Self::store(env, invoice)
+    }
+
     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
         let key = Indexes::invoices_by_business(business);
         env.storage()
             .persistent()
             .get(&key)
             .unwrap_or(Vec::new(env))
+    }
+
+    /// Alias for get_by_business - retrieve invoices by business address
+    pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
+        Self::get_by_business(env, business)
     }
 
     pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
@@ -193,11 +203,21 @@ impl InvoiceStorage {
             .unwrap_or(Vec::new(env))
     }
 
+    /// Alias for get_by_status - retrieve invoices by status
+    pub fn get_invoices_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
+        Self::get_by_status(env, status)
+    }
+
     /// Get an invoice by ID
     pub fn get(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
         env.storage()
             .persistent()
             .get(&DataKey::Invoice(invoice_id.clone()))
+    }
+
+    /// Alias for get - retrieve invoice by ID
+    pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
+        Self::get(env, invoice_id)
     }
 
     /// Update an invoice
@@ -229,96 +249,74 @@ impl InvoiceStorage {
             .set(&DataKey::Invoice(invoice.id.clone()), invoice);
     }
 
-    /// Add invoice to business index
-    fn add_to_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
-        let mut invoices = Self::get_by_business(env, business);
-        if !invoices.contains(invoice_id) {
-            invoices.push_back(invoice_id.clone());
-            env.storage()
-                .persistent()
-                .set(&Indexes::invoices_by_business(business), &invoices);
-        }
+    /// Alias for update - update an existing invoice
+    pub fn update_invoice(env: &Env, invoice: &Invoice) {
+        Self::update(env, invoice)
     }
 
-    /// Add invoice to status index
-    fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
-        let mut invoices = Self::get_by_status(env, status.clone());
-        if !invoices.contains(invoice_id) {
-            invoices.push_back(invoice_id.clone());
-            env.storage()
-                .persistent()
-                .set(&Indexes::invoices_by_status(status), &invoices);
-        }
-    }
-
-    /// Remove invoice from status index
-    fn remove_from_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
-        let mut invoices = Self::get_by_status(env, status.clone());
-        if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
-            invoices.remove(pos as u32);
-            env.storage()
-                .persistent()
-                .set(&Indexes::invoices_by_status(status), &invoices);
-        }
-    }
-
-    pub fn add_to_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
-        let key = Indexes::invoices_by_customer(customer_name);
-        let mut ids: Vec<BytesN<32>> = env
+    /// Get next invoice count
+    pub fn next_count(env: &Env) -> u64 {
+        let current: u64 = env
             .storage()
             .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env));
-        if !ids.iter().any(|id| id == *invoice_id) {
-            ids.push_back(invoice_id.clone());
-            env.storage().persistent().set(&key, &ids);
-        }
+            .get(&StorageKeys::invoice_count())
+            .unwrap_or(0);
+        let next = current.saturating_add(1);
+        env.storage()
+            .persistent()
+            .set(&StorageKeys::invoice_count(), &next);
+        next
     }
 
-    pub fn remove_from_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
-        let key = Indexes::invoices_by_customer(customer_name);
-        let ids: Vec<BytesN<32>> = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env));
-        let mut filtered = Vec::new(env);
-        for id in ids.iter() {
-            if id != *invoice_id {
-                filtered.push_back(id.clone());
-            }
-        }
-        env.storage().persistent().set(&key, &filtered);
+    /// Clear all invoice data
+    pub fn clear_all(env: &Env) {
+        // Delegate to the storage manager's clear_all_mappings function
+        // This clears all persistent storage mappings
+        StorageManager::clear_all_mappings(env);
     }
 
-    pub fn add_to_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
-        let key = Indexes::invoices_by_tax_id(tax_id);
-        let mut ids: Vec<BytesN<32>> = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env));
-        if !ids.iter().any(|id| id == *invoice_id) {
-            ids.push_back(invoice_id.clone());
-            env.storage().persistent().set(&key, &ids);
-        }
+    /// Get invoices with rating above threshold
+    /// Note: This is a placeholder implementation - in a real system you would need to iterate through all invoices
+    /// and check their ratings. For now, we return an empty vector.
+    pub fn get_invoices_with_rating_above(env: &Env, _min_rating: u32) -> Vec<BytesN<32>> {
+        // TODO: Implement proper rating-based querying
+        // This would require either:
+        // 1. An index on ratings (complex to maintain)
+        // 2. Iterating through all invoices (expensive but possible for small datasets)
+        // 3. Storing ratings in a separate indexed structure
+        Vec::new(env)
     }
 
-    pub fn remove_from_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
-        let key = Indexes::invoices_by_tax_id(tax_id);
-        let ids: Vec<BytesN<32>> = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env));
-        let mut filtered = Vec::new(env);
-        for id in ids.iter() {
-            if id != *invoice_id {
-                filtered.push_back(id.clone());
-            }
-        }
-        env.storage().persistent().set(&key, &filtered);
+    /// Get invoices with ratings count threshold
+    /// Note: This is a placeholder implementation - in a real system you would need to iterate through all invoices
+    /// and count their ratings. For now, we return an empty vector.
+    pub fn get_invoices_with_ratings_count(env: &Env, _min_count: u32) -> Vec<BytesN<32>> {
+        // TODO: Implement proper rating count-based querying
+        Vec::new(env)
     }
+}
+
+/// Add invoice to business index
+fn add_to_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
+    let mut invoices = Self::get_by_business(env, business);
+    if !invoices.contains(invoice_id) {
+        invoices.push_back(invoice_id.clone());
+        env.storage()
+            .persistent()
+            .set(&Indexes::invoices_by_business(business), &invoices);
+    }
+}
+
+/// Add invoice to status index
+fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
+    let mut invoices = Self::get_by_status(env, status.clone());
+    if !invoices.contains(invoice_id) {
+        invoices.push_back(invoice_id.clone());
+        env.storage()
+            .persistent()
+            .set(&Indexes::invoices_by_status(status), &invoices);
+    }
+}
 
     pub fn store_invoice(env: &Env, invoice: &Invoice) {
         Self::store(env, invoice);
@@ -555,9 +553,80 @@ impl InvoiceStorage {
         let next = current.saturating_add(1);
         env.storage()
             .persistent()
-            .set(&StorageKeys::invoice_count(), &next);
-        next
+            .set(&Indexes::invoices_by_status(status), &invoices);
     }
+}
+
+pub fn add_to_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
+    let key = Indexes::invoices_by_customer(customer_name);
+    let mut ids: Vec<BytesN<32>> = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(Vec::new(env));
+    if !ids.iter().any(|id| id == *invoice_id) {
+        ids.push_back(invoice_id.clone());
+        env.storage().persistent().set(&key, &ids);
+    }
+}
+
+pub fn remove_from_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
+    let key = Indexes::invoices_by_customer(customer_name);
+    let ids: Vec<BytesN<32>> = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(Vec::new(env));
+    let mut filtered = Vec::new(env);
+    for id in ids.iter() {
+        if id != *invoice_id {
+            filtered.push_back(id.clone());
+        }
+    }
+    env.storage().persistent().set(&key, &filtered);
+}
+
+pub fn add_to_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
+    let key = Indexes::invoices_by_tax_id(tax_id);
+    let mut ids: Vec<BytesN<32>> = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(Vec::new(env));
+    if !ids.iter().any(|id| id == *invoice_id) {
+        ids.push_back(invoice_id.clone());
+        env.storage().persistent().set(&key, &ids);
+    }
+}
+
+pub fn remove_from_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
+    let key = Indexes::invoices_by_tax_id(tax_id);
+    let ids: Vec<BytesN<32>> = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(Vec::new(env));
+    let mut filtered = Vec::new(env);
+    for id in ids.iter() {
+        if id != *invoice_id {
+            filtered.push_back(id.clone());
+        }
+    }
+    env.storage().persistent().set(&key, &filtered);
+}
+
+/// Get next invoice count
+pub fn next_count(env: &Env) -> u64 {
+    let current: u64 = env
+        .storage()
+        .persistent()
+        .get(&StorageKeys::invoice_count())
+        .unwrap_or(0);
+    let next = current.saturating_add(1);
+    env.storage()
+        .persistent()
+        .set(&StorageKeys::invoice_count(), &next);
+    next
 }
 
 /// Storage operations for bids

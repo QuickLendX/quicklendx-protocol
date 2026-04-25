@@ -117,6 +117,8 @@ use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeC
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
+use storage::InvoiceStorage;
+use types::{Invoice, InvoiceMetadata, InvoiceStatus};
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
     get_investor_verification as do_get_investor_verification, reject_business,
