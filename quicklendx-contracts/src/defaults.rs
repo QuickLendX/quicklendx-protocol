@@ -210,7 +210,7 @@ pub fn scan_funded_invoice_expirations(
     grace_period: u64,
     limit: Option<u32>,
 ) -> Result<OverdueScanResult, QuickLendXError> {
-    let funded_invoices = InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Funded);
+    let funded_invoices = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
     let total_funded = funded_invoices.len();
 
     if total_funded == 0 {
@@ -288,12 +288,12 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
+    InvoiceStorage::remove_from_status_invoices(env, InvoiceStatus::Funded, invoice_id);
 
     invoice.mark_as_defaulted();
     InvoiceStorage::update_invoice(env, &invoice);
 
-    InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Defaulted, invoice_id);
+    InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Defaulted, invoice_id);
 
     emit_invoice_expired(env, &invoice);
 

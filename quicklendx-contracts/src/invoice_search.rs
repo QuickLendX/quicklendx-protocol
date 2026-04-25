@@ -30,22 +30,22 @@ impl InvoiceSearch {
         }
 
         // Convert to lowercase for case-insensitive search
-        let mut sanitized = String::new(query.env());
-        for byte in query.as_bytes().iter() {
-            if *byte >= b'A' && *byte <= b'Z' {
-                sanitized.push(*byte + 32); // Convert to lowercase
-            } else if *byte >= b'a' && *byte <= b'z' || *byte >= b'0' && *byte <= b'9' || *byte == b' ' {
-                sanitized.push(*byte);
+        let mut sanitized_bytes = alloc::vec::Vec::new();
+        for byte in query.to_bytes().iter() {
+            if byte >= b'A' && byte <= b'Z' {
+                sanitized_bytes.push(byte + 32); // Convert to lowercase
+            } else if byte >= b'a' && byte <= b'z' || byte >= b'0' && byte <= b'9' || byte == b' ' {
+                sanitized_bytes.push(byte);
             }
             // Skip other characters (punctuation, etc.)
         }
 
-        let trimmed = sanitized.trim();
-        if trimmed.len() == 0 {
+        let trimmed_str = core::str::from_utf8(&sanitized_bytes).unwrap_or("").trim();
+        if trimmed_str.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
         }
 
-        Ok(String::from_str(query.env(), trimmed))
+        Ok(String::from_str(query.env(), trimmed_str))
     }
 
     /// Search invoices with relevance ranking
@@ -136,10 +136,13 @@ impl InvoiceSearch {
             return false;
         }
 
+        let text_lower_bytes = text_lower.to_bytes();
+        let query_lower_bytes = query_lower.to_bytes();
+
         for i in 0..=(text_lower.len() - query_lower.len()) {
             let mut matches = true;
             for j in 0..query_lower.len() {
-                if text_lower.as_bytes()[i + j] != query_lower.as_bytes()[j] {
+                if text_lower_bytes.get(i + j).unwrap() != query_lower_bytes.get(j).unwrap() {
                     matches = false;
                     break;
                 }
@@ -154,27 +157,27 @@ impl InvoiceSearch {
 
     /// Convert string to lowercase
     fn to_lowercase(s: &String) -> String {
-        let mut result = String::new(s.env());
-        for byte in s.as_bytes().iter() {
-            if *byte >= b'A' && *byte <= b'Z' {
-                result.push(*byte + 32);
+        let mut result_bytes = alloc::vec::Vec::new();
+        for byte in s.to_bytes().iter() {
+            if byte >= b'A' && byte <= b'Z' {
+                result_bytes.push(byte + 32);
             } else {
-                result.push(*byte);
+                result_bytes.push(byte);
             }
         }
-        result
+        String::from_str(s.env(), core::str::from_utf8(&result_bytes).unwrap_or(""))
     }
 
     /// Convert BytesN<32> to hex string for comparison
     fn bytes_to_hex_string(env: &Env, bytes: &BytesN<32>) -> String {
-        let mut hex = String::new(env);
-        for byte in bytes.as_ref().iter() {
+        let mut hex_bytes = alloc::vec::Vec::new();
+        for byte in bytes.to_array().iter() {
             let high = byte >> 4;
             let low = byte & 0x0F;
-            hex.push(Self::nibble_to_hex(high));
-            hex.push(Self::nibble_to_hex(low));
+            hex_bytes.push(Self::nibble_to_hex(high));
+            hex_bytes.push(Self::nibble_to_hex(low));
         }
-        hex
+        String::from_str(env, core::str::from_utf8(&hex_bytes).unwrap_or(""))
     }
 
     /// Convert nibble to hex character
@@ -273,34 +276,17 @@ mod tests {
         description: &str,
         customer_name: Option<&str>,
     ) -> Invoice {
-        let mut invoice = Invoice {
-            id: env.crypto().sha256(&env.crypto().random_bytes()).into(),
-            business: business.clone(),
-            amount: 1000,
-            currency: Address::generate(env),
-            due_date: env.ledger().timestamp() + 86400,
-            status: InvoiceStatus::Verified,
-            created_at: env.ledger().timestamp(),
-            description: String::from_str(env, description),
-            metadata_customer_name: customer_name.map(|name| String::from_str(env, name)),
-            metadata_customer_address: None,
-            metadata_tax_id: None,
-            metadata_notes: None,
-            metadata_line_items: Vec::new(env),
-            category: InvoiceCategory::Services,
-            tags: Vec::new(env),
-            funded_amount: 0,
-            funded_at: None,
-            investor: None,
-            settled_at: None,
-            average_rating: None,
-            total_ratings: 0,
-            ratings: Vec::new(env),
-            dispute_status: DisputeStatus::None,
-            dispute: Default::default(),
-            total_paid: 0,
-            payment_history: Vec::new(env),
-        };
+        let mut invoice = Invoice::new(
+            env,
+            business.clone(),
+            1000,
+            Address::generate(env),
+            env.ledger().timestamp() + 86400,
+            String::from_str(env, description),
+            InvoiceCategory::Services,
+            Vec::new(env),
+        ).unwrap();
+        invoice.metadata_customer_name = customer_name.map(|name| String::from_str(env, name));
         invoice
     }
 

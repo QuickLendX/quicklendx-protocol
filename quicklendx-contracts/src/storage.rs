@@ -103,6 +103,10 @@ impl Indexes {
             InvoiceCategory::Goods => symbol_short!("goods"),
             InvoiceCategory::Consulting => symbol_short!("consult"),
             InvoiceCategory::Logistics => symbol_short!("logist"),
+            InvoiceCategory::Products => symbol_short!("products"),
+            InvoiceCategory::Manufacturing => symbol_short!("manufac"),
+            InvoiceCategory::Technology => symbol_short!("tech"),
+            InvoiceCategory::Healthcare => symbol_short!("health"),
             InvoiceCategory::Other => symbol_short!("other"),
         };
         (symbol_short!("inv_cat"), cat_symbol)
@@ -139,6 +143,20 @@ impl InvoiceStorage {
 
     pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
         Self::get_by_business(env, business)
+    }
+
+    pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
+        let mut categories = Vec::new(env);
+        categories.push_back(InvoiceCategory::Goods);
+        categories.push_back(InvoiceCategory::Logistics);
+        categories.push_back(InvoiceCategory::Services);
+        categories.push_back(InvoiceCategory::Products);
+        categories.push_back(InvoiceCategory::Consulting);
+        categories.push_back(InvoiceCategory::Manufacturing);
+        categories.push_back(InvoiceCategory::Technology);
+        categories.push_back(InvoiceCategory::Healthcare);
+        categories.push_back(InvoiceCategory::Other);
+        categories
     }
 
     pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
@@ -219,6 +237,27 @@ impl InvoiceStorage {
         StorageManager::clear_all_mappings(env);
     }
 
+    pub fn get_all_invoice_ids(env: &Env) -> Vec<BytesN<32>> {
+        let mut all = Vec::new(env);
+        let mut statuses = Vec::new(env);
+        statuses.push_back(InvoiceStatus::Pending);
+        statuses.push_back(InvoiceStatus::Verified);
+        statuses.push_back(InvoiceStatus::Funded);
+        statuses.push_back(InvoiceStatus::Paid);
+        statuses.push_back(InvoiceStatus::Defaulted);
+        statuses.push_back(InvoiceStatus::Cancelled);
+        statuses.push_back(InvoiceStatus::Refunded);
+        
+        for status in statuses.iter() {
+            for id in Self::get_by_status(env, status).iter() {
+                if !all.contains(&id) {
+                    all.push_back(id);
+                }
+            }
+        }
+        all
+    }
+
     pub fn get_invoices_with_rating_above(env: &Env, threshold: u32) -> Vec<BytesN<32>> {
         let mut matches = Vec::new(env);
         for invoice_id in Self::get_all_invoice_ids(env).iter() {
@@ -251,7 +290,7 @@ impl InvoiceStorage {
         Self::remove_from_status_index(env, status, invoice_id);
     }
 
-    pub fn get_invoices_by_category_and_status(env: &Env, category: crate::invoice::InvoiceCategory, status: InvoiceStatus) -> Vec<BytesN<32>> {
+    pub fn get_invoices_by_category_and_status(env: &Env, category: crate::types::InvoiceCategory, status: InvoiceStatus) -> Vec<BytesN<32>> {
         let mut matches = Vec::new(env);
         for invoice_id in Self::get_by_status(env, status).iter() {
             if let Some(invoice) = Self::get(env, &invoice_id) {
@@ -352,8 +391,8 @@ impl InvoiceStorage {
         env.storage().persistent().set(&key, &filtered);
     }
 
-    pub fn add_category_index(env: &Env, category: InvoiceCategory, invoice_id: &BytesN<32>) {
-        let key = Indexes::invoices_by_category(category);
+    pub fn add_category_index(env: &Env, category: &InvoiceCategory, invoice_id: &BytesN<32>) {
+        let key = Indexes::invoices_by_category(category.clone());
         let mut ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
@@ -361,8 +400,8 @@ impl InvoiceStorage {
         }
     }
 
-    pub fn remove_category_index(env: &Env, category: InvoiceCategory, invoice_id: &BytesN<32>) {
-        let key = Indexes::invoices_by_category(category);
+    pub fn remove_category_index(env: &Env, category: &InvoiceCategory, invoice_id: &BytesN<32>) {
+        let key = Indexes::invoices_by_category(category.clone());
         let ids: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
         let mut filtered = Vec::new(env);
         for id in ids.iter() {
@@ -387,7 +426,7 @@ impl InvoiceStorage {
         Self::get_invoices_by_tax_id(env, tax_id)
     }
 
-    pub fn get_invoices_by_category(env: &Env, category: &crate::invoice::InvoiceCategory) -> Vec<BytesN<32>> {
+    pub fn get_invoices_by_category(env: &Env, category: &crate::types::InvoiceCategory) -> Vec<BytesN<32>> {
         let mut matches = Vec::new(env);
         for invoice_id in Self::get_all_invoice_ids(env).iter() {
             if let Some(invoice) = Self::get(env, &invoice_id) {
@@ -395,6 +434,10 @@ impl InvoiceStorage {
             }
         }
         matches
+    }
+
+    pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
+        Self::get_invoices_by_category(env, category).len()
     }
 
     pub fn count_active_business_invoices(env: &Env, business: &Address) -> u32 {

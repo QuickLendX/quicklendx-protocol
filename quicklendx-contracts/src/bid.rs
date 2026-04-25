@@ -100,7 +100,34 @@ impl Bid {
 
 pub struct BidStorage;
 
+const ALL_BIDS_KEY: Symbol = symbol_short!("all_bids");
+
 impl BidStorage {
+    fn all_bids_key() -> Symbol {
+        ALL_BIDS_KEY
+    }
+
+    pub fn get_all_bids(env: &Env) -> Vec<BytesN<32>> {
+        env.storage()
+            .instance()
+            .get(&Self::all_bids_key())
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    fn add_to_all_bids(env: &Env, bid_id: &BytesN<32>) {
+        let mut bids = Self::get_all_bids(env);
+        let mut exists = false;
+        for bid in bids.iter() {
+            if bid == *bid_id {
+                exists = true;
+                break;
+            }
+        }
+        if !exists {
+            bids.push_back(bid_id.clone());
+            env.storage().instance().set(&Self::all_bids_key(), &bids);
+        }
+    }
     fn invoice_key(invoice_id: &BytesN<32>) -> (soroban_sdk::Symbol, BytesN<32>) {
         (symbol_short!("bids"), invoice_id.clone())
     }
@@ -137,6 +164,8 @@ impl BidStorage {
         env.storage().instance().set(&bid.bid_id, bid);
         // Add to investor index
         Self::add_to_investor_bids(env, &bid.investor, &bid.bid_id);
+        // Add to global index
+        Self::add_to_all_bids(env, &bid.bid_id);
     }
     pub fn get_bid(env: &Env, bid_id: &BytesN<32>) -> Option<Bid> {
         env.storage().instance().get(bid_id)
@@ -781,14 +810,19 @@ impl BidStorage {
         }
         total_amount
     }
-    /// Generates a unique 32-byte bid ID using timestamp and a simple counter.
-    /// This approach avoids potential serialization issues with large counters.
-    pub fn generate_unique_bid_id(env: &Env) -> BytesN<32> {
-        let timestamp = env.ledger().timestamp();
+    pub fn generate_next_bid_counter(env: &Env) -> u64 {
         let counter_key = symbol_short!("bid_cnt");
         let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
         let next_counter = counter.saturating_add(1);
         env.storage().instance().set(&counter_key, &next_counter);
+        next_counter
+    }
+
+    /// Generates a unique 32-byte bid ID using timestamp and a simple counter.
+    /// This approach avoids potential serialization issues with large counters.
+    pub fn generate_unique_bid_id(env: &Env) -> BytesN<32> {
+        let timestamp = env.ledger().timestamp();
+        let next_counter = Self::generate_next_bid_counter(env);
 
         let mut bytes = [0u8; 32];
         // Add bid prefix to distinguish from other entity types

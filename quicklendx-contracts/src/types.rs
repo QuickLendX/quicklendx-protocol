@@ -64,6 +64,10 @@ pub enum InvoiceCategory {
     Goods,
     Consulting,
     Logistics,
+    Products,
+    Manufacturing,
+    Technology,
+    Healthcare,
     Other,
 }
 
@@ -194,6 +198,7 @@ pub struct InsuranceCoverage {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeConfig {
     pub fee_bps: u32,
+    pub treasury_address: Option<Address>,
     pub updated_at: u64,
     pub updated_by: Address,
 }

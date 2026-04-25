@@ -27,8 +27,8 @@ use soroban_sdk::{Address, BytesN, Env, Vec};
 
 /// Loaded and validated state required to accept a bid.
 pub(crate) struct AcceptBidContext {
-    pub invoice: crate::invoice::Invoice,
-    pub bid: crate::bid::Bid,
+    pub invoice: crate::types::Invoice,
+    pub bid: crate::types::Bid,
 }
 
 /// Validate the invoice, bid, and escrow state before any funds move.
@@ -132,7 +132,7 @@ pub fn accept_bid_and_fund(
 
     // Update Invoice
     // Remove from old status list before changing status
-    InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Verified, invoice_id);
+    InvoiceStorage::remove_from_status_invoices(env, InvoiceStatus::Verified, invoice_id);
 
     // mark_as_funded updates status, funded_amount, investor, and logs audit
     invoice.mark_as_funded(
@@ -144,7 +144,7 @@ pub fn accept_bid_and_fund(
     InvoiceStorage::update_invoice(env, &invoice);
 
     // Add to new status list after status change
-    InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
+    InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Funded, invoice_id);
 
     // Create Investment
     let investment_id = InvestmentStorage::generate_unique_investment_id(env);
@@ -215,8 +215,8 @@ pub fn refund_escrow_funds(
     InvoiceStorage::update_invoice(env, &invoice);
 
     // Update status indices
-    InvoiceStorage::remove_from_status_invoices(env, &previous_status, invoice_id);
-    InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Refunded, invoice_id);
+    InvoiceStorage::remove_from_status_invoices(env, previous_status.clone(), invoice_id);
+    InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Refunded, invoice_id);
 
     // Update Bid status to Cancelled (find the accepted bid first)
     // In our protocol, a Funded invoice has exactly one Accepted bid

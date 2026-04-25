@@ -1,4 +1,5 @@
-use crate::bid::{BidStatus, BidStorage};
+use crate::bid::BidStorage;
+use crate::types::BidStatus;
 use crate::errors::QuickLendXError;
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
@@ -999,18 +1000,20 @@ fn emit_kyc_resubmitted(env: &Env, business: &Address) {
 
 /// Validate invoice category
 pub fn validate_invoice_category(
-    category: &crate::invoice::InvoiceCategory,
+    category: &crate::types::InvoiceCategory,
 ) -> Result<(), QuickLendXError> {
     // All categories are valid as they are defined in the enum
     // This function can be extended to add additional validation logic if needed
     match category {
-        crate::invoice::InvoiceCategory::Services => Ok(()),
-        crate::invoice::InvoiceCategory::Products => Ok(()),
-        crate::invoice::InvoiceCategory::Consulting => Ok(()),
-        crate::invoice::InvoiceCategory::Manufacturing => Ok(()),
-        crate::invoice::InvoiceCategory::Technology => Ok(()),
-        crate::invoice::InvoiceCategory::Healthcare => Ok(()),
-        crate::invoice::InvoiceCategory::Other => Ok(()),
+        crate::types::InvoiceCategory::Services => Ok(()),
+        crate::types::InvoiceCategory::Goods => Ok(()),
+        crate::types::InvoiceCategory::Consulting => Ok(()),
+        crate::types::InvoiceCategory::Logistics => Ok(()),
+        crate::types::InvoiceCategory::Products => Ok(()),
+        crate::types::InvoiceCategory::Manufacturing => Ok(()),
+        crate::types::InvoiceCategory::Technology => Ok(()),
+        crate::types::InvoiceCategory::Healthcare => Ok(()),
+        crate::types::InvoiceCategory::Other => Ok(()),
     }
 }
 

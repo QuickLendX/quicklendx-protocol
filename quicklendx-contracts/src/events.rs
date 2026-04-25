@@ -1,17 +1,17 @@
 #![allow(deprecated)]
 
-use crate::bid::Bid;
+use crate::types::Bid;
 use crate::fees::FeeType;
 use crate::payments::Escrow;
 use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::InvestorVerification;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol};
+use soroban_sdk::{contractevent, contracttype, symbol_short, Address, BytesN, Env, String, Symbol};
 
 // ============================================================================
 // Structured Event Types
 // ============================================================================
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceUploaded {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -21,21 +21,21 @@ pub struct InvoiceUploaded {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceVerified {
     pub invoice_id: BytesN<32>,
     pub business: Address,
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceCancelled {
     pub invoice_id: BytesN<32>,
     pub business: Address,
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceSettled {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -45,7 +45,7 @@ pub struct InvoiceSettled {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceDefaulted {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -53,14 +53,14 @@ pub struct InvoiceDefaulted {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceExpired {
     pub invoice_id: BytesN<32>,
     pub business: Address,
     pub due_date: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct PartialPayment {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -70,7 +70,7 @@ pub struct PartialPayment {
     pub transaction_id: String,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct PaymentRecorded {
     pub invoice_id: BytesN<32>,
     pub payer: Address,
@@ -79,7 +79,7 @@ pub struct PaymentRecorded {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceSettledFinal {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -88,7 +88,7 @@ pub struct InvoiceSettledFinal {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct BidPlaced {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -99,7 +99,7 @@ pub struct BidPlaced {
     pub expiration_timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct BidAccepted {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -110,7 +110,7 @@ pub struct BidAccepted {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct BidWithdrawn {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -119,7 +119,7 @@ pub struct BidWithdrawn {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct BidExpired {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -128,7 +128,7 @@ pub struct BidExpired {
     pub expiration_timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct EscrowCreated {
     pub escrow_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -137,7 +137,7 @@ pub struct EscrowCreated {
     pub amount: i128,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct EscrowReleased {
     pub escrow_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -145,7 +145,7 @@ pub struct EscrowReleased {
     pub amount: i128,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct EscrowRefunded {
     pub escrow_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -153,7 +153,7 @@ pub struct EscrowRefunded {
     pub amount: i128,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceMetadataUpdated {
     pub invoice_id: BytesN<32>,
     pub customer_name: String,
@@ -162,20 +162,20 @@ pub struct InvoiceMetadataUpdated {
     pub total_value: i128,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceMetadataCleared {
     pub invoice_id: BytesN<32>,
     pub business: Address,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvestorVerified {
     pub investor: Address,
     pub investment_limit: i128,
     pub verified_at: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceFunded {
     pub invoice_id: BytesN<32>,
     pub investor: Address,
@@ -183,7 +183,7 @@ pub struct InvoiceFunded {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InsuranceAdded {
     pub investment_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -194,14 +194,14 @@ pub struct InsuranceAdded {
     pub premium_amount: i128,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InsurancePremiumCollected {
     pub investment_id: BytesN<32>,
     pub provider: Address,
     pub premium_amount: i128,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InsuranceClaimed {
     pub investment_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -209,14 +209,14 @@ pub struct InsuranceClaimed {
     pub coverage_amount: i128,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct PlatformFeeUpdated {
     pub fee_bps: u32,
     pub updated_at: u64,
     pub updated_by: Address,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct FeeStructureUpdated {
     pub fee_type: FeeType,
     pub old_fee_bps: u32,
@@ -225,7 +225,7 @@ pub struct FeeStructureUpdated {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct PlatformFeeRouted {
     pub invoice_id: BytesN<32>,
     pub recipient: Address,
@@ -233,7 +233,7 @@ pub struct PlatformFeeRouted {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct PlatformFeeConfigUpdated {
     pub old_fee_bps: u32,
     pub new_fee_bps: u32,
@@ -241,41 +241,41 @@ pub struct PlatformFeeConfigUpdated {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct TreasuryConfigured {
     pub treasury_address: Address,
     pub configured_by: Address,
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct BackupCreated {
     pub backup_id: BytesN<32>,
     pub invoice_count: u32,
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct BackupRestored {
     pub backup_id: BytesN<32>,
     pub invoice_count: u32,
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct BackupValidated {
     pub backup_id: BytesN<32>,
     pub success: bool,
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct BackupArchived {
     pub backup_id: BytesN<32>,
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct RetentionPolicyUpdated {
     pub max_backups: u32,
     pub max_age_seconds: u64,
@@ -283,48 +283,48 @@ pub struct RetentionPolicyUpdated {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct BackupsCleaned {
     pub removed_count: u32,
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct AuditValidation {
     pub invoice_id: BytesN<32>,
     pub is_valid: bool,
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct AuditQuery {
     pub query_type: String,
     pub result_count: u32,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceCategoryUpdated {
     pub invoice_id: BytesN<32>,
     pub business: Address,
-    pub old_category: crate::invoice::InvoiceCategory,
-    pub new_category: crate::invoice::InvoiceCategory,
+    pub old_category: crate::types::InvoiceCategory,
+    pub new_category: crate::types::InvoiceCategory,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceTagAdded {
     pub invoice_id: BytesN<32>,
     pub business: Address,
     pub tag: String,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceTagRemoved {
     pub invoice_id: BytesN<32>,
     pub business: Address,
     pub tag: String,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct DisputeCreated {
     pub invoice_id: BytesN<32>,
     pub created_by: Address,
@@ -332,14 +332,14 @@ pub struct DisputeCreated {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct DisputeUnderReview {
     pub invoice_id: BytesN<32>,
     pub reviewed_by: Address,
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct DisputeResolved {
     pub invoice_id: BytesN<32>,
     pub resolved_by: Address,
@@ -347,7 +347,7 @@ pub struct DisputeResolved {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct ProfitFeeBreakdown {
     pub invoice_id: BytesN<32>,
     pub investment_amount: i128,
@@ -359,7 +359,7 @@ pub struct ProfitFeeBreakdown {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct BidTtlUpdated {
     pub old_days: u64,
     pub new_days: u64,
@@ -367,7 +367,7 @@ pub struct BidTtlUpdated {
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct EmergencyWithdrawalInitiated {
     pub token: Address,
     pub amount: i128,
@@ -376,7 +376,7 @@ pub struct EmergencyWithdrawalInitiated {
     pub admin: Address,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct EmergencyWithdrawalExecuted {
     pub token: Address,
     pub amount: i128,
@@ -384,7 +384,7 @@ pub struct EmergencyWithdrawalExecuted {
     pub admin: Address,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct EmergencyWithdrawalCancelled {
     pub token: Address,
     pub amount: i128,
@@ -392,20 +392,20 @@ pub struct EmergencyWithdrawalCancelled {
     pub admin: Address,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct AdminSet {
     pub admin: Address,
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct AdminTransferred {
     pub old_admin: Address,
     pub new_admin: Address,
     pub timestamp: u64,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct RevenueDistributed {
     pub period: u64,
     pub treasury_amount: i128,
@@ -413,18 +413,18 @@ pub struct RevenueDistributed {
     pub platform_amount: i128,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct InvoiceStatusUpdated {
     pub invoice_id: BytesN<32>,
-    pub status: crate::invoice::InvoiceStatus,
+    pub status: crate::types::InvoiceStatus,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct AdminInitialized {
     pub admin: Address,
 }
 
-#[contracttype]
+#[contractevent]
 pub struct ProtocolInitialized {
     pub admin: Address,
     pub treasury: Address,
@@ -504,7 +504,7 @@ pub fn emit_investor_verified(env: &Env, verification: &InvestorVerification) {
 
 pub fn emit_invoice_settled(
     env: &Env,
-    invoice: &crate::invoice::Invoice,
+    invoice: &crate::types::Invoice,
     investor_return: i128,
     platform_fee: i128,
 ) {
@@ -575,7 +575,7 @@ pub fn emit_invoice_settled_final(
     .publish(env);
 }
 
-pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
+pub fn emit_invoice_expired(env: &Env, invoice: &crate::types::Invoice) {
     InvoiceExpired {
         invoice_id: invoice.id.clone(),
         business: invoice.business.clone(),
@@ -584,7 +584,7 @@ pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
     .publish(env);
 }
 
-pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::invoice::Invoice) {
+pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::types::Invoice) {
     InvoiceDefaulted {
         invoice_id: invoice.id.clone(),
         business: invoice.business.clone(),
@@ -929,8 +929,8 @@ pub fn emit_invoice_category_updated(
     env: &Env,
     invoice_id: &BytesN<32>,
     business: &Address,
-    old_category: &crate::invoice::InvoiceCategory,
-    new_category: &crate::invoice::InvoiceCategory,
+    old_category: &crate::types::InvoiceCategory,
+    new_category: &crate::types::InvoiceCategory,
 ) {
     InvoiceCategoryUpdated {
         invoice_id: invoice_id.clone(),
@@ -1137,7 +1137,7 @@ pub fn emit_revenue_distributed(
 pub fn emit_invoice_status_updated(
     env: &Env,
     invoice_id: BytesN<32>,
-    status: crate::invoice::InvoiceStatus,
+    status: crate::types::InvoiceStatus,
 ) {
     InvoiceStatusUpdated { invoice_id, status }.publish(env);
 }
