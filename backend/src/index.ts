@@ -2,13 +2,15 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { statusService } from "./services/statusService";
+import { browserCorsOptions } from "./config/cors";
+import { csrfMiddleware } from "./middleware/csrf";
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors(browserCorsOptions));
 app.use(express.json());
 
 /**
@@ -40,12 +42,12 @@ app.get("/api/status", async (req, res) => {
 
 // Admin-only (internal/secured) endpoint to toggle maintenance mode
 // In a real app, this would be protected by API key or Auth
-app.post("/api/admin/maintenance", (req, res) => {
+app.post("/api/admin/maintenance", csrfMiddleware, (req, res) => {
   const { enabled } = req.body;
   if (typeof enabled !== "boolean") {
     return res.status(400).json({ error: "Invalid enabled flag" });
   }
-  
+
   statusService.setMaintenanceMode(enabled);
   res.json({ success: true, maintenance: enabled });
 });

@@ -3,7 +3,10 @@ import cors from "cors";
 import helmet from "helmet";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { errorHandler } from "./middleware/error-handler";
+import { browserCorsOptions, webhookCorsOptions } from "./config/cors";
+import { csrfMiddleware } from "./middleware/csrf";
 import v1Routes from "./routes/v1";
+import webhookRoutes from "./routes/webhooks";
 
 const app = express();
 
@@ -11,7 +14,7 @@ app.set("trust proxy", true);
 
 // Security Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors(browserCorsOptions));
 app.use(express.json());
 app.set("trust proxy", true);
 
@@ -27,6 +30,8 @@ app.use((req, res, next) => {
 app.use(rateLimitMiddleware);
 
 // Routes
+app.use("/api/webhooks", cors(webhookCorsOptions), webhookRoutes);
+app.use(csrfMiddleware);
 app.use("/api/v1", v1Routes);
 
 // Health check (root level as well if needed)
