@@ -42,6 +42,7 @@ mod init;
 mod investment;
 mod investment_queries;
 mod invoice;
+mod invoice_search;
 mod notifications;
 mod pause;
 mod payments;
@@ -733,6 +734,30 @@ impl QuickLendXContract {
     /// Get invoices indexed by tax id
     pub fn get_invoices_by_tax_id(env: Env, tax_id: String) -> Vec<BytesN<32>> {
         InvoiceStorage::get_invoices_by_tax_id(&env, &tax_id)
+    }
+
+    /// Search invoices with relevance ranking
+    ///
+    /// Performs a full-text search across invoice descriptions and customer names
+    /// with ranking based on match quality and recency.
+    ///
+    /// # Arguments
+    /// * `query` - Search query string (sanitized automatically)
+    ///
+    /// # Returns
+    /// * `Vec<SearchResult>` - Ranked search results (max 50 results)
+    ///
+    /// # Ranking Logic
+    /// 1. Exact invoice ID matches (highest priority)
+    /// 2. Partial matches in description/customer name
+    /// 3. Sorted by created_at timestamp (newest first) within same rank
+    ///
+    /// # Security Notes
+    /// - Input sanitization prevents injection attacks
+    /// - Memory-safe: bounded result set prevents DoS
+    /// - Case-insensitive search
+    pub fn search_invoices(env: Env, query: String) -> Result<Vec<SearchResult>, QuickLendXError> {
+        InvoiceSearch::search_invoices(&env, query)
     }
 
     /// Get all invoices by status
