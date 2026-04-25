@@ -2,7 +2,8 @@ use crate::errors::QuickLendXError;
 use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice_expired};
 use crate::init::ProtocolInitializer;
 use crate::investment::{InvestmentStatus, InvestmentStorage};
-use crate::invoice::{InvoiceStatus, InvoiceStorage};
+use crate::storage::InvoiceStorage;
+use crate::types::InvoiceStatus;
 use soroban_sdk::{contracttype, symbol_short, BytesN, Env, Vec};
 
 /// Default grace period in seconds (7 days)

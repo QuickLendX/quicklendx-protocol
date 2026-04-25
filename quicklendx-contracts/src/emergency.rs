@@ -261,7 +261,6 @@ impl EmergencyWithdraw {
             .instance()
             .set(&PENDING_WITHDRAWAL_KEY, &pending);
 
-        env.storage().instance().remove(&PENDING_WITHDRAWAL_KEY);
         crate::events::emit_emergency_withdrawal_cancelled(
             env,
             pending.token.clone(),

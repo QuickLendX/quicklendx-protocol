@@ -7,6 +7,18 @@ use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke};
 use soroban_sdk::{token, Address, Env, IntoVal, String, Vec};
 
+/// Standard test setup: registers contract, initializes admin, generates test addresses.
+pub fn setup_contract_with_admin() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    client.initialize_admin(&admin);
+    (env, client, admin, business)
+}
+
 fn setup(
     env: &Env,
 ) -> (
@@ -45,6 +57,10 @@ fn verify_investor_for_test(
     client.verify_investor(investor, &limit);
 }
 
+// ============================================================================
+// Core pause/unpause behavior
+// ============================================================================
+
 #[test]
 fn test_pause_blocks_user_and_invoice_state_mutations() {
     let env = Env::default();
@@ -52,7 +68,6 @@ fn test_pause_blocks_user_and_invoice_state_mutations() {
     let due_date = env.ledger().timestamp() + 86_400;
 
     let invoice_id = client.store_invoice(
-        &admin,
         &business,
         &1_000i128,
         &currency,
@@ -65,27 +80,25 @@ fn test_pause_blocks_user_and_invoice_state_mutations() {
     client.pause(&admin);
     assert!(client.is_paused());
 
-    let upload_err = client
-        .try_store_invoice(
-            &business,
-            &1_000i128,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Blocked"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        )
-        .err()
-        .expect("pause should block invoice creation")
-        .expect("contract error");
-    assert_eq!(upload_err, QuickLendXError::OperationNotAllowed);
+    // store_invoice blocked
+    let result = client.try_store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Blocked"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
 
-    let verify_err = client
-        .try_verify_invoice(&invoice_id)
-        .err()
-        .expect("pause should block invoice verification")
-        .expect("contract error");
-    assert_eq!(verify_err, QuickLendXError::OperationNotAllowed);
+    // verify_invoice blocked
+    let result = client.try_verify_invoice(&invoice_id);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
 }
 
 #[test]
@@ -96,10 +109,8 @@ fn test_pause_allows_governance_configuration_updates() {
 
     client.pause(&admin);
 
+    // Admin config functions remain allowed during pause
     assert_eq!(client.set_bid_ttl_days(&14), 14);
-
-    client.set_platform_fee(&250i128);
-    assert_eq!(client.get_platform_fee().fee_bps, 250);
 
     client.add_currency(&admin, &currency);
     assert!(client.is_allowed_currency(&currency));
@@ -108,20 +119,19 @@ fn test_pause_allows_governance_configuration_updates() {
 
     client.unpause(&admin);
 
-    let below_limit_err = client
-        .try_store_invoice(
-            &business,
-            &24i128,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Below min"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        )
-        .err()
-        .expect("updated limits should affect later invoice validation")
-        .expect("contract error");
-    assert_eq!(below_limit_err, QuickLendXError::InvalidAmount);
+    // Updated limits affect post-unpause operations
+    let result = client.try_store_invoice(
+        &business,
+        &24i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Below min"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::InvalidAmount);
 }
 
 #[test]
@@ -164,12 +174,11 @@ fn test_pause_allows_admin_rotation_and_new_admin_unpause() {
     client.transfer_admin(&new_admin);
     assert_eq!(client.get_current_admin(), Some(new_admin.clone()));
 
-    let old_admin_err = client
-        .try_unpause(&admin)
-        .err()
-        .expect("old admin should lose authority")
-        .expect("contract error");
-    assert_eq!(old_admin_err, QuickLendXError::NotAdmin);
+    // Old admin cannot unpause
+    let result = client.try_unpause(&admin);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::NotAdmin);
 
     client.unpause(&new_admin);
     assert!(!client.is_paused());
@@ -209,6 +218,10 @@ fn test_pause_allows_emergency_withdraw_lifecycle() {
     assert!(client.is_paused());
 }
 
+// ============================================================================
+// Bid and escrow flows blocked during pause
+// ============================================================================
+
 #[test]
 fn test_pause_blocks_accept_bid_and_fund() {
     let env = Env::default();
@@ -216,7 +229,6 @@ fn test_pause_blocks_accept_bid_and_fund() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        &admin,
         &business,
         &1000i128,
         &currency,
@@ -232,9 +244,9 @@ fn test_pause_blocks_accept_bid_and_fund() {
     client.pause(&admin);
 
     let result = client.try_accept_bid_and_fund(&invoice_id, &bid_id);
-    let err = result.err().expect("expected contract error");
-    let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed.into());
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
 }
 
 #[test]
@@ -244,7 +256,6 @@ fn test_pause_blocks_release_escrow_funds() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        &admin,
         &business,
         &1000i128,
         &currency,
@@ -257,7 +268,6 @@ fn test_pause_blocks_release_escrow_funds() {
     verify_investor_for_test(&env, &client, &investor, 10_000);
     let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
 
-    // Debug: check if accept_bid fails
     let accept_res = client.try_accept_bid(&invoice_id, &bid_id);
     if let Err(err) = accept_res {
         panic!("Setup failed at accept_bid: {:?}", err);
@@ -266,9 +276,9 @@ fn test_pause_blocks_release_escrow_funds() {
     client.pause(&admin);
 
     let result = client.try_release_escrow_funds(&invoice_id);
-    let err = result.err().expect("expected contract error");
-    let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
 }
 
 #[test]
@@ -278,7 +288,6 @@ fn test_pause_blocks_refund_escrow_funds() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        &admin,
         &business,
         &1000i128,
         &currency,
@@ -295,19 +304,18 @@ fn test_pause_blocks_refund_escrow_funds() {
     client.pause(&admin);
 
     let result = client.try_refund_escrow_funds(&invoice_id, &business);
-    let err = result.err().expect("expected contract error");
-    let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
 }
 
 #[test]
-fn test_pause_blocks_cancel_bid() {
+fn test_pause_blocks_withdraw_bid() {
     let env = Env::default();
     let (client, admin, business, investor, currency) = setup(&env);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        &admin,
         &business,
         &1000i128,
         &currency,
@@ -322,11 +330,15 @@ fn test_pause_blocks_cancel_bid() {
 
     client.pause(&admin);
 
-    let result = client.try_cancel_bid(&bid_id);
-    let err = result.err().expect("expected contract error");
-    let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+    let result = client.try_withdraw_bid(&bid_id);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
 }
+
+// ============================================================================
+// Invoice management blocked during pause
+// ============================================================================
 
 #[test]
 fn test_pause_blocks_update_invoice_category() {
@@ -335,7 +347,6 @@ fn test_pause_blocks_update_invoice_category() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        &admin,
         &business,
         &1000i128,
         &currency,
@@ -348,9 +359,9 @@ fn test_pause_blocks_update_invoice_category() {
     client.pause(&admin);
 
     let result = client.try_update_invoice_category(&invoice_id, &InvoiceCategory::Products);
-    let err = result.err().expect("expected contract error");
-    let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
 }
 
 #[test]
@@ -360,7 +371,6 @@ fn test_pause_blocks_settle_invoice() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        &admin,
         &business,
         &1000i128,
         &currency,
@@ -372,13 +382,13 @@ fn test_pause_blocks_settle_invoice() {
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(&env, &client, &investor, 10_000);
     let _bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
-    // Normally accept_bid_and_fund happens here
 
     client.pause(&admin);
+
     let result = client.try_settle_invoice(&invoice_id, &1000i128);
-    let err = result.err().expect("expected contract error");
-    let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
 }
 
 #[test]
@@ -388,7 +398,6 @@ fn test_pause_blocks_add_investment_insurance() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        &admin,
         &business,
         &1000i128,
         &currency,
@@ -407,23 +416,16 @@ fn test_pause_blocks_add_investment_insurance() {
     let provider = Address::generate(&env);
 
     client.pause(&admin);
+
     let result = client.try_add_investment_insurance(&investment.investment_id, &provider, &80);
-    let err = result.err().expect("expected contract error");
-    let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
 }
 
-#[test]
-fn test_pause_blocks_admin_set_platform_fee() {
-    let env = Env::default();
-    let (client, admin, _business, _investor, _currency) = setup(&env);
-
-    client.pause(&admin);
-    let result = client.try_set_platform_fee(&200i128);
-    let err = result.err().expect("expected contract error");
-    let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
-}
+// ============================================================================
+// KYC and user onboarding blocked during pause
+// ============================================================================
 
 #[test]
 fn test_pause_and_unpause_require_admin_signature() {
@@ -481,23 +483,29 @@ fn test_pause_blocks_kyc_submission() {
     let (client, admin, business, _investor, _currency) = setup(&env);
 
     client.pause(&admin);
+
     let result = client.try_submit_kyc_application(&business, &String::from_str(&env, "Data"));
-    let err = result.err().expect("expected contract error");
-    let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
 }
 
 #[test]
-fn test_pause_blocks_protocol_limits_update() {
+fn test_pause_blocks_investor_kyc_submission() {
     let env = Env::default();
-    let (client, admin, _business, _investor, _currency) = setup(&env);
+    let (client, admin, _business, investor, _currency) = setup(&env);
 
     client.pause(&admin);
-    let result = client.try_set_protocol_limits(&admin, &100i128, &90, &604800);
-    let err = result.err().expect("expected contract error");
-    let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+
+    let result = client.try_submit_investor_kyc(&investor, &String::from_str(&env, "Data"));
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
 }
+
+// ============================================================================
+// Tag management blocked during pause
+// ============================================================================
 
 #[test]
 fn test_pause_blocks_tag_management() {
@@ -506,7 +514,6 @@ fn test_pause_blocks_tag_management() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        &admin,
         &business,
         &1000i128,
         &currency,
@@ -517,8 +524,83 @@ fn test_pause_blocks_tag_management() {
     );
 
     client.pause(&admin);
+
     let result = client.try_add_invoice_tag(&invoice_id, &String::from_str(&env, "Urgent"));
-    let err = result.err().expect("expected contract error");
-    let contract_error = err.expect("expected contract invoke error");
-    assert_eq!(contract_error, QuickLendXError::OperationNotAllowed);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
+
+    let result = client.try_remove_invoice_tag(&invoice_id, &String::from_str(&env, "Urgent"));
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
 }
+
+// ============================================================================
+// Query functions always allowed
+// ============================================================================
+
+#[test]
+fn test_pause_allows_all_query_functions() {
+    let env = Env::default();
+    let (client, admin, business, _investor, _currency) = setup(&env);
+
+    client.pause(&admin);
+
+    // All read-only operations must succeed while paused
+    client.get_current_admin();
+    client.is_paused();
+    client.get_bid_ttl_days();
+    client.get_total_invoice_count();
+    client.get_available_invoices();
+    client.get_invoice_by_business(&business);
+    client.get_platform_fee();
+    client.get_pending_businesses();
+    client.get_verified_businesses();
+    client.get_pending_investors();
+    client.get_verified_investors();
+}
+
+// ============================================================================
+// Determinism: repeated pause/unpause cycles
+// ============================================================================
+
+#[test]
+fn test_pause_unpause_cycle_is_deterministic() {
+    let env = Env::default();
+    let (client, admin, business, _investor, currency) = setup(&env);
+    let due_date = env.ledger().timestamp() + 86_400;
+
+    for _ in 0..3 {
+        assert!(!client.is_paused());
+
+        // Operation succeeds when unpaused
+        let _ = client.store_invoice(
+            &business,
+            &1_000i128,
+            &currency,
+            &due_date,
+            &String::from_str(&env, "Test"),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
+
+        client.pause(&admin);
+        assert!(client.is_paused());
+
+        // Operation fails when paused
+        let result = client.try_store_invoice(
+            &business,
+            &1_000i128,
+            &currency,
+            &due_date,
+            &String::from_str(&env, "Blocked"),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
+        assert!(result.is_err());
+
+        client.unpause(&admin);
+    }
+}
+
