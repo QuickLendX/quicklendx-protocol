@@ -29,6 +29,9 @@ pub mod verification;
 #[cfg(test)]
 mod test_fuzz;
 
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_invariants;
+
 #[cfg(test)]
 mod test_business_kyc;
 
