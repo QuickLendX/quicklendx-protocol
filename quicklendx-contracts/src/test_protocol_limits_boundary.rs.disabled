@@ -18,7 +18,7 @@ use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn setup() -> (Env, QuickLendXContractClient<'static\>, Address) {
+fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let id = env.register(QuickLendXContract, ());

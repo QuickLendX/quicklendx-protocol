@@ -458,11 +458,9 @@ fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>
             env,
             [
                 Services,
-                Products,
+                Goods,
                 Consulting,
-                Manufacturing,
-                Technology,
-                Healthcare,
+                Logistics,
                 Other,
             ],
         )

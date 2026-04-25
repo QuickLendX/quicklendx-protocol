@@ -11,6 +11,24 @@
 
 use soroban_sdk::{contracttype, Address, BytesN, Env, IntoVal, String, Vec};
 
+/// Search result ranking for invoice search
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum SearchRank {
+    ExactMatch = 3,
+    PartialMatch = 2,
+    Other = 1,
+}
+
+/// Search result containing invoice ID and ranking
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SearchResult {
+    pub invoice_id: BytesN<32>,
+    pub rank: SearchRank,
+    pub created_at: u64,
+}
+
 /// Invoice status enumeration representing the lifecycle of an invoice
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
