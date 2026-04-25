@@ -1,8 +1,10 @@
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
 use crate::errors::QuickLendXError;
-use crate::invoice::{Invoice, InvoiceStorage};
-use crate::types::{SearchRank, SearchResult};
+use crate::storage::InvoiceStorage;
+use crate::types::{
+    Invoice, InvoiceStatus, SearchRank, SearchResult,
+};
 
 /// Maximum number of search results to return
 pub const MAX_SEARCH_RESULTS: u32 = 50;
@@ -193,19 +195,18 @@ impl InvoiceSearch {
         let mut all_ids = Vec::new(env);
 
         // Get from all status lists
-        let statuses = vec![
-            env,
-            crate::invoice::InvoiceStatus::Pending,
-            crate::invoice::InvoiceStatus::Verified,
-            crate::invoice::InvoiceStatus::Funded,
-            crate::invoice::InvoiceStatus::Paid,
-            crate::invoice::InvoiceStatus::Defaulted,
-            crate::invoice::InvoiceStatus::Cancelled,
-            crate::invoice::InvoiceStatus::Refunded,
+        let statuses = [
+            InvoiceStatus::Pending,
+            InvoiceStatus::Verified,
+            InvoiceStatus::Funded,
+            InvoiceStatus::Paid,
+            InvoiceStatus::Defaulted,
+            InvoiceStatus::Cancelled,
+            InvoiceStatus::Refunded,
         ];
 
-        for status in statuses.iter() {
-            let status_invoices = InvoiceStorage::get_invoices_by_status(env, &status);
+        for status in statuses {
+            let status_invoices = InvoiceStorage::get_invoices_by_status(env, status);
             for invoice_id in status_invoices.iter() {
                 // Avoid duplicates
                 if !Self::contains_id(&all_ids, &invoice_id) {
@@ -234,10 +235,10 @@ impl InvoiceSearch {
         for i in 0..len {
             for j in 0..(len - i - 1) {
                 if let (Some(a), Some(b)) = (results.get(j), results.get(j + 1)) {
-                    let should_swap = match (a.rank.cmp(&b.rank), a.created_at.cmp(&b.created_at)) {
-                        (std::cmp::Ordering::Less, _) => true,
-                        (std::cmp::Ordering::Equal, std::cmp::Ordering::Less) => true,
-                        _ => false,
+                    let should_swap = match a.rank.cmp(&b.rank) {
+                        core::cmp::Ordering::Less => true,
+                        core::cmp::Ordering::Equal => a.created_at < b.created_at,
+                        core::cmp::Ordering::Greater => false,
                     };
 
                     if should_swap {
@@ -258,7 +259,7 @@ mod tests {
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::{Address, Env, String, Vec};
 
-    use crate::invoice::{Invoice, InvoiceCategory, InvoiceStatus};
+    use crate::types::{Invoice, InvoiceCategory, InvoiceStatus, DisputeStatus, SearchRank};
 
     fn setup_test_env() -> Env {
         let env = Env::default();
@@ -295,7 +296,7 @@ mod tests {
             average_rating: None,
             total_ratings: 0,
             ratings: Vec::new(env),
-            dispute_status: crate::invoice::DisputeStatus::None,
+            dispute_status: DisputeStatus::None,
             dispute: Default::default(),
             total_paid: 0,
             payment_history: Vec::new(env),

@@ -26,7 +26,7 @@
 //! # Overflow Safety
 //!
 //! - Uses `saturating_*` arithmetic to prevent overflow panics
-//! - Maximum supported amounts: i128::MAX (approximately 1.7 × 10^38)
+//! - Maximum supported amounts: i128::MAX (approximately 1.7 - 10^38)
 //! - Fee basis points capped at 1000 (10%)
 //!
 //! # Security Considerations

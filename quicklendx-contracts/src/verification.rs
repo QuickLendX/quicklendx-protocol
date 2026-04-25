@@ -87,16 +87,16 @@ impl BusinessVerificationStorage {
     /// Validates that a state transition is allowed according to KYC lifecycle rules
     ///
     /// Valid transitions:
-    /// - None → Pending (new submission)
-    /// - Pending → Verified (admin approval)
-    /// - Pending → Rejected (admin rejection)
-    /// - Rejected → Pending (resubmission after rejection)
+    /// - None -> Pending (new submission)
+    /// - Pending -> Verified (admin approval)
+    /// - Pending -> Rejected (admin rejection)
+    /// - Rejected -> Pending (resubmission after rejection)
     ///
     /// Invalid transitions:
-    /// - Verified → *any other state (verified is final)
-    /// - Pending → Pending (duplicate submission)
-    /// - Rejected → Rejected (duplicate rejection)
-    /// - Rejected → Verified (must go through Pending first)
+    /// - Verified -> *any other state (verified is final)
+    /// - Pending -> Pending (duplicate submission)
+    /// - Rejected -> Rejected (duplicate rejection)
+    /// - Rejected -> Verified (must go through Pending first)
     pub fn validate_state_transition(
         old_status: Option<BusinessVerificationStatus>,
         new_status: BusinessVerificationStatus,
@@ -105,17 +105,17 @@ impl BusinessVerificationStorage {
             // New submission (no previous status)
             (None, BusinessVerificationStatus::Pending) => Ok(()),
 
-            // Pending → Verified (admin approval)
+            // Pending -> Verified (admin approval)
             (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Verified) => {
                 Ok(())
             }
 
-            // Pending → Rejected (admin rejection)
+            // Pending -> Rejected (admin rejection)
             (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Rejected) => {
                 Ok(())
             }
 
-            // Rejected → Pending (resubmission after rejection)
+            // Rejected -> Pending (resubmission after rejection)
             (Some(BusinessVerificationStatus::Rejected), BusinessVerificationStatus::Pending) => {
                 Ok(())
             }
@@ -1020,8 +1020,8 @@ pub fn validate_invoice_category(
 /// length checks and duplicate detection operate on the canonical stored form.
 ///
 /// # Rules enforced
-/// - Tag count ≤ 10.
-/// - Each normalized tag must be 1–50 bytes.
+/// - Tag count - 10.
+/// - Each normalized tag must be 1-50 bytes.
 /// - No two tags may normalize to the same value (e.g. "Tech" and "tech" are duplicates).
 ///
 /// # Errors
@@ -1473,7 +1473,7 @@ pub fn validate_invoice_metadata(
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        let expected_total = record.1.saturating_mul(record.2);
+        let expected_total = (record.1 as i128).saturating_mul(record.2);
         if expected_total != record.3 {
             return Err(QuickLendXError::InvalidAmount);
         }

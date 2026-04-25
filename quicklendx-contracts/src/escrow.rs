@@ -7,9 +7,9 @@
 //! Each invoice may have **at most one** escrow record across its entire lifetime.
 //! This is enforced at two independent layers:
 //!
-//! 1. **`load_accept_bid_context`** – checks `EscrowStorage::get_escrow_by_invoice`
+//! 1. **`load_accept_bid_context`** - checks `EscrowStorage::get_escrow_by_invoice`
 //!    and `InvestmentStorage::get_investment_by_invoice` before any state changes.
-//! 2. **`payments::create_escrow`** – re-checks `get_escrow_by_invoice` before the
+//! 2. **`payments::create_escrow`** - re-checks `get_escrow_by_invoice` before the
 //!    token transfer, so the guard holds even if the higher-level check is bypassed.
 //!
 //! Any duplicate attempt returns [`QuickLendXError::InvoiceAlreadyFunded`] or
@@ -17,13 +17,11 @@
 //! See `test_escrow_uniqueness.rs` for the full attack-vector test suite.
 
 use crate::admin::AdminStorage;
-use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::events::{emit_escrow_refunded, emit_invoice_funded};
-use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
 use crate::payments::{create_escrow, refund_escrow, EscrowStorage};
-use crate::storage::InvoiceStorage;
-use crate::types::InvoiceStatus;
+use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
+use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
 use crate::verification::require_business_not_pending;
 use soroban_sdk::{Address, BytesN, Env, Vec};
 

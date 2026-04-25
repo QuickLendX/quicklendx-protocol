@@ -802,9 +802,9 @@ fn test_comprehensive_fee_calculation() {
 // Treasury Configuration Tests
 // ============================================================================
 
-// ─── calculate_transaction_fees: all flag combinations ───────────────────────
+// --- calculate_transaction_fees: all flag combinations -----------------------
 
-/// Base case: no flags set, Standard tier — verifies raw fee with no modifiers
+/// Base case: no flags set, Standard tier - verifies raw fee with no modifiers
 #[test]
 fn test_calculate_transaction_fees_base_case() {
     let env = Env::default();
@@ -819,7 +819,7 @@ fn test_calculate_transaction_fees_base_case() {
     let amount = 10_000_i128;
     let fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
 
-    // Platform 2% = 200, Processing 0.5% = 50, Verification 1% = 100 → total 350
+    // Platform 2% = 200, Processing 0.5% = 50, Verification 1% = 100 -> total 350
     assert_eq!(fees, 350);
 }
 
@@ -928,7 +928,7 @@ fn test_calculate_transaction_fees_early_payment_flag() {
     let base_fees = client.calculate_transaction_fees(&user, &amount, &false, &false);
     let early_fees = client.calculate_transaction_fees(&user, &amount, &true, &false);
 
-    // Early payment applies 10% discount on Platform fee (200 → 180)
+    // Early payment applies 10% discount on Platform fee (200 -> 180)
     // Total: 180 + 50 + 100 = 330
     assert_eq!(early_fees, 330);
     assert!(

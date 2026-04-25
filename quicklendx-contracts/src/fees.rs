@@ -823,9 +823,9 @@ impl FeeManager {
     /// # Safety invariants enforced
     /// - Revenue config must exist and shares must sum to 10_000 bps.
     /// - If [`Self::get_treasury_address`] is set and `treasury_share_bps > 0`, the revenue
-    ///   config’s `treasury_address` must match that routing target (same on-chain fee treasury).
+    ///   config's `treasury_address` must match that routing target (same on-chain fee treasury).
     /// - Idempotency: when `pending_distribution == 0`, the call returns
-    ///   [`QuickLendXError::OperationNotAllowed`] so a period cannot be “re-settled” until new
+    ///   [`QuickLendXError::OperationNotAllowed`] so a period cannot be "re-settled" until new
     ///   fees are collected (avoids duplicate events / no-op distributions when
     ///   `min_distribution_amount == 0`).
     /// - Pending distribution must meet the minimum threshold when it is positive.

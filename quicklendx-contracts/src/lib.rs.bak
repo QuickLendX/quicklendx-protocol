@@ -17,12 +17,12 @@ extern crate alloc;
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod scratch_events;
-// #[cfg(test)]
-// mod test_default;
-// #[cfg(test)]
-// mod test_fees;
-// #[cfg(test)]
-// mod test_fees_extended;
+#[cfg(test)]
+mod test_default;
+#[cfg(test)]
+mod test_fees;
+#[cfg(test)]
+mod test_fees_extended;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 mod admin;
@@ -52,51 +52,51 @@ mod protocol_limits;
 mod reentrancy;
 mod settlement;
 mod storage;
-// #[cfg(test)]
-// #[cfg(test)]
-// mod test_admin;
-// #[cfg(test)]
-// mod test_admin_simple;
-// #[cfg(test)]
-// mod test_admin_standalone;
-// #[cfg(test)]
-// mod test_expired_bids_cleanup;
-// #[cfg(test)]
-// mod test_freshness;
-// #[cfg(test)]
-// mod test_init;
-// #[cfg(test)]
-// mod test_dispute;
-// #[cfg(test)]
-// mod test_investment_consistency;
+#[cfg(test)]
+#[cfg(test)]
+mod test_admin;
+#[cfg(test)]
+mod test_admin_simple;
+#[cfg(test)]
+mod test_admin_standalone;
+#[cfg(test)]
+mod test_expired_bids_cleanup;
+#[cfg(test)]
+mod test_freshness;
+#[cfg(test)]
+mod test_init;
+#[cfg(test)]
+mod test_dispute;
+#[cfg(test)]
+mod test_investment_consistency;
 // test_investment_queries disabled: depends on crate::pagination + proptest (not in scope)
 // #[cfg(test)]
 // mod test_investment_queries;
-// #[cfg(test)]
-// mod test_init_invariants;
-// #[cfg(test)]
-// mod test_max_invoices_per_business;
+#[cfg(test)]
+mod test_init_invariants;
+#[cfg(test)]
+mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
-// mod test_overflow;
+mod test_overflow;
 #[cfg(all(test, feature = "legacy-tests"))]
-// mod test_pause;
+mod test_pause;
 #[cfg(all(test, feature = "legacy-tests"))]
-// mod test_profit_fee;
+mod test_profit_fee;
 #[cfg(all(test, feature = "legacy-tests"))]
-// mod test_refund;
+mod test_refund;
 #[cfg(all(test, feature = "legacy-tests"))]
-// mod test_storage;
-// #[cfg(test)]
-// mod test_protocol_limits_boundary;
-// #[cfg(test)]
-// mod test_string_limits;
+mod test_storage;
+#[cfg(test)]
+mod test_protocol_limits_boundary;
+#[cfg(test)]
+mod test_string_limits;
 #[cfg(all(test, feature = "legacy-tests"))]
-// mod test_types;
+mod test_types;
 #[cfg(all(test, feature = "legacy-tests"))]
-// mod test_vesting;
-// #[cfg(test)]
-// mod test_notifications;
-// #[cfg(test)]
+mod test_vesting;
+#[cfg(test)]
+mod test_notifications;
+#[cfg(test)]
 mod test_bid_ranking;
 pub mod types;
 mod verification;

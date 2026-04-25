@@ -13,7 +13,7 @@ use soroban_sdk::{contracttype, Address, BytesN, Env, IntoVal, String, Vec};
 
 /// Invoice status enumeration representing the lifecycle of an invoice
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvoiceStatus {
     Pending,
     Verified,
@@ -32,6 +32,7 @@ pub enum BidStatus {
     Accepted,
     Withdrawn,
     Expired,
+    Cancelled,
 }
 
 /// Investment status enumeration
@@ -50,6 +51,7 @@ pub enum InvestmentStatus {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DisputeStatus {
     None,
+    Disputed,
     UnderReview,
     Resolved,
 }
@@ -146,122 +148,8 @@ pub struct InvoiceMetadata {
     pub notes: String,
 }
 
-impl Invoice {
-    pub fn new(
-        env: &Env,
-        business: Address,
-        amount: i128,
-        currency: Address,
-        due_date: u64,
-        description: String,
-        category: InvoiceCategory,
-        tags: Vec<String>,
-    ) -> Result<Self, crate::errors::QuickLendXError> {
-        let id = env.crypto().sha256(&(&business, &amount, &due_date, env.ledger().timestamp()).into_val(env));
-        let timestamp = env.ledger().timestamp();
 
-        Ok(Self {
-            id,
-            business: business.clone(),
-            amount,
-            currency,
-            due_date,
-            status: InvoiceStatus::Pending,
-            description,
-            category,
-            tags,
-            metadata_customer_name: None,
-            metadata_customer_address: None,
-            metadata_tax_id: None,
-            metadata_notes: None,
-            metadata_line_items: Vec::new(env),
-            funded_amount: 0,
-            funded_at: None,
-            investor: None,
-            settled_at: None,
-            total_paid: 0,
-            payment_history: Vec::new(env),
-            average_rating: None,
-            total_ratings: 0,
-            ratings: Vec::new(env),
-            dispute_status: DisputeStatus::None,
-            dispute: Dispute {
-                created_by: business.clone(),
-                created_at: 0,
-                reason: String::from_str(env, ""),
-                evidence: String::from_str(env, ""),
-                resolution: String::from_str(env, ""),
-                resolved_by: business.clone(),
-                resolved_at: 0,
-            },
-            created_at: timestamp,
-            updated_at: timestamp,
-        })
-    }
-
-    pub fn verify(&mut self, env: &Env, _actor: Address) {
-        self.status = InvoiceStatus::Verified;
-        self.updated_at = env.ledger().timestamp();
-    }
-
-    pub fn cancel(&mut self, env: &Env, _actor: Address) -> Result<(), crate::errors::QuickLendXError> {
-        if self.status != InvoiceStatus::Pending && self.status != InvoiceStatus::Verified {
-            return Err(crate::errors::QuickLendXError::InvalidStatus);
-        }
-        self.status = InvoiceStatus::Cancelled;
-        self.updated_at = env.ledger().timestamp();
-        Ok(())
-    }
-
-    pub fn mark_as_paid(&mut self, env: &Env, _actor: Address, timestamp: u64) {
-        self.status = InvoiceStatus::Paid;
-        self.settled_at = Some(timestamp);
-        self.updated_at = timestamp;
-    }
-
-    pub fn mark_as_defaulted(&mut self) {
-        self.status = InvoiceStatus::Defaulted;
-    }
-
-    pub fn mark_as_funded(&mut self, env: &Env, _actor: Address, amount: i128, timestamp: u64) {
-        self.status = InvoiceStatus::Funded;
-        self.funded_amount = amount;
-        self.funded_at = Some(timestamp);
-        self.updated_at = timestamp;
-    }
-
-    pub fn set_metadata(&mut self, env: &Env, metadata: Option<InvoiceMetadata>) -> Result<(), crate::errors::QuickLendXError> {
-        if let Some(m) = metadata {
-            self.metadata_customer_name = Some(m.customer_name);
-            self.metadata_customer_address = Some(m.customer_address);
-            self.metadata_tax_id = Some(m.tax_id);
-            self.metadata_line_items = m.line_items;
-            self.metadata_notes = Some(m.notes);
-        } else {
-            self.metadata_customer_name = None;
-            self.metadata_customer_address = None;
-            self.metadata_tax_id = None;
-            self.metadata_line_items = Vec::new(env);
-            self.metadata_notes = None;
-        }
-        self.updated_at = env.ledger().timestamp();
-        Ok(())
-    }
-
-    pub fn metadata(&self) -> Option<InvoiceMetadata> {
-        if let Some(name) = self.metadata_customer_name.clone() {
-            Some(InvoiceMetadata {
-                customer_name: name,
-                customer_address: self.metadata_customer_address.clone().unwrap_or(String::from_str(self.metadata_line_items.env(), "")),
-                tax_id: self.metadata_tax_id.clone().unwrap_or(String::from_str(self.metadata_line_items.env(), "")),
-                line_items: self.metadata_line_items.clone(),
-                notes: self.metadata_notes.clone().unwrap_or(String::from_str(self.metadata_line_items.env(), "")),
-            })
-        } else {
-            None
-        }
-    }
-}
+// Invoice logic is implemented in crate::invoice module.
 
 /// Bid data structure
 #[contracttype]
@@ -308,4 +196,22 @@ pub struct PlatformFeeConfig {
     pub fee_bps: u32,
     pub updated_at: u64,
     pub updated_by: Address,
+}
+
+/// Search relevance rank for invoice search results
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum SearchRank {
+    Other,
+    PartialMatch,
+    ExactId,
+}
+
+/// A single search result entry
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SearchResult {
+    pub invoice_id: BytesN<32>,
+    pub rank: SearchRank,
+    pub created_at: u64,
 }

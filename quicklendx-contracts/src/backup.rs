@@ -101,7 +101,7 @@ impl BackupStorage {
             .unwrap_or_else(|| BackupRetentionPolicy::default())
     }
 
-    /// Set the backup retention policy (admin only — caller must enforce auth).
+    /// Set the backup retention policy (admin only - caller must enforce auth).
     pub fn set_retention_policy(env: &Env, policy: &BackupRetentionPolicy) {
         env.storage().instance().set(&RETENTION_POLICY_KEY, policy);
     }
@@ -259,13 +259,13 @@ impl BackupStorage {
     ///
     /// ```text
     /// Step 1  validate_backup()
-    ///         ─────────────────
+    ///         -----------------
     ///         Full integrity check BEFORE any mutation.  If the backup is
     ///         corrupt or the invoice_count mismatches, we abort here and
     ///         leave existing storage completely untouched.
     ///
     /// Step 2  InvoiceStorage::clear_all()
-    ///         ────────────────────────────
+    ///         ----------------------------
     ///         Atomically removes every invoice record, status bucket,
     ///         category index, tag index, business index, and metadata index.
     ///         After this step storage is empty.  There is no rollback
@@ -273,14 +273,14 @@ impl BackupStorage {
     ///         caller has accepted that the current state will be discarded.
     ///
     /// Step 3  InvoiceStorage::store_invoice() per invoice
-    ///         ────────────────────────────────────────────
+    ///         --------------------------------------------
     ///         Re-registers each invoice from the backup payload, rebuilding
     ///         all secondary indexes from scratch.  The write order within
     ///         this step does not matter because `store_invoice` is
     ///         self-contained.
     ///
     /// Step 4  Mark the backup as Archived
-    ///         ────────────────────────────
+    ///         ----------------------------
     ///         Prevents the same backup from being restored twice, which
     ///         could cause duplicate invoice registrations if the store is
     ///         not cleared between restores.
@@ -288,7 +288,7 @@ impl BackupStorage {
     ///
     /// # Errors
     ///
-    /// Returns an error *only* in step 1.  Steps 2–4 are infallible on a
+    /// Returns an error *only* in step 1.  Steps 2-4 are infallible on a
     /// well-formed Soroban environment; panics in those steps indicate a
     /// platform bug, not a contract bug.
     ///
@@ -296,7 +296,7 @@ impl BackupStorage {
     ///
     /// - The caller **must** enforce admin authentication before invoking this
     ///   function.  The contract entry point is responsible for `require_auth`.
-    /// - Validate → clear → restore is the only safe ordering.  Clearing
+    /// - Validate -> clear -> restore is the only safe ordering.  Clearing
     ///   before validating would leave the contract in an empty state if the
     ///   backup turns out to be corrupt.
     /// - Restoring without clearing first would overlay backup data on stale
@@ -323,7 +323,7 @@ impl BackupStorage {
         // Step 4: mark the backup as archived to prevent re-use
         if let Some(mut backup) = Self::get_backup(env, backup_id) {
             backup.status = BackupStatus::Archived;
-            // Ignore the result — the restore itself has already succeeded.
+            // Ignore the result - the restore itself has already succeeded.
             let _ = Self::update_backup(env, &backup);
         }
 

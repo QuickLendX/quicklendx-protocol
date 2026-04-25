@@ -1,9 +1,8 @@
 use crate::errors::QuickLendXError;
 use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice_expired};
 use crate::init::ProtocolInitializer;
-use crate::investment::{InvestmentStatus, InvestmentStorage};
-use crate::storage::InvoiceStorage;
-use crate::types::InvoiceStatus;
+use crate::storage::{InvestmentStorage, InvoiceStorage};
+use crate::types::{InvestmentStatus, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, BytesN, Env, Vec};
 
 /// Default grace period in seconds (7 days)
@@ -76,9 +75,9 @@ const MAX_GRACE_PERIOD: u64 = 30 * 24 * 60 * 60;
 /// Resolve grace period using per-call override, protocol config, or default.
 ///
 /// # Fallback Resolution Order
-/// 1. If `grace_period` is provided and valid → use it (after validation)
-/// 2. If `grace_period` is None → try protocol config
-/// 3. If protocol config not available → use hardcoded DEFAULT_GRACE_PERIOD
+/// 1. If `grace_period` is provided and valid -> use it (after validation)
+/// 2. If `grace_period` is None -> try protocol config
+/// 3. If protocol config not available -> use hardcoded DEFAULT_GRACE_PERIOD
 ///
 /// # Validation Rules
 /// - Override values must be <= MAX_GRACE_PERIOD (30 days)
@@ -332,7 +331,7 @@ pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
 pub fn get_dispute_details(
     env: &Env,
     invoice_id: &BytesN<32>,
-) -> Result<Option<crate::invoice::Dispute>, QuickLendXError> {
+) -> Result<Option<crate::types::Dispute>, QuickLendXError> {
     let _invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 

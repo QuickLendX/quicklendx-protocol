@@ -4,8 +4,9 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_bid_expired, emit_bid_ttl_updated};
+use crate::types::{Bid, BidStatus};
 
-// ─── Bid TTL configuration ────────────────────────────────────────────────────
+// --- Bid TTL configuration ----------------------------------------------------
 //
 // TTL is stored in whole days and is admin-configurable within [MIN, MAX].
 // A zero TTL is explicitly rejected to prevent bids that expire immediately.
@@ -60,7 +61,7 @@ pub struct BidTtlConfig {
 ///
 /// | `limit` value | Meaning                                                    |
 /// |---------------|------------------------------------------------------------|
-/// | `0`           | Limit is **disabled** — any number of open bids is allowed |
+/// | `0`           | Limit is **disabled** - any number of open bids is allowed |
 /// | `n > 0`       | At most `n` concurrently `Placed` bids per investor        |
 ///
 /// Use [`BidStorage::is_investor_bid_limit_active`] for a simple boolean check.
@@ -77,28 +78,8 @@ pub struct BidLimitConfig {
     pub is_custom: bool,
 }
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum BidStatus {
-    Placed,
-    Withdrawn,
-    Accepted,
-    Expired,
-    Cancelled,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Bid {
-    pub bid_id: BytesN<32>,
-    pub invoice_id: BytesN<32>,
-    pub investor: Address,
-    pub bid_amount: i128,
-    pub expected_return: i128,
-    pub timestamp: u64,
-    pub status: BidStatus,
-    pub expiration_timestamp: u64,
-}
+// Removed duplicate BidStatus and Bid definitions.
+// Using definitions from crate::types.
 
 impl Bid {
     pub fn is_expired(&self, current_timestamp: u64) -> bool {
@@ -216,9 +197,9 @@ impl BidStorage {
     /// Admin-only: set bid TTL in days.
     ///
     /// ### Bounds
-    /// - Minimum: `MIN_BID_TTL_DAYS` (1) — prevents zero-TTL bids that expire
+    /// - Minimum: `MIN_BID_TTL_DAYS` (1) - prevents zero-TTL bids that expire
     ///   immediately and can never be accepted.
-    /// - Maximum: `MAX_BID_TTL_DAYS` (30) — prevents extreme windows that
+    /// - Maximum: `MAX_BID_TTL_DAYS` (30) - prevents extreme windows that
     ///   would lock investor funds for unreasonably long periods.
     ///
     /// ### Errors
@@ -318,7 +299,7 @@ impl BidStorage {
     pub fn investor_has_reached_bid_limit(env: &Env, investor: &Address) -> bool {
         let limit = Self::get_max_active_bids_per_investor(env);
 
-        // Limit of 0 means "disabled" — never block a placement.
+        // Limit of 0 means "disabled" - never block a placement.
         if limit == INVESTOR_BID_LIMIT_DISABLED {
             return false;
         }
@@ -478,18 +459,18 @@ impl BidStorage {
     /// - Invariant 1: Terminal bids (Accepted, Withdrawn, Cancelled) are NEVER modified or removed
     /// - Invariant 2: Active Placed bids are preserved if not yet expired
     /// - Invariant 3: Expired/orphaned bids are removed from the index to prevent unbounded growth
-    /// - Invariant 4: The operation is idempotent — calling multiple times on same state yields same result
+    /// - Invariant 4: The operation is idempotent - calling multiple times on same state yields same result
     /// - Invariant 5: Cleanup is bounded by O(N) compute and storage changes
     ///
     /// # Security Properties
     /// - Cleanup cannot corrupt active bid records; terminal states are always preserved
     /// - Cleanup cannot trigger DoS via unbounded iteration (index size capped at MAX_BIDS_PER_INVOICE)
-    /// - Cleanup is deterministic: same ledger timestamp + bid set → same result always
+    /// - Cleanup is deterministic: same ledger timestamp + bid set -> same result always
     ///
     /// @param env The Soroban environment (for timestamp, storage access).
     /// @param invoice_id The unique identifier of the invoice.
     /// @return cleaned_count Total number of bids cleaned (transitioned to Expired or already Expired bids removed from index).
-    fn refresh_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+    pub fn refresh_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let current_timestamp = env.ledger().timestamp();
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
         let mut active = Vec::new(env);
@@ -498,7 +479,7 @@ impl BidStorage {
 
         for bid_id in bid_ids.iter() {
             if let Some(mut bid) = Self::get_bid(env, &bid_id) {
-                // Invariant 1: Preservation — terminal bids are NEVER touched by cleanup.
+                // Invariant 1: Preservation - terminal bids are NEVER touched by cleanup.
                 let is_terminal = bid.status == BidStatus::Accepted
                     || bid.status == BidStatus::Withdrawn
                     || bid.status == BidStatus::Cancelled;
@@ -516,7 +497,7 @@ impl BidStorage {
                     cleaned_count = cleaned_count.saturating_add(1);
                     changed = true;
                 } else {
-                    // Placed but deadline not yet reached — keep active
+                    // Placed but deadline not yet reached - keep active
                     active.push_back(bid_id);
                 }
             } else {
@@ -738,7 +719,7 @@ impl BidStorage {
         ranked
     }
 
-    /// Cancel a placed bid by bid_id. Only transitions Placed → Cancelled.
+    /// Cancel a placed bid by bid_id. Only transitions Placed -> Cancelled.
     /// Returns false if bid not found or already not Placed.
     pub fn cancel_bid(env: &Env, bid_id: &BytesN<32>) -> bool {
         if let Some(mut bid) = Self::get_bid(env, bid_id) {
@@ -879,5 +860,45 @@ impl BidStorage {
             idx += 1;
         }
         (placed, accepted, withdrawn, expired, cancelled)
+    }
+
+    // --- Aliases and compatibility methods ---
+
+    pub fn store(env: &Env, bid: &Bid) {
+        Self::store_bid(env, bid);
+    }
+
+    pub fn get(env: &Env, bid_id: &BytesN<32>) -> Option<Bid> {
+        Self::get_bid(env, bid_id)
+    }
+
+    pub fn update(env: &Env, bid: &Bid) {
+        Self::update_bid(env, bid);
+    }
+
+    pub fn get_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
+        Self::get_bids_for_invoice(env, invoice_id)
+    }
+
+    pub fn get_by_investor(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
+        Self::get_bids_by_investor_all(env, investor)
+    }
+
+    pub fn get_by_status(env: &Env, status: BidStatus) -> Vec<BytesN<32>> {
+        // Fallback for status-based retrieval if needed
+        let mut result = Vec::new(env);
+        // This is inefficient but avoids complex indexing for now
+        for bid_id in Self::get_all_bids(env).iter() {
+            if let Some(bid) = Self::get_bid(env, &bid_id) {
+                if bid.status == status {
+                    result.push_back(bid_id);
+                }
+            }
+        }
+        result
+    }
+
+    pub fn next_count(env: &Env) -> u64 {
+        Self::generate_next_bid_counter(env)
     }
 }
