@@ -4,8 +4,8 @@ use crate::emergency::DEFAULT_EMERGENCY_TIMELOCK_SECS;
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::{QuickLendXContract, QuickLendXContractClient};
-use soroban_sdk::testutils::{Address as _, Ledger};
-use soroban_sdk::{token, Address, Env, String, Vec};
+use soroban_sdk::testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke};
+use soroban_sdk::{token, Address, Env, IntoVal, String, Vec};
 
 /// Standard test setup: registers contract, initializes admin, generates test addresses.
 pub fn setup_contract_with_admin() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
@@ -426,6 +426,56 @@ fn test_pause_blocks_add_investment_insurance() {
 // ============================================================================
 // KYC and user onboarding blocked during pause
 // ============================================================================
+
+#[test]
+fn test_pause_and_unpause_require_admin_signature() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+
+    client.mock_all_auths().initialize_admin(&admin);
+
+    let spoofed_pause = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "pause",
+            args: (admin.clone(),).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+    let pause_result = client.mock_auths(&[spoofed_pause]).try_pause(&admin);
+    let pause_err = pause_result
+        .err()
+        .expect("spoofed pause must fail")
+        .err()
+        .expect("spoofed pause must abort at auth");
+    assert_eq!(pause_err, soroban_sdk::InvokeError::Abort);
+    assert!(!client.is_paused(), "failed spoofed pause must not mutate state");
+
+    client.pause(&admin);
+    assert!(client.is_paused());
+
+    let spoofed_unpause = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "unpause",
+            args: (admin.clone(),).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+    let unpause_result = client.mock_auths(&[spoofed_unpause]).try_unpause(&admin);
+    let unpause_err = unpause_result
+        .err()
+        .expect("spoofed unpause must fail")
+        .err()
+        .expect("spoofed unpause must abort at auth");
+    assert_eq!(unpause_err, soroban_sdk::InvokeError::Abort);
+    assert!(client.is_paused(), "failed spoofed unpause must leave pause flag set");
+}
 
 #[test]
 fn test_pause_blocks_kyc_submission() {
