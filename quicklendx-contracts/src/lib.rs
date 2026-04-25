@@ -59,6 +59,8 @@ mod test_admin_simple;
 #[cfg(test)]
 mod test_admin_standalone;
 #[cfg(test)]
+mod test_expired_bids_cleanup;
+#[cfg(test)]
 mod test_init;
 #[cfg(test)]
 mod test_dispute;
