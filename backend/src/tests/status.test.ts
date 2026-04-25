@@ -4,14 +4,11 @@ import { adminControlService } from "../services/adminControlService";
 import { auditLogService } from "../services/auditLogService";
 import { statusService, StatusService } from "../services/statusService";
 
-const OPERATIONS_TOKEN = "test-operations-token";
+const ADMIN_TOKEN = "test-admin-token";
 
 describe("Status API", () => {
   beforeEach(() => {
-    process.env.QLX_SUPPORT_TOKEN = "test-support-token";
-    process.env.QLX_OPERATIONS_TOKEN = OPERATIONS_TOKEN;
-    process.env.QLX_SUPER_ADMIN_TOKEN = "test-super-admin-token";
-
+    process.env.ADMIN_API_TOKEN = ADMIN_TOKEN;
     // Reset service state before each test
     adminControlService.reset();
     auditLogService.clear();
@@ -32,9 +29,9 @@ describe("Status API", () => {
   it("should return maintenance status when maintenance mode is enabled", async () => {
     await request(app)
       .post("/api/admin/maintenance")
-      .set("Authorization", `Bearer ${OPERATIONS_TOKEN}`)
+      .set("Authorization", `Bearer ${ADMIN_TOKEN}`)
       .send({ enabled: true });
-
+    
     const res = await request(app).get("/api/status");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("maintenance");
@@ -54,9 +51,14 @@ describe("Status API", () => {
   it("should return 400 for invalid maintenance toggle", async () => {
     const res = await request(app)
       .post("/api/admin/maintenance")
-      .set("Authorization", `Bearer ${OPERATIONS_TOKEN}`)
+      .set("Authorization", `Bearer ${ADMIN_TOKEN}`)
       .send({ enabled: "not-a-boolean" });
     expect(res.status).toBe(400);
+  });
+
+  it("should reject admin maintenance requests without token", async () => {
+    const res = await request(app).post("/api/admin/maintenance").send({ enabled: true });
+    expect(res.status).toBe(401);
   });
 
   it("should use fallback ledger when mock ledger is not set", async () => {

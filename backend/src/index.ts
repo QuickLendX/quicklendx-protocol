@@ -5,39 +5,25 @@ import { getAdminContext, requireAdminRoles } from "./middleware/rbac";
 import { adminControlService } from "./services/adminControlService";
 import { auditLogService } from "./services/auditLogService";
 import { statusService } from "./services/statusService";
-import {
-  OPERATIONS_WRITE_ROLES,
-  SUPPORT_READ_ROLES,
-  SUPER_ADMIN_ONLY_ROLES,
-} from "./types/rbac";
+import { requireAdminAuth, getAdminActor } from "./middleware/adminAuth";
+import { backfillService, BackfillError } from "./services/backfillService";
+import { BackfillActionSchema, BackfillStartRequestSchema } from "./types/backfill";
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
 
+app.set("trust proxy", true);
+app.use(helmet());
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
+app.use(rateLimitMiddleware);
+app.use(requestLimitsMiddleware);
 
-/**
- * @openapi
- * /api/status:
- *   get:
- *     summary: Get system status
- *     description: Reports maintenance, degraded mode, and index lag.
- *     responses:
- *       200:
- *         description: OK
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Status'
- */
 app.get("/api/status", async (req, res) => {
   try {
     const status = await statusService.getStatus();
-
-    // Cache safely: 30 seconds max age
     res.setHeader("Cache-Control", "public, max-age=30");
     res.json(status);
   } catch (error) {
@@ -46,150 +32,67 @@ app.get("/api/status", async (req, res) => {
   }
 });
 
-app.get(
-  "/api/admin/status",
-  requireAdminRoles(SUPPORT_READ_ROLES, "admin.status.read"),
-  async (req, res) => {
-    try {
-      const adminContext = getAdminContext(req);
-      const status = await statusService.getStatus();
+app.post("/api/admin/maintenance", requireAdminAuth, (req, res) => {
+  const { enabled } = req.body;
+  if (typeof enabled !== "boolean") {
+    return res.status(400).json({ error: "Invalid enabled flag" });
+  }
+  statusService.setMaintenanceMode(enabled);
+  res.json({ success: true, maintenance: enabled });
+});
 
-      res.json({
-        requested_by: adminContext.role,
-        status,
-        dangerous_config: adminControlService.getDangerousConfig(),
-        queued_backfills: adminControlService.listBackfillJobs().length,
-      });
-    } catch (error) {
-      console.error("Admin status check failed:", error);
-      res.status(500).json({ error: "Internal server error" });
+app.post("/api/admin/backfill", requireAdminAuth, async (req, res) => {
+  try {
+    const payload = BackfillStartRequestSchema.parse(req.body);
+    const actor = getAdminActor(req);
+    const result = await backfillService.startBackfill(payload, actor);
+    res.status(payload.dryRun ? 200 : 202).json(result);
+  } catch (error) {
+    if (error instanceof BackfillError) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code });
     }
-  },
-);
+    return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });
+  }
+});
 
-app.get(
-  "/api/admin/audit-logs",
-  requireAdminRoles(SUPPORT_READ_ROLES, "admin.audit_logs.read"),
-  (req, res) => {
-    const rawLimit = req.query.limit;
-    const limit = rawLimit === undefined ? 50 : Number(rawLimit);
-    if (!Number.isInteger(limit) || limit < 1) {
-      return res.status(400).json({ error: "Invalid audit log limit" });
+app.get("/api/admin/backfill/runs", requireAdminAuth, (req, res) => {
+  res.json({ runs: backfillService.listRuns() });
+});
+
+app.get("/api/admin/backfill/:runId", requireAdminAuth, (req, res) => {
+  const runId = Array.isArray(req.params.runId) ? req.params.runId[0] : req.params.runId;
+  const run = backfillService.getRun(runId);
+  if (!run) {
+    return res.status(404).json({ error: "Backfill run not found", code: "RUN_NOT_FOUND" });
+  }
+  res.json({ run });
+});
+
+app.post("/api/admin/backfill/pause", requireAdminAuth, async (req, res) => {
+  try {
+    const { runId } = BackfillActionSchema.parse(req.body);
+    const run = await backfillService.pauseRun(runId, getAdminActor(req));
+    res.json({ run });
+  } catch (error) {
+    if (error instanceof BackfillError) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code });
     }
+    return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });
+  }
+});
 
-    res.json({
-      entries: auditLogService.listEntries(limit),
-    });
-  },
-);
-
-app.post(
-  "/api/admin/maintenance",
-  requireAdminRoles(OPERATIONS_WRITE_ROLES, "admin.maintenance.write"),
-  (req, res) => {
-    const adminContext = getAdminContext(req);
-    const { enabled } = req.body;
-    if (typeof enabled !== "boolean") {
-      return res.status(400).json({ error: "Invalid enabled flag" });
+app.post("/api/admin/backfill/resume", requireAdminAuth, async (req, res) => {
+  try {
+    const { runId } = BackfillActionSchema.parse(req.body);
+    const run = await backfillService.resumeRun(runId, getAdminActor(req));
+    res.json({ run });
+  } catch (error) {
+    if (error instanceof BackfillError) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code });
     }
-
-    statusService.setMaintenanceMode(enabled);
-    auditLogService.recordAdminAction({
-      action: "maintenance.mode.updated",
-      role: adminContext.role,
-      method: req.method,
-      path: req.path,
-      ip: req.ip || "unknown",
-      metadata: { enabled },
-    });
-    res.json({
-      success: true,
-      maintenance: enabled,
-      updated_by: adminContext.role,
-    });
-  },
-);
-
-app.post(
-  "/api/admin/backfill",
-  requireAdminRoles(OPERATIONS_WRITE_ROLES, "admin.backfill.write"),
-  (req, res) => {
-    const adminContext = getAdminContext(req);
-    const scope =
-      typeof req.body?.scope === "string" ? req.body.scope.trim() : "all";
-
-    if (!scope) {
-      return res.status(400).json({ error: "Invalid backfill scope" });
-    }
-
-    const job = adminControlService.queueBackfill(adminContext.role, scope);
-    auditLogService.recordAdminAction({
-      action: "backfill.job.queued",
-      role: adminContext.role,
-      method: req.method,
-      path: req.path,
-      ip: req.ip || "unknown",
-      metadata: {
-        jobId: job.id,
-        scope: job.scope,
-      },
-    });
-
-    res.status(202).json({
-      success: true,
-      job,
-    });
-  },
-);
-
-app.post(
-  "/api/admin/config/dangerous",
-  requireAdminRoles(SUPER_ADMIN_ONLY_ROLES, "admin.config.dangerous.write"),
-  (req, res) => {
-    const adminContext = getAdminContext(req);
-    const { allowEmergencyConfigChanges, maintenanceWindowMinutes } =
-      req.body ?? {};
-
-    if (
-      typeof allowEmergencyConfigChanges !== "boolean" ||
-      !Number.isInteger(maintenanceWindowMinutes) ||
-      maintenanceWindowMinutes < 1 ||
-      maintenanceWindowMinutes > 1440
-    ) {
-      return res
-        .status(400)
-        .json({ error: "Invalid dangerous config payload" });
-    }
-
-    const config = adminControlService.updateDangerousConfig(
-      adminContext.role,
-      {
-        allowEmergencyConfigChanges,
-        maintenanceWindowMinutes,
-      },
-    );
-
-    auditLogService.recordAdminAction({
-      action: "dangerous.config.updated",
-      role: adminContext.role,
-      method: req.method,
-      path: req.path,
-      ip: req.ip || "unknown",
-      metadata: {
-        allowEmergencyConfigChanges: config.allowEmergencyConfigChanges,
-        maintenanceWindowMinutes: config.maintenanceWindowMinutes,
-        updatedAt: config.updatedAt,
-        updatedBy: config.updatedBy,
-      },
-    });
-
-    res.json({
-      success: true,
-      config,
-      updated_by: adminContext.role,
-    });
-  },
-);
+    return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });
+  }
+});
 
 if (require.main === module) {
   app.listen(port, () => {

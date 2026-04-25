@@ -148,10 +148,16 @@ fn test_calculate_premium_boundary_coverage_percentages() {
     assert!(p >= MIN_PREMIUM_AMOUNT);
 
     // One below min → 0
-    assert_eq!(Investment::calculate_premium(10_000, MIN_COVERAGE_PERCENTAGE - 1), 0);
+    assert_eq!(
+        Investment::calculate_premium(10_000, MIN_COVERAGE_PERCENTAGE - 1),
+        0
+    );
 
     // One above max → 0  (over-coverage guard)
-    assert_eq!(Investment::calculate_premium(10_000, MAX_COVERAGE_PERCENTAGE + 1), 0);
+    assert_eq!(
+        Investment::calculate_premium(10_000, MAX_COVERAGE_PERCENTAGE + 1),
+        0
+    );
 }
 
 #[test]
@@ -163,7 +169,10 @@ fn test_calculate_premium_coverage_never_exceeds_amount() {
         // premium > 0 means inputs were valid; verify invariant holds
         if premium > 0 {
             let coverage_amount = amount * pct as i128 / 100;
-            assert!(coverage_amount <= amount, "coverage_amount must not exceed principal");
+            assert!(
+                coverage_amount <= amount,
+                "coverage_amount must not exceed principal"
+            );
         }
     }
 }
@@ -193,7 +202,10 @@ fn test_calculate_premium_premium_does_not_exceed_coverage() {
         let premium = Investment::calculate_premium(amount, pct);
         if premium > 0 {
             let coverage_amount = amount * pct as i128 / 100;
-            assert!(premium <= coverage_amount, "premium must not exceed coverage amount");
+            assert!(
+                premium <= coverage_amount,
+                "premium must not exceed coverage amount"
+            );
         }
     }
 }
@@ -213,8 +225,14 @@ fn test_add_insurance_requires_exactly_investor_auth() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let investment_id =
-        store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 1);
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        1,
+    );
 
     env.mock_auths(&[MockAuth {
         address: &investor,
@@ -260,7 +278,14 @@ fn test_add_insurance_fails_on_withdrawn_investment() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Withdrawn, 2);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Withdrawn,
+        2,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &50u32)
@@ -277,7 +302,14 @@ fn test_add_insurance_fails_on_completed_investment() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Completed, 3);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Completed,
+        3,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &50u32)
@@ -294,7 +326,14 @@ fn test_add_insurance_fails_on_defaulted_investment() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Defaulted, 4);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Defaulted,
+        4,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &50u32)
@@ -311,7 +350,14 @@ fn test_add_insurance_fails_on_refunded_investment() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Refunded, 5);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Refunded,
+        5,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &50u32)
@@ -332,7 +378,14 @@ fn test_add_insurance_rejects_zero_coverage_percentage() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 10);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        10,
+    );
 
     // coverage_percentage = 0 is below MIN_COVERAGE_PERCENTAGE → specific error
     let err = client
@@ -350,7 +403,14 @@ fn test_add_insurance_rejects_over_100_coverage_percentage() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 11);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        11,
+    );
 
     for &pct in &[101u32, 150, 200, u32::MAX] {
         let err = client
@@ -358,10 +418,7 @@ fn test_add_insurance_rejects_over_100_coverage_percentage() {
             .err()
             .unwrap()
             .unwrap();
-        assert_eq!(
-            err,
-            QuickLendXError::InvalidCoveragePercentage
-        );
+        assert_eq!(err, QuickLendXError::InvalidCoveragePercentage);
     }
 }
 
@@ -373,13 +430,23 @@ fn test_add_insurance_accepts_min_coverage_percentage() {
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
     // Use a large enough amount so 1 % gives a non-zero coverage_amount and premium.
-    let id = store_investment(&env, &contract_id, &investor, 100_000, InvestmentStatus::Active, 12);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        100_000,
+        InvestmentStatus::Active,
+        12,
+    );
 
     client.add_investment_insurance(&id, &provider, &MIN_COVERAGE_PERCENTAGE);
 
     let records = client.query_investment_insurance(&id);
     assert_eq!(records.len(), 1);
-    assert_eq!(records.get(0).unwrap().coverage_percentage, MIN_COVERAGE_PERCENTAGE);
+    assert_eq!(
+        records.get(0).unwrap().coverage_percentage,
+        MIN_COVERAGE_PERCENTAGE
+    );
 }
 
 #[test]
@@ -389,13 +456,23 @@ fn test_add_insurance_accepts_max_coverage_percentage() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 13);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        13,
+    );
 
     client.add_investment_insurance(&id, &provider, &MAX_COVERAGE_PERCENTAGE);
 
     let records = client.query_investment_insurance(&id);
     assert_eq!(records.len(), 1);
-    assert_eq!(records.get(0).unwrap().coverage_percentage, MAX_COVERAGE_PERCENTAGE);
+    assert_eq!(
+        records.get(0).unwrap().coverage_percentage,
+        MAX_COVERAGE_PERCENTAGE
+    );
     // 100 % coverage means coverage_amount == investment amount
     assert_eq!(records.get(0).unwrap().coverage_amount, 10_000);
 }
@@ -411,7 +488,14 @@ fn test_add_insurance_rejects_negative_investment_amount() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, -1, InvestmentStatus::Active, 20);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        -1,
+        InvestmentStatus::Active,
+        20,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &50u32)
@@ -428,7 +512,14 @@ fn test_add_insurance_rejects_zero_investment_amount() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 0, InvestmentStatus::Active, 21);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        0,
+        InvestmentStatus::Active,
+        21,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &50u32)
@@ -446,7 +537,14 @@ fn test_add_insurance_rejects_tiny_amount_where_premium_rounds_to_zero() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 50, InvestmentStatus::Active, 22);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        50,
+        InvestmentStatus::Active,
+        22,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &1u32)
@@ -468,7 +566,14 @@ fn test_add_insurance_allows_multiple_active_coverages_within_cumulative_cap() {
     let investor = Address::generate(&env);
     let provider_a = Address::generate(&env);
     let provider_b = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 30);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        30,
+    );
 
     client.add_investment_insurance(&id, &provider_a, &60u32);
     client.add_investment_insurance(&id, &provider_b, &40u32);
@@ -489,7 +594,14 @@ fn test_add_insurance_rejects_when_cumulative_coverage_exceeds_cap() {
     let investor = Address::generate(&env);
     let provider_a = Address::generate(&env);
     let provider_b = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 31);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        31,
+    );
 
     client.add_investment_insurance(&id, &provider_a, &60u32);
 
@@ -514,7 +626,14 @@ fn test_add_insurance_accepts_exact_cumulative_cap_across_multiple_policies() {
     let provider_a = Address::generate(&env);
     let provider_b = Address::generate(&env);
     let provider_c = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 32);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        32,
+    );
 
     client.add_investment_insurance(&id, &provider_a, &30u32);
     client.add_investment_insurance(&id, &provider_b, &30u32);
@@ -535,7 +654,14 @@ fn test_add_insurance_allowed_after_previous_is_deactivated() {
     let investor = Address::generate(&env);
     let provider_a = Address::generate(&env);
     let provider_b = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 33);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        33,
+    );
 
     client.add_investment_insurance(&id, &provider_a, &60u32);
     set_insurance_inactive(&env, &contract_id, &id, 0);
@@ -546,7 +672,7 @@ fn test_add_insurance_allowed_after_previous_is_deactivated() {
     let records = client.query_investment_insurance(&id);
     assert_eq!(records.len(), 2);
     assert!(!records.get(0).unwrap().active); // first is now inactive
-    assert!(records.get(1).unwrap().active);  // second is active
+    assert!(records.get(1).unwrap().active); // second is active
 }
 
 // ============================================================================
@@ -561,7 +687,14 @@ fn test_premium_stored_in_coverage_record() {
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
     // 10 000 × 80 % = 8 000; 8 000 × 2 % = 160
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 40);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        40,
+    );
 
     client.add_investment_insurance(&id, &provider, &80u32);
 
@@ -579,13 +712,20 @@ fn test_premium_minimum_floor_applied() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 100, InvestmentStatus::Active, 41);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        100,
+        InvestmentStatus::Active,
+        41,
+    );
 
     client.add_investment_insurance(&id, &provider, &1u32);
 
     let cov = client.query_investment_insurance(&id).get(0).unwrap();
     assert_eq!(cov.coverage_amount, 1);
-    assert_eq!(cov.premium_amount, 1);  // floor applied
+    assert_eq!(cov.premium_amount, 1); // floor applied
 }
 
 // ============================================================================
@@ -600,12 +740,22 @@ fn test_coverage_amount_never_exceeds_investment_amount() {
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
     let amount: i128 = 7_777;
-    let id = store_investment(&env, &contract_id, &investor, amount, InvestmentStatus::Active, 50);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        amount,
+        InvestmentStatus::Active,
+        50,
+    );
 
     client.add_investment_insurance(&id, &provider, &MAX_COVERAGE_PERCENTAGE);
 
     let cov = client.query_investment_insurance(&id).get(0).unwrap();
-    assert!(cov.coverage_amount <= amount, "coverage_amount must not exceed investment amount");
+    assert!(
+        cov.coverage_amount <= amount,
+        "coverage_amount must not exceed investment amount"
+    );
     assert_eq!(cov.coverage_amount, amount); // 100 % → exact match
 }
 
@@ -619,7 +769,14 @@ fn test_over_100_percent_rejected_with_specific_error() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 51);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        51,
+    );
 
     for &pct in &[101u32, 150, 200, 1_000, u32::MAX] {
         let err = client
@@ -627,10 +784,7 @@ fn test_over_100_percent_rejected_with_specific_error() {
             .err()
             .unwrap()
             .unwrap();
-        assert_eq!(
-            err,
-            QuickLendXError::InvalidCoveragePercentage
-        );
+        assert_eq!(err, QuickLendXError::InvalidCoveragePercentage);
     }
 }
 
@@ -644,7 +798,14 @@ fn test_query_returns_empty_for_new_investment() {
     env.mock_all_auths();
 
     let investor = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 60);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        60,
+    );
 
     let records = client.query_investment_insurance(&id);
     assert_eq!(records.len(), 0);
@@ -658,7 +819,14 @@ fn test_query_returns_all_historical_entries() {
     let investor = Address::generate(&env);
     let provider_a = Address::generate(&env);
     let provider_b = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 61);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        61,
+    );
 
     client.add_investment_insurance(&id, &provider_a, &40u32);
     set_insurance_inactive(&env, &contract_id, &id, 0);
@@ -755,7 +923,9 @@ fn test_second_claim_returns_none_after_first() {
     };
 
     let premium = Investment::calculate_premium(1_000, 100);
-    investment.add_insurance(provider.clone(), 100, premium).unwrap();
+    investment
+        .add_insurance(provider.clone(), 100, premium)
+        .unwrap();
     investment.process_insurance_claim().unwrap();
 
     // Second call must return None because coverage is now inactive.
@@ -781,8 +951,12 @@ fn test_process_all_insurance_claims_deactivates_all_active_coverages() {
 
     let premium_a = Investment::calculate_premium(10_000, 40);
     let premium_b = Investment::calculate_premium(10_000, 60);
-    investment.add_insurance(provider_a.clone(), 40, premium_a).unwrap();
-    investment.add_insurance(provider_b.clone(), 60, premium_b).unwrap();
+    investment
+        .add_insurance(provider_a.clone(), 40, premium_a)
+        .unwrap();
+    investment
+        .add_insurance(provider_b.clone(), 60, premium_b)
+        .unwrap();
 
     let claims = investment.process_all_insurance_claims(&env);
     assert_eq!(claims.len(), 2);
@@ -806,8 +980,22 @@ fn test_insurance_on_one_investment_does_not_affect_another() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id_a = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 70);
-    let id_b = store_investment(&env, &contract_id, &investor, 20_000, InvestmentStatus::Active, 71);
+    let id_a = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        70,
+    );
+    let id_b = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        20_000,
+        InvestmentStatus::Active,
+        71,
+    );
 
     client.add_investment_insurance(&id_a, &provider, &50u32);
 
@@ -855,7 +1043,9 @@ fn test_add_insurance_unit_coverage_percentage_bounds() {
 
     // coverage_percentage = MAX_COVERAGE_PERCENTAGE with valid premium → Ok
     let premium = Investment::calculate_premium(1_000, MAX_COVERAGE_PERCENTAGE);
-    assert!(inv.add_insurance(provider.clone(), MAX_COVERAGE_PERCENTAGE, premium).is_ok());
+    assert!(inv
+        .add_insurance(provider.clone(), MAX_COVERAGE_PERCENTAGE, premium)
+        .is_ok());
 }
 
 #[test]
@@ -958,8 +1148,10 @@ fn test_add_insurance_unit_enforces_cumulative_cap() {
     let premium_a = Investment::calculate_premium(10_000, 50);
     let premium_b = Investment::calculate_premium(10_000, 30);
     let premium_c = Investment::calculate_premium(10_000, 21);
-    inv.add_insurance(provider_a.clone(), 50, premium_a).unwrap();
-    inv.add_insurance(provider_b.clone(), 30, premium_b).unwrap();
+    inv.add_insurance(provider_a.clone(), 50, premium_a)
+        .unwrap();
+    inv.add_insurance(provider_b.clone(), 30, premium_b)
+        .unwrap();
 
     assert_eq!(inv.total_active_coverage_percentage(), 80);
 
