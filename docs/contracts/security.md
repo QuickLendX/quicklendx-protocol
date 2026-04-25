@@ -10,19 +10,20 @@ Payment and escrow flows are protected by a **reentrancy guard** so that no nest
 - Before any payment or escrow transfer runs, the guard checks that the lock is not set.
 - If the lock is already set, the call fails with `QuickLendXError::OperationNotAllowed`.
 - Otherwise the lock is set, the operation runs, and the lock is cleared on both success and failure.
+- **Global Coverage**: The `pay_lock` is shared across all token-moving functions. Re-entry from one guarded function into another is strictly prohibited.
 
 ### Guarded Entry Points
 
 The following public functions run inside the guard:
 
-| Function | Purpose |
-|----------|---------|
-| `accept_bid_and_fund` | Transfer in: investor → contract (escrow) |
-| `accept_bid` | Transfer in: investor → contract (escrow) |
-| `release_escrow_funds` | Transfer out: contract → business |
-| `refund_escrow_funds` | Transfer out: contract → investor |
+| Function                  | Purpose                                                              |
+| ------------------------- | -------------------------------------------------------------------- |
+| `accept_bid_and_fund`     | Transfer in: investor → contract (escrow)                            |
+| `accept_bid`              | Transfer in: investor → contract (escrow)                            |
+| `release_escrow_funds`    | Transfer out: contract → business                                    |
+| `refund_escrow_funds`     | Transfer out: contract → investor                                    |
 | `process_partial_payment` | Record payment progress and trigger final settlement when fully paid |
-| `settle_invoice` | Transfer out: business → investor (and fee routing) |
+| `settle_invoice`          | Transfer out: business → investor (and fee routing)                  |
 
 ### Nested Execution Assumptions
 

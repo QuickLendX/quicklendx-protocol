@@ -603,7 +603,7 @@ fn test_cleanup_expired_bids_integration() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 100_000);
-    
+
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400 * 30; // 30 days away
 
@@ -620,25 +620,32 @@ fn test_cleanup_expired_bids_integration() {
 
     // Place 3 bids at different times
     let _bid1 = client.place_bid(&investor, &invoice_id, &1000, &1100);
-    
+
     env.ledger().set_timestamp(env.ledger().timestamp() + 86400); // +1 day
     let _bid2 = client.place_bid(&investor, &invoice_id, &2000, &2200);
 
-    env.ledger().set_timestamp(env.ledger().timestamp() + 86400 * 5); // +5 days (total 6 days)
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 86400 * 5); // +5 days (total 6 days)
     let _bid3 = client.place_bid(&investor, &invoice_id, &3000, &3300);
 
     // After 2 more days, bid 1 and 2 should be expired (7 days TTL)
-    env.ledger().set_timestamp(env.ledger().timestamp() + 86400 * 2); // +2 days (total 8 days)
-    
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 86400 * 2); // +2 days (total 8 days)
+
     // Cleanup - should return 2 (bid 1 and 2 expired)
     let cleaned = client.cleanup_expired_bids(&invoice_id);
     assert_eq!(cleaned, 2, "Should clean 2 expired bids");
 
     // After 6 more days, bid 3 should be expired
-    env.ledger().set_timestamp(env.ledger().timestamp() + 86400 * 6);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 86400 * 6);
     let cleaned2 = client.cleanup_expired_bids(&invoice_id);
     assert_eq!(cleaned2, 1, "Should clean last expired bid");
 
     // Final check
-    assert_eq!(client.cleanup_expired_bids(&invoice_id), 0, "No more bids to clean");
+    assert_eq!(
+        client.cleanup_expired_bids(&invoice_id),
+        0,
+        "No more bids to clean"
+    );
 }

@@ -1,149 +1,269 @@
-# Backend Reliability — Load Shedding
+# Reliability & Degraded Mode
+
+This document explains how the QuickLendX backend detects indexer lag, enters
+degraded mode, gates write operations, and signals health state to clients.
+
+---
 
 ## Overview
 
-The load-shedding middleware (`src/middleware/load-shedding.ts`) protects the
-backend from traffic spikes by enforcing two independent limits:
+The backend indexes on-chain data from the Soroban/Stellar ledger.  When the
+indexer falls behind the chain tip, stale data can cause incorrect bid
+calculations, double-spend risks, and settlement errors.
 
-1. **Concurrency cap** — hard ceiling on simultaneous in-flight requests.
-2. **Per-request timeout** — maximum wall-clock time any single request may
-   occupy a slot.
+The **Degraded Mode** system provides three layers of protection:
 
-Both limits respond with **HTTP 503 Service Unavailable** and a
-`Retry-After` header so clients can back off and retry automatically.
-
----
-
-## Configuration
-
-| Constant | Test value | Production value | Description |
-|:---|---:|---:|:---|
-| `CONCURRENCY_CAP` | `5` | `100` | Max simultaneous in-flight requests |
-| `REQUEST_TIMEOUT_MS` | `200` | `10 000` | Per-request timeout in milliseconds |
-| `RETRY_AFTER_SECONDS` | `5` | `5` | Value of the `Retry-After` response header |
-
-Values are selected via `process.env.NODE_ENV === "test"` so tests run fast
-without changing production behaviour.
+1. **Lag Monitor** — continuously computes the gap between the current chain
+   tip and the last indexed ledger.
+2. **Degraded Guard** — middleware that blocks write/sensitive endpoints when
+   lag exceeds configured thresholds.
+3. **Status Injector** — response interceptor that appends a `_system` metadata
+   block to every JSON response so clients always know the current health state.
 
 ---
 
-## Middleware position
+## Lag Thresholds
+
+Lag is measured in **ledgers**.  Each Stellar ledger closes approximately every
+5 seconds.
+
+| Level        | Default threshold | Meaning                                                  |
+|--------------|-------------------|----------------------------------------------------------|
+| `none`       | lag < 10          | System is healthy; all operations permitted.             |
+| `warn`       | 10 ≤ lag < 50     | Indexer is behind; write operations are blocked.         |
+| `critical`   | lag ≥ 50          | Indexer is severely behind; all mutating ops blocked.    |
+
+### Threshold calculation
 
 ```
-Request
-  │
-  ▼ helmet / cors / express.json
-  ▼ rateLimitMiddleware        ← rejects abusive IPs before they consume a slot
-  ▼ loadSheddingMiddleware     ← concurrency cap + timeout
-  ▼ route handlers
+lag = current_chain_ledger − last_indexed_ledger
 ```
 
-Rate limiting runs first so that a single abusive IP cannot exhaust the
-concurrency cap for legitimate users.
+- `current_chain_ledger` — fetched from the Soroban RPC (mocked in tests).
+- `last_indexed_ledger` — updated by the indexer process after each batch.
+
+At **10 ledgers** (~50 seconds) the system enters `warn` level.  This is
+conservative enough to catch transient RPC hiccups before they cause data
+integrity issues.
+
+At **50 ledgers** (~4 minutes) the system enters `critical` level.  At this
+point the indexed state is too stale to safely process any writes.
+
+### Overriding thresholds
+
+Set environment variables before starting the server:
+
+```bash
+LAG_WARN_THRESHOLD=15      # ledgers before warn
+LAG_CRITICAL_THRESHOLD=75  # ledgers before critical
+```
 
 ---
 
-## Behaviour
+## API Endpoints
 
-### Concurrency cap
+### `GET /api/v1/status`
 
-```
-if activeRequests >= CONCURRENCY_CAP:
-    respond 503 + Retry-After
-    return          ← counter NOT incremented
-else:
-    activeRequests++
-    proceed to handler
-```
+Returns the current lag status.  Never blocked by the degraded guard.
 
-The counter is decremented on the `finish` event (normal completion) **and**
-the `close` event (client disconnect / abort).  A boolean guard ensures the
-decrement runs exactly once regardless of which event fires first.
-
-### Per-request timeout
-
-A `setTimeout` is armed when a request is admitted.  If the handler has not
-sent a response within `REQUEST_TIMEOUT_MS`:
-
-1. `shed(res, "TIMEOUT")` sends 503 + `Retry-After` (no-op if headers already sent).
-2. The counter is decremented so the slot is freed for the next request.
-
-The timer is cleared on `finish` / `close` so it never fires after a normal
-response.
-
----
-
-## Response format
-
-Both shed conditions return the same JSON shape:
+**Response `200`**
 
 ```json
 {
-  "error": {
-    "message": "Server is under heavy load. Please retry shortly.",
-    "code": "CONCURRENCY_CAP",
-    "retryAfter": 5
+  "lag": 5,
+  "warnThreshold": 10,
+  "criticalThreshold": 50,
+  "level": "none",
+  "isDegraded": false,
+  "isCritical": false,
+  "checkedAt": "2026-04-23T12:00:00.000Z",
+  "_system": { "status": "operational", "degraded": false, "lag": 5, "level": "none" }
+}
+```
+
+`level` values: `"none"` | `"warn"` | `"critical"`
+
+---
+
+## `_system` Metadata (Response Injection)
+
+Every JSON **object** response from the API includes a `_system` field:
+
+```json
+{
+  "...": "original response fields unchanged",
+  "_system": {
+    "status": "operational",
+    "degraded": false,
+    "lag": 5,
+    "level": "none"
   }
 }
 ```
 
-| Field | Values |
-|:---|:---|
-| `code` | `"CONCURRENCY_CAP"` or `"TIMEOUT"` |
-| `retryAfter` | `RETRY_AFTER_SECONDS` (integer seconds) |
+| Field      | Type    | Description                                              |
+|------------|---------|----------------------------------------------------------|
+| `status`   | string  | `"operational"` \| `"degraded"` \| `"maintenance"`      |
+| `degraded` | boolean | `true` when level is `warn` or `critical`                |
+| `lag`      | number  | Current indexer lag in ledgers                           |
+| `level`    | string  | `"none"` \| `"warn"` \| `"critical"`                    |
 
-HTTP headers:
+**Schema stability guarantee:** `_system` is purely additive.  Existing fields
+are never modified or removed.  Clients that do not read `_system` are
+completely unaffected.
 
-```
-HTTP/1.1 503 Service Unavailable
-Retry-After: 5
-Content-Type: application/json
-```
+Array responses (e.g. `GET /invoices`) do **not** have `_system` injected,
+preserving their array type.
 
 ---
 
-## Security considerations
+## Feature Gating (Degraded Guard)
 
-| Risk | Mitigation |
-|:---|:---|
-| DoS via connection exhaustion | Concurrency cap rejects excess requests before any handler work begins |
-| Slow-loris / slow-response amplification | Per-request timeout frees the slot and closes the response |
-| Cap bypass via abusive IP | Rate limiter runs before load shedding; abusive IPs are blocked upstream |
-| Counter leak (slot never freed) | Decrement on both `finish` and `close`; boolean guard prevents double-decrement |
-| Double response (handler + timeout race) | `res.headersSent` checked before writing in `shed()` |
-| Negative counter | Boolean `decremented` flag makes decrement idempotent |
+Write and sensitive endpoints are protected by `degradedGuard()` middleware.
+
+### Behaviour
+
+| Lag level  | `degradedGuard()` | `degradedGuard({ criticalOnly: true })` |
+|------------|-------------------|-----------------------------------------|
+| `none`     | ✅ Pass through   | ✅ Pass through                         |
+| `warn`     | ❌ 503            | ✅ Pass through                         |
+| `critical` | ❌ 503            | ❌ 503                                  |
+
+### Error response (503)
+
+```json
+{
+  "error": {
+    "message": "Service is degraded due to indexer lag. Write operations are temporarily unavailable.",
+    "code": "DEGRADED_MODE",
+    "details": {
+      "lag": 20,
+      "warn_threshold": 10,
+      "critical_threshold": 50,
+      "level": "warn"
+    }
+  }
+}
+```
+
+At critical level, `code` is `"DEGRADED_MODE_CRITICAL"`.
+
+### Applying the guard to a route
+
+```typescript
+import { degradedGuard } from "../middleware/degraded-guard";
+
+// Block at warn AND critical:
+router.post("/bids", authMiddleware, degradedGuard(), bidController.placeBid);
+
+// Block only at critical:
+router.post("/settlements", authMiddleware, degradedGuard({ criticalOnly: true }), ...);
+```
+
+### Security contract
+
+`degradedGuard` **must** be placed **after** any authentication/authorisation
+middleware.  It never bypasses auth — it only adds an availability gate on top
+of existing security layers.  The guard does not modify request headers, auth
+tokens, or any security-sensitive fields.
+
+---
+
+## Frontend Integration Guide
+
+### Polling `/api/v1/status`
+
+Poll every 30 seconds to get the current lag level:
+
+```typescript
+const { level, isDegraded } = await fetch("/api/v1/status").then(r => r.json());
+
+if (isDegraded) {
+  showBanner("System is experiencing delays. Some actions may be unavailable.");
+}
+```
+
+### Reading `_system` from any response
+
+Every API response object includes `_system`.  Use it to update UI state
+without a separate status poll:
+
+```typescript
+const data = await fetch("/api/v1/invoices/abc").then(r => r.json());
+
+if (data._system?.degraded) {
+  disableWriteButtons();
+}
+```
+
+### Handling 503 responses
+
+When a write endpoint returns 503, display a user-friendly message and offer
+a retry:
+
+```typescript
+if (response.status === 503) {
+  const { error } = await response.json();
+  if (error.code === "DEGRADED_MODE" || error.code === "DEGRADED_MODE_CRITICAL") {
+    showRetryDialog(
+      "The system is temporarily unavailable due to high indexer lag. " +
+      "Please try again in a few minutes."
+    );
+  }
+}
+```
+
+### Recommended UI states
+
+| `_system.level` | Recommended UI behaviour                                      |
+|-----------------|---------------------------------------------------------------|
+| `none`          | Normal operation; no banner needed.                           |
+| `warn`          | Show a yellow warning banner; disable write buttons.          |
+| `critical`      | Show a red error banner; disable all mutating actions.        |
+| `maintenance`   | Show a maintenance page; disable all interactions.            |
+
+---
+
+## Architecture Diagram
+
+```
+Request
+  │
+  ▼
+rateLimitMiddleware
+  │
+  ▼
+statusInjector          ← wraps res.json() to append _system
+  │
+  ▼
+Router
+  │
+  ├── GET  /status      ← always accessible, returns LagStatus
+  ├── GET  /invoices    ← read-only, no guard
+  │
+  └── POST /write-action
+        │
+        ▼
+      degradedGuard()   ← checks lagMonitor.getLagStatus()
+        │                  503 if warn or critical
+        ▼
+      controller        ← only reached when healthy
+```
 
 ---
 
 ## Testing
 
-Test file: `backend/tests/load-shedding.test.ts`
-
-25 tests across 7 sections:
-
-| Section | Tests | What's validated |
-|:---|:---|:---|
-| Constants | 3 | Numeric values match documentation |
-| Counter helpers | 2 | `getActiveRequests` starts at 0; `resetActiveRequests` works |
-| Fast requests | 3 | 200 pass-through; counter returns to 0; no leak across sequential requests |
-| Concurrency cap | 6 | Admits exactly cap; 503 on cap+1; `Retry-After` header; `CONCURRENCY_CAP` code; counter not incremented for shed; slot freed after completion |
-| Request timeout | 6 | 503 after timeout; `Retry-After` header; `TIMEOUT` code; counter decremented; fast handler wins; just-before-timeout handler wins |
-| Counter leak prevention | 2 | Non-negative after reset; idempotent decrement |
-| Integration | 2 | Real app health endpoint; middleware wired before routes |
-
-### Running the tests
+Run the full test suite:
 
 ```bash
-cd backend
-npm test -- --testPathPattern=load-shedding
-# or with coverage
-npm run test:coverage -- --testPathPattern=load-shedding
+node node_modules/jest/bin/jest.js --coverage --forceExit
 ```
 
----
+Key test files:
 
-## Tuning guidance
-
-- **`CONCURRENCY_CAP`**: set to roughly `(available_memory_MB / avg_request_memory_MB)` capped at the number of upstream connections your database / RPC node can handle.
-- **`REQUEST_TIMEOUT_MS`**: should be slightly above your p99 upstream latency.  Start at 10 s and tighten once you have latency data.
-- **`RETRY_AFTER_SECONDS`**: 5 s is a safe default.  Increase if your recovery time after a spike is longer.
+| File | What it tests |
+|------|---------------|
+| `src/tests/lagMonitor.test.ts` | Unit tests for lag calculation, threshold validation, env var config |
+| `src/tests/degradedGuard.test.ts` | Unit + integration tests for endpoint gating (503/201) |
+| `src/tests/statusInjector.test.ts` | Schema stability, `_system` injection, array passthrough |

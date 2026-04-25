@@ -888,10 +888,8 @@ mod test_investor_kyc {
             .unwrap();
 
         // 2. Admin rejects → investor resubmits (now pending again)
-        let _ = client.try_reject_investor(
-            &investor,
-            &String::from_str(&env, "Needs updated docs"),
-        );
+        let _ =
+            client.try_reject_investor(&investor, &String::from_str(&env, "Needs updated docs"));
         let new_kyc = String::from_str(&env, "Updated KYC data with more information provided");
         let _ = client.try_submit_investor_kyc(&investor, &new_kyc);
 
@@ -918,10 +916,8 @@ mod test_investor_kyc {
 
         // Reject → resubmit → verify cycle
         let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
-        let _ = client.try_reject_investor(
-            &investor,
-            &String::from_str(&env, "Needs updated docs"),
-        );
+        let _ =
+            client.try_reject_investor(&investor, &String::from_str(&env, "Needs updated docs"));
         let new_kyc = String::from_str(&env, "Updated KYC data with more information provided");
         let _ = client.try_submit_investor_kyc(&investor, &new_kyc);
         let _ = client.try_verify_investor(&investor, &100_000i128);
@@ -951,10 +947,8 @@ mod test_investor_kyc {
         let kyc_data = String::from_str(&env, "Insufficient KYC data");
 
         let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
-        let _ = client.try_reject_investor(
-            &investor,
-            &String::from_str(&env, "Fraudulent documents"),
-        );
+        let _ =
+            client.try_reject_investor(&investor, &String::from_str(&env, "Fraudulent documents"));
 
         let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
 
@@ -1032,4 +1026,3 @@ mod test_investor_kyc {
         assert_eq!(err, QuickLendXError::BusinessNotVerified);
     }
 }
-
