@@ -2,7 +2,9 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
+import { loadSheddingMiddleware } from "./middleware/load-shedding";
 import { errorHandler } from "./middleware/error-handler";
+import { statusInjector } from "./middleware/status-injector";
 import v1Routes from "./routes/v1";
 
 const app = express();
@@ -12,7 +14,7 @@ app.set("trust proxy", true);
 // Security Middleware
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 app.set("trust proxy", true);
 
 // Test middleware to simulate no IP for coverage
@@ -25,6 +27,9 @@ app.use((req, res, next) => {
 
 // Rate Limiting
 app.use(rateLimitMiddleware);
+
+// Inject _system metadata into every JSON response
+app.use(statusInjector);
 
 // Routes
 app.use("/api/v1", v1Routes);

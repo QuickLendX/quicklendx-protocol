@@ -869,12 +869,18 @@ fn test_valid_state_transitions() {
     // 1. None → Pending (new submission) - should succeed
     client.submit_kyc_application(&business, &kyc_data);
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Pending));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Pending
+    ));
 
     // 2. Pending → Verified (admin approval) - should succeed
     client.verify_business(&admin, &business);
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Verified));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Verified
+    ));
 
     // 3. Verified is final - cannot transition further
     let result = client.try_verify_business(&admin, &business);
@@ -895,11 +901,14 @@ fn test_pending_to_rejected_transition() {
 
     // Submit KYC (None → Pending)
     client.submit_kyc_application(&business, &kyc_data);
-    
+
     // Pending → Rejected (admin rejection) - should succeed
     client.reject_business(&admin, &business, &rejection_reason);
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Rejected));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Rejected
+    ));
     assert_eq!(verification.rejection_reason, Some(rejection_reason));
 }
 
@@ -920,7 +929,10 @@ fn test_rejected_to_pending_transition() {
     // Rejected → Pending (resubmission) - should succeed
     client.submit_kyc_application(&business, &kyc_data2);
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Pending));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Pending
+    ));
     assert!(verification.rejection_reason.is_none()); // Should be cleared on resubmission
 }
 
@@ -998,7 +1010,10 @@ fn test_rejection_reason_persistence() {
 
     // Verify rejection reason is stored
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert_eq!(verification.rejection_reason, Some(rejection_reason.clone()));
+    assert_eq!(
+        verification.rejection_reason,
+        Some(rejection_reason.clone())
+    );
 
     // Resubmit should clear rejection reason
     let new_kyc_data = create_test_kyc_data(&env, "Resubmitted");
@@ -1025,7 +1040,7 @@ fn test_rejection_reason_cleared_on_verification() {
     // Submit → Reject → Resubmit → Verify
     client.submit_kyc_application(&business, &kyc_data);
     client.reject_business(&admin, &business, &rejection_reason);
-    
+
     let new_kyc_data = create_test_kyc_data(&env, "Improved");
     client.submit_kyc_application(&business, &new_kyc_data);
     client.verify_business(&admin, &business);
@@ -1033,7 +1048,10 @@ fn test_rejection_reason_cleared_on_verification() {
     // Verify rejection reason is cleared after verification
     let verification = client.get_business_verification_status(&business).unwrap();
     assert!(verification.rejection_reason.is_none());
-    assert!(matches!(verification.status, BusinessVerificationStatus::Verified));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Verified
+    ));
 }
 
 // ============================================================================
@@ -1120,7 +1138,7 @@ fn test_no_duplicate_entries_in_index_lists() {
     // Submit → Reject → Resubmit → Verify cycle
     client.submit_kyc_application(&business, &kyc_data);
     client.reject_business(&admin, &business, &rejection_reason);
-    
+
     let new_kyc_data = create_test_kyc_data(&env, "Improved");
     client.submit_kyc_application(&business, &new_kyc_data);
     client.verify_business(&admin, &business);
@@ -1132,7 +1150,7 @@ fn test_no_duplicate_entries_in_index_lists() {
 
     assert_eq!(verified.len(), 1);
     assert!(verified.contains(&business));
-    
+
     assert_eq!(pending.len(), 0);
     assert_eq!(rejected.len(), 0);
 

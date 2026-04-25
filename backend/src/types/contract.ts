@@ -1,3 +1,16 @@
+/**
+ * Attached to every record written by the indexer.
+ * Versions are derived from the on-chain event, never from user input.
+ */
+export interface VersionedRecord {
+  /** Matches PROTOCOL_VERSION in the contract (quicklendx-contracts/src/init.rs). */
+  contract_version: number;
+  /** Tracks the event payload shape version; bumped when field positions change. */
+  event_schema_version: number;
+  /** ISO 8601 timestamp set by the indexer at ingest time. */
+  indexed_at: string;
+}
+
 export enum InvoiceStatus {
   Pending = "Pending",
   Verified = "Verified",
@@ -61,7 +74,7 @@ export interface InvoiceMetadata {
   notes: string;
 }
 
-export interface Invoice {
+export interface Invoice extends VersionedRecord {
   id: string;
   business: string;
   amount: string;
@@ -76,7 +89,7 @@ export interface Invoice {
   updated_at: number;
 }
 
-export interface Bid {
+export interface Bid extends VersionedRecord {
   bid_id: string;
   invoice_id: string;
   investor: string;
@@ -87,7 +100,7 @@ export interface Bid {
   expiration_timestamp: number;
 }
 
-export interface Settlement {
+export interface Settlement extends VersionedRecord {
   id: string;
   invoice_id: string;
   amount: string;
@@ -97,7 +110,7 @@ export interface Settlement {
   status: SettlementStatus;
 }
 
-export interface Dispute {
+export interface Dispute extends VersionedRecord {
   id: string;
   invoice_id: string;
   initiator: string;
