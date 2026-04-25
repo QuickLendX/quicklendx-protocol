@@ -3,7 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { errorHandler } from "./middleware/error-handler";
-import { requestLimitsMiddleware } from "./middleware/request-limits";
+import { statusInjector } from "./middleware/status-injector";
 import v1Routes from "./routes/v1";
 
 const app = express();
@@ -27,8 +27,8 @@ app.use((req, res, next) => {
 // Rate Limiting
 app.use(rateLimitMiddleware);
 
-// Request size limits (body already limited by express.json above, this adds query/header limits)
-app.use(requestLimitsMiddleware);
+// Inject _system metadata into every JSON response
+app.use(statusInjector);
 
 // Routes
 app.use("/api/v1", v1Routes);
