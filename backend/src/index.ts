@@ -2,6 +2,9 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { statusService } from "./services/statusService";
+import { requireAdminAuth, getAdminActor } from "./middleware/adminAuth";
+import { backfillService, BackfillError } from "./services/backfillService";
+import { BackfillActionSchema, BackfillStartRequestSchema } from "./types/backfill";
 
 dotenv.config();
 
@@ -38,9 +41,7 @@ app.get("/api/status", async (req, res) => {
   }
 });
 
-// Admin-only (internal/secured) endpoint to toggle maintenance mode
-// In a real app, this would be protected by API key or Auth
-app.post("/api/admin/maintenance", (req, res) => {
+app.post("/api/admin/maintenance", requireAdminAuth, (req, res) => {
   const { enabled } = req.body;
   if (typeof enabled !== "boolean") {
     return res.status(400).json({ error: "Invalid enabled flag" });
@@ -48,6 +49,59 @@ app.post("/api/admin/maintenance", (req, res) => {
   
   statusService.setMaintenanceMode(enabled);
   res.json({ success: true, maintenance: enabled });
+});
+
+app.post("/api/admin/backfill", requireAdminAuth, async (req, res) => {
+  try {
+    const payload = BackfillStartRequestSchema.parse(req.body);
+    const actor = getAdminActor(req);
+    const result = await backfillService.startBackfill(payload, actor);
+    res.status(payload.dryRun ? 200 : 202).json(result);
+  } catch (error) {
+    if (error instanceof BackfillError) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code });
+    }
+    return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });
+  }
+});
+
+app.get("/api/admin/backfill/runs", requireAdminAuth, (req, res) => {
+  res.json({ runs: backfillService.listRuns() });
+});
+
+app.get("/api/admin/backfill/:runId", requireAdminAuth, (req, res) => {
+  const runId = Array.isArray(req.params.runId) ? req.params.runId[0] : req.params.runId;
+  const run = backfillService.getRun(runId);
+  if (!run) {
+    return res.status(404).json({ error: "Backfill run not found", code: "RUN_NOT_FOUND" });
+  }
+  res.json({ run });
+});
+
+app.post("/api/admin/backfill/pause", requireAdminAuth, async (req, res) => {
+  try {
+    const { runId } = BackfillActionSchema.parse(req.body);
+    const run = await backfillService.pauseRun(runId, getAdminActor(req));
+    res.json({ run });
+  } catch (error) {
+    if (error instanceof BackfillError) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code });
+    }
+    return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });
+  }
+});
+
+app.post("/api/admin/backfill/resume", requireAdminAuth, async (req, res) => {
+  try {
+    const { runId } = BackfillActionSchema.parse(req.body);
+    const run = await backfillService.resumeRun(runId, getAdminActor(req));
+    res.json({ run });
+  } catch (error) {
+    if (error instanceof BackfillError) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code });
+    }
+    return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });
+  }
 });
 
 if (require.main === module) {
