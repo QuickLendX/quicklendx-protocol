@@ -3,6 +3,7 @@ import invoiceRoutes from "./invoices";
 import bidRoutes from "./bids";
 import settlementRoutes from "./settlements";
 import testErrorRoutes from "./test-errors";
+import adminRoutes from "./admin";
 
 const router = Router();
 
@@ -10,6 +11,7 @@ router.use("/invoices", invoiceRoutes);
 router.use("/bids", bidRoutes);
 router.use("/settlements", settlementRoutes);
 router.use("/test-errors", testErrorRoutes);
+router.use("/admin", adminRoutes);
 
 // V1 Health check
 router.get("/health", (req, res) => {
