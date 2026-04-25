@@ -1,188 +1,170 @@
-# Fuzz Testing Implementation - Test Plan
+# Fuzz Testing — QuickLendX Protocol
 
 ## Overview
-This document describes the fuzz testing implementation for QuickLendX Protocol's critical paths.
 
-## Test Coverage
+Property-based fuzz tests validate core protocol invariants under randomised
+inputs using [`proptest`](https://docs.rs/proptest/).  Tests are gated behind
+`--features fuzz-tests` so they never block a normal `cargo test` run.
 
-### 1. Invoice Creation (`store_invoice`)
-**File:** `src/test_fuzz.rs`
+---
 
-**Test Cases:**
-- `fuzz_store_invoice_valid_ranges`: Tests valid parameter ranges
-  - Amount: 1 to i128::MAX/1000
-  - Due date offset: 1 second to 1 year
-  - Description length: 1 to 500 characters
-  - Validates: No panic, correct storage, proper state
+## Invariants Covered (Issue #812)
 
-- `fuzz_store_invoice_boundary_conditions`: Tests edge cases
-  - Zero/negative amounts
-  - Past due dates
-  - Empty descriptions
-  - Validates: Proper error handling, no state corruption
+### 1. `total_paid <= total_due`
 
-### 2. Bid Placement (`place_bid`)
-**File:** `src/test_fuzz.rs`
+**File:** `src/test_fuzz_invariants.rs`
 
-**Test Cases:**
-- `fuzz_place_bid_valid_ranges`: Tests valid bid parameters
-  - Bid amount: 1 to i128::MAX/1000
-  - Expected return: 1.0x to 2.0x of bid amount
-  - Validates: Bid storage, status tracking, no panic
+Every payment step caps the applied amount to `remaining_due`, so the running
+total can never exceed the invoice face value.
 
-- `fuzz_place_bid_boundary_conditions`: Tests edge cases
-  - Zero/negative bid amounts
-  - Negative expected returns
-  - Validates: Proper rejection, state consistency
+| Test | What it validates |
+|------|-------------------|
+| `fuzz_settlement_total_paid_conservation` | `investor_payout + protocol_fee == total_collected` for all valid inputs |
+| `fuzz_total_paid_never_exceeds_total_due` | Simulated multi-step payments never exceed `face_value` |
+| `fuzz_investor_profit_sign_consistency` | `investor_profit >= 0` iff `payout >= funded` |
 
-### 3. Invoice Settlement (`settle_invoice`)
-**File:** `src/test_fuzz.rs`
+### 2. Escrow transitions valid and non-reentrant
 
-**Test Cases:**
-- `fuzz_settle_invoice_payment_amounts`: Tests various payment amounts
-  - Payment: 0.5x to 2.0x of investment amount
-  - Validates: Status transitions, payment tracking, no panic
+**File:** `src/test_fuzz_invariants.rs`
 
-- `fuzz_settle_invoice_boundary_conditions`: Tests edge cases
-  - Zero/negative payments
-  - Validates: Error handling, state immutability on error
+Once an escrow is settled (Released/Refunded), re-settlement is a no-op.
+The arithmetic layer enforces this via the finalization guard.
 
-### 4. Arithmetic Safety
-**File:** `src/test_fuzz.rs`
+| Test | What it validates |
+|------|-------------------|
+| `fuzz_settlement_idempotent_non_reentrant` | Same inputs always produce identical results (pure function) |
+| `fuzz_escrow_release_non_reentrant` | After full settlement `remaining_due == 0`; second release applies 0 |
+| `fuzz_escrow_invalid_inputs_always_rejected` | Zero face, funded > face, fee > 100% always return `None` |
 
-**Test Cases:**
-- `fuzz_no_arithmetic_overflow`: Tests large number handling
-  - Tests amounts up to i128::MAX/2
-  - Validates: No overflow/underflow in calculations
+### 3. Bid caps enforced (`MAX_BIDS_PER_INVOICE`, per-investor limits)
+
+**File:** `src/test_fuzz_invariants.rs`
+
+The verification module enforces tier × risk multipliers and per-investment
+caps for High/VeryHigh risk investors.
+
+| Test | What it validates |
+|------|-------------------|
+| `fuzz_bid_effective_limit_bounded` | Effective limit ≤ `base_limit × 10` (VIP × Low) |
+| `fuzz_bid_cap_over_limit_always_rejected` | Bid of `limit + 1` always rejected with typed error |
+| `fuzz_bid_within_limit_always_accepted` | Bid ≤ effective limit always accepted for verified investor |
+| `fuzz_bid_unverified_always_rejected` | Pending/Rejected/None investors always rejected |
+| `fuzz_per_investment_cap_enforced` | High/VeryHigh per-bid caps enforced independently of limit |
+| `fuzz_zero_bid_always_rejected` | Zero-amount bids always return `ZeroAmount` |
+| `fuzz_tier_monotone_in_investment` | Higher activity → tier multiplier is non-decreasing |
+| `fuzz_risk_score_full_coverage` | All scores 0–100 map to a valid `RiskLevel` |
+| `fuzz_risk_score_over_max_rejected` | Scores > 100 always return `None` |
+
+### Cross-invariant integration
+
+| Test | What it validates |
+|------|-------------------|
+| `fuzz_valid_bid_settlement_no_investor_loss` | Valid bid + settlement → investor profit ≥ 0 |
+
+---
+
+## Existing Arithmetic Fuzz Tests
+
+**File:** `src/test_fuzz.rs` (deterministic sweep-based, no proptest required)
+
+| Test | Invariant |
+|------|-----------|
+| `fuzz_settlement_conservation_invariant` | Conservation for all boundary inputs |
+| `fuzz_settlement_penalty_monotonicity` | Higher penalty_bps → higher late_penalty |
+| `fuzz_settlement_fee_reduces_payout` | Higher fee_bps → lower investor_payout |
+| `fuzz_fees_never_exceed_principal` | All fees ≤ principal |
+| `fuzz_fees_cap_enforcement` | Rate > cap → `None` |
+| `fuzz_fees_zero_rate_yields_zero_fee` | Zero rate → zero fee |
+| `fuzz_fees_monotone_in_rate` | Fee increases with rate |
+| `fuzz_total_fees_additivity` | `total_fees == sum(individual fees)` |
+| `fuzz_gross_profit_sign_consistency` | Profit sign matches payout vs funded |
+| `fuzz_net_profit_le_gross_profit` | `net_profit ≤ gross_profit` |
+| `fuzz_roi_sign_matches_net_profit` | ROI sign matches net_profit sign |
+| `fuzz_aggregate_revenue_internal_consistency` | `total_revenue == fees + penalties` |
+| `fuzz_revenue_share_full_ownership` | 100% pool share → full revenue |
+| `fuzz_revenue_share_proportional_split` | 50/50 split → ~half each |
+| `fuzz_settlement_to_profit_pipeline` | Settlement output feeds profit correctly |
+| `fuzz_fees_and_settlement_arithmetic_compatibility` | Fee modules use compatible arithmetic |
+
+---
 
 ## Running Tests
 
-### Basic Test Run
 ```bash
-cd quicklendx-contracts
+# Run all fuzz tests (default: 200 cases per proptest test)
 cargo test --features fuzz-tests fuzz_
-```
 
-### Run Only Fuzz Tests
-```bash
-cargo test --features fuzz-tests fuzz_
-```
-
-### Extended Fuzz Testing (More Iterations)
-```bash
-# Run with 1000 cases per test (default is 50)
+# Extended run (1 000 cases)
 PROPTEST_CASES=1000 cargo test --features fuzz-tests fuzz_
 
-# Run with 10000 cases for thorough testing
+# Thorough run (10 000 cases)
 PROPTEST_CASES=10000 cargo test --features fuzz-tests fuzz_
 
-# Run specific fuzz test
-cargo test --features fuzz-tests fuzz_store_invoice_valid_ranges
+# Run a specific test
+cargo test --features fuzz-tests fuzz_total_paid_never_exceeds_total_due
+
+# Reproduce a failure from a saved seed
+PROPTEST_SEED=<seed> cargo test --features fuzz-tests <test_name>
 ```
 
-### Continuous Fuzzing
-For long-running fuzz campaigns:
-```bash
-# Run for extended period
-PROPTEST_CASES=100000 cargo test --features fuzz-tests fuzz_ -- --nocapture
+### Expected output
+
+```
+running 32 tests
+test test_fuzz::fuzz_aggregate_revenue_internal_consistency ... ok
+test test_fuzz::fuzz_fees_and_settlement_arithmetic_compatibility ... ok
+...
+test test_fuzz_invariants::fuzz_total_paid_never_exceeds_total_due ... ok
+test test_fuzz_invariants::fuzz_valid_bid_settlement_no_investor_loss ... ok
+test test_fuzz_invariants::fuzz_zero_bid_always_rejected ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured
 ```
 
-## Expected Results
+---
 
-### Success Criteria
-1. **No Panics**: All tests should complete without panicking
-2. **Consistent State**: Failed operations should not corrupt state
-3. **Proper Errors**: Invalid inputs should return appropriate errors
-4. **Valid Operations**: Valid inputs should succeed and store correct data
+## Security Assumptions
 
-### Test Output Example
-```
-running 9 tests
-test test_fuzz::standard_tests::test_fuzz_infrastructure_works ... ok
-test test_fuzz::fuzz_store_invoice_valid_ranges ... ok
-test test_fuzz::fuzz_store_invoice_boundary_conditions ... ok
-test test_fuzz::fuzz_place_bid_valid_ranges ... ok
-test test_fuzz::fuzz_place_bid_boundary_conditions ... ok
-test test_fuzz::fuzz_settle_invoice_payment_amounts ... ok
-test test_fuzz::fuzz_settle_invoice_boundary_conditions ... ok
-test test_fuzz::fuzz_no_arithmetic_overflow ... ok
+- **Bounded arithmetic**: all operations use `checked_*`; overflow returns `None`.
+- **Bounded iteration**: sweep sizes are O(N) where N ≤ 10 000 per test run.
+- **Deterministic**: proptest seeds are fixed per-run; failures are reproducible.
+- **Deny-by-default**: every guard returns `Err` unless the actor is `Verified`.
+- **No silent wrapping**: `u128` with `overflow-checks = true` in release profile.
 
-test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured
-```
+---
 
-## Security Considerations
+## CI Integration
 
-### Input Validation
-- All numeric inputs are bounded to prevent overflow
-- String lengths are limited to prevent resource exhaustion
-- Dates are validated against current timestamp
-- Currency addresses must be whitelisted
-
-### State Consistency
-- Failed operations must not modify state
-- Successful operations must update all related indexes
-- Status transitions must follow valid state machine
-
-### Math Safety
-- All arithmetic operations use checked math where possible
-- Large numbers are tested to ensure no overflow
-- Division operations handle zero denominators
-- Percentage calculations avoid precision loss
-
-## Integration with CI/CD
-
-### Recommended CI Configuration
 ```yaml
 # .github/workflows/test.yml
 - name: Run fuzz tests
   run: |
-    cd quicklendx-contracts
-    PROPTEST_CASES=1000 cargo test fuzz_
+    PROPTEST_CASES=1000 cargo test --features fuzz-tests fuzz_
 ```
 
-### Pre-commit Hook
-```bash
-#!/bin/bash
-# Run quick fuzz test before commit
-cd quicklendx-contracts
-PROPTEST_CASES=50 cargo test fuzz_ --quiet
-```
+---
 
 ## Troubleshooting
 
-### Test Failures
-If a fuzz test fails:
-1. Note the seed value from the error message
-2. Reproduce with: `PROPTEST_SEED=<seed> cargo test <test_name>`
-3. Debug the specific input that caused the failure
-4. Fix the underlying issue
-5. Re-run all fuzz tests
+If a proptest test fails:
+
+1. Note the seed from the error output.
+2. Reproduce: `PROPTEST_SEED=<seed> cargo test --features fuzz-tests <test_name>`
+3. Fix the underlying invariant violation.
+4. Re-run the full suite to confirm no regressions.
 
 ### Performance
-- Default 100 cases per test: ~30 seconds total
-- 1000 cases per test: ~5 minutes total
-- 10000 cases per test: ~30 minutes total
 
-### Memory Usage
-- Each test creates isolated environments
-- Memory usage scales with PROPTEST_CASES
-- Monitor with: `cargo test fuzz_ -- --nocapture`
+| Cases | Approx. time |
+|-------|-------------|
+| 200 (default) | < 1 s |
+| 1 000 | ~5 s |
+| 10 000 | ~30 s |
 
-## Future Enhancements
-
-### Additional Test Coverage
-- [ ] Multi-bid scenarios
-- [ ] Concurrent operations
-- [ ] Dispute resolution paths
-- [ ] Insurance claim processing
-- [ ] Partial payment sequences
-
-### Advanced Fuzzing
-- [ ] Stateful fuzzing (operation sequences)
-- [ ] Differential fuzzing (compare implementations)
-- [ ] Coverage-guided fuzzing (cargo-fuzz integration)
+---
 
 ## References
+
 - [Proptest Documentation](https://docs.rs/proptest/)
 - [Soroban Testing Guide](https://soroban.stellar.org/docs/how-to-guides/testing)
 - [Rust Fuzz Book](https://rust-fuzz.github.io/book/)

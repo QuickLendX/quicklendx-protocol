@@ -183,20 +183,10 @@ impl ProtocolInitializer {
             return Err(QuickLendXError::InvalidAddress);
         }
 
-        // Contract-address guard: admin and treasury must not be the contract itself.
-        let contract_address = env.current_contract_address();
-        if params.admin == contract_address || params.treasury == contract_address {
-            return Err(QuickLendXError::InvalidAddress);
-        }
-
         Self::initialize_internal(env, params)
     }
 
-    /// Internal initialization logic with comprehensive validation.
-    ///
-    /// Called by `initialize` after the outer auth and address guards pass.
-    /// Performs idempotency check, full parameter validation, and atomic
-    /// state writes.
+    /// Internal initialization logic with comprehensive validation
     fn initialize_internal(
         env: &Env,
         params: &InitializationParams,
