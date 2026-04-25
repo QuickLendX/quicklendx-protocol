@@ -1,6 +1,9 @@
 import request from "supertest";
 import app from "../index";
 import { statusService, StatusService } from "../services/statusService";
+import { ADMIN_KEY_HEADER } from "../middleware/admin-auth";
+
+const TEST_ADMIN_KEY = "test-status-admin-key";
 
 describe("Status API", () => {
   beforeEach(() => {
@@ -8,6 +11,12 @@ describe("Status API", () => {
     statusService.setMaintenanceMode(false);
     statusService.updateLastIndexedLedger(100000);
     statusService.setMockCurrentLedger(100005); // 5 ledgers lag
+    // Provide a known admin key so admin-protected routes are reachable.
+    process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  });
+
+  afterEach(() => {
+    delete process.env.ADMIN_API_KEY;
   });
 
   it("should return operational status when healthy", async () => {
@@ -20,7 +29,10 @@ describe("Status API", () => {
   });
 
   it("should return maintenance status when maintenance mode is enabled", async () => {
-    await request(app).post("/api/admin/maintenance").send({ enabled: true });
+    await request(app)
+      .post("/api/admin/maintenance")
+      .set(ADMIN_KEY_HEADER, TEST_ADMIN_KEY)
+      .send({ enabled: true });
     
     const res = await request(app).get("/api/status");
     expect(res.status).toBe(200);
@@ -41,6 +53,7 @@ describe("Status API", () => {
   it("should return 400 for invalid maintenance toggle", async () => {
     const res = await request(app)
       .post("/api/admin/maintenance")
+      .set(ADMIN_KEY_HEADER, TEST_ADMIN_KEY)
       .send({ enabled: "not-a-boolean" });
     expect(res.status).toBe(400);
   });
@@ -86,5 +99,3 @@ describe("Status API", () => {
     expect(StatusSchema.parse(validData)).toEqual(validData);
   });
 });
-
-

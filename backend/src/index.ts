@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { statusService } from "./services/statusService";
+import { adminAuth } from "./middleware/admin-auth";
 
 dotenv.config();
 
@@ -38,9 +39,9 @@ app.get("/api/status", async (req, res) => {
   }
 });
 
-// Admin-only (internal/secured) endpoint to toggle maintenance mode
-// In a real app, this would be protected by API key or Auth
-app.post("/api/admin/maintenance", (req, res) => {
+// Admin-only (internal/secured) endpoint to toggle maintenance mode.
+// Protected by API-key authentication; see middleware/admin-auth.ts.
+app.post("/api/admin/maintenance", adminAuth, (req, res) => {
   const { enabled } = req.body;
   if (typeof enabled !== "boolean") {
     return res.status(400).json({ error: "Invalid enabled flag" });

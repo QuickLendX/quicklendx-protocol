@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { errorHandler } from "./middleware/error-handler";
+import { validateQueryParams } from "./middleware/validate-query";
 import v1Routes from "./routes/v1";
 
 const app = express();
@@ -12,7 +13,8 @@ app.set("trust proxy", true);
 // Security Middleware
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
+// Limit request body to 100 KB to mitigate request-body DoS attacks.
+app.use(express.json({ limit: "100kb" }));
 app.set("trust proxy", true);
 
 // Test middleware to simulate no IP for coverage
@@ -25,6 +27,9 @@ app.use((req, res, next) => {
 
 // Rate Limiting
 app.use(rateLimitMiddleware);
+
+// Query-parameter validation (defence-in-depth against injection / oversized inputs)
+app.use(validateQueryParams);
 
 // Routes
 app.use("/api/v1", v1Routes);
