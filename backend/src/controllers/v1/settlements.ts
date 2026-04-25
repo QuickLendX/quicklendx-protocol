@@ -1,7 +1,12 @@
 import { Request, Response, NextFunction } from "express";
 import { Settlement, SettlementStatus } from "../../types/contract";
+import {
+  parsePaginationParams,
+  applyPagination,
+  PaginationError,
+} from "../../utils/pagination";
 
-const MOCK_SETTLEMENTS: Settlement[] = [
+export const MOCK_SETTLEMENTS: Settlement[] = [
   {
     id: "0xsettle123",
     invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
@@ -19,15 +24,20 @@ export const getSettlements = async (
   next: NextFunction
 ) => {
   try {
+    const params = parsePaginationParams(req.query);
     const { invoice_id } = req.query;
 
     let filtered = [...MOCK_SETTLEMENTS];
-    if (invoice_id) {
-      filtered = filtered.filter((s) => s.invoice_id === invoice_id);
-    }
+    if (invoice_id) filtered = filtered.filter((s) => s.invoice_id === invoice_id);
 
-    res.json(filtered);
+    const result = applyPagination(filtered, "timestamp", params);
+    res.json(result);
   } catch (error) {
+    if (error instanceof PaginationError) {
+      return res.status(400).json({
+        error: { message: error.message, code: "INVALID_PAGINATION" },
+      });
+    }
     next(error);
   }
 };
@@ -43,10 +53,7 @@ export const getSettlementById = async (
 
     if (!settlement) {
       return res.status(404).json({
-        error: {
-          message: "Settlement not found",
-          code: "SETTLEMENT_NOT_FOUND",
-        },
+        error: { message: "Settlement not found", code: "SETTLEMENT_NOT_FOUND" },
       });
     }
 

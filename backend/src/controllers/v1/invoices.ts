@@ -1,12 +1,17 @@
 import { Request, Response, NextFunction } from "express";
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../../types/contract";
+import {
+  parsePaginationParams,
+  applyPagination,
+  PaginationError,
+} from "../../utils/pagination";
 
 // Mock data aligned with contract types
-const MOCK_INVOICES: Invoice[] = [
+export const MOCK_INVOICES: Invoice[] = [
   {
     id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     business: "GDVLRH4G4...7Y",
-    amount: "1000000000", // 100.00 USDC (assuming 7 decimals or whatever)
+    amount: "1000000000",
     currency: "CBGHS...ABC",
     due_date: Math.floor(Date.now() / 1000) + 86400 * 30,
     status: InvoiceStatus.Verified,
@@ -38,19 +43,21 @@ export const getInvoices = async (
   next: NextFunction
 ) => {
   try {
-    // In a real implementation, you would fetch from a DB/Indexer
+    const params = parsePaginationParams(req.query);
     const { business, status } = req.query;
 
     let filtered = [...MOCK_INVOICES];
-    if (business) {
-      filtered = filtered.filter((i) => i.business === business);
-    }
-    if (status) {
-      filtered = filtered.filter((i) => i.status === status);
-    }
+    if (business) filtered = filtered.filter((i) => i.business === business);
+    if (status) filtered = filtered.filter((i) => i.status === status);
 
-    res.json(filtered);
+    const result = applyPagination(filtered, "created_at", params);
+    res.json(result);
   } catch (error) {
+    if (error instanceof PaginationError) {
+      return res.status(400).json({
+        error: { message: error.message, code: "INVALID_PAGINATION" },
+      });
+    }
     next(error);
   }
 };
@@ -66,10 +73,7 @@ export const getInvoiceById = async (
 
     if (!invoice) {
       return res.status(404).json({
-        error: {
-          message: "Invoice not found",
-          code: "INVOICE_NOT_FOUND",
-        },
+        error: { message: "Invoice not found", code: "INVOICE_NOT_FOUND" },
       });
     }
 

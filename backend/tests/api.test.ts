@@ -19,27 +19,30 @@ describe("QuickLendX API Skeleton Tests", () => {
   });
 
   describe("Invoice API (v1)", () => {
-    it("should list invoices", async () => {
+    it("should list invoices as PageResult", async () => {
       const res = await request(app).get("/api/v1/invoices");
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
-      expect(res.body[0]).toHaveProperty("id");
-      expect(res.body[0]).toHaveProperty("status");
+      expect(res.body).toHaveProperty("data");
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(res.body.data[0]).toHaveProperty("id");
+      expect(res.body.data[0]).toHaveProperty("status");
+      expect(res.body).toHaveProperty("has_more");
+      expect(res.body).toHaveProperty("next_cursor");
     });
 
     it("should filter invoices by business", async () => {
       const business = "GDVLRH4G4...7Y";
       const res = await request(app).get(`/api/v1/invoices?business=${business}`);
       expect(res.status).toBe(200);
-      expect(res.body.every((i: any) => i.business === business)).toBe(true);
+      expect(res.body.data.every((i: any) => i.business === business)).toBe(true);
     });
 
     it("should filter invoices by status", async () => {
       const status = "Verified";
       const res = await request(app).get(`/api/v1/invoices?status=${status}`);
       expect(res.status).toBe(200);
-      expect(res.body.every((i: any) => i.status === status)).toBe(true);
+      expect(res.body.data.every((i: any) => i.status === status)).toBe(true);
     });
 
     it("should get invoice by ID", async () => {
@@ -57,34 +60,36 @@ describe("QuickLendX API Skeleton Tests", () => {
   });
 
   describe("Bid API (v1)", () => {
-    it("should list bids", async () => {
+    it("should list bids as PageResult", async () => {
       const res = await request(app).get("/api/v1/bids");
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
+      expect(res.body).toHaveProperty("data");
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThan(0);
     });
 
     it("should filter bids by invoice_id", async () => {
       const invoice_id = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
       const res = await request(app).get(`/api/v1/bids?invoice_id=${invoice_id}`);
       expect(res.status).toBe(200);
-      expect(res.body.every((b: any) => b.invoice_id === invoice_id)).toBe(true);
+      expect(res.body.data.every((b: any) => b.invoice_id === invoice_id)).toBe(true);
     });
 
     it("should filter bids by investor", async () => {
       const investor = "GA...ABC";
       const res = await request(app).get(`/api/v1/bids?investor=${investor}`);
       expect(res.status).toBe(200);
-      expect(res.body.every((b: any) => b.investor === investor)).toBe(true);
+      expect(res.body.data.every((b: any) => b.investor === investor)).toBe(true);
     });
   });
 
   describe("Settlement API (v1)", () => {
-    it("should list settlements", async () => {
+    it("should list settlements as PageResult", async () => {
       const res = await request(app).get("/api/v1/settlements");
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
+      expect(res.body).toHaveProperty("data");
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThan(0);
     });
 
     it("should get settlement by ID", async () => {
@@ -104,7 +109,7 @@ describe("QuickLendX API Skeleton Tests", () => {
       const invoice_id = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
       const res = await request(app).get(`/api/v1/settlements?invoice_id=${invoice_id}`);
       expect(res.status).toBe(200);
-      expect(res.body.every((s: any) => s.invoice_id === invoice_id)).toBe(true);
+      expect(res.body.data.every((s: any) => s.invoice_id === invoice_id)).toBe(true);
     });
   });
 
