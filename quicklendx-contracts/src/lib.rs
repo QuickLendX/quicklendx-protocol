@@ -1,5 +1,18 @@
-#![cfg_attr(target_family = "wasm", no_std)]
-#[cfg(target_family = "wasm")]
+#![no_std]
+
+//! QuickLendX contracts library — minimal surface.
+//!
+//! The historical contract implementation lives in the `src/*.rs` sibling
+//! modules but is not wired in yet because the legacy test suite is mid-
+//! migration (see the `# temporarily disabled` note in
+//! `.github/workflows/ci.yml`). Until the legacy modules are restored, this
+//! file exposes only the pure, self-contained utility layer plus a minimal
+//! placeholder contract.
+//!
+//! The placeholder `#[contract]` is required for the `wasm32v1-none` release
+//! build: Soroban's contract macros install the `#[panic_handler]` and wire
+//! the SDK's global allocator, both of which are mandatory on that target.
+
 extern crate alloc;
 
 #[cfg(test)]
@@ -1203,6 +1216,7 @@ impl QuickLendXContract {
 
         result
     }
+}
 
     /// Mark an invoice as defaulted (admin only)
     /// Checks due date + grace period before marking as defaulted.
