@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Bid, BidStatus } from "../../types/contract";
+import { SnapshotService } from "../../services/snapshotService";
 
 const MOCK_BIDS: Bid[] = [
   {
@@ -31,6 +32,37 @@ export const getBids = async (
     }
 
     res.json(filtered);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getBestBid = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { invoiceId } = req.params;
+    const bestBid = await SnapshotService.getBestBid(invoiceId);
+    if (!bestBid) {
+      return res.status(404).json({ error: "No best bid found for this invoice" });
+    }
+    res.json(bestBid);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getTopBids = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { invoiceId } = req.params;
+    const topBids = await SnapshotService.getTopBids(invoiceId);
+    res.json({ top_bids: topBids });
   } catch (error) {
     next(error);
   }
