@@ -17,7 +17,7 @@ paths:
       summary: Health check
       description: Returns the status of the API service and connectivity.
       responses:
-        '200':
+        "200":
           description: Service is healthy
           content:
             application/json:
@@ -34,6 +34,100 @@ paths:
                     type: string
                     format: date-time
 
+  /admin/status:
+    get:
+      summary: Read internal admin status
+      description: Returns troubleshooting details for authenticated admin roles.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Internal admin status
+        "401":
+          description: Missing bearer token
+        "403":
+          description: Invalid token or insufficient role
+
+  /admin/audit-logs:
+    get:
+      summary: Read admin audit logs
+      description: Returns recent authorization and admin action audit entries.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Audit log entries
+
+  /admin/maintenance:
+    post:
+      summary: Toggle maintenance mode
+      description: Restricted to operations admin and super-admin.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ enabled ]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Maintenance mode updated
+
+  /admin/backfill:
+    post:
+      summary: Queue a backfill job
+      description: Restricted to operations admin and super-admin.
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope:
+                  type: string
+                  example: ledger:100000-100500
+      responses:
+        "202":
+          description: Backfill job queued
+
+  /admin/config/dangerous:
+    post:
+      summary: Update dangerous admin configuration
+      description: Restricted to super-admin only.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ allowEmergencyConfigChanges, maintenanceWindowMinutes ]
+              properties:
+                allowEmergencyConfigChanges:
+                  type: boolean
+                maintenanceWindowMinutes:
+                  type: integer
+                  minimum: 1
+                  maximum: 1440
+      responses:
+        "200":
+          description: Dangerous config updated
+
   /invoices:
     get:
       summary: List invoices
@@ -47,21 +141,16 @@ paths:
         - name: status
           in: query
           schema:
-            $ref: '#/components/schemas/InvoiceStatus'
+            $ref: "#/components/schemas/InvoiceStatus"
       responses:
-        '200':
-          description: List of invoices with freshness metadata
+        "200":
+          description: List of invoices
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/FreshnessEnvelope'
-                  - type: object
-                    properties:
-                      data:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/Invoice'
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invoice"
 
   /invoices/{id}:
     get:
@@ -73,18 +162,13 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: Invoice details with freshness metadata
+        "200":
+          description: Invoice details
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/FreshnessEnvelope'
-                  - type: object
-                    properties:
-                      data:
-                        $ref: '#/components/schemas/Invoice'
-        '404':
+                $ref: "#/components/schemas/Invoice"
+        "404":
           description: Invoice not found
 
   /bids:
@@ -100,19 +184,14 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: List of bids with freshness metadata
+        "200":
+          description: List of bids
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/FreshnessEnvelope'
-                  - type: object
-                    properties:
-                      data:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/Bid'
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bid"
 
   /settlements:
     get:
@@ -123,19 +202,14 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: List of settlements with freshness metadata
+        "200":
+          description: List of settlements
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/FreshnessEnvelope'
-                  - type: object
-                    properties:
-                      data:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/Settlement'
+                type: array
+                items:
+                  $ref: "#/components/schemas/Settlement"
 
   /settlements/{id}:
     get:
@@ -147,18 +221,13 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: Settlement details with freshness metadata
+        "200":
+          description: Settlement details
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/FreshnessEnvelope'
-                  - type: object
-                    properties:
-                      data:
-                        $ref: '#/components/schemas/Settlement'
-        '404':
+                $ref: "#/components/schemas/Settlement"
+        "404":
           description: Settlement not found
 
   /invoices/{id}/disputes:
@@ -171,21 +240,96 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: List of disputes with freshness metadata
+        "200":
+          description: List of disputes
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/FreshnessEnvelope'
-                  - type: object
-                    properties:
-                      data:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/Dispute'
+                type: array
+                items:
+                  $ref: "#/components/schemas/Dispute"
+
+  /notifications/preferences/{userId}:
+    get:
+      summary: Get user notification preferences
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: User notification preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserNotificationPreferences'
+        '404':
+          description: User preferences not found
+    put:
+      summary: Update user notification preferences
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNotificationPreferences'
+      responses:
+        '200':
+          description: Preferences updated successfully
+        '400':
+          description: Invalid request data
+
+  /notifications/unsubscribe/{userId}:
+    post:
+      summary: Unsubscribe user from email notifications
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: Successfully unsubscribed
+
+  /events:
+    post:
+      summary: Process blockchain events for notifications
+      description: Internal endpoint for indexer to post events that trigger notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/Event'
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/Event'
+      responses:
+        '200':
+          description: Events processed successfully
+        '500':
+          description: Internal server error
 
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-token
+
   schemas:
     FreshnessMetadata:
       type: object
@@ -235,11 +379,20 @@ components:
 
     InvoiceStatus:
       type: string
-      enum: [Pending, Verified, Funded, Paid, Defaulted, Cancelled]
+      enum: [ Pending, Verified, Funded, Paid, Defaulted, Cancelled ]
 
     InvoiceCategory:
       type: string
-      enum: [Services, Products, Consulting, Manufacturing, Technology, Healthcare, Other]
+      enum:
+        [
+          Services,
+          Products,
+          Consulting,
+          Manufacturing,
+          Technology,
+          Healthcare,
+          Other,
+        ]
 
     LineItem:
       type: object
@@ -258,7 +411,7 @@ components:
         line_items:
           type: array
           items:
-            $ref: '#/components/schemas/LineItem'
+            $ref: "#/components/schemas/LineItem"
         notes: { type: string }
 
     Invoice:
@@ -269,19 +422,19 @@ components:
         amount: { type: integer, format: int128 }
         currency: { type: string }
         due_date: { type: integer, format: int64 }
-        status: { $ref: '#/components/schemas/InvoiceStatus' }
+        status: { $ref: "#/components/schemas/InvoiceStatus" }
         description: { type: string }
-        category: { $ref: '#/components/schemas/InvoiceCategory' }
+        category: { $ref: "#/components/schemas/InvoiceCategory" }
         tags:
           type: array
           items: { type: string }
-        metadata: { $ref: '#/components/schemas/InvoiceMetadata' }
+        metadata: { $ref: "#/components/schemas/InvoiceMetadata" }
         created_at: { type: integer, format: int64 }
         updated_at: { type: integer, format: int64 }
 
     BidStatus:
       type: string
-      enum: [Placed, Withdrawn, Accepted, Expired, Cancelled]
+      enum: [ Placed, Withdrawn, Accepted, Expired, Cancelled ]
 
     Bid:
       type: object
@@ -292,12 +445,12 @@ components:
         bid_amount: { type: integer, format: int128 }
         expected_return: { type: integer, format: int128 }
         timestamp: { type: integer, format: int64 }
-        status: { $ref: '#/components/schemas/BidStatus' }
+        status: { $ref: "#/components/schemas/BidStatus" }
         expiration_timestamp: { type: integer, format: int64 }
 
     SettlementStatus:
       type: string
-      enum: [Pending, Paid, Defaulted]
+      enum: [ Pending, Paid, Defaulted ]
 
     Settlement:
       type: object
@@ -308,11 +461,11 @@ components:
         payer: { type: string }
         recipient: { type: string }
         timestamp: { type: integer, format: int64 }
-        status: { $ref: '#/components/schemas/SettlementStatus' }
+        status: { $ref: "#/components/schemas/SettlementStatus" }
 
     DisputeStatus:
       type: string
-      enum: [None, Disputed, UnderReview, Resolved]
+      enum: [ None, Disputed, UnderReview, Resolved ]
 
     Dispute:
       type: object
@@ -321,12 +474,6 @@ components:
         invoice_id: { type: string }
         initiator: { type: string }
         reason: { type: string }
-        status: { $ref: '#/components/schemas/DisputeStatus' }
+        status: { $ref: "#/components/schemas/DisputeStatus" }
         created_at: { type: integer, format: int64 }
         resolved_at: { type: integer, format: int64 }
-
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT

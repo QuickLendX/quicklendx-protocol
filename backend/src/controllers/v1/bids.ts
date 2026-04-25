@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { Bid, BidStatus } from "../../types/contract";
-import { freshnessService } from "../../services/freshnessService";
+import { labelRecord } from "../../services/versioningService";
 
 const MOCK_BIDS: Bid[] = [
-  {
+  labelRecord<Omit<Bid, "contract_version" | "event_schema_version" | "indexed_at">>({
     bid_id: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
     invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     investor: "GA...ABC",
@@ -12,7 +12,7 @@ const MOCK_BIDS: Bid[] = [
     timestamp: Math.floor(Date.now() / 1000) - 3600,
     status: BidStatus.Placed,
     expiration_timestamp: Math.floor(Date.now() / 1000) + 86400,
-  },
+  }),
 ];
 
 export const getBids = async (

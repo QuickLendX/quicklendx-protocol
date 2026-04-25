@@ -1,25 +1,14 @@
 /**
- * Freshness metadata attached to every API response.
- * Clients use this to determine whether displayed data is near-real-time or lagging.
- *
- * Security: only public ledger data is exposed — no node addresses, validator
- * identities, or network topology.
+ * Attached to every record written by the indexer.
+ * Versions are derived from the on-chain event, never from user input.
  */
-export interface FreshnessMetadata {
-  /** Last ledger sequence number processed by the indexer. */
-  lastIndexedLedger: number;
-  /** Seconds between the indexed ledger's close time and now. 0 when current. */
-  indexLagSeconds: number;
-  /** ISO 8601 UTC timestamp of the indexed ledger close time. */
-  lastUpdatedAt: string;
-  /** Opaque pagination/replay cursor. Do not parse — treat as a black box. */
-  cursor: string;
-}
-
-/** Generic response wrapper pairing any payload with freshness metadata. */
-export interface ApiResponse<T> {
-  data: T;
-  freshness: FreshnessMetadata;
+export interface VersionedRecord {
+  /** Matches PROTOCOL_VERSION in the contract (quicklendx-contracts/src/init.rs). */
+  contract_version: number;
+  /** Tracks the event payload shape version; bumped when field positions change. */
+  event_schema_version: number;
+  /** ISO 8601 timestamp set by the indexer at ingest time. */
+  indexed_at: string;
 }
 
 export enum InvoiceStatus {
@@ -85,7 +74,7 @@ export interface InvoiceMetadata {
   notes: string;
 }
 
-export interface Invoice {
+export interface Invoice extends VersionedRecord {
   id: string;
   business: string;
   amount: string;
@@ -100,7 +89,7 @@ export interface Invoice {
   updated_at: number;
 }
 
-export interface Bid {
+export interface Bid extends VersionedRecord {
   bid_id: string;
   invoice_id: string;
   investor: string;
@@ -111,7 +100,7 @@ export interface Bid {
   expiration_timestamp: number;
 }
 
-export interface Settlement {
+export interface Settlement extends VersionedRecord {
   id: string;
   invoice_id: string;
   amount: string;
@@ -121,7 +110,7 @@ export interface Settlement {
   status: SettlementStatus;
 }
 
-export interface Dispute {
+export interface Dispute extends VersionedRecord {
   id: string;
   invoice_id: string;
   initiator: string;
@@ -129,4 +118,39 @@ export interface Dispute {
   status: DisputeStatus;
   created_at: number;
   resolved_at?: number;
+}
+
+// Notification-related types
+export enum NotificationType {
+  InvoiceFunded = "invoice_funded",
+  PaymentReceived = "payment_received",
+  DisputeOpened = "dispute_opened",
+  DisputeResolved = "dispute_resolved",
+}
+
+export interface NotificationEvent {
+  id: string; // Event ID for idempotency
+  type: NotificationType;
+  user_id: string; // Stellar address or user identifier
+  invoice_id?: string;
+  amount?: string;
+  timestamp: number;
+  metadata?: Record<string, any>;
+}
+
+export interface UserNotificationPreferences {
+  email_enabled: boolean;
+  email_address?: string;
+  notifications: {
+    [NotificationType.InvoiceFunded]: boolean;
+    [NotificationType.PaymentReceived]: boolean;
+    [NotificationType.DisputeOpened]: boolean;
+    [NotificationType.DisputeResolved]: boolean;
+  };
+}
+
+export interface NotificationTemplate {
+  subject: string;
+  html: string;
+  text: string;
 }

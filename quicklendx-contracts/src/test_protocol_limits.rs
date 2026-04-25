@@ -83,8 +83,10 @@ fn test_admin_limit_update_applies_immediately_to_validation_and_default_date() 
 
 #[test]
 fn test_non_admin_limit_updates_are_rejected_across_all_entrypoints() {
-    let (_, client, admin, non_admin, _) = setup();
+    let (env, client, admin, non_admin, _) = setup();
     client.set_admin(&admin);
+
+    let original_limits = client.get_protocol_limits();
 
     let set_result = client.try_set_protocol_limits(&non_admin, &10i128, &365u64, &0u64);
     assert_eq!(set_result, Err(Ok(QuickLendXError::NotAdmin)));
@@ -95,6 +97,30 @@ fn test_non_admin_limit_updates_are_rejected_across_all_entrypoints() {
     let update_with_cap =
         client.try_update_limits_max_invoices(&non_admin, &10i128, &365u64, &0u64, &2u32);
     assert_eq!(update_with_cap, Err(Ok(QuickLendXError::NotAdmin)));
+
+    let limits_after = client.get_protocol_limits();
+    assert_eq!(limits_after.min_invoice_amount, original_limits.min_invoice_amount);
+    assert_eq!(limits_after.max_due_date_days, original_limits.max_due_date_days);
+    assert_eq!(limits_after.grace_period_seconds, original_limits.grace_period_seconds);
+    assert_eq!(
+        limits_after.max_invoices_per_business,
+        original_limits.max_invoices_per_business
+    );
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86_400;
+    assert!(client
+        .try_store_invoice(
+            &business,
+            &original_limits.min_invoice_amount,
+            &currency,
+            &due_date,
+            &String::from_str(&env, "still governed by original limits"),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        )
+        .is_ok());
 }
 
 #[test]

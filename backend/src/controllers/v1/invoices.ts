@@ -1,13 +1,15 @@
 import { Request, Response, NextFunction } from "express";
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../../types/contract";
-import { freshnessService } from "../../services/freshnessService";
+import { labelRecord } from "../../services/versioningService";
 
-// Mock data aligned with contract types
+// Mock data aligned with contract types.
+// labelRecord stamps each record with the contract and event schema version
+// that produced it — exactly as the real indexer would do at ingest time.
 const MOCK_INVOICES: Invoice[] = [
-  {
+  labelRecord<Omit<Invoice, "contract_version" | "event_schema_version" | "indexed_at">>({
     id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     business: "GDVLRH4G4...7Y",
-    amount: "1000000000", // 100.00 USDC (assuming 7 decimals or whatever)
+    amount: "1000000000", // 100.00 USDC (7 decimals)
     currency: "CBGHS...ABC",
     due_date: Math.floor(Date.now() / 1000) + 86400 * 30,
     status: InvoiceStatus.Verified,
@@ -30,7 +32,7 @@ const MOCK_INVOICES: Invoice[] = [
     },
     created_at: Math.floor(Date.now() / 1000) - 86400,
     updated_at: Math.floor(Date.now() / 1000) - 86400,
-  },
+  }),
 ];
 
 export const getInvoices = async (

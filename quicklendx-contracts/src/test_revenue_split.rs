@@ -421,7 +421,10 @@ fn test_double_distribution_same_period_fails() {
     // Second distribution fails — pending is now 0 (idempotency per settlement)
     let result = client.try_distribute_revenue(&admin, &current_period);
     assert_eq!(
-        result.err().expect("expected error").expect("contract error"),
+        result
+            .err()
+            .expect("expected error")
+            .expect("contract error"),
         QuickLendXError::OperationNotAllowed
     );
 }
@@ -450,7 +453,10 @@ fn test_double_distribution_min_zero_fails_without_new_collections() {
 
     let result = client.try_distribute_revenue(&admin, &current_period);
     assert_eq!(
-        result.err().expect("expected error").expect("contract error"),
+        result
+            .err()
+            .expect("expected error")
+            .expect("contract error"),
         QuickLendXError::OperationNotAllowed
     );
 }
@@ -516,7 +522,10 @@ fn test_distribute_revenue_rejects_treasury_mismatch_with_platform_routing() {
     let current_period = env.ledger().timestamp() / 2_592_000;
     let result = client.try_distribute_revenue(&admin, &current_period);
     assert_eq!(
-        result.err().expect("expected error").expect("contract error"),
+        result
+            .err()
+            .expect("expected error")
+            .expect("contract error"),
         QuickLendXError::InvalidFeeConfiguration
     );
 }
@@ -682,13 +691,7 @@ fn test_negative_min_distribution_amount_rejected() {
     client.initialize_fee_system(&admin);
 
     let result = client.try_configure_revenue_distribution(
-        &admin,
-        &treasury,
-        &5000,
-        &2500,
-        &2500,
-        &false,
-        &-1, // negative
+        &admin, &treasury, &5000, &2500, &2500, &false, &-1, // negative
     );
     assert!(
         result.is_err(),
@@ -708,9 +711,8 @@ fn test_shares_sum_over_10000_rejected() {
     client.initialize_fee_system(&admin);
 
     // Sum = 10001
-    let result = client.try_configure_revenue_distribution(
-        &admin, &treasury, &5000, &3000, &2001, &false, &100,
-    );
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2001, &false, &100);
     assert!(result.is_err(), "Shares summing to > 10000 should fail");
 }
 
@@ -726,9 +728,8 @@ fn test_shares_sum_under_10000_rejected() {
     client.initialize_fee_system(&admin);
 
     // Sum = 9999
-    let result = client.try_configure_revenue_distribution(
-        &admin, &treasury, &5000, &3000, &1999, &false, &100,
-    );
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &5000, &3000, &1999, &false, &100);
     assert!(result.is_err(), "Shares summing to < 10000 should fail");
 }
 
@@ -881,9 +882,8 @@ fn test_zero_min_distribution_amount_allowed() {
     client.initialize_fee_system(&admin);
 
     // min_distribution_amount = 0 should be valid
-    let result = client.try_configure_revenue_distribution(
-        &admin, &treasury, &5000, &2500, &2500, &false, &0,
-    );
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &5000, &2500, &2500, &false, &0);
     assert!(
         result.is_ok(),
         "Zero min_distribution_amount should be allowed"

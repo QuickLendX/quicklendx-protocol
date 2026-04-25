@@ -260,4 +260,32 @@ cargo test test_cross_module
 
 # Run all lifecycle-related tests
 cargo test test_lifecycle test_cross_module test_investment_lifecycle
+
+# Run end-to-end integration tests
+cargo test --test invoice_lifecycle_e2e
 ```
+
+## 7. End-to-End Integration Tests
+
+The `invoice_lifecycle_e2e.rs` test suite provides comprehensive integration coverage
+that exercises the full protocol workflow across all modules. These tests validate:
+
+| Test | Purpose |
+|------|---------|
+| `test_complete_invoice_lifecycle_happy_path` | Full workflow from KYC to settlement |
+| `test_concurrent_invoice_operations` | Multi-invoice isolation |
+| `test_partial_payment_to_settlement` | Partial payment flow |
+| `test_kyc_rejection_blocks_workflow` | Negative: KYC validation |
+| `test_invalid_bid_rejected` | Negative: Bid validation |
+| `test_escrow_refund_atomicity` | Refund flow atomicity |
+| `test_settlement_accounting_identity` | Accounting invariants |
+| `test_status_transitions_are_atomic` | Atomicity on failures |
+| `test_cross_module_pointer_integrity` | Data integrity |
+
+### Security Validation
+
+The E2E tests specifically validate:
+- **Auth roles**: Each operation requires correct authorization
+- **No partial-state writes**: Failures don't leave inconsistent state
+- **Accounting invariants**: `investor_return + platform_fee == total_paid`
+- **Cross-module consistency**: All modules agree on invoice state
