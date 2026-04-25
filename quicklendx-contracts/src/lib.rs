@@ -66,6 +66,8 @@ mod test_investment_consistency;
 #[cfg(test)]
 mod test_investment_queries;
 #[cfg(test)]
+mod test_init_invariants;
+#[cfg(test)]
 mod test_max_invoices_per_business;
 #[cfg(test)]
 mod test_overflow;
