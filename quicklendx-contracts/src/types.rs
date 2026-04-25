@@ -113,36 +113,26 @@ pub struct Invoice {
     pub currency: Address,
     pub due_date: u64,
     pub status: InvoiceStatus,
+    pub created_at: u64,
     pub description: String,
-    pub category: InvoiceCategory,
-    pub tags: Vec<String>,
-    
-    // Metadata fields
     pub metadata_customer_name: Option<String>,
     pub metadata_customer_address: Option<String>,
     pub metadata_tax_id: Option<String>,
     pub metadata_notes: Option<String>,
     pub metadata_line_items: Vec<LineItemRecord>,
-    
-    // Financial and lifecycle fields
+    pub category: InvoiceCategory,
+    pub tags: Vec<String>,
     pub funded_amount: i128,
     pub funded_at: Option<u64>,
     pub investor: Option<Address>,
     pub settled_at: Option<u64>,
-    pub total_paid: i128,
-    pub payment_history: Vec<PaymentRecord>,
-    
-    // Rating fields
     pub average_rating: Option<u32>,
     pub total_ratings: u32,
     pub ratings: Vec<InvoiceRating>,
-    
-    // Dispute fields
     pub dispute_status: DisputeStatus,
     pub dispute: Dispute,
-    
-    pub created_at: u64,
-    pub updated_at: u64,
+    pub total_paid: i128,
+    pub payment_history: Vec<PaymentRecord>,
 }
 
 /// Helper struct for metadata updates
@@ -318,14 +308,4 @@ pub struct PlatformFeeConfig {
     pub fee_bps: u32,
     pub updated_at: u64,
     pub updated_by: Address,
-}
-
-/// Platform fee record
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PlatformFee {
-    pub invoice_id: BytesN<32>,
-    pub amount: i128,
-    pub recipient: Address,
-    pub timestamp: u64,
 }

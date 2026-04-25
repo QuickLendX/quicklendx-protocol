@@ -498,7 +498,8 @@ mod test_init {
         let (env, client, _params) = setup_initialized();
         let non_admin = Address::generate(&env);
 
-        let result = client.try_set_protocol_config(&non_admin, &1_000_000i128, &365u64, &604800u64);
+        let result =
+            client.try_set_protocol_config(&non_admin, &1_000_000i128, &365u64, &604800u64);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::NotAdmin)),
@@ -519,7 +520,8 @@ mod test_init {
         );
 
         // Test invalid max days
-        let result = client.try_set_protocol_config(&params.admin, &1_000_000i128, &0u64, &604800u64);
+        let result =
+            client.try_set_protocol_config(&params.admin, &1_000_000i128, &0u64, &604800u64);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::InvoiceDueDateInvalid)),
@@ -527,7 +529,8 @@ mod test_init {
         );
 
         // Test invalid grace period
-        let result = client.try_set_protocol_config(&params.admin, &1_000_000i128, &365u64, &3_000_000u64);
+        let result =
+            client.try_set_protocol_config(&params.admin, &1_000_000i128, &365u64, &3_000_000u64);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::InvalidTimestamp)),
@@ -582,6 +585,16 @@ mod test_init {
     }
 
     #[test]
+    fn test_set_fee_config_non_admin_fails_and_preserves_state() {
+        let (env, client, params) = setup_initialized();
+        let non_admin = Address::generate(&env);
+
+        let result = client.try_set_fee_config(&non_admin, &300u32);
+        assert_eq!(result, Err(Ok(QuickLendXError::NotAdmin)));
+        assert_eq!(client.get_fee_bps(), params.fee_bps);
+    }
+
+    #[test]
     fn test_set_treasury_succeeds() {
         let (env, client, params) = setup_initialized();
         let new_treasury = Address::generate(&env);
@@ -606,6 +619,17 @@ mod test_init {
             Err(Ok(QuickLendXError::InvalidAddress)),
             "Treasury same as admin must fail"
         );
+    }
+
+    #[test]
+    fn test_set_treasury_non_admin_fails_and_preserves_state() {
+        let (env, client, params) = setup_initialized();
+        let non_admin = Address::generate(&env);
+        let attacker_treasury = Address::generate(&env);
+
+        let result = client.try_set_treasury(&non_admin, &attacker_treasury);
+        assert_eq!(result, Err(Ok(QuickLendXError::NotAdmin)));
+        assert_eq!(client.get_treasury(), Some(params.treasury));
     }
 
     // ============================================================================

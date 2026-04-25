@@ -18,8 +18,8 @@ mod test_admin {
     use crate::errors::QuickLendXError;
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{
-        testutils::{Address as _, Events},
-        Address, Env,
+        testutils::{Address as _, Events, MockAuth, MockAuthInvoke},
+        Address, Env, IntoVal,
     };
 
     fn setup() -> (Env, QuickLendXContractClient<'static>) {
@@ -463,6 +463,37 @@ mod test_admin {
 
         assert!(result.is_ok(), "set_admin must route to transfer");
         assert_eq!(client.get_current_admin(), Some(admin2));
+    }
+
+    #[test]
+    fn test_set_admin_rejects_spoofed_current_admin_signature() {
+        let env = Env::default();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let attacker = Address::generate(&env);
+        let replacement = Address::generate(&env);
+
+        client.mock_all_auths().initialize_admin(&admin);
+
+        let spoofed_auth = MockAuth {
+            address: &attacker,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "set_admin",
+                args: (replacement.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        };
+
+        let result = client.mock_auths(&[spoofed_auth]).try_set_admin(&replacement);
+        let invoke_err = result
+            .err()
+            .expect("spoofed transfer must fail")
+            .err()
+            .expect("spoofed transfer must fail at auth");
+        assert_eq!(invoke_err, soroban_sdk::InvokeError::Abort);
+        assert_eq!(client.get_current_admin(), Some(admin));
     }
 
     // ============================================================================

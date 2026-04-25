@@ -562,12 +562,7 @@ fn test_ledger_time_consistent_within_transaction() {
     let mut ids: Vec<soroban_sdk::BytesN<32>> = Vec::new(&env);
     for _ in 0..3 {
         ids.push_back(create_invoice(
-            &env,
-            &client,
-            &business,
-            1000,
-            &currency,
-            due_date,
+            &env, &client, &business, 1000, &currency, due_date,
         ));
     }
 

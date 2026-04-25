@@ -2606,7 +2606,9 @@ fn test_audit_trail_creation() {
     assert!(!audit_trail.is_empty());
 
     // Verify audit entry details
-    let audit_entry = client.get_audit_entry(&audit_trail.get(0).unwrap()).unwrap();
+    let audit_entry = client
+        .get_audit_entry(&audit_trail.get(0).unwrap())
+        .unwrap();
     // Audit fields validation has been updated in the contract API
 }
 
@@ -2973,7 +2975,10 @@ fn test_notification_delivery_status_update() {
         client.update_notification_status(&notification_id, &NotificationDeliveryStatus::Sent);
         let notification = client.get_notification(&notification_id);
         assert!(notification.is_some());
-        assert_eq!(notification.unwrap().delivery_status, NotificationDeliveryStatus::Sent);
+        assert_eq!(
+            notification.unwrap().delivery_status,
+            NotificationDeliveryStatus::Sent
+        );
     }
 }
 
@@ -3194,13 +3199,25 @@ fn test_update_notification_status_all_transitions() {
     if !ids.is_empty() {
         let nid = ids.get(0).unwrap();
         client.update_notification_status(&nid, &NotificationDeliveryStatus::Sent);
-        assert_eq!(client.get_notification(&nid).unwrap().delivery_status, NotificationDeliveryStatus::Sent);
+        assert_eq!(
+            client.get_notification(&nid).unwrap().delivery_status,
+            NotificationDeliveryStatus::Sent
+        );
         client.update_notification_status(&nid, &NotificationDeliveryStatus::Delivered);
-        assert_eq!(client.get_notification(&nid).unwrap().delivery_status, NotificationDeliveryStatus::Delivered);
+        assert_eq!(
+            client.get_notification(&nid).unwrap().delivery_status,
+            NotificationDeliveryStatus::Delivered
+        );
         client.update_notification_status(&nid, &NotificationDeliveryStatus::Read);
-        assert_eq!(client.get_notification(&nid).unwrap().delivery_status, NotificationDeliveryStatus::Read);
+        assert_eq!(
+            client.get_notification(&nid).unwrap().delivery_status,
+            NotificationDeliveryStatus::Read
+        );
         client.update_notification_status(&nid, &NotificationDeliveryStatus::Failed);
-        assert_eq!(client.get_notification(&nid).unwrap().delivery_status, NotificationDeliveryStatus::Failed);
+        assert_eq!(
+            client.get_notification(&nid).unwrap().delivery_status,
+            NotificationDeliveryStatus::Failed
+        );
     }
 }
 
@@ -4036,7 +4053,8 @@ fn test_investment_insurance_lifecycle() {
     assert_eq!(insurance.coverage_percentage, coverage_percentage_a);
     let expected_coverage_a = investment_amount * coverage_percentage_a as i128 / 100;
     assert_eq!(insurance.coverage_amount, expected_coverage_a);
-    let expected_premium_a = Investment::calculate_premium(investment_amount, coverage_percentage_a);
+    let expected_premium_a =
+        Investment::calculate_premium(investment_amount, coverage_percentage_a);
     assert_eq!(insurance.premium_amount, expected_premium_a);
 
     let second_insurance = insured_investment
@@ -4048,7 +4066,8 @@ fn test_investment_insurance_lifecycle() {
     assert_eq!(second_insurance.coverage_percentage, coverage_percentage_b);
     let expected_coverage_b = investment_amount * coverage_percentage_b as i128 / 100;
     assert_eq!(second_insurance.coverage_amount, expected_coverage_b);
-    let expected_premium_b = Investment::calculate_premium(investment_amount, coverage_percentage_b);
+    let expected_premium_b =
+        Investment::calculate_premium(investment_amount, coverage_percentage_b);
     assert_eq!(second_insurance.premium_amount, expected_premium_b);
 
     let stored_invoice = client.get_invoice(&invoice_id);
