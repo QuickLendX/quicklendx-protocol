@@ -33,6 +33,38 @@ paths:
                 $ref: '#/components/schemas/Error'
 components:
   schemas:
+    FreshnessMetadata:
+      type: object
+      description: >
+        Data freshness metadata attached to every data-bearing API response.
+        Clients SHOULD warn users when indexLagSeconds > 30 and SHOULD block
+        irreversible financial actions when indexLagSeconds > 120.
+        Only public ledger data is exposed — no node addresses or network topology.
+      required:
+        - lastIndexedLedger
+        - indexLagSeconds
+        - lastUpdatedAt
+        - cursor
+      properties:
+        lastIndexedLedger:
+          type: integer
+          format: int64
+          description: Last ledger sequence number processed by the indexer.
+          example: 1042857
+        indexLagSeconds:
+          type: number
+          format: double
+          description: Seconds the indexer is behind the chain tip. 0 when current.
+          example: 10
+        lastUpdatedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 UTC timestamp of the indexed ledger close time.
+          example: "2024-03-15T10:22:41Z"
+        cursor:
+          type: string
+          description: Opaque pagination/replay cursor. Do not parse.
+          example: "1042857_0"
     Status:
       type: object
       properties:

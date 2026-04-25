@@ -1,6 +1,7 @@
 //! Token vesting module with time-locked release schedules.
 //!
 //! Supports admin-created vesting schedules that lock protocol tokens or rewards
+//!
 //! in the contract and release them linearly over time after an optional cliff.
 //! Beneficiaries can claim vested tokens as they unlock.
 
@@ -12,6 +13,31 @@ use crate::payments::transfer_funds;
 
 const VESTING_COUNTER_KEY: Symbol = symbol_short!("vest_cnt");
 const VESTING_KEY: Symbol = symbol_short!("vest");
+
+/// Events emitted by the vesting module.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum VestingEvent {
+    /// Emitted when a new vesting schedule is created.
+    #[tag(symbol_short!("vest_new"))]
+    NewSchedule {
+        id: u64,
+        beneficiary: Address,
+        token: Address,
+        total_amount: i128,
+        start_time: u64,
+        cliff_time: u64,
+        end_time: u64,
+    },
+    /// Emitted when tokens are released from a vesting schedule.
+    #[tag(symbol_short!("vest_rel"))]
+    Released {
+        id: u64,
+        beneficiary: Address,
+        token: Address,
+        amount: i128,
+    },
+}
 
 /// Vesting schedule stored on-chain.
 #[contracttype]
@@ -173,17 +199,15 @@ impl Vesting {
         transfer_funds(env, &token, admin, &contract, total_amount)?;
 
         VestingStorage::store(env, &schedule);
-        env.events().publish(
-            (symbol_short!("vest_new"),),
-            (
-                id,
-                beneficiary,
-                token,
-                total_amount,
-                start_time,
-                cliff_time,
-                end_time,
-            ),
+        env.events().publish(&VestingEvent::NewSchedule {
+            id,
+            beneficiary: beneficiary.clone(),
+            token: token.clone(),
+            total_amount,
+            start_time,
+            cliff_time,
+            end_time,
+        },
         );
 
         Ok(id)
@@ -272,11 +296,12 @@ impl Vesting {
         Self::validate_schedule_state(&schedule)?;
         VestingStorage::update(env, &schedule);
 
-        env.events().publish(
-            (symbol_short!("vest_rel"),),
-            (id, beneficiary.clone(), schedule.token, releasable),
-        );
-
+        env.events().publish(&VestingEvent::Released {
+            id,
+            beneficiary: beneficiary.clone(),
+            token: schedule.token.clone(),
+            amount: releasable,
+        });
         Ok(releasable)
     }
 }

@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { Settlement, SettlementStatus } from "../../types/contract";
+import { labelRecord } from "../../services/versioningService";
 
 const MOCK_SETTLEMENTS: Settlement[] = [
-  {
+  labelRecord<Omit<Settlement, "contract_version" | "event_schema_version" | "indexed_at">>({
     id: "0xsettle123",
     invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     amount: "1000000000",
@@ -10,7 +11,7 @@ const MOCK_SETTLEMENTS: Settlement[] = [
     recipient: "GB...RECIP",
     timestamp: Math.floor(Date.now() / 1000) - 43200,
     status: SettlementStatus.Paid,
-  },
+  }),
 ];
 
 export const getSettlements = async (
@@ -26,7 +27,7 @@ export const getSettlements = async (
       filtered = filtered.filter((s) => s.invoice_id === invoice_id);
     }
 
-    res.json(filtered);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }
@@ -50,7 +51,7 @@ export const getSettlementById = async (
       });
     }
 
-    res.json(settlement);
+    res.json({ data: settlement, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }

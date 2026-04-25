@@ -231,3 +231,153 @@ fn test_calculate_profit_large_amount_no_overflow() {
     );
     assert_eq!(investor_return + platform_fee, payment_amount);
 }
+
+// ============================================================================
+// PROFIT + FEE INTEGRATION TESTS
+// ============================================================================
+
+/// Fee config update is immediately reflected in the next calculate_profit call.
+#[test]
+fn test_fee_config_change_reflected_immediately() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let admin = Address::generate(&env);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let _ = client.initialize_admin(&admin);
+
+    // Default 2%: profit=1000 => fee=20
+    let (_, fee_2pct) = client.calculate_profit(&0, &1000);
+    assert_eq!(fee_2pct, 20);
+
+    // Switch to 5%: profit=1000 => fee=50
+    client.set_platform_fee(&500);
+    let (_, fee_5pct) = client.calculate_profit(&0, &1000);
+    assert_eq!(fee_5pct, 50);
+
+    // Switch to 10%: profit=1000 => fee=100
+    client.set_platform_fee(&1000);
+    let (_, fee_10pct) = client.calculate_profit(&0, &1000);
+    assert_eq!(fee_10pct, 100);
+}
+
+/// Invariant holds across a sequence of fee-rate changes.
+#[test]
+fn test_invariant_across_fee_rate_sequence() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let admin = Address::generate(&env);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let _ = client.initialize_admin(&admin);
+
+    let investment = 5_000i128;
+    let payment = 6_000i128;
+
+    for bps in [0u32, 50, 200, 500, 750, 1000] {
+        client.set_platform_fee(&bps);
+        let (investor_return, platform_fee) = client.calculate_profit(&investment, &payment);
+        assert_eq!(
+            investor_return + platform_fee,
+            payment,
+            "invariant broken at bps={bps}"
+        );
+        assert!(investor_return >= investment, "principal lost at bps={bps}");
+        assert!(platform_fee >= 0, "negative fee at bps={bps}");
+    }
+}
+
+/// Fee is only taken from profit, never from principal.
+#[test]
+fn test_fee_only_from_profit_not_principal() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let admin = Address::generate(&env);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let _ = client.initialize_admin(&admin);
+
+    client.set_platform_fee(&1000); // 10% — worst case
+    let investment = 10_000i128;
+    let payment = 10_500i128; // profit=500
+    let gross_profit = payment - investment;
+
+    let (investor_return, platform_fee) = client.calculate_profit(&investment, &payment);
+
+    // Fee must not exceed gross profit
+    assert!(platform_fee <= gross_profit);
+    // Investor must recover at least their principal
+    assert!(investor_return >= investment);
+    assert_eq!(investor_return + platform_fee, payment);
+}
+
+/// Zero-profit settlement: investor recovers exactly the payment, fee is zero.
+#[test]
+fn test_zero_profit_investor_recovers_full_payment() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let admin = Address::generate(&env);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let _ = client.initialize_admin(&admin);
+
+    client.set_platform_fee(&1000);
+    let amount = 7_777i128;
+    let (investor_return, platform_fee) = client.calculate_profit(&amount, &amount);
+    assert_eq!(platform_fee, 0);
+    assert_eq!(investor_return, amount);
+}
+
+/// Loss settlement: investor receives payment_amount, fee is zero.
+#[test]
+fn test_loss_settlement_no_fee_investor_gets_payment() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let admin = Address::generate(&env);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let _ = client.initialize_admin(&admin);
+
+    client.set_platform_fee(&1000);
+    let (investor_return, platform_fee) = client.calculate_profit(&10_000, &8_000);
+    assert_eq!(platform_fee, 0);
+    assert_eq!(investor_return, 8_000);
+    assert_eq!(investor_return + platform_fee, 8_000);
+}
+
+/// Rounding boundary: profit=49 at 2% rounds to fee=0; profit=50 rounds to fee=1.
+#[test]
+fn test_rounding_boundary_2pct_profit_49_vs_50() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let admin = Address::generate(&env);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let _ = client.initialize_admin(&admin);
+
+    // Default 2%
+    let (_, fee_49) = client.calculate_profit(&1000, &1049);
+    assert_eq!(fee_49, 0);
+
+    let (_, fee_50) = client.calculate_profit(&1000, &1050);
+    assert_eq!(fee_50, 1);
+}
+
+/// Overflow safety: near-max i128 values satisfy the invariant without panic.
+#[test]
+fn test_overflow_safety_near_max_i128() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let admin = Address::generate(&env);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let _ = client.initialize_admin(&admin);
+
+    let investment: i128 = i128::MAX / 2;
+    let payment: i128 = i128::MAX / 2 + 1_000_000;
+
+    let (investor_return, platform_fee) = client.calculate_profit(&investment, &payment);
+    assert_eq!(investor_return + platform_fee, payment);
+    assert!(platform_fee >= 0);
+    assert!(investor_return >= investment);
+}
