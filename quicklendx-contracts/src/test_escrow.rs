@@ -692,29 +692,15 @@ fn test_create_escrow_idempotency_check() {
     // First call should succeed
     env.as_contract(&contract_id, || {
         use crate::payments::create_escrow;
-        let result = create_escrow(
-            &env,
-            &invoice_id,
-            &investor,
-            &business,
-            amount,
-            &currency,
-        );
+        let result = create_escrow(&env, &invoice_id, &investor, &business, amount, &currency);
         assert!(result.is_ok(), "First create_escrow should succeed");
     });
 
     // Second call for the same invoice_id should fail, even if bypassed higher level checks
     env.as_contract(&contract_id, || {
         use crate::payments::create_escrow;
-        let result = create_escrow(
-            &env,
-            &invoice_id,
-            &investor,
-            &business,
-            amount,
-            &currency,
-        );
-        
+        let result = create_escrow(&env, &invoice_id, &investor, &business, amount, &currency);
+
         // Assert it fails with InvoiceAlreadyFunded
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -1100,7 +1086,7 @@ fn test_release_escrow_fails_if_refunded() {
     let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1000);
 
     client.accept_bid(&invoice_id, &bid_id);
-    
+
     // Refund the escrow
     client.refund_escrow_funds(&invoice_id, &admin);
 
@@ -1158,7 +1144,10 @@ fn test_accept_bid_fails_when_investor_has_zero_balance() {
 
     let result = client.try_accept_bid(&invoice_id, &bid_id);
 
-    assert!(result.is_err(), "accept_bid must fail when investor has no balance");
+    assert!(
+        result.is_err(),
+        "accept_bid must fail when investor has no balance"
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::InsufficientFunds,
@@ -1281,7 +1270,10 @@ fn test_accept_bid_fails_when_investor_has_partial_allowance() {
 
     let result = client.try_accept_bid(&invoice_id, &bid_id);
 
-    assert!(result.is_err(), "accept_bid must fail with partial allowance");
+    assert!(
+        result.is_err(),
+        "accept_bid must fail with partial allowance"
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::OperationNotAllowed,
@@ -1293,7 +1285,10 @@ fn test_accept_bid_fails_when_investor_has_partial_allowance() {
     assert_eq!(token_client.balance(&contract_id), contract_balance_before);
 
     // State unchanged.
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Verified);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Verified
+    );
     assert_eq!(client.get_bid(&bid_id).unwrap().status, BidStatus::Placed);
     assert!(client.try_get_escrow_details(&invoice_id).is_err());
 }
@@ -1531,8 +1526,7 @@ fn test_accept_bid_and_fund_partial_allowance_leaves_state_unchanged() {
     let investor = setup_verified_investor(&env, &client, 50_000);
 
     let amount = 10_000i128;
-    let currency =
-        setup_token_partial_allowance(&env, &business, &investor, &contract_id, amount);
+    let currency = setup_token_partial_allowance(&env, &business, &investor, &contract_id, amount);
     let token_client = token::Client::new(&env, &currency);
 
     let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
@@ -1657,7 +1651,10 @@ fn test_accept_bid_and_fund_second_call_rejected() {
 
     // Second call must fail — invoice is already Funded.
     let result = client.try_accept_bid_and_fund(&invoice_id, &bid_id);
-    assert!(result.is_err(), "second accept_bid_and_fund must be rejected");
+    assert!(
+        result.is_err(),
+        "second accept_bid_and_fund must be rejected"
+    );
 
     // No additional funds moved.
     assert_eq!(token_client.balance(&contract_id), balance_after_first);
@@ -1692,7 +1689,9 @@ fn test_accept_bid_and_fund_failure_preserves_status_indices() {
     let funded_before = client.get_invoice_count_by_status(&InvoiceStatus::Funded);
 
     // Attempt fails (no investor allowance).
-    assert!(client.try_accept_bid_and_fund(&invoice_id, &bid_id).is_err());
+    assert!(client
+        .try_accept_bid_and_fund(&invoice_id, &bid_id)
+        .is_err());
 
     // Buckets unchanged.
     assert_eq!(

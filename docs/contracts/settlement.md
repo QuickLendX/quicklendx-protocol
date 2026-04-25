@@ -61,6 +61,11 @@ Accounting guarantees:
 ### Double-Settlement Protection
 A dedicated `Finalized(invoice_id)` storage flag is set atomically during settlement finalization. Any subsequent settlement attempt (via `settle_invoice` or auto-settlement through `process_partial_payment`) is rejected immediately with `InvalidStatus`.
 
+### Regression tests added
+
+- `test_partial_payment_rejected_after_explicit_settlement` ensures explicit settlement blocks further partial payments and produces no side effects.
+- `test_settlement_idempotency_no_side_effects` verifies repeated settlement attempts are rejected and cause no additional balance, event, or accounting changes.
+
 ### Accounting Invariant
 Before disbursing funds, the settlement engine asserts:
 

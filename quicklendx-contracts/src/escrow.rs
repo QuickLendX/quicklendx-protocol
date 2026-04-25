@@ -21,8 +21,9 @@ use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::events::{emit_escrow_refunded, emit_invoice_funded};
 use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
-use crate::invoice::{InvoiceStatus, InvoiceStorage};
 use crate::payments::{create_escrow, refund_escrow, EscrowStorage};
+use crate::storage::InvoiceStorage;
+use crate::types::InvoiceStatus;
 use crate::verification::require_business_not_pending;
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
