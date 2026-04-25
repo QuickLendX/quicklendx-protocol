@@ -74,8 +74,7 @@ impl BackupStorage {
             return Err(QuickLendXError::StorageError);
         }
 
-        if backup.description.len() == 0
-            || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
+        if backup.description.len() == 0 || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
         {
             return Err(QuickLendXError::InvalidDescription);
         }
@@ -136,7 +135,6 @@ impl BackupStorage {
 
         BytesN::from_array(env, &id_bytes)
     }
-
 
     /// Persist a backup record (metadata only).
     ///
@@ -221,7 +219,6 @@ impl BackupStorage {
         env.storage().instance().remove(&data_key);
     }
 
-
     /// Validate backup data integrity.
     ///
     /// Checks that:
@@ -230,8 +227,7 @@ impl BackupStorage {
     /// 3. The payload length matches `backup.invoice_count`.
     /// 4. Every invoice in the payload has a positive `amount`.
     pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-        let backup =
-            Self::get_backup(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let backup = Self::get_backup(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         // Validate metadata alone first (cheap).
         Self::validate_backup_metadata(&backup, None)?;
@@ -253,7 +249,6 @@ impl BackupStorage {
 
         Ok(())
     }
-
 
     /// Restore all invoices from a backup in a safe, validated sequence.
     ///
@@ -307,20 +302,17 @@ impl BackupStorage {
     /// - Restoring without clearing first would overlay backup data on stale
     ///   indexes, causing ghost entries in status/category/tag buckets for
     ///   any invoices that existed before the restore.
-    pub fn restore_from_backup(
-        env: &Env,
-        backup_id: &BytesN<32>,
-    ) -> Result<u32, QuickLendXError> {
-        //  Step 1: validate before mutating anything 
+    pub fn restore_from_backup(env: &Env, backup_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
+        //  Step 1: validate before mutating anything
         Self::validate_backup(env, backup_id)?;
 
         // Fetch the validated payload.
-        let data = Self::get_backup_data(env, backup_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let data =
+            Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         let restored_count = data.len();
 
-        //  Step 2: atomically clear all existing invoice state 
+        //  Step 2: atomically clear all existing invoice state
         crate::invoice::InvoiceStorage::clear_all(env);
 
         //  Step 3: re-register every invoice, rebuilding all indexes
@@ -328,7 +320,7 @@ impl BackupStorage {
             crate::invoice::InvoiceStorage::store_invoice(env, &invoice);
         }
 
-        // Step 4: mark the backup as archived to prevent re-use 
+        // Step 4: mark the backup as archived to prevent re-use
         if let Some(mut backup) = Self::get_backup(env, backup_id) {
             backup.status = BackupStatus::Archived;
             // Ignore the result — the restore itself has already succeeded.
@@ -370,9 +362,7 @@ impl BackupStorage {
         let len = backup_timestamps.len();
         for i in 0..len {
             for j in 0..len - i - 1 {
-                if backup_timestamps.get(j).unwrap().1
-                    > backup_timestamps.get(j + 1).unwrap().1
-                {
+                if backup_timestamps.get(j).unwrap().1 > backup_timestamps.get(j + 1).unwrap().1 {
                     let temp = backup_timestamps.get(j).unwrap().clone();
                     backup_timestamps.set(j, backup_timestamps.get(j + 1).unwrap().clone());
                     backup_timestamps.set(j + 1, temp);
@@ -410,7 +400,6 @@ impl BackupStorage {
 
         Ok(removed_count)
     }
-
 
     /// Retrieve all invoices from storage across all possible statuses.
     ///

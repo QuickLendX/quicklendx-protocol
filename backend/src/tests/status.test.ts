@@ -2,8 +2,11 @@ import request from "supertest";
 import app from "../index";
 import { statusService, StatusService } from "../services/statusService";
 
+const ADMIN_TOKEN = "test-admin-token";
+
 describe("Status API", () => {
   beforeEach(() => {
+    process.env.ADMIN_API_TOKEN = ADMIN_TOKEN;
     // Reset service state before each test
     statusService.setMaintenanceMode(false);
     statusService.updateLastIndexedLedger(100000);
@@ -20,7 +23,10 @@ describe("Status API", () => {
   });
 
   it("should return maintenance status when maintenance mode is enabled", async () => {
-    await request(app).post("/api/admin/maintenance").send({ enabled: true });
+    await request(app)
+      .post("/api/admin/maintenance")
+      .set("Authorization", `Bearer ${ADMIN_TOKEN}`)
+      .send({ enabled: true });
     
     const res = await request(app).get("/api/status");
     expect(res.status).toBe(200);
@@ -41,8 +47,14 @@ describe("Status API", () => {
   it("should return 400 for invalid maintenance toggle", async () => {
     const res = await request(app)
       .post("/api/admin/maintenance")
+      .set("Authorization", `Bearer ${ADMIN_TOKEN}`)
       .send({ enabled: "not-a-boolean" });
     expect(res.status).toBe(400);
+  });
+
+  it("should reject admin maintenance requests without token", async () => {
+    const res = await request(app).post("/api/admin/maintenance").send({ enabled: true });
+    expect(res.status).toBe(401);
   });
 
   it("should use fallback ledger when mock ledger is not set", async () => {
