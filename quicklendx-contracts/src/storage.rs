@@ -553,9 +553,9 @@ fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>
         let next = current.saturating_add(1);
         env.storage()
             .persistent()
-            .set(&Indexes::invoices_by_status(status), &invoices);
+            .set(&StorageKeys::invoice_count(), &next);
+        next
     }
-}
 
 pub fn add_to_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
     let key = Indexes::invoices_by_customer(customer_name);
@@ -613,20 +613,6 @@ pub fn remove_from_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<
         }
     }
     env.storage().persistent().set(&key, &filtered);
-}
-
-/// Get next invoice count
-pub fn next_count(env: &Env) -> u64 {
-    let current: u64 = env
-        .storage()
-        .persistent()
-        .get(&StorageKeys::invoice_count())
-        .unwrap_or(0);
-    let next = current.saturating_add(1);
-    env.storage()
-        .persistent()
-        .set(&StorageKeys::invoice_count(), &next);
-    next
 }
 
 /// Storage operations for bids
