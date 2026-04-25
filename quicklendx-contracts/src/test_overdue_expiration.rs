@@ -304,7 +304,7 @@ fn test_check_invoice_expiration_grace_boundary_exact() {
     let grace = 5 * 24 * 60 * 60; // 5 days
     let deadline = due_date + grace;
 
-    // Exactly at the grace deadline — should NOT default (current <= deadline)
+    // Exactly at the grace deadline - should NOT default (current <= deadline)
     env.ledger().set_timestamp(deadline);
     let result = client.check_invoice_expiration(&invoice_id, &Some(grace));
     assert!(!result);
@@ -313,7 +313,7 @@ fn test_check_invoice_expiration_grace_boundary_exact() {
         InvoiceStatus::Funded
     );
 
-    // One second past the deadline — should default
+    // One second past the deadline - should default
     env.ledger().set_timestamp(deadline + 1);
     let result = client.check_invoice_expiration(&invoice_id, &Some(grace));
     assert!(result);
@@ -344,7 +344,7 @@ fn test_check_invoice_expiration_returns_false_for_non_funded() {
     env.ledger()
         .set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
 
-    // Verified but not funded — check_and_handle_expiration returns false
+    // Verified but not funded - check_and_handle_expiration returns false
     let result = client.check_invoice_expiration(&invoice_id, &None);
     assert!(!result);
 }

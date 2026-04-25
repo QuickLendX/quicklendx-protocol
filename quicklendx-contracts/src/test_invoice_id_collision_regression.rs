@@ -1,4 +1,4 @@
-//! # Invoice ID Collision Prevention — Regression Suite
+//! # Invoice ID Collision Prevention - Regression Suite
 //!
 //! Extends the existing collision regression coverage (issue #821) to ensure
 //! invoice IDs cannot collide or overwrite previous invoices accidentally.
@@ -6,10 +6,10 @@
 //! ## Invoice ID Layout (32 bytes)
 //!
 //! ```text
-//! [0..8]   timestamp  (u64 big-endian) — ledger timestamp at creation
-//! [8..12]  sequence   (u32 big-endian) — ledger sequence number at creation
-//! [12..16] counter    (u32 big-endian) — monotonic per-contract counter
-//! [16..32] reserved   (zeroed)         — future use; must remain 0x00
+//! [0..8]   timestamp  (u64 big-endian) - ledger timestamp at creation
+//! [8..12]  sequence   (u32 big-endian) - ledger sequence number at creation
+//! [12..16] counter    (u32 big-endian) - monotonic per-contract counter
+//! [16..32] reserved   (zeroed)         - future use; must remain 0x00
 //! ```
 //!
 //! ## Security Assumptions
@@ -48,7 +48,7 @@ use soroban_sdk::{
 use crate::QuickLendXContract;
 
 // ============================================================================
-// Helpers — mirror the ID layout documented above
+// Helpers - mirror the ID layout documented above
 // ============================================================================
 
 /// Extract the timestamp segment (bytes 0..8).
@@ -171,7 +171,7 @@ fn counter_segment_encodes_big_endian() {
 // Uniqueness across different ledger slots
 // ============================================================================
 
-/// Same counter value but different timestamps → distinct IDs.
+/// Same counter value but different timestamps -> distinct IDs.
 #[test]
 fn ids_unique_across_different_timestamps() {
     let env = Env::default();
@@ -188,7 +188,7 @@ fn ids_unique_across_different_timestamps() {
     assert_eq!(ctr(&id_t2), 0);
 }
 
-/// Same timestamp but different sequence numbers → distinct IDs.
+/// Same timestamp but different sequence numbers -> distinct IDs.
 #[test]
 fn ids_unique_across_different_sequence_numbers() {
     let env = Env::default();
@@ -278,7 +278,7 @@ fn counter_starts_at_zero_for_fresh_contract() {
 }
 
 // ============================================================================
-// Counter rewind — no overwrite
+// Counter rewind - no overwrite
 // ============================================================================
 
 /// After a counter rewind, the allocator skips the occupied slot and advances.
@@ -293,7 +293,7 @@ fn counter_rewind_skips_occupied_slot() {
     pin(&env, 1_700_000_001, 77);
     let contract = register(&env);
 
-    // Allocation 0: counter=0 → ID with counter segment 0
+    // Allocation 0: counter=0 -> ID with counter segment 0
     let id_0 = expected_id(&env, 0);
     set_counter(&env, &contract, 1); // advance counter
 
@@ -324,7 +324,7 @@ fn multiple_counter_rewinds_skip_all_occupied_slots() {
     let id_2 = expected_id(&env, 2);
     set_counter(&env, &contract, 3);
 
-    // Rewind to 0 — next 3 allocations must skip 0, 1, 2 and use 3, 4, 5
+    // Rewind to 0 - next 3 allocations must skip 0, 1, 2 and use 3, 4, 5
     set_counter(&env, &contract, 0);
 
     let id_3 = expected_id(&env, 3);

@@ -16,7 +16,7 @@ use crate::pagination::{
 use proptest::prelude::*;
 
 // ---------------------------------------------------------------------------
-// Mock investment model — deliberately minimal, no Soroban storage involved.
+// Mock investment model - deliberately minimal, no Soroban storage involved.
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -66,7 +66,7 @@ fn filter_by_status(
 }
 
 // ---------------------------------------------------------------------------
-// 1. Helper determinism — mock dataset is reproducible.
+// 1. Helper determinism - mock dataset is reproducible.
 // ---------------------------------------------------------------------------
 
 /// The mock generator yields the same data on every call, which is a
@@ -155,7 +155,7 @@ fn test_status_filter_then_paginate_size_three() {
     assert!(collected.len() as u32 <= MAX_QUERY_LIMIT);
 }
 
-/// Multi-page status filter — ensures concatenation of all pages of the
+/// Multi-page status filter - ensures concatenation of all pages of the
 /// filtered list equals the original filtered list.
 #[test]
 fn test_multi_page_status_filter_reconstructs_filtered_list() {
@@ -178,7 +178,7 @@ fn test_multi_page_status_filter_reconstructs_filtered_list() {
 /// Filter yielding an empty set still paginates safely.
 #[test]
 fn test_empty_filter_result_yields_empty_page() {
-    // Ten investments → all Active since 10 < 5*2 cycles? Actually build 10:
+    // Ten investments -> all Active since 10 < 5*2 cycles? Actually build 10:
     // indices 0..10 cycle through all 5 statuses twice. To get a truly empty
     // filter, build a tiny dataset of 1 (only Active) and filter for Defaulted.
     let dataset = build_mock_investments(1);
@@ -207,7 +207,7 @@ fn test_u32_max_offset_always_empty() {
 }
 
 /// With 50 investments (< `MAX_QUERY_LIMIT`), `(0, u32::MAX)` returns the full
-/// dataset — the cap does not truncate data that already fits.
+/// dataset - the cap does not truncate data that already fits.
 #[test]
 fn test_u32_max_limit_returns_full_small_collection() {
     let dataset = build_mock_investments(50);
@@ -252,7 +252,7 @@ fn test_cross_consistency_validate_and_bounds_specific() {
 // 6. Boundary clamp: limit is trimmed to the remaining items.
 // ---------------------------------------------------------------------------
 
-/// `(total=250, offset=240, limit=50)` → eff_lim = 10, has_more = false.
+/// `(total=250, offset=240, limit=50)` -> eff_lim = 10, has_more = false.
 #[test]
 fn test_boundary_clamp_trims_effective_limit() {
     let (safe_off, eff_lim, has_more) = validate_pagination_params(240, 50, 250);
@@ -288,7 +288,7 @@ fn test_empty_dataset_always_returns_empty() {
 }
 
 // ---------------------------------------------------------------------------
-// 8. Stability — repeated calls are bitwise identical.
+// 8. Stability - repeated calls are bitwise identical.
 // ---------------------------------------------------------------------------
 
 /// Repeated calls with identical args to the filter + paginate pipeline yield
@@ -304,7 +304,7 @@ fn test_query_is_stable_across_repeated_calls() {
 }
 
 // ---------------------------------------------------------------------------
-// 9. Proptest — status-filter + pagination invariants.
+// 9. Proptest - status-filter + pagination invariants.
 // ---------------------------------------------------------------------------
 
 fn status_strategy() -> impl Strategy<Value = MockInvestmentStatus> {

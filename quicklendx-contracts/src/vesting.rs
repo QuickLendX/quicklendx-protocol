@@ -15,22 +15,17 @@ const VESTING_COUNTER_KEY: Symbol = symbol_short!("vest_cnt");
 const VESTING_KEY: Symbol = symbol_short!("vest");
 
 /// Events emitted by the vesting module.
-#[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum VestingEvent {
-    /// Emitted when a new vesting schedule is created.
-    #[tag(symbol_short!("vest_new"))]
     NewSchedule {
         id: u64,
         beneficiary: Address,
         token: Address,
-        total_amount: i128,
-        start_time: u64,
-        cliff_time: u64,
-        end_time: u64,
+        amount: i128,
+        cliff: u64,
+        start: u64,
+        end: u64,
     },
-    /// Emitted when tokens are released from a vesting schedule.
-    #[tag(symbol_short!("vest_rel"))]
     Released {
         id: u64,
         beneficiary: Address,
@@ -199,15 +194,9 @@ impl Vesting {
         transfer_funds(env, &token, admin, &contract, total_amount)?;
 
         VestingStorage::store(env, &schedule);
-        env.events().publish(&VestingEvent::NewSchedule {
-            id,
-            beneficiary: beneficiary.clone(),
-            token: token.clone(),
-            total_amount,
-            start_time,
-            cliff_time,
-            end_time,
-        },
+        env.events().publish(
+            (symbol_short!("vesting"), symbol_short!("created")),
+            (id, beneficiary.clone(), token.clone(), total_amount, start_time, cliff_time, end_time),
         );
 
         Ok(id)
@@ -296,12 +285,10 @@ impl Vesting {
         Self::validate_schedule_state(&schedule)?;
         VestingStorage::update(env, &schedule);
 
-        env.events().publish(&VestingEvent::Released {
-            id,
-            beneficiary: beneficiary.clone(),
-            token: schedule.token.clone(),
-            amount: releasable,
-        });
+        env.events().publish(
+            (symbol_short!("vesting"), symbol_short!("released")),
+            (id, beneficiary.clone(), schedule.token.clone(), releasable),
+        );
         Ok(releasable)
     }
 }

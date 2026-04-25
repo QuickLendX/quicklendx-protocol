@@ -1,19 +1,17 @@
 #![allow(deprecated)]
 
-use crate::bid::Bid;
+use crate::types::Bid;
 use crate::fees::FeeType;
 use crate::payments::Escrow;
-use crate::profits::PlatformFeeConfig;
-use crate::types::{Invoice, InvoiceMetadata};
+use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::InvestorVerification;
-use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+use soroban_sdk::{contractevent, contracttype, symbol_short, Address, BytesN, Env, String, Symbol};
 
 // ============================================================================
 // Structured Event Types
 // ============================================================================
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceUploaded {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -24,7 +22,6 @@ pub struct InvoiceUploaded {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceVerified {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -32,7 +29,6 @@ pub struct InvoiceVerified {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceCancelled {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -40,7 +36,6 @@ pub struct InvoiceCancelled {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceSettled {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -51,7 +46,6 @@ pub struct InvoiceSettled {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceDefaulted {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -60,7 +54,6 @@ pub struct InvoiceDefaulted {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceExpired {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -68,7 +61,6 @@ pub struct InvoiceExpired {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PartialPayment {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -79,7 +71,6 @@ pub struct PartialPayment {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaymentRecorded {
     pub invoice_id: BytesN<32>,
     pub payer: Address,
@@ -89,7 +80,6 @@ pub struct PaymentRecorded {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceSettledFinal {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -99,7 +89,6 @@ pub struct InvoiceSettledFinal {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidPlaced {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -111,7 +100,6 @@ pub struct BidPlaced {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidAccepted {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -123,7 +111,6 @@ pub struct BidAccepted {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidWithdrawn {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -133,7 +120,6 @@ pub struct BidWithdrawn {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidExpired {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -143,7 +129,6 @@ pub struct BidExpired {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EscrowCreated {
     pub escrow_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -153,7 +138,6 @@ pub struct EscrowCreated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EscrowReleased {
     pub escrow_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -162,7 +146,6 @@ pub struct EscrowReleased {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EscrowRefunded {
     pub escrow_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -171,7 +154,6 @@ pub struct EscrowRefunded {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceMetadataUpdated {
     pub invoice_id: BytesN<32>,
     pub customer_name: String,
@@ -181,14 +163,12 @@ pub struct InvoiceMetadataUpdated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceMetadataCleared {
     pub invoice_id: BytesN<32>,
     pub business: Address,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvestorVerified {
     pub investor: Address,
     pub investment_limit: i128,
@@ -196,7 +176,6 @@ pub struct InvestorVerified {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceFunded {
     pub invoice_id: BytesN<32>,
     pub investor: Address,
@@ -205,7 +184,6 @@ pub struct InvoiceFunded {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InsuranceAdded {
     pub investment_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -217,7 +195,6 @@ pub struct InsuranceAdded {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InsurancePremiumCollected {
     pub investment_id: BytesN<32>,
     pub provider: Address,
@@ -225,7 +202,6 @@ pub struct InsurancePremiumCollected {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InsuranceClaimed {
     pub investment_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -234,7 +210,6 @@ pub struct InsuranceClaimed {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeUpdated {
     pub fee_bps: u32,
     pub updated_at: u64,
@@ -242,7 +217,6 @@ pub struct PlatformFeeUpdated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeeStructureUpdated {
     pub fee_type: FeeType,
     pub old_fee_bps: u32,
@@ -252,7 +226,6 @@ pub struct FeeStructureUpdated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeRouted {
     pub invoice_id: BytesN<32>,
     pub recipient: Address,
@@ -261,7 +234,6 @@ pub struct PlatformFeeRouted {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeConfigUpdated {
     pub old_fee_bps: u32,
     pub new_fee_bps: u32,
@@ -270,7 +242,6 @@ pub struct PlatformFeeConfigUpdated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TreasuryConfigured {
     pub treasury_address: Address,
     pub configured_by: Address,
@@ -278,7 +249,6 @@ pub struct TreasuryConfigured {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupCreated {
     pub backup_id: BytesN<32>,
     pub invoice_count: u32,
@@ -286,7 +256,6 @@ pub struct BackupCreated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupRestored {
     pub backup_id: BytesN<32>,
     pub invoice_count: u32,
@@ -294,7 +263,6 @@ pub struct BackupRestored {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupValidated {
     pub backup_id: BytesN<32>,
     pub success: bool,
@@ -302,14 +270,12 @@ pub struct BackupValidated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupArchived {
     pub backup_id: BytesN<32>,
     pub timestamp: u64,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RetentionPolicyUpdated {
     pub max_backups: u32,
     pub max_age_seconds: u64,
@@ -318,14 +284,12 @@ pub struct RetentionPolicyUpdated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupsCleaned {
     pub removed_count: u32,
     pub timestamp: u64,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuditValidation {
     pub invoice_id: BytesN<32>,
     pub is_valid: bool,
@@ -333,23 +297,20 @@ pub struct AuditValidation {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuditQuery {
     pub query_type: String,
     pub result_count: u32,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceCategoryUpdated {
     pub invoice_id: BytesN<32>,
     pub business: Address,
-    pub old_category: crate::invoice::InvoiceCategory,
-    pub new_category: crate::invoice::InvoiceCategory,
+    pub old_category: crate::types::InvoiceCategory,
+    pub new_category: crate::types::InvoiceCategory,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceTagAdded {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -357,7 +318,6 @@ pub struct InvoiceTagAdded {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceTagRemoved {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -365,7 +325,6 @@ pub struct InvoiceTagRemoved {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisputeCreated {
     pub invoice_id: BytesN<32>,
     pub created_by: Address,
@@ -374,7 +333,6 @@ pub struct DisputeCreated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisputeUnderReview {
     pub invoice_id: BytesN<32>,
     pub reviewed_by: Address,
@@ -382,7 +340,6 @@ pub struct DisputeUnderReview {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisputeResolved {
     pub invoice_id: BytesN<32>,
     pub resolved_by: Address,
@@ -391,7 +348,6 @@ pub struct DisputeResolved {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProfitFeeBreakdown {
     pub invoice_id: BytesN<32>,
     pub investment_amount: i128,
@@ -404,7 +360,6 @@ pub struct ProfitFeeBreakdown {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidTtlUpdated {
     pub old_days: u64,
     pub new_days: u64,
@@ -413,7 +368,6 @@ pub struct BidTtlUpdated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EmergencyWithdrawalInitiated {
     pub token: Address,
     pub amount: i128,
@@ -423,7 +377,6 @@ pub struct EmergencyWithdrawalInitiated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EmergencyWithdrawalExecuted {
     pub token: Address,
     pub amount: i128,
@@ -432,7 +385,6 @@ pub struct EmergencyWithdrawalExecuted {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EmergencyWithdrawalCancelled {
     pub token: Address,
     pub amount: i128,
@@ -441,14 +393,12 @@ pub struct EmergencyWithdrawalCancelled {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminSet {
     pub admin: Address,
     pub timestamp: u64,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminTransferred {
     pub old_admin: Address,
     pub new_admin: Address,
@@ -456,7 +406,6 @@ pub struct AdminTransferred {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RevenueDistributed {
     pub period: u64,
     pub treasury_amount: i128,
@@ -465,20 +414,17 @@ pub struct RevenueDistributed {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceStatusUpdated {
     pub invoice_id: BytesN<32>,
-    pub status: crate::invoice::InvoiceStatus,
+    pub status: crate::types::InvoiceStatus,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminInitialized {
     pub admin: Address,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtocolInitialized {
     pub admin: Address,
     pub treasury: Address,
@@ -558,7 +504,7 @@ pub fn emit_investor_verified(env: &Env, verification: &InvestorVerification) {
 
 pub fn emit_invoice_settled(
     env: &Env,
-    invoice: &crate::invoice::Invoice,
+    invoice: &crate::types::Invoice,
     investor_return: i128,
     platform_fee: i128,
 ) {
@@ -629,7 +575,7 @@ pub fn emit_invoice_settled_final(
     .publish(env);
 }
 
-pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
+pub fn emit_invoice_expired(env: &Env, invoice: &crate::types::Invoice) {
     InvoiceExpired {
         invoice_id: invoice.id.clone(),
         business: invoice.business.clone(),
@@ -638,7 +584,7 @@ pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
     .publish(env);
 }
 
-pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::invoice::Invoice) {
+pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::types::Invoice) {
     InvoiceDefaulted {
         invoice_id: invoice.id.clone(),
         business: invoice.business.clone(),
@@ -983,8 +929,8 @@ pub fn emit_invoice_category_updated(
     env: &Env,
     invoice_id: &BytesN<32>,
     business: &Address,
-    old_category: &crate::invoice::InvoiceCategory,
-    new_category: &crate::invoice::InvoiceCategory,
+    old_category: &crate::types::InvoiceCategory,
+    new_category: &crate::types::InvoiceCategory,
 ) {
     InvoiceCategoryUpdated {
         invoice_id: invoice_id.clone(),
@@ -1162,9 +1108,6 @@ pub fn emit_admin_set(env: &Env, admin: &Address) {
     .publish(env);
 }
 
-pub fn emit_admin_initialized(env: &Env, admin: &Address) {
-    emit_admin_set(env, admin);
-}
 
 pub fn emit_admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
     AdminTransferred {
@@ -1194,7 +1137,7 @@ pub fn emit_revenue_distributed(
 pub fn emit_invoice_status_updated(
     env: &Env,
     invoice_id: BytesN<32>,
-    status: crate::invoice::InvoiceStatus,
+    status: crate::types::InvoiceStatus,
 ) {
     InvoiceStatusUpdated { invoice_id, status }.publish(env);
 }

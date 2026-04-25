@@ -71,11 +71,11 @@ impl QuickLendXContract {
     /// This function enforces a **two-layer authentication policy** to prevent
     /// unauthorized invoice creation and storage-based denial-of-service attacks:
     ///
-    /// 1. **Business signature** — `business.require_auth()` is called first.
+    /// 1. **Business signature** - `business.require_auth()` is called first.
     ///    Only the business address itself may submit an invoice; no third party
     ///    (including the admin) can create invoices on behalf of a business.
     ///
-    /// 2. **Verified KYC** — the business must have a `Verified` KYC record.
+    /// 2. **Verified KYC** - the business must have a `Verified` KYC record.
     ///    - `BusinessNotVerified` (1600) is returned if the business has no KYC
     ///      record or was rejected.
     ///    - `KYCAlreadyPending` (1601) is returned if the KYC application is
@@ -94,11 +94,11 @@ impl QuickLendXContract {
     /// * `due_date`    - Unix timestamp by which the invoice must be settled.
     /// * `description` - Human-readable invoice description.
     /// * `category`    - Invoice category (Services, Products, etc.).
-    /// * `tags`        - Optional searchable tags (max 10, each 1–50 bytes).
+    /// * `tags`        - Optional searchable tags (max 10, each 1-50 bytes).
     ///
     /// # Errors
-    /// * `BusinessNotVerified` (1600) — business has no KYC record or is rejected.
-    /// * `KYCAlreadyPending`   (1601) — business KYC is pending admin review.
+    /// * `BusinessNotVerified` (1600) - business has no KYC record or is rejected.
+    /// * `KYCAlreadyPending`   (1601) - business KYC is pending admin review.
     pub fn store_invoice(
         env: Env,
         business: Address,
@@ -110,7 +110,7 @@ impl QuickLendXContract {
         tags: Vec<soroban_sdk::Bytes>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         // POLICY LAYER 1: Require explicit authorization from the business address.
-        // This ensures only the business itself can create invoices — not the admin,
+        // This ensures only the business itself can create invoices - not the admin,
         // not a third party. Prevents impersonation and unauthorized storage writes.
         business.require_auth();
 

@@ -1,4 +1,4 @@
-use crate::bid::Bid;
+use crate::types::Bid;
 use crate::protocol_limits::{
     check_string_length, MAX_NOTIFICATION_MESSAGE_LENGTH, MAX_NOTIFICATION_TITLE_LENGTH,
 };

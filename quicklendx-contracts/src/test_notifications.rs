@@ -5,7 +5,7 @@
 //! 1. Emits exactly one `notif` event per successful `create_notification` call.
 //! 2. Does **not** emit duplicate events when the same logical action is retried
 //!    (idempotency guard via `NotificationBlocked` on preference-filtered paths).
-//! 3. Never includes sensitive / PII data in any event payload — only opaque
+//! 3. Never includes sensitive / PII data in any event payload - only opaque
 //!    identifiers, addresses, type tags, and priority levels are present.
 //! 4. Emits `n_status` events on every delivery-status transition.
 //! 5. Emits `pref_up` events when user preferences are updated.
@@ -14,7 +14,7 @@
 //! # Security Notes
 //! - Payloads are inspected field-by-field; any `String` value that looks like
 //!   a name, email, phone, or tax-ID causes the test to fail.
-//! - Timestamps originate from `env.ledger().timestamp()` — tamper-proof in Soroban.
+//! - Timestamps originate from `env.ledger().timestamp()` - tamper-proof in Soroban.
 //! - No raw invoice amounts, business names, or free-text messages appear in the
 //!   `notif` event payload (only the notification ID, recipient, type, priority).
 
@@ -163,7 +163,7 @@ fn test_n_notifications_emit_n_events() {
 
 /// When a user has opted out of a notification type, `create_notification`
 /// returns `NotificationBlocked` and emits **zero** `notif` events.
-/// Calling it again (retry) still emits zero events — no duplication.
+/// Calling it again (retry) still emits zero events - no duplication.
 #[test]
 fn test_blocked_notification_emits_no_event_on_retry() {
     let env = Env::default();
@@ -179,7 +179,7 @@ fn test_blocked_notification_emits_no_event_on_retry() {
 
     let before = count_topic(&env, symbol_short!("notif"));
 
-    // First attempt — should be blocked.
+    // First attempt - should be blocked.
     let result1 = NotificationSystem::create_notification(
         &env,
         recipient.clone(),
@@ -194,7 +194,7 @@ fn test_blocked_notification_emits_no_event_on_retry() {
         "expected NotificationBlocked on first attempt"
     );
 
-    // Second attempt (retry) — still blocked.
+    // Second attempt (retry) - still blocked.
     let result2 = NotificationSystem::create_notification(
         &env,
         recipient.clone(),
@@ -218,7 +218,7 @@ fn test_blocked_notification_emits_no_event_on_retry() {
 }
 
 /// Updating preferences twice for the same user emits exactly two `pref_up`
-/// events — one per call, no silent deduplication or extra emissions.
+/// events - one per call, no silent deduplication or extra emissions.
 #[test]
 fn test_preference_update_emits_one_event_per_call() {
     let env = Env::default();
@@ -264,7 +264,7 @@ fn test_notif_payload_contains_no_sensitive_strings() {
     )
     .expect("create_notification failed");
 
-    // Decode the payload — this will panic if the tuple shape is wrong,
+    // Decode the payload - this will panic if the tuple shape is wrong,
     // proving the payload is (id, address, type, priority) and nothing else.
     let (notif_id, emitted_recipient, ntype, priority) = latest_notif_payload(&env);
 
@@ -273,7 +273,7 @@ fn test_notif_payload_contains_no_sensitive_strings() {
     assert_eq!(ntype, NotificationType::BidAccepted);
     assert_eq!(priority, NotificationPriority::High);
 
-    // The notification ID must be a 32-byte opaque hash — not a human-readable string.
+    // The notification ID must be a 32-byte opaque hash - not a human-readable string.
     assert_eq!(notif_id.len(), 32, "notification ID must be 32 bytes");
 
     // Confirm the stored notification has the title/message but the event does not.
@@ -307,7 +307,7 @@ fn test_status_event_payload_contains_no_pii() {
     )
     .expect("status update failed");
 
-    // Decode — panics if shape is wrong, proving no extra fields.
+    // Decode - panics if shape is wrong, proving no extra fields.
     let (emitted_id, emitted_status) = latest_status_payload(&env);
     assert_eq!(emitted_id, notif_id);
     assert_eq!(emitted_status, NotificationDeliveryStatus::Delivered);
@@ -333,7 +333,7 @@ fn test_pref_up_payload_contains_only_address() {
 }
 
 // ============================================================================
-// 4. Status transition events — one per transition
+// 4. Status transition events - one per transition
 // ============================================================================
 
 /// Each call to `update_notification_status` emits exactly one `n_status` event.
@@ -402,7 +402,7 @@ fn test_failed_status_emits_one_event() {
 }
 
 // ============================================================================
-// 5. Preference filtering — blocked types produce no events
+// 5. Preference filtering - blocked types produce no events
 // ============================================================================
 
 /// Disabling every notification type causes all `create_notification` calls
@@ -486,7 +486,7 @@ fn test_below_minimum_priority_emits_no_event() {
 
     let before = count_topic(&env, symbol_short!("notif"));
 
-    // Low priority — should be blocked.
+    // Low priority - should be blocked.
     let result = NotificationSystem::create_notification(
         &env,
         recipient.clone(),
@@ -520,7 +520,7 @@ fn test_at_minimum_priority_emits_event() {
 
     let before = count_topic(&env, symbol_short!("notif"));
 
-    // High priority — should pass.
+    // High priority - should pass.
     create_notif(
         &env,
         &recipient,
@@ -631,7 +631,7 @@ fn test_status_update_on_missing_notification_emits_no_event() {
 }
 
 // ============================================================================
-// 9. Payload determinism — same inputs produce same payload shape
+// 9. Payload determinism - same inputs produce same payload shape
 // ============================================================================
 
 /// Two notifications with the same type and priority (different timestamps)

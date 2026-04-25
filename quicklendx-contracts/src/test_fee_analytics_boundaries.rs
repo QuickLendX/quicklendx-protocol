@@ -29,7 +29,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     (env, client, admin)
 }
 
-// ── Empty state tests ────────────────────────────────────────────────────────
+// -- Empty state tests --------------------------------------------------------
 
 #[test]
 fn analytics_returns_error_for_uninitialized_period() {
@@ -54,7 +54,7 @@ fn analytics_returns_error_for_future_period() {
     assert!(result.is_err());
 }
 
-// ── Period boundary tests via full invoice lifecycle ──────────────────────────
+// -- Period boundary tests via full invoice lifecycle --------------------------
 
 #[test]
 fn analytics_query_returns_consistent_period_field() {
@@ -70,7 +70,7 @@ fn analytics_query_returns_consistent_period_field() {
     assert!(r3.is_err());
 }
 
-// ── Revenue distribution boundary tests ──────────────────────────────────────
+// -- Revenue distribution boundary tests --------------------------------------
 
 #[test]
 fn distribute_revenue_fails_without_config() {
@@ -106,13 +106,13 @@ fn revenue_distribution_requires_minimum_threshold() {
         &1_000_000i128, // high minimum threshold
     );
 
-    // Try to distribute period 4 — should fail since no fees were collected
+    // Try to distribute period 4 - should fail since no fees were collected
     // (pending < min_distribution_amount)
     let result = client.try_distribute_revenue(&admin, &4);
     assert!(result.is_err());
 }
 
-// ── Fee system initialization boundary ───────────────────────────────────────
+// -- Fee system initialization boundary ---------------------------------------
 
 #[test]
 fn fee_system_double_init_fails() {

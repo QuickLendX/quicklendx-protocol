@@ -1,7 +1,6 @@
-//! Protocol limits boundary tests — Issue #826
+//! Protocol limits boundary tests - Issue #826
 //!
 //! Covers: invoice amount bounds, due-date horizon, string/vector limits.
-
 
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
@@ -18,7 +17,7 @@ use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn setup() -> (Env, QuickLendXContractClient<'static\>, Address) {
+fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let id = env.register(QuickLendXContract, ());
@@ -68,6 +67,7 @@ fn store(
 fn test_amount_zero_rejected() {
     let (env, client, _) = setup();
     let b = Address::generate(&env);
+    assert_eq!(
         store(&env, &client, &b, 0, "desc", Vec::new(&env)),
         Err(QuickLendXError::InvalidAmount)
     );
@@ -77,6 +77,7 @@ fn test_amount_zero_rejected() {
 fn test_amount_negative_rejected() {
     let (env, client, _) = setup();
     let b = Address::generate(&env);
+    assert_eq!(
         store(&env, &client, &b, -1, "desc", Vec::new(&env)),
         Err(QuickLendXError::InvalidAmount)
     );
@@ -85,9 +86,9 @@ fn test_amount_negative_rejected() {
 #[test]
 fn test_amount_below_min_rejected() {
     let (env, client, admin) = setup();
-    // Set min to 100
     client.set_protocol_limits(&admin, &100i128, &365u64, &0u64);
     let b = Address::generate(&env);
+    assert_eq!(
         store(&env, &client, &b, 99, "desc", Vec::new(&env)),
         Err(QuickLendXError::InvalidAmount)
     );
@@ -154,7 +155,6 @@ fn test_due_date_at_now_rejected() {
 #[test]
 fn test_due_date_beyond_max_horizon_rejected() {
     let (env, client, admin) = setup();
-    // 1-day horizon
     client.set_protocol_limits(&admin, &10i128, &1u64, &0u64);
     let b = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -175,6 +175,7 @@ fn test_due_date_within_max_horizon_accepted() {
     let b = Address::generate(&env);
     let currency = Address::generate(&env);
     let ok = env.ledger().timestamp() + 86_400;
+    assert!(client.try_store_invoice(
         &b, &10i128, &currency, &ok,
         &String::from_str(&env, "desc"),
         &InvoiceCategory::Services,
@@ -189,6 +190,7 @@ fn test_due_date_exactly_at_max_horizon_accepted() {
     let b = Address::generate(&env);
     let currency = Address::generate(&env);
     let exactly = env.ledger().timestamp() + 730 * 86_400;
+    assert!(client.try_store_invoice(
         &b, &10i128, &currency, &exactly,
         &String::from_str(&env, "desc"),
         &InvoiceCategory::Services,
@@ -203,6 +205,7 @@ fn test_due_date_exactly_at_max_horizon_accepted() {
 #[test]
 fn test_set_limits_min_amount_zero_rejected() {
     let (_, client, admin) = setup();
+    assert_eq!(
         client.try_set_protocol_limits(&admin, &0i128, &365u64, &0u64),
         Err(Ok(QuickLendXError::InvalidAmount))
     );
@@ -211,6 +214,7 @@ fn test_set_limits_min_amount_zero_rejected() {
 #[test]
 fn test_set_limits_min_amount_negative_rejected() {
     let (_, client, admin) = setup();
+    assert_eq!(
         client.try_set_protocol_limits(&admin, &-1i128, &365u64, &0u64),
         Err(Ok(QuickLendXError::InvalidAmount))
     );
@@ -219,6 +223,7 @@ fn test_set_limits_min_amount_negative_rejected() {
 #[test]
 fn test_set_limits_max_due_days_zero_rejected() {
     let (_, client, admin) = setup();
+    assert_eq!(
         client.try_set_protocol_limits(&admin, &10i128, &0u64, &0u64),
         Err(Ok(QuickLendXError::InvoiceDueDateInvalid))
     );
@@ -227,6 +232,7 @@ fn test_set_limits_max_due_days_zero_rejected() {
 #[test]
 fn test_set_limits_max_due_days_731_rejected() {
     let (_, client, admin) = setup();
+    assert_eq!(
         client.try_set_protocol_limits(&admin, &10i128, &731u64, &0u64),
         Err(Ok(QuickLendXError::InvoiceDueDateInvalid))
     );
@@ -241,6 +247,7 @@ fn test_set_limits_max_due_days_730_accepted() {
 #[test]
 fn test_set_limits_grace_period_above_max_rejected() {
     let (_, client, admin) = setup();
+    assert_eq!(
         client.try_set_protocol_limits(&admin, &10i128, &365u64, &2_592_001u64),
         Err(Ok(QuickLendXError::InvalidTimestamp))
     );
@@ -255,7 +262,7 @@ fn test_set_limits_grace_period_at_max_accepted() {
 #[test]
 fn test_set_limits_grace_exceeds_horizon_rejected() {
     let (_, client, admin) = setup();
-    // 1-day horizon, 2-day grace — impossible combination
+    assert_eq!(
         client.try_set_protocol_limits(&admin, &10i128, &1u64, &172_801u64),
         Err(Ok(QuickLendXError::InvalidTimestamp))
     );
@@ -265,6 +272,7 @@ fn test_set_limits_grace_exceeds_horizon_rejected() {
 fn test_set_limits_non_admin_rejected() {
     let (env, client, _) = setup();
     let stranger = Address::generate(&env);
+    assert_eq!(
         client.try_set_protocol_limits(&stranger, &10i128, &365u64, &0u64),
         Err(Ok(QuickLendXError::NotAdmin))
     );
@@ -297,6 +305,7 @@ fn test_description_at_max_length_accepted() {
     let currency = Address::generate(&env);
     let due = env.ledger().timestamp() + 86_400;
     let desc = make_str(&env, MAX_DESCRIPTION_LENGTH as usize);
+    assert!(client.try_store_invoice(
         &b, &10i128, &currency, &due,
         &desc,
         &InvoiceCategory::Services,
@@ -314,8 +323,8 @@ fn test_tag_count_at_limit_accepted() {
     client.set_protocol_limits(&admin, &10i128, &365u64, &0u64);
     let b = Address::generate(&env);
     let mut tags = Vec::new(&env);
-    for i in 0..10u32 {
-        tags.push_back(String::from_str(&env, &format!("tag{}", i)));
+    for tag in &["tag0", "tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9"] {
+        tags.push_back(String::from_str(&env, tag));
     }
     assert!(store(&env, &client, &b, 10, "desc", tags).is_ok());
 }
@@ -326,9 +335,10 @@ fn test_tag_count_above_limit_rejected() {
     client.set_protocol_limits(&admin, &10i128, &365u64, &0u64);
     let b = Address::generate(&env);
     let mut tags = Vec::new(&env);
-    for i in 0..11u32 {
-        tags.push_back(String::from_str(&env, &format!("tag{}", i)));
+    for tag in &["tag0", "tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10"] {
+        tags.push_back(String::from_str(&env, tag));
     }
+    assert_eq!(
         store(&env, &client, &b, 10, "desc", tags),
         Err(QuickLendXError::TagLimitExceeded)
     );
@@ -405,7 +415,6 @@ fn test_kyc_data_above_max_rejected() {
 
 #[test]
 fn test_kyc_data_empty_accepted() {
-    // Empty KYC is allowed at the string-length level (business logic may differ)
     let (env, client, _) = setup();
     let b = Address::generate(&env);
     assert!(client.try_submit_kyc_application(&b, &String::from_str(&env, "")).is_ok());
@@ -530,6 +539,7 @@ fn test_check_string_length_at_limit_ok() {
 fn test_check_string_length_above_limit_err() {
     let env = Env::default();
     let s = make_str(&env, 51);
+    assert_eq!(
         check_string_length(&s, 50),
         Err(QuickLendXError::InvalidDescription)
     );
@@ -588,8 +598,9 @@ fn test_limits_update_takes_effect_immediately() {
     let b = Address::generate(&env);
     assert!(store(&env, &client, &b, 10, "desc", Vec::new(&env)).is_ok());
 
-    // Raise min to 1000 — now 10 is rejected
+    // Raise min to 1000 - now 10 is rejected
     client.set_protocol_limits(&admin, &1000i128, &365u64, &0u64);
+    assert_eq!(
         store(&env, &client, &b, 10, "desc", Vec::new(&env)),
         Err(QuickLendXError::InvalidAmount)
     );
