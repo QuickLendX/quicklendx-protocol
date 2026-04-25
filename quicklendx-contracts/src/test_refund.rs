@@ -290,7 +290,10 @@ fn test_refund_updates_internal_states_correctly() {
     // 3. Bid status should update to Cancelled
     let bids = client.get_bids_for_invoice(&invoice_id);
     assert_eq!(bids.len(), 1);
-    assert_eq!(bids.get(0).unwrap().status, crate::bid::BidStatus::Cancelled);
+    assert_eq!(
+        bids.get(0).unwrap().status,
+        crate::bid::BidStatus::Cancelled
+    );
 
     // 4. Investment status should update to Refunded
     env.as_contract(&client.address, || {
@@ -411,7 +414,10 @@ fn test_refund_succeeds_after_balance_restored() {
 
     // Second refund attempt succeeds.
     let result = client.try_refund_escrow_funds(&invoice_id, &business);
-    assert!(result.is_ok(), "refund should succeed after balance restored");
+    assert!(
+        result.is_ok(),
+        "refund should succeed after balance restored"
+    );
 
     // Investor received funds.
     assert_eq!(
