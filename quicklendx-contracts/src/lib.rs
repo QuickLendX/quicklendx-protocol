@@ -2743,6 +2743,19 @@ impl QuickLendXContract {
         audit::AuditStorage::get_audit_entry(&env, &audit_id)
     }
 
+    /// Get all audit entry IDs for a given operation type.
+    pub fn get_audit_entries_by_operation(
+        env: Env,
+        operation: audit::AuditOperation,
+    ) -> Vec<BytesN<32>> {
+        audit::AuditStorage::get_audit_entries_by_operation(&env, &operation)
+    }
+
+    /// Get all audit entry IDs attributed to a given actor address.
+    pub fn get_audit_entries_by_actor(env: Env, actor: Address) -> Vec<BytesN<32>> {
+        audit::AuditStorage::get_audit_entries_by_actor(&env, &actor)
+    }
+
     pub fn query_audit_logs(
         env: Env,
         filter: audit::AuditQueryFilter,
