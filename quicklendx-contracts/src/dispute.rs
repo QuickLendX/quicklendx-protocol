@@ -1,9 +1,7 @@
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::invoice::{Dispute, DisputeStatus, InvoiceStatus, InvoiceStorage};
-use crate::protocol_limits::{
-    MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
-};
+use crate::protocol_limits::*;
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
 fn dispute_index_key() -> soroban_sdk::Symbol {
@@ -31,7 +29,6 @@ fn zero_address(env: &Env) -> Address {
         "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
     )
 }
-
 fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> {
     Ok(())
 }

@@ -1149,6 +1149,10 @@ pub fn emit_admin_set(env: &Env, admin: &Address) {
     .publish(env);
 }
 
+pub fn emit_admin_initialized(env: &Env, admin: &Address) {
+    emit_admin_set(env, admin);
+}
+
 pub fn emit_admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
     AdminTransferred {
         old_admin: old_admin.clone(),

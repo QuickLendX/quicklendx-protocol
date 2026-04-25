@@ -29,8 +29,9 @@
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 // Removed ToString import; not needed in Soroban environment.
 
+use crate::invoice::{Invoice, InvoiceStatus};
 use crate::profits::PlatformFeeConfig;
-use crate::types::{Bid, BidStatus, Investment, InvestmentStatus, Invoice, InvoiceStatus};
+use crate::types::{Bid, BidStatus, Investment, InvestmentStatus};
 
 /// Storage keys for the contract
 pub struct StorageKeys;
@@ -317,11 +318,239 @@ fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>
     }
 }
 
-/// Remove invoice from status index
-fn remove_from_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
-    let mut invoices = Self::get_by_status(env, status.clone());
-    if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
-        invoices.remove(pos as u32);
+    pub fn store_invoice(env: &Env, invoice: &Invoice) {
+        Self::store(env, invoice);
+    }
+
+    pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
+        Self::get(env, invoice_id)
+    }
+
+    pub fn update_invoice(env: &Env, invoice: &Invoice) {
+        Self::update(env, invoice);
+    }
+
+    pub fn get_invoices_by_status(env: &Env, status: &InvoiceStatus) -> Vec<BytesN<32>> {
+        Self::get_by_status(env, status.clone())
+    }
+
+    pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
+        Self::get_by_business(env, business)
+    }
+
+    pub fn add_category_index(
+        _env: &Env,
+        _category: &crate::invoice::InvoiceCategory,
+        _invoice_id: &BytesN<32>,
+    ) {
+    }
+
+    pub fn remove_category_index(
+        _env: &Env,
+        _category: &crate::invoice::InvoiceCategory,
+        _invoice_id: &BytesN<32>,
+    ) {
+    }
+
+    pub fn add_tag_index(_env: &Env, _tag: &String, _invoice_id: &BytesN<32>) {}
+
+    pub fn remove_tag_index(_env: &Env, _tag: &String, _invoice_id: &BytesN<32>) {}
+
+    pub fn add_metadata_indexes(env: &Env, invoice: &Invoice) {
+        if let Some(metadata) = invoice.metadata() {
+            Self::add_to_customer_index(env, &metadata.customer_name, &invoice.id);
+            Self::add_to_tax_id_index(env, &metadata.tax_id, &invoice.id);
+        }
+    }
+
+    pub fn remove_metadata_indexes(
+        env: &Env,
+        metadata: &crate::invoice::InvoiceMetadata,
+        invoice_id: &BytesN<32>,
+    ) {
+        Self::remove_from_customer_index(env, &metadata.customer_name, invoice_id);
+        Self::remove_from_tax_id_index(env, &metadata.tax_id, invoice_id);
+    }
+
+    pub fn add_to_status_invoices(env: &Env, status: &InvoiceStatus, invoice_id: &BytesN<32>) {
+        Self::add_to_status_index(env, status.clone(), invoice_id);
+    }
+
+    pub fn remove_from_status_invoices(env: &Env, status: &InvoiceStatus, invoice_id: &BytesN<32>) {
+        Self::remove_from_status_index(env, status.clone(), invoice_id);
+    }
+
+    pub fn get_invoices_by_customer(env: &Env, customer_name: &String) -> Vec<BytesN<32>> {
+        env.storage()
+            .persistent()
+            .get(&Indexes::invoices_by_customer(customer_name))
+            .unwrap_or(Vec::new(env))
+    }
+
+    pub fn get_invoices_by_tax_id(env: &Env, tax_id: &String) -> Vec<BytesN<32>> {
+        env.storage()
+            .persistent()
+            .get(&Indexes::invoices_by_tax_id(tax_id))
+            .unwrap_or(Vec::new(env))
+    }
+
+    pub fn get_invoices_by_category(
+        env: &Env,
+        category: &crate::invoice::InvoiceCategory,
+    ) -> Vec<BytesN<32>> {
+        let mut matches = Vec::new(env);
+        for invoice_id in Self::get_all_invoice_ids(env).iter() {
+            if let Some(invoice) = Self::get(env, &invoice_id) {
+                if invoice.category == *category {
+                    matches.push_back(invoice_id);
+                }
+            }
+        }
+        matches
+    }
+
+    pub fn get_invoices_by_category_and_status(
+        env: &Env,
+        category: &crate::invoice::InvoiceCategory,
+        status: &InvoiceStatus,
+    ) -> Vec<BytesN<32>> {
+        let mut matches = Vec::new(env);
+        for invoice_id in Self::get_by_status(env, status.clone()).iter() {
+            if let Some(invoice) = Self::get(env, &invoice_id) {
+                if invoice.category == *category {
+                    matches.push_back(invoice_id);
+                }
+            }
+        }
+        matches
+    }
+
+    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
+        let mut matches = Vec::new(env);
+        for invoice_id in Self::get_all_invoice_ids(env).iter() {
+            if let Some(invoice) = Self::get(env, &invoice_id) {
+                if invoice.has_tag(tag.clone()) {
+                    matches.push_back(invoice_id);
+                }
+            }
+        }
+        matches
+    }
+
+    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
+        let mut matches = Vec::new(env);
+        'invoice: for invoice_id in Self::get_all_invoice_ids(env).iter() {
+            if let Some(invoice) = Self::get(env, &invoice_id) {
+                for tag in tags.iter() {
+                    if !invoice.has_tag(tag.clone()) {
+                        continue 'invoice;
+                    }
+                }
+                matches.push_back(invoice_id);
+            }
+        }
+        matches
+    }
+
+    pub fn get_all_categories(env: &Env) -> Vec<crate::invoice::InvoiceCategory> {
+        use crate::invoice::InvoiceCategory::*;
+        Vec::from_array(
+            env,
+            [
+                Services,
+                Products,
+                Consulting,
+                Manufacturing,
+                Technology,
+                Healthcare,
+                Other,
+            ],
+        )
+    }
+
+    pub fn get_invoice_count_by_category(
+        env: &Env,
+        category: &crate::invoice::InvoiceCategory,
+    ) -> u32 {
+        Self::get_invoices_by_category(env, category).len()
+    }
+
+    pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
+        Self::get_invoices_by_tag(env, tag).len()
+    }
+
+    pub fn get_invoices_with_rating_above(env: &Env, threshold: u32) -> Vec<BytesN<32>> {
+        let mut matches = Vec::new(env);
+        for invoice_id in Self::get_all_invoice_ids(env).iter() {
+            if let Some(invoice) = Self::get(env, &invoice_id) {
+                if invoice
+                    .average_rating
+                    .map_or(false, |rating| rating > threshold)
+                {
+                    matches.push_back(invoice_id);
+                }
+            }
+        }
+        matches
+    }
+
+    pub fn get_invoices_with_ratings_count(env: &Env) -> u32 {
+        let mut count = 0u32;
+        for invoice_id in Self::get_all_invoice_ids(env).iter() {
+            if let Some(invoice) = Self::get(env, &invoice_id) {
+                if invoice.total_ratings > 0 {
+                    count = count.saturating_add(1);
+                }
+            }
+        }
+        count
+    }
+
+    pub fn clear_all(env: &Env) {
+        StorageManager::clear_all_mappings(env);
+    }
+
+    pub fn count_active_business_invoices(env: &Env, business: &Address) -> u32 {
+        let mut count = 0u32;
+        for invoice_id in Self::get_by_business(env, business).iter() {
+            if let Some(invoice) = Self::get(env, &invoice_id) {
+                if crate::protocol_limits::is_active_status(&invoice.status) {
+                    count = count.saturating_add(1);
+                }
+            }
+        }
+        count
+    }
+
+    fn get_all_invoice_ids(env: &Env) -> Vec<BytesN<32>> {
+        let mut all = Vec::new(env);
+        let statuses = [
+            InvoiceStatus::Pending,
+            InvoiceStatus::Verified,
+            InvoiceStatus::Funded,
+            InvoiceStatus::Paid,
+            InvoiceStatus::Defaulted,
+            InvoiceStatus::Cancelled,
+            InvoiceStatus::Refunded,
+        ];
+        for status in statuses {
+            for invoice_id in Self::get_by_status(env, status).iter() {
+                if !all.contains(&invoice_id) {
+                    all.push_back(invoice_id);
+                }
+            }
+        }
+        all
+    }
+
+    /// Get next invoice count
+    pub fn next_count(env: &Env) -> u64 {
+        let current: u64 = env
+            .storage()
+            .persistent()
+            .get(&StorageKeys::invoice_count())
+            .unwrap_or(0);
+        let next = current.saturating_add(1);
         env.storage()
             .persistent()
             .set(&Indexes::invoices_by_status(status), &invoices);
