@@ -29,7 +29,7 @@
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 // Removed ToString import; not needed in Soroban environment.
 
-use crate::invoice::{Invoice, InvoiceStatus};
+use crate::invoice::{DisputeStatus, Invoice, InvoiceStatus};
 use crate::profits::PlatformFeeConfig;
 use crate::types::{Bid, BidStatus, Investment, InvestmentStatus};
 
@@ -155,6 +155,20 @@ impl Indexes {
     /// Index: invoices by tax_id
     pub fn invoices_by_tax_id(tax_id: &soroban_sdk::String) -> (Symbol, soroban_sdk::String) {
         (symbol_short!("inv_taxid"), tax_id.clone())
+    }
+
+    /// Index: invoices by dispute status.
+    ///
+    /// This symbolic index namespace is reserved for dispute lifecycle lookups
+    /// and keeps dispute-query keys separate from invoice-status keys.
+    pub fn invoices_by_dispute_status(status: DisputeStatus) -> (Symbol, Symbol) {
+        let status_symbol = match status {
+            DisputeStatus::None => symbol_short!("dsp_none"),
+            DisputeStatus::Disputed => symbol_short!("dsp_open"),
+            DisputeStatus::UnderReview => symbol_short!("dsp_rev"),
+            DisputeStatus::Resolved => symbol_short!("dsp_res"),
+        };
+        (symbol_short!("inv_dsp"), status_symbol)
     }
 }
 
