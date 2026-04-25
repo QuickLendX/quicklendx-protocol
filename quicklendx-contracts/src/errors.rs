@@ -107,6 +107,7 @@ pub enum QuickLendXError {
     /// Write operations are blocked until maintenance ends.
     /// Query the maintenance reason via `get_maintenance_reason`.
     MaintenanceModeActive = 2201,
+    DuplicateDefaultTransition = 2202,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -189,6 +190,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::EmergencyWithdrawInsufficientBalance => symbol_short!("EMG_BAL"),
             QuickLendXError::TokenTransferFailed => symbol_short!("TKN_FAIL"),
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
+            QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
         }
     }
 }
