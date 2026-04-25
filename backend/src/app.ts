@@ -6,6 +6,7 @@ import { loadSheddingMiddleware } from "./middleware/load-shedding";
 import { errorHandler } from "./middleware/error-handler";
 import { statusInjector } from "./middleware/status-injector";
 import v1Routes from "./routes/v1";
+import webhookRoutes from "./routes/webhooks";
 
 const app = express();
 
@@ -32,6 +33,8 @@ app.use(rateLimitMiddleware);
 app.use(statusInjector);
 
 // Routes
+app.use("/api/webhooks", cors(webhookCorsOptions), webhookRoutes);
+app.use(csrfMiddleware);
 app.use("/api/v1", v1Routes);
 
 // Health check (root level as well if needed)
