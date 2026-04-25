@@ -9,6 +9,11 @@ use crate::protocol_limits::{
 use crate::types::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
+/// Maximum normalized tags allowed on an invoice.
+pub const MAX_INVOICE_TAG_COUNT: u32 = 10;
+/// Maximum line items allowed in structured invoice metadata.
+pub const MAX_METADATA_LINE_ITEMS: u32 = 100;
+
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
@@ -1028,7 +1033,7 @@ pub fn validate_invoice_category(
 /// - `TagLimitExceeded` (1801): more than 10 tags supplied.
 /// - `InvalidTag` (1800): a tag is empty/too long after normalization, or is a duplicate.
 pub fn validate_invoice_tags(env: &Env, tags: &Vec<String>) -> Result<(), QuickLendXError> {
-    if tags.len() > 10 {
+    if tags.len() > MAX_INVOICE_TAG_COUNT {
         return Err(QuickLendXError::TagLimitExceeded);
     }
 
@@ -1459,6 +1464,9 @@ pub fn validate_invoice_metadata(
     check_string_length(&metadata.notes, MAX_NOTES_LENGTH)?;
 
     if metadata.line_items.len() == 0 {
+        return Err(QuickLendXError::InvalidDescription);
+    }
+    if metadata.line_items.len() > MAX_METADATA_LINE_ITEMS {
         return Err(QuickLendXError::InvalidDescription);
     }
 
