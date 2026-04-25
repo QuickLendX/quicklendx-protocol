@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Dispute, DisputeStatus } from "../../types/contract";
+import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
 
 const MOCK_DISPUTES: Dispute[] = [
   {
@@ -25,6 +26,9 @@ export const getDisputes = async (
       filtered = filtered.filter((d) => d.invoice_id === invoice_id);
     }
 
+    // Disputes must never be served from cache: status has legal/compliance
+    // implications and must always reflect the current on-chain state.
+    applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body: filtered });
     res.json(filtered);
   } catch (error) {
     next(error);

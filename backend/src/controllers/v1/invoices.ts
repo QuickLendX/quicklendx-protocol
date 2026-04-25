@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../../types/contract";
+import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
 
 // Mock data aligned with contract types
 const MOCK_INVOICES: Invoice[] = [
@@ -49,6 +50,10 @@ export const getInvoices = async (
       filtered = filtered.filter((i) => i.status === status);
     }
 
+    if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body: filtered })) {
+      res.status(304).end();
+      return;
+    }
     res.json(filtered);
   } catch (error) {
     next(error);
@@ -73,6 +78,10 @@ export const getInvoiceById = async (
       });
     }
 
+    if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body: invoice })) {
+      res.status(304).end();
+      return;
+    }
     res.json(invoice);
   } catch (error) {
     next(error);

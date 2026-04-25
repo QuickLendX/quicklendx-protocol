@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Settlement, SettlementStatus } from "../../types/contract";
+import { applyCacheHeaders, CC_LONG } from "../../middleware/cache-headers";
 
 const MOCK_SETTLEMENTS: Settlement[] = [
   {
@@ -26,6 +27,10 @@ export const getSettlements = async (
       filtered = filtered.filter((s) => s.invoice_id === invoice_id);
     }
 
+    if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body: filtered })) {
+      res.status(304).end();
+      return;
+    }
     res.json(filtered);
   } catch (error) {
     next(error);
@@ -50,6 +55,10 @@ export const getSettlementById = async (
       });
     }
 
+    if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body: settlement })) {
+      res.status(304).end();
+      return;
+    }
     res.json(settlement);
   } catch (error) {
     next(error);
