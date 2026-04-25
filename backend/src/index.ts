@@ -1,6 +1,9 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { getAdminContext, requireAdminRoles } from "./middleware/rbac";
+import { adminControlService } from "./services/adminControlService";
+import { auditLogService } from "./services/auditLogService";
 import { statusService } from "./services/statusService";
 import { requireAdminAuth, getAdminActor } from "./middleware/adminAuth";
 import { backfillService, BackfillError } from "./services/backfillService";
