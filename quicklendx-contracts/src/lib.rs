@@ -88,6 +88,8 @@ mod test_string_limits;
 mod test_types;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_vesting;
+#[cfg(test)]
+mod test_notifications;
 pub mod types;
 pub use invoice::{InvoiceCategory, InvoiceStatus};
 mod verification;
