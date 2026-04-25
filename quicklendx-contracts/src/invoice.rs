@@ -938,6 +938,7 @@ impl InvoiceStorage {
             InvoiceStatus::Paid,
             InvoiceStatus::Defaulted,
             InvoiceStatus::Cancelled,
+            InvoiceStatus::Refunded,
         ] {
             let ids = Self::get_invoices_by_status(env, &status);
             for id in ids.iter() {
@@ -949,8 +950,8 @@ impl InvoiceStorage {
                 InvoiceStatus::Funded => symbol_short!("funded"),
                 InvoiceStatus::Paid => symbol_short!("paid"),
                 InvoiceStatus::Defaulted => symbol_short!("default"),
-                InvoiceStatus::Cancelled => symbol_short!("cancel"),
-                InvoiceStatus::Refunded => symbol_short!("refunded"),
+                InvoiceStatus::Cancelled => symbol_short!("canceld"),
+                InvoiceStatus::Refunded => symbol_short!("refundd"),
             };
             env.storage().instance().remove(&key);
         }
