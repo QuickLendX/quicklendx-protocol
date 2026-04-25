@@ -6,7 +6,7 @@ This is the backend API service skeleton for the QuickLendX protocol. It provide
 
 - **Contract-Aware**: Schemas and types are aligned with the Soroban smart contracts (`Invoice`, `Bid`, `Investment`).
 - **OpenAPI 3.0**: Fully documented API with explicit versioning (`v1`).
-- **Security**: 
+- **Security**:
   - Helmet for secure HTTP headers.
   - Rate limiting to prevent DDoS.
   - Centralized safe error handling.
@@ -71,3 +71,13 @@ The OpenAPI spec is located in `openapi.yaml`. You can view it using any Swagger
 - **Auth Model**: Initial skeleton uses a Bearer token placeholder in the middleware. Production implementation should integrate with Soroban wallet signatures or JWT.
 - **Rate Limits**: Configured for 100 requests per minute per IP.
 - **Error Handling**: Internal errors are masked in production; only safe messages and codes are returned.
+
+## RBAC
+
+The backend now separates privileged duties across three explicit admin roles:
+
+- `support`: read-only troubleshooting access
+- `operations_admin`: maintenance and backfill operations
+- `super_admin`: dangerous configuration changes and full admin access
+
+See [docs/rbac.md](docs/rbac.md) for the authorization matrix, environment variables, audit logging behavior, and security notes.

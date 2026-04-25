@@ -3,7 +3,7 @@ import { Bid, BidStatus } from "../../types/contract";
 import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
 
 const MOCK_BIDS: Bid[] = [
-  {
+  labelRecord<Omit<Bid, "contract_version" | "event_schema_version" | "indexed_at">>({
     bid_id: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
     invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     investor: "GA...ABC",
@@ -12,7 +12,7 @@ const MOCK_BIDS: Bid[] = [
     timestamp: Math.floor(Date.now() / 1000) - 3600,
     status: BidStatus.Placed,
     expiration_timestamp: Math.floor(Date.now() / 1000) + 86400,
-  },
+  }),
 ];
 
 export const getBids = async (
@@ -35,6 +35,7 @@ export const getBids = async (
     // every new placement and serving stale data could mislead investors.
     applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body: filtered });
     res.json(filtered);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }
