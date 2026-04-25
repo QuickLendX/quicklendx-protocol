@@ -101,6 +101,15 @@ pub struct Bid {
 }
 
 impl Bid {
+    /// @notice Returns whether a bid is expired at `current_timestamp`.
+    /// @dev Expiration is evaluated with a strict comparison:
+    ///      `current_timestamp > expiration_timestamp`.
+    ///      This means a bid is still valid at the exact expiry timestamp and
+    ///      becomes expired starting from the next second. All cleanup and
+    ///      acceptance paths rely on this same predicate to avoid off-by-one
+    ///      divergence across call sites.
+    /// @param current_timestamp Current ledger timestamp.
+    /// @return true when the bid has moved strictly past its expiry boundary.
     pub fn is_expired(&self, current_timestamp: u64) -> bool {
         current_timestamp > self.expiration_timestamp
     }
