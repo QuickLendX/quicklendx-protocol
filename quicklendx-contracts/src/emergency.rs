@@ -102,7 +102,7 @@ impl EmergencyWithdraw {
         amount: i128,
         target: Address,
     ) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin_auth(env, admin)?;
+        AdminStorage::require_admin(env, admin)?;
 
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -137,17 +137,13 @@ impl EmergencyWithdraw {
         env.storage()
             .instance()
             .set(&PENDING_WITHDRAWAL_KEY, &pending);
-        env.events().publish(
-            (symbol_short!("emg_init"),),
-            (
-                token,
-                amount,
-                target,
-                unlock_at,
-                expires_at,
-                nonce,
-                admin.clone(),
-            ),
+        crate::events::emit_emergency_withdrawal_initiated(
+            env,
+            token,
+            amount,
+            target,
+            unlock_at,
+            admin.clone(),
         );
 
         Ok(())
@@ -173,7 +169,7 @@ impl EmergencyWithdraw {
     /// * `EmergencyWithdrawCancelled` if withdrawal was cancelled
     /// * Transfer errors (e.g. `InsufficientFunds`) if contract balance is insufficient
     pub fn execute(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin_auth(env, admin)?;
+        AdminStorage::require_admin(env, admin)?;
 
         let pending: PendingEmergencyWithdrawal = env
             .storage()
@@ -205,15 +201,12 @@ impl EmergencyWithdraw {
         )?;
 
         env.storage().instance().remove(&PENDING_WITHDRAWAL_KEY);
-        env.events().publish(
-            (symbol_short!("emg_exec"),),
-            (
-                pending.token.clone(),
-                pending.amount,
-                pending.target.clone(),
-                pending.nonce,
-                admin.clone(),
-            ),
+        crate::events::emit_emergency_withdrawal_executed(
+            env,
+            pending.token.clone(),
+            pending.amount,
+            pending.target.clone(),
+            admin.clone(),
         );
 
         Ok(())
@@ -243,7 +236,7 @@ impl EmergencyWithdraw {
     /// * `EmergencyWithdrawNotFound` if no pending withdrawal exists
     /// * `EmergencyWithdrawCancelled` if withdrawal is already cancelled
     pub fn cancel(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin_auth(env, admin)?;
+        AdminStorage::require_admin(env, admin)?;
 
         let mut pending: PendingEmergencyWithdrawal = env
             .storage()
@@ -265,15 +258,12 @@ impl EmergencyWithdraw {
             .instance()
             .set(&PENDING_WITHDRAWAL_KEY, &pending);
 
-        env.events().publish(
-            (symbol_short!("emg_cncl"),),
-            (
-                pending.token.clone(),
-                pending.amount,
-                pending.target.clone(),
-                pending.nonce,
-                admin.clone(),
-            ),
+        crate::events::emit_emergency_withdrawal_cancelled(
+            env,
+            pending.token.clone(),
+            pending.amount,
+            pending.target.clone(),
+            admin.clone(),
         );
 
         Ok(())

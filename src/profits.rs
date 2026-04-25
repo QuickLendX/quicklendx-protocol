@@ -1,23 +1,23 @@
-/// # Profits Module
-///
-/// Computes investor return metrics and platform revenue in the QuickLendX
-/// protocol.
-///
-/// ## Return Metrics
-///
-/// | Metric              | Formula                                                   |
-/// |---------------------|-----------------------------------------------------------|
-/// | Gross Profit        | `payout − funded_amount`                                  |
-/// | Net Profit          | `gross_profit − investor_fees`                            |
-/// | Return on Investment| `net_profit * BPS_DENOMINATOR / funded_amount` (in bps)  |
-/// | Platform Revenue    | `sum(protocol_fees)`                                      |
-///
-/// ## Safety
-///
-/// All arithmetic is checked. Division is guarded against zero divisors.
-/// ROI is expressed in basis points to avoid floating-point; callers can
-/// convert: `roi_bps / 100` gives percent with two-decimal precision.
-
+//! # Profits Module
+//!
+//! Computes investor return metrics and platform revenue in the QuickLendX
+//! protocol.
+//!
+//! ## Return Metrics
+//!
+//! | Metric              | Formula                                                   |
+//! |---------------------|-----------------------------------------------------------|
+//! | Gross Profit        | `payout − funded_amount`                                  |
+//! | Net Profit          | `gross_profit − investor_fees`                            |
+//! | Return on Investment| `net_profit * BPS_DENOMINATOR / funded_amount` (in bps)  |
+//! | Platform Revenue    | `sum(protocol_fees)`                                      |
+//!
+//! ## Safety
+//!
+//! All arithmetic is checked. Division is guarded against zero divisors.
+//! ROI is expressed in basis points to avoid floating-point; callers can
+//! convert: `roi_bps / 100` gives percent with two-decimal precision.
+//!
 /// Basis-point denominator (10_000 = 100%).
 pub const BPS_DENOMINATOR: u128 = 10_000;
 
@@ -82,8 +82,7 @@ pub fn return_on_investment_bps(
         return None;
     }
     let np = net_profit(investor_payout, funded_amount, investor_fees)?;
-    np.checked_mul(BPS_DENOMINATOR)?
-        .checked_div(funded_amount)
+    np.checked_mul(BPS_DENOMINATOR)?.checked_div(funded_amount)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

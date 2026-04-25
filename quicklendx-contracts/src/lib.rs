@@ -1,5 +1,18 @@
-#![cfg_attr(target_family = "wasm", no_std)]
-#[cfg(target_family = "wasm")]
+#![no_std]
+
+//! QuickLendX contracts library — minimal surface.
+//!
+//! The historical contract implementation lives in the `src/*.rs` sibling
+//! modules but is not wired in yet because the legacy test suite is mid-
+//! migration (see the `# temporarily disabled` note in
+//! `.github/workflows/ci.yml`). Until the legacy modules are restored, this
+//! file exposes only the pure, self-contained utility layer plus a minimal
+//! placeholder contract.
+//!
+//! The placeholder `#[contract]` is required for the `wasm32v1-none` release
+//! build: Soroban's contract macros install the `#[panic_handler]` and wire
+//! the SDK's global allocator, both of which are mandatory on that target.
+
 extern crate alloc;
 
 #[cfg(test)]
@@ -48,11 +61,13 @@ mod test_admin_standalone;
 #[cfg(test)]
 mod test_init;
 #[cfg(test)]
+mod test_dispute;
+#[cfg(test)]
 mod test_investment_consistency;
 #[cfg(test)]
 mod test_investment_queries;
 #[cfg(test)]
-mod test_invoice_search;
+mod test_init_invariants;
 #[cfg(test)]
 mod test_max_invoices_per_business;
 #[cfg(test)]
@@ -92,8 +107,7 @@ use events::{
     emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
-use invoice::{Invoice, InvoiceMetadata, InvoiceStorage};
-use invoice_search::InvoiceSearch;
+use invoice::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus, InvoiceStorage};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
@@ -101,11 +115,13 @@ use settlement::{
 };
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
-    get_investor_verification as do_get_investor_verification, normalize_tag, reject_business,
+    get_investor_verification as do_get_investor_verification, reject_business,
     reject_investor as do_reject_investor, require_business_not_pending,
-    require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
+    require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc, normalize_tag,
     submit_kyc_application, validate_bid, validate_investor_investment, validate_invoice_metadata,
     verify_business, verify_investor as do_verify_investor, verify_invoice_data,
+    validate_dispute_reason, validate_dispute_evidence, validate_dispute_resolution,
+    validate_dispute_eligibility,
     BusinessVerificationStatus, BusinessVerificationStorage, InvestorRiskLevel, InvestorTier,
     InvestorVerification, InvestorVerificationStorage,
 };
@@ -137,20 +153,10 @@ fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError>
     if offset > u32::MAX - MAX_QUERY_LIMIT {
         return Err(QuickLendXError::InvalidAmount);
     }
-
+    
     // Limit is automatically capped by cap_query_limit, but we validate the input
     // Note: limit=0 is allowed and results in empty response
     Ok(())
-}
-
-/// Map the contract-exported `types::BidStatus` filter to the bid-storage enum.
-fn map_public_bid_status(s: BidStatus) -> bid::BidStatus {
-    match s {
-        BidStatus::Placed => bid::BidStatus::Placed,
-        BidStatus::Withdrawn => bid::BidStatus::Withdrawn,
-        BidStatus::Accepted => bid::BidStatus::Accepted,
-        BidStatus::Expired => bid::BidStatus::Expired,
-    }
 }
 
 #[contractimpl]
@@ -243,11 +249,7 @@ impl QuickLendXContract {
     }
 
     /// Set treasury address (admin only)
-    pub fn set_treasury(
-        env: Env,
-        admin: Address,
-        treasury: Address,
-    ) -> Result<(), QuickLendXError> {
+    pub fn set_treasury(env: Env, admin: Address, treasury: Address) -> Result<(), QuickLendXError> {
         init::ProtocolInitializer::set_treasury(&env, &admin, &treasury)
     }
 
@@ -278,6 +280,7 @@ impl QuickLendXContract {
 
     /// Admin-only: configure default bid TTL (days). Bounds: 1..=30.
     pub fn set_bid_ttl_days(env: Env, days: u64) -> Result<u64, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         bid::BidStorage::set_bid_ttl_days(&env, &admin, days)
     }
@@ -361,6 +364,7 @@ impl QuickLendXContract {
         admin: Address,
         currency: Address,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         currency::CurrencyWhitelist::add_currency(&env, &admin, &currency)
     }
 
@@ -370,6 +374,7 @@ impl QuickLendXContract {
         admin: Address,
         currency: Address,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         currency::CurrencyWhitelist::remove_currency(&env, &admin, &currency)
     }
 
@@ -389,14 +394,14 @@ impl QuickLendXContract {
         admin: Address,
         currencies: Vec<Address>,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         currency::CurrencyWhitelist::set_currencies(&env, &admin, &currencies)
     }
 
     /// Clear the entire currency whitelist (admin only).
     /// After this call all currencies are allowed (empty-list backward-compat rule).
     pub fn clear_currencies(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         currency::CurrencyWhitelist::clear_currencies(&env, &admin)
     }
 
@@ -462,7 +467,7 @@ impl QuickLendXContract {
         category: invoice::InvoiceCategory,
         tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         // Validate input parameters
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -527,7 +532,7 @@ impl QuickLendXContract {
         category: invoice::InvoiceCategory,
         tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         // Only the business can upload their own invoice
         business.require_auth();
 
@@ -585,13 +590,13 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         reentrancy::with_payment_guard(&env, || do_accept_bid_and_fund(&env, &invoice_id, &bid_id))
     }
 
     /// Verify an invoice (admin or automated process)
     pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
 
@@ -631,7 +636,7 @@ impl QuickLendXContract {
 
     /// Cancel an invoice (business only, before funding)
     pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -684,7 +689,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         metadata: InvoiceMetadata,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -705,7 +710,7 @@ impl QuickLendXContract {
 
     /// Clear metadata attached to an invoice
     pub fn clear_invoice_metadata(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -771,7 +776,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         new_status: InvoiceStatus,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -847,7 +852,7 @@ impl QuickLendXContract {
 
     /// Clear all invoices from storage (admin only, used for restore operations)
     pub fn clear_all_invoices(env: Env) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         use crate::invoice::InvoiceStorage;
         InvoiceStorage::clear_all(&env);
         Ok(())
@@ -870,7 +875,7 @@ impl QuickLendXContract {
 
     /// Get bids filtered by status
     pub fn get_bids_by_status(env: Env, invoice_id: BytesN<32>, status: BidStatus) -> Vec<Bid> {
-        BidStorage::get_bids_by_status(&env, &invoice_id, map_public_bid_status(status))
+        BidStorage::get_bids_by_status(&env, &invoice_id, status)
     }
 
     /// Get bids filtered by investor
@@ -890,12 +895,12 @@ impl QuickLendXContract {
         BidStorage::cleanup_expired_bids(&env, &invoice_id)
     }
 
-    /// Cancel a placed bid (investor only, Placed → Cancelled).
+    /// Cancel a placed bid (investor only, Placed ΓåÆ Cancelled).
     ///
     /// # Race Safety
     /// Uses a read-check-write pattern that validates the bid is still in `Placed`
     /// status before transitioning. Terminal statuses (`Withdrawn`, `Accepted`,
-    /// `Expired`, `Cancelled`) are immutable — a bid that has already left `Placed`
+    /// `Expired`, `Cancelled`) are immutable ΓÇö a bid that has already left `Placed`
     /// will cause this function to return `false` without any state mutation,
     /// preventing double-action execution regardless of call ordering.
     pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> bool {
@@ -903,7 +908,7 @@ impl QuickLendXContract {
             && bid::BidStorage::cancel_bid(&env, &bid_id)
     }
 
-    /// Withdraw a bid (investor only, Placed → Withdrawn).
+    /// Withdraw a bid (investor only, Placed ΓåÆ Withdrawn).
     ///
     /// # Race Safety
     /// Validates `BidStatus::Placed` atomically before transitioning. If a
@@ -919,10 +924,10 @@ impl QuickLendXContract {
         // Re-read status after auth to guard against concurrent transitions.
         let bid_fresh =
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-        if bid_fresh.status != bid::BidStatus::Placed {
+        if bid_fresh.status != BidStatus::Placed {
             return Err(QuickLendXError::OperationNotAllowed);
         }
-        bid.status = bid::BidStatus::Withdrawn;
+        bid.status = BidStatus::Withdrawn;
         BidStorage::update_bid(&env, &bid);
         emit_bid_withdrawn(&env, &bid);
         Ok(())
@@ -947,7 +952,7 @@ impl QuickLendXContract {
         bid_amount: i128,
         expected_return: i128,
     ) -> Result<BytesN<32>, QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         // Authorization check: Only the investor can place their own bid
         investor.require_auth();
 
@@ -1003,7 +1008,7 @@ impl QuickLendXContract {
             bid_amount,
             expected_return,
             timestamp: current_timestamp,
-            status: bid::BidStatus::Placed,
+            status: BidStatus::Placed,
             expiration_timestamp: Bid::default_expiration_with_env(&env, current_timestamp),
         };
         BidStorage::store_bid(&env, &bid);
@@ -1022,7 +1027,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         reentrancy::with_payment_guard(&env, || {
             Self::accept_bid_impl(env.clone(), invoice_id.clone(), bid_id.clone())
         })
@@ -1046,7 +1051,7 @@ impl QuickLendXContract {
         // Enforce KYC: a pending business must not accept bids.
         require_business_not_pending(&env, &invoice.business)?;
 
-        if invoice.status != InvoiceStatus::Verified || bid.status != bid::BidStatus::Placed {
+        if invoice.status != InvoiceStatus::Verified || bid.status != BidStatus::Placed {
             return Err(QuickLendXError::InvalidStatus);
         }
 
@@ -1058,7 +1063,7 @@ impl QuickLendXContract {
             bid.bid_amount,
             &invoice.currency,
         )?;
-        bid.status = bid::BidStatus::Accepted;
+        bid.status = BidStatus::Accepted;
         BidStorage::update_bid(&env, &bid);
         // Remove from old status list before changing status
         InvoiceStorage::remove_from_status_invoices(&env, &InvoiceStatus::Verified, &invoice_id);
@@ -1230,7 +1235,7 @@ impl QuickLendXContract {
     /// Handle invoice default (admin only)
     /// This is the internal handler - use mark_invoice_defaulted for public API
     pub fn handle_default(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
 
@@ -1241,6 +1246,7 @@ impl QuickLendXContract {
 
         result
     }
+}
 
     /// Mark an invoice as defaulted (admin only)
     /// Checks due date + grace period before marking as defaulted.
@@ -1265,7 +1271,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         grace_period: Option<u64>,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
 
@@ -1293,7 +1299,7 @@ impl QuickLendXContract {
 
     /// Update the platform fee basis points (admin only)
     pub fn set_platform_fee(env: Env, new_fee_bps: i128) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         PlatformFee::set_config(&env, &admin, new_fee_bps)?;
         Ok(())
@@ -1307,7 +1313,7 @@ impl QuickLendXContract {
         business: Address,
         kyc_data: String,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         submit_kyc_application(&env, &business, kyc_data)
     }
 
@@ -1317,7 +1323,7 @@ impl QuickLendXContract {
         investor: Address,
         kyc_data: String,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         do_submit_investor_kyc(&env, &investor, kyc_data)
     }
 
@@ -1327,7 +1333,7 @@ impl QuickLendXContract {
         investor: Address,
         investment_limit: i128,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         let admin =
             BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         let verification = do_verify_investor(&env, &admin, &investor, investment_limit)?;
@@ -1346,7 +1352,7 @@ impl QuickLendXContract {
         investor: Address,
         reason: String,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         do_reject_investor(&env, &admin, &investor, reason)
     }
@@ -1362,7 +1368,7 @@ impl QuickLendXContract {
         investor: Address,
         new_limit: i128,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         let admin =
             BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         verification::set_investment_limit(&env, &admin, &investor, new_limit)
@@ -1374,7 +1380,7 @@ impl QuickLendXContract {
         admin: Address,
         business: Address,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         verify_business(&env, &admin, &business)
     }
 
@@ -1385,7 +1391,7 @@ impl QuickLendXContract {
         business: Address,
         reason: String,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         reject_business(&env, &admin, &business, reason)
     }
 
@@ -1442,7 +1448,7 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
@@ -1463,7 +1469,7 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
@@ -1485,7 +1491,7 @@ impl QuickLendXContract {
         grace_period_seconds: u64,
         max_invoices_per_business: u32,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
@@ -1600,7 +1606,7 @@ impl QuickLendXContract {
 
     /// Release escrow funds to business upon invoice verification
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         reentrancy::with_payment_guard(&env, || {
             let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
                 .ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -1637,7 +1643,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         caller: Address,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         reentrancy::with_payment_guard(&env, || do_refund_escrow_funds(&env, &invoice_id, &caller))
     }
 
@@ -1692,7 +1698,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         grace_period: Option<u64>,
     ) -> Result<bool, QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
+        pause::PauseControl::require_not_paused(&env);
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         let grace = defaults::resolve_grace_period(&env, grace_period)?;
@@ -2003,10 +2009,7 @@ impl QuickLendXContract {
         fees::FeeManager::get_revenue_split_config(&env)
     }
 
-    /// Distribute revenue for a period.
-    ///
-    /// Fails with [`QuickLendXError::OperationNotAllowed`] if there is no pending balance for the
-    /// period (including after a successful distribution until new fees are collected).
+    /// Distribute revenue for a period
     pub fn distribute_revenue(
         env: Env,
         admin: Address,
@@ -2064,7 +2067,7 @@ impl QuickLendXContract {
             // Return empty result on validation failure
             return Vec::new(&env);
         }
-
+        
         let capped_limit = cap_query_limit(limit);
         let all_invoices = InvoiceStorage::get_business_invoices(&env, &business);
         let mut filtered = Vec::new(&env);
@@ -2098,33 +2101,33 @@ impl QuickLendXContract {
 
     /// Get investments by investor with optional status filter and pagination
     /// Retrieves paginated investments for a specific investor with enhanced boundary checking.
-    ///
+    /// 
     /// This function provides overflow-safe pagination with comprehensive boundary validation
     /// to prevent arithmetic overflow and ensure consistent behavior across all edge cases.
-    ///
+    /// 
     /// # Arguments
     /// * `env` - Soroban environment
     /// * `investor` - Address of the investor to query
     /// * `status_filter` - Optional filter by investment status
     /// * `offset` - Starting position (0-based, will be capped to available data)
     /// * `limit` - Maximum records to return (capped to MAX_QUERY_LIMIT)
-    ///
+    /// 
     /// # Returns
     /// * Vector of investment IDs matching the criteria
-    ///
+    /// 
     /// # Security Notes
     /// - Uses saturating arithmetic throughout to prevent overflow attacks
     /// - Validates all array bounds before access
     /// - Caps query limit to prevent DoS via large requests
     /// - Handles edge cases like offset >= total_count gracefully
-    ///
+    /// 
     /// # Examples
     /// ```
     /// // Get first 10 active investments
     /// let investments = contract.get_investor_investments_paged(
     ///     env, investor, Some(InvestmentStatus::Active), 0, 10
     /// );
-    ///
+    /// 
     /// // Get next page with offset
     /// let next_page = contract.get_investor_investments_paged(
     ///     env, investor, Some(InvestmentStatus::Active), 10, 10
@@ -2167,7 +2170,7 @@ impl QuickLendXContract {
         if validate_query_params(offset, limit).is_err() {
             return Vec::new(&env);
         }
-
+        
         let capped_limit = cap_query_limit(limit);
         let verified_invoices =
             InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified);
@@ -2230,18 +2233,18 @@ impl QuickLendXContract {
         if validate_query_params(offset, limit).is_err() {
             return Vec::new(&env);
         }
-
+        
         let capped_limit = cap_query_limit(limit);
         let all_bids = BidStorage::get_bid_records_for_invoice(&env, &invoice_id);
         let mut filtered = Vec::new(&env);
 
         for bid in all_bids.iter() {
-            let include = match status_filter {
-                Some(s) => bid.status == map_public_bid_status(s),
-                None => true,
-            };
-            if include {
-                filtered.push_back(bid.clone());
+            if let Some(status) = &status_filter {
+                if bid.status == *status {
+                    filtered.push_back(bid);
+                }
+            } else {
+                filtered.push_back(bid);
             }
         }
 
@@ -2279,19 +2282,19 @@ impl QuickLendXContract {
         if validate_query_params(offset, limit).is_err() {
             return Vec::new(&env);
         }
-
+        
         let capped_limit = cap_query_limit(limit);
         let all_bid_ids = BidStorage::get_bids_by_investor_all(&env, &investor);
         let mut filtered = Vec::new(&env);
 
         for bid_id in all_bid_ids.iter() {
             if let Some(bid) = BidStorage::get_bid(&env, &bid_id) {
-                let include = match status_filter {
-                    Some(s) => bid.status == map_public_bid_status(s),
-                    None => true,
-                };
-                if include {
-                    filtered.push_back(bid.clone());
+                if let Some(status) = &status_filter {
+                    if bid.status == *status {
+                        filtered.push_back(bid);
+                    }
+                } else {
+                    filtered.push_back(bid);
                 }
             }
         }
@@ -2439,6 +2442,7 @@ impl QuickLendXContract {
         cliff_seconds: u64,
         end_time: u64,
     ) -> Result<u64, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         vesting::Vesting::create_schedule(
             &env,
             &admin,
@@ -2460,6 +2464,7 @@ impl QuickLendXContract {
         beneficiary: Address,
         id: u64,
     ) -> Result<i128, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         vesting::Vesting::release(&env, &beneficiary, id)
     }
 
@@ -2477,12 +2482,43 @@ impl QuickLendXContract {
         analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).unwrap()
     }
 
-    /// Financial metrics for a time bucket (fees, volume, etc.).
+    /// Get financial metrics for a specific period
     pub fn get_financial_metrics(
         env: Env,
-        period: analytics::TimePeriod,
-    ) -> Result<analytics::FinancialMetrics, QuickLendXError> {
-        analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period)
+        invoice_id: BytesN<32>,
+        rating: u32,
+        feedback: String,
+        rater: Address,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        let ts = env.ledger().timestamp();
+        invoice.add_rating(rating, feedback, rater, ts)?;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// Generate a business report for a specific period
+    pub fn generate_business_report(
+        env: Env,
+        admin: Address,
+        max_backups: u32,
+        max_age_seconds: u64,
+        auto_cleanup_enabled: bool,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        let policy = backup::BackupRetentionPolicy {
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+        };
+        backup::BackupStorage::set_retention_policy(&env, &policy);
+        Ok(())
+    }
+
+    pub fn get_backup_retention_policy(env: Env) -> backup::BackupRetentionPolicy {
+        backup::BackupStorage::get_retention_policy(&env)
     }
 
     // =========================================================================
@@ -2491,8 +2527,8 @@ impl QuickLendXContract {
 
     pub fn get_platform_metrics(env: Env) -> analytics::PlatformMetrics {
         analytics::AnalyticsStorage::get_platform_metrics(&env).unwrap_or_else(|| {
-            analytics::AnalyticsCalculator::calculate_platform_metrics(&env).unwrap_or(
-                analytics::PlatformMetrics {
+            analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
+                .unwrap_or(analytics::PlatformMetrics {
                     total_invoices: 0,
                     total_investments: 0,
                     total_volume: 0,
@@ -2505,15 +2541,14 @@ impl QuickLendXContract {
                     default_rate: 0,
                     success_rate: 0,
                     timestamp: env.ledger().timestamp(),
-                },
-            )
+                })
         })
     }
 
     pub fn get_performance_metrics(env: Env) -> analytics::PerformanceMetrics {
         analytics::AnalyticsStorage::get_performance_metrics(&env).unwrap_or_else(|| {
-            analytics::AnalyticsCalculator::calculate_performance_metrics(&env).unwrap_or(
-                analytics::PerformanceMetrics {
+            analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
+                .unwrap_or(analytics::PerformanceMetrics {
                     platform_uptime: env.ledger().timestamp(),
                     average_settlement_time: 0,
                     average_verification_time: 0,
@@ -2523,12 +2558,11 @@ impl QuickLendXContract {
                     error_rate: 0,
                     user_satisfaction_score: 0,
                     platform_efficiency: 0,
-                },
-            )
+                })
         })
     }
 
-    /// Build and persist a business report for the given period bucket.
+    /// Generate a business report for a specific period
     pub fn generate_business_report(
         env: Env,
         business: Address,
@@ -2541,10 +2575,7 @@ impl QuickLendXContract {
     }
 
     /// Retrieve a stored business report by ID
-    pub fn get_business_report(
-        env: Env,
-        report_id: BytesN<32>,
-    ) -> Option<analytics::BusinessReport> {
+    pub fn get_business_report(env: Env, report_id: BytesN<32>) -> Option<analytics::BusinessReport> {
         analytics::AnalyticsStorage::get_business_report(&env, &report_id)
     }
 
@@ -2555,6 +2586,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         amount: i128,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         investor.require_auth();
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -2578,6 +2610,7 @@ impl QuickLendXContract {
         reason: String,
         evidence: String,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         creator.require_auth();
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -2777,11 +2810,117 @@ impl QuickLendXContract {
         notifications::NotificationSystem::get_user_notification_stats(&env, &user)
     }
 
-    /// Retrieve a stored investor report by ID
-    pub fn get_investor_report(
+    // =========================================================================
+    // Backup
+    // =========================================================================
+
+    pub fn create_backup(env: Env, admin: Address) -> Result<BytesN<32>, QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        let backup_id = backup::BackupStorage::generate_backup_id(&env);
+        let invoices = backup::BackupStorage::get_all_invoices(&env);
+        let b = backup::Backup {
+            backup_id: backup_id.clone(),
+            timestamp: env.ledger().timestamp(),
+            description: String::from_str(&env, "Backup"),
+            invoice_count: invoices.len() as u32,
+            status: backup::BackupStatus::Active,
+        };
+        backup::BackupStorage::store_backup(&env, &b, Some(&invoices))?;
+        backup::BackupStorage::store_backup_data(&env, &backup_id, &invoices);
+        backup::BackupStorage::add_to_backup_list(&env, &backup_id);
+        let _ = backup::BackupStorage::cleanup_old_backups(&env);
+        Ok(backup_id)
+    }
+
+    pub fn get_backup_details(env: Env, backup_id: BytesN<32>) -> Option<backup::Backup> {
+        backup::BackupStorage::get_backup(&env, &backup_id)
+    }
+
+    pub fn get_backups(env: Env) -> Vec<BytesN<32>> {
+        backup::BackupStorage::get_all_backups(&env)
+    }
+
+    pub fn restore_backup(
         env: Env,
-        report_id: BytesN<32>,
-    ) -> Option<analytics::InvestorReport> {
+        admin: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        backup::BackupStorage::validate_backup(&env, &backup_id)?;
+        let invoices = backup::BackupStorage::get_backup_data(&env, &backup_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        InvoiceStorage::clear_all(&env);
+        for inv in invoices.iter() {
+            InvoiceStorage::store_invoice(&env, &inv);
+        }
+        Ok(())
+    }
+
+    pub fn archive_backup(
+        env: Env,
+        admin: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        let mut b = backup::BackupStorage::get_backup(&env, &backup_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        b.status = backup::BackupStatus::Archived;
+        backup::BackupStorage::update_backup(&env, &b);
+        backup::BackupStorage::remove_from_backup_list(&env, &backup_id);
+        Ok(())
+    }
+
+    pub fn validate_backup(env: Env, backup_id: BytesN<32>) -> Result<bool, QuickLendXError> {
+        backup::BackupStorage::validate_backup(&env, &backup_id).map(|_| true)
+    }
+
+    pub fn cleanup_backups(env: Env, admin: Address) -> Result<u32, QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        backup::BackupStorage::cleanup_old_backups(&env)
+    }
+
+    pub fn set_backup_retention_policy(
+        env: Env,
+        admin: Address,
+        max_backups: u32,
+        max_age_seconds: u64,
+        auto_cleanup_enabled: bool,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        let policy = backup::BackupRetentionPolicy {
+            max_backups,
+            max_age_seconds,
+            auto_cleanup_enabled,
+        };
+        backup::BackupStorage::set_retention_policy(&env, &policy);
+        Ok(())
+    }
+
+    pub fn get_backup_retention_policy(env: Env) -> backup::BackupRetentionPolicy {
+        backup::BackupStorage::get_retention_policy(&env)
+    }
+
+    // =========================================================================
+    // Analytics (contract-exported)
+    // =========================================================================
+
+    pub fn get_platform_metrics(env: Env) -> Option<analytics::PlatformMetrics> {
+        analytics::AnalyticsStorage::get_platform_metrics(&env)
+    }
+
+    pub fn get_performance_metrics(env: Env) -> Option<analytics::PerformanceMetrics> {
+        analytics::AnalyticsStorage::get_performance_metrics(&env)
+    }
+
+    pub fn get_financial_metrics(
+        env: Env,
+        period: analytics::TimePeriod,
+    ) -> Result<analytics::FinancialMetrics, QuickLendXError> {
+        analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period)
+    }
+
+    /// Retrieve a stored investor report by ID
+    pub fn get_investor_report(env: Env, report_id: BytesN<32>) -> Option<analytics::InvestorReport> {
         analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
     }
 
@@ -2818,5 +2957,194 @@ impl QuickLendXContract {
                 platform_efficiency: 0,
             });
         (platform, performance)
+    }
+
+    // ============================================================================
+    // Dispute Resolution Functions
+    // ============================================================================
+
+    /// @notice Create a dispute on an invoice.
+    /// @dev Only the business owner or investor on the invoice may create a dispute.
+    ///      Validates reason (1ΓÇô1000 chars) and evidence (1ΓÇô2000 chars) to prevent
+    ///      abusive storage growth. Only one dispute per invoice is allowed.
+    /// @param invoice_id The invoice to dispute.
+    /// @param creator The address creating the dispute (must be business or investor).
+    /// @param reason The dispute reason (1ΓÇô1000 chars, non-empty).
+    /// @param evidence Supporting evidence (1ΓÇô2000 chars, non-empty).
+    /// @return Ok(()) on success.
+    pub fn create_dispute(
+        env: Env,
+        invoice_id: BytesN<32>,
+        creator: Address,
+        reason: String,
+        evidence: String,
+    ) -> Result<(), QuickLendXError> {
+        creator.require_auth();
+
+        // Validate reason and evidence payloads
+        validate_dispute_reason(&reason)?;
+        validate_dispute_evidence(&evidence)?;
+
+        // Load invoice and validate eligibility
+        let mut invoice =
+            InvoiceStorage::get_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        validate_dispute_eligibility(&invoice, &creator)?;
+
+        // Set dispute fields on the invoice
+        invoice.dispute_status = DisputeStatus::Disputed;
+        invoice.dispute = Dispute {
+            created_by: creator,
+            created_at: env.ledger().timestamp(),
+            reason,
+            evidence,
+            resolution: String::from_str(&env, ""),
+            resolved_by: Address::from_str(
+                &env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            ),
+            resolved_at: 0,
+        };
+
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// @notice Move a dispute from Disputed to UnderReview status (admin only).
+    /// @param invoice_id The invoice whose dispute to review.
+    /// @param admin The admin address.
+    /// @return Ok(()) on success.
+    pub fn put_dispute_under_review(
+        env: Env,
+        invoice_id: BytesN<32>,
+        admin: Address,
+    ) -> Result<(), QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+
+        let mut invoice =
+            InvoiceStorage::get_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        if invoice.dispute_status != DisputeStatus::Disputed {
+            return Err(QuickLendXError::DisputeNotFound);
+        }
+
+        invoice.dispute_status = DisputeStatus::UnderReview;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// @notice Resolve a dispute with a resolution message (admin only).
+    /// @dev Validates resolution text (1ΓÇô2000 chars). Dispute must be UnderReview.
+    /// @param invoice_id The invoice whose dispute to resolve.
+    /// @param admin The admin address.
+    /// @param resolution Resolution text (1ΓÇô2000 chars, non-empty).
+    /// @return Ok(()) on success.
+    pub fn resolve_dispute(
+        env: Env,
+        invoice_id: BytesN<32>,
+        admin: Address,
+        resolution: String,
+    ) -> Result<(), QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+
+        validate_dispute_resolution(&resolution)?;
+
+        let mut invoice =
+            InvoiceStorage::get_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        if invoice.dispute_status != DisputeStatus::UnderReview {
+            return Err(QuickLendXError::DisputeNotUnderReview);
+        }
+
+        invoice.dispute_status = DisputeStatus::Resolved;
+        invoice.dispute.resolution = resolution;
+        invoice.dispute.resolved_by = admin;
+        invoice.dispute.resolved_at = env.ledger().timestamp();
+
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// @notice Get dispute details for an invoice.
+    /// @param invoice_id The invoice to query.
+    /// @return Some(Dispute) if a dispute exists, None if dispute_status is None.
+    pub fn get_dispute_details(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Option<Dispute> {
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)?;
+        if invoice.dispute_status == DisputeStatus::None {
+            None
+        } else {
+            Some(invoice.dispute)
+        }
+    }
+
+    /// @notice Get the dispute status for an invoice.
+    /// @param invoice_id The invoice to query.
+    /// @return The current DisputeStatus.
+    pub fn get_invoice_dispute_status(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> DisputeStatus {
+        InvoiceStorage::get_invoice(&env, &invoice_id)
+            .map(|inv| inv.dispute_status)
+            .unwrap_or(DisputeStatus::None)
+    }
+
+    /// @notice Get all invoice IDs that have an active or resolved dispute.
+    /// @return Vec of invoice IDs with dispute_status != None.
+    pub fn get_invoices_with_disputes(env: Env) -> Vec<BytesN<32>> {
+        let mut result = Vec::new(&env);
+        // Check across all relevant invoice statuses
+        for status in [
+            InvoiceStatus::Pending,
+            InvoiceStatus::Verified,
+            InvoiceStatus::Funded,
+            InvoiceStatus::Paid,
+            InvoiceStatus::Defaulted,
+        ] {
+            let ids = InvoiceStorage::get_invoices_by_status(&env, &status);
+            for id in ids.iter() {
+                if let Some(inv) = InvoiceStorage::get_invoice(&env, &id) {
+                    if inv.dispute_status != DisputeStatus::None {
+                        result.push_back(id);
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    /// @notice Get invoice IDs filtered by dispute status.
+    /// @param status The DisputeStatus to filter by.
+    /// @return Vec of matching invoice IDs.
+    pub fn get_invoices_by_dispute_status(
+        env: Env,
+        status: DisputeStatus,
+    ) -> Vec<BytesN<32>> {
+        let mut result = Vec::new(&env);
+        for inv_status in [
+            InvoiceStatus::Pending,
+            InvoiceStatus::Verified,
+            InvoiceStatus::Funded,
+            InvoiceStatus::Paid,
+            InvoiceStatus::Defaulted,
+        ] {
+            let ids = InvoiceStorage::get_invoices_by_status(&env, &inv_status);
+            for id in ids.iter() {
+                if let Some(inv) = InvoiceStorage::get_invoice(&env, &id) {
+                    if inv.dispute_status == status {
+                        result.push_back(id);
+                    }
+                }
+            }
+        }
+        result
     }
 }

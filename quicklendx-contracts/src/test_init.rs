@@ -464,9 +464,9 @@ mod test_init {
         let params = create_valid_params(&env);
 
         // Should panic without authorization
-        let result = std::panic::catch_unwind(|| {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             client.initialize(&params);
-        });
+        }));
         assert!(result.is_err(), "Initialization without auth must fail");
     }
 
@@ -498,7 +498,7 @@ mod test_init {
         let (env, client, _params) = setup_initialized();
         let non_admin = Address::generate(&env);
 
-        let result = client.try_set_protocol_config(&non_admin, 1_000_000, 365, 604800);
+        let result = client.try_set_protocol_config(&non_admin, &1_000_000i128, &365u64, &604800u64);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::NotAdmin)),
@@ -511,7 +511,7 @@ mod test_init {
         let (env, client, params) = setup_initialized();
 
         // Test invalid min amount
-        let result = client.try_set_protocol_config(&params.admin, 0, 365, 604800);
+        let result = client.try_set_protocol_config(&params.admin, &0i128, &365u64, &604800u64);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::InvalidAmount)),
@@ -519,7 +519,7 @@ mod test_init {
         );
 
         // Test invalid max days
-        let result = client.try_set_protocol_config(&params.admin, 1_000_000, 0, 604800);
+        let result = client.try_set_protocol_config(&params.admin, &1_000_000i128, &0u64, &604800u64);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::InvoiceDueDateInvalid)),
@@ -527,7 +527,7 @@ mod test_init {
         );
 
         // Test invalid grace period
-        let result = client.try_set_protocol_config(&params.admin, 1_000_000, 365, 3_000_000);
+        let result = client.try_set_protocol_config(&params.admin, &1_000_000i128, &365u64, &3_000_000u64);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::InvalidTimestamp)),
@@ -539,7 +539,7 @@ mod test_init {
     fn test_set_protocol_config_emits_event() {
         let (env, client, params) = setup_initialized();
 
-        client.set_protocol_config(&params.admin, 2_000_000, 180, 86400);
+        client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64);
 
         let events = env.events().all();
         let config_events: Vec<_> = events
@@ -554,7 +554,7 @@ mod test_init {
     fn test_set_fee_config_succeeds() {
         let (env, client, params) = setup_initialized();
 
-        let result = client.try_set_fee_config(&params.admin, 300); // 3%
+        let result = client.try_set_fee_config(&params.admin, &300u32); // 3%
         assert!(result.is_ok(), "Fee config update must succeed");
 
         assert_eq!(client.get_fee_bps(), 300, "Fee must be updated");
@@ -564,7 +564,7 @@ mod test_init {
     fn test_set_fee_config_validates_fee() {
         let (env, client, params) = setup_initialized();
 
-        let result = client.try_set_fee_config(&params.admin, 1001); // > 10%
+        let result = client.try_set_fee_config(&params.admin, &1001u32); // > 10%
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::InvalidFeeBasisPoints)),
@@ -576,7 +576,7 @@ mod test_init {
     fn test_set_fee_config_zero_allowed() {
         let (env, client, params) = setup_initialized();
 
-        let result = client.try_set_fee_config(&params.admin, 0);
+        let result = client.try_set_fee_config(&params.admin, &0u32);
         assert!(result.is_ok(), "Zero fee must be allowed");
         assert_eq!(client.get_fee_bps(), 0);
     }
@@ -763,7 +763,7 @@ mod test_init {
         assert_eq!(client.get_current_admin(), Some(params.admin.clone()));
 
         // 4. Update configurations
-        client.set_protocol_config(&params.admin, 2_000_000, 180, 86400);
+        client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64);
         client.set_fee_config(&params.admin, 300);
 
         let new_treasury = Address::generate(&env);
@@ -814,7 +814,7 @@ mod test_init {
         client.initialize(&params);
 
         // Update configs
-        client.set_protocol_config(&params.admin, 2_000_000, 180, 86400);
+        client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64);
         client.set_fee_config(&params.admin, 300);
 
         let new_treasury = Address::generate(&env);
@@ -844,5 +844,65 @@ mod test_init {
         assert_eq!(config_events.len(), 1, "Must have one config event");
         assert_eq!(fee_events.len(), 1, "Must have one fee event");
         assert_eq!(treasury_events.len(), 1, "Must have one treasury event");
+    }
+
+    // ============================================================================
+    // 13. Version Consistency Tests
+    // ============================================================================
+
+    #[test]
+    fn test_get_version_before_init_returns_constant() {
+        let (_env, client) = setup();
+        assert_eq!(
+            client.get_version(),
+            crate::init::PROTOCOL_VERSION,
+            "get_version must return PROTOCOL_VERSION constant before init"
+        );
+    }
+
+    #[test]
+    fn test_get_version_after_init_matches_constant() {
+        let (_env, client, _params) = setup_initialized();
+        assert_eq!(
+            client.get_version(),
+            crate::init::PROTOCOL_VERSION,
+            "get_version must equal PROTOCOL_VERSION after init"
+        );
+    }
+
+    #[test]
+    fn test_get_version_stored_in_instance_storage() {
+        let (env, _client, _params) = setup_initialized();
+        assert_eq!(
+            crate::init::ProtocolInitializer::get_version(&env),
+            crate::init::PROTOCOL_VERSION,
+            "Stored version must match PROTOCOL_VERSION"
+        );
+    }
+
+    #[test]
+    fn test_get_version_consistent_before_and_after_init() {
+        let (env, client) = setup();
+        let before = client.get_version();
+        let params = create_valid_params(&env);
+        client.initialize(&params);
+        let after = client.get_version();
+        assert_eq!(
+            before, after,
+            "Version must be the same before and after init"
+        );
+    }
+
+    #[test]
+    fn test_reinit_does_not_change_version() {
+        let (_env, client, params) = setup_initialized();
+        let v1 = client.get_version();
+        // Idempotent re-init with same params must not alter version
+        let _ = client.try_initialize(&params);
+        assert_eq!(
+            client.get_version(),
+            v1,
+            "Version must not change on idempotent re-init"
+        );
     }
 }

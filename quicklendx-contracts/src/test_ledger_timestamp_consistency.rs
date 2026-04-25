@@ -29,6 +29,7 @@
 
 #![cfg(test)]
 extern crate std;
+use std::vec::Vec as StdVec;
 
 use crate::{invoice::InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{

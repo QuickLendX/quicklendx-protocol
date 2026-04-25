@@ -2,7 +2,9 @@
 
 ## Overview
 
-The QuickLendX protocol uses a secure, one-time initialization flow that sets up all critical configuration parameters in a single atomic operation. This document describes the initialization system, its security model, and usage patterns.
+The QuickLendX protocol uses a secure, one-time initialization flow that sets up all critical
+configuration parameters in a single atomic operation. This document describes the initialization
+system, its security model, and usage patterns.
 
 ## Table of Contents
 
@@ -16,31 +18,39 @@ The QuickLendX protocol uses a secure, one-time initialization flow that sets up
 - [Testing](#testing)
 - [Best Practices](#best-practices)
 
+---
+
 ## Architecture
 
 ### Module Structure
 
 ```
 quicklendx-contracts/src/
-├── init.rs           # Core initialization module
-├── admin.rs          # Admin role management
-├── currency.rs       # Currency whitelist
-├── test_init.rs      # Comprehensive test suite
-└── test_init_debug.rs # Initialization edge-case tests
+├── init.rs                   # Core initialization module
+├── admin.rs                  # Admin role management
+├── currency.rs               # Currency whitelist
+├── test_init.rs              # Comprehensive test suite
+├── test_init_debug.rs        # Address / currency edge-case tests
+└── test_init_invariants.rs   # Initialization invariants (Issue #833)
 ```
 
 ### Key Components
 
-1. **ProtocolInitializer**: Main struct providing initialization and configuration management
-2. **InitializationParams**: Struct bundling all initialization parameters
-3. **ProtocolConfig**: On-chain storage for protocol-wide parameters
-4. **Storage Keys**: Isolated storage keys for different configuration aspects
+1. **`ProtocolInitializer`** — main struct providing initialization and configuration management
+2. **`InitializationParams`** — struct bundling all initialization parameters
+3. **`ProtocolConfig`** — on-chain storage for protocol-wide parameters
+4. **Storage Keys** — isolated storage keys for different configuration aspects
+
+---
 
 ## Initialization Flow
 
 ### Single-Shot Initialization
 
-The protocol supports atomic initialization where all parameters are set in one transaction. This function is engineered to be **idempotent**: if called multiple times with the exact same parameters, it safely succeeds without altering the state or emitting duplicate events. If called with different parameters after initial setup, it immediately reverts with an `OperationNotAllowed` error, providing strong replay protection against unauthorized reconfiguration.
+The protocol supports atomic initialization where all parameters are set in one transaction.
+The function is **idempotent**: if called again with the exact same parameters it returns `Ok(())`
+without altering state. If called with different parameters after initial setup it reverts with
+`OperationNotAllowed`.
 
 ```rust
 use quicklendx_contracts::init::{InitializationParams, ProtocolInitializer};
@@ -50,10 +60,10 @@ fn initialize_protocol(env: &Env) {
     let params = InitializationParams {
         admin: Address::generate(env),
         treasury: Address::generate(env),
-        fee_bps: 200,                    // 2%
-        min_invoice_amount: 1_000_000,   // 1 token (6 decimals)
+        fee_bps: 200,               // 2 %
+        min_invoice_amount: 1_000_000,
         max_due_date_days: 365,
-        grace_period_seconds: 86400,     // 24 hours
+        grace_period_seconds: 604_800, // 7 days
         initial_currencies: Vec::new(env),
     };
 
@@ -62,32 +72,26 @@ fn initialize_protocol(env: &Env) {
 }
 ```
 
-### Phased Initialization (Future)
-
-While the current implementation uses single-shot initialization, the architecture supports future phased initialization:
-
-1. **Phase 1**: Set admin and basic configuration
-2. **Phase 2**: Configure fees and treasury
-3. **Phase 3**: Add whitelisted currencies
+---
 
 ## Security Model
 
 ### One-Time Initialization
 
-- The contract can only be initialized **once**
-- Subsequent calls to `initialize()` will fail with `OperationNotAllowed`
-- Initialization state is stored in instance storage under key `proto_in`
+- The contract can only be initialized **once**.
+- Subsequent calls with different parameters fail with `OperationNotAllowed`.
+- The initialization flag is stored in instance storage under key `proto_in`.
 
 ### Admin Authorization
 
-- Initialization requires authorization from the admin address
-- Uses Soroban's built-in `require_auth()` mechanism
-- Admin address is stored and used for all future admin operations
+- Initialization requires `require_auth()` from the admin address.
+- Admin address is stored and used for all future privileged operations.
 
 ### Address Sanity
 
-- Admin and treasury addresses must be distinct and must not be the contract address
-- Initial currency list must be unique and must not include admin/treasury/contract addresses
+- Admin and treasury must be **distinct** addresses.
+- Neither admin nor treasury may equal the contract address itself.
+- Initial currency list must be unique and must not include admin, treasury, or the contract.
 
 ### Re-initialization Protection
 
@@ -108,23 +112,25 @@ All parameters are validated before any state changes:
 
 | Parameter | Validation | Error |
 |-----------|------------|-------|
-| `admin` / `treasury` | Distinct and not the contract address | `InvalidAddress` |
-| `initial_currencies` | No duplicates and must not include admin/treasury/contract | `InvalidCurrency` |
-| `fee_bps` | 0 ≤ fee ≤ 1000 | `InvalidFeeBasisPoints` |
-| `min_invoice_amount` | > 0 | `InvalidAmount` |
-| `max_due_date_days` | 1 ≤ days ≤ 730 | `InvoiceDueDateInvalid` |
-| `grace_period_seconds` | ≤ 2,592,000 (30 days) | `InvalidTimestamp` |
+| `admin` / `treasury` | Distinct, not the contract address | `InvalidAddress` |
+| `initial_currencies` | No duplicates; not admin/treasury/contract | `InvalidCurrency` |
+| `fee_bps` | `0 ≤ fee ≤ 1000` | `InvalidFeeBasisPoints` |
+| `min_invoice_amount` | `> 0` | `InvalidAmount` |
+| `max_due_date_days` | `1 ≤ days ≤ 730` | `InvoiceDueDateInvalid` |
+| `grace_period_seconds` | `≤ 2,592,000` (30 days) | `InvalidTimestamp` |
+
+---
 
 ## Configuration Parameters
 
-### InitializationParams
+### `InitializationParams`
 
 ```rust
 #[contracttype]
 pub struct InitializationParams {
     pub admin: Address,                    // Protocol admin
     pub treasury: Address,                 // Fee collection address
-    pub fee_bps: u32,                      // Fee in basis points (e.g., 200 = 2%)
+    pub fee_bps: u32,                      // Fee in basis points (e.g. 200 = 2 %)
     pub min_invoice_amount: i128,          // Minimum invoice amount
     pub max_due_date_days: u64,            // Max days until due date
     pub grace_period_seconds: u64,         // Grace period before default
@@ -132,942 +138,288 @@ pub struct InitializationParams {
 }
 ```
 
-### ProtocolConfig
+### `ProtocolConfig`
 
 Stored on-chain after initialization:
 
 ```rust
 #[contracttype]
 pub struct ProtocolConfig {
-    pub min_invoice_amount: i128,    // Minimum allowed invoice amount
-    pub max_due_date_days: u64,      // Maximum due date extension
-    pub grace_period_seconds: u64,   // Default grace period
-    pub updated_at: u64,             // Last update timestamp
-    pub updated_by: Address,         // Last updater address
+    pub min_invoice_amount: i128,
+    pub max_due_date_days: u64,
+    pub grace_period_seconds: u64,
+    pub updated_at: u64,
+    pub updated_by: Address,
 }
 ```
 
 ### Default Values
 
-| Parameter | Default Value | Description |
-|-----------|---------------|-------------|
-| `fee_bps` | 200 | 2% platform fee |
-| `min_invoice_amount` | 1,000,000 | 1 token (6 decimals) |
-| `max_due_date_days` | 365 | 1 year maximum |
-| `grace_period_seconds` | 86,400 | 24 hours |
-
-## API Reference
-
-### Initialization Functions
-
-#### `initialize`
-
-```rust
-pub fn initialize(
-    env: &Env,
-    params: &InitializationParams,
-) -> Result<(), QuickLendXError>
-```
-
-Initializes the protocol with all configuration parameters.
-
-**Authorization**: Requires auth from `params.admin`
-
-**Errors**:
-- `OperationNotAllowed` - Already initialized
-- `InvalidAddress` - Admin/treasury address conflict or contract self-reference
-- `InvalidCurrency` - Duplicate or conflicting currency address
-- `InvalidFeeBasisPoints` - Fee out of range
-- `InvalidAmount` - Min amount ≤ 0
-- `InvoiceDueDateInvalid` - Due date days out of range
-- `InvalidTimestamp` - Grace period too long
-
----
-
-#### `is_initialized`
-
-```rust
-pub fn is_initialized(env: &Env) -> bool
-```
-
-Checks if the protocol has been initialized.
-
----
-
-### Admin Configuration Functions
-
-#### `set_protocol_config`
-
-```rust
-pub fn set_protocol_config(
-    env: &Env,
-    admin: &Address,
-    min_invoice_amount: i128,
-    max_due_date_days: u64,
-    grace_period_seconds: u64,
-) -> Result<(), QuickLendXError>
-```
-
-Updates protocol configuration parameters.
-
-**Authorization**: Requires auth from admin
-
----
-
-#### `set_fee_config`
-
-```rust
-pub fn set_fee_config(
-    env: &Env,
-    admin: &Address,
-    fee_bps: u32,
-) -> Result<(), QuickLendXError>
-```
-
-Updates the platform fee in basis points.
-
-**Authorization**: Requires auth from admin
-
----
-
-#### `set_treasury`
-
-```rust
-pub fn set_treasury(
-    env: &Env,
-    admin: &Address,
-    treasury: &Address,
-) -> Result<(), QuickLendXError>
-```
-
-Updates the treasury address for fee collection.
-
-**Authorization**: Requires auth from admin
-
----
-
-### Query Functions
-
-#### `get_protocol_config`
-
-```rust
-pub fn get_protocol_config(env: &Env) -> Option<ProtocolConfig>
-```
-
-Returns the current protocol configuration.
-
----
-
-#### `get_fee_bps`
-
-```rust
-pub fn get_fee_bps(env: &Env) -> u32
-```
-
-Returns the current fee in basis points (defaults to 200).
-
----
-
-#### `get_treasury`
-
-```rust
-pub fn get_treasury(env: &Env) -> Option<Address>
-```
-
-Returns the treasury address if set.
-
----
-
-#### `get_min_invoice_amount`
-
-```rust
-pub fn get_min_invoice_amount(env: &Env) -> i128
-```
-
-Returns the minimum invoice amount (defaults to 1,000,000).
-
----
-
-#### `get_max_due_date_days`
-
-```rust
-pub fn get_max_due_date_days(env: &Env) -> u64
-```
-
-Returns the maximum due date days (defaults to 365).
-
----
-
-#### `get_grace_period_seconds`
-
-```rust
-pub fn get_grace_period_seconds(env: &Env) -> u64
-```
-
-Returns the grace period in seconds (defaults to 86,400).
-
-## Events
-
-All initialization and configuration changes emit events for audit trails:
-
-### `proto_in` - Protocol Initialized
-
-Emitted when the protocol is successfully initialized.
-
-```rust
-(admin: Address, treasury: Address, fee_bps: u32, 
- min_invoice_amount: i128, max_due_date_days: u64, 
- grace_period_seconds: u64, timestamp: u64)
-```
-
-### `proto_cfg` - Protocol Config Updated
-
-Emitted when protocol configuration is updated.
-
-```rust
-(admin: Address, min_invoice_amount: i128, max_due_date_days: u64, 
- grace_period_seconds: u64, timestamp: u64)
-```
-
-### `fee_cfg` - Fee Config Updated
-
-Emitted when fee configuration is updated.
-
-```rust
-(admin: Address, fee_bps: u32, timestamp: u64)
-```
-
-### `trsr_upd` - Treasury Updated
-
-Emitted when treasury address is updated.
-
-```rust
-(admin: Address, treasury: Address, timestamp: u64)
-```
-
-## Error Handling
-
-### Error Types
-
-| Error | Code | Description |
-|-------|------|-------------|
-| `OperationNotAllowed` | 1009 | Contract already initialized |
-| `NotAdmin` | 1005 | Caller is not the admin |
-| `InvalidFeeBasisPoints` | 1034 | Fee outside valid range (0-1000) |
-| `InvalidAmount` | 1002 | Amount must be positive |
-| `InvoiceDueDateInvalid` | 1013 | Due date days out of range |
-| `InvalidTimestamp` | 1017 | Grace period exceeds maximum |
-
-### Error Handling Example
-
-```rust
-match ProtocolInitializer::initialize(env, &params) {
-    Ok(()) => {
-        // Initialization successful
-    }
-    Err(QuickLendXError::OperationNotAllowed) => {
-        // Contract already initialized
-    }
-    Err(QuickLendXError::InvalidFeeBasisPoints) => {
-        // Fee must be between 0 and 1000
-    }
-    Err(e) => {
-        // Handle other errors
-    }
-}
-```
-
-## Testing
-
-The initialization module includes comprehensive tests covering:
-
-### Test Categories
-
-1. **Successful Initialization** (6 tests)
-   - Default parameters
-   - Admin storage
-   - Treasury storage
-   - Fee BPS storage
-   - Protocol config storage
-   - Currency whitelist
-
-2. **Re-initialization Protection** (4 tests)
-   - Double initialization fails
-   - State preservation on failure
-   - `is_initialized` returns correct values
-
-3. **Parameter Validation - Fee BPS** (3 tests)
-   - Too high fails
-   - Max value succeeds
-   - Zero succeeds
-
-4. **Parameter Validation - Min Amount** (4 tests)
-   - Zero fails
-   - Negative fails
-   - Small positive succeeds
-   - Large amount succeeds
-
-5. **Parameter Validation - Due Date** (4 tests)
-   - Zero fails
-   - Too high fails
-   - Max value succeeds
-   - One day succeeds
-
-6. **Parameter Validation - Grace Period** (3 tests)
-   - Too long fails
-   - Max value succeeds
-   - Zero succeeds
-
-7. **Set Protocol Config** (5 tests)
-   - Success case
-   - Non-admin fails
-   - Parameter validation
-   - Timestamp updates
-
-8. **Set Fee Config** (4 tests)
-   - Success case
-   - Non-admin fails
-   - Validation
-   - Zero allowed
-
-9. **Set Treasury** (2 tests)
-   - Success case
-   - Non-admin fails
-
-10. **Query Functions** (6 tests)
-    - Before/after initialization
-    - Default values
-
-11. **Edge Cases** (3 tests)
-    - Boundary values
-    - Multiple updates
-    - Config immutability
-
-12. **Integration** (1 test)
-    - Full workflow
-
-### Running Tests
-
-```bash
-cd quicklendx-contracts
-cargo test test_init -- --nocapture
-```
-
-### Test Coverage
-
-Target: 95%+ coverage of initialization module
-
-## Best Practices
-
-### 1. Initialization Check
-
-Always check if the protocol is initialized before dependent operations:
-
-```rust
-if !ProtocolInitializer::is_initialized(env) {
-    panic!("Protocol not initialized");
-}
-```
-
-### 2. Parameter Validation
-
-Validate all parameters client-side before calling initialize:
-
-```rust
-fn validate_params(params: &InitializationParams) -> Result<(), String> {
-    if params.fee_bps > 1000 {
-        return Err("Fee too high".to_string());
-    }
-    if params.min_invoice_amount <= 0 {
-        return Err("Min amount must be positive".to_string());
-    }
-    // ... more validation
-    Ok(())
-}
-```
-
-### 3. Event Monitoring
-
-Monitor initialization events for audit purposes:
-
-```rust
-// Listen for proto_in events
-// Verify all parameters match expected values
-// Alert on unexpected initialization attempts
-```
-
-### 4. Secure Admin Key Management
-
-- Use a multi-sig or hardware wallet for the admin address
-- Consider time-locked admin operations for critical changes
-- Have a plan for admin key rotation
-
-### 5. Treasury Configuration
-
-- Use a secure treasury address (multi-sig recommended)
-- Verify treasury can receive the protocol's token types
-- Consider using a separate treasury per currency
-
-## Security Considerations
-
-### Threat Model
-
-| Threat | Mitigation |
-|--------|------------|
-| Re-initialization attack | Atomic initialization flag |
-| Unauthorized config changes | Admin-only functions with auth |
-| Parameter manipulation | Comprehensive validation |
-| Front-running | Single-shot initialization |
-
-### Audit Checklist
-
-- [ ] Verify initialization can only happen once
-- [ ] Verify all admin functions require authorization
-- [ ] Verify parameter validation covers all edge cases
-- [ ] Verify events are emitted for all state changes
-- [ ] Verify default values are reasonable
-- [ ] Verify storage keys don't collide with other modules
-
-## Future Enhancements
-
-1. **Phased Initialization**: Support for multi-phase initialization
-2. **Pause/Unpause**: Emergency pause functionality
-3. **Upgrade Support**: Migration path for configuration updates
-4. **Multi-sig Admin**: Support for multi-signature admin operations
-5. **Configuration Proposals**: Time-locked configuration changes
-
-## References
-
-- [Soroban Authorization](https://soroban.stellar.org/docs/fundamentals/authorization)
-- [Contract Storage](https://soroban.stellar.org/docs/fundamentals/persisting-data)
-- [Events](https://soroban.stellar.org/docs/fundamentals/events)
-# QuickLendX Protocol Initialization
-
-## Overview
-
-The QuickLendX protocol uses a secure, one-time initialization flow that sets up all critical configuration parameters in a single atomic operation. This document describes the initialization system, its security model, and usage patterns.
-
-## Table of Contents
-
-- [Architecture](#architecture)
-- [Initialization Flow](#initialization-flow)
-- [Security Model](#security-model)
-- [Configuration Parameters](#configuration-parameters)
-- [API Reference](#api-reference)
-- [Events](#events)
-- [Error Handling](#error-handling)
-- [Testing](#testing)
-- [Best Practices](#best-practices)
-
-## Architecture
-
-### Module Structure
-
-```
-quicklendx-contracts/src/
-├── init.rs           # Core initialization module
-├── admin.rs          # Admin role management
-├── currency.rs       # Currency whitelist
-└── test_init.rs      # Comprehensive test suite
-```
-
-### Key Components
-
-1. **ProtocolInitializer**: Main struct providing initialization and configuration management
-2. **InitializationParams**: Struct bundling all initialization parameters
-3. **ProtocolConfig**: On-chain storage for protocol-wide parameters
-4. **Storage Keys**: Isolated storage keys for different configuration aspects
-
-## Initialization Flow
-
-### Single-Shot Initialization
-
-The protocol supports atomic initialization where all parameters are set in one transaction:
-
-```rust
-use quicklendx_contracts::init::{InitializationParams, ProtocolInitializer};
-use soroban_sdk::{Address, Env, Vec};
-
-fn initialize_protocol(env: &Env) {
-    let params = InitializationParams {
-        admin: Address::generate(env),
-        treasury: Address::generate(env),
-        fee_bps: 200,                    // 2%
-        min_invoice_amount: 1_000_000,   // 1 token (6 decimals)
-        max_due_date_days: 365,
-        grace_period_seconds: 604800,     // 7 days
-        initial_currencies: Vec::new(env),
-    };
-
-    ProtocolInitializer::initialize(env, &params)
-        .expect("Initialization failed");
-}
-```
-
-### Phased Initialization (Future)
-
-While the current implementation uses single-shot initialization, the architecture supports future phased initialization:
-
-1. **Phase 1**: Set admin and basic configuration
-2. **Phase 2**: Configure fees and treasury
-3. **Phase 3**: Add whitelisted currencies
-
-## Security Model
-
-### One-Time Initialization
-
-- The contract can only be initialized **once**
-- Subsequent calls to `initialize()` will fail with `OperationNotAllowed`
-- Initialization state is stored in instance storage under key `proto_in`
-
-### Admin Authorization
-
-- Initialization requires authorization from the admin address
-- Uses Soroban's built-in `require_auth()` mechanism
-- Admin address is stored and used for all future admin operations
-
-### Re-initialization Protection
-
-```rust
-pub fn is_initialized(env: &Env) -> bool {
-    env.storage()
-        .instance()
-        .get(&PROTOCOL_INITIALIZED_KEY)
-        .unwrap_or(false)
-}
-```
-
-The initialization flag is set **after** all other state changes, ensuring atomicity.
-
-### Parameter Validation
-
-All parameters are validated before any state changes:
-
-| Parameter | Validation | Error |
-|-----------|------------|-------|
-| `fee_bps` | 0 ≤ fee ≤ 1000 | `InvalidFeeBasisPoints` |
-| `min_invoice_amount` | > 0 | `InvalidAmount` |
-| `max_due_date_days` | 1 ≤ days ≤ 730 | `InvoiceDueDateInvalid` |
-| `grace_period_seconds` | ≤ 2,592,000 (30 days) | `InvalidTimestamp` |
-
-## Configuration Parameters
-
-### InitializationParams
-
-```rust
-#[contracttype]
-pub struct InitializationParams {
-    pub admin: Address,                    // Protocol admin
-    pub treasury: Address,                 // Fee collection address
-    pub fee_bps: u32,                      // Fee in basis points (e.g., 200 = 2%)
-    pub min_invoice_amount: i128,          // Minimum invoice amount
-    pub max_due_date_days: u64,            // Max days until due date
-    pub grace_period_seconds: u64,         // Grace period before default
-    pub initial_currencies: Vec<Address>,  // Initial whitelisted currencies
-}
-```
-
-### ProtocolConfig
-
-Stored on-chain after initialization:
-
-```rust
-#[contracttype]
-pub struct ProtocolConfig {
-    pub min_invoice_amount: i128,    // Minimum allowed invoice amount
-    pub max_due_date_days: u64,      // Maximum due date extension
-    pub grace_period_seconds: u64,   // Default grace period
-    pub updated_at: u64,             // Last update timestamp
-    pub updated_by: Address,         // Last updater address
-}
-```
-
-### Default Values
-
-| Parameter | Default Value | Description |
-|-----------|---------------|-------------|
-| `fee_bps` | 200 | 2% platform fee |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `fee_bps` | 200 | 2 % platform fee |
 | `min_invoice_amount` | 1,000,000 | 1 token (6 decimals) |
 | `max_due_date_days` | 365 | 1 year maximum |
 | `grace_period_seconds` | 604,800 | 7 days |
 
+---
+
 ## API Reference
 
-### Initialization Functions
-
-#### `initialize`
+### `initialize`
 
 ```rust
-pub fn initialize(
-    env: &Env,
-    params: &InitializationParams,
-) -> Result<(), QuickLendXError>
+pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError>
 ```
 
-Initializes the protocol with all configuration parameters.
+Initializes the protocol. Requires auth from `params.admin`.
 
-**Authorization**: Requires auth from `params.admin`
-
-**Errors**:
-- `OperationNotAllowed` - Already initialized
-- `InvalidFeeBasisPoints` - Fee out of range
-- `InvalidAmount` - Min amount ≤ 0
-- `InvoiceDueDateInvalid` - Due date days out of range
-- `InvalidTimestamp` - Grace period too long
+**Errors**: `OperationNotAllowed`, `InvalidAddress`, `InvalidCurrency`,
+`InvalidFeeBasisPoints`, `InvalidAmount`, `InvoiceDueDateInvalid`, `InvalidTimestamp`
 
 ---
 
-#### `is_initialized`
+### `is_initialized`
 
 ```rust
 pub fn is_initialized(env: &Env) -> bool
 ```
 
-Checks if the protocol has been initialized.
+Returns `true` after a successful `initialize` call.
 
 ---
 
-### Admin Configuration Functions
-
-#### `set_protocol_config`
+### `set_protocol_config` *(admin only)*
 
 ```rust
 pub fn set_protocol_config(
-    env: &Env,
-    admin: &Address,
-    min_invoice_amount: i128,
-    max_due_date_days: u64,
-    grace_period_seconds: u64,
+    env: &Env, admin: &Address,
+    min_invoice_amount: i128, max_due_date_days: u64, grace_period_seconds: u64,
 ) -> Result<(), QuickLendXError>
 ```
 
-Updates protocol configuration parameters.
-
-**Authorization**: Requires auth from admin
+Updates protocol configuration. Enforces the same bounds as `initialize`.
 
 ---
 
-#### `set_fee_config`
+### `set_fee_config` *(admin only)*
 
 ```rust
-pub fn set_fee_config(
-    env: &Env,
-    admin: &Address,
-    fee_bps: u32,
-) -> Result<(), QuickLendXError>
+pub fn set_fee_config(env: &Env, admin: &Address, fee_bps: u32) -> Result<(), QuickLendXError>
 ```
 
-Updates the platform fee in basis points.
-
-**Authorization**: Requires auth from admin
+Updates the platform fee. Valid range: `0–1000`.
 
 ---
 
-#### `set_treasury`
+### `set_treasury` *(admin only)*
 
 ```rust
-pub fn set_treasury(
-    env: &Env,
-    admin: &Address,
-    treasury: &Address,
-) -> Result<(), QuickLendXError>
+pub fn set_treasury(env: &Env, admin: &Address, treasury: &Address) -> Result<(), QuickLendXError>
 ```
 
-Updates the treasury address for fee collection.
-
-**Authorization**: Requires auth from admin
+Updates the treasury address. Treasury must differ from admin.
 
 ---
 
-### Query Functions
+### Query functions
 
-#### `get_protocol_config`
-
-```rust
-pub fn get_protocol_config(env: &Env) -> Option<ProtocolConfig>
-```
-
-Returns the current protocol configuration.
-
----
-
-#### `get_fee_bps`
-
-```rust
-pub fn get_fee_bps(env: &Env) -> u32
-```
-
-Returns the current fee in basis points (defaults to 200).
+| Function | Returns | Default |
+|----------|---------|---------|
+| `get_fee_bps` | `u32` | 200 |
+| `get_treasury` | `Option<Address>` | `None` |
+| `get_min_invoice_amount` | `i128` | 1,000,000 |
+| `get_max_due_date_days` | `u64` | 365 |
+| `get_grace_period_seconds` | `u64` | 604,800 |
+| `get_protocol_config` | `Option<ProtocolConfig>` | `None` |
+| `get_version` | `u32` | `PROTOCOL_VERSION` |
 
 ---
-
-#### `get_treasury`
-
-```rust
-pub fn get_treasury(env: &Env) -> Option<Address>
-```
-
-Returns the treasury address if set.
-
----
-
-#### `get_min_invoice_amount`
-
-```rust
-pub fn get_min_invoice_amount(env: &Env) -> i128
-```
-
-Returns the minimum invoice amount (defaults to 1,000,000).
-
----
-
-#### `get_max_due_date_days`
-
-```rust
-pub fn get_max_due_date_days(env: &Env) -> u64
-```
-
-Returns the maximum due date days (defaults to 365).
-
----
-
-#### `get_grace_period_seconds`
-
-```rust
-pub fn get_grace_period_seconds(env: &Env) -> u64
-```
-
-Returns the grace period in seconds (defaults to 604,800).
 
 ## Events
 
-All initialization and configuration changes emit events for audit trails:
+| Symbol | Trigger | Payload |
+|--------|---------|---------|
+| `proto_in` | Successful `initialize` | admin, treasury, fee_bps, min_amount, max_days, grace, ts |
+| `proto_cfg` | `set_protocol_config` | admin, min_amount, max_days, grace, ts |
+| `fee_cfg` | `set_fee_config` | admin, fee_bps, ts |
+| `trsr_upd` | `set_treasury` | admin, treasury, ts |
 
-### `proto_in` - Protocol Initialized
-
-Emitted when the protocol is successfully initialized.
-
-```rust
-(admin: Address, treasury: Address, fee_bps: u32, 
- min_invoice_amount: i128, max_due_date_days: u64, 
- grace_period_seconds: u64, timestamp: u64)
-```
-
-### `proto_cfg` - Protocol Config Updated
-
-Emitted when protocol configuration is updated.
-
-```rust
-(admin: Address, min_invoice_amount: i128, max_due_date_days: u64, 
- grace_period_seconds: u64, timestamp: u64)
-```
-
-### `fee_cfg` - Fee Config Updated
-
-Emitted when fee configuration is updated.
-
-```rust
-(admin: Address, fee_bps: u32, timestamp: u64)
-```
-
-### `trsr_upd` - Treasury Updated
-
-Emitted when treasury address is updated.
-
-```rust
-(admin: Address, treasury: Address, timestamp: u64)
-```
+---
 
 ## Error Handling
 
-### Error Types
+| Error | Description |
+|-------|-------------|
+| `OperationNotAllowed` | Contract already initialized |
+| `NotAdmin` | Caller is not the admin |
+| `InvalidFeeBasisPoints` | `fee_bps` outside `[0, 1000]` |
+| `InvalidAmount` | `min_invoice_amount ≤ 0` |
+| `InvoiceDueDateInvalid` | `max_due_date_days` outside `[1, 730]` |
+| `InvalidTimestamp` | `grace_period_seconds > 2,592,000` |
+| `InvalidAddress` | admin == treasury, or either equals contract address |
+| `InvalidCurrency` | Duplicate or reserved currency in initial list |
 
-| Error | Code | Description |
-|-------|------|-------------|
-| `OperationNotAllowed` | 1009 | Contract already initialized |
-| `NotAdmin` | 1005 | Caller is not the admin |
-| `InvalidFeeBasisPoints` | 1034 | Fee outside valid range (0-1000) |
-| `InvalidAmount` | 1002 | Amount must be positive |
-| `InvoiceDueDateInvalid` | 1013 | Due date days out of range |
-| `InvalidTimestamp` | 1017 | Grace period exceeds maximum |
-
-### Error Handling Example
-
-```rust
-match ProtocolInitializer::initialize(env, &params) {
-    Ok(()) => {
-        // Initialization successful
-    }
-    Err(QuickLendXError::OperationNotAllowed) => {
-        // Contract already initialized
-    }
-    Err(QuickLendXError::InvalidFeeBasisPoints) => {
-        // Fee must be between 0 and 1000
-    }
-    Err(e) => {
-        // Handle other errors
-    }
-}
-```
+---
 
 ## Testing
 
-The initialization module includes comprehensive tests covering:
+### Test files
 
-### Test Categories
+| File | Purpose |
+|------|---------|
+| `test_init.rs` | Full lifecycle, config updates, query functions, events |
+| `test_init_debug.rs` | Address / currency edge cases |
+| `test_init_invariants.rs` | **Initialization invariants (Issue #833)** |
 
-1. **Successful Initialization** (6 tests)
-   - Default parameters
-   - Admin storage
-   - Treasury storage
-   - Fee BPS storage
-   - Protocol config storage
-   - Currency whitelist
+### Invariants test suite (`test_init_invariants.rs`)
 
-2. **Re-initialization Protection** (4 tests)
-   - Double initialization fails
-   - State preservation on failure
-   - `is_initialized` returns correct values
+Added in Issue #833, this suite verifies the four core security invariants:
 
-3. **Parameter Validation - Fee BPS** (3 tests)
-   - Too high fails
-   - Max value succeeds
-   - Zero succeeds
+#### 1. One-time initialization
 
-4. **Parameter Validation - Min Amount** (4 tests)
-   - Zero fails
-   - Negative fails
-   - Small positive succeeds
-   - Large amount succeeds
+| Test | What it checks |
+|------|---------------|
+| `test_init_succeeds_first_call` | Happy path succeeds |
+| `test_init_second_call_different_params_fails` | Re-init with different params → `OperationNotAllowed` |
+| `test_init_idempotent_same_params` | Re-init with identical params → `Ok(())` |
+| `test_is_initialized_flag_lifecycle` | Flag is `false` before, `true` after |
+| `test_failed_reinit_preserves_state` | Failed re-init leaves all stored values unchanged |
+| `test_multiple_failed_reinits_preserve_state` | Five consecutive failed re-inits, state intact |
+| `test_version_written_at_init_and_stable` | Version constant written at init, stable across calls |
 
-5. **Parameter Validation - Due Date** (4 tests)
-   - Zero fails
-   - Too high fails
-   - Max value succeeds
-   - One day succeeds
+#### 2. Admin / treasury distinct
 
-6. **Parameter Validation - Grace Period** (3 tests)
-   - Too long fails
-   - Max value succeeds
-   - Zero succeeds
+| Test | What it checks |
+|------|---------------|
+| `test_admin_equals_treasury_rejected` | admin == treasury → `InvalidAddress` |
+| `test_admin_is_contract_address_rejected` | admin == contract → `InvalidAddress` |
+| `test_treasury_is_contract_address_rejected` | treasury == contract → `InvalidAddress` |
+| `test_stored_admin_and_treasury_are_distinct` | Stored values are distinct after init |
+| `test_set_treasury_same_as_admin_rejected` | `set_treasury(admin)` → `InvalidAddress` |
+| `test_set_treasury_valid_update` | Valid new treasury is accepted and stored |
+| `test_set_treasury_non_admin_rejected` | Non-admin → `NotAdmin` |
 
-7. **Set Protocol Config** (5 tests)
-   - Success case
-   - Non-admin fails
-   - Parameter validation
-   - Timestamp updates
+#### 3. Fee bps bounds
 
-8. **Set Fee Config** (4 tests)
-   - Success case
-   - Non-admin fails
-   - Validation
-   - Zero allowed
+| Test | What it checks |
+|------|---------------|
+| `test_fee_bps_zero_accepted` | `fee_bps = 0` accepted |
+| `test_fee_bps_max_accepted` | `fee_bps = 1000` accepted |
+| `test_fee_bps_above_max_rejected` | `fee_bps = 1001` → `InvalidFeeBasisPoints` |
+| `test_fee_bps_u32_max_rejected` | `fee_bps = u32::MAX` → `InvalidFeeBasisPoints` |
+| `test_fee_bps_midrange_accepted` | `fee_bps = 500` accepted |
+| `test_set_fee_config_bounds_enforced` | `set_fee_config` enforces same bounds |
+| `test_set_fee_config_non_admin_rejected` | Non-admin → `NotAdmin` |
+| `test_set_fee_config_persisted` | Updated fee is immediately readable |
 
-9. **Set Treasury** (2 tests)
-   - Success case
-   - Non-admin fails
+#### 4. Limits configuration bounds
 
-10. **Query Functions** (6 tests)
-    - Before/after initialization
-    - Default values
+| Test | What it checks |
+|------|---------------|
+| `test_min_invoice_amount_zero_rejected` | `min_invoice_amount = 0` → `InvalidAmount` |
+| `test_min_invoice_amount_negative_rejected` | Negative → `InvalidAmount` |
+| `test_min_invoice_amount_one_accepted` | `min_invoice_amount = 1` accepted |
+| `test_min_invoice_amount_large_accepted` | Large value accepted |
+| `test_max_due_date_days_zero_rejected` | `max_due_date_days = 0` → `InvoiceDueDateInvalid` |
+| `test_max_due_date_days_above_max_rejected` | `731` → `InvoiceDueDateInvalid` |
+| `test_max_due_date_days_max_accepted` | `730` accepted |
+| `test_max_due_date_days_one_accepted` | `1` accepted |
+| `test_grace_period_zero_accepted` | `grace_period_seconds = 0` accepted |
+| `test_grace_period_max_accepted` | `2,592,000` accepted |
+| `test_grace_period_above_max_rejected` | `2,592,001` → `InvalidTimestamp` |
+| `test_set_protocol_config_bounds_enforced` | `set_protocol_config` enforces same bounds |
+| `test_set_protocol_config_valid_update_atomic` | All three fields updated atomically |
+| `test_set_protocol_config_non_admin_rejected` | Non-admin → `NotAdmin` |
 
-11. **Edge Cases** (3 tests)
-    - Boundary values
-    - Multiple updates
-    - Config immutability
+#### 5. Currency whitelist invariants
 
-12. **Integration** (1 test)
-    - Full workflow
+| Test | What it checks |
+|------|---------------|
+| `test_init_duplicate_currencies_rejected` | Duplicate → `InvalidCurrency` |
+| `test_init_currency_equals_admin_rejected` | Currency == admin → `InvalidCurrency` |
+| `test_init_currency_equals_treasury_rejected` | Currency == treasury → `InvalidCurrency` |
+| `test_init_currency_equals_contract_rejected` | Currency == contract → `InvalidCurrency` |
+| `test_init_valid_currencies_accepted` | Two distinct valid currencies accepted |
 
-### Running Tests
+#### 6. Authorization invariant
+
+| Test | What it checks |
+|------|---------------|
+| `test_init_requires_admin_auth` | `initialize` without auth panics |
+
+#### 7. Query defaults & post-init values
+
+| Test | What it checks |
+|------|---------------|
+| `test_query_defaults_before_init` | All getters return safe defaults before init |
+| `test_query_values_after_init` | All getters return stored values after init |
+| `test_protocol_config_none_before_init` | `get_protocol_config` returns `None` before init |
+| `test_protocol_config_some_after_init` | Returns correct `ProtocolConfig` after init |
+
+#### 8. Boundary combinations
+
+| Test | What it checks |
+|------|---------------|
+| `test_all_params_at_minimum_boundary` | All params at minimum valid values |
+| `test_all_params_at_maximum_boundary` | All params at maximum valid values |
+
+#### 9. Admin transfer
+
+| Test | What it checks |
+|------|---------------|
+| `test_admin_transfer_revokes_old_admin_config_access` | New admin can update; old admin is rejected |
+
+#### 10. Deterministic validation
+
+| Test | What it checks |
+|------|---------------|
+| `test_validation_is_deterministic` | Same invalid input always returns same error |
+| `test_validation_order_fee_before_amount` | `fee_bps` validated before `min_invoice_amount` |
+
+### Running the invariants tests
 
 ```bash
 cd quicklendx-contracts
-cargo test test_init -- --nocapture
+cargo test test_init_invariants -- --nocapture
 ```
 
-### Test Coverage
+### Security assumptions validated
 
-Target: 95%+ coverage of initialization module
+- **No config bypass** — invalid params are always rejected before any state write.
+- **Deterministic validation** — the same invalid input always produces the same error code.
+- **State immutability after init** — a failed re-init leaves all stored values unchanged.
+- **Admin/treasury separation** — the protocol enforces role separation at the storage level.
+
+---
 
 ## Best Practices
 
-### 1. Initialization Check
+1. **Check initialization** before dependent operations:
+   ```rust
+   assert!(ProtocolInitializer::is_initialized(env), "Protocol not initialized");
+   ```
 
-Always check if the protocol is initialized before dependent operations:
+2. **Validate params client-side** before calling `initialize`.
 
-```rust
-if !ProtocolInitializer::is_initialized(env) {
-    panic!("Protocol not initialized");
-}
-```
+3. **Monitor `proto_in` events** for audit purposes.
 
-### 2. Parameter Validation
+4. **Use a multi-sig** for the admin address.
 
-Validate all parameters client-side before calling initialize:
+5. **Use a separate treasury** per currency if needed.
 
-```rust
-fn validate_params(params: &InitializationParams) -> Result<(), String> {
-    if params.fee_bps > 1000 {
-        return Err("Fee too high".to_string());
-    }
-    if params.min_invoice_amount <= 0 {
-        return Err("Min amount must be positive".to_string());
-    }
-    // ... more validation
-    Ok(())
-}
-```
-
-### 3. Event Monitoring
-
-Monitor initialization events for audit purposes:
-
-```rust
-// Listen for proto_in events
-// Verify all parameters match expected values
-// Alert on unexpected initialization attempts
-```
-
-### 4. Secure Admin Key Management
-
-- Use a multi-sig or hardware wallet for the admin address
-- Consider time-locked admin operations for critical changes
-- Have a plan for admin key rotation
-
-### 5. Treasury Configuration
-
-- Use a secure treasury address (multi-sig recommended)
-- Verify treasury can receive the protocol's token types
-- Consider using a separate treasury per currency
+---
 
 ## Security Considerations
-
-### Threat Model
 
 | Threat | Mitigation |
 |--------|------------|
 | Re-initialization attack | Atomic initialization flag |
-| Unauthorized config changes | Admin-only functions with auth |
-| Parameter manipulation | Comprehensive validation |
+| Unauthorized config changes | Admin-only functions with `require_auth` |
+| Parameter manipulation | Comprehensive pre-write validation |
 | Front-running | Single-shot initialization |
 
-### Audit Checklist
-
-- [ ] Verify initialization can only happen once
-- [ ] Verify all admin functions require authorization
-- [ ] Verify parameter validation covers all edge cases
-- [ ] Verify events are emitted for all state changes
-- [ ] Verify default values are reasonable
-- [ ] Verify storage keys don't collide with other modules
-
-## Future Enhancements
-
-1. **Phased Initialization**: Support for multi-phase initialization
-2. **Pause/Unpause**: Emergency pause functionality
-3. **Upgrade Support**: Migration path for configuration updates
-4. **Multi-sig Admin**: Support for multi-signature admin operations
-5. **Configuration Proposals**: Time-locked configuration changes
+---
 
 ## References
 

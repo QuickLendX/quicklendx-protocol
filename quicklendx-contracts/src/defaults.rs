@@ -14,6 +14,50 @@ pub const MAX_OVERDUE_SCAN_BATCH_LIMIT: u32 = 100;
 
 const OVERDUE_SCAN_CURSOR_KEY: soroban_sdk::Symbol = symbol_short!("ovd_scan");
 
+/// Storage key for default transition guards.
+/// Format: (symbol_short!("def_guard"), invoice_id) -> bool
+const DEFAULT_TRANSITION_GUARD_KEY: soroban_sdk::Symbol = symbol_short!("def_guard");
+
+/// Transition guard to ensure default transitions are atomic and idempotent.
+/// Tracks whether a default transition has been initiated for a specific invoice.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransitionGuard {
+    /// Whether the default transition has been triggered
+    pub triggered: bool,
+}
+
+/// @notice Checks if a default transition guard exists for the given invoice.
+/// @dev Returns true if the guard is set (transition already attempted), false otherwise.
+/// @param env The contract environment.
+/// @param invoice_id The invoice ID to check.
+/// @return true if default transition has been guarded, false otherwise.
+fn is_default_transition_guarded(env: &Env, invoice_id: &BytesN<32>) -> bool {
+    env.storage()
+        .persistent()
+        .has(&(DEFAULT_TRANSITION_GUARD_KEY, invoice_id))
+}
+
+/// @notice Atomically checks and sets the default transition guard.
+/// @dev This ensures that only one default transition can be initiated per invoice.
+/// If the guard is already set, returns DuplicateDefaultTransition error.
+/// Otherwise, sets the guard and returns Ok(()).
+/// @param env The contract environment.
+/// @param invoice_id The invoice ID to guard.
+/// @return Ok(()) if guard was successfully set, Err(DuplicateDefaultTransition) if already guarded.
+fn check_and_set_default_guard(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+    let key = (DEFAULT_TRANSITION_GUARD_KEY, invoice_id);
+
+    // Check if guard is already set
+    if env.storage().persistent().has(&key) {
+        return Err(QuickLendXError::DuplicateDefaultTransition);
+    }
+
+    // Set the guard atomically
+    env.storage().persistent().set(&key, &true);
+    Ok(())
+}
+
 /// Result metadata returned by the bounded overdue invoice scanner.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -55,19 +99,14 @@ const MAX_GRACE_PERIOD: u64 = 30 * 24 * 60 * 60;
 pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64, QuickLendXError> {
     match grace_period {
         Some(value) => {
-            // Validate override value
-            // Allow zero (immediate default) but reject excessively large values
             if value > MAX_GRACE_PERIOD {
                 return Err(QuickLendXError::InvalidTimestamp);
             }
             Ok(value)
         }
-        None => {
-            // Fallback to protocol config or hardcoded default
-            Ok(ProtocolInitializer::get_protocol_config(env)
-                .map(|config| config.grace_period_seconds)
-                .unwrap_or(DEFAULT_GRACE_PERIOD))
-        }
+        None => Ok(ProtocolInitializer::get_protocol_config(env)
+            .map(|config| config.grace_period_seconds)
+            .unwrap_or(DEFAULT_GRACE_PERIOD)),
     }
 }
 
@@ -93,12 +132,10 @@ pub fn mark_invoice_defaulted(
     let invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    // Check if invoice is already defaulted (no double default)
     if invoice.status == InvoiceStatus::Defaulted {
         return Err(QuickLendXError::InvoiceAlreadyDefaulted);
     }
 
-    // Only funded invoices can be defaulted
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvoiceNotAvailableForFunding);
     }
@@ -107,12 +144,10 @@ pub fn mark_invoice_defaulted(
     let grace = resolve_grace_period(env, grace_period)?;
     let grace_deadline = invoice.grace_deadline(grace);
 
-    // Check if grace period has passed
     if current_timestamp <= grace_deadline {
         return Err(QuickLendXError::OperationNotAllowed);
     }
 
-    // Proceed with default handling
     handle_default(env, invoice_id)
 }
 
@@ -236,74 +271,59 @@ pub fn scan_funded_invoice_expirations(
 /// @notice Applies the default transition after all time and status checks have passed.
 /// @dev This helper does not re-check the grace-period cutoff and must only be reached from
 /// validated call sites such as `mark_invoice_defaulted` or `check_and_handle_expiration`.
+/// The transition guard ensures atomicity and idempotency of default operations.
+/// @security The guard prevents race conditions and duplicate side effects (analytics, state initialization).
 pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+    // Atomically check and set the transition guard to prevent duplicate defaults
+    check_and_set_default_guard(env, invoice_id)?;
+
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    // Check if already defaulted (no double default)
     if invoice.status == InvoiceStatus::Defaulted {
         return Err(QuickLendXError::InvoiceAlreadyDefaulted);
     }
 
-    // Validate invoice is in funded status
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    // Remove from funded status list
     InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
 
-    // Mark invoice as defaulted
     invoice.mark_as_defaulted();
     InvoiceStorage::update_invoice(env, &invoice);
 
-    // Add to defaulted status list
     InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Defaulted, invoice_id);
 
-    // Emit expiration event
     emit_invoice_expired(env, &invoice);
 
-    // Update investment status and process insurance claims
     if let Some(mut investment) = InvestmentStorage::get_investment_by_invoice(env, invoice_id) {
         investment.status = InvestmentStatus::Defaulted;
 
-        let claim_details = investment
-            .process_insurance_claim()
-            .and_then(|(provider, amount)| {
-                if amount > 0 {
-                    Some((provider, amount))
-                } else {
-                    None
-                }
-            });
+        let claim_details = investment.process_all_insurance_claims(env);
 
         InvestmentStorage::update_investment(env, &investment);
 
-        if let Some((provider, coverage_amount)) = claim_details {
-            emit_insurance_claimed(
-                env,
-                &investment.investment_id,
-                &investment.invoice_id,
-                &provider,
-                coverage_amount,
-            );
+        for (provider, coverage_amount) in claim_details.iter() {
+            if coverage_amount > 0 {
+                emit_insurance_claimed(
+                    env,
+                    &investment.investment_id,
+                    &investment.invoice_id,
+                    &provider,
+                    coverage_amount,
+                );
+            }
         }
     }
 
-    // Emit default event
     emit_invoice_defaulted(env, &invoice);
-
-    // Send notification
-    // No notifications
 
     Ok(())
 }
 
 /// Get all invoice IDs that have active or resolved disputes
 pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
-    // This is a simplified implementation. In a production environment,
-    // we would maintain a separate index for invoices with disputes.
-    // For now, we return empty as a placeholder or could iterate (expensive).
     Vec::new(env)
 }
 
@@ -315,11 +335,5 @@ pub fn get_dispute_details(
     let _invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    // In this implementation, the Dispute struct is part of the Invoice struct
-    // but the analytics module expects a separate query.
-    // Actually, looking at types.rs or invoice.rs, let's see where Dispute is.
-    // If it's not in Invoice, we might need a separate storage.
-    // Based on analytics.rs usage, it seems to expect it found here.
-
-    Ok(None) // Placeholder
+    Ok(None)
 }

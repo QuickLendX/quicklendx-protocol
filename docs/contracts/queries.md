@@ -1,7 +1,7 @@
 # Query Hard Caps and Resilience
 
 > **Module:** `quicklendx-contracts/src/lib.rs` — query endpoints
-> **Tests:** `quicklendx-contracts/src/test_queries.rs`, `quicklendx-contracts/src/test_limit.rs`
+> **Tests:** `quicklendx-contracts/src/test_queries.rs`, `quicklendx-contracts/src/test_investment_queries.rs`, `quicklendx-contracts/src/test_limit.rs`
 
 ---
 
@@ -23,6 +23,7 @@ to prevent resource abuse and ensure predictable performance characteristics.
 **All paginated endpoints enforce a hard cap of `MAX_QUERY_LIMIT = 100` records per query.**
 
 This limit cannot be bypassed by:
+
 - Passing `limit > MAX_QUERY_LIMIT` (automatically capped)
 - Using overflow attacks with large offset values (validated and rejected)
 - Combining parameters to exceed resource bounds (comprehensive validation)
@@ -60,37 +61,49 @@ fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError>
 
 ## Paginated Endpoints with Hard Cap Enforcement
 
-| Endpoint | Hard Cap Applied | Validation |
-|---|---|---|
-| `get_business_invoices_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
-| `get_investor_investments_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
-| `get_available_invoices_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
-| `get_bid_history_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
-| `get_investor_bids_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| Endpoint                           | Hard Cap Applied   | Validation             |
+| ---------------------------------- | ------------------ | ---------------------- |
+| `get_business_invoices_paged`      | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_investor_investments_paged`   | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_available_invoices_paged`     | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_bid_history_paged`            | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_investor_bids_paged`          | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
 | `get_whitelisted_currencies_paged` | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+| `get_payment_records`            | ✅ MAX_QUERY_LIMIT | ✅ Overflow protection |
+
+### Business Invoice Query Ordering
+
+`get_business_invoices_paged` applies status filtering first, then deterministically orders
+results by `(created_at ASC, invoice_id ASC)` before pagination.
+
+Security and consistency implications:
+
+- Repeated calls with identical contract state return identical page boundaries.
+- Status-filtered pagination remains deterministic and does not leak cross-status entries.
+- Tie-breaking by `invoice_id` avoids validator-dependent ordering when timestamps match.
 
 ---
 
 ## Resilience Guarantees by Endpoint
 
-| Endpoint | Missing record behaviour |
-|---|---|
-| `get_invoice(id)` | Returns `Err(InvoiceNotFound)` |
-| `get_bid(id)` | Returns `None` |
-| `get_investment(id)` | Returns `Err(StorageKeyNotFound)` |
-| `get_invoice_investment(id)` | Returns `Err(StorageKeyNotFound)` |
-| `get_bids_for_invoice(id)` | Returns empty `Vec` |
-| `get_best_bid(id)` | Returns `None` |
-| `get_ranked_bids(id)` | Returns empty `Vec` |
-| `get_bids_by_status(id, status)` | Returns empty `Vec` |
-| `get_bids_by_investor(id, investor)` | Returns empty `Vec` |
-| `get_all_bids_by_investor(investor)` | Returns empty `Vec` |
-| `get_business_invoices(business)` | Returns empty `Vec` |
-| `get_investments_by_investor(investor)` | Returns empty `Vec` |
-| `get_escrow_details(id)` | Returns `Err(StorageKeyNotFound)` |
-| `get_bid_history_paged(id, ...)` | Returns empty `Vec` (capped) |
-| `get_investor_bids_paged(investor, ...)` | Returns empty `Vec` (capped) |
-| `cleanup_expired_bids(id)` | Returns `0` |
+| Endpoint                                 | Missing record behaviour          |
+| ---------------------------------------- | --------------------------------- |
+| `get_invoice(id)`                        | Returns `Err(InvoiceNotFound)`    |
+| `get_bid(id)`                            | Returns `None`                    |
+| `get_investment(id)`                     | Returns `Err(StorageKeyNotFound)` |
+| `get_invoice_investment(id)`             | Returns `Err(StorageKeyNotFound)` |
+| `get_bids_for_invoice(id)`               | Returns empty `Vec`               |
+| `get_best_bid(id)`                       | Returns `None`                    |
+| `get_ranked_bids(id)`                    | Returns empty `Vec`               |
+| `get_bids_by_status(id, status)`         | Returns empty `Vec`               |
+| `get_bids_by_investor(id, investor)`     | Returns empty `Vec`               |
+| `get_all_bids_by_investor(investor)`     | Returns empty `Vec`               |
+| `get_business_invoices(business)`        | Returns empty `Vec`               |
+| `get_investments_by_investor(investor)`  | Returns empty `Vec`               |
+| `get_escrow_details(id)`                 | Returns `Err(StorageKeyNotFound)` |
+| `get_bid_history_paged(id, ...)`         | Returns empty `Vec` (capped)      |
+| `get_investor_bids_paged(investor, ...)` | Returns empty `Vec` (capped)      |
+| `cleanup_expired_bids(id)`               | Returns `0`                       |
 
 ---
 
@@ -127,8 +140,71 @@ fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError>
 ---
 
 ## Running Tests
+
 ```bash
 cd quicklendx-contracts
 cargo test test_queries
 cargo test test_limit
+```
+
+---
+
+## Pure Pagination Module (`src/pagination.rs`)
+
+A self-contained, dependency-free pagination utility module that powers every
+query endpoint's offset/limit handling. It is decoupled from Soroban storage
+so its semantics can be unit-tested in isolation and is therefore runnable
+today even while the legacy contract library is mid-migration.
+
+### Public API
+
+| Symbol                       | Purpose                                                         |
+| ---------------------------- | --------------------------------------------------------------- |
+| `MAX_QUERY_LIMIT: u32`       | Hard cap = 100 records per response.                            |
+| `cap_query_limit`            | Clamp any `limit` to `MAX_QUERY_LIMIT`.                         |
+| `validate_pagination_params` | Returns `(safe_offset, effective_limit, has_more)` for a total. |
+| `calculate_safe_bounds`      | Returns `[start, end)` slice bounds, always within collection.  |
+| `paginate_slice<T: Clone>`   | Generic `offset/limit` slice over any `&[T]`; stable ordering.  |
+
+### Invariants
+
+1. **Hard cap** — No call returns more than `MAX_QUERY_LIMIT` items.
+2. **Empty on overflow** — `offset >= total_count` always returns empty.
+3. **Stable ordering** — Input order is preserved; no sorting, no dedup.
+4. **No unbounded loops** — Every loop is bounded by
+   `min(limit, MAX_QUERY_LIMIT, remaining)`.
+5. **No panics** — All arithmetic uses `saturating_*`; no `unwrap()` or
+   indexing outside pre-computed safe bounds.
+
+### Security assumptions
+
+- Worst-case allocation per call ≤ `MAX_QUERY_LIMIT * size_of::<T>()` bytes.
+- `(offset, limit) = (u32::MAX, u32::MAX)` for any `total_count` is a no-op
+  (empty result, no panic).
+- Read-only; no authorization required.
+- Independent of validator order — output is a function of
+  `(items, offset, limit)` only.
+
+### Test coverage
+
+Located at `src/test_queries.rs` and `src/test_investment_queries.rs`, both
+wired into `src/lib.rs` behind `#[cfg(test)]`.
+
+Coverage highlights:
+
+- `limit=0` returns empty (deterministic across collection sizes).
+- `offset >= total_count` returns empty (including `u32::MAX`).
+- `limit > MAX_QUERY_LIMIT` is clamped to `MAX_QUERY_LIMIT`.
+- Stable ordering across repeated calls and consecutive pages.
+- No duplicates across pages (`size ∈ {1, 3, 7, 25, MAX_QUERY_LIMIT}`).
+- Cross-type coverage: `u64`, `[u8; 32]`, `String` newtype, and a mock
+  `Investment` struct.
+- Proptest properties: clamping, order preservation, page coverage, and
+  no-panic-on-`u32::MAX` extremes.
+
+### Running
+
+```bash
+cd quicklendx-contracts
+cargo test --verbose
 ```
