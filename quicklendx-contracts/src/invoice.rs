@@ -951,7 +951,7 @@ impl InvoiceStorage {
                 InvoiceStatus::Paid => symbol_short!("paid"),
                 InvoiceStatus::Defaulted => symbol_short!("default"),
                 InvoiceStatus::Cancelled => symbol_short!("canceld"),
-                InvoiceStatus::Refunded => symbol_short!("refunded"),
+                InvoiceStatus::Refunded => symbol_short!("refundd"),
             };
             env.storage().instance().remove(&key);
         }
