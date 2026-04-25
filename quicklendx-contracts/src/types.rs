@@ -1,15 +1,15 @@
-//! Core data types for the QuickLendX invoice factoring protocol.
+//! Core data types for the QuickLendX protocol.
 //!
-//! This module defines all the fundamental types used throughout the contract,
-//! including invoices, bids, investments, and their associated enums and structs.
+//! This module defines the persistent data structures stored in the blockchain.
+//! All types are designed for Soroban compatibility using `#[contracttype]`.
 //!
-//! # Security Notes
-//!
-//! - All types use `#[contracttype]` to ensure proper serialization for on-chain storage
-//! - Types are designed to be immutable where possible to prevent unauthorized modifications
+//! Key design principles:
+//! - Direct storage optimization: minimal nesting for frequently accessed fields
+//! - Future-proofing: use of optional fields and versioned enums
+//! - Type safety: strong typing for status and categories
 //! - Addresses are used for identity to leverage Soroban's built-in access control
 
-use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
+use soroban_sdk::{contracttype, Address, BytesN, Env, IntoVal, String, Vec};
 
 /// Invoice status enumeration representing the lifecycle of an invoice
 #[contracttype]
@@ -29,15 +29,14 @@ pub enum InvoiceStatus {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BidStatus {
     Placed,
-    Withdrawn,
     Accepted,
+    Withdrawn,
     Expired,
-    Cancelled,
 }
 
 /// Investment status enumeration
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvestmentStatus {
     Active,
     Withdrawn,
@@ -48,53 +47,40 @@ pub enum InvestmentStatus {
 
 /// Dispute status enumeration
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DisputeStatus {
     None,
-    Disputed,
     UnderReview,
     Resolved,
 }
 
-/// Invoice category enumeration for classification
+/// Invoice category for classification
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvoiceCategory {
     Services,
-    Products,
+    Goods,
     Consulting,
-    Manufacturing,
-    Technology,
-    Healthcare,
+    Logistics,
     Other,
 }
 
-/// Compact representation of a line item stored on-chain
+/// Line item record for invoice metadata
 #[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LineItemRecord(pub String, pub i128, pub i128, pub i128);
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LineItemRecord(pub String, pub u32, pub i128, pub i128);
 
-/// Metadata associated with an invoice
-#[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct InvoiceMetadata {
-    pub customer_name: String,
-    pub customer_address: String,
-    pub tax_id: String,
-    pub line_items: Vec<LineItemRecord>,
-    pub notes: String,
-}
-
-/// Individual payment record for an invoice
+/// Payment record for invoice history
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaymentRecord {
     pub amount: i128,
+    pub payer: Address,
     pub timestamp: u64,
     pub transaction_id: String,
 }
 
-/// Dispute structure
+/// Dispute data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Dispute {
@@ -111,13 +97,13 @@ pub struct Dispute {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceRating {
-    pub rating: u32,
-    pub feedback: String,
-    pub rated_by: Address,
-    pub rated_at: u64,
+    pub rater: Address,
+    pub score: u32, // 1-5
+    pub comment: String,
+    pub timestamp: u64,
 }
 
-/// Core invoice data structure
+/// Core Invoice data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Invoice {
@@ -149,6 +135,134 @@ pub struct Invoice {
     pub payment_history: Vec<PaymentRecord>,
 }
 
+/// Helper struct for metadata updates
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvoiceMetadata {
+    pub customer_name: String,
+    pub customer_address: String,
+    pub tax_id: String,
+    pub line_items: Vec<LineItemRecord>,
+    pub notes: String,
+}
+
+impl Invoice {
+    pub fn new(
+        env: &Env,
+        business: Address,
+        amount: i128,
+        currency: Address,
+        due_date: u64,
+        description: String,
+        category: InvoiceCategory,
+        tags: Vec<String>,
+    ) -> Result<Self, crate::errors::QuickLendXError> {
+        let id = env.crypto().sha256(&(&business, &amount, &due_date, env.ledger().timestamp()).into_val(env));
+        let timestamp = env.ledger().timestamp();
+
+        Ok(Self {
+            id,
+            business: business.clone(),
+            amount,
+            currency,
+            due_date,
+            status: InvoiceStatus::Pending,
+            description,
+            category,
+            tags,
+            metadata_customer_name: None,
+            metadata_customer_address: None,
+            metadata_tax_id: None,
+            metadata_notes: None,
+            metadata_line_items: Vec::new(env),
+            funded_amount: 0,
+            funded_at: None,
+            investor: None,
+            settled_at: None,
+            total_paid: 0,
+            payment_history: Vec::new(env),
+            average_rating: None,
+            total_ratings: 0,
+            ratings: Vec::new(env),
+            dispute_status: DisputeStatus::None,
+            dispute: Dispute {
+                created_by: business.clone(),
+                created_at: 0,
+                reason: String::from_str(env, ""),
+                evidence: String::from_str(env, ""),
+                resolution: String::from_str(env, ""),
+                resolved_by: business.clone(),
+                resolved_at: 0,
+            },
+            created_at: timestamp,
+            updated_at: timestamp,
+        })
+    }
+
+    pub fn verify(&mut self, env: &Env, _actor: Address) {
+        self.status = InvoiceStatus::Verified;
+        self.updated_at = env.ledger().timestamp();
+    }
+
+    pub fn cancel(&mut self, env: &Env, _actor: Address) -> Result<(), crate::errors::QuickLendXError> {
+        if self.status != InvoiceStatus::Pending && self.status != InvoiceStatus::Verified {
+            return Err(crate::errors::QuickLendXError::InvalidStatus);
+        }
+        self.status = InvoiceStatus::Cancelled;
+        self.updated_at = env.ledger().timestamp();
+        Ok(())
+    }
+
+    pub fn mark_as_paid(&mut self, env: &Env, _actor: Address, timestamp: u64) {
+        self.status = InvoiceStatus::Paid;
+        self.settled_at = Some(timestamp);
+        self.updated_at = timestamp;
+    }
+
+    pub fn mark_as_defaulted(&mut self) {
+        self.status = InvoiceStatus::Defaulted;
+    }
+
+    pub fn mark_as_funded(&mut self, env: &Env, _actor: Address, amount: i128, timestamp: u64) {
+        self.status = InvoiceStatus::Funded;
+        self.funded_amount = amount;
+        self.funded_at = Some(timestamp);
+        self.updated_at = timestamp;
+    }
+
+    pub fn set_metadata(&mut self, env: &Env, metadata: Option<InvoiceMetadata>) -> Result<(), crate::errors::QuickLendXError> {
+        if let Some(m) = metadata {
+            self.metadata_customer_name = Some(m.customer_name);
+            self.metadata_customer_address = Some(m.customer_address);
+            self.metadata_tax_id = Some(m.tax_id);
+            self.metadata_line_items = m.line_items;
+            self.metadata_notes = Some(m.notes);
+        } else {
+            self.metadata_customer_name = None;
+            self.metadata_customer_address = None;
+            self.metadata_tax_id = None;
+            self.metadata_line_items = Vec::new(env);
+            self.metadata_notes = None;
+        }
+        self.updated_at = env.ledger().timestamp();
+        Ok(())
+    }
+
+    pub fn metadata(&self) -> Option<InvoiceMetadata> {
+        if let Some(name) = self.metadata_customer_name.clone() {
+            Some(InvoiceMetadata {
+                customer_name: name,
+                customer_address: self.metadata_customer_address.clone().unwrap_or(String::from_str(self.metadata_line_items.env(), "")),
+                tax_id: self.metadata_tax_id.clone().unwrap_or(String::from_str(self.metadata_line_items.env(), "")),
+                line_items: self.metadata_line_items.clone(),
+                notes: self.metadata_notes.clone().unwrap_or(String::from_str(self.metadata_line_items.env(), "")),
+            })
+        } else {
+            None
+        }
+    }
+}
+
 /// Bid data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -161,17 +275,6 @@ pub struct Bid {
     pub timestamp: u64,
     pub status: BidStatus,
     pub expiration_timestamp: u64,
-}
-
-/// Insurance coverage structure
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InsuranceCoverage {
-    pub provider: Address,
-    pub coverage_amount: i128,
-    pub premium_amount: i128,
-    pub coverage_percentage: u32,
-    pub active: bool,
 }
 
 /// Investment data structure
@@ -187,21 +290,22 @@ pub struct Investment {
     pub insurance: Vec<InsuranceCoverage>,
 }
 
-/// Platform fee configuration
-
+/// Insurance coverage record
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PlatformFee {
-    pub fee_bps: u32,
-    pub recipient: Address,
-    pub description: String,
+pub struct InsuranceCoverage {
+    pub provider: Address,
+    pub coverage_percentage: u32,
+    pub coverage_amount: i128,
+    pub premium_amount: i128,
+    pub active: bool,
 }
 
+/// Platform fee configuration
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeConfig {
-    pub verification_fee: PlatformFee,
-    pub settlement_fee: PlatformFee,
-    pub bid_fee: PlatformFee,
-    pub investment_fee: PlatformFee,
+    pub fee_bps: u32,
+    pub updated_at: u64,
+    pub updated_by: Address,
 }
