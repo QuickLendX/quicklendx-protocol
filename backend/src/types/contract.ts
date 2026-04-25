@@ -119,3 +119,38 @@ export interface Dispute extends VersionedRecord {
   created_at: number;
   resolved_at?: number;
 }
+
+// Notification-related types
+export enum NotificationType {
+  InvoiceFunded = "invoice_funded",
+  PaymentReceived = "payment_received",
+  DisputeOpened = "dispute_opened",
+  DisputeResolved = "dispute_resolved",
+}
+
+export interface NotificationEvent {
+  id: string; // Event ID for idempotency
+  type: NotificationType;
+  user_id: string; // Stellar address or user identifier
+  invoice_id?: string;
+  amount?: string;
+  timestamp: number;
+  metadata?: Record<string, any>;
+}
+
+export interface UserNotificationPreferences {
+  email_enabled: boolean;
+  email_address?: string;
+  notifications: {
+    [NotificationType.InvoiceFunded]: boolean;
+    [NotificationType.PaymentReceived]: boolean;
+    [NotificationType.DisputeOpened]: boolean;
+    [NotificationType.DisputeResolved]: boolean;
+  };
+}
+
+export interface NotificationTemplate {
+  subject: string;
+  html: string;
+  text: string;
+}

@@ -10,6 +10,7 @@ const router = Router();
 router.use("/invoices", invoiceRoutes);
 router.use("/bids", bidRoutes);
 router.use("/settlements", settlementRoutes);
+router.use("/notifications", notificationRoutes);
 router.use("/test-errors", testErrorRoutes);
 router.use("/webhooks", webhookRoutes);
 
@@ -49,6 +50,23 @@ router.post(
     res.status(201).json({ success: true, message: "Critical action accepted" });
   }
 );
+
+// Event processing endpoint (for indexer to post events)
+router.post("/events", async (req, res) => {
+  try {
+    const { eventProcessor } = await import("../../services/eventProcessor");
+    const events = Array.isArray(req.body) ? req.body : [req.body];
+
+    for (const event of events) {
+      await eventProcessor.processEvent(event);
+    }
+
+    res.json({ success: true, processed: events.length });
+  } catch (error) {
+    console.error("Error processing events:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // V1 Health check
 router.get("/health", (req, res) => {
