@@ -21,6 +21,7 @@ pub enum InvoiceStatus {
     Paid,
     Defaulted,
     Cancelled,
+    Refunded,
 }
 
 /// Bid status enumeration
@@ -126,15 +127,26 @@ pub struct Invoice {
     pub currency: Address,
     pub due_date: u64,
     pub status: InvoiceStatus,
+    pub created_at: u64,
     pub description: String,
+    pub metadata_customer_name: Option<String>,
+    pub metadata_customer_address: Option<String>,
+    pub metadata_tax_id: Option<String>,
+    pub metadata_notes: Option<String>,
+    pub metadata_line_items: Vec<LineItemRecord>,
     pub category: InvoiceCategory,
     pub tags: Vec<String>,
-    pub metadata: InvoiceMetadata,
-    pub dispute: Dispute,
-    pub payments: Vec<PaymentRecord>,
+    pub funded_amount: i128,
+    pub funded_at: Option<u64>,
+    pub investor: Option<Address>,
+    pub settled_at: Option<u64>,
+    pub average_rating: Option<u32>,
+    pub total_ratings: u32,
     pub ratings: Vec<InvoiceRating>,
-    pub created_at: u64,
-    pub updated_at: u64,
+    pub dispute_status: DisputeStatus,
+    pub dispute: Dispute,
+    pub total_paid: i128,
+    pub payment_history: Vec<PaymentRecord>,
 }
 
 /// Bid data structure

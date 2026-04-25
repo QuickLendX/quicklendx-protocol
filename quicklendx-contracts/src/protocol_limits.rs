@@ -288,11 +288,11 @@ pub fn is_active_status(status: &InvoiceStatus) -> bool {
 /// Always reads from on-chain storage at check time. No cached or pre-computed
 /// counts are used to prevent manipulation by callers.
 pub fn count_active_invoices(env: &Env, business: &Address) -> Result<u32, QuickLendXError> {
-    let invoices = InvoiceStorage::get_business_invoices(env, business)?;
+    let invoices = InvoiceStorage::get_business_invoices(env, business);
     let mut active_count = 0u32;
 
     for invoice_id in invoices.iter() {
-        if let Some(invoice) = InvoiceStorage::get_invoice(env, invoice_id) {
+        if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
             if is_active_status(&invoice.status) {
                 active_count = active_count.saturating_add(1);
             }
