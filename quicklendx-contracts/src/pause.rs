@@ -62,6 +62,5 @@ impl PauseControl {
         } else {
             Ok(())
         }
-        Ok(())
     }
 }
