@@ -19,6 +19,7 @@ mod errors;
 mod escrow;
 mod events;
 mod fees;
+pub mod freshness;
 mod init;
 mod investment;
 mod invoice;
@@ -41,6 +42,8 @@ mod test_business_kyc;
 mod test_cancel_refund;
 #[cfg(test)]
 mod test_emergency_withdraw;
+#[cfg(test)]
+mod test_freshness;
 #[cfg(test)]
 mod test_init;
 #[cfg(test)]
@@ -109,6 +112,69 @@ fn cap_query_limit(limit: u32) -> u32 {
     limit.min(MAX_QUERY_LIMIT)
 }
 
+/// Write a `u32` as ASCII decimal into `buf`, return byte length.
+#[inline]
+fn u32_to_ascii_lib(mut value: u32, buf: &mut [u8; 10]) -> usize {
+    if value == 0 {
+        buf[0] = b'0';
+        return 1;
+    }
+    let mut tmp = [0u8; 10];
+    let mut len = 0usize;
+    while value > 0 {
+        tmp[len] = b'0' + (value % 10) as u8;
+        value /= 10;
+        len += 1;
+    }
+    for i in 0..len {
+        buf[i] = tmp[len - 1 - i];
+    }
+    len
+}
+
+/// Convert an `i64` to a soroban `String` using stack-allocated ASCII.
+#[inline]
+fn i64_to_string_lib(env: &Env, value: i64) -> String {
+    // "-9223372036854775808" = 20 chars
+    let mut buf = [0u8; 21];
+    let mut tmp = [0u8; 20];
+    let (negative, abs_val) = if value < 0 {
+        (true, (value as i128).unsigned_abs() as u64)
+    } else {
+        (false, value as u64)
+    };
+    let n = u64_to_ascii_20(abs_val, &mut tmp);
+    let start = if negative {
+        buf[0] = b'-';
+        buf[1..1 + n].copy_from_slice(&tmp[..n]);
+        1 + n
+    } else {
+        buf[..n].copy_from_slice(&tmp[..n]);
+        n
+    };
+    let s = core::str::from_utf8(&buf[..start]).unwrap_or("0");
+    String::from_str(env, s)
+}
+
+#[inline]
+fn u64_to_ascii_20(mut value: u64, buf: &mut [u8; 20]) -> usize {
+    if value == 0 {
+        buf[0] = b'0';
+        return 1;
+    }
+    let mut tmp = [0u8; 20];
+    let mut len = 0usize;
+    while value > 0 {
+        tmp[len] = b'0' + (value % 10) as u8;
+        value /= 10;
+        len += 1;
+    }
+    for i in 0..len {
+        buf[i] = tmp[len - 1 - i];
+    }
+    len
+}
+
 #[contractimpl]
 impl QuickLendXContract {
     // ============================================================================
@@ -138,6 +204,62 @@ impl QuickLendXContract {
     /// Major versions indicate breaking changes that require migration.
     pub fn get_version(_env: Env) -> u32 {
         1u32
+    }
+
+    /// Return data freshness metadata for the current ledger state.
+    ///
+    /// Clients use this to determine whether displayed data is near-real-time
+    /// or lagging. Call alongside any data query.
+    ///
+    /// # Parameters
+    /// * `indexed_ledger_seq` — last ledger sequence the caller's indexer has processed
+    /// * `indexed_ledger_timestamp` — Unix timestamp (seconds) of that ledger's close
+    /// * `offset` — pagination offset to embed in the returned cursor
+    ///
+    /// # Returns
+    /// A `Map<String, String>` with keys:
+    /// - `"last_indexed_ledger"` → ledger sequence as decimal string
+    /// - `"index_lag_seconds"` → lag in seconds as decimal string
+    /// - `"last_updated_at"` → ISO 8601 UTC timestamp
+    /// - `"cursor"` → opaque cursor `"<ledger_seq>_<offset>"`
+    ///
+    /// # Security
+    /// Only public ledger data is returned. No node addresses, validator
+    /// identities, or network topology are exposed.
+    pub fn get_freshness(
+        env: Env,
+        indexed_ledger_seq: u32,
+        indexed_ledger_timestamp: u64,
+        offset: u32,
+    ) -> Map<String, String> {
+        let meta = freshness::FreshnessMetadata::from_env(
+            &env,
+            indexed_ledger_seq,
+            indexed_ledger_timestamp,
+            offset,
+        );
+
+        let mut map = Map::new(&env);
+
+        let mut seq_buf = [0u8; 10];
+        let seq_len = u32_to_ascii_lib(meta.last_indexed_ledger, &mut seq_buf);
+        let seq_str = core::str::from_utf8(&seq_buf[..seq_len]).unwrap_or("0");
+        map.set(
+            String::from_str(&env, "last_indexed_ledger"),
+            String::from_str(&env, seq_str),
+        );
+
+        let lag_str = i64_to_string_lib(&env, meta.index_lag_seconds);
+        map.set(String::from_str(&env, "index_lag_seconds"), lag_str);
+
+        map.set(
+            String::from_str(&env, "last_updated_at"),
+            meta.last_updated_at,
+        );
+
+        map.set(String::from_str(&env, "cursor"), meta.cursor);
+
+        map
     }
 
     /// Initialize the admin address (deprecated: use initialize)
@@ -1142,8 +1264,7 @@ impl QuickLendXContract {
         investor: Address,
         investment_limit: i128,
     ) -> Result<(), QuickLendXError> {
-        let admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         let verification = do_verify_investor(&env, &admin, &investor, investment_limit)?;
         emit_investor_verified(&env, &verification);
         Ok(())
@@ -1175,8 +1296,7 @@ impl QuickLendXContract {
         investor: Address,
         new_limit: i128,
     ) -> Result<(), QuickLendXError> {
-        let admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         verification::set_investment_limit(&env, &admin, &investor, new_limit)
     }
 
@@ -1679,8 +1799,7 @@ impl QuickLendXContract {
 
     /// Configure treasury address for platform fee routing (admin only)
     pub fn configure_treasury(env: Env, treasury_address: Address) -> Result<(), QuickLendXError> {
-        let admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
 
         let _treasury_config =
             fees::FeeManager::configure_treasury(&env, &admin, treasury_address.clone())?;
@@ -1693,8 +1812,7 @@ impl QuickLendXContract {
 
     /// Update platform fee basis points (admin only)
     pub fn update_platform_fee_bps(env: Env, new_fee_bps: u32) -> Result<(), QuickLendXError> {
-        let admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
 
         let old_config = fees::FeeManager::get_platform_fee_config(&env)?;
         let old_fee_bps = old_config.fee_bps;
@@ -1789,8 +1907,7 @@ impl QuickLendXContract {
         min_distribution_amount: i128,
     ) -> Result<(), QuickLendXError> {
         // Verify admin
-        let stored_admin =
-            admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let stored_admin = admin::AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         if admin != stored_admin {
             return Err(QuickLendXError::NotAdmin);
         }

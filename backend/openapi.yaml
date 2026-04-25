@@ -50,13 +50,18 @@ paths:
             $ref: '#/components/schemas/InvoiceStatus'
       responses:
         '200':
-          description: List of invoices
+          description: List of invoices with freshness metadata
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Invoice'
+                allOf:
+                  - $ref: '#/components/schemas/FreshnessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Invoice'
 
   /invoices/{id}:
     get:
@@ -69,11 +74,16 @@ paths:
             type: string
       responses:
         '200':
-          description: Invoice details
+          description: Invoice details with freshness metadata
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Invoice'
+                allOf:
+                  - $ref: '#/components/schemas/FreshnessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Invoice'
         '404':
           description: Invoice not found
 
@@ -91,13 +101,18 @@ paths:
             type: string
       responses:
         '200':
-          description: List of bids
+          description: List of bids with freshness metadata
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Bid'
+                allOf:
+                  - $ref: '#/components/schemas/FreshnessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Bid'
 
   /settlements:
     get:
@@ -109,13 +124,18 @@ paths:
             type: string
       responses:
         '200':
-          description: List of settlements
+          description: List of settlements with freshness metadata
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Settlement'
+                allOf:
+                  - $ref: '#/components/schemas/FreshnessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Settlement'
 
   /settlements/{id}:
     get:
@@ -128,11 +148,16 @@ paths:
             type: string
       responses:
         '200':
-          description: Settlement details
+          description: Settlement details with freshness metadata
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Settlement'
+                allOf:
+                  - $ref: '#/components/schemas/FreshnessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Settlement'
         '404':
           description: Settlement not found
 
@@ -147,16 +172,67 @@ paths:
             type: string
       responses:
         '200':
-          description: List of disputes
+          description: List of disputes with freshness metadata
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Dispute'
+                allOf:
+                  - $ref: '#/components/schemas/FreshnessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Dispute'
 
 components:
   schemas:
+    FreshnessMetadata:
+      type: object
+      description: >
+        Data freshness metadata. Clients SHOULD warn users when indexLagSeconds > 30
+        and SHOULD block irreversible financial actions when indexLagSeconds > 120.
+        Only public ledger data is exposed — no node addresses or network topology.
+      required:
+        - lastIndexedLedger
+        - indexLagSeconds
+        - lastUpdatedAt
+        - cursor
+      properties:
+        lastIndexedLedger:
+          type: integer
+          format: int64
+          description: Last ledger sequence number processed by the indexer.
+          example: 1042857
+        indexLagSeconds:
+          type: number
+          format: double
+          description: >
+            Seconds the indexer is behind the chain tip.
+            0 when the indexer is current. Computed as lagLedgers × 5 (Stellar ~5 s/ledger).
+          example: 10
+        lastUpdatedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 UTC timestamp of the indexed ledger close time.
+          example: "2024-03-15T10:22:41Z"
+        cursor:
+          type: string
+          description: >
+            Opaque pagination/replay cursor. Do not parse — treat as a black box.
+            Format is an implementation detail and may change.
+          example: "1042857_0"
+
+    FreshnessEnvelope:
+      type: object
+      description: Generic response wrapper pairing a data payload with freshness metadata.
+      required:
+        - data
+        - freshness
+      properties:
+        freshness:
+          $ref: '#/components/schemas/FreshnessMetadata'
+
     InvoiceStatus:
       type: string
       enum: [Pending, Verified, Funded, Paid, Defaulted, Cancelled]

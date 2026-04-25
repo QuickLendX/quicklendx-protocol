@@ -1,3 +1,27 @@
+/**
+ * Freshness metadata attached to every API response.
+ * Clients use this to determine whether displayed data is near-real-time or lagging.
+ *
+ * Security: only public ledger data is exposed — no node addresses, validator
+ * identities, or network topology.
+ */
+export interface FreshnessMetadata {
+  /** Last ledger sequence number processed by the indexer. */
+  lastIndexedLedger: number;
+  /** Seconds between the indexed ledger's close time and now. 0 when current. */
+  indexLagSeconds: number;
+  /** ISO 8601 UTC timestamp of the indexed ledger close time. */
+  lastUpdatedAt: string;
+  /** Opaque pagination/replay cursor. Do not parse — treat as a black box. */
+  cursor: string;
+}
+
+/** Generic response wrapper pairing any payload with freshness metadata. */
+export interface ApiResponse<T> {
+  data: T;
+  freshness: FreshnessMetadata;
+}
+
 export enum InvoiceStatus {
   Pending = "Pending",
   Verified = "Verified",

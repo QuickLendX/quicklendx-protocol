@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../../types/contract";
+import { freshnessService } from "../../services/freshnessService";
 
 // Mock data aligned with contract types
 const MOCK_INVOICES: Invoice[] = [
@@ -38,7 +39,6 @@ export const getInvoices = async (
   next: NextFunction
 ) => {
   try {
-    // In a real implementation, you would fetch from a DB/Indexer
     const { business, status } = req.query;
 
     let filtered = [...MOCK_INVOICES];
@@ -49,7 +49,7 @@ export const getInvoices = async (
       filtered = filtered.filter((i) => i.status === status);
     }
 
-    res.json(filtered);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }
@@ -73,7 +73,7 @@ export const getInvoiceById = async (
       });
     }
 
-    res.json(invoice);
+    res.json({ data: invoice, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }

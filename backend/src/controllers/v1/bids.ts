@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Bid, BidStatus } from "../../types/contract";
+import { freshnessService } from "../../services/freshnessService";
 
 const MOCK_BIDS: Bid[] = [
   {
@@ -30,7 +31,7 @@ export const getBids = async (
       filtered = filtered.filter((b) => b.investor === investor);
     }
 
-    res.json(filtered);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Dispute, DisputeStatus } from "../../types/contract";
+import { freshnessService } from "../../services/freshnessService";
 
 const MOCK_DISPUTES: Dispute[] = [
   {
@@ -25,7 +26,7 @@ export const getDisputes = async (
       filtered = filtered.filter((d) => d.invoice_id === invoice_id);
     }
 
-    res.json(filtered);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }
