@@ -1882,3 +1882,279 @@ fn test_release_escrow_funds_retry_after_balance_restored() {
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Funded);
 }
+
+// ============================================================================
+// Escrow Query Consistency Tests (Issue #831)
+//
+// These tests verify that get_escrow_details and get_escrow_status agree at
+// every lifecycle transition (Held → Released, Held → Refunded), that
+// immutable fields on the escrow record are stable across those transitions,
+// and that both query surfaces return the same deterministic error for any
+// invoice ID that has no escrow record.
+// ============================================================================
+
+/// `get_escrow_details().status` and `get_escrow_status()` agree in Held state.
+#[test]
+fn test_query_details_status_match_held() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1_000);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let details = client.get_escrow_details(&invoice_id);
+    let status = client.get_escrow_status(&invoice_id);
+
+    assert_eq!(details.status, EscrowStatus::Held);
+    assert_eq!(status, EscrowStatus::Held);
+    assert_eq!(details.status, status, "details.status must equal get_escrow_status()");
+}
+
+/// `get_escrow_details().status` and `get_escrow_status()` agree in Released state.
+#[test]
+fn test_query_details_status_match_released() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1_000);
+    client.accept_bid(&invoice_id, &bid_id);
+    client.release_escrow_funds(&invoice_id);
+
+    let details = client.get_escrow_details(&invoice_id);
+    let status = client.get_escrow_status(&invoice_id);
+
+    assert_eq!(details.status, EscrowStatus::Released);
+    assert_eq!(status, EscrowStatus::Released);
+    assert_eq!(details.status, status, "details.status must equal get_escrow_status()");
+}
+
+/// `get_escrow_details().status` and `get_escrow_status()` agree in Refunded state.
+#[test]
+fn test_query_details_status_match_refunded() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1_000);
+    client.accept_bid(&invoice_id, &bid_id);
+    client.refund_escrow_funds(&invoice_id, &admin);
+
+    let details = client.get_escrow_details(&invoice_id);
+    let status = client.get_escrow_status(&invoice_id);
+
+    assert_eq!(details.status, EscrowStatus::Refunded);
+    assert_eq!(status, EscrowStatus::Refunded);
+    assert_eq!(details.status, status, "details.status must equal get_escrow_status()");
+}
+
+/// Immutable fields (escrow_id, invoice_id, investor, business, amount, currency,
+/// created_at) must be identical before and after a Held → Released transition.
+#[test]
+fn test_query_immutable_fields_stable_across_release() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1_000);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let before = client.get_escrow_details(&invoice_id);
+    client.release_escrow_funds(&invoice_id);
+    let after = client.get_escrow_details(&invoice_id);
+
+    assert_eq!(before.escrow_id, after.escrow_id, "escrow_id must not change");
+    assert_eq!(before.invoice_id, after.invoice_id, "invoice_id must not change");
+    assert_eq!(before.investor, after.investor, "investor must not change");
+    assert_eq!(before.business, after.business, "business must not change");
+    assert_eq!(before.amount, after.amount, "amount must not change");
+    assert_eq!(before.currency, after.currency, "currency must not change");
+    assert_eq!(before.created_at, after.created_at, "created_at must not change");
+    assert_ne!(before.status, after.status, "only status should differ");
+}
+
+/// Immutable fields must be identical before and after a Held → Refunded transition.
+#[test]
+fn test_query_immutable_fields_stable_across_refund() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1_000);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let before = client.get_escrow_details(&invoice_id);
+    client.refund_escrow_funds(&invoice_id, &admin);
+    let after = client.get_escrow_details(&invoice_id);
+
+    assert_eq!(before.escrow_id, after.escrow_id);
+    assert_eq!(before.invoice_id, after.invoice_id);
+    assert_eq!(before.investor, after.investor);
+    assert_eq!(before.business, after.business);
+    assert_eq!(before.amount, after.amount);
+    assert_eq!(before.currency, after.currency);
+    assert_eq!(before.created_at, after.created_at);
+    assert_ne!(before.status, after.status);
+}
+
+/// Both `get_escrow_details` and `get_escrow_status` must return
+/// `StorageKeyNotFound` for an invoice that has never had an escrow.
+#[test]
+fn test_query_missing_record_both_surfaces_return_storage_key_not_found() {
+    let (env, client, _admin) = setup();
+
+    let ghost_id = BytesN::from_array(&env, &[0xAB; 32]);
+
+    let details_err = client.try_get_escrow_details(&ghost_id).unwrap_err().unwrap();
+    let status_err = client.try_get_escrow_status(&ghost_id).unwrap_err().unwrap();
+
+    assert_eq!(
+        details_err,
+        QuickLendXError::StorageKeyNotFound,
+        "get_escrow_details must return StorageKeyNotFound for missing escrow"
+    );
+    assert_eq!(
+        status_err,
+        QuickLendXError::StorageKeyNotFound,
+        "get_escrow_status must return StorageKeyNotFound for missing escrow"
+    );
+    assert_eq!(
+        details_err, status_err,
+        "both query surfaces must return the same error variant"
+    );
+}
+
+/// Missing-record error is stable: the same error is returned regardless of
+/// how many times the query is retried.
+#[test]
+fn test_query_missing_record_error_is_deterministic() {
+    let (env, client, _admin) = setup();
+
+    let ghost_id = BytesN::from_array(&env, &[0xFF; 32]);
+
+    let err1 = client.try_get_escrow_details(&ghost_id).unwrap_err().unwrap();
+    let err2 = client.try_get_escrow_details(&ghost_id).unwrap_err().unwrap();
+    let err3 = client.try_get_escrow_status(&ghost_id).unwrap_err().unwrap();
+    let err4 = client.try_get_escrow_status(&ghost_id).unwrap_err().unwrap();
+
+    assert_eq!(err1, QuickLendXError::StorageKeyNotFound);
+    assert_eq!(err1, err2, "repeated calls must return the same error");
+    assert_eq!(err3, QuickLendXError::StorageKeyNotFound);
+    assert_eq!(err3, err4, "repeated status calls must return the same error");
+}
+
+/// Querying an invoice ID that exists but has no escrow also returns
+/// `StorageKeyNotFound` (not `InvoiceNotFound` or any other variant).
+#[test]
+fn test_query_verified_invoice_without_escrow_returns_storage_key_not_found() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 10_000i128;
+    // Invoice is created and verified but never funded — no escrow exists.
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+
+    let details_err = client.try_get_escrow_details(&invoice_id).unwrap_err().unwrap();
+    let status_err = client.try_get_escrow_status(&invoice_id).unwrap_err().unwrap();
+
+    assert_eq!(details_err, QuickLendXError::StorageKeyNotFound);
+    assert_eq!(status_err, QuickLendXError::StorageKeyNotFound);
+}
+
+/// Repeated `get_escrow_details` calls on the same funded invoice return
+/// identical results (deterministic read behaviour).
+#[test]
+fn test_query_get_escrow_details_is_deterministic() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 10_000i128;
+    let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1_000);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let first = client.get_escrow_details(&invoice_id);
+    let second = client.get_escrow_details(&invoice_id);
+
+    assert_eq!(first.escrow_id, second.escrow_id);
+    assert_eq!(first.invoice_id, second.invoice_id);
+    assert_eq!(first.investor, second.investor);
+    assert_eq!(first.business, second.business);
+    assert_eq!(first.amount, second.amount);
+    assert_eq!(first.currency, second.currency);
+    assert_eq!(first.status, second.status);
+    assert_eq!(first.created_at, second.created_at);
+}
+
+/// Two independent invoices each hold their own escrow record; querying one
+/// never corrupts or alters the other.
+#[test]
+fn test_query_independent_escrows_do_not_cross_contaminate() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 100_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount_a = 5_000i128;
+    let invoice_a = create_verified_invoice(&env, &client, &business, amount_a, &currency);
+    let bid_a = place_test_bid(&client, &investor, &invoice_a, amount_a, amount_a + 500);
+    client.accept_bid(&invoice_a, &bid_a);
+
+    let amount_b = 8_000i128;
+    let invoice_b = create_verified_invoice(&env, &client, &business, amount_b, &currency);
+    let bid_b = place_test_bid(&client, &investor, &invoice_b, amount_b, amount_b + 500);
+    client.accept_bid(&invoice_b, &bid_b);
+
+    // Release escrow A only.
+    client.release_escrow_funds(&invoice_a);
+
+    let escrow_a = client.get_escrow_details(&invoice_a);
+    let escrow_b = client.get_escrow_details(&invoice_b);
+    let status_a = client.get_escrow_status(&invoice_a);
+    let status_b = client.get_escrow_status(&invoice_b);
+
+    assert_eq!(escrow_a.status, EscrowStatus::Released);
+    assert_eq!(status_a, EscrowStatus::Released);
+    assert_eq!(escrow_b.status, EscrowStatus::Held, "escrow B must stay Held");
+    assert_eq!(status_b, EscrowStatus::Held);
+
+    assert_ne!(escrow_a.invoice_id, escrow_b.invoice_id);
+    assert_eq!(escrow_a.amount, amount_a);
+    assert_eq!(escrow_b.amount, amount_b);
+}

@@ -23,6 +23,14 @@ fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
     }
 }
 
+/// @notice Track an invoice ID in the dispute index.
+/// @dev Idempotent helper used by contract entry points to keep query indexes consistent.
+/// @param env The contract environment.
+/// @param invoice_id The invoice to index as dispute-bearing.
+pub(crate) fn track_dispute_invoice(env: &Env, invoice_id: &BytesN<32>) {
+    add_to_dispute_index(env, invoice_id);
+}
+
 fn zero_address(env: &Env) -> Address {
     Address::from_str(
         env,
@@ -169,6 +177,13 @@ pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
     get_dispute_index(env)
 }
 
+/// @notice Read the dispute index for query endpoints.
+/// @param env The contract environment.
+/// @return Invoice IDs that have entered the dispute lifecycle.
+pub(crate) fn indexed_dispute_invoices(env: &Env) -> Vec<BytesN<32>> {
+    get_dispute_index(env)
+}
+
 #[allow(dead_code)]
 pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<BytesN<32>> {
     let mut result = Vec::new(env);
@@ -180,6 +195,14 @@ pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<
         }
     }
     result
+}
+
+/// @notice Filter dispute-indexed invoices by dispute status.
+/// @param env The contract environment.
+/// @param status Desired dispute status filter.
+/// @return Invoice IDs whose current dispute status matches `status`.
+pub(crate) fn indexed_invoices_by_status(env: &Env, status: &DisputeStatus) -> Vec<BytesN<32>> {
+    get_invoices_by_dispute_status(env, status)
 }
 // Invoice disputes are represented on [`crate::invoice::Invoice`] and handled by contract
 // entry points in `lib.rs`. This module is reserved for future dispute-specific helpers.
