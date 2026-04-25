@@ -17,7 +17,10 @@
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 use crate::errors::QuickLendXError;
-use crate::invoice::{Invoice, InvoiceCategory, InvoiceMetadata, LineItemRecord};
+use crate::invoice::{
+    Invoice, InvoiceCategory, InvoiceMetadata, LineItemRecord, MAX_INVOICE_TAGS,
+    MAX_RATINGS_PER_INVOICE,
+};
 use crate::storage::{Indexes, InvoiceStorage};
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -495,4 +498,94 @@ fn test_owner_succeeds_after_attacker_fails() {
         invoice.metadata_customer_name,
         Some(metadata.customer_name)
     );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 14. Tag normalization deduplicates at invoice construction
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_invoice_new_deduplicates_trimmed_casefolded_tags() {
+    let env = Env::default();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, "  Tech  "));
+    tags.push_back(String::from_str(&env, "tech"));
+    tags.push_back(String::from_str(&env, "TECH"));
+
+    let invoice = Invoice::new(
+        &env,
+        business,
+        1000,
+        currency,
+        env.ledger().timestamp() + 86400,
+        String::from_str(&env, "Normalized tags"),
+        InvoiceCategory::Services,
+        tags,
+    )
+    .expect("invoice creation should normalize tags");
+
+    assert_eq!(
+        invoice.tags.len(),
+        1,
+        "trim/case-equivalent tags must collapse to one canonical value"
+    );
+    assert_eq!(invoice.tags.get(0).unwrap(), String::from_str(&env, "tech"));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 15. Tag vector cap blocks unbounded growth
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_add_tag_rejects_when_max_tag_count_reached() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let business = Address::generate(&env);
+    let mut invoice = make_invoice(&env, &business);
+
+    for i in 0..MAX_INVOICE_TAGS {
+        let tag = String::from_str(&env, &format!("tag{}", i));
+        invoice.add_tag(&env, tag).expect("tag add should succeed");
+    }
+    assert_eq!(invoice.tags.len(), MAX_INVOICE_TAGS);
+
+    let err = invoice
+        .add_tag(&env, String::from_str(&env, "overflow-tag"))
+        .unwrap_err();
+    assert_eq!(err, QuickLendXError::TagLimitExceeded);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 16. Ratings vector cap blocks unbounded growth
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_add_rating_rejects_when_max_rating_count_reached() {
+    let env = Env::default();
+    let business = Address::generate(&env);
+    let mut invoice = make_invoice(&env, &business);
+
+    // add_rating is only valid when invoice is funded/paid.
+    invoice.status = crate::invoice::InvoiceStatus::Funded;
+
+    for i in 0..MAX_RATINGS_PER_INVOICE {
+        let rater = Address::generate(&env);
+        invoice
+            .add_rating(5, String::from_str(&env, "ok"), rater, i as u64 + 1)
+            .expect("rating add should succeed until max bound");
+    }
+
+    let err = invoice
+        .add_rating(
+            4,
+            String::from_str(&env, "excess"),
+            Address::generate(&env),
+            9999,
+        )
+        .unwrap_err();
+    assert_eq!(err, QuickLendXError::OperationNotAllowed);
 }
