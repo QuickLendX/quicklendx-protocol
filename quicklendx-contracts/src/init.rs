@@ -31,7 +31,7 @@
 //! - `set_treasury()` - Update treasury address
 //! - Currency whitelist management functions
 
-use crate::admin::AdminStorage;
+use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY};
 use crate::errors::QuickLendXError;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
@@ -174,11 +174,36 @@ impl ProtocolInitializer {
         // This ensures the designated admin address has consented to the role.
         params.admin.require_auth();
 
-        // Zero-address guard
-        let zero = Address::from_string(&soroban_sdk::String::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"));
+        // Zero-address guard: reject the well-known Stellar zero/burn address.
+        let zero = Address::from_string(&soroban_sdk::String::from_str(
+            env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        ));
         if params.admin == zero || params.treasury == zero {
             return Err(QuickLendXError::InvalidAddress);
         }
+        Self::initialize_internal(env, params)
+    }
+
+        Self::initialize_internal(env, params)
+    }
+
+        // Delegate to internal initialization logic
+        Self::initialize_internal(env, params)
+    }
+
+        if Self::is_initialization_locked(env) {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
+        Self::set_initialization_lock(env, true);
+        let result = Self::initialize_internal(env, params);
+        Self::set_initialization_lock(env, false);
+        result
+    }
+
+        Self::initialize_internal(env, params)
+    }
 
     /// Internal initialization logic with comprehensive validation
     fn initialize_internal(
@@ -188,16 +213,25 @@ impl ProtocolInitializer {
         // Check if already initialized (re-initialization protection with idempotency)
         if Self::is_initialized(env) {
             // Check for idempotency: if fully initialized with exact same parameters, return Ok(())
-            let current_admin: Option<Address> = env.storage().instance().get(&crate::admin::ADMIN_KEY);
+            let current_admin: Option<Address> =
+                env.storage().instance().get(&crate::admin::ADMIN_KEY);
             let current_treasury: Option<Address> = env.storage().instance().get(&TREASURY_KEY);
             let current_fee_bps: Option<u32> = env.storage().instance().get(&FEE_BPS_KEY);
-            let current_config: Option<ProtocolConfig> = env.storage().instance().get(&PROTOCOL_CONFIG_KEY);
-            let current_whitelist: Vec<Address> = env.storage().instance().get(&WHITELIST_KEY).unwrap_or(Vec::new(env));
+            let current_config: Option<ProtocolConfig> =
+                env.storage().instance().get(&PROTOCOL_CONFIG_KEY);
+            let current_whitelist: Vec<Address> = env
+                .storage()
+                .instance()
+                .get(&WHITELIST_KEY)
+                .unwrap_or(Vec::new(env));
 
-            if let (Some(c_admin), Some(c_treasury), Some(c_fee), Some(c_conf)) = 
-                (current_admin, current_treasury, current_fee_bps, current_config) 
-            {
-                if c_admin == params.admin 
+            if let (Some(c_admin), Some(c_treasury), Some(c_fee), Some(c_conf)) = (
+                current_admin,
+                current_treasury,
+                current_fee_bps,
+                current_config,
+            ) {
+                if c_admin == params.admin
                     && c_treasury == params.treasury
                     && c_fee == params.fee_bps
                     && c_conf.min_invoice_amount == params.min_invoice_amount
@@ -294,17 +328,19 @@ impl ProtocolInitializer {
     ///
     /// @notice Returns true when the initialization flag is set.
     pub fn is_initialized(env: &Env) -> bool {
-        let proto_init = env.storage()
+        let proto_init = env
+            .storage()
             .instance()
             .get(&PROTOCOL_INITIALIZED_KEY)
             .unwrap_or(false);
-        
+
         // Also check if admin was initialized via legacy/phased flow
-        let admin_init = env.storage()
+        let admin_init = env
+            .storage()
             .instance()
             .get(&ADMIN_INITIALIZED_KEY)
             .unwrap_or(false);
-            
+
         proto_init || admin_init
     }
 
@@ -321,7 +357,7 @@ impl ProtocolInitializer {
     /// * `Ok(())` if all parameters are valid
     /// * `Err(QuickLendXError)` with specific error for invalid parameters
     fn validate_initialization_params(
-        _env: &Env,
+        env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // VALIDATION: Fee basis points (0% to 10%)
@@ -347,6 +383,24 @@ impl ProtocolInitializer {
         // VALIDATION: Treasury address is not the same as admin (separation of concerns)
         if params.treasury == params.admin {
             return Err(QuickLendXError::InvalidAddress);
+        }
+
+        // VALIDATION: Initial currencies must not contain duplicates or
+        // reserved addresses (admin, treasury, contract itself).
+        let contract_address = env.current_contract_address();
+        let len = params.initial_currencies.len();
+        for i in 0..len {
+            let curr = params.initial_currencies.get(i).unwrap();
+            // Must not be a reserved address
+            if curr == params.admin || curr == params.treasury || curr == contract_address {
+                return Err(QuickLendXError::InvalidCurrency);
+            }
+            // Must not be a duplicate (O(n²) — list is expected to be small)
+            for j in (i + 1)..len {
+                if curr == params.initial_currencies.get(j).unwrap() {
+                    return Err(QuickLendXError::InvalidCurrency);
+                }
+            }
         }
 
         Ok(())

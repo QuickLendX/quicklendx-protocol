@@ -55,7 +55,13 @@ To prevent unbounded storage growth and protect against payment-count overflow, 
 
 4. **Storage Cost predictability**: Users and the protocol can predict maximum storage costs per invoice.
 
-### Cap Enforcement
+### Regression tests added
+
+- `test_partial_payment_rejected_after_explicit_settlement` ensures explicit settlement blocks further partial payments and produces no side effects.
+- `test_settlement_idempotency_no_side_effects` verifies repeated settlement attempts are rejected and cause no additional balance, event, or accounting changes.
+
+### Accounting Invariant
+Before disbursing funds, the settlement engine asserts:
 
 The cap is enforced in `record_payment()`:
 

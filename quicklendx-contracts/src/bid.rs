@@ -77,7 +77,6 @@ pub struct BidLimitConfig {
     pub is_custom: bool,
 }
 
-
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BidStatus {
@@ -280,7 +279,10 @@ impl BidStorage {
     /// for off-chain dashboards, admin panels, and test assertions.
     ///
     pub fn get_bid_limit_config(env: &Env) -> BidLimitConfig {
-        let stored: Option<u32> = env.storage().instance().get(&MAX_ACTIVE_BIDS_PER_INVESTOR_KEY);
+        let stored: Option<u32> = env
+            .storage()
+            .instance()
+            .get(&MAX_ACTIVE_BIDS_PER_INVESTOR_KEY);
         let limit = stored.unwrap_or(DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR);
         BidLimitConfig {
             limit,
@@ -290,7 +292,7 @@ impl BidStorage {
         }
     }
 
-     /// Returns `true` when the investor active-bid limit is enforced.
+    /// Returns `true` when the investor active-bid limit is enforced.
     ///
     /// Returns `false` when the limit has been set to `0`
     /// (`INVESTOR_BID_LIMIT_DISABLED`), meaning bids will **not** be rejected
@@ -306,7 +308,7 @@ impl BidStorage {
     ///     // enforcement is on; check count
     /// }
     /// ```
-     pub fn is_investor_bid_limit_active(env: &Env) -> bool {
+    pub fn is_investor_bid_limit_active(env: &Env) -> bool {
         Self::get_max_active_bids_per_investor(env) != INVESTOR_BID_LIMIT_DISABLED
     }
 
@@ -315,12 +317,12 @@ impl BidStorage {
     /// [`BidStorage::set_max_active_bids_per_investor`].
     pub fn investor_has_reached_bid_limit(env: &Env, investor: &Address) -> bool {
         let limit = Self::get_max_active_bids_per_investor(env);
- 
+
         // Limit of 0 means "disabled" — never block a placement.
         if limit == INVESTOR_BID_LIMIT_DISABLED {
             return false;
         }
- 
+
         let active = Self::count_active_placed_bids_for_investor(env, investor);
         active >= limit
     }
@@ -340,7 +342,7 @@ impl BidStorage {
         Ok(limit)
     }
 
-     /// Admin-only: reset the investor active-bid limit to the compile-time
+    /// Admin-only: reset the investor active-bid limit to the compile-time
     /// default (`DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR` = 20).
     ///
     /// Removes the stored override so `get_bid_limit_config` reports
@@ -742,7 +744,7 @@ impl BidStorage {
         if let Some(mut bid) = Self::get_bid(env, bid_id) {
             // SECURITY FIX: User must authorize their own bid cancellation
             bid.investor.require_auth();
-            
+
             if bid.status == BidStatus::Placed {
                 bid.status = BidStatus::Cancelled;
                 Self::update_bid(env, &bid);
