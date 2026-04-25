@@ -182,6 +182,8 @@ impl ProtocolInitializer {
         if params.admin == zero || params.treasury == zero {
             return Err(QuickLendXError::InvalidAddress);
         }
+        Self::initialize_internal(env, params)
+    }
 
         Self::initialize_internal(env, params)
     }
@@ -194,16 +196,25 @@ impl ProtocolInitializer {
         // Check if already initialized (re-initialization protection with idempotency)
         if Self::is_initialized(env) {
             // Check for idempotency: if fully initialized with exact same parameters, return Ok(())
-            let current_admin: Option<Address> = env.storage().instance().get(&crate::admin::ADMIN_KEY);
+            let current_admin: Option<Address> =
+                env.storage().instance().get(&crate::admin::ADMIN_KEY);
             let current_treasury: Option<Address> = env.storage().instance().get(&TREASURY_KEY);
             let current_fee_bps: Option<u32> = env.storage().instance().get(&FEE_BPS_KEY);
-            let current_config: Option<ProtocolConfig> = env.storage().instance().get(&PROTOCOL_CONFIG_KEY);
-            let current_whitelist: Vec<Address> = env.storage().instance().get(&WHITELIST_KEY).unwrap_or(Vec::new(env));
+            let current_config: Option<ProtocolConfig> =
+                env.storage().instance().get(&PROTOCOL_CONFIG_KEY);
+            let current_whitelist: Vec<Address> = env
+                .storage()
+                .instance()
+                .get(&WHITELIST_KEY)
+                .unwrap_or(Vec::new(env));
 
-            if let (Some(c_admin), Some(c_treasury), Some(c_fee), Some(c_conf)) = 
-                (current_admin, current_treasury, current_fee_bps, current_config) 
-            {
-                if c_admin == params.admin 
+            if let (Some(c_admin), Some(c_treasury), Some(c_fee), Some(c_conf)) = (
+                current_admin,
+                current_treasury,
+                current_fee_bps,
+                current_config,
+            ) {
+                if c_admin == params.admin
                     && c_treasury == params.treasury
                     && c_fee == params.fee_bps
                     && c_conf.min_invoice_amount == params.min_invoice_amount
@@ -300,17 +311,19 @@ impl ProtocolInitializer {
     ///
     /// @notice Returns true when the initialization flag is set.
     pub fn is_initialized(env: &Env) -> bool {
-        let proto_init = env.storage()
+        let proto_init = env
+            .storage()
             .instance()
             .get(&PROTOCOL_INITIALIZED_KEY)
             .unwrap_or(false);
-        
+
         // Also check if admin was initialized via legacy/phased flow
-        let admin_init = env.storage()
+        let admin_init = env
+            .storage()
             .instance()
             .get(&ADMIN_INITIALIZED_KEY)
             .unwrap_or(false);
-            
+
         proto_init || admin_init
     }
 

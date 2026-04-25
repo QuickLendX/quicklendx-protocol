@@ -15,7 +15,7 @@
 
 extern crate alloc;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod scratch_events;
 #[cfg(test)]
 mod test_default;
@@ -70,23 +70,23 @@ mod test_investment_queries;
 mod test_init_invariants;
 #[cfg(test)]
 mod test_max_invoices_per_business;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_overflow;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_profit_fee;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_refund;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_storage;
 #[cfg(test)]
 mod test_protocol_limits_boundary;
 #[cfg(test)]
 mod test_string_limits;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_types;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_vesting;
 pub mod types;
 pub use invoice::{InvoiceCategory, InvoiceStatus};

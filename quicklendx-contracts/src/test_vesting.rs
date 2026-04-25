@@ -1042,8 +1042,13 @@ fn test_only_admin_can_create_schedule() {
 fn test_admin_rejects_zero_amount() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
     let result = client.try_create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &0i128, &1500u64, &0u64, &2000u64,
+        &admin,
+        &token_id,
+        &beneficiary,
+        &0i128,
+        &1500u64,
+        &0u64,
+        &2000u64,
     );
     assert!(result.is_err(), "Zero-amount schedule must be rejected");
 }
@@ -1054,8 +1059,13 @@ fn test_admin_rejects_backdated_start() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
     // Ledger is at 1000; start_time = 999 is in the past.
     let result = client.try_create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &1000i128, &999u64, &0u64, &2000u64,
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000i128,
+        &999u64,
+        &0u64,
+        &2000u64,
     );
     assert!(result.is_err(), "Backdated start_time must be rejected");
 }
@@ -1065,8 +1075,13 @@ fn test_admin_rejects_backdated_start() {
 fn test_admin_rejects_end_before_start() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
     let result = client.try_create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &1000i128, &1500u64, &0u64, &1500u64, // end == start
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000i128,
+        &1500u64,
+        &0u64,
+        &1500u64, // end == start
     );
     assert!(result.is_err(), "end_time == start_time must be rejected");
 }
@@ -1077,8 +1092,13 @@ fn test_admin_rejects_cliff_at_or_after_end() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
     // cliff_seconds = 1000, start = 1000 → cliff_time = 2000 = end_time
     let result = client.try_create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &1000i128, &1000u64, &1000u64, &2000u64,
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000i128,
+        &1000u64,
+        &1000u64,
+        &2000u64,
     );
     assert!(result.is_err(), "cliff_time == end_time must be rejected");
 }
@@ -1090,17 +1110,30 @@ fn test_old_admin_loses_vesting_power_after_transfer() {
     let new_admin = Address::generate(&env);
 
     // Fund new_admin so it can back a schedule
-    token_client.approve(&new_admin, &client.address, &ADMIN_BALANCE, &(env.ledger().sequence() + 10_000));
+    token_client.approve(
+        &new_admin,
+        &client.address,
+        &ADMIN_BALANCE,
+        &(env.ledger().sequence() + 10_000),
+    );
 
     // Transfer admin role
     client.transfer_admin(&new_admin);
 
     // Old admin can no longer create a vesting schedule
     let result = client.try_create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &1000i128, &1500u64, &0u64, &2000u64,
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000i128,
+        &1500u64,
+        &0u64,
+        &2000u64,
     );
-    assert!(result.is_err(), "Old admin must not create schedules after role transfer");
+    assert!(
+        result.is_err(),
+        "Old admin must not create schedules after role transfer"
+    );
 }
 
 /// Non-beneficiary cannot release tokens from someone else's schedule.
@@ -1110,8 +1143,13 @@ fn test_non_beneficiary_cannot_release() {
     let attacker = Address::generate(&env);
 
     let id = client.create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &1000i128, &1000u64, &0u64, &2000u64,
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000i128,
+        &1000u64,
+        &0u64,
+        &2000u64,
     );
 
     env.ledger().set_timestamp(1500);
@@ -1125,8 +1163,13 @@ fn test_release_before_cliff_is_error_not_noop() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
 
     let id = client.create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &1000i128, &1000u64, &500u64, &3000u64,
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000i128,
+        &1000u64,
+        &500u64,
+        &3000u64,
     );
 
     // cliff_time = 1500; set ledger to 1499
