@@ -2,9 +2,9 @@
 
 use crate::bid::Bid;
 use crate::fees::FeeType;
-use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::payments::Escrow;
 use crate::profits::PlatformFeeConfig;
+use crate::types::{Invoice, InvoiceMetadata};
 use crate::verification::InvestorVerification;
 use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
 
@@ -473,6 +473,12 @@ pub struct InvoiceStatusUpdated {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminInitialized {
+    pub admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtocolInitialized {
     pub admin: Address,
     pub treasury: Address,
@@ -791,6 +797,13 @@ pub fn emit_escrow_created(env: &Env, escrow: &Escrow) {
         investor: escrow.investor.clone(),
         business: escrow.business.clone(),
         amount: escrow.amount,
+    }
+    .publish(env);
+}
+
+pub fn emit_admin_initialized(env: &Env, admin: &Address) {
+    AdminInitialized {
+        admin: admin.clone(),
     }
     .publish(env);
 }
@@ -1147,6 +1160,10 @@ pub fn emit_admin_set(env: &Env, admin: &Address) {
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
+}
+
+pub fn emit_admin_initialized(env: &Env, admin: &Address) {
+    emit_admin_set(env, admin);
 }
 
 pub fn emit_admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {

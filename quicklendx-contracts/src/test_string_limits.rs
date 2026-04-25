@@ -31,36 +31,33 @@ fn create_string(env: &Env, len: u32) -> String {
 #[test]
 fn test_invoice_metadata_limits() {
     let env = Env::default();
+    let mut line_items = Vec::new(&env);
+    line_items.push_back(LineItemRecord(String::from_str(&env, "Item"), 1, 100, 100));
 
-    // Exactly at limits
     let metadata = InvoiceMetadata {
         customer_name: create_string(&env, MAX_NAME_LENGTH),
         customer_address: create_string(&env, MAX_ADDRESS_LENGTH),
         tax_id: create_string(&env, MAX_TAX_ID_LENGTH),
-        line_items: Vec::new(&env),
+        line_items,
         notes: create_string(&env, MAX_NOTES_LENGTH),
     };
-    assert!(metadata.validate().is_ok());
+    assert!(crate::verification::validate_invoice_metadata(&metadata, 100).is_ok());
 
-    // Over name limit
     let mut bad_metadata = metadata.clone();
     bad_metadata.customer_name = create_string(&env, MAX_NAME_LENGTH + 1);
-    assert!(bad_metadata.validate().is_err());
+    assert!(crate::verification::validate_invoice_metadata(&bad_metadata, 100).is_err());
 
-    // Over address limit
     let mut bad_metadata = metadata.clone();
     bad_metadata.customer_address = create_string(&env, MAX_ADDRESS_LENGTH + 1);
-    assert!(bad_metadata.validate().is_err());
+    assert!(crate::verification::validate_invoice_metadata(&bad_metadata, 100).is_err());
 
-    // Over tax_id limit
     let mut bad_metadata = metadata.clone();
     bad_metadata.tax_id = create_string(&env, MAX_TAX_ID_LENGTH + 1);
-    assert!(bad_metadata.validate().is_err());
+    assert!(crate::verification::validate_invoice_metadata(&bad_metadata, 100).is_err());
 
-    // Over notes limit
     let mut bad_metadata = metadata.clone();
     bad_metadata.notes = create_string(&env, MAX_NOTES_LENGTH + 1);
-    assert!(bad_metadata.validate().is_err());
+    assert!(crate::verification::validate_invoice_metadata(&bad_metadata, 100).is_err());
 }
 
 #[test]
@@ -77,9 +74,8 @@ fn test_line_item_description_limit() {
         line_items,
         notes: String::from_str(&env, "Test"),
     };
-    assert!(metadata.validate().is_ok());
+    assert!(crate::verification::validate_invoice_metadata(&metadata, 100).is_ok());
 
-    // Over description limit
     let mut bad_line_items = Vec::new(&env);
     bad_line_items.push_back(LineItemRecord(
         create_string(&env, MAX_DESCRIPTION_LENGTH + 1),
@@ -89,7 +85,7 @@ fn test_line_item_description_limit() {
     ));
     let mut bad_metadata = metadata.clone();
     bad_metadata.line_items = bad_line_items;
-    assert!(bad_metadata.validate().is_err());
+    assert!(crate::verification::validate_invoice_metadata(&bad_metadata, 100).is_err());
 }
 
 #[test]
