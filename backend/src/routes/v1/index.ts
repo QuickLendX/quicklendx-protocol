@@ -12,6 +12,7 @@ router.use("/bids", bidRoutes);
 router.use("/settlements", settlementRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/test-errors", testErrorRoutes);
+router.use("/admin", adminRoutes);
 router.use("/webhooks", webhookRoutes);
 
 // ---------------------------------------------------------------------------
