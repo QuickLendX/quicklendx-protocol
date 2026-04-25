@@ -2,9 +2,11 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
+import { loadSheddingMiddleware } from "./middleware/load-shedding";
 import { errorHandler } from "./middleware/error-handler";
-import { validateQueryParams } from "./middleware/validate-query";
+import { statusInjector } from "./middleware/status-injector";
 import v1Routes from "./routes/v1";
+import webhookRoutes from "./routes/webhooks";
 
 const app = express();
 
@@ -13,8 +15,7 @@ app.set("trust proxy", true);
 // Security Middleware
 app.use(helmet());
 app.use(cors());
-// Limit request body to 100 KB to mitigate request-body DoS attacks.
-app.use(express.json({ limit: "100kb" }));
+app.use(express.json({ limit: "1mb" }));
 app.set("trust proxy", true);
 
 // Test middleware to simulate no IP for coverage
@@ -28,10 +29,12 @@ app.use((req, res, next) => {
 // Rate Limiting
 app.use(rateLimitMiddleware);
 
-// Query-parameter validation (defence-in-depth against injection / oversized inputs)
-app.use(validateQueryParams);
+// Inject _system metadata into every JSON response
+app.use(statusInjector);
 
 // Routes
+app.use("/api/webhooks", cors(webhookCorsOptions), webhookRoutes);
+app.use(csrfMiddleware);
 app.use("/api/v1", v1Routes);
 
 // Health check (root level as well if needed)

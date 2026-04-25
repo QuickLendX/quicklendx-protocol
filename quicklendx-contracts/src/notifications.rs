@@ -1,8 +1,8 @@
 use crate::bid::Bid;
-use crate::invoice::{Invoice, InvoiceStatus};
 use crate::protocol_limits::{
     check_string_length, MAX_NOTIFICATION_MESSAGE_LENGTH, MAX_NOTIFICATION_TITLE_LENGTH,
 };
+use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, Map, String, Vec};
 
 /// Notification types for different events

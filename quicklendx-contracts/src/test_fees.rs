@@ -849,6 +849,69 @@ fn test_configure_treasury() {
     assert_eq!(treasury_addr.unwrap(), treasury);
 }
 
+/// Non-admin callers cannot initialize the fee system even if they self-authorize.
+#[test]
+fn test_only_admin_can_initialize_fee_system() {
+    let env = Env::default();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+
+    client.mock_all_auths().set_admin(&admin);
+
+    let attacker_auth = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "initialize_fee_system",
+            args: (attacker.clone(),).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+
+    let result = client
+        .mock_auths(&[attacker_auth])
+        .try_initialize_fee_system(&attacker);
+    assert_eq!(result, Err(Ok(QuickLendXError::NotAdmin)));
+    assert_eq!(client.get_treasury_address(), None);
+}
+
+/// Non-admin signatures cannot spoof the stored admin for treasury configuration.
+#[test]
+fn test_only_admin_signature_can_configure_treasury() {
+    let env = Env::default();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    client.mock_all_auths().set_admin(&admin);
+    client.mock_all_auths().initialize_fee_system(&admin);
+
+    let spoofed_auth = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "configure_treasury",
+            args: (treasury.clone(),).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+
+    let result = client
+        .mock_auths(&[spoofed_auth])
+        .try_configure_treasury(&treasury);
+    let invoke_err = result
+        .err()
+        .expect("spoofed treasury config must fail")
+        .err()
+        .expect("spoofed treasury config must abort at auth");
+    assert_eq!(invoke_err, soroban_sdk::InvokeError::Abort);
+    assert_eq!(client.get_treasury_address(), None);
+}
+
 /// is_early_payment = true: Platform fee gets an extra 10% reduction
 #[test]
 fn test_calculate_transaction_fees_early_payment_flag() {
