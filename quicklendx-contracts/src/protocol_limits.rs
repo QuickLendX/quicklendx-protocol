@@ -244,6 +244,21 @@ pub fn compute_min_bid_amount(invoice_amount: i128, limits: &ProtocolLimits) -> 
 /// Maximum number of active invoices allowed per business
 pub const MAX_ACTIVE_INVOICES_PER_BUSINESS: u32 = 100;
 
+/// Default maximum number of active bids allowed per investor.
+///
+/// # Security Rationale
+/// This limit prevents bid churn attacks where an investor rapidly places, cancels,
+/// and re-places bids to manipulate protocol state or bypass other limits. By capping
+/// the number of simultaneous active bids, we ensure:
+/// - Predictable resource usage per investor
+/// - Difficulty in manipulating order book dynamics
+/// - Protection against spam attacks that could degrade system performance
+///
+/// The default value of 20 balances investor flexibility with system security.
+/// Admins can adjust this limit via `set_max_active_bids_per_investor` if needed.
+/// Setting to 0 disables the limit (use with caution).
+pub const DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 20;
+
 /// Determine if an invoice status is considered "active" for limit enforcement.
 ///
 /// Active invoices are those that are still in the lifecycle and not yet resolved.
@@ -268,6 +283,32 @@ pub fn is_active_status(status: &InvoiceStatus) -> bool {
         InvoiceStatus::Defaulted => false,
         InvoiceStatus::Cancelled => false,
         InvoiceStatus::Refunded => false,
+    }
+}
+
+/// Determine if a bid status is considered "active" for limit enforcement.
+///
+/// Active bids are those that are still in the bidding lifecycle and can potentially
+/// be accepted. Terminal statuses (Cancelled, Expired, Accepted, Withdrawn) are not
+/// counted toward the active bid limit.
+///
+/// # Arguments
+/// * `status` - The bid status to classify
+///
+/// # Returns
+/// `true` if the status is active, `false` if terminal
+///
+/// # Security Note
+/// This function uses exhaustive matching without a wildcard arm to ensure
+/// compile-time errors when new BidStatus variants are added without
+/// updating this classification. Silent misclassification would be a security regression.
+pub fn is_active_bid_status(status: &crate::bid::BidStatus) -> bool {
+    match status {
+        crate::bid::BidStatus::Placed => true,
+        crate::bid::BidStatus::Cancelled => false,
+        crate::bid::BidStatus::Expired => false,
+        crate::bid::BidStatus::Accepted => false,
+        crate::bid::BidStatus::Withdrawn => false,
     }
 }
 

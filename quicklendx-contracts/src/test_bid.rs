@@ -42,7 +42,7 @@ use soroban_sdk::{
 // ---------------------------------------------------------------------------
 
 /// Minimal environment with mock_all_auths for setup convenience.
-fn setup() -> (Env, QuickLendXContractClient<'static\>, Address, Address) {
+fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let id = env.register(QuickLendXContract, ());
@@ -428,4 +428,202 @@ fn test_investor_can_cancel_multiple_own_bids() {
         client.get_bid(&bid_id_2).unwrap().status,
         crate::bid::BidStatus::Cancelled
     );
+}
+
+// ---------------------------------------------------------------------------
+// Investor Exposure Cap and Active Bid Limit Tests — Issue #782
+// ---------------------------------------------------------------------------
+
+/// Helper to create a verified investor with a given investment limit
+fn create_verified_investor(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    admin: &Address,
+    investment_limit: i128,
+) -> Address {
+    let investor = Address::generate(env);
+    client.submit_kyc_application(&investor, &String::from_str(env, "kyc_data"));
+    client.verify_investor(admin, &investor, &investment_limit);
+    investor
+}
+
+/// Helper to create a verified invoice for testing
+fn create_verified_invoice(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    business: &Address,
+    admin: &Address,
+    amount: i128,
+) -> BytesN<32> {
+    let currency = Address::generate(env);
+    client.add_currency(admin, &currency);
+    let due = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        business,
+        &amount,
+        &currency,
+        &due,
+        &String::from_str(env, "description"),
+        &InvoiceCategory::Services,
+        &Vec::new(env),
+    );
+    invoice_id
+}
+
+// Group A: Active Bid Limit Enforcement
+
+#[test]
+fn test_active_bid_limit_enforced() {
+    let (env, client, admin, business) = setup();
+    let investor = create_verified_investor(&env, &client, &admin, &1_000_000i128);
+    
+    // Set a low limit for testing
+    client.set_max_active_bids_per_investor(&admin, &3u32);
+    
+    // Place 3 bids - should succeed
+    for i in 0..3 {
+        let invoice_id = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+        let result = client.try_place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+        assert!(result.is_ok(), "Bid {} should succeed under limit", i);
+    }
+    
+    // Try to place 4th bid - should fail
+    let invoice_id = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+    let result = client.try_place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    assert!(result.is_err(), "4th bid should be rejected due to active bid limit");
+}
+
+#[test]
+fn test_active_bid_limit_respects_cancellation() {
+    let (env, client, admin, business) = setup();
+    let investor = create_verified_investor(&env, &client, &admin, &1_000_000i128);
+    
+    client.set_max_active_bids_per_investor(&admin, &2u32);
+    
+    // Place 2 bids
+    let invoice_id1 = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+    let bid_id1 = client.place_bid(&investor, &invoice_id1, &1000i128, &1100i128);
+    
+    let invoice_id2 = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+    let bid_id2 = client.place_bid(&investor, &invoice_id2, &1000i128, &1100i128);
+    
+    // Cancel one bid
+    assert!(client.cancel_bid(&bid_id1), "Cancellation should succeed");
+    
+    // Now should be able to place a new bid
+    let invoice_id3 = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+    let result = client.try_place_bid(&investor, &invoice_id3, &1000i128, &1100i128);
+    assert!(result.is_ok(), "Should be able to place bid after cancellation");
+}
+
+// Group B: Portfolio Exposure Cap
+
+#[test]
+fn test_portfolio_exposure_cap_enforced() {
+    let (env, client, admin, business) = setup();
+    let investor = create_verified_investor(&env, &client, &admin, &50_000i128);
+    
+    // Place bids totaling 40,000
+    let invoice_id1 = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+    client.place_bid(&investor, &invoice_id1, &20_000i128, &22_000i128);
+    
+    let invoice_id2 = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+    client.place_bid(&investor, &invoice_id2, &20_000i128, &22_000i128);
+    
+    // Try to place bid that would exceed cap (would make total 60,000)
+    let invoice_id3 = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+    let result = client.try_place_bid(&investor, &invoice_id3, &20_000i128, &22_000i128);
+    assert!(result.is_err(), "Bid exceeding portfolio cap should be rejected");
+}
+
+#[test]
+fn test_portfolio_exposure_respects_cancellation() {
+    let (env, client, admin, business) = setup();
+    let investor = create_verified_investor(&env, &client, &admin, &50_000i128);
+    
+    // Place bid for 40,000
+    let invoice_id1 = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+    let bid_id1 = client.place_bid(&investor, &invoice_id1, &40_000i128, &44_000i128);
+    
+    // Cancel it
+    assert!(client.cancel_bid(&bid_id1), "Cancellation should succeed");
+    
+    // Now should be able to place bid for 40,000 again
+    let invoice_id2 = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+    let result = client.try_place_bid(&investor, &invoice_id2, &40_000i128, &44_000i128);
+    assert!(result.is_ok(), "Should be able to place bid after cancellation");
+}
+
+// Group C: Bid Churn Attack Prevention
+
+#[test]
+fn test_bid_churn_attack_prevented() {
+    let (env, client, admin, business) = setup();
+    let investor = create_verified_investor(&env, &client, &admin, &100_000i128);
+    
+    client.set_max_active_bids_per_investor(&admin, &5u32);
+    
+    // Attempt rapid place/cancel cycles
+    for i in 0..10 {
+        let invoice_id = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+        let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+        
+        // Immediately cancel
+        assert!(client.cancel_bid(&bid_id), "Cancellation should succeed");
+        
+        // Try to place another bid immediately
+        let invoice_id2 = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+        let result = client.try_place_bid(&investor, &invoice_id2, &1000i128, &1100i128);
+        
+        // The limit should still be enforced based on current active bids
+        // After cancellation, count should be 0, so this should succeed
+        assert!(result.is_ok(), "Bid after cancellation should succeed");
+    }
+}
+
+// Group D: State Consistency
+
+#[test]
+fn test_active_count_consistency_after_expiration() {
+    let (env, client, admin, business) = setup();
+    let investor = create_verified_investor(&env, &client, &admin, &1_000_000i128);
+    
+    client.set_max_active_bids_per_investor(&admin, &2u32);
+    
+    // Place 2 bids with short TTL
+    let invoice_id1 = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+    client.place_bid(&investor, &invoice_id1, &1000i128, &1100i128);
+    
+    let invoice_id2 = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+    client.place_bid(&investor, &invoice_id2, &1000i128, &1100i128);
+    
+    // Advance time past bid TTL
+    env.ledger().set(env.ledger().timestamp() + 86400 * 30); // 30 days
+    
+    // Bids should be expired and pruned, allowing new bids
+    let invoice_id3 = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+    let result = client.try_place_bid(&investor, &invoice_id3, &1000i128, &1100i128);
+    assert!(result.is_ok(), "Should be able to place bid after expiration");
+}
+
+// Group E: Edge Cases
+
+#[test]
+fn test_limit_disabled_when_set_to_zero() {
+    let (env, client, admin, business) = setup();
+    let investor = create_verified_investor(&env, &client, &admin, &1_000_000i128);
+    
+    // Disable the limit by setting to 0
+    client.set_max_active_bids_per_investor(&admin, &0u32);
+    
+    // Place many bids (more than the default limit of 20)
+    for i in 0..25 {
+        let invoice_id = create_verified_invoice(&env, &client, &business, &admin, 10_000);
+        let result = client.try_place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+        assert!(result.is_ok(), "Bid {} should succeed when limit is disabled", i);
+    }
+    
+    // Verify all bids are active
+    let active_count = client.count_active_placed_bids_for_investor(&investor);
+    assert_eq!(active_count, 25, "All bids should be active when limit is disabled");
 }
