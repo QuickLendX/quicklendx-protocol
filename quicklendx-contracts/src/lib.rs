@@ -976,7 +976,7 @@ impl QuickLendXContract {
         currency::CurrencyWhitelist::require_allowed_currency(&env, &invoice.currency)?;
 
         let verification = do_get_investor_verification(&env, &investor)
-            .ok_or(QuickLendXError::BusinessNotVerified)?;
+            .ok_or(QuickLendXError::InvestorNotVerified)?; // Changed error to InvestorNotVerified
         match verification.status {
             BusinessVerificationStatus::Verified => {
                 if bid_amount > verification.investment_limit {
@@ -984,8 +984,8 @@ impl QuickLendXContract {
                 }
             }
             BusinessVerificationStatus::Pending => return Err(QuickLendXError::KYCAlreadyPending),
-            BusinessVerificationStatus::Rejected => {
-                return Err(QuickLendXError::BusinessNotVerified)
+            BusinessVerificationStatus::Rejected => { // This is for BusinessVerificationStatus, but used for InvestorVerification.
+                return Err(QuickLendXError::InvestorNotVerified) // Changed error to InvestorNotVerified
             }
         }
 
@@ -1348,7 +1348,7 @@ impl QuickLendXContract {
     }
 
     /// Reject an investor verification requbusinesses
-    pub fn get_verified_businesses(env: Env) -> Vec<Address> {
+    pub fn get_verified_businesses(_env: Env) -> Vec<Address> { // Added _ to env
         BusinessVerificationStorage::get_verified_businesses(&env)
     }
 
@@ -1368,7 +1368,7 @@ impl QuickLendXContract {
         do_get_investor_verification(&env, &investor)
     }
 
-    /// Set investment limit for a verified investor (admin only)
+    /// Set investment limit for a verified investor (admin only).
     pub fn set_investment_limit(
         env: Env,
         investor: Address,
@@ -1381,7 +1381,7 @@ impl QuickLendXContract {
     }
 
     /// Verify business (admin only)
-    pub fn verify_business(
+    pub fn verify_business( // This function is already defined in verification module
         env: Env,
         admin: Address,
         business: Address,
@@ -1391,7 +1391,7 @@ impl QuickLendXContract {
     }
 
     /// Reject business (admin only)
-    pub fn reject_business(
+    pub fn reject_business( // This function is already defined in verification module
         env: Env,
         admin: Address,
         business: Address,
@@ -1402,7 +1402,7 @@ impl QuickLendXContract {
     }
 
     /// Get business verification status
-    pub fn get_business_verification_status(
+    pub fn get_business_verification_status( // This function is already defined in verification module
         env: Env,
         business: Address,
     ) -> Option<verification::BusinessVerification> {
@@ -1420,7 +1420,7 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    /// Get admin address
+    /// Get admin address // This function is already defined in admin module
     pub fn get_admin(env: Env) -> Option<Address> {
         BusinessVerificationStorage::get_admin(&env)
     }
@@ -1439,7 +1439,7 @@ impl QuickLendXContract {
             admin,
             min_invoice_amount,
             10,  // min_bid_amount
-            100, // min_bid_bps
+            100, // min_bid_bps (default)
             max_due_date_days,
             grace_period_seconds,
             100, // max_invoices_per_business (default)
@@ -1460,7 +1460,7 @@ impl QuickLendXContract {
             admin,
             min_invoice_amount,
             10,  // min_bid_amount
-            100, // min_bid_bps
+            100, // min_bid_bps (default)
             max_due_date_days,
             grace_period_seconds,
             100, // max_invoices_per_business (default)
@@ -1481,7 +1481,7 @@ impl QuickLendXContract {
             admin,
             min_invoice_amount,
             10,  // min_bid_amount
-            100, // min_bid_bps
+            100, // min_bid_bps (default)
             max_due_date_days,
             grace_period_seconds,
             100, // max_invoices_per_business (default)
@@ -1503,7 +1503,7 @@ impl QuickLendXContract {
             admin,
             min_invoice_amount,
             10,  // min_bid_amount
-            100, // min_bid_bps
+            100, // min_bid_bps (default)
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
@@ -1554,7 +1554,7 @@ impl QuickLendXContract {
         env: Env,
         investor: Address,
         kyc_data: String,
-    ) -> Result<u32, QuickLendXError> {
+    ) -> Result<u32, QuickLendXError> { // This function is already defined in verification module
         calculate_investor_risk_score(&env, &investor, &kyc_data)
     }
 
@@ -1563,7 +1563,7 @@ impl QuickLendXContract {
         env: Env,
         investor: Address,
         risk_score: u32,
-    ) -> Result<InvestorTier, QuickLendXError> {
+    ) -> Result<InvestorTier, QuickLendXError> { // This function is already defined in verification module
         determine_investor_tier(&env, &investor, risk_score)
     }
 
@@ -1573,7 +1573,7 @@ impl QuickLendXContract {
         tier: InvestorTier,
         risk_level: InvestorRiskLevel,
         base_limit: i128,
-    ) -> i128 {
+    ) -> i128 { // This function is already defined in verification module
         calculate_investment_limit(&tier, &risk_level, base_limit)
     }
 
@@ -1582,7 +1582,7 @@ impl QuickLendXContract {
         env: Env,
         investor: Address,
         investment_amount: i128,
-    ) -> Result<(), QuickLendXError> {
+    ) -> Result<(), QuickLendXError> { // This function is already defined in verification module
         validate_investor_investment(&env, &investor, investment_amount)
     }
 

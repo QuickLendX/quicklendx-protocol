@@ -37,7 +37,7 @@ fn setup() -> (
 
     let token_admin = Address::generate(&env);
     let token_id = env
-        .register_stellar_asset_contract_v2(token_admin.clone())
+        .register_stellar_asset_contract_v2(token_admin.clone()) // Use _v2
         .address();
     let sac = token::StellarAssetClient::new(&env, &token_id);
     let token_client = token::Client::new(&env, &token_id);
@@ -955,6 +955,47 @@ fn test_release_idempotency() {
     assert_eq!(schedule.released_amount, first);
 }
 
+#[test]
+fn test_vested_and_releasable_are_always_non_negative() {
+    let (env, client, admin, beneficiary, token_id, _token_client) = setup();
+
+    let total = 1000i128;
+    let start = 1000u64;
+    let cliff_seconds = 500u64;
+    let end = start + 2000u64;
+
+    client.create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &total,
+        &start,
+        &cliff_seconds,
+        &end,
+    );
+
+    // Before start time
+    env.ledger().set_timestamp(start - 1);
+    let vested_before_start = client.get_vesting_vested(&1).unwrap();
+    let releasable_before_start = client.get_vesting_releasable(&1).unwrap();
+    assert_eq!(vested_before_start, 0);
+    assert_eq!(releasable_before_start, 0);
+
+    // At start time
+    env.ledger().set_timestamp(start);
+    let vested_at_start = client.get_vesting_vested(&1).unwrap();
+    let releasable_at_start = client.get_vesting_releasable(&1).unwrap();
+    assert_eq!(vested_at_start, 0);
+    assert_eq!(releasable_at_start, 0);
+
+    // After full release, check again
+    env.ledger().set_timestamp(end + 100);
+    client.release_vested_tokens(&beneficiary, &1);
+    let vested_after_full_release = client.get_vesting_vested(&1).unwrap();
+    let releasable_after_full_release = client.get_vesting_releasable(&1).unwrap();
+    assert_eq!(vested_after_full_release, total);
+    assert_eq!(releasable_after_full_release, 0); // Should be 0 as all released
+}
 #[test]
 fn test_multi_step_progression() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
