@@ -31,7 +31,7 @@
 //! - `set_treasury()` - Update treasury address
 //! - Currency whitelist management functions
 
-use crate::admin::AdminStorage;
+use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY};
 use crate::errors::QuickLendXError;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
