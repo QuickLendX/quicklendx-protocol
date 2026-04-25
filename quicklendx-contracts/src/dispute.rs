@@ -181,5 +181,5 @@ pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<
     }
     result
 }
-// Invoice disputes are represented on `crate::invoice::Invoice` and handled by contract
+// Invoice disputes are represented on [`crate::invoice::Invoice`] and handled by contract
 // entry points in `lib.rs`. This module is reserved for future dispute-specific helpers.

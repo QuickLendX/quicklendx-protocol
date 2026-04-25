@@ -174,14 +174,17 @@ impl ProtocolInitializer {
         // This ensures the designated admin address has consented to the role.
         params.admin.require_auth();
 
-        // Zero-address guard
-        let zero = Address::from_str(
+        // Zero-address guard: reject the well-known Stellar zero/burn address.
+        let zero = Address::from_string(&soroban_sdk::String::from_str(
             env,
             "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-        );
+        ));
         if params.admin == zero || params.treasury == zero {
             return Err(QuickLendXError::InvalidAddress);
         }
+        Self::initialize_internal(env, params)
+    }
+
         Self::initialize_internal(env, params)
     }
 
@@ -337,7 +340,7 @@ impl ProtocolInitializer {
     /// * `Ok(())` if all parameters are valid
     /// * `Err(QuickLendXError)` with specific error for invalid parameters
     fn validate_initialization_params(
-        _env: &Env,
+        env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // VALIDATION: Fee basis points (0% to 10%)
@@ -363,6 +366,24 @@ impl ProtocolInitializer {
         // VALIDATION: Treasury address is not the same as admin (separation of concerns)
         if params.treasury == params.admin {
             return Err(QuickLendXError::InvalidAddress);
+        }
+
+        // VALIDATION: Initial currencies must not contain duplicates or
+        // reserved addresses (admin, treasury, contract itself).
+        let contract_address = env.current_contract_address();
+        let len = params.initial_currencies.len();
+        for i in 0..len {
+            let curr = params.initial_currencies.get(i).unwrap();
+            // Must not be a reserved address
+            if curr == params.admin || curr == params.treasury || curr == contract_address {
+                return Err(QuickLendXError::InvalidCurrency);
+            }
+            // Must not be a duplicate (O(n²) — list is expected to be small)
+            for j in (i + 1)..len {
+                if curr == params.initial_currencies.get(j).unwrap() {
+                    return Err(QuickLendXError::InvalidCurrency);
+                }
+            }
         }
 
         Ok(())
