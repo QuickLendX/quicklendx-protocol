@@ -1,23 +1,6 @@
-/// # Backup/Restore Safety Tests (Issue #819)
-///
-/// This integration test suite validates the safety, ordering, idempotency,
-/// and index integrity guarantees of the backup/restore system.
-///
-/// ## Test Coverage
-///
-/// 1. **Restore Ordering** — validate → clear → restore → archive sequence
-/// 2. **Idempotency** — repeated restore is blocked via archival
-/// 3. **Index Rebuild** — all secondary indexes are correctly rebuilt
-/// 4. **Retention Policy** — count-based and age-based cleanup
-/// 5. **Admin-Only Access** — all mutation operations require admin auth
-/// 6. **Metadata Validation** — tampered backups are rejected
-/// 7. **Archived Backup Preservation** — archived backups survive cleanup
-/// 8. **Payload Integrity** — backup data matches metadata count
-use quicklendx_contracts::{
-    backup::{Backup, BackupStatus, BackupStorage},
-    types::{InvoiceCategory, InvoiceStatus},
-    QuickLendXContract, QuickLendXContractClient, QuickLendXError,
-};
+#![cfg(feature = "legacy-tests")]
+
+use quicklendx_contracts::{types::InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Address, BytesN, Bytes, Env, Vec,

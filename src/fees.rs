@@ -57,6 +57,12 @@ fn bps_fee(amount: u128, rate_bps: u128) -> Option<u128> {
     amount.checked_mul(rate_bps)?.checked_div(BPS_DENOMINATOR)
 }
 
+/// Test-only re-export of `bps_fee` to cover the overflow branch.
+#[cfg(test)]
+pub(crate) fn bps_fee_unchecked(amount: u128, rate_bps: u128) -> Option<u128> {
+    bps_fee(amount, rate_bps)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
@@ -342,5 +348,25 @@ mod tests {
     fn test_rate_exactly_bps_denominator_rejected_by_origination() {
         // BPS_DENOMINATOR = 10_000 > MAX_ORIGINATION_BPS = 500
         assert!(origination_fee(1_000_000, BPS_DENOMINATOR).is_none());
+    }
+
+    // ── bps_fee internal overflow branch ─────────────────────────────────────
+
+    #[test]
+    fn test_bps_fee_unchecked_overflow_returns_none() {
+        // amount * rate_bps overflows u128 → checked_mul returns None → ? propagates None.
+        // Use u128::MAX as amount and rate_bps = 2 (> 1, so product overflows).
+        assert!(bps_fee_unchecked(u128::MAX, 2).is_none());
+    }
+
+    #[test]
+    fn test_bps_fee_unchecked_rate_exceeds_denominator_returns_none() {
+        assert!(bps_fee_unchecked(1_000_000, BPS_DENOMINATOR + 1).is_none());
+    }
+
+    #[test]
+    fn test_bps_fee_unchecked_valid_computes_correctly() {
+        // 1_000_000 * 100 / 10_000 = 10_000
+        assert_eq!(bps_fee_unchecked(1_000_000, 100), Some(10_000));
     }
 }

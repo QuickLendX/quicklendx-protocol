@@ -59,19 +59,19 @@ pub struct Progress {
     pub status: InvoiceStatus,
 }
 
-/// Record a partial payment for an invoice. 
-/// 
+/// Record a partial payment for an invoice.
+///
 /// If the total paid amount reaches the invoice total, the settlement is finalized.
 /// This method provides strictly ordered record persistence and idempotent deduplication.
-/// 
+///
 /// # Arguments
 /// - `invoice_id`: Unique identifier for the invoice being paid.
 /// - `payment_amount`: The requested payment amount.
 /// - `transaction_id`: A unique identifier for the payment attempt (nonce).
-/// 
+///
 /// # Returns
 /// - `Ok(())` on success, or a `QuickLendXError` on failure.
-/// 
+///
 /// # Security
 /// - @security Requires business-owner authorization for every payment attempt.
 /// - @security Safely bounds applied value to the remaining due amount.
@@ -298,7 +298,7 @@ pub fn settle_invoice(
 /// Returns aggregate payment progress for an invoice.
 ///
 /// # Returns
-/// - `Ok(Progress)` containing `total_due`, `total_paid`, `remaining_due`, 
+/// - `Ok(Progress)` containing `total_due`, `total_paid`, `remaining_due`,
 ///   `progress_percent`, `payment_count`, and `status`.
 pub fn get_invoice_progress(
     env: &Env,
@@ -339,10 +339,7 @@ pub fn get_invoice_progress(
 }
 
 /// Returns the total number of recorded payments for an invoice.
-pub fn get_payment_count(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-) -> Result<u32, QuickLendXError> {
+pub fn get_payment_count(env: &Env, invoice_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
     ensure_invoice_exists(env, invoice_id)?;
     Ok(get_payment_count_internal(env, invoice_id))
 }
@@ -389,15 +386,12 @@ pub fn get_payment_records(
             records.push_back(record);
         }
     }
-    
+
     Ok(records)
 }
 
 /// Returns whether an invoice has been finalized (settlement completed).
-pub fn is_invoice_finalized(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-) -> Result<bool, QuickLendXError> {
+pub fn is_invoice_finalized(env: &Env, invoice_id: &BytesN<32>) -> Result<bool, QuickLendXError> {
     ensure_invoice_exists(env, invoice_id)?;
     Ok(is_finalized(env, invoice_id))
 }
@@ -508,10 +502,9 @@ fn is_finalized(env: &Env, invoice_id: &BytesN<32>) -> bool {
 }
 
 fn mark_finalized(env: &Env, invoice_id: &BytesN<32>) {
-    env.storage().persistent().set(
-        &SettlementDataKey::Finalized(invoice_id.clone()),
-        &true,
-    );
+    env.storage()
+        .persistent()
+        .set(&SettlementDataKey::Finalized(invoice_id.clone()), &true);
 }
 
 fn ensure_invoice_exists(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
