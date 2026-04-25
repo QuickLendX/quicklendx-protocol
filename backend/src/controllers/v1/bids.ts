@@ -31,7 +31,7 @@ export const getBids = async (
       filtered = filtered.filter((b) => b.investor === investor);
     }
 
-    res.json(filtered);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }

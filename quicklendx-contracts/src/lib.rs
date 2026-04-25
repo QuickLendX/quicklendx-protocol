@@ -38,6 +38,7 @@ mod errors;
 mod escrow;
 mod events;
 mod fees;
+pub mod freshness;
 mod init;
 mod investment;
 mod investment_queries;
@@ -60,6 +61,8 @@ mod test_admin_simple;
 mod test_admin_standalone;
 #[cfg(test)]
 mod test_expired_bids_cleanup;
+#[cfg(test)]
+mod test_freshness;
 #[cfg(test)]
 mod test_init;
 #[cfg(test)]
@@ -165,6 +168,69 @@ fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError>
     // Limit is automatically capped by cap_query_limit, but we validate the input
     // Note: limit=0 is allowed and results in empty response
     Ok(())
+}
+
+/// Write a `u32` as ASCII decimal into `buf`, return byte length.
+#[inline]
+fn u32_to_ascii_lib(mut value: u32, buf: &mut [u8; 10]) -> usize {
+    if value == 0 {
+        buf[0] = b'0';
+        return 1;
+    }
+    let mut tmp = [0u8; 10];
+    let mut len = 0usize;
+    while value > 0 {
+        tmp[len] = b'0' + (value % 10) as u8;
+        value /= 10;
+        len += 1;
+    }
+    for i in 0..len {
+        buf[i] = tmp[len - 1 - i];
+    }
+    len
+}
+
+/// Convert an `i64` to a soroban `String` using stack-allocated ASCII.
+#[inline]
+fn i64_to_string_lib(env: &Env, value: i64) -> String {
+    // "-9223372036854775808" = 20 chars
+    let mut buf = [0u8; 21];
+    let mut tmp = [0u8; 20];
+    let (negative, abs_val) = if value < 0 {
+        (true, (value as i128).unsigned_abs() as u64)
+    } else {
+        (false, value as u64)
+    };
+    let n = u64_to_ascii_20(abs_val, &mut tmp);
+    let start = if negative {
+        buf[0] = b'-';
+        buf[1..1 + n].copy_from_slice(&tmp[..n]);
+        1 + n
+    } else {
+        buf[..n].copy_from_slice(&tmp[..n]);
+        n
+    };
+    let s = core::str::from_utf8(&buf[..start]).unwrap_or("0");
+    String::from_str(env, s)
+}
+
+#[inline]
+fn u64_to_ascii_20(mut value: u64, buf: &mut [u8; 20]) -> usize {
+    if value == 0 {
+        buf[0] = b'0';
+        return 1;
+    }
+    let mut tmp = [0u8; 20];
+    let mut len = 0usize;
+    while value > 0 {
+        tmp[len] = b'0' + (value % 10) as u8;
+        value /= 10;
+        len += 1;
+    }
+    for i in 0..len {
+        buf[i] = tmp[len - 1 - i];
+    }
+    len
 }
 
 #[contractimpl]

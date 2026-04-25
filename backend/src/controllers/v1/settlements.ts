@@ -27,7 +27,7 @@ export const getSettlements = async (
       filtered = filtered.filter((s) => s.invoice_id === invoice_id);
     }
 
-    res.json(filtered);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }
@@ -51,7 +51,7 @@ export const getSettlementById = async (
       });
     }
 
-    res.json(settlement);
+    res.json({ data: settlement, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }

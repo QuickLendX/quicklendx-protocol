@@ -26,7 +26,7 @@ export const getDisputes = async (
       filtered = filtered.filter((d) => d.invoice_id === invoice_id);
     }
 
-    res.json(filtered);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }

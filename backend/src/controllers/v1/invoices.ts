@@ -51,7 +51,7 @@ export const getInvoices = async (
       filtered = filtered.filter((i) => i.status === status);
     }
 
-    res.json(filtered);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }
@@ -75,7 +75,7 @@ export const getInvoiceById = async (
       });
     }
 
-    res.json(invoice);
+    res.json({ data: invoice, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }
