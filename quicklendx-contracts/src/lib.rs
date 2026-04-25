@@ -277,6 +277,7 @@ impl QuickLendXContract {
 
     /// Admin-only: configure default bid TTL (days). Bounds: 1..=30.
     pub fn set_bid_ttl_days(env: Env, days: u64) -> Result<u64, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         bid::BidStorage::set_bid_ttl_days(&env, &admin, days)
     }
@@ -360,6 +361,7 @@ impl QuickLendXContract {
         admin: Address,
         currency: Address,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         currency::CurrencyWhitelist::add_currency(&env, &admin, &currency)
     }
 
@@ -369,6 +371,7 @@ impl QuickLendXContract {
         admin: Address,
         currency: Address,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         currency::CurrencyWhitelist::remove_currency(&env, &admin, &currency)
     }
 
@@ -2412,6 +2415,7 @@ impl QuickLendXContract {
         cliff_seconds: u64,
         end_time: u64,
     ) -> Result<u64, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         vesting::Vesting::create_schedule(
             &env,
             &admin,
@@ -2433,6 +2437,7 @@ impl QuickLendXContract {
         beneficiary: Address,
         id: u64,
     ) -> Result<i128, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         vesting::Vesting::release(&env, &beneficiary, id)
     }
 
@@ -2458,6 +2463,7 @@ impl QuickLendXContract {
         feedback: String,
         rater: Address,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         let ts = env.ledger().timestamp();
@@ -2553,6 +2559,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         amount: i128,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         investor.require_auth();
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -2576,6 +2583,7 @@ impl QuickLendXContract {
         reason: String,
         evidence: String,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         creator.require_auth();
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
