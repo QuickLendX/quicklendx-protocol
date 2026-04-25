@@ -1,65 +1,59 @@
-# Settlement Contract Flow
+# Invoice Settlement & Partial Payments
+
+This document describes the settlement module's payment record storage architecture, bounded storage design, and security guarantees.
 
 ## Overview
-QuickLendX settlement supports full and partial invoice payments with durable on-chain payment records and hardened finalization safety.
 
-- Partial payments accumulate per invoice.
-- Payment progress is queryable at any time.
-- Applied payment amount is capped so `total_paid` never exceeds invoice `amount` (total due).
-- Every applied payment is persisted as a dedicated payment record with payer, amount, timestamp, and nonce/tx id.
-- Settlement finalization is protected against double-execution via a dedicated finalization flag.
-- Disbursement invariant (`investor_return + platform_fee == total_paid`) is checked before fund transfer.
+The settlement module handles invoice payment processing with support for partial payments, durable per-payment storage records, and finalization safety guards. A critical design goal is preventing unbounded storage growth that could lead to denial-of-service (DoS) attacks or gas limit issues.
 
-## State Machine
-QuickLendX uses existing invoice statuses. For settlement:
+## Payment Record Storage Architecture
 
-- `Funded`: open for repayment; may have zero or more partial payments.
-- `Paid`: terminal settled state after full repayment and distribution.
-- `Cancelled`: terminal non-payable state.
+### Storage Keys
 
-Partial repayment is represented by:
+Payment records are stored in Soroban persistent storage using the following key structure:
 
-- `status == Funded`
-- `total_paid > 0`
-- `progress_percent < 100`
+```rust
+enum SettlementDataKey {
+    PaymentCount(BytesN<32>),           // Current count of payments for an invoice
+    Payment(BytesN<32>, u32),           // Individual payment record by index
+    PaymentNonce(BytesN<32>, String),   // Nonce tracking for replay protection
+    Finalized(BytesN<32>),              // Settlement finalization flag
+}
+```
 
-## Storage Layout
-Settlement storage in `src/settlement.rs` uses keyed records (no large single-value payment vector as source of truth):
+### Payment Record Structure
 
-- `PaymentCount(invoice_id) -> u32`
-- `Payment(invoice_id, idx) -> SettlementPaymentRecord`
-- `PaymentNonce(invoice_id, payer, nonce) -> bool`
-- `Finalized(invoice_id) -> bool` — double-settlement guard flag
+Each payment record contains:
 
-`SettlementPaymentRecord` fields:
+```rust
+pub struct SettlementPaymentRecord {
+    pub payer: Address,      // Address that made the payment
+    pub amount: i128,        // Amount applied (may be capped from requested)
+    pub timestamp: u64,      // Ledger timestamp when recorded
+    pub nonce: String,       // Transaction identifier for deduplication
+}
+```
 
-- `payer: Address`
-- `amount: i128` (applied amount)
-- `timestamp: u64` (ledger timestamp)
-- `nonce: String` (tx id / nonce)
+## Bounded Storage Design
 
-Invoice fields used for progress:
+### Maximum Payment Count
 
-- `amount` (total due)
-- `total_paid`
-- `status`
+To prevent unbounded storage growth and protect against payment-count overflow, the contract enforces a hard cap on the number of payment records per invoice:
 
-## Overpayment Behavior
-Settlement and partial-payment paths intentionally behave differently:
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `MAX_PAYMENT_COUNT` | 1,000 | Maximum discrete payment records per invoice |
+| `MAX_INLINE_PAYMENT_HISTORY` | 32 | Maximum payments stored inline in the Invoice struct |
 
-- `process_partial_payment` safely bounds any excess request with `applied_amount = min(requested_amount, remaining_due)`.
-- `settle_invoice` rejects explicit overpayment attempts with `InvalidAmount` unless the submitted amount exactly matches the remaining due.
-- In both paths, `total_paid` can never exceed `amount`.
+### Why Bounded Storage?
 
-Accounting guarantees:
+1. **DoS Prevention**: Without a cap, an attacker could force the contract to store unlimited payment records, exhausting storage quotas and increasing costs for all users.
 
-- Rejected settlement overpayments do not mutate invoice state, investment state, balances, or settlement events.
-- Accepted final settlements emit `pay_rec` for the exact remaining due and `inv_stlf` for the final settled total.
+2. **Gas Limit Protection**: Query operations that iterate over payment records (e.g., `get_payment_records`) must complete within Soroban's compute limits. A bounded count ensures predictable gas costs.
 
-## Finalization Safety
+3. **Overflow Prevention**: The payment count is stored as `u32`. While `u32::MAX` (4.2 billion) is theoretically safe, practical limits prevent edge cases and ensure reasonable usage patterns.
 
-### Double-Settlement Protection
-A dedicated `Finalized(invoice_id)` storage flag is set atomically during settlement finalization. Any subsequent settlement attempt (via `settle_invoice` or auto-settlement through `process_partial_payment`) is rejected immediately with `InvalidStatus`.
+4. **Storage Cost predictability**: Users and the protocol can predict maximum storage costs per invoice.
 
 ### Regression tests added
 
@@ -69,163 +63,174 @@ A dedicated `Finalized(invoice_id)` storage flag is set atomically during settle
 ### Accounting Invariant
 Before disbursing funds, the settlement engine asserts:
 
+The cap is enforced in `record_payment()`:
+
+```rust
+let payment_count = get_payment_count_internal(env, invoice_id);
+
+// Guard against unbounded payment record growth.
+if payment_count >= MAX_PAYMENT_COUNT {
+    return Err(QuickLendXError::OperationNotAllowed);
+}
 ```
-investor_return + platform_fee == total_paid
-```
 
-If this invariant is violated (e.g., due to rounding errors in fee calculation), the settlement is rejected with `InvalidAmount`. This prevents any accounting drift between what the business paid and what gets disbursed.
+### Behavior at Cap Boundary
 
-### Payment Count Limit
-Each invoice is limited to `MAX_PAYMENT_COUNT` (1,000) discrete payment records. This prevents unbounded storage growth and protects against payment-count overflow attacks.
+| Scenario | Behavior |
+|----------|----------|
+| Payment count < 1000 | Payment accepted and recorded |
+| Payment count = 1000 | Payment rejected with `OperationNotAllowed` |
+| Payment count > 1000 | Impossible (cannot exceed cap) |
 
-## Public Query API
+### Secondary Guards
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `get_invoice_progress` | `(env, invoice_id) -> Progress` | Aggregate settlement progress |
-| `get_payment_count` | `(env, invoice_id) -> u32` | Total number of payment records |
-| `get_payment_record` | `(env, invoice_id, index) -> SettlementPaymentRecord` | Single record by index |
-| `get_payment_records` | `(env, invoice_id, from, limit) -> Vec<SettlementPaymentRecord>` | Paginated record slice (ordered ASC) |
-| `is_invoice_finalized` | `(env, invoice_id) -> bool` | Whether settlement is complete |
+In addition to the payment count cap, the contract includes secondary defenses:
 
-## Events
-Settlement emits:
+1. **Status Guard**: Once an invoice is marked as `Paid`, further payment attempts are rejected with `InvalidStatus`.
 
-- `pay_rec` (PaymentRecorded): `(invoice_id, payer, applied_amount, total_paid, status)`
-- `inv_stlf` (InvoiceSettledFinal): `(invoice_id, final_amount, paid_at)`
+2. **Finalization Flag**: The `Finalized` storage key marks an invoice as settled, preventing double-settlement.
+
+3. **Overpayment Capping**: If a payment would exceed the remaining due amount, only the remaining amount is applied.
+
+## Query Functions
+
+All query functions remain stable and efficient near the cap boundary:
+
+### `get_payment_count(env, invoice_id) -> u32`
+
+Returns the total number of recorded payments for an invoice. O(1) operation.
+
+### `get_payment_record(env, invoice_id, index) -> SettlementPaymentRecord`
+
+Returns a single payment record by index. O(1) operation. Returns `StorageKeyNotFound` if index is out of bounds.
+
+### `get_payment_records(env, invoice_id, from, limit) -> Vec<SettlementPaymentRecord>`
+
+Returns a paginated slice of payment records. Records are returned in chronological order (index 0 = first payment).
+
+**Parameters:**
+- `from`: Starting index (inclusive)
+- `limit`: Maximum number of records to return (capped at `MAX_QUERY_LIMIT` for gas safety)
+
+**Behavior near cap:**
+- Querying beyond available records returns an empty vector
+- Partial pages at the end return only available records
+- Full range query (0, 1000) at cap returns all 1000 records
+
+### `get_invoice_progress(env, invoice_id) -> Progress`
+
+Returns aggregate payment progress including:
+- `total_due`: Original invoice amount
+- `total_paid`: Sum of all applied payments
+- `remaining_due`: Amount still owed
+- `progress_percent`: Percentage paid (0-100)
+- `payment_count`: Number of recorded payments
+- `status`: Current invoice status
+
+## Error Handling
+
+| Error | Code | When Returned |
+|-------|------|---------------|
+| `OperationNotAllowed` | 2001 | Payment count has reached `MAX_PAYMENT_COUNT` |
+| `InvalidStatus` | 1003 | Invoice is already `Paid`, `Cancelled`, or not in `Funded` state |
+| `InvalidAmount` | 1200 | Payment amount ≤ 0, or would cause accounting invariant violation |
+| `InvoiceNotFound` | 1001 | Invoice ID does not exist |
+| `StorageKeyNotFound` | 3001 | Payment record at index does not exist |
+| `NotBusinessOwner` | 1401 | Payer is not the invoice business |
 
 ## Security Considerations
 
-### Replay/Idempotency
-- Non-empty nonce is enforced unique per `(invoice, nonce)`.
-- Duplicate payment attempts with the same nonce return the current `Progress` without mutating state (idempotent behavior).
+### Threat Model
 
-### Ordering and Pagination
-- Payments are stored with a strictly increasing index `[0..payment_count)`.
-- `get_payment_records` returns records in chronological order (oldest first).
-- Pagination supports arbitrary `from` offsets and enforces `MAX_QUERY_LIMIT` (100) per page.
-- Duplicate nonce attempts are rejected with `OperationNotAllowed`.
-- Nonces are scoped per invoice — the same nonce can be used on different invoices.
+1. **Storage DoS**: An attacker attempts to exhaust contract storage by creating many small payments.
+   - **Mitigation**: `MAX_PAYMENT_COUNT` cap prevents unbounded growth.
 
-### Overpayment Integrity
-- Final settlement requires an exact remaining-due payment to avoid ambiguous excess-value handling.
-- Partial-payment capping protects incremental repayment flows without allowing accounting drift.
+2. **Gas Exhaustion**: An attacker creates enough payments to make queries exceed gas limits.
+   - **Mitigation**: Cap ensures maximum iteration count; `get_payment_records` enforces `MAX_QUERY_LIMIT`.
 
-### Arithmetic Safety
-- Checked arithmetic (`checked_add`, `checked_sub`, `checked_mul`, `checked_div`) is used for all payment accumulation and progress calculations.
-- Invalid/overflowing states reject with contract errors.
+3. **Replay Attacks**: An attacker replays a valid payment transaction.
+   - **Mitigation**: Nonce-based deduplication tracks seen transaction IDs per invoice.
+
+4. **Double Settlement**: An attacker attempts to settle an already-settled invoice.
+   - **Mitigation**: `Finalized` flag and status checks prevent re-entry.
+
+### Security Invariants
+
+1. **`total_paid <= total_due`**: Enforced at every payment recording step. Amounts are capped to prevent overpayment.
+
+2. **Payment count bounded**: `payment_count <= MAX_PAYMENT_COUNT` for all invoices.
+
+3. **Idempotent settlement**: Once `status == Paid`, further settlement attempts are rejected.
+
+4. **Accounting identity**: `investor_return + platform_fee == total_paid` is asserted before fund disbursement.
 
 ### Authorization
-- Payer must be the invoice business owner and must authorize payment.
 
-### Closed Invoice Protection
-- Payments are rejected for `Paid`, `Cancelled`, `Defaulted`, and `Refunded` states.
+- Payment recording requires authorization from the invoice business address.
+- The business must explicitly approve each payment via Soroban's `require_auth()`.
 
-### Invariants
-- `total_paid <= total_due` is enforced at every payment step.
-- `investor_return + platform_fee == total_paid` is enforced at finalization.
-- `payment_count <= MAX_PAYMENT_COUNT` (1,000) per invoice.
+## Testing
 
-## Timestamp Consistency Guarantees
-Settlement and adjacent lifecycle entrypoints enforce monotonic ledger-time assumptions to avoid
-temporal anomalies when validators, simulation environments, or test harnesses move time backward.
+The payment count cap enforcement is validated by comprehensive tests in `test_partial_payments.rs`:
 
-- Guarded flows:
-  - Create: invoice due date must remain strictly in the future (`due_date > now`).
-  - Fund: funding entrypoints reject if `now < created_at`.
-  - Settle: settlement rejects if `now < created_at` or `now < funded_at`.
-  - Default: default handlers reject if `now < created_at` or `now < funded_at`.
-- Error behavior:
-  - Non-monotonic transitions fail with `InvalidTimestamp`.
-- Data integrity assumptions:
-  - `created_at` is immutable once written.
-  - If present, `funded_at` must not precede `created_at`.
-  - Lifecycle transitions rely only on ledger timestamp (not sequence number) for time checks.
+| Test | Purpose |
+|------|---------|
+| `test_payment_count_cap_is_enforced` | Verifies 1001st payment is rejected |
+| `test_payment_just_before_cap_succeeds` | Verifies 1000th payment succeeds |
+| `test_queries_stable_near_cap` | Validates query correctness with 999 payments |
+| `test_pagination_at_cap_boundary` | Tests pagination at exactly 1000 records |
+| `test_cap_is_per_invoice_not_global` | Confirms cap is per-invoice, not global |
+| `test_settled_invoice_rejects_additional_payments` | Status guard validation |
+| `test_finalization_flag_after_settlement` | Finalization flag correctness |
+| `test_payment_record_fields_are_complete` | Record structure validation |
+| `test_duplicate_nonce_does_not_increment_count` | Replay protection |
+| `test_empty_nonce_each_creates_separate_record` | Empty nonce handling |
 
-### Threat Model Notes
-- Mitigated:
-  - Backward-time execution paths that could otherwise settle/default before a valid funding-time
-    reference.
-  - Cross-step inconsistencies caused by stale temporal assumptions.
-  - Double-settlement via finalization flag.
-  - Accounting drift via disbursement invariant check.
-  - Unbounded storage via payment count limit.
-- Not mitigated:
-  - Consensus-level manipulation of canonical ledger time beyond protocol tolerance.
-  - Misconfigured off-chain automation that never advances time far enough to pass grace windows.
+## Usage Examples
 
-## Running Tests
-From `quicklendx-contracts/`:
+### Recording Partial Payments
 
-```bash
-cargo test test_partial_payments -- --nocapture
-cargo test test_settlement -- --nocapture
+```rust
+// Record a partial payment
+let result = record_payment(
+    &env,
+    &invoice_id,
+    &business_address,
+    500_000,  // Payment amount
+    "tx-hash-123".to_string(),  // Unique transaction ID
+);
 ```
 
-## Vesting Validation Notes
-The vesting flow also relies on ledger-time validation to keep token release schedules sane and reviewable.
+### Querying Payment Progress
 
-- Schedule creation rejects zero-value vesting amounts.
-- The creating caller must authorize and must be the configured protocol admin.
-- `start_time` cannot be backdated relative to the current ledger timestamp.
-- `end_time` must be strictly after `start_time`.
-- `cliff_time = start_time + cliff_seconds` must not overflow and must be strictly before `end_time`.
-- Release calculations reject impossible stored states such as `released_amount > total_amount` or timelines where `cliff_time` falls outside `[start_time, end_time)`.
-
-These checks prevent schedules that would unlock immediately from stale timestamps, collapse into zero-duration timelines, or defer the entire vesting curve to an invalid cliff boundary.
-
-## Timestamp Consistency Guarantees
-Settlement and adjacent lifecycle entrypoints enforce monotonic ledger-time assumptions to avoid
-temporal anomalies when validators, simulation environments, or test harnesses move time backward.
-
-- Guarded flows:
-  - Create: invoice due date must remain strictly in the future (`due_date > now`).
-  - Fund: funding entrypoints reject if `now < created_at`.
-  - Settle: settlement rejects if `now < created_at` or `now < funded_at`.
-  - Default: default handlers reject if `now < created_at` or `now < funded_at`.
-- Error behavior:
-  - Non-monotonic transitions fail with `InvalidTimestamp`.
-- Data integrity assumptions:
-  - `created_at` is immutable once written.
-  - If present, `funded_at` must not precede `created_at`.
-  - Lifecycle transitions rely only on ledger timestamp (not sequence number) for time checks.
-
-### Threat Model Notes
-- Mitigated:
-  - Backward-time execution paths that could otherwise settle/default before a valid funding-time
-    reference.
-  - Cross-step inconsistencies caused by stale temporal assumptions.
-- Not mitigated:
-  - Consensus-level manipulation of canonical ledger time beyond protocol tolerance.
-  - Misconfigured off-chain automation that never advances time far enough to pass grace windows.
-
-## Escrow Release Rules
-
-The escrow release lifecycle follows a strict path to prevent premature or repeated release of funds.
-
-### Release Conditions
-- **Invoice Status**: Must be `Funded`. Release is prohibited for `Pending`, `Verified`, `Refunded`, or `Cancelled` invoices.
-- **Escrow Status**: Must be `Held`. This ensures funds are only moved once.
-- **Verification**: If an invoice is verified *after* being funded, the protocol can automatically trigger the release to ensure the business receives capital promptly.
-
-### Idempotency and Retries
-- The release operation is idempotent.
-- Atomic Transfer: Funds move before the state update. If the transfer fails, the state is NOT updated, allowing for safe retries.
-- Success Guard: Once status becomes `Released`, further attempts are rejected with `InvalidStatus`.
-
-### Lifecycle Transitions
-| Action | Invoice Status | Escrow Status | Result |
-|--------|----------------|--------------|--------|
-| `accept_bid` | `Verified` -> `Funded` | `None` -> `Held` | Funds locked in contract |
-| `release_escrow` | `Funded` | `Held` -> `Released` | Funds moved to Business |
-| `refund_escrow` | `Funded` -> `Refunded` | `Held` -> `Refunded` | Funds moved to Investor |
-| `settle_invoice` | `Funded` -> `Paid` | `Released` | Invoice settled; Investor paid |
-
-## Running Tests
-From `quicklendx-contracts/`:
-
-```bash
-cargo test test_partial_payments -- --nocapture
-cargo test test_settlement -- --nocapture
-cargo test test_release_escrow_ -- --nocapture
+```rust
+// Get current payment progress
+let progress = get_invoice_progress(&env, &invoice_id)?;
+println!("Paid: {}/{} ({}%)", 
+    progress.total_paid, 
+    progress.total_due, 
+    progress.progress_percent
+);
+println!("Payment count: {}", progress.payment_count);
 ```
+
+### Paginated Payment History
+
+```rust
+// Get first 50 payment records
+let records = get_payment_records(&env, &invoice_id, 0, 50)?;
+for record in records.iter() {
+    println!("Payment: {} from {} at {}", 
+        record.amount, 
+        record.payer, 
+        record.timestamp
+    );
+}
+```
+
+## References
+
+- Implementation: `quicklendx-contracts/src/settlement.rs`
+- Tests: `quicklendx-contracts/src/test_partial_payments.rs`
+- Error definitions: `quicklendx-contracts/src/errors.rs`
+- Related: `docs/contracts/limits.md`, `docs/contracts/invoice.md`
