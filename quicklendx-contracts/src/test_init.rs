@@ -463,10 +463,8 @@ mod test_init {
 
         let params = create_valid_params(&env);
 
-        // Should panic without authorization
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            client.initialize(&params);
-        }));
+        // Should fail without authorization
+        let result = client.try_initialize(&params);
         assert!(result.is_err(), "Initialization without auth must fail");
     }
 

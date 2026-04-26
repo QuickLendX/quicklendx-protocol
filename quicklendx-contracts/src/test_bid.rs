@@ -181,7 +181,7 @@ fn test_third_party_cannot_cancel_bid() {
         },
     }]);
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
         client.cancel_bid(&bid_id);
     }));
     assert!(result.is_err(), "third party must not be able to cancel bid");
@@ -217,7 +217,7 @@ fn test_business_owner_cannot_cancel_bid() {
         },
     }]);
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
         client.cancel_bid(&bid_id);
     }));
     assert!(result.is_err(), "business owner must not be able to cancel investor bid");
@@ -252,7 +252,7 @@ fn test_admin_cannot_cancel_bid() {
         },
     }]);
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
         client.cancel_bid(&bid_id);
     }));
     assert!(result.is_err(), "admin must not be able to cancel bids (no override)");
@@ -290,7 +290,7 @@ fn test_different_investor_cannot_cancel_others_bid() {
         },
     }]);
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
         client.cancel_bid(&bid_id_a);
     }));
     assert!(result.is_err(), "investor B must not cancel investor A's bid");
@@ -377,7 +377,7 @@ fn test_withdraw_bid_also_requires_investor_auth() {
         },
     }]);
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
         let _ = client.withdraw_bid(&bid_id);
     }));
     assert!(result.is_err(), "withdraw_bid must also enforce investor-only auth");

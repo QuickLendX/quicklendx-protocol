@@ -193,12 +193,12 @@ fn test_tag_at_limit_uppercase_normalizes_valid() {
     let due_date = env.ledger().timestamp() + 86400;
 
     // 50 uppercase 'A' characters — normalizes to 50 lowercase 'a' characters.
-    let mut s = std::string::String::with_capacity(50);
+    let mut s = String::from_str(&env, "");
     for _ in 0..50 {
-        s.push('A');
+        s = s.concat(&String::from_str(&env, "A"));
     }
     let mut tags = Vec::new(&env);
-    tags.push_back(String::from_str(&env, &s));
+    tags.push_back(s);
 
     let res = client.try_store_invoice(
         &business,
@@ -224,14 +224,13 @@ fn test_tag_trim_to_limit_valid() {
     let due_date = env.ledger().timestamp() + 86400;
 
     // Build " " + 50 'a' chars + " " = 52 bytes, normalizes to 50 bytes.
-    let mut s = std::string::String::with_capacity(52);
-    s.push(' ');
+    let mut s = String::from_str(&env, " ");
     for _ in 0..50 {
-        s.push('a');
+        s = s.concat(&String::from_str(&env, "a"));
     }
-    s.push(' ');
+    s = s.concat(&String::from_str(&env, " "));
     let mut tags = Vec::new(&env);
-    tags.push_back(String::from_str(&env, &s));
+    tags.push_back(s);
 
     let res = client.try_store_invoice(
         &business,

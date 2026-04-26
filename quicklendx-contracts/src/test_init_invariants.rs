@@ -615,10 +615,8 @@ fn test_init_requires_admin_auth() {
     let client = QuickLendXContractClient::new(&env, &id);
     let p = valid_params(&env);
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        client.initialize(&p);
-    }));
-    assert!(result.is_err(), "init without auth must panic");
+    let result = client.try_initialize(&p);
+    assert!(result.is_err(), "init without auth must fail");
 }
 
 // ===========================================================================

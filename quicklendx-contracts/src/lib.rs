@@ -45,6 +45,7 @@ mod investment_queries;
 mod invoice;
 mod invoice_search;
 mod notifications;
+mod pagination;
 mod pause;
 mod payments;
 mod profits;

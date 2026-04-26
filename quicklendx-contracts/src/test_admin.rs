@@ -19,7 +19,7 @@ mod test_admin {
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{
         testutils::{Address as _, Events, MockAuth, MockAuthInvoke},
-        Address, Env, IntoVal,
+        Address, Env, IntoVal, Vec,
     };
 
     fn setup() -> (Env, QuickLendXContractClient<'static>) {
@@ -70,7 +70,7 @@ mod test_admin {
         let admin = Address::generate(&env);
 
         // Should panic without authorization
-        let result = std::panic::catch_unwind(|| {
+        let result = panic::catch_unwind(|| {
             client.initialize_admin(&admin);
         });
         assert!(result.is_err(), "Initialization without auth must fail");

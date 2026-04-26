@@ -99,12 +99,10 @@ fn test_rounding() {
     let current_period = env.ledger().timestamp() / 2_592_000;
 
     // Debug print
-    // std::println!("Distributing revenue for period: {}", current_period);
 
     let (treasury_amount, developer_amount, platform_amount) =
         client.distribute_revenue(&admin, &current_period);
 
-    // std::println!("Amounts: T={}, D={}, P={}", treasury_amount, developer_amount, platform_amount);
 
     // 33% of 100 = 33
     // 33% of 100 = 33
