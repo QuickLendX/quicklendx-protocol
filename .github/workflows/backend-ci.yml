@@ -86,7 +86,7 @@ jobs:
     name: Generate SBOM Artifact
     runs-on: ubuntu-latest
     needs: security_scan
-    if: github.event_name == 'release' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || github.event_name == 'release' || github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
