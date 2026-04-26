@@ -836,12 +836,12 @@ impl QuickLendXContract {
 
     /// Get all invoices by status
     pub fn get_invoices_by_status(env: Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_invoices_by_status(&env, &status)
+        InvoiceStorage::get_invoices_by_status(&env, status)
     }
 
     /// Get all available invoices (verified and not funded)
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified)
+        InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified)
     }
 
     /// Update invoice status (admin function)
@@ -901,7 +901,7 @@ impl QuickLendXContract {
 
     /// Get invoice count by status
     pub fn get_invoice_count_by_status(env: Env, status: InvoiceStatus) -> u32 {
-        let invoices = InvoiceStorage::get_invoices_by_status(&env, &status);
+        let invoices = InvoiceStorage::get_invoices_by_status(&env, status);
         invoices.len() as u32
     }
 
@@ -2246,7 +2246,7 @@ impl QuickLendXContract {
         
         let capped_limit = cap_query_limit(limit);
         let verified_invoices =
-            InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Verified);
+            InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified);
         let mut filtered = Vec::new(&env);
 
         for invoice_id in verified_invoices.iter() {
@@ -2298,10 +2298,10 @@ impl QuickLendXContract {
     pub fn get_bid_history_paged(
         env: Env,
         invoice_id: BytesN<32>,
-        status_filter: Option<BidStatus>,
+        status_filter: Option<bid::BidStatus>,
         offset: u32,
         limit: u32,
-    ) -> Vec<Bid> {
+    ) -> Vec<bid::Bid> {
         // Validate query parameters for security
         if validate_query_params(offset, limit).is_err() {
             return Vec::new(&env);
@@ -2671,7 +2671,7 @@ impl QuickLendXContract {
         if reason.len() == 0 {
             return Err(QuickLendXError::InvalidDisputeReason);
         }
-        invoice.dispute_status = invoice::DisputeStatus::Disputed;
+        invoice.dispute_status = invoice::DisputeStatus::UnderReview;
         invoice.dispute = invoice::Dispute {
             created_by: creator,
             created_at: env.ledger().timestamp(),
@@ -2747,7 +2747,7 @@ impl QuickLendXContract {
             InvoiceStatus::Funded,
             InvoiceStatus::Paid,
         ] {
-            for id in InvoiceStorage::get_invoices_by_status(&env, &status).iter() {
+            for id in InvoiceStorage::get_invoices_by_status(&env, status).iter() {
                 if let Some(inv) = InvoiceStorage::get_invoice(&env, &id) {
                     if inv.dispute_status != invoice::DisputeStatus::None {
                         result.push_back(id);
@@ -2769,7 +2769,7 @@ impl QuickLendXContract {
             InvoiceStatus::Funded,
             InvoiceStatus::Paid,
         ] {
-            for id in InvoiceStorage::get_invoices_by_status(&env, &status).iter() {
+            for id in InvoiceStorage::get_invoices_by_status(&env, status).iter() {
                 if let Some(inv) = InvoiceStorage::get_invoice(&env, &id) {
                     if inv.dispute_status == dispute_status {
                         result.push_back(id);
