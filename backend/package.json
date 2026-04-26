@@ -6,7 +6,12 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "dev": "ts-node-dev src/index.ts",
-    "start": "ts-node src/index.ts"
+    "start": "ts-node src/index.ts",
+    "migrate": "ts-node src/lib/migrations/cli.ts",
+    "migrate:check": "npm run migrate -- --check",
+    "migrate:dry-run": "npm run migrate -- --dry-run",
+    "migrate:validate": "npm run migrate -- --validate-only",
+    "build": "tsc && cp -r src/migrations dist/migrations && cp -r src/lib/migrations dist/lib/migrations"
   },
   "keywords": [],
   "author": "",
@@ -14,11 +19,15 @@
   "description": "",
   "dependencies": {
     "@types/helmet": "^0.0.48",
+    "better-sqlite3": "^12.9.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "rate-limiter-flexible": "^11.0.1",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1",
+    "uuid": "^14.0.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

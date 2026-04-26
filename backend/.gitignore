@@ -3,3 +3,7 @@ dist
 coverage
 .env
 *.log
+.data/
+.hotfix-approvals/
+.data/
+.hotfix-approvals/

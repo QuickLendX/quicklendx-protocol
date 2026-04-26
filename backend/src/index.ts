@@ -1,103 +1,58 @@
-import express from "express";
-import cors from "cors";
+import app from "./app";
 import dotenv from "dotenv";
-import { getAdminContext, requireAdminRoles } from "./middleware/rbac";
-import { adminControlService } from "./services/adminControlService";
-import { auditLogService } from "./services/auditLogService";
-import { statusService } from "./services/statusService";
-import { requireAdminAuth, getAdminActor } from "./middleware/adminAuth";
-import { backfillService, BackfillError } from "./services/backfillService";
-import { BackfillActionSchema, BackfillStartRequestSchema } from "./types/backfill";
+import { getDatabase } from "./lib/database";
+import { runMigrations } from "./lib/migrations/runner";
+import { ensureRuntimeDirs } from "./lib/bootstrap";
 
 dotenv.config();
 
-const app = express();
-const port = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3001;
 
-app.set("trust proxy", true);
-app.use(helmet());
-app.use(cors());
-app.use(express.json({ limit: "1mb" }));
-app.use(rateLimitMiddleware);
-app.use(requestLimitsMiddleware);
+async function boot(): Promise<void> {
+  console.log("🚀 QuickLendX Backend starting...");
 
-app.get("/api/status", async (req, res) => {
+  // 0. Ensure runtime directories exist (.data for SQLite, .hotfix-approvals)
+  await ensureRuntimeDirs();
+
+  // 1. Database + Migrations
   try {
-    const status = await statusService.getStatus();
-    res.setHeader("Cache-Control", "public, max-age=30");
-    res.json(status);
-  } catch (error) {
-    console.error("Status check failed:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
+    const db = getDatabase();
+    console.log("   ✅ Database connected");
 
-app.post("/api/admin/maintenance", requireAdminAuth, (req, res) => {
-  const { enabled } = req.body;
-  if (typeof enabled !== "boolean") {
-    return res.status(400).json({ error: "Invalid enabled flag" });
-  }
-  statusService.setMaintenanceMode(enabled);
-  res.json({ success: true, maintenance: enabled });
-});
-
-app.post("/api/admin/backfill", requireAdminAuth, async (req, res) => {
-  try {
-    const payload = BackfillStartRequestSchema.parse(req.body);
-    const actor = getAdminActor(req);
-    const result = await backfillService.startBackfill(payload, actor);
-    res.status(payload.dryRun ? 200 : 202).json(result);
-  } catch (error) {
-    if (error instanceof BackfillError) {
-      return res.status(error.statusCode).json({ error: error.message, code: error.code });
+    // Run migrations (forward-only by default)
+    // In production, failures exit the process. In dev, we warn but continue.
+    try {
+      const result = await runMigrations({ verbose: true });
+      console.log(`   ✅ Migrations: ${result.applied.length} applied, ${result.skipped} skipped`);
+    } catch (migErr: any) {
+      console.error("❌ Migration error:", migErr.message);
+      if (process.env.NODE_ENV === "production") {
+        console.error("🛑 Refusing to start with failed migrations in production");
+        process.exit(1);
+      } else {
+        console.warn("⚠️  Continuing in dev mode despite migration failure");
+      }
     }
-    return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });
-  }
-});
-
-app.get("/api/admin/backfill/runs", requireAdminAuth, (req, res) => {
-  res.json({ runs: backfillService.listRuns() });
-});
-
-app.get("/api/admin/backfill/:runId", requireAdminAuth, (req, res) => {
-  const runId = Array.isArray(req.params.runId) ? req.params.runId[0] : req.params.runId;
-  const run = backfillService.getRun(runId);
-  if (!run) {
-    return res.status(404).json({ error: "Backfill run not found", code: "RUN_NOT_FOUND" });
-  }
-  res.json({ run });
-});
-
-app.post("/api/admin/backfill/pause", requireAdminAuth, async (req, res) => {
-  try {
-    const { runId } = BackfillActionSchema.parse(req.body);
-    const run = await backfillService.pauseRun(runId, getAdminActor(req));
-    res.json({ run });
-  } catch (error) {
-    if (error instanceof BackfillError) {
-      return res.status(error.statusCode).json({ error: error.message, code: error.code });
+  } catch (dbErr: any) {
+    console.error("❌ Database connection failed:", dbErr.message);
+    if (process.env.NODE_ENV === "production") {
+      process.exit(1);
     }
-    return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });
+    console.warn("⚠️  Continuing in dev mode without database");
   }
-});
 
-app.post("/api/admin/backfill/resume", requireAdminAuth, async (req, res) => {
-  try {
-    const { runId } = BackfillActionSchema.parse(req.body);
-    const run = await backfillService.resumeRun(runId, getAdminActor(req));
-    res.json({ run });
-  } catch (error) {
-    if (error instanceof BackfillError) {
-      return res.status(error.statusCode).json({ error: error.message, code: error.code });
-    }
-    return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });
-  }
-});
-
-if (require.main === module) {
-  app.listen(port, () => {
-    console.log(`Backend server running at http://localhost:${port}`);
+  // 2. Start HTTP server
+  app.listen(PORT, () => {
+    console.log(`   ✅ HTTP listening on http://localhost:${PORT}`);
+    console.log(`   🔍 Health: /health`);
   });
 }
 
-export default app;
+if (require.main === module) {
+  boot().catch((err: any) => {
+    console.error("Fatal startup error:", err.message);
+    process.exit(1);
+  });
+}
+
+export { app };
