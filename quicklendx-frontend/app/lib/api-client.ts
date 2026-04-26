@@ -18,23 +18,35 @@ import {
   globalErrorHandler,
 } from "./errors";
 
-// API configuration
-const API_CONFIG = {
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api",
-  timeout: 10000,
-  retryAttempts: 3,
-  retryDelay: 1000,
+export interface RetryConfig {
+  maxRetries?: number;
+  initialDelayMs?: number;
+  maxDelayMs?: number;
+}
+
+export interface StellarClientOptions {
+  baseURL?: string;
+  timeout?: number;
+  retryConfig?: RetryConfig;
+}
+
+const DEFAULT_RETRY: Required<RetryConfig> = {
+  maxRetries: 3,
+  initialDelayMs: 1000,
+  maxDelayMs: 30000,
 };
 
 // Request/Response interceptors for error handling
 class ApiClient {
   private client: AxiosInstance;
   private requestQueue: Map<string, Promise<any>> = new Map();
+  private retryConfig: Required<RetryConfig>;
 
-  constructor() {
+  constructor(options: StellarClientOptions = {}) {
+    this.retryConfig = { ...DEFAULT_RETRY, ...options.retryConfig };
     this.client = axios.create({
-      baseURL: API_CONFIG.baseURL,
-      timeout: API_CONFIG.timeout,
+      baseURL: options.baseURL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api",
+      timeout: options.timeout ?? 10000,
       headers: {
         "Content-Type": "application/json",
       },
@@ -249,8 +261,9 @@ class ApiClient {
         const response = await this.client.request(config);
         return response.data;
       },
-      API_CONFIG.retryAttempts,
-      API_CONFIG.retryDelay
+      this.retryConfig.maxRetries,
+      this.retryConfig.initialDelayMs,
+      this.retryConfig.maxDelayMs
     );
 
     this.requestQueue.set(requestKey, requestPromise);
@@ -342,6 +355,7 @@ class ApiClient {
 }
 
 // Singleton instance
+export { ApiClient };
 export const apiClient = new ApiClient();
 
 // Hook for using API client with error handling

@@ -7,8 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "jest --passWithNoTests",
-    "test:watch": "jest --watch"
+    "test": "jest"
   },
   "dependencies": {
     "axios": "^1.13.2",
@@ -21,17 +20,17 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/jest": "^29.5.14",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9.38.0",
     "eslint-config-next": "^15.5.12",
-    "jest": "^29",
-    "jest-environment-node": "^29",
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0",
     "prettier": "^3.6.2",
     "tailwindcss": "^4",
-    "ts-jest": "^29",
+    "ts-jest": "^29.4.9",
     "typescript": "^5"
   },
   "jest": {
