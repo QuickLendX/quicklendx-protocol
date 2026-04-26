@@ -305,8 +305,13 @@ export class ErrorRecovery {
   static async retryOperation<T>(
     operation: () => Promise<T>,
     maxRetries: number = 3,
-    delay: number = 1000
+    delay: number = 1000,
+    maxDelayMs: number = 30000
   ): Promise<T> {
+    if (maxRetries === 0) {
+      return operation();
+    }
+
     let lastError: Error;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -319,8 +324,8 @@ export class ErrorRecovery {
           throw lastError;
         }
 
-        // Exponential backoff
-        const waitTime = delay * Math.pow(2, attempt - 1);
+        // Exponential backoff capped at maxDelayMs
+        const waitTime = Math.min(delay * Math.pow(2, attempt - 1), maxDelayMs);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
     }
