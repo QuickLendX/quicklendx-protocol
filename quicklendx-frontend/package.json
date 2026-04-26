@@ -33,6 +33,16 @@
     "ts-jest": "^29.4.9",
     "typescript": "^5"
   },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.ts"
+    ],
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/$1"
+    }
+  },
   "overrides": {
     "minimatch": "^10.2.1",
     "tar": "^7.5.8"
