@@ -113,6 +113,6 @@ jobs:
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
         with:
-          name: backend-sbom-${{ github.ref_name }}
+          name: backend-sbom-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref_name }}
           path: backend/sbom/backend-sbom.cdx.json
           retention-days: 90
