@@ -20,7 +20,7 @@ const updatePreferencesSchema = z.object({
 // Get user notification preferences
 router.get('/preferences/:userId', async (req: Request, res: Response) => {
   try {
-    const { userId } = req.params;
+    const userId = req.params.userId as string;
     const preferences = await notificationService.getUserPreferencesPublic(userId);
 
     if (!preferences) {
@@ -37,15 +37,15 @@ router.get('/preferences/:userId', async (req: Request, res: Response) => {
 // Update user notification preferences
 router.put('/preferences/:userId', async (req: Request, res: Response) => {
   try {
-    const { userId } = req.params;
+    const userId = req.params.userId as string;
     const updates = updatePreferencesSchema.parse(req.body);
 
-    await notificationService.updateUserPreferences(userId, updates);
+    await notificationService.updateUserPreferences(userId, updates as any);
 
     res.json({ success: true });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      return res.status(400).json({ error: 'Invalid request data', details: error.issues });
     }
 
     console.error('Error updating preferences:', error);
@@ -56,11 +56,11 @@ router.put('/preferences/:userId', async (req: Request, res: Response) => {
 // Unsubscribe from all emails (for email links)
 router.post('/unsubscribe/:userId', async (req: Request, res: Response) => {
   try {
-    const { userId } = req.params;
+    const userId = req.params.userId as string;
 
     await notificationService.updateUserPreferences(userId, {
       email_enabled: false,
-    });
+    } as any);
 
     res.json({ success: true, message: 'Successfully unsubscribed from email notifications' });
   } catch (error) {

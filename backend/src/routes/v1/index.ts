@@ -4,6 +4,10 @@ import bidRoutes from "./bids";
 import settlementRoutes from "./settlements";
 import testErrorRoutes from "./test-errors";
 import webhookRoutes from "./webhooks";
+import exportRoutes from "./exports";
+import notificationRoutes from "./notifications";
+import { lagMonitor } from "../../services/lagMonitor";
+import { degradedGuard } from "../../middleware/degraded-guard";
 
 const router = Router();
 
@@ -13,6 +17,7 @@ router.use("/settlements", settlementRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/test-errors", testErrorRoutes);
 router.use("/webhooks", webhookRoutes);
+router.use("/exports", exportRoutes);
 
 // ---------------------------------------------------------------------------
 // System status endpoint

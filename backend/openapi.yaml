@@ -303,6 +303,63 @@ paths:
         '200':
           description: Successfully unsubscribed
 
+  /exports/generate:
+    post:
+      summary: Generate a signed data export link
+      description: Returns a short-lived link to download all user-scoped data (invoices, bids, settlements) in CSV or JSON format.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+          description: The desired export format.
+      responses:
+        "200":
+          description: Export link generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  download_url:
+                    type: string
+                    example: "/api/v1/exports/download/SIGNED_TOKEN"
+                  expires_in:
+                    type: string
+                    example: "1 hour"
+        "401":
+          description: Authentication required
+
+  /exports/download/{token}:
+    get:
+      summary: Download exported data
+      description: Serves the export file using a signed token.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Signed token representing the export request.
+      responses:
+        "200":
+          description: Export file content
+          content:
+            application/json:
+              schema:
+                type: object
+            text/csv:
+              schema:
+                type: string
+        "401":
+          description: Invalid or expired token
+
   /events:
     post:
       summary: Process blockchain events for notifications

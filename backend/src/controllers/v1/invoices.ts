@@ -1,11 +1,12 @@
 import { Request, Response, NextFunction } from "express";
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../../types/contract";
 import { labelRecord } from "../../services/versioningService";
+import { freshnessService } from "../../services/freshnessService";
 
 // Mock data aligned with contract types.
 // labelRecord stamps each record with the contract and event schema version
 // that produced it — exactly as the real indexer would do at ingest time.
-const MOCK_INVOICES: Invoice[] = [
+export const MOCK_INVOICES: Invoice[] = [
   labelRecord<Omit<Invoice, "contract_version" | "event_schema_version" | "indexed_at">>({
     id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     business: "GDVLRH4G4...7Y",
