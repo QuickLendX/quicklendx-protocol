@@ -3,3 +3,5 @@ dist
 coverage
 .env
 *.log
+audit-report.json
+sbom/
