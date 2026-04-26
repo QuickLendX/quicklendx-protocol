@@ -2,32 +2,8 @@
 //!
 //! This module defines storage keys, indexing strategies, and storage operations
 //! for efficient data retrieval and management.
-//!
-//! # Storage Design
-//!
-//! The storage is organized with the following indexing strategy:
-//! - Primary storage: Direct key-value storage for core entities
-//! - Secondary indexes: For efficient querying by various criteria
-//!
-//! # Security Notes
-//!
-//! - Storage keys use symbols to prevent collisions
-//! - Instance storage is used for frequently accessed data
-//! - Persistent storage for long-term data retention
-//! - Upgrade-safe: Keys are designed to avoid conflicts during contract upgrades
-//!
-//! # Collision Safety (Schema v1)
-//!
-//! Primary entity keys are namespaced via the `DataKey` enum.
-//! The Soroban host includes the enum discriminant in the serialized
-//! key, guaranteeing that `Invoice(x)`, `Bid(x)`, and `Investment(x)`
-//! never occupy the same storage slot regardless of the ID value.
-//!
-//! Index keys continue to use `(Symbol, payload)` tuples. Each index
-//! function uses a unique symbol — see `Indexes` for the full list.
 
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
-// Removed ToString import; not needed in Soroban environment.
 
 use crate::invoice::{Invoice, InvoiceStatus};
 use crate::profits::PlatformFeeConfig;
@@ -37,57 +13,26 @@ use crate::types::{Bid, BidStatus, Investment, InvestmentStatus};
 pub struct StorageKeys;
 
 /// Primary storage key namespace for core entities.
-///
-/// # Collision Safety
-///
-/// Each variant wraps the same `BytesN<32>` ID type, but the Soroban
-/// host serializes the enum discriminant tag together with the payload,
-/// so `DataKey::Invoice(x)` and `DataKey::Bid(x)` produce distinct
-/// binary storage keys even when `x` is identical. This makes
-/// cross-entity collisions structurally impossible at the protocol level.
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    /// Primary key for an Invoice record. Keyed by invoice ID.
     Invoice(BytesN<32>),
-    /// Primary key for a Bid record. Keyed by bid ID.
     Bid(BytesN<32>),
-    /// Primary key for an Investment record. Keyed by investment ID.
     Investment(BytesN<32>),
 }
 
 impl StorageKeys {
-    /// Key for platform fee configuration
-    pub fn platform_fees() -> Symbol {
-        symbol_short!("fees")
-    }
-
-    /// Key for invoice count
-    pub fn invoice_count() -> Symbol {
-        symbol_short!("inv_count")
-    }
-
-    /// Key for bid count
-    pub fn bid_count() -> Symbol {
-        symbol_short!("bid_count")
-    }
-
-    /// Key for investment count
-    pub fn investment_count() -> Symbol {
-        symbol_short!("inv_cnt")
-    }
+    pub fn platform_fees() -> Symbol { symbol_short!("fees") }
+    pub fn invoice_count() -> Symbol { symbol_short!("inv_count") }
+    pub fn bid_count() -> Symbol { symbol_short!("bid_count") }
+    pub fn investment_count() -> Symbol { symbol_short!("inv_cnt") }
 }
 
 /// Secondary indexes for efficient querying
 pub struct Indexes;
 
 impl Indexes {
-    /// Index: invoices by business address
-    pub fn invoices_by_business(business: &Address) -> (Symbol, Address) {
-        (symbol_short!("inv_bus"), business.clone())
-    }
-
-    /// Index: invoices by status
+    pub fn invoices_by_business(business: &Address) -> (Symbol, Address) { (symbol_short!("inv_bus"), business.clone()) }
     pub fn invoices_by_status(status: InvoiceStatus) -> (Symbol, Symbol) {
         let status_symbol = match status {
             InvoiceStatus::Pending => symbol_short!("pending"),
@@ -100,40 +45,19 @@ impl Indexes {
         };
         (symbol_short!("inv_st"), status_symbol)
     }
-
-    /// Index: bids by invoice
-    pub fn bids_by_invoice(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
-        (symbol_short!("bids_inv"), invoice_id.clone())
-    }
-
-    /// Index: bids by investor
-    pub fn bids_by_investor(investor: &Address) -> (Symbol, Address) {
-        (symbol_short!("bids_invr"), investor.clone())
-    }
-
-    /// Index: bids by status
+    pub fn bids_by_invoice(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) { (symbol_short!("bids_inv"), invoice_id.clone()) }
+    pub fn bids_by_investor(investor: &Address) -> (Symbol, Address) { (symbol_short!("bids_invr"), investor.clone()) }
     pub fn bids_by_status(status: BidStatus) -> (Symbol, Symbol) {
         let status_symbol = match status {
             BidStatus::Placed => symbol_short!("placed"),
             BidStatus::Withdrawn => symbol_short!("withdrawn"),
             BidStatus::Accepted => symbol_short!("accepted"),
             BidStatus::Expired => symbol_short!("expired"),
-            BidStatus::Cancelled => symbol_short!("cancelled"),
         };
         (symbol_short!("bids_stat"), status_symbol)
     }
-
-    /// Index: investments by invoice
-    pub fn investments_by_invoice(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
-        (symbol_short!("invst_inv"), invoice_id.clone())
-    }
-
-    /// Index: investments by investor
-    pub fn investments_by_investor(investor: &Address) -> (Symbol, Address) {
-        (symbol_short!("inv_invst"), investor.clone())
-    }
-
-    /// Index: investments by status
+    pub fn investments_by_invoice(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) { (symbol_short!("invst_inv"), invoice_id.clone()) }
+    pub fn investments_by_investor(investor: &Address) -> (Symbol, Address) { (symbol_short!("inv_invst"), investor.clone()) }
     pub fn investments_by_status(status: InvestmentStatus) -> (Symbol, Symbol) {
         let status_symbol = match status {
             InvestmentStatus::Active => symbol_short!("active"),
@@ -144,781 +68,329 @@ impl Indexes {
         };
         (symbol_short!("inv_st"), status_symbol)
     }
-
-    /// Index: invoices by customer name
-    pub fn invoices_by_customer(
-        customer_name: &soroban_sdk::String,
-    ) -> (Symbol, soroban_sdk::String) {
-        (symbol_short!("inv_cust"), customer_name.clone())
-    }
-
-    /// Index: invoices by tax_id
-    pub fn invoices_by_tax_id(tax_id: &soroban_sdk::String) -> (Symbol, soroban_sdk::String) {
-        (symbol_short!("inv_taxid"), tax_id.clone())
-    }
+    pub fn invoices_by_customer(name: &String) -> (Symbol, String) { (symbol_short!("inv_cust"), name.clone()) }
+    pub fn invoices_by_tax_id(tax_id: &String) -> (Symbol, String) { (symbol_short!("inv_taxid"), tax_id.clone()) }
+    pub fn dispute_index() -> Symbol { symbol_short!("dispute") }
 }
 
 /// Storage operations for invoices
 pub struct InvoiceStorage;
 
 impl InvoiceStorage {
-    /// Store an invoice
+    /// Store an invoice and update all its secondary indexes.
     pub fn store(env: &Env, invoice: &Invoice) {
-        env.storage()
-            .persistent()
-            .set(&DataKey::Invoice(invoice.id.clone()), invoice);
+        env.storage().persistent().set(&DataKey::Invoice(invoice.id.clone()), invoice);
         Self::add_to_business_index(env, &invoice.business, &invoice.id);
         Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
-        if let Some(ref name) = invoice.metadata_customer_name {
-            Self::add_to_customer_index(env, name, &invoice.id);
-        }
-        if let Some(ref tax_id) = invoice.metadata_tax_id {
-            Self::add_to_tax_id_index(env, tax_id, &invoice.id);
-        }
+        if let Some(ref name) = invoice.metadata_customer_name { Self::add_to_customer_index(env, name, &invoice.id); }
+        if let Some(ref tax_id) = invoice.metadata_tax_id { Self::add_to_tax_id_index(env, tax_id, &invoice.id); }
     }
 
-    /// Alias for store - store a new invoice
-    pub fn store_invoice(env: &Env, invoice: &Invoice) {
-        Self::store(env, invoice)
+    /// Retrieve an invoice by its unique ID.
+    pub fn get(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
+        env.storage().persistent().get(&DataKey::Invoice(invoice_id.clone()))
+    }
+
+    /// Update an existing invoice and maintain index consistency.
+    pub fn update(env: &Env, invoice: &Invoice) {
+        if let Some(old) = Self::get(env, &invoice.id) {
+            if old.status != invoice.status {
+                Self::remove_from_status_index(env, old.status, &invoice.id);
+                Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
+            }
+            if old.metadata_customer_name != invoice.metadata_customer_name {
+                if let Some(ref name) = old.metadata_customer_name { Self::remove_from_customer_index(env, name, &invoice.id); }
+                if let Some(ref name) = invoice.metadata_customer_name { Self::add_to_customer_index(env, name, &invoice.id); }
+            }
+            if old.metadata_tax_id != invoice.metadata_tax_id {
+                if let Some(ref tax_id) = old.metadata_tax_id { Self::remove_from_tax_id_index(env, tax_id, &invoice.id); }
+                if let Some(ref tax_id) = invoice.metadata_tax_id { Self::add_to_tax_id_index(env, tax_id, &invoice.id); }
+            }
+        }
+        env.storage().persistent().set(&DataKey::Invoice(invoice.id.clone()), invoice);
     }
 
     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
-        let key = Indexes::invoices_by_business(business);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env))
-    }
-
-    /// Alias for get_by_business - retrieve invoices by business address
-    pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
-        Self::get_by_business(env, business)
+        env.storage().persistent().get(&Indexes::invoices_by_business(business)).unwrap_or(Vec::new(env))
     }
 
     pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
-        let key = Indexes::invoices_by_status(status);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env))
+        env.storage().persistent().get(&Indexes::invoices_by_status(status)).unwrap_or(Vec::new(env))
     }
 
-    /// Alias for get_by_status - retrieve invoices by status
-    pub fn get_invoices_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
-        Self::get_by_status(env, status)
+    /// Get all invoice IDs that have ever been disputed.
+    pub fn get_dispute_index(env: &Env) -> Vec<BytesN<32>> {
+        env.storage().persistent().get(&Indexes::dispute_index()).unwrap_or_else(|| Vec::new(env))
     }
 
-    /// Get an invoice by ID
-    pub fn get(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Invoice(invoice_id.clone()))
-    }
-
-    /// Alias for get - retrieve invoice by ID
-    pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
-        Self::get(env, invoice_id)
-    }
-
-    /// Update an invoice
-    pub fn update(env: &Env, invoice: &Invoice) {
-        if let Some(old_invoice) = Self::get(env, &invoice.id) {
-            if old_invoice.status != invoice.status {
-                Self::remove_from_status_index(env, old_invoice.status, &invoice.id);
-                Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
-            }
-            if old_invoice.metadata_customer_name != invoice.metadata_customer_name {
-                if let Some(ref old_name) = old_invoice.metadata_customer_name {
-                    Self::remove_from_customer_index(env, old_name, &invoice.id);
-                }
-                if let Some(ref new_name) = invoice.metadata_customer_name {
-                    Self::add_to_customer_index(env, new_name, &invoice.id);
-                }
-            }
-            if old_invoice.metadata_tax_id != invoice.metadata_tax_id {
-                if let Some(ref old_tax_id) = old_invoice.metadata_tax_id {
-                    Self::remove_from_tax_id_index(env, old_tax_id, &invoice.id);
-                }
-                if let Some(ref new_tax_id) = invoice.metadata_tax_id {
-                    Self::add_to_tax_id_index(env, new_tax_id, &invoice.id);
-                }
-            }
+    /// Add an invoice to the dispute index (append-only discovery index).
+    pub fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
+        let mut ids = Self::get_dispute_index(env);
+        if !ids.iter().any(|id| id == *invoice_id) {
+            ids.push_back(invoice_id.clone());
+            env.storage().persistent().set(&Indexes::dispute_index(), &ids);
         }
-        env.storage()
-            .persistent()
-            .set(&DataKey::Invoice(invoice.id.clone()), invoice);
     }
 
-    /// Alias for update - update an existing invoice
-    pub fn update_invoice(env: &Env, invoice: &Invoice) {
-        Self::update(env, invoice)
-    }
-
-    /// Get next invoice count
+    /// Increment and return the total invoice counter.
     pub fn next_count(env: &Env) -> u64 {
-        let current: u64 = env
-            .storage()
-            .persistent()
-            .get(&StorageKeys::invoice_count())
-            .unwrap_or(0);
+        let current: u64 = env.storage().persistent().get(&StorageKeys::invoice_count()).unwrap_or(0);
         let next = current.saturating_add(1);
-        env.storage()
-            .persistent()
-            .set(&StorageKeys::invoice_count(), &next);
+        env.storage().persistent().set(&StorageKeys::invoice_count(), &next);
         next
     }
 
-    /// Clear all invoice data
-    pub fn clear_all(env: &Env) {
-        // Delegate to the storage manager's clear_all_mappings function
-        // This clears all persistent storage mappings
-        StorageManager::clear_all_mappings(env);
-    }
+    // --- Private Index Helpers ---
 
-    /// Get invoices with rating above threshold
-    /// Note: This is a placeholder implementation - in a real system you would need to iterate through all invoices
-    /// and check their ratings. For now, we return an empty vector.
-    pub fn get_invoices_with_rating_above(env: &Env, _min_rating: u32) -> Vec<BytesN<32>> {
-        // TODO: Implement proper rating-based querying
-        // This would require either:
-        // 1. An index on ratings (complex to maintain)
-        // 2. Iterating through all invoices (expensive but possible for small datasets)
-        // 3. Storing ratings in a separate indexed structure
-        Vec::new(env)
-    }
-
-    /// Get invoices with ratings count threshold
-    /// Note: This is a placeholder implementation - in a real system you would need to iterate through all invoices
-    /// and count their ratings. For now, we return an empty vector.
-    pub fn get_invoices_with_ratings_count(env: &Env, _min_count: u32) -> Vec<BytesN<32>> {
-        // TODO: Implement proper rating count-based querying
-        Vec::new(env)
-    }
-}
-
-/// Add invoice to business index
-fn add_to_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
-    let mut invoices = Self::get_by_business(env, business);
-    if !invoices.contains(invoice_id) {
-        invoices.push_back(invoice_id.clone());
-        env.storage()
-            .persistent()
-            .set(&Indexes::invoices_by_business(business), &invoices);
-    }
-}
-
-/// Add invoice to status index
-fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
-    let mut invoices = Self::get_by_status(env, status.clone());
-    if !invoices.contains(invoice_id) {
-        invoices.push_back(invoice_id.clone());
-        env.storage()
-            .persistent()
-            .set(&Indexes::invoices_by_status(status), &invoices);
-    }
-}
-
-    pub fn store_invoice(env: &Env, invoice: &Invoice) {
-        Self::store(env, invoice);
-    }
-
-    pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
-        Self::get(env, invoice_id)
-    }
-
-    pub fn update_invoice(env: &Env, invoice: &Invoice) {
-        Self::update(env, invoice);
-    }
-
-    pub fn get_invoices_by_status(env: &Env, status: &InvoiceStatus) -> Vec<BytesN<32>> {
-        Self::get_by_status(env, status.clone())
-    }
-
-    pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
-        Self::get_by_business(env, business)
-    }
-
-    pub fn add_category_index(
-        _env: &Env,
-        _category: &crate::invoice::InvoiceCategory,
-        _invoice_id: &BytesN<32>,
-    ) {
-    }
-
-    pub fn remove_category_index(
-        _env: &Env,
-        _category: &crate::invoice::InvoiceCategory,
-        _invoice_id: &BytesN<32>,
-    ) {
-    }
-
-    pub fn add_tag_index(_env: &Env, _tag: &String, _invoice_id: &BytesN<32>) {}
-
-    pub fn remove_tag_index(_env: &Env, _tag: &String, _invoice_id: &BytesN<32>) {}
-
-    pub fn add_metadata_indexes(env: &Env, invoice: &Invoice) {
-        if let Some(metadata) = invoice.metadata() {
-            Self::add_to_customer_index(env, &metadata.customer_name, &invoice.id);
-            Self::add_to_tax_id_index(env, &metadata.tax_id, &invoice.id);
+    fn add_to_business_index(env: &Env, business: &Address, id: &BytesN<32>) {
+        let mut list = Self::get_by_business(env, business);
+        if !list.contains(id) {
+            list.push_back(id.clone());
+            env.storage().persistent().set(&Indexes::invoices_by_business(business), &list);
         }
     }
 
-    pub fn remove_metadata_indexes(
-        env: &Env,
-        metadata: &crate::invoice::InvoiceMetadata,
-        invoice_id: &BytesN<32>,
-    ) {
-        Self::remove_from_customer_index(env, &metadata.customer_name, invoice_id);
-        Self::remove_from_tax_id_index(env, &metadata.tax_id, invoice_id);
-    }
-
-    pub fn add_to_status_invoices(env: &Env, status: &InvoiceStatus, invoice_id: &BytesN<32>) {
-        Self::add_to_status_index(env, status.clone(), invoice_id);
-    }
-
-    pub fn remove_from_status_invoices(env: &Env, status: &InvoiceStatus, invoice_id: &BytesN<32>) {
-        Self::remove_from_status_index(env, status.clone(), invoice_id);
-    }
-
-    pub fn get_invoices_by_customer(env: &Env, customer_name: &String) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_customer(customer_name))
-            .unwrap_or(Vec::new(env))
-    }
-
-    pub fn get_invoices_by_tax_id(env: &Env, tax_id: &String) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_tax_id(tax_id))
-            .unwrap_or(Vec::new(env))
-    }
-
-    pub fn get_invoices_by_category(
-        env: &Env,
-        category: &crate::invoice::InvoiceCategory,
-    ) -> Vec<BytesN<32>> {
-        let mut matches = Vec::new(env);
-        for invoice_id in Self::get_all_invoice_ids(env).iter() {
-            if let Some(invoice) = Self::get(env, &invoice_id) {
-                if invoice.category == *category {
-                    matches.push_back(invoice_id);
-                }
-            }
+    fn add_to_status_index(env: &Env, status: InvoiceStatus, id: &BytesN<32>) {
+        let mut list = Self::get_by_status(env, status.clone());
+        if !list.contains(id) {
+            list.push_back(id.clone());
+            env.storage().persistent().set(&Indexes::invoices_by_status(status), &list);
         }
-        matches
     }
 
-    pub fn get_invoices_by_category_and_status(
-        env: &Env,
-        category: &crate::invoice::InvoiceCategory,
-        status: &InvoiceStatus,
-    ) -> Vec<BytesN<32>> {
-        let mut matches = Vec::new(env);
-        for invoice_id in Self::get_by_status(env, status.clone()).iter() {
-            if let Some(invoice) = Self::get(env, &invoice_id) {
-                if invoice.category == *category {
-                    matches.push_back(invoice_id);
-                }
-            }
+    fn remove_from_status_index(env: &Env, status: InvoiceStatus, id: &BytesN<32>) {
+        let mut list = Self::get_by_status(env, status.clone());
+        if let Some(pos) = list.iter().position(|x| x == *id) {
+            list.remove(pos as u32);
+            env.storage().persistent().set(&Indexes::invoices_by_status(status), &list);
         }
-        matches
     }
 
-    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
-        let mut matches = Vec::new(env);
-        for invoice_id in Self::get_all_invoice_ids(env).iter() {
-            if let Some(invoice) = Self::get(env, &invoice_id) {
-                if invoice.has_tag(tag.clone()) {
-                    matches.push_back(invoice_id);
-                }
-            }
+    fn add_to_customer_index(env: &Env, name: &String, id: &BytesN<32>) {
+        let key = Indexes::invoices_by_customer(name);
+        let mut list: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        if !list.contains(id) {
+            list.push_back(id.clone());
+            env.storage().persistent().set(&key, &list);
         }
-        matches
     }
 
-    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
-        let mut matches = Vec::new(env);
-        'invoice: for invoice_id in Self::get_all_invoice_ids(env).iter() {
-            if let Some(invoice) = Self::get(env, &invoice_id) {
-                for tag in tags.iter() {
-                    if !invoice.has_tag(tag.clone()) {
-                        continue 'invoice;
-                    }
-                }
-                matches.push_back(invoice_id);
-            }
+    fn remove_from_customer_index(env: &Env, name: &String, id: &BytesN<32>) {
+        let key = Indexes::invoices_by_customer(name);
+        let mut list: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        if let Some(pos) = list.iter().position(|x| x == *id) {
+            list.remove(pos as u32);
+            env.storage().persistent().set(&key, &list);
         }
-        matches
     }
 
-    pub fn get_all_categories(env: &Env) -> Vec<crate::invoice::InvoiceCategory> {
-        use crate::invoice::InvoiceCategory::*;
-        Vec::from_array(
-            env,
-            [
-                Services,
-                Products,
-                Consulting,
-                Manufacturing,
-                Technology,
-                Healthcare,
-                Other,
-            ],
-        )
-    }
-
-    pub fn get_invoice_count_by_category(
-        env: &Env,
-        category: &crate::invoice::InvoiceCategory,
-    ) -> u32 {
-        Self::get_invoices_by_category(env, category).len()
-    }
-
-    pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
-        Self::get_invoices_by_tag(env, tag).len()
-    }
-
-    pub fn get_invoices_with_rating_above(env: &Env, threshold: u32) -> Vec<BytesN<32>> {
-        let mut matches = Vec::new(env);
-        for invoice_id in Self::get_all_invoice_ids(env).iter() {
-            if let Some(invoice) = Self::get(env, &invoice_id) {
-                if invoice
-                    .average_rating
-                    .map_or(false, |rating| rating > threshold)
-                {
-                    matches.push_back(invoice_id);
-                }
-            }
+    fn add_to_tax_id_index(env: &Env, tax_id: &String, id: &BytesN<32>) {
+        let key = Indexes::invoices_by_tax_id(tax_id);
+        let mut list: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        if !list.contains(id) {
+            list.push_back(id.clone());
+            env.storage().persistent().set(&key, &list);
         }
-        matches
     }
 
-    pub fn get_invoices_with_ratings_count(env: &Env) -> u32 {
-        let mut count = 0u32;
-        for invoice_id in Self::get_all_invoice_ids(env).iter() {
-            if let Some(invoice) = Self::get(env, &invoice_id) {
-                if invoice.total_ratings > 0 {
-                    count = count.saturating_add(1);
-                }
-            }
+    fn remove_from_tax_id_index(env: &Env, tax_id: &String, id: &BytesN<32>) {
+        let key = Indexes::invoices_by_tax_id(tax_id);
+        let mut list: Vec<BytesN<32>> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        if let Some(pos) = list.iter().position(|x| x == *id) {
+            list.remove(pos as u32);
+            env.storage().persistent().set(&key, &list);
         }
-        count
     }
 
-    pub fn clear_all(env: &Env) {
-        StorageManager::clear_all_mappings(env);
-    }
+    // --- Public API Aliases & Extended Queries ---
+
+    pub fn store_invoice(env: &Env, invoice: &Invoice) { Self::store(env, invoice); }
+    pub fn get_invoice(env: &Env, id: &BytesN<32>) -> Option<Invoice> { Self::get(env, id) }
+    pub fn update_invoice(env: &Env, invoice: &Invoice) { Self::update(env, invoice); }
+    pub fn get_invoices_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> { Self::get_by_status(env, status) }
+    pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> { Self::get_by_business(env, business) }
 
     pub fn count_active_business_invoices(env: &Env, business: &Address) -> u32 {
         let mut count = 0u32;
-        for invoice_id in Self::get_by_business(env, business).iter() {
-            if let Some(invoice) = Self::get(env, &invoice_id) {
-                if crate::protocol_limits::is_active_status(&invoice.status) {
-                    count = count.saturating_add(1);
-                }
+        for id in Self::get_by_business(env, business).iter() {
+            if let Some(inv) = Self::get(env, &id) {
+                if crate::protocol_limits::is_active_status(&inv.status) { count += 1; }
             }
         }
         count
     }
 
-    fn get_all_invoice_ids(env: &Env) -> Vec<BytesN<32>> {
+    pub fn get_invoices_by_customer(env: &Env, name: &String) -> Vec<BytesN<32>> {
+        env.storage().persistent().get(&Indexes::invoices_by_customer(name)).unwrap_or(Vec::new(env))
+    }
+
+    pub fn get_invoices_by_tax_id(env: &Env, tax_id: &String) -> Vec<BytesN<32>> {
+        env.storage().persistent().get(&Indexes::invoices_by_tax_id(tax_id)).unwrap_or(Vec::new(env))
+    }
+
+    pub fn get_invoices_by_category(env: &Env, cat: &crate::invoice::InvoiceCategory) -> Vec<BytesN<32>> {
+        let mut res = Vec::new(env);
+        for id in Self::get_all_invoice_ids(env).iter() {
+            if let Some(inv) = Self::get(env, &id) {
+                if inv.category == *cat { res.push_back(id); }
+            }
+        }
+        res
+    }
+
+    pub fn get_invoices_by_category_and_status(env: &Env, cat: &crate::invoice::InvoiceCategory, status: &InvoiceStatus) -> Vec<BytesN<32>> {
+        let mut res = Vec::new(env);
+        for id in Self::get_by_status(env, status.clone()).iter() {
+            if let Some(inv) = Self::get(env, &id) {
+                if inv.category == *cat { res.push_back(id); }
+            }
+        }
+        res
+    }
+
+    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
+        let mut res = Vec::new(env);
+        for id in Self::get_all_invoice_ids(env).iter() {
+            if let Some(inv) = Self::get(env, &id) {
+                if inv.has_tag(tag.clone()) { res.push_back(id); }
+            }
+        }
+        res
+    }
+
+    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
+        let mut res = Vec::new(env);
+        'outer: for id in Self::get_all_invoice_ids(env).iter() {
+            if let Some(inv) = Self::get(env, &id) {
+                for tag in tags.iter() {
+                    if !inv.has_tag(tag) { continue 'outer; }
+                }
+                res.push_back(id);
+            }
+        }
+        res
+    }
+
+    pub fn get_all_invoice_ids(env: &Env) -> Vec<BytesN<32>> {
         let mut all = Vec::new(env);
         let statuses = [
-            InvoiceStatus::Pending,
-            InvoiceStatus::Verified,
-            InvoiceStatus::Funded,
-            InvoiceStatus::Paid,
-            InvoiceStatus::Defaulted,
-            InvoiceStatus::Cancelled,
-            InvoiceStatus::Refunded,
+            InvoiceStatus::Pending, InvoiceStatus::Verified, InvoiceStatus::Funded,
+            InvoiceStatus::Paid, InvoiceStatus::Defaulted, InvoiceStatus::Cancelled,
+            InvoiceStatus::Refunded
         ];
-        for status in statuses {
-            for invoice_id in Self::get_by_status(env, status).iter() {
-                if !all.contains(&invoice_id) {
-                    all.push_back(invoice_id);
-                }
+        for s in statuses {
+            for id in Self::get_by_status(env, s).iter() {
+                if !all.contains(&id) { all.push_back(id); }
             }
         }
         all
     }
 
-    /// Get next invoice count
-    pub fn next_count(env: &Env) -> u64 {
-        let current: u64 = env
-            .storage()
-            .persistent()
-            .get(&StorageKeys::invoice_count())
-            .unwrap_or(0);
-        let next = current.saturating_add(1);
-        env.storage()
-            .persistent()
-            .set(&Indexes::invoices_by_status(status), &invoices);
-    }
-}
-
-pub fn add_to_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
-    let key = Indexes::invoices_by_customer(customer_name);
-    let mut ids: Vec<BytesN<32>> = env
-        .storage()
-        .persistent()
-        .get(&key)
-        .unwrap_or(Vec::new(env));
-    if !ids.iter().any(|id| id == *invoice_id) {
-        ids.push_back(invoice_id.clone());
-        env.storage().persistent().set(&key, &ids);
-    }
-}
-
-pub fn remove_from_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
-    let key = Indexes::invoices_by_customer(customer_name);
-    let ids: Vec<BytesN<32>> = env
-        .storage()
-        .persistent()
-        .get(&key)
-        .unwrap_or(Vec::new(env));
-    let mut filtered = Vec::new(env);
-    for id in ids.iter() {
-        if id != *invoice_id {
-            filtered.push_back(id.clone());
-        }
-    }
-    env.storage().persistent().set(&key, &filtered);
-}
-
-pub fn add_to_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
-    let key = Indexes::invoices_by_tax_id(tax_id);
-    let mut ids: Vec<BytesN<32>> = env
-        .storage()
-        .persistent()
-        .get(&key)
-        .unwrap_or(Vec::new(env));
-    if !ids.iter().any(|id| id == *invoice_id) {
-        ids.push_back(invoice_id.clone());
-        env.storage().persistent().set(&key, &ids);
-    }
-}
-
-pub fn remove_from_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
-    let key = Indexes::invoices_by_tax_id(tax_id);
-    let ids: Vec<BytesN<32>> = env
-        .storage()
-        .persistent()
-        .get(&key)
-        .unwrap_or(Vec::new(env));
-    let mut filtered = Vec::new(env);
-    for id in ids.iter() {
-        if id != *invoice_id {
-            filtered.push_back(id.clone());
-        }
-    }
-    env.storage().persistent().set(&key, &filtered);
-}
-
-/// Get next invoice count
-pub fn next_count(env: &Env) -> u64 {
-    let current: u64 = env
-        .storage()
-        .persistent()
-        .get(&StorageKeys::invoice_count())
-        .unwrap_or(0);
-    let next = current.saturating_add(1);
-    env.storage()
-        .persistent()
-        .set(&StorageKeys::invoice_count(), &next);
-    next
+    pub fn clear_all(env: &Env) { StorageManager::clear_all_mappings(env); }
 }
 
 /// Storage operations for bids
 pub struct BidStorage;
-
 impl BidStorage {
-    /// Store a bid
     pub fn store(env: &Env, bid: &Bid) {
-        env.storage()
-            .persistent()
-            .set(&DataKey::Bid(bid.bid_id.clone()), bid);
-
-        // Update indexes
+        env.storage().persistent().set(&DataKey::Bid(bid.bid_id.clone()), bid);
         Self::add_to_invoice_index(env, &bid.invoice_id, &bid.bid_id);
         Self::add_to_investor_index(env, &bid.investor, &bid.bid_id);
-        Self::add_to_status_index(env, bid.status.clone(), &bid.bid_id);
+        Self::add_to_status_index(env, bid.status, &bid.bid_id);
     }
-
-    /// Get a bid by ID
-    pub fn get(env: &Env, bid_id: &BytesN<32>) -> Option<Bid> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Bid(bid_id.clone()))
-    }
-
-    /// Update a bid
+    pub fn get(env: &Env, id: &BytesN<32>) -> Option<Bid> { env.storage().persistent().get(&DataKey::Bid(id.clone())) }
     pub fn update(env: &Env, bid: &Bid) {
-        // Remove from old status index if status changed
-        if let Some(old_bid) = Self::get(env, &bid.bid_id) {
-            if old_bid.status != bid.status {
-                Self::remove_from_status_index(env, old_bid.status, &bid.bid_id);
-                Self::add_to_status_index(env, bid.status.clone(), &bid.bid_id);
+        if let Some(old) = Self::get(env, &bid.bid_id) {
+            if old.status != bid.status {
+                Self::remove_from_status_index(env, old.status, &bid.bid_id);
+                Self::add_to_status_index(env, bid.status, &bid.bid_id);
             }
         }
-
-        env.storage()
-            .persistent()
-            .set(&DataKey::Bid(bid.bid_id.clone()), bid);
+        env.storage().persistent().set(&DataKey::Bid(bid.bid_id.clone()), bid);
     }
+    pub fn get_by_invoice(env: &Env, id: &BytesN<32>) -> Vec<BytesN<32>> { env.storage().persistent().get(&Indexes::bids_by_invoice(id)).unwrap_or(Vec::new(env)) }
+    pub fn get_by_investor(env: &Env, addr: &Address) -> Vec<BytesN<32>> { env.storage().persistent().get(&Indexes::bids_by_investor(addr)).unwrap_or(Vec::new(env)) }
+    pub fn get_by_status(env: &Env, status: BidStatus) -> Vec<BytesN<32>> { env.storage().persistent().get(&Indexes::bids_by_status(status)).unwrap_or(Vec::new(env)) }
 
-    /// Get bids by invoice
-    pub fn get_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::bids_by_invoice(invoice_id))
-            .unwrap_or_else(|| Vec::new(env))
+    fn add_to_invoice_index(env: &Env, inv: &BytesN<32>, bid: &BytesN<32>) {
+        let mut list = Self::get_by_invoice(env, inv);
+        if !list.contains(bid) { list.push_back(bid.clone()); env.storage().persistent().set(&Indexes::bids_by_invoice(inv), &list); }
     }
-
-    /// Get bids by investor
-    pub fn get_by_investor(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::bids_by_investor(investor))
-            .unwrap_or_else(|| Vec::new(env))
+    fn add_to_investor_index(env: &Env, invr: &Address, bid: &BytesN<32>) {
+        let mut list = Self::get_by_investor(env, invr);
+        if !list.contains(bid) { list.push_back(bid.clone()); env.storage().persistent().set(&Indexes::bids_by_investor(invr), &list); }
     }
-
-    /// Get bids by status
-    pub fn get_by_status(env: &Env, status: BidStatus) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::bids_by_status(status))
-            .unwrap_or_else(|| Vec::new(env))
+    fn add_to_status_index(env: &Env, s: BidStatus, bid: &BytesN<32>) {
+        let mut list = Self::get_by_status(env, s);
+        if !list.contains(bid) { list.push_back(bid.clone()); env.storage().persistent().set(&Indexes::bids_by_status(s), &list); }
     }
-
-    /// Add bid to invoice index
-    fn add_to_invoice_index(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
-        let mut bids = Self::get_by_invoice(env, invoice_id);
-        if !bids.contains(bid_id) {
-            bids.push_back(bid_id.clone());
-            env.storage()
-                .persistent()
-                .set(&Indexes::bids_by_invoice(invoice_id), &bids);
-        }
+    fn remove_from_status_index(env: &Env, s: BidStatus, bid: &BytesN<32>) {
+        let mut list = Self::get_by_status(env, s);
+        if let Some(pos) = list.iter().position(|x| x == *bid) { list.remove(pos as u32); env.storage().persistent().set(&Indexes::bids_by_status(s), &list); }
     }
-
-    /// Add bid to investor index
-    fn add_to_investor_index(env: &Env, investor: &Address, bid_id: &BytesN<32>) {
-        let mut bids = Self::get_by_investor(env, investor);
-        if !bids.contains(bid_id) {
-            bids.push_back(bid_id.clone());
-            env.storage()
-                .persistent()
-                .set(&Indexes::bids_by_investor(investor), &bids);
-        }
-    }
-
-    /// Add bid to status index
-    fn add_to_status_index(env: &Env, status: BidStatus, bid_id: &BytesN<32>) {
-        let mut bids = Self::get_by_status(env, status.clone());
-        if !bids.contains(bid_id) {
-            bids.push_back(bid_id.clone());
-            env.storage()
-                .persistent()
-                .set(&Indexes::bids_by_status(status), &bids);
-        }
-    }
-
-    /// Remove bid from status index
-    fn remove_from_status_index(env: &Env, status: BidStatus, bid_id: &BytesN<32>) {
-        let mut bids = Self::get_by_status(env, status.clone());
-        if let Some(pos) = bids.iter().position(|id| id == *bid_id) {
-            bids.remove(pos as u32);
-            env.storage()
-                .persistent()
-                .set(&Indexes::bids_by_status(status), &bids);
-        }
-    }
-
-    /// Get next bid count
     pub fn next_count(env: &Env) -> u64 {
-        let current: u64 = env
-            .storage()
-            .persistent()
-            .get(&StorageKeys::bid_count())
-            .unwrap_or(0);
-        let next = current.saturating_add(1);
-        env.storage()
-            .persistent()
-            .set(&StorageKeys::bid_count(), &next);
-        next
+        let c: u64 = env.storage().persistent().get(&StorageKeys::bid_count()).unwrap_or(0);
+        let n = c.saturating_add(1); env.storage().persistent().set(&StorageKeys::bid_count(), &n); n
     }
 }
 
 /// Storage operations for investments
 pub struct InvestmentStorage;
-
 impl InvestmentStorage {
-    /// Store an investment
-    pub fn store(env: &Env, investment: &Investment) {
-        env.storage().persistent().set(
-            &DataKey::Investment(investment.investment_id.clone()),
-            investment,
-        );
-
-        // Update indexes
-        Self::add_to_invoice_index(env, &investment.invoice_id, &investment.investment_id);
-        Self::add_to_investor_index(env, &investment.investor, &investment.investment_id);
-        Self::add_to_status_index(env, investment.status.clone(), &investment.investment_id);
+    pub fn store(env: &Env, i: &Investment) {
+        env.storage().persistent().set(&DataKey::Investment(i.investment_id.clone()), i);
+        Self::add_to_invoice_index(env, &i.invoice_id, &i.investment_id);
+        Self::add_to_investor_index(env, &i.investor, &i.investment_id);
+        Self::add_to_status_index(env, i.status, &i.investment_id);
     }
-
-    /// Get an investment by ID
-    pub fn get(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Investment(investment_id.clone()))
-    }
-
-    /// Update an investment
-    pub fn update(env: &Env, investment: &Investment) {
-        // Remove from old status index if status changed
-        if let Some(old_investment) = Self::get(env, &investment.investment_id) {
-            if old_investment.status != investment.status {
-                Self::remove_from_status_index(
-                    env,
-                    old_investment.status,
-                    &investment.investment_id,
-                );
-                Self::add_to_status_index(
-                    env,
-                    investment.status.clone(),
-                    &investment.investment_id,
-                );
+    pub fn get(env: &Env, id: &BytesN<32>) -> Option<Investment> { env.storage().persistent().get(&DataKey::Investment(id.clone())) }
+    pub fn update(env: &Env, i: &Investment) {
+        if let Some(old) = Self::get(env, &i.investment_id) {
+            if old.status != i.status {
+                Self::remove_from_status_index(env, old.status, &i.investment_id);
+                Self::add_to_status_index(env, i.status, &i.investment_id);
             }
         }
-
-        env.storage().persistent().set(
-            &DataKey::Investment(investment.investment_id.clone()),
-            investment,
-        );
+        env.storage().persistent().set(&DataKey::Investment(i.investment_id.clone()), i);
     }
+    pub fn get_by_invoice(env: &Env, id: &BytesN<32>) -> Vec<BytesN<32>> { env.storage().persistent().get(&Indexes::investments_by_invoice(id)).unwrap_or(Vec::new(env)) }
+    pub fn get_by_investor(env: &Env, addr: &Address) -> Vec<BytesN<32>> { env.storage().persistent().get(&Indexes::investments_by_investor(addr)).unwrap_or(Vec::new(env)) }
+    pub fn get_by_status(env: &Env, s: InvestmentStatus) -> Vec<BytesN<32>> { env.storage().persistent().get(&Indexes::investments_by_status(s)).unwrap_or(Vec::new(env)) }
 
-    /// Get investments by invoice
-    pub fn get_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::investments_by_invoice(invoice_id))
-            .unwrap_or_else(|| Vec::new(env))
+    fn add_to_invoice_index(env: &Env, inv: &BytesN<32>, id: &BytesN<32>) {
+        let mut list = Self::get_by_invoice(env, inv);
+        if !list.contains(id) { list.push_back(id.clone()); env.storage().persistent().set(&Indexes::investments_by_invoice(inv), &list); }
     }
-
-    /// Get investments by investor
-    pub fn get_by_investor(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::investments_by_investor(investor))
-            .unwrap_or_else(|| Vec::new(env))
+    fn add_to_investor_index(env: &Env, invr: &Address, id: &BytesN<32>) {
+        let mut list = Self::get_by_investor(env, invr);
+        if !list.contains(id) { list.push_back(id.clone()); env.storage().persistent().set(&Indexes::investments_by_investor(invr), &list); }
     }
-
-    /// Get investments by status
-    pub fn get_by_status(env: &Env, status: InvestmentStatus) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::investments_by_status(status))
-            .unwrap_or_else(|| Vec::new(env))
+    fn add_to_status_index(env: &Env, s: InvestmentStatus, id: &BytesN<32>) {
+        let mut list = Self::get_by_status(env, s);
+        if !list.contains(id) { list.push_back(id.clone()); env.storage().persistent().set(&Indexes::investments_by_status(s), &list); }
     }
-
-    /// Add investment to invoice index
-    fn add_to_invoice_index(env: &Env, invoice_id: &BytesN<32>, investment_id: &BytesN<32>) {
-        let mut investments = Self::get_by_invoice(env, invoice_id);
-        if !investments.contains(investment_id) {
-            investments.push_back(investment_id.clone());
-            env.storage()
-                .persistent()
-                .set(&Indexes::investments_by_invoice(invoice_id), &investments);
-        }
+    fn remove_from_status_index(env: &Env, s: InvestmentStatus, id: &BytesN<32>) {
+        let mut list = Self::get_by_status(env, s);
+        if let Some(pos) = list.iter().position(|x| x == *id) { list.remove(pos as u32); env.storage().persistent().set(&Indexes::investments_by_status(s), &list); }
     }
-
-    /// Add investment to investor index
-    fn add_to_investor_index(env: &Env, investor: &Address, investment_id: &BytesN<32>) {
-        let mut investments = Self::get_by_investor(env, investor);
-        if !investments.contains(investment_id) {
-            investments.push_back(investment_id.clone());
-            env.storage()
-                .persistent()
-                .set(&Indexes::investments_by_investor(investor), &investments);
-        }
-    }
-
-    /// Add investment to status index
-    fn add_to_status_index(env: &Env, status: InvestmentStatus, investment_id: &BytesN<32>) {
-        let mut investments = Self::get_by_status(env, status.clone());
-        if !investments.contains(investment_id) {
-            investments.push_back(investment_id.clone());
-            env.storage()
-                .persistent()
-                .set(&Indexes::investments_by_status(status), &investments);
-        }
-    }
-
-    /// Remove investment from status index
-    fn remove_from_status_index(env: &Env, status: InvestmentStatus, investment_id: &BytesN<32>) {
-        let mut investments = Self::get_by_status(env, status.clone());
-        if let Some(pos) = investments.iter().position(|id| id == *investment_id) {
-            investments.remove(pos as u32);
-            env.storage()
-                .persistent()
-                .set(&Indexes::investments_by_status(status), &investments);
-        }
-    }
-
-    /// Get next investment count
     pub fn next_count(env: &Env) -> u64 {
-        let current: u64 = env
-            .storage()
-            .persistent()
-            .get(&StorageKeys::investment_count())
-            .unwrap_or(0);
-        let next = current.saturating_add(1);
-        env.storage()
-            .persistent()
-            .set(&StorageKeys::investment_count(), &next);
-        next
+        let c: u64 = env.storage().persistent().get(&StorageKeys::investment_count()).unwrap_or(0);
+        let n = c.saturating_add(1); env.storage().persistent().set(&StorageKeys::investment_count(), &n); n
     }
 }
 
-/// Storage operations for platform configuration
 pub struct ConfigStorage;
-
 impl ConfigStorage {
-    /// Store platform fee configuration
-    pub fn set_platform_fees(env: &Env, config: &PlatformFeeConfig) {
-        env.storage()
-            .instance()
-            .set(&StorageKeys::platform_fees(), config);
-    }
-
-    /// Get platform fee configuration
-    pub fn get_platform_fees(env: &Env) -> Option<PlatformFeeConfig> {
-        env.storage().instance().get(&StorageKeys::platform_fees())
-    }
+    pub fn set_platform_fees(env: &Env, c: &PlatformFeeConfig) { env.storage().instance().set(&StorageKeys::platform_fees(), c); }
+    pub fn get_platform_fees(env: &Env) -> Option<PlatformFeeConfig> { env.storage().instance().get(&StorageKeys::platform_fees()) }
 }
 
-/// Helper for clean resets (used in migrations/tests)
 pub struct StorageManager;
-
 impl StorageManager {
-    /// Clear all mapping indexes and core entities for a fresh state.
-    /// WARNING: This is a destructive operation.
     pub fn clear_all_mappings(env: &Env) {
-        // Clear counters
-        env.storage()
-            .persistent()
-            .remove(&StorageKeys::invoice_count());
+        env.storage().persistent().remove(&StorageKeys::invoice_count());
         env.storage().persistent().remove(&StorageKeys::bid_count());
-        env.storage()
-            .persistent()
-            .remove(&StorageKeys::investment_count());
-
-        // Note: In a real protocol, we would need a way to discover all keys.
-        // Since we can't iterate, we clear the known "singleton" or "root" keys
-        // that point to lists or maps of other data.
-
-        // Clearing these effectively "orphans" the data, which is what
-        // a "clear" operation does in this context (e.g. for testing/restore).
+        env.storage().persistent().remove(&StorageKeys::investment_count());
+        env.storage().persistent().remove(&Indexes::dispute_index());
     }
 }
