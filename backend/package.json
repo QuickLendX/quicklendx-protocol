@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "seed": "ts-node seed.ts",
+    "test:seeds": "jest seeds.test.ts",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "dev": "ts-node-dev src/index.ts",
