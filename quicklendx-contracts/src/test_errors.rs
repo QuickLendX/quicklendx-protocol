@@ -217,7 +217,7 @@ fn test_unauthorized_error() {
     let business = create_verified_business(&env, &client, &admin);
     let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 1000);
 
-    // Try to default an invoice that is not yet funded — should return an error
+    // Try to default an invoice that is not yet funded - should return an error
     let result = client.try_mark_invoice_defaulted(&invoice_id, &None);
     assert!(result.is_err());
 }

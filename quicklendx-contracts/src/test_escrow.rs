@@ -1351,7 +1351,7 @@ fn test_accept_bid_succeeds_after_topping_up_balance() {
 // accept_bid_and_fund Atomicity Tests
 //
 // These tests assert that accept_bid_and_fund is atomic: when the token
-// transfer fails, NO partial state is written — no orphan escrow, no bid
+// transfer fails, NO partial state is written - no orphan escrow, no bid
 // status change, no invoice mutation, and no investment record.
 //
 // Security invariant: funds safety requires that storage state only advances
@@ -1375,7 +1375,7 @@ fn setup_token_no_allowance(
     let sac_client = token::StellarAssetClient::new(env, &currency);
     sac_client.mint(business, &(amount * 10));
     sac_client.mint(investor, &(amount * 10));
-    // Deliberately omit investor approve — contract has zero allowance.
+    // Deliberately omit investor approve - contract has zero allowance.
     let _ = contract_id; // allowance intentionally absent
     currency
 }
@@ -1427,7 +1427,7 @@ fn test_accept_bid_and_fund_no_balance_leaves_state_unchanged() {
     let token_client = token::Client::new(&env, &currency);
     let sac_client = token::StellarAssetClient::new(&env, &currency);
     sac_client.mint(&business, &(amount * 10));
-    // Investor deliberately receives no mint — balance is 0.
+    // Investor deliberately receives no mint - balance is 0.
     let expiration = env.ledger().sequence() + 10_000;
     token_client.approve(&business, &contract_id, &(amount * 10), &expiration);
     token_client.approve(&investor, &contract_id, &(amount * 10), &expiration);
@@ -1587,7 +1587,7 @@ fn test_accept_bid_and_fund_retry_succeeds_after_topping_up() {
     let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
     let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 500);
 
-    // First attempt fails — state is clean.
+    // First attempt fails - state is clean.
     assert_eq!(
         client
             .try_accept_bid_and_fund(&invoice_id, &bid_id)
@@ -1649,7 +1649,7 @@ fn test_accept_bid_and_fund_second_call_rejected() {
 
     let balance_after_first = token_client.balance(&contract_id);
 
-    // Second call must fail — invoice is already Funded.
+    // Second call must fail - invoice is already Funded.
     let result = client.try_accept_bid_and_fund(&invoice_id, &bid_id);
     assert!(
         result.is_err(),
@@ -1731,7 +1731,7 @@ fn test_accept_bid_and_fund_mismatched_pair_rejected_atomically() {
 
     let investor_balance_before = token_client.balance(&investor);
 
-    // Try to accept bid_a against invoice_b — must fail.
+    // Try to accept bid_a against invoice_b - must fail.
     let result = client.try_accept_bid_and_fund(&invoice_id_b, &bid_id_a);
     assert!(result.is_err(), "mismatched pair must be rejected");
 
@@ -1754,7 +1754,7 @@ fn test_accept_bid_and_fund_mismatched_pair_rejected_atomically() {
 }
 
 // ============================================================================
-// Release Escrow Funds — Insufficient Contract Balance
+// Release Escrow Funds - Insufficient Contract Balance
 //
 // These tests verify that when the contract's token balance is drained after
 // escrow creation, release_escrow_funds fails cleanly with InsufficientFunds

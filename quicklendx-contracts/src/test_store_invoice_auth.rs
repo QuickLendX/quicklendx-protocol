@@ -14,7 +14,7 @@
 /// - Unverified businesses cannot create invoices (storage DoS prevention).
 /// - Pending businesses are explicitly blocked with `KYCAlreadyPending`.
 /// - Rejected businesses are blocked with `BusinessNotVerified`.
-/// - No KYC record → `BusinessNotVerified`.
+/// - No KYC record -> `BusinessNotVerified`.
 /// - Admin cannot bypass the business signature requirement.
 /// - A third party cannot create invoices on behalf of a business.
 /// - Only after KYC approval can a business write invoice data on-chain.
@@ -86,7 +86,7 @@ fn invoice_params(env: &Env) -> (i128, Address, u64, Bytes, InvoiceCategory, Vec
 }
 
 // ============================================================================
-// POLICY LAYER 1 — Business signature requirement
+// POLICY LAYER 1 - Business signature requirement
 // ============================================================================
 
 /// A verified business that signs the transaction can create an invoice.
@@ -139,7 +139,7 @@ fn test_third_party_cannot_store_invoice_for_another_business() {
     client.set_admin(&admin);
     let business = verified_business(&env, &client, &admin);
 
-    // Now switch to targeted auth mocking — only the attacker signs.
+    // Now switch to targeted auth mocking - only the attacker signs.
     let attacker = Address::generate(&env);
     let (amount, currency, due_date, description, category, tags) = invoice_params(&env);
 
@@ -190,7 +190,7 @@ fn test_admin_cannot_bypass_business_auth_for_store_invoice() {
     client.set_admin(&admin);
     let business = verified_business(&env, &client, &admin);
 
-    // Only mock the admin's auth — not the business's.
+    // Only mock the admin's auth - not the business's.
     let (amount, currency, due_date, description, category, tags) = invoice_params(&env);
 
     env.mock_auths(&[MockAuth {
@@ -228,7 +228,7 @@ fn test_admin_cannot_bypass_business_auth_for_store_invoice() {
 }
 
 // ============================================================================
-// POLICY LAYER 2 — KYC gating
+// POLICY LAYER 2 - KYC gating
 // ============================================================================
 
 /// A business with **no KYC record** must receive `BusinessNotVerified`.
@@ -377,7 +377,7 @@ fn test_multiple_pending_businesses_all_blocked_with_correct_error() {
 // KYC lifecycle state-machine integration
 // ============================================================================
 
-/// Full lifecycle: submit → pending (blocked) → verify → store invoice (ok).
+/// Full lifecycle: submit -> pending (blocked) -> verify -> store invoice (ok).
 /// This is the canonical happy path and validates the state machine integration.
 #[test]
 fn test_full_kyc_lifecycle_unlocks_store_invoice() {
@@ -386,7 +386,7 @@ fn test_full_kyc_lifecycle_unlocks_store_invoice() {
     let kyc = Bytes::from_slice(&env, b"full-lifecycle-kyc");
     let (amount, currency, due_date, description, category, tags) = invoice_params(&env);
 
-    // Step 1: No KYC → blocked.
+    // Step 1: No KYC -> blocked.
     let r1 = client.try_store_invoice(
         &business,
         &amount,
@@ -402,7 +402,7 @@ fn test_full_kyc_lifecycle_unlocks_store_invoice() {
         "Step 1: no KYC must return BusinessNotVerified"
     );
 
-    // Step 2: Submit KYC → pending → blocked with KYCAlreadyPending.
+    // Step 2: Submit KYC -> pending -> blocked with KYCAlreadyPending.
     client.submit_kyc_application(&business, &kyc);
     let r2 = client.try_store_invoice(
         &business,
@@ -419,7 +419,7 @@ fn test_full_kyc_lifecycle_unlocks_store_invoice() {
         "Step 2: pending KYC must return KYCAlreadyPending"
     );
 
-    // Step 3: Admin verifies → store invoice succeeds.
+    // Step 3: Admin verifies -> store invoice succeeds.
     client.verify_business(&admin, &business);
     let r3 = client.try_store_invoice(
         &business,
@@ -437,7 +437,7 @@ fn test_full_kyc_lifecycle_unlocks_store_invoice() {
     );
 }
 
-/// Rejection → resubmission → re-verification → store invoice succeeds.
+/// Rejection -> resubmission -> re-verification -> store invoice succeeds.
 /// Validates that the full rejection/resubmission cycle restores access.
 #[test]
 fn test_rejection_resubmission_reverification_restores_access() {
@@ -448,11 +448,11 @@ fn test_rejection_resubmission_reverification_restores_access() {
     let reason = Bytes::from_slice(&env, b"Incomplete documentation");
     let (amount, currency, due_date, description, category, tags) = invoice_params(&env);
 
-    // Submit → reject.
+    // Submit -> reject.
     client.submit_kyc_application(&business, &kyc_v1);
     client.reject_business(&admin, &business, &reason);
 
-    // Rejected → blocked.
+    // Rejected -> blocked.
     let r1 = client.try_store_invoice(
         &business,
         &amount,
@@ -468,7 +468,7 @@ fn test_rejection_resubmission_reverification_restores_access() {
         "Rejected business must be blocked"
     );
 
-    // Resubmit → pending → blocked.
+    // Resubmit -> pending -> blocked.
     client.submit_kyc_application(&business, &kyc_v2);
     let r2 = client.try_store_invoice(
         &business,
@@ -485,7 +485,7 @@ fn test_rejection_resubmission_reverification_restores_access() {
         "Resubmitted (pending) business must be blocked"
     );
 
-    // Re-verify → store invoice succeeds.
+    // Re-verify -> store invoice succeeds.
     client.verify_business(&admin, &business);
     let r3 = client.try_store_invoice(
         &business,
