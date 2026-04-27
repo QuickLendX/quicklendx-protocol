@@ -2,21 +2,21 @@
 //!
 //! ## Security Invariant
 //! Each invoice maps to **at most one** escrow record for its entire lifetime.
-//! Any attempt to create a second escrow for the same `invoice_id` — regardless
-//! of the caller, the escrow's current status, or the amount — must be rejected
+//! Any attempt to create a second escrow for the same `invoice_id` - regardless
+//! of the caller, the escrow's current status, or the amount - must be rejected
 //! with [`QuickLendXError::InvoiceAlreadyFunded`].
 //!
 //! ## Attack Vectors Covered
-//! 1. **Double-accept via `accept_bid`** – business calls `accept_bid` twice on
+//! 1. **Double-accept via `accept_bid`** - business calls `accept_bid` twice on
 //!    the same invoice (same or different bid).
-//! 2. **Direct `create_escrow` bypass** – attacker calls `payments::create_escrow`
+//! 2. **Direct `create_escrow` bypass** - attacker calls `payments::create_escrow`
 //!    directly after a legitimate escrow already exists.
-//! 3. **Post-release overwrite** – attempt to create a new escrow after the
+//! 3. **Post-release overwrite** - attempt to create a new escrow after the
 //!    original has been released (terminal state).
-//! 4. **Post-refund overwrite** – attempt to create a new escrow after the
+//! 4. **Post-refund overwrite** - attempt to create a new escrow after the
 //!    original has been refunded (terminal state).
-//! 5. **Cross-invoice isolation** – funding one invoice must not affect another.
-//! 6. **Storage key collision** – two invoices with different IDs must produce
+//! 5. **Cross-invoice isolation** - funding one invoice must not affect another.
+//! 6. **Storage key collision** - two invoices with different IDs must produce
 //!    independent escrow records that cannot overwrite each other.
 //!
 //! Run: `cargo test test_escrow_uniqueness`
@@ -47,7 +47,12 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     (env, client, admin)
 }
 
-fn setup_token(env: &Env, business: &Address, investor: &Address, contract_id: &Address) -> Address {
+fn setup_token(
+    env: &Env,
+    business: &Address,
+    investor: &Address,
+    contract_id: &Address,
+) -> Address {
     let token_admin = Address::generate(env);
     let currency = env
         .register_stellar_asset_contract_v2(token_admin)
@@ -123,7 +128,10 @@ fn test_double_accept_bid_rejected() {
 
     // First accept succeeds.
     client.accept_bid(&invoice_id, &bid_id);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
 
     let investor_bal = tok.balance(&investor);
     let contract_bal = tok.balance(&contract_id);
@@ -164,7 +172,12 @@ fn test_second_bid_on_funded_invoice_rejected() {
     let sac = token::StellarAssetClient::new(&env, &currency);
     let tok = token::Client::new(&env, &currency);
     sac.mint(&investor2, &100_000i128);
-    tok.approve(&investor2, &contract_id, &100_000i128, &(env.ledger().sequence() + 10_000));
+    tok.approve(
+        &investor2,
+        &contract_id,
+        &100_000i128,
+        &(env.ledger().sequence() + 10_000),
+    );
 
     let amount = 10_000i128;
     let invoice_id = verified_invoice(&env, &client, &business, amount, &currency);
@@ -219,7 +232,7 @@ fn test_create_escrow_direct_duplicate_rejected() {
 }
 
 /// The duplicate guard fires even when the second call uses a *different* investor
-/// or a *different* amount — the key is the invoice_id, not the caller.
+/// or a *different* amount - the key is the invoice_id, not the caller.
 #[test]
 fn test_create_escrow_different_investor_same_invoice_rejected() {
     let (env, client, admin) = setup();
@@ -232,7 +245,12 @@ fn test_create_escrow_different_investor_same_invoice_rejected() {
     let sac = token::StellarAssetClient::new(&env, &currency);
     let tok = token::Client::new(&env, &currency);
     sac.mint(&investor2, &100_000i128);
-    tok.approve(&investor2, &contract_id, &100_000i128, &(env.ledger().sequence() + 10_000));
+    tok.approve(
+        &investor2,
+        &contract_id,
+        &100_000i128,
+        &(env.ledger().sequence() + 10_000),
+    );
 
     let amount = 10_000i128;
     let invoice_id = verified_invoice(&env, &client, &business, amount, &currency);
@@ -243,7 +261,14 @@ fn test_create_escrow_different_investor_same_invoice_rejected() {
     });
 
     env.as_contract(&contract_id, || {
-        let result = create_escrow(&env, &invoice_id, &investor2, &business, amount / 2, &currency);
+        let result = create_escrow(
+            &env,
+            &invoice_id,
+            &investor2,
+            &business,
+            amount / 2,
+            &currency,
+        );
         assert_eq!(
             result.unwrap_err(),
             QuickLendXError::InvoiceAlreadyFunded,
@@ -367,7 +392,10 @@ fn test_escrow_isolation_between_invoices() {
     client.accept_bid(&invoice_a, &bid_a);
 
     // Invoice B must still be Verified with no escrow.
-    assert_eq!(client.get_invoice(&invoice_b).status, InvoiceStatus::Verified);
+    assert_eq!(
+        client.get_invoice(&invoice_b).status,
+        InvoiceStatus::Verified
+    );
     assert!(
         client.try_get_escrow_details(&invoice_b).is_err(),
         "invoice B must have no escrow after funding invoice A"
@@ -380,7 +408,10 @@ fn test_escrow_isolation_between_invoices() {
     let escrow_a = client.get_escrow_details(&invoice_a);
     let escrow_b = client.get_escrow_details(&invoice_b);
 
-    assert_ne!(escrow_a.escrow_id, escrow_b.escrow_id, "escrow IDs must differ");
+    assert_ne!(
+        escrow_a.escrow_id, escrow_b.escrow_id,
+        "escrow IDs must differ"
+    );
     assert_eq!(escrow_a.invoice_id, invoice_a);
     assert_eq!(escrow_b.invoice_id, invoice_b);
     assert_eq!(escrow_a.status, EscrowStatus::Held);
@@ -518,7 +549,7 @@ fn test_failed_accept_leaves_no_escrow_and_no_state_change() {
     let business = verified_business(&env, &client, &admin);
     let investor = verified_investor(&env, &client, 50_000);
 
-    // Investor has balance but zero allowance → transfer will fail.
+    // Investor has balance but zero allowance -> transfer will fail.
     let token_admin = Address::generate(&env);
     let currency = env
         .register_stellar_asset_contract_v2(token_admin)
@@ -536,7 +567,10 @@ fn test_failed_accept_leaves_no_escrow_and_no_state_change() {
     let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500));
 
     let result = client.try_accept_bid(&invoice_id, &bid_id);
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::OperationNotAllowed);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::OperationNotAllowed
+    );
 
     // Invoice unchanged.
     let invoice = client.get_invoice(&invoice_id);

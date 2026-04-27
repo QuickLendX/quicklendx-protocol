@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { Bid, BidStatus } from "../../types/contract";
+import { labelRecord } from "../../services/versioningService";
 
 const MOCK_BIDS: Bid[] = [
-  {
+  labelRecord<Omit<Bid, "contract_version" | "event_schema_version" | "indexed_at">>({
     bid_id: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
     invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     investor: "GA...ABC",
@@ -11,7 +12,7 @@ const MOCK_BIDS: Bid[] = [
     timestamp: Math.floor(Date.now() / 1000) - 3600,
     status: BidStatus.Placed,
     expiration_timestamp: Math.floor(Date.now() / 1000) + 86400,
-  },
+  }),
 ];
 
 export const getBids = async (
@@ -30,7 +31,38 @@ export const getBids = async (
       filtered = filtered.filter((b) => b.investor === investor);
     }
 
-    res.json(filtered);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getBestBid = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { invoiceId } = req.params;
+    const bestBid = await SnapshotService.getBestBid(invoiceId);
+    if (!bestBid) {
+      return res.status(404).json({ error: "No best bid found for this invoice" });
+    }
+    res.json(bestBid);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getTopBids = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { invoiceId } = req.params;
+    const topBids = await SnapshotService.getTopBids(invoiceId);
+    res.json({ top_bids: topBids });
   } catch (error) {
     next(error);
   }

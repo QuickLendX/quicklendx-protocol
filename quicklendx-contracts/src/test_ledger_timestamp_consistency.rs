@@ -256,7 +256,7 @@ fn test_overdue_boundary_after_due_date_is_overdue() {
 #[test]
 fn test_grace_deadline_boundary_exact_not_defaulted() {
     // At exactly grace_deadline, invoice should NOT be allowed to default
-    // Boundary: current_timestamp <= grace_deadline → no default
+    // Boundary: current_timestamp <= grace_deadline -> no default
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, 50_000);
@@ -562,12 +562,7 @@ fn test_ledger_time_consistent_within_transaction() {
     let mut ids: Vec<soroban_sdk::BytesN<32>> = Vec::new(&env);
     for _ in 0..3 {
         ids.push_back(create_invoice(
-            &env,
-            &client,
-            &business,
-            1000,
-            &currency,
-            due_date,
+            &env, &client, &business, 1000, &currency, due_date,
         ));
     }
 

@@ -1,8 +1,8 @@
 use crate::errors::QuickLendXError;
 use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice_expired};
 use crate::init::ProtocolInitializer;
-use crate::investment::{InvestmentStatus, InvestmentStorage};
-use crate::invoice::{InvoiceStatus, InvoiceStorage};
+use crate::storage::{InvestmentStorage, InvoiceStorage};
+use crate::types::{InvestmentStatus, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, BytesN, Env, Vec};
 
 /// Default grace period in seconds (7 days)
@@ -75,9 +75,9 @@ const MAX_GRACE_PERIOD: u64 = 30 * 24 * 60 * 60;
 /// Resolve grace period using per-call override, protocol config, or default.
 ///
 /// # Fallback Resolution Order
-/// 1. If `grace_period` is provided and valid → use it (after validation)
-/// 2. If `grace_period` is None → try protocol config
-/// 3. If protocol config not available → use hardcoded DEFAULT_GRACE_PERIOD
+/// 1. If `grace_period` is provided and valid -> use it (after validation)
+/// 2. If `grace_period` is None -> try protocol config
+/// 3. If protocol config not available -> use hardcoded DEFAULT_GRACE_PERIOD
 ///
 /// # Validation Rules
 /// - Override values must be <= MAX_GRACE_PERIOD (30 days)
@@ -131,6 +131,10 @@ pub fn mark_invoice_defaulted(
 ) -> Result<(), QuickLendXError> {
     let invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+    if is_default_transition_guarded(env, invoice_id) {
+        return Err(QuickLendXError::DuplicateDefaultTransition);
+    }
 
     if invoice.status == InvoiceStatus::Defaulted {
         return Err(QuickLendXError::InvoiceAlreadyDefaulted);
@@ -210,7 +214,7 @@ pub fn scan_funded_invoice_expirations(
     grace_period: u64,
     limit: Option<u32>,
 ) -> Result<OverdueScanResult, QuickLendXError> {
-    let funded_invoices = InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Funded);
+    let funded_invoices = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
     let total_funded = funded_invoices.len();
 
     if total_funded == 0 {
@@ -288,12 +292,12 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
+    InvoiceStorage::remove_from_status_invoices(env, InvoiceStatus::Funded, invoice_id);
 
     invoice.mark_as_defaulted();
     InvoiceStorage::update_invoice(env, &invoice);
 
-    InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Defaulted, invoice_id);
+    InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Defaulted, invoice_id);
 
     emit_invoice_expired(env, &invoice);
 
@@ -331,7 +335,7 @@ pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
 pub fn get_dispute_details(
     env: &Env,
     invoice_id: &BytesN<32>,
-) -> Result<Option<crate::invoice::Dispute>, QuickLendXError> {
+) -> Result<Option<crate::types::Dispute>, QuickLendXError> {
     let _invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 

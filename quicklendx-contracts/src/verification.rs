@@ -1,12 +1,13 @@
-use crate::bid::{BidStatus, BidStorage};
+use crate::bid::BidStorage;
+use crate::types::BidStatus;
 use crate::errors::QuickLendXError;
-use crate::invoice::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
-    MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_REJECTION_REASON_LENGTH, MAX_TAX_ID_LENGTH,
-    MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
+    MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_REJECTION_REASON_LENGTH,
+    MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
 };
+use crate::types::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 #[contracttype]
@@ -87,16 +88,16 @@ impl BusinessVerificationStorage {
     /// Validates that a state transition is allowed according to KYC lifecycle rules
     ///
     /// Valid transitions:
-    /// - None → Pending (new submission)
-    /// - Pending → Verified (admin approval)
-    /// - Pending → Rejected (admin rejection)
-    /// - Rejected → Pending (resubmission after rejection)
+    /// - None -> Pending (new submission)
+    /// - Pending -> Verified (admin approval)
+    /// - Pending -> Rejected (admin rejection)
+    /// - Rejected -> Pending (resubmission after rejection)
     ///
     /// Invalid transitions:
-    /// - Verified → *any other state (verified is final)
-    /// - Pending → Pending (duplicate submission)
-    /// - Rejected → Rejected (duplicate rejection)
-    /// - Rejected → Verified (must go through Pending first)
+    /// - Verified -> *any other state (verified is final)
+    /// - Pending -> Pending (duplicate submission)
+    /// - Rejected -> Rejected (duplicate rejection)
+    /// - Rejected -> Verified (must go through Pending first)
     pub fn validate_state_transition(
         old_status: Option<BusinessVerificationStatus>,
         new_status: BusinessVerificationStatus,
@@ -105,17 +106,17 @@ impl BusinessVerificationStorage {
             // New submission (no previous status)
             (None, BusinessVerificationStatus::Pending) => Ok(()),
 
-            // Pending → Verified (admin approval)
+            // Pending -> Verified (admin approval)
             (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Verified) => {
                 Ok(())
             }
 
-            // Pending → Rejected (admin rejection)
+            // Pending -> Rejected (admin rejection)
             (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Rejected) => {
                 Ok(())
             }
 
-            // Rejected → Pending (resubmission after rejection)
+            // Rejected -> Pending (resubmission after rejection)
             (Some(BusinessVerificationStatus::Rejected), BusinessVerificationStatus::Pending) => {
                 Ok(())
             }
@@ -617,25 +618,40 @@ impl InvestorVerificationStorage {
 /// Normalizes a tag by trimming whitespace and converting to lowercase.
 /// Enforces length limits of 1-50 characters.
 pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError> {
-    if tag.len() == 0 || tag.len() > 50 {
-        return Err(QuickLendXError::InvalidTag); // Code 1035/1800
+    if tag.len() == 0 || tag.len() > MAX_TAG_LENGTH.saturating_mul(2) {
+        return Err(QuickLendXError::InvalidTag);
     }
 
-    // Stack-allocated buffer — no heap allocation needed in no_std context.
-    let mut buf = [0u8; 50];
+    let mut buf = [0u8; (MAX_TAG_LENGTH as usize) * 2];
     tag.copy_into_slice(&mut buf[..tag.len() as usize]);
-    let mut normalized_bytes = [0u8; 50];
     let raw_slice = &buf[..tag.len() as usize];
 
-    for (idx, &b) in raw_slice.iter().enumerate() {
+    let mut start = 0usize;
+    let mut end = raw_slice.len();
+    while start < end && raw_slice[start].is_ascii_whitespace() {
+        start += 1;
+    }
+    while end > start && raw_slice[end - 1].is_ascii_whitespace() {
+        end -= 1;
+    }
+    if start == end {
+        return Err(QuickLendXError::InvalidTag);
+    }
+
+    let normalized_len = end - start;
+    if normalized_len > MAX_TAG_LENGTH as usize {
+        return Err(QuickLendXError::InvalidTag);
+    }
+
+    let mut normalized_bytes = [0u8; MAX_TAG_LENGTH as usize];
+    for (idx, &b) in raw_slice[start..end].iter().enumerate() {
         let lower = if b >= b'A' && b <= b'Z' { b + 32 } else { b };
         normalized_bytes[idx] = lower;
     }
-    let normalized_slice = &normalized_bytes[..raw_slice.len()];
 
     let normalized_str = String::from_str(
         env,
-        core::str::from_utf8(&normalized_bytes[..tag.len() as usize])
+        core::str::from_utf8(&normalized_bytes[..normalized_len])
             .map_err(|_| QuickLendXError::InvalidTag)?,
     );
 
@@ -688,9 +704,10 @@ pub fn validate_bid(
 
     // 4. Protocol limits and bid size validation
     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
-    
+
     // Calculate minimum bid amount using both absolute minimum and percentage-based minimum
-    let percent_min = invoice.amount
+    let percent_min = invoice
+        .amount
         .saturating_mul(limits.min_bid_bps as i128)
         .saturating_div(10_000);
     let effective_min_bid = if percent_min > limits.min_bid_amount {
@@ -698,7 +715,7 @@ pub fn validate_bid(
     } else {
         limits.min_bid_amount
     };
-    
+
     if bid_amount < effective_min_bid {
         return Err(QuickLendXError::InvalidAmount);
     }
@@ -983,18 +1000,20 @@ fn emit_kyc_resubmitted(env: &Env, business: &Address) {
 
 /// Validate invoice category
 pub fn validate_invoice_category(
-    category: &crate::invoice::InvoiceCategory,
+    category: &crate::types::InvoiceCategory,
 ) -> Result<(), QuickLendXError> {
     // All categories are valid as they are defined in the enum
     // This function can be extended to add additional validation logic if needed
     match category {
-        crate::invoice::InvoiceCategory::Services => Ok(()),
-        crate::invoice::InvoiceCategory::Products => Ok(()),
-        crate::invoice::InvoiceCategory::Consulting => Ok(()),
-        crate::invoice::InvoiceCategory::Manufacturing => Ok(()),
-        crate::invoice::InvoiceCategory::Technology => Ok(()),
-        crate::invoice::InvoiceCategory::Healthcare => Ok(()),
-        crate::invoice::InvoiceCategory::Other => Ok(()),
+        crate::types::InvoiceCategory::Services => Ok(()),
+        crate::types::InvoiceCategory::Goods => Ok(()),
+        crate::types::InvoiceCategory::Consulting => Ok(()),
+        crate::types::InvoiceCategory::Logistics => Ok(()),
+        crate::types::InvoiceCategory::Products => Ok(()),
+        crate::types::InvoiceCategory::Manufacturing => Ok(()),
+        crate::types::InvoiceCategory::Technology => Ok(()),
+        crate::types::InvoiceCategory::Healthcare => Ok(()),
+        crate::types::InvoiceCategory::Other => Ok(()),
     }
 }
 
@@ -1004,8 +1023,8 @@ pub fn validate_invoice_category(
 /// length checks and duplicate detection operate on the canonical stored form.
 ///
 /// # Rules enforced
-/// - Tag count ≤ 10.
-/// - Each normalized tag must be 1–50 bytes.
+/// - Tag count - 10.
+/// - Each normalized tag must be 1-50 bytes.
 /// - No two tags may normalize to the same value (e.g. "Tech" and "tech" are duplicates).
 ///
 /// # Errors
@@ -1440,6 +1459,8 @@ pub fn validate_invoice_metadata(
         return Err(QuickLendXError::InvalidDescription);
     }
 
+    check_string_length(&metadata.notes, MAX_NOTES_LENGTH)?;
+
     if metadata.line_items.len() == 0 {
         return Err(QuickLendXError::InvalidDescription);
     }
@@ -1455,7 +1476,7 @@ pub fn validate_invoice_metadata(
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        let expected_total = record.1.saturating_mul(record.2);
+        let expected_total = (record.1 as i128).saturating_mul(record.2);
         if expected_total != record.3 {
             return Err(QuickLendXError::InvalidAmount);
         }

@@ -11,8 +11,8 @@
 //!
 //! | Mechanism | Reads | Writes | Use case |
 //! |-----------|-------|--------|----------|
-//! | Maintenance mode | ✅ | ❌ | Planned upgrades, routine ops |
-//! | Full pause | ✅ | ❌ | Emergency incident response |
+//! | Maintenance mode | - | - | Planned upgrades, routine ops |
+//! | Full pause | - | - | Emergency incident response |
 //!
 //! Both block writes, but maintenance mode stores a human-readable `reason`
 //! string returned to callers so clients can display an explicit message.
@@ -64,22 +64,22 @@ impl MaintenanceControl {
     /// Enable or disable maintenance mode (admin only).
     ///
     /// When `enabled` is `true`, `reason` is stored and emitted in the event so
-    /// that clients can display explicit messaging (e.g. "Scheduled upgrade –
+    /// that clients can display explicit messaging (e.g. "Scheduled upgrade -
     /// back in 30 min"). When `enabled` is `false`, the reason is cleared.
     ///
     /// This function is intentionally exempt from `require_write_allowed` so
     /// that an admin can exit maintenance mode while writes are frozen.
     ///
     /// # Arguments
-    /// * `env`     – The contract environment.
-    /// * `admin`   – Caller address; must be the current admin.
-    /// * `enabled` – `true` to enter maintenance, `false` to exit.
-    /// * `reason`  – Human-readable message (required when `enabled`; ignored
+    /// * `env`     - The contract environment.
+    /// * `admin`   - Caller address; must be the current admin.
+    /// * `enabled` - `true` to enter maintenance, `false` to exit.
+    /// * `reason`  - Human-readable message (required when `enabled`; ignored
     ///               on disable but must still be supplied by the caller).
     ///
     /// # Errors
-    /// * `NotAdmin`           – caller is not the admin.
-    /// * `InvalidDescription` – reason exceeds `MAX_REASON_LEN` bytes.
+    /// * `NotAdmin`           - caller is not the admin.
+    /// * `InvalidDescription` - reason exceeds `MAX_REASON_LEN` bytes.
     pub fn set_maintenance_mode(
         env: &Env,
         admin: &Address,
@@ -121,11 +121,11 @@ impl MaintenanceControl {
     /// `Err(MaintenanceModeActive)` when maintenance mode is on, so callers
     /// receive an explicit error code rather than a generic rejection.
     ///
-    /// Read-only entrypoints must NOT call this — they remain available during
+    /// Read-only entrypoints must NOT call this - they remain available during
     /// maintenance so clients can inspect protocol state.
     ///
     /// # Errors
-    /// * `MaintenanceModeActive` – protocol is in maintenance (read-only) mode.
+    /// * `MaintenanceModeActive` - protocol is in maintenance (read-only) mode.
     pub fn require_write_allowed(env: &Env) -> Result<(), QuickLendXError> {
         if Self::is_maintenance_mode(env) {
             Err(QuickLendXError::MaintenanceModeActive)

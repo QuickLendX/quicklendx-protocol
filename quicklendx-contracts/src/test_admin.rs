@@ -1,14 +1,14 @@
 //! Comprehensive test suite for hardened admin role management.
 //!
 //! Test Coverage:
-//! 1. Initialization — admin setup, double-init prevention, authorization
-//! 2. Transfer — success path, authorization, validation, atomicity
-//! 3. Query Functions — get_admin, is_admin, is_initialized
-//! 4. Authorization — require_admin, require_current_admin
-//! 5. Security — transfer locks, concurrent operations, edge cases
-//! 6. Events — initialization, transfer audit trail
-//! 7. Utilities — with_admin_auth, with_current_admin
-//! 8. Legacy Compatibility — set_admin routing
+//! 1. Initialization - admin setup, double-init prevention, authorization
+//! 2. Transfer - success path, authorization, validation, atomicity
+//! 3. Query Functions - get_admin, is_admin, is_initialized
+//! 4. Authorization - require_admin, require_current_admin
+//! 5. Security - transfer locks, concurrent operations, edge cases
+//! 6. Events - initialization, transfer audit trail
+//! 7. Utilities - with_admin_auth, with_current_admin
+//! 8. Legacy Compatibility - set_admin routing
 //!
 //! Target: 95%+ test coverage for admin.rs
 
@@ -18,8 +18,8 @@ mod test_admin {
     use crate::errors::QuickLendXError;
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{
-        testutils::{Address as _, Events},
-        Address, Env,
+        testutils::{Address as _, Events, MockAuth, MockAuthInvoke},
+        Address, Env, IntoVal,
     };
 
     fn setup() -> (Env, QuickLendXContractClient<'static>) {
@@ -69,10 +69,8 @@ mod test_admin {
 
         let admin = Address::generate(&env);
 
-        // Should panic without authorization
-        let result = std::panic::catch_unwind(|| {
-            client.initialize_admin(&admin);
-        });
+        // Should fail without authorization (no mock_all_auths)
+        let result = client.try_initialize_admin(&admin);
         assert!(result.is_err(), "Initialization without auth must fail");
     }
 
@@ -463,6 +461,37 @@ mod test_admin {
 
         assert!(result.is_ok(), "set_admin must route to transfer");
         assert_eq!(client.get_current_admin(), Some(admin2));
+    }
+
+    #[test]
+    fn test_set_admin_rejects_spoofed_current_admin_signature() {
+        let env = Env::default();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let attacker = Address::generate(&env);
+        let replacement = Address::generate(&env);
+
+        client.mock_all_auths().initialize_admin(&admin);
+
+        let spoofed_auth = MockAuth {
+            address: &attacker,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "set_admin",
+                args: (replacement.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        };
+
+        let result = client.mock_auths(&[spoofed_auth]).try_set_admin(&replacement);
+        let invoke_err = result
+            .err()
+            .expect("spoofed transfer must fail")
+            .err()
+            .expect("spoofed transfer must fail at auth");
+        assert_eq!(invoke_err, soroban_sdk::InvokeError::Abort);
+        assert_eq!(client.get_current_admin(), Some(admin));
     }
 
     // ============================================================================
