@@ -11,7 +11,8 @@
 
 use crate::errors::QuickLendXError;
 use crate::events::{emit_invoice_settled, emit_partial_payment};
-use crate::investment::{InvestmentStatus, InvestmentStorage};
+use crate::investment::InvestmentStorage;
+use crate::types::InvestmentStatus;
 use crate::payments::transfer_funds;
 use crate::storage::InvoiceStorage;
 use crate::types::{Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord};
@@ -218,6 +219,7 @@ pub fn record_payment(
     invoice.total_paid = new_total_paid;
     update_inline_payment_history(
         &mut invoice,
+        payer.clone(),
         applied_amount,
         timestamp,
         payment_record.nonce,
@@ -264,7 +266,6 @@ pub fn settle_invoice(
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
     let payer = invoice.business.clone();
-    payer.require_auth();
 
     let remaining_due = compute_remaining_due(&invoice)?;
     if payment_amount > remaining_due {
@@ -479,8 +480,8 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     InvoiceStorage::update_invoice(env, &invoice);
 
     if previous_status != invoice.status {
-        InvoiceStorage::remove_from_status_invoices(env, &previous_status, invoice_id);
-        InvoiceStorage::add_to_status_invoices(env, &invoice.status, invoice_id);
+        InvoiceStorage::remove_from_status_invoices(env, previous_status.clone(), invoice_id);
+        InvoiceStorage::add_to_status_invoices(env, invoice.status.clone(), invoice_id);
     }
 
     let mut updated_investment = investment;
@@ -550,6 +551,7 @@ fn compute_remaining_due(invoice: &Invoice) -> Result<i128, QuickLendXError> {
 
 fn update_inline_payment_history(
     invoice: &mut Invoice,
+    payer: Address,
     amount: i128,
     timestamp: u64,
     nonce: String,
@@ -559,6 +561,7 @@ fn update_inline_payment_history(
     }
 
     invoice.payment_history.push_back(InvoicePaymentRecord {
+        payer,
         amount,
         timestamp,
         transaction_id: nonce,

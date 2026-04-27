@@ -16,10 +16,10 @@
 //! - Cross-cutting: topic constant stability, no events on reads, lifecycle ordering
 //!
 //! # Security Notes
-//! - All timestamps come from `env.ledger().timestamp()` — tamper-proof in Soroban.
+//! - All timestamps come from `env.ledger().timestamp()` - tamper-proof in Soroban.
 //! - No PII is included in any event payload; only identifiers, addresses, amounts.
 //! - Read-only entrypoints emit zero events, confirmed by `test_no_events_emitted_for_reads`.
-//! - Topic constants are compile-time `symbol_short!` values — mismatches are compile errors.
+//! - Topic constants are compile-time `symbol_short!` values - mismatches are compile errors.
 
 use super::*;
 use crate::audit::{AuditOperationFilter, AuditQueryFilter};
@@ -212,7 +212,7 @@ fn test_admin_update_invoice_status_requires_configured_admin() {
 }
 
 // ============================================================================
-// 2. Invoice Uploaded — field order
+// 2. Invoice Uploaded - field order
 // ============================================================================
 
 #[test]
@@ -247,7 +247,7 @@ fn test_invoice_uploaded_field_order() {
 }
 
 // ============================================================================
-// 3. Invoice Verified — field order
+// 3. Invoice Verified - field order
 // ============================================================================
 
 #[test]
@@ -296,7 +296,7 @@ fn test_admin_update_invoice_status_verified_emits_canonical_event_and_moves_ind
 }
 
 // ============================================================================
-// 4. Invoice Cancelled — field order
+// 4. Invoice Cancelled - field order
 // ============================================================================
 
 #[test]
@@ -320,7 +320,7 @@ fn test_invoice_cancelled_field_order() {
 }
 
 // ============================================================================
-// 5. Invoice Defaulted — field order
+// 5. Invoice Defaulted - field order
 // ============================================================================
 
 #[test]
@@ -453,7 +453,7 @@ fn test_admin_update_invoice_status_defaulted_emits_canonical_event_and_moves_in
 }
 
 // ============================================================================
-// 6. Invoice Settled — field order
+// 6. Invoice Settled - field order
 // ============================================================================
 
 #[test]
@@ -488,7 +488,7 @@ fn test_invoice_settled_field_order() {
 }
 
 // ============================================================================
-// 7. Invoice Expired — field order
+// 7. Invoice Expired - field order
 // ============================================================================
 
 #[test]
@@ -514,7 +514,7 @@ fn test_invoice_expired_field_order() {
 }
 
 // ============================================================================
-// 8. Partial Payment — field order
+// 8. Partial Payment - field order
 // ============================================================================
 
 #[test]
@@ -555,7 +555,7 @@ fn test_partial_payment_field_order() {
 }
 
 // ============================================================================
-// 9. Bid Placed — field order
+// 9. Bid Placed - field order
 // ============================================================================
 
 #[test]
@@ -588,7 +588,7 @@ fn test_bid_placed_field_order() {
 }
 
 // ============================================================================
-// 10. Bid Accepted — field order
+// 10. Bid Accepted - field order
 // ============================================================================
 
 #[test]
@@ -622,7 +622,7 @@ fn test_bid_accepted_field_order() {
 }
 
 // ============================================================================
-// 11. Bid Withdrawn — field order
+// 11. Bid Withdrawn - field order
 // ============================================================================
 
 #[test]
@@ -653,7 +653,7 @@ fn test_bid_withdrawn_field_order() {
 }
 
 // ============================================================================
-// 12. Bid Expired — field order
+// 12. Bid Expired - field order
 // ============================================================================
 
 #[test]
@@ -687,7 +687,7 @@ fn test_bid_expired_field_order() {
 }
 
 // ============================================================================
-// 13. Escrow Created — field order
+// 13. Escrow Created - field order
 // ============================================================================
 
 #[test]
@@ -717,7 +717,7 @@ fn test_escrow_created_field_order() {
 }
 
 // ============================================================================
-// 14. Escrow Released — field order
+// 14. Escrow Released - field order
 // ============================================================================
 
 #[test]
@@ -754,7 +754,7 @@ fn test_escrow_released_field_order() {
 }
 
 // ============================================================================
-// 15. Escrow Refunded on Cancellation — field order
+// 15. Escrow Refunded on Cancellation - field order
 // ============================================================================
 
 #[test]
@@ -785,7 +785,7 @@ fn test_escrow_refunded_field_order_on_cancellation() {
 }
 
 // ============================================================================
-// 16. Dispute Lifecycle — field orders
+// 16. Dispute Lifecycle - field orders
 // ============================================================================
 
 #[test]
@@ -840,7 +840,7 @@ fn test_dispute_lifecycle_field_orders() {
 }
 
 // ============================================================================
-// 17. Platform Fee Updated — field order
+// 17. Platform Fee Updated - field order
 // ============================================================================
 
 #[test]
@@ -861,7 +861,7 @@ fn test_platform_fee_updated_field_order() {
 }
 
 // ============================================================================
-// 18. Audit Events — field orders
+// 18. Audit Events - field orders
 // ============================================================================
 
 #[test]
@@ -914,7 +914,7 @@ fn test_no_events_emitted_for_reads() {
     let (id, _) = upload_invoice(&env, &client, &biz, &currency, "reads no events");
     let event_count_after_upload = env.events().all().len();
 
-    // Read-only calls — must not add events
+    // Read-only calls - must not add events
     client.get_invoice(&id);
     client.get_business_invoices_paged(&biz, &None, &0u32, &10u32);
     client.get_platform_fee();
@@ -953,7 +953,7 @@ fn test_event_ordering_across_lifecycle() {
     env.ledger().set_timestamp(30);
     let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
 
-    // T=40: accept → escrow created
+    // T=40: accept -> escrow created
     env.ledger().set_timestamp(40);
     client.accept_bid(&id, &bid_id);
 
@@ -1344,7 +1344,7 @@ fn test_event_timestamp_ordering() {
     assert!(bid.timestamp >= time_bid);
 }
 
-// Helper used only in this test module — suppress unused warning
+// Helper used only in this test module - suppress unused warning
 #[allow(dead_code)]
 fn _use_count_events(env: &Env) {
     let _ = count_events_with_topic(env, symbol_short!("inv_up"));

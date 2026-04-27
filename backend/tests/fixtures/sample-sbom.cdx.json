@@ -1,0 +1,27 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-04-26T00:00:00.000Z",
+    "component": {
+      "type": "application",
+      "name": "quicklendx-backend",
+      "version": "1.0.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "express",
+      "version": "5.2.1",
+      "purl": "pkg:npm/express@5.2.1"
+    },
+    {
+      "type": "library",
+      "name": "zod",
+      "version": "4.3.6",
+      "purl": "pkg:npm/zod@4.3.6"
+    }
+  ]
+}

@@ -7,9 +7,9 @@
 //! Each invoice may have **at most one** escrow record across its entire lifetime.
 //! This is enforced at two independent layers:
 //!
-//! 1. **`load_accept_bid_context`** – checks `EscrowStorage::get_escrow_by_invoice`
+//! 1. **`load_accept_bid_context`** - checks `EscrowStorage::get_escrow_by_invoice`
 //!    and `InvestmentStorage::get_investment_by_invoice` before any state changes.
-//! 2. **`payments::create_escrow`** – re-checks `get_escrow_by_invoice` before the
+//! 2. **`payments::create_escrow`** - re-checks `get_escrow_by_invoice` before the
 //!    token transfer, so the guard holds even if the higher-level check is bypassed.
 //!
 //! Any duplicate attempt returns [`QuickLendXError::InvoiceAlreadyFunded`] or
@@ -17,20 +17,18 @@
 //! See `test_escrow_uniqueness.rs` for the full attack-vector test suite.
 
 use crate::admin::AdminStorage;
-use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::events::{emit_escrow_refunded, emit_invoice_funded};
-use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
 use crate::payments::{create_escrow, refund_escrow, EscrowStorage};
-use crate::storage::InvoiceStorage;
-use crate::types::InvoiceStatus;
+use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
+use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
 use crate::verification::require_business_not_pending;
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
 /// Loaded and validated state required to accept a bid.
 pub(crate) struct AcceptBidContext {
-    pub invoice: crate::invoice::Invoice,
-    pub bid: crate::bid::Bid,
+    pub invoice: crate::types::Invoice,
+    pub bid: crate::types::Bid,
 }
 
 /// Validate the invoice, bid, and escrow state before any funds move.
@@ -134,7 +132,7 @@ pub fn accept_bid_and_fund(
 
     // Update Invoice
     // Remove from old status list before changing status
-    InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Verified, invoice_id);
+    InvoiceStorage::remove_from_status_invoices(env, InvoiceStatus::Verified, invoice_id);
 
     // mark_as_funded updates status, funded_amount, investor, and logs audit
     invoice.mark_as_funded(
@@ -146,7 +144,7 @@ pub fn accept_bid_and_fund(
     InvoiceStorage::update_invoice(env, &invoice);
 
     // Add to new status list after status change
-    InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
+    InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Funded, invoice_id);
 
     // Create Investment
     let investment_id = InvestmentStorage::generate_unique_investment_id(env);
@@ -217,8 +215,8 @@ pub fn refund_escrow_funds(
     InvoiceStorage::update_invoice(env, &invoice);
 
     // Update status indices
-    InvoiceStorage::remove_from_status_invoices(env, &previous_status, invoice_id);
-    InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Refunded, invoice_id);
+    InvoiceStorage::remove_from_status_invoices(env, previous_status.clone(), invoice_id);
+    InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Refunded, invoice_id);
 
     // Update Bid status to Cancelled (find the accepted bid first)
     // In our protocol, a Funded invoice has exactly one Accepted bid

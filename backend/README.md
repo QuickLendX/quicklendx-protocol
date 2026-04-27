@@ -53,6 +53,22 @@ Run the test suite with coverage:
 npm run test:coverage
 ```
 
+### Dependency Security and SBOM
+
+Run dependency vulnerability gate locally:
+
+```bash
+npm audit --json > audit-report.json || true
+npm run security:scan
+```
+
+Generate and validate the backend SBOM (CycloneDX JSON):
+
+```bash
+npm run sbom:generate
+npm run sbom:check
+```
+
 ## Project Structure
 
 - `src/app.ts`: Express application setup.

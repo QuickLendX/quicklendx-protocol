@@ -1,16 +1,16 @@
 //! Comprehensive test suite for hardened protocol initialization.
 //!
 //! Test Coverage:
-//! 1. Successful Initialization — all parameters, admin setup, storage
-//! 2. Re-initialization Protection — double init, state preservation
-//! 3. Parameter Validation — fees, amounts, dates, grace periods
-//! 4. Authorization — admin auth requirement, unauthorized attempts
-//! 5. Configuration Updates — protocol config, fees, treasury
-//! 6. Query Functions — all getters, defaults, edge cases
-//! 7. Events — initialization, updates, audit trail
-//! 8. Security — atomic operations, locks, validation
-//! 9. Edge Cases — boundary values, concurrent operations
-//! 10. Integration — full workflow, admin integration
+//! 1. Successful Initialization - all parameters, admin setup, storage
+//! 2. Re-initialization Protection - double init, state preservation
+//! 3. Parameter Validation - fees, amounts, dates, grace periods
+//! 4. Authorization - admin auth requirement, unauthorized attempts
+//! 5. Configuration Updates - protocol config, fees, treasury
+//! 6. Query Functions - all getters, defaults, edge cases
+//! 7. Events - initialization, updates, audit trail
+//! 8. Security - atomic operations, locks, validation
+//! 9. Edge Cases - boundary values, concurrent operations
+//! 10. Integration - full workflow, admin integration
 //!
 //! Target: 95%+ test coverage for init.rs
 
@@ -463,10 +463,8 @@ mod test_init {
 
         let params = create_valid_params(&env);
 
-        // Should panic without authorization
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            client.initialize(&params);
-        }));
+        // Should fail without authorization (no mock_all_auths)
+        let result = client.try_initialize(&params);
         assert!(result.is_err(), "Initialization without auth must fail");
     }
 

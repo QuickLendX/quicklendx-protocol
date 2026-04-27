@@ -768,41 +768,41 @@ fn test_complete_lifecycle_with_refund() {
 // This test module provides comprehensive coverage for:
 //
 // 1. CANCEL INVOICE FUNCTIONALITY:
-//    ✓ Cancel invoice in Pending status
-//    ✓ Cancel invoice in Verified status
-//    ✓ Cannot cancel invoice in Funded status
-//    ✓ Cannot cancel invoice in other statuses (Paid, Defaulted, Cancelled)
-//    ✓ Event emission on cancellation
-//    ✓ Authorization checks (business owner only)
-//    ✓ Status list updates
+//    - Cancel invoice in Pending status
+//    - Cancel invoice in Verified status
+//    - Cannot cancel invoice in Funded status
+//    - Cannot cancel invoice in other statuses (Paid, Defaulted, Cancelled)
+//    - Event emission on cancellation
+//    - Authorization checks (business owner only)
+//    - Status list updates
 //
 // 2. REFUND PATH FUNCTIONALITY:
-//    ✓ Refund escrow after funding
-//    ✓ Refund updates invoice status to Refunded
-//    ✓ Refund returns funds to investor
-//    ✓ Refund emits events
-//    ✓ Refund idempotency (cannot refund twice)
-//    ✓ Refund prevents subsequent release
-//    ✓ Cannot refund without escrow
+//    - Refund escrow after funding
+//    - Refund updates invoice status to Refunded
+//    - Refund returns funds to investor
+//    - Refund emits events
+//    - Refund idempotency (cannot refund twice)
+//    - Refund prevents subsequent release
+//    - Cannot refund without escrow
 //
 // 3. AUTHORIZATION AND SECURITY:
-//    ✓ Only business owner can cancel
-//    ✓ Non-owner cancel fails
-//    ✓ Admin cannot cancel (business owner only)
+//    - Only business owner can cancel
+//    - Non-owner cancel fails
+//    - Admin cannot cancel (business owner only)
 //
 // 4. EDGE CASES:
-//    ✓ Cancel non-existent invoice fails
-//    ✓ Cancel already cancelled invoice fails
-//    ✓ Multiple cancellation attempts fail
+//    - Cancel non-existent invoice fails
+//    - Cancel already cancelled invoice fails
+//    - Multiple cancellation attempts fail
 //
 // 5. INTEGRATION TESTS:
-//    ✓ Complete lifecycle with cancellation
-//    ✓ Complete lifecycle with refund
+//    - Complete lifecycle with cancellation
+//    - Complete lifecycle with refund
 //
 // ESTIMATED COVERAGE: 95%+
 
 // ============================================================================
-// RACE CONDITION TESTS — bid cancellation and withdrawal
+// RACE CONDITION TESTS - bid cancellation and withdrawal
 // ============================================================================
 
 /// cancel_bid on a Withdrawn bid returns false (terminal state is immutable).
@@ -881,7 +881,7 @@ fn test_withdraw_bid_after_cancel_fails() {
     );
 }
 
-/// Double cancel returns false on the second call — idempotent terminal state.
+/// Double cancel returns false on the second call - idempotent terminal state.
 #[test]
 fn test_double_cancel_second_is_noop() {
     let (env, client, admin) = setup_env();
@@ -943,7 +943,7 @@ fn test_double_withdraw_second_fails() {
     );
 }
 
-/// cancel_bid on an Accepted bid returns false — accepted is a terminal state.
+/// cancel_bid on an Accepted bid returns false - accepted is a terminal state.
 #[test]
 fn test_cancel_bid_after_accept_is_noop() {
     let (env, client, admin) = setup_env();
@@ -1009,7 +1009,7 @@ fn test_withdraw_bid_after_accept_fails() {
     );
 }
 
-/// cancel_bid on an Expired bid returns false — expired is a terminal state.
+/// cancel_bid on an Expired bid returns false - expired is a terminal state.
 #[test]
 fn test_cancel_bid_after_expiry_is_noop() {
     let (env, client, admin) = setup_env();

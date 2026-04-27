@@ -3,7 +3,5 @@ dist
 coverage
 .env
 *.log
-.data/
-.hotfix-approvals/
-.data/
-.hotfix-approvals/
+audit-report.json
+sbom/
