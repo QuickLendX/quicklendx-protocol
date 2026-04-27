@@ -34,6 +34,7 @@ const schema = z.object({
   EXPORT_SECRET: isProduction
     ? z.string().min(32)
     : z.string().min(32).default("development-only-export-secret-32-chars"),
+  RPC_ALLOWED_HOSTS: z.string().default("soroban-testnet.stellar.org,soroban-mainnet.stellar.org,localhost"),
 });
 
 export type Config = z.infer<typeof schema>;
