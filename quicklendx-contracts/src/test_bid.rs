@@ -33,7 +33,7 @@ use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
-    testutils::{Address as _, MockAuth, MockAuthInvoke},
+    testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke},
     Address, BytesN, Env, IntoVal, String, Vec,
 };
 
@@ -427,5 +427,42 @@ fn test_investor_can_cancel_multiple_own_bids() {
     assert_eq!(
         client.get_bid(&bid_id_2).unwrap().status,
         crate::bid::BidStatus::Cancelled
+    );
+}
+
+// ===========================================================================
+// 7. TTL/EXPIRY BOUNDARIES — exact-timestamp and off-by-one protections
+// ===========================================================================
+
+/// At exact expiration timestamp, bid remains valid (strict `>` expiry rule).
+#[test]
+fn test_accept_bid_at_exact_expiration_timestamp_succeeds() {
+    let (env, client, admin, business) = setup();
+    client.set_bid_ttl_days(&1u64);
+
+    let (bid_id, _, invoice_id) = place_bid(&env, &client, &admin, &business);
+    let bid = client.get_bid(&bid_id).unwrap();
+    env.ledger().set_timestamp(bid.expiration_timestamp);
+
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+    assert!(result.is_ok(), "bid should remain valid at exact expiry timestamp");
+}
+
+/// One second after expiration timestamp, bid must not be accepted.
+#[test]
+fn test_accept_bid_after_expiration_timestamp_fails() {
+    let (env, client, admin, business) = setup();
+    client.set_bid_ttl_days(&1u64);
+
+    let (bid_id, _, invoice_id) = place_bid(&env, &client, &admin, &business);
+    let bid = client.get_bid(&bid_id).unwrap();
+    env.ledger()
+        .set_timestamp(bid.expiration_timestamp.saturating_add(1));
+
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+    assert!(result.is_err(), "expired bid must not be accepted");
+    assert_eq!(
+        result.unwrap_err().expect("expected contract error"),
+        QuickLendXError::InvalidStatus
     );
 }
