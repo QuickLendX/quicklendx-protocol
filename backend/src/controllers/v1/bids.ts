@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { Bid, BidStatus } from "../../types/contract";
 import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
+import { labelRecord } from "../../services/versioningService";
 
 export const MOCK_BIDS: Bid[] = [
   labelRecord<Omit<Bid, "contract_version" | "event_schema_version" | "indexed_at">>({

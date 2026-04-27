@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../../types/contract";
 import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
+import { labelRecord } from "../../services/versioningService";
 
 export const MOCK_INVOICES: Invoice[] = [
   labelRecord<Omit<Invoice, "contract_version" | "event_schema_version" | "indexed_at">>({
@@ -46,11 +47,6 @@ export const getInvoices = async (
 
     res.json({ data: filtered });
   } catch (error) {
-    if (error instanceof PaginationError) {
-      return res.status(400).json({
-        error: { message: error.message, code: "INVALID_PAGINATION" },
-      });
-    }
     next(error);
   }
 };
@@ -75,7 +71,6 @@ export const getInvoiceById = async (
       return;
     }
     res.json(invoice);
-    res.json({ data: invoice, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }
