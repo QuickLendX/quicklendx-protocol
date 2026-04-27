@@ -17,7 +17,8 @@ use crate::invoice::{
 };
 use crate::profits::{PlatformFee, PlatformFeeConfig};
 use crate::storage::{
-    BidStorage, ConfigStorage, DataKey, Indexes, InvestmentStorage, InvoiceStorage, StorageKeys,
+    BidStorage, ConfigStorage, DataKey, Indexes, InvestmentStorage, InvoiceStorage,
+    StorageIntegrityAudit, StorageKeys,
 };
 use crate::QuickLendXContract;
 
@@ -1110,3 +1111,132 @@ fn clear_all_empties_category_index() {
         "category index must have no orphans after clear_all"
     );
 }
+
+#[test]
+fn test_storage_integrity_audit_lifecycle() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1000);
+    with_registered_contract(&env, || {
+        let business = Address::generate(&env);
+        let investor = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
+        let bid_id = BytesN::from_array(&env, &[2; 32]);
+        let investment_id = BytesN::from_array(&env, &[3; 32]);
+
+        // 1. Initial Audit (empty)
+        StorageIntegrityAudit::audit_all(&env).expect("Initial audit should pass");
+
+        // 2. Create Invoice
+        let invoice = create_test_invoice(&env, invoice_id.clone(), business.clone());
+        InvoiceStorage::store(&env, &invoice);
+        StorageIntegrityAudit::audit_all(&env).expect("Audit after invoice creation should pass");
+
+        // 3. Place Bid
+        let bid = Bid {
+            bid_id: bid_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            bid_amount: 5000,
+            expected_return: 5500,
+            timestamp: 1000,
+            status: BidStatus::Placed,
+            expiration_timestamp: 2000,
+        };
+        BidStorage::store(&env, &bid);
+        StorageIntegrityAudit::audit_all(&env).expect("Audit after bid placement should pass");
+
+        // 4. Create Investment (simulating acceptance)
+        let investment = Investment {
+            investment_id: investment_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            amount: 5000,
+            funded_at: 1000,
+            status: InvestmentStatus::Active,
+            insurance: Vec::new(&env),
+        };
+        InvestmentStorage::store(&env, &investment);
+        
+        // Update invoice and bid status
+        let mut funded_invoice = invoice.clone();
+        funded_invoice.status = InvoiceStatus::Funded;
+        InvoiceStorage::update(&env, &funded_invoice);
+        
+        let mut accepted_bid = bid.clone();
+        accepted_bid.status = BidStatus::Accepted;
+        BidStorage::update(&env, &accepted_bid);
+
+        StorageIntegrityAudit::audit_all(&env).expect("Audit after investment should pass");
+
+        // 5. Complete Investment (simulating settlement)
+        let mut paid_invoice = funded_invoice.clone();
+        paid_invoice.status = InvoiceStatus::Paid;
+        InvoiceStorage::update(&env, &paid_invoice);
+
+        let mut completed_investment = investment.clone();
+        completed_investment.status = InvestmentStatus::Completed;
+        InvestmentStorage::update(&env, &completed_investment);
+
+        StorageIntegrityAudit::audit_all(&env).expect("Audit after settlement should pass");
+
+        // 6. Cleanup (simulating expired bid cleanup)
+        // Add an expired bid
+        let expired_bid_id = BytesN::from_array(&env, &[4; 32]);
+        let expired_bid = Bid {
+            bid_id: expired_bid_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            bid_amount: 1000,
+            expected_return: 1100,
+            timestamp: 500,
+            status: BidStatus::Placed,
+            expiration_timestamp: 800, // already expired
+        };
+        BidStorage::store(&env, &expired_bid);
+        BidStorage::add_bid_to_invoice(&env, &invoice_id, &expired_bid_id);
+        
+        // Advance time and cleanup
+        env.ledger().set_timestamp(1500);
+        BidStorage::cleanup_expired_bids(&env, &invoice_id);
+        
+        StorageIntegrityAudit::audit_all(&env).expect("Audit after cleanup should pass");
+    });
+}
+
+#[test]
+fn test_storage_integrity_orphan_detection() {
+    let env = Env::default();
+    with_registered_contract(&env, || {
+        let business = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
+        
+        // Manually corrupt the index: add an ID but don't store the record
+        InvoiceStorage::add_to_status_invoices(&env, InvoiceStatus::Pending, &invoice_id);
+        
+        let result = StorageIntegrityAudit::audit_invoice_integrity(&env);
+        assert!(result.is_err(), "Audit should fail with orphan ID");
+        
+        if let Err(errors) = result {
+            assert!(errors.iter().any(|e| e == String::from_str(&env, "Orphan invoice ID found in status index")));
+        }
+    });
+}
+
+#[test]
+fn test_storage_integrity_status_mismatch_detection() {
+    let env = Env::default();
+    with_registered_contract(&env, || {
+        let business = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
+        
+        // Manually corrupt: record says Pending, but in Verified index
+        let invoice = create_test_invoice(&env, invoice_id.clone(), business.clone());
+        // We use env.storage().persistent().set directly to avoid automatic indexing
+        env.storage().persistent().set(&DataKey::Invoice(invoice_id.clone()), &invoice);
+        InvoiceStorage::add_to_status_invoices(&env, InvoiceStatus::Verified, &invoice_id);
+        
+        let result = StorageIntegrityAudit::audit_invoice_integrity(&env);
+        assert!(result.is_err(), "Audit should fail with status mismatch");
+    });
+}
+

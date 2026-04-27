@@ -513,3 +513,180 @@ impl StorageManager {
         env.storage().persistent().remove(&StorageKeys::investment_count());
     }
 }
+
+/// Comprehensive integrity audit for protocol storage indexes.
+/// 
+/// This helper provides deep inspection of secondary indexes to ensure no
+/// orphan IDs exist and that all records are mutually consistent across
+/// different indexing strategies (status, owner, metadata).
+pub struct StorageIntegrityAudit;
+
+impl StorageIntegrityAudit {
+    /// Audits all invoice-related indexes for consistency and orphans.
+    pub fn audit_invoice_integrity(env: &Env) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new(env);
+        let mut discovered_ids = Vec::new(env);
+
+        // 1. Status Index Audit (Pending, Verified, Funded, Paid, Defaulted, Cancelled, Refunded)
+        let statuses = Vec::from_array(env, [
+            InvoiceStatus::Pending,
+            InvoiceStatus::Verified,
+            InvoiceStatus::Funded,
+            InvoiceStatus::Paid,
+            InvoiceStatus::Defaulted,
+            InvoiceStatus::Cancelled,
+            InvoiceStatus::Refunded,
+        ]);
+
+        for status in statuses.iter() {
+            let ids = InvoiceStorage::get_by_status(env, status.clone());
+            for id in ids.iter() {
+                if !discovered_ids.contains(&id) {
+                    discovered_ids.push_back(id.clone());
+                }
+                match InvoiceStorage::get(env, &id) {
+                    None => {
+                        errors.push_back(String::from_str(env, "Orphan invoice ID found in status index"));
+                    }
+                    Some(invoice) => {
+                        if invoice.status != status {
+                            errors.push_back(String::from_str(env, "Invoice status mismatch: record vs index"));
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Cross-Consistency Check for all discovered invoices
+        for id in discovered_ids.iter() {
+            if let Some(invoice) = InvoiceStorage::get(env, &id) {
+                // Check business index
+                let business_ids = InvoiceStorage::get_by_business(env, &invoice.business);
+                if !business_ids.contains(&id) {
+                    errors.push_back(String::from_str(env, "Invoice missing from business index"));
+                }
+
+                // Check metadata indexes if present
+                if let Some(ref name) = invoice.metadata_customer_name {
+                    let customer_ids = InvoiceStorage::get_by_customer(env, name);
+                    if !customer_ids.contains(&id) {
+                        errors.push_back(String::from_str(env, "Invoice missing from customer metadata index"));
+                    }
+                }
+                if let Some(ref tax_id) = invoice.metadata_tax_id {
+                    let tax_ids = InvoiceStorage::get_by_tax_id(env, tax_id);
+                    if !tax_ids.contains(&id) {
+                        errors.push_back(String::from_str(env, "Invoice missing from tax ID metadata index"));
+                    }
+                }
+
+                // Check tag index if present
+                if let Some(ref tag) = invoice.tag {
+                    let tag_ids = InvoiceStorage::get_by_tag(env, tag);
+                    if !tag_ids.contains(&id) {
+                        errors.push_back(String::from_str(env, "Invoice missing from tag index"));
+                    }
+                }
+
+                // Check category index
+                let category_ids = InvoiceStorage::get_by_category(env, invoice.category.clone());
+                if !category_ids.contains(&id) {
+                    errors.push_back(String::from_str(env, "Invoice missing from category index"));
+                }
+            }
+        }
+
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
+    }
+
+    /// Audits all bid-related indexes using the global bid list as source of truth.
+    pub fn audit_bid_integrity(env: &Env) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new(env);
+        let all_bid_ids = BidStorage::get_all_bids(env);
+        
+        for bid_id in all_bid_ids.iter() {
+            match BidStorage::get_bid(env, &bid_id) {
+                None => {
+                    errors.push_back(String::from_str(env, "Orphan ID in global bid list"));
+                }
+                Some(bid) => {
+                    // Check investor index
+                    let investor_ids = BidStorage::get_bids_by_investor_all(env, &bid.investor);
+                    if !investor_ids.contains(&bid_id) {
+                        errors.push_back(String::from_str(env, "Bid missing from investor index"));
+                    }
+
+                    // Check invoice index
+                    let invoice_ids = BidStorage::get_bids_for_invoice(env, &bid.invoice_id);
+                    if !invoice_ids.contains(&bid_id) {
+                        errors.push_back(String::from_str(env, "Bid missing from invoice index"));
+                    }
+                }
+            }
+        }
+        
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
+    }
+
+    /// Audits all investment-related indexes.
+    pub fn audit_investment_integrity(env: &Env) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new(env);
+        let mut all_discovered = Vec::new(env);
+
+        // 1. Check active index (should only contain Active investments)
+        let active_ids = InvestmentStorage::get_active_investment_ids(env);
+        for id in active_ids.iter() {
+            if !all_discovered.contains(&id) { all_discovered.push_back(id.clone()); }
+            match InvestmentStorage::get(env, &id) {
+                None => {
+                    errors.push_back(String::from_str(env, "Orphan ID in active investment index"));
+                }
+                Some(inv) => {
+                    if inv.status != InvestmentStatus::Active {
+                        errors.push_back(String::from_str(env, "Terminal investment found in active index"));
+                    }
+                }
+            }
+        }
+
+        // 2. Cross-check consistency for discovered investments
+        for id in all_discovered.iter() {
+            if let Some(inv) = InvestmentStorage::get(env, &id) {
+                // Check investor index
+                let investor_ids = InvestmentStorage::get_by_investor(env, &inv.investor);
+                if !investor_ids.contains(&id) {
+                    errors.push_back(String::from_str(env, "Investment missing from investor index"));
+                }
+
+                // Check invoice mapping
+                if let Some(mapped_id) = InvestmentStorage::get_investment_by_invoice(env, &inv.invoice_id) {
+                    if mapped_id.investment_id != id.clone() {
+                        errors.push_back(String::from_str(env, "Invoice to investment mapping mismatch"));
+                    }
+                } else {
+                    errors.push_back(String::from_str(env, "Investment missing from invoice mapping"));
+                }
+            }
+        }
+
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
+    }
+
+    /// Performs a full protocol-wide integrity audit.
+    pub fn audit_all(env: &Env) -> Result<(), Vec<String>> {
+        let mut all_errors = Vec::new(env);
+        
+        if let Err(e) = Self::audit_invoice_integrity(env) {
+            for err in e.iter() { all_errors.push_back(err.clone()); }
+        }
+        if let Err(e) = Self::audit_bid_integrity(env) {
+            for err in e.iter() { all_errors.push_back(err.clone()); }
+        }
+        if let Err(e) = Self::audit_investment_integrity(env) {
+            for err in e.iter() { all_errors.push_back(err.clone()); }
+        }
+
+        if all_errors.is_empty() { Ok(()) } else { Err(all_errors) }
+    }
+}
+
