@@ -20,12 +20,11 @@ export const getSettlements = async (
   next: NextFunction
 ) => {
   try {
+    const params = parsePaginationParams(req.query);
     const { invoice_id } = req.query;
 
     let filtered = [...MOCK_SETTLEMENTS];
-    if (invoice_id) {
-      filtered = filtered.filter((s) => s.invoice_id === invoice_id);
-    }
+    if (invoice_id) filtered = filtered.filter((s) => s.invoice_id === invoice_id);
 
     if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body: filtered })) {
       res.status(304).end();
@@ -33,6 +32,11 @@ export const getSettlements = async (
     }
     res.json(filtered);
   } catch (error) {
+    if (error instanceof PaginationError) {
+      return res.status(400).json({
+        error: { message: error.message, code: "INVALID_PAGINATION" },
+      });
+    }
     next(error);
   }
 };
@@ -48,10 +52,7 @@ export const getSettlementById = async (
 
     if (!settlement) {
       return res.status(404).json({
-        error: {
-          message: "Settlement not found",
-          code: "SETTLEMENT_NOT_FOUND",
-        },
+        error: { message: "Settlement not found", code: "SETTLEMENT_NOT_FOUND" },
       });
     }
 

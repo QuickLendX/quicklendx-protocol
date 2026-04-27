@@ -1,7 +1,52 @@
 openapi: 3.0.0
 info:
   title: QuickLendX Protocol API
-  description: Backend API service for the QuickLendX invoice factoring protocol.
+  description: |
+    Backend API service for the QuickLendX invoice factoring protocol.
+
+    ## Pagination
+
+    All list endpoints use **cursor-based pagination** for stable, efficient traversal.
+
+    ### Request parameters
+
+    | Parameter | Type    | Default | Max | Description                                      |
+    |-----------|---------|---------|-----|--------------------------------------------------|
+    | `limit`   | integer | 20      | 100 | Number of items per page. Clamped to [1, 100].   |
+    | `cursor`  | string  | —       | —   | Opaque cursor from a previous response's `next_cursor`. |
+
+    ### Response shape
+
+    Every list endpoint returns a `PageResult` object:
+
+    ```json
+    {
+      "data": [ ... ],
+      "next_cursor": "eyJpZCI6Ii4uLiIsInNvcnRfdmFsIjoxNzQ1NTk5fQ",
+      "has_more": true
+    }
+    ```
+
+    - `data` — the current page of items.
+    - `next_cursor` — opaque string to pass as `cursor` on the next request; `null` when there are no more pages.
+    - `has_more` — `true` when more items exist beyond this page.
+
+    ### Sort order
+
+    | Endpoint       | Primary sort key | Direction | Tiebreaker |
+    |----------------|-----------------|-----------|------------|
+    | `/invoices`    | `created_at`    | DESC      | `id` ASC   |
+    | `/bids`        | `timestamp`     | DESC      | `bid_id` ASC |
+    | `/settlements` | `timestamp`     | DESC      | `id` ASC   |
+    | `/portfolio`   | `invested_at`   | DESC      | `id` ASC   |
+
+    ### Security
+
+    - Limit is always clamped server-side; clients cannot trigger unbounded scans.
+    - Cursors are opaque base64url-encoded tokens; do not parse or construct them manually.
+    - A malformed or tampered cursor returns `400 INVALID_PAGINATION`.
+    - No `total` count is exposed to prevent data-inference attacks.
+
   version: 1.0.0
   contact:
     name: QuickLendX Team
@@ -130,9 +175,22 @@ paths:
 
   /invoices:
     get:
-      summary: List invoices
-      description: Retrieve a list of invoices with optional filtering.
+      summary: List invoices (paginated)
+      description: |
+        Returns a cursor-paginated list of invoices sorted by `created_at DESC, id ASC`.
+
+        **Example — first page:**
+        ```
+        GET /invoices?limit=20
+        ```
+
+        **Example — next page:**
+        ```
+        GET /invoices?limit=20&cursor=<next_cursor from previous response>
+        ```
       parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
         - name: business
           in: query
           schema:
@@ -173,8 +231,12 @@ paths:
 
   /bids:
     get:
-      summary: List bids
+      summary: List bids (paginated)
+      description: |
+        Returns a cursor-paginated list of bids sorted by `timestamp DESC, bid_id ASC`.
       parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
         - name: invoice_id
           in: query
           schema:
@@ -195,8 +257,12 @@ paths:
 
   /settlements:
     get:
-      summary: List settlements
+      summary: List settlements (paginated)
+      description: |
+        Returns a cursor-paginated list of settlements sorted by `timestamp DESC, id ASC`.
       parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
         - name: invoice_id
           in: query
           schema:
@@ -229,6 +295,33 @@ paths:
                 $ref: "#/components/schemas/Settlement"
         "404":
           description: Settlement not found
+
+  /portfolio:
+    get:
+      summary: List investor portfolio (paginated)
+      description: |
+        Returns a cursor-paginated list of portfolio entries for a given investor,
+        sorted by `invested_at DESC, id ASC`.
+
+        The `investor` query parameter is **required**.
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
+        - name: investor
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Investor address (Stellar public key)
+      responses:
+        '200':
+          description: Paginated portfolio entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioPageResult'
+        '400':
+          $ref: '#/components/responses/PaginationError'
 
   /invoices/{id}/disputes:
     get:
@@ -398,9 +491,9 @@ components:
       type: object
       properties:
         description: { type: string }
-        quantity: { type: integer, format: int128 }
-        unit_price: { type: integer, format: int128 }
-        total: { type: integer, format: int128 }
+        quantity: { type: string, description: "i128 as string" }
+        unit_price: { type: string, description: "i128 as string" }
+        total: { type: string, description: "i128 as string" }
 
     InvoiceMetadata:
       type: object
@@ -419,7 +512,7 @@ components:
       properties:
         id: { type: string }
         business: { type: string }
-        amount: { type: integer, format: int128 }
+        amount: { type: string, description: "i128 as string" }
         currency: { type: string }
         due_date: { type: integer, format: int64 }
         status: { $ref: "#/components/schemas/InvoiceStatus" }
@@ -442,8 +535,8 @@ components:
         bid_id: { type: string }
         invoice_id: { type: string }
         investor: { type: string }
-        bid_amount: { type: integer, format: int128 }
-        expected_return: { type: integer, format: int128 }
+        bid_amount: { type: string, description: "i128 as string" }
+        expected_return: { type: string, description: "i128 as string" }
         timestamp: { type: integer, format: int64 }
         status: { $ref: "#/components/schemas/BidStatus" }
         expiration_timestamp: { type: integer, format: int64 }
@@ -457,11 +550,26 @@ components:
       properties:
         id: { type: string }
         invoice_id: { type: string }
-        amount: { type: integer, format: int128 }
+        amount: { type: string, description: "i128 as string" }
         payer: { type: string }
         recipient: { type: string }
         timestamp: { type: integer, format: int64 }
         status: { $ref: "#/components/schemas/SettlementStatus" }
+
+    InvestmentStatus:
+      type: string
+      enum: [Active, Completed, Defaulted, Refunded]
+
+    PortfolioEntry:
+      type: object
+      properties:
+        id: { type: string }
+        investor: { type: string }
+        invoice_id: { type: string }
+        invested_amount: { type: string, description: "i128 as string" }
+        expected_return: { type: string, description: "i128 as string" }
+        status: { $ref: '#/components/schemas/InvestmentStatus' }
+        invested_at: { type: integer, format: int64 }
 
     DisputeStatus:
       type: string

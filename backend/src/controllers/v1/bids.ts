@@ -15,21 +15,25 @@ const MOCK_BIDS: Bid[] = [
   }),
 ];
 
+// applyPagination requires items with `id` field; bids use `bid_id`
+type BidWithId = Bid & { id: string };
+
+function normalizeBids(bids: Bid[]): BidWithId[] {
+  return bids.map((b) => ({ ...b, id: b.bid_id }));
+}
+
 export const getBids = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
+    const params = parsePaginationParams(req.query);
     const { invoice_id, investor } = req.query;
 
     let filtered = [...MOCK_BIDS];
-    if (invoice_id) {
-      filtered = filtered.filter((b) => b.invoice_id === invoice_id);
-    }
-    if (investor) {
-      filtered = filtered.filter((b) => b.investor === investor);
-    }
+    if (invoice_id) filtered = filtered.filter((b) => b.invoice_id === invoice_id);
+    if (investor) filtered = filtered.filter((b) => b.investor === investor);
 
     // Bids must never be served from cache: the best-bid amount changes with
     // every new placement and serving stale data could mislead investors.
@@ -68,6 +72,11 @@ export const getTopBids = async (
     const topBids = await SnapshotService.getTopBids(invoiceId);
     res.json({ top_bids: topBids });
   } catch (error) {
+    if (error instanceof PaginationError) {
+      return res.status(400).json({
+        error: { message: error.message, code: "INVALID_PAGINATION" },
+      });
+    }
     next(error);
   }
 };
