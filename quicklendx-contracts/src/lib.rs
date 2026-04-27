@@ -96,6 +96,8 @@ mod test_max_invoices_per_business;
 // #[cfg(test)]
 // mod test_notifications;
 // #[cfg(test)]
+#[cfg(test)]
+mod test_analytics_consistency;
 mod test_bid_ranking;
 pub mod types;
 mod verification;

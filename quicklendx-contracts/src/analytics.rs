@@ -316,7 +316,13 @@ impl AnalyticsCalculator {
         v.min(10000).max(0)
     }
 
-    /// Calculate comprehensive platform metrics
+    /// Calculate a snapshot of comprehensive platform metrics from on-chain state.
+    ///
+    /// Iterates all invoices by status to derive totals, rates, and averages.
+    /// Returns zero for every field when the contract has no data (empty state).
+    ///
+    /// # Security
+    /// Read-only — no auth required. Does not expose individual user data.
     pub fn calculate_platform_metrics(env: &Env) -> Result<PlatformMetrics, QuickLendXError> {
         let current_timestamp = env.ledger().timestamp();
 
@@ -515,7 +521,20 @@ impl AnalyticsCalculator {
         })
     }
 
-    /// Calculate financial metrics
+    /// Calculate financial metrics for the given `TimePeriod`.
+    ///
+    /// Only invoices whose `created_at` falls within `[start_date, end_date]`
+    /// (both ends inclusive) contribute to volume, fees, and profits.
+    /// Returns all-zero fields when no invoices match the window.
+    ///
+    /// # Edge cases
+    /// - At `timestamp = 0`, every timed period produces `start == end == 0`; the
+    ///   window is degenerate (zero-length) and all totals will be zero.
+    /// - `AllTime` always uses `start = 0`, so it captures every invoice ever created.
+    ///
+    /// # Security
+    /// Read-only — no auth required. Aggregated totals only; no individual invoice
+    /// details are returned.
     pub fn calculate_financial_metrics(
         env: &Env,
         period: TimePeriod,
@@ -773,7 +792,25 @@ impl AnalyticsCalculator {
         })
     }
 
-    /// Generate business report
+    /// Generate and persist a `BusinessReport` for `business` over `period`.
+    ///
+    /// Counts invoices, funding events, volume, success/default rates, and
+    /// category breakdowns scoped to invoices whose `created_at` is within
+    /// the period window `[start_date, end_date]` (both inclusive).
+    ///
+    /// The report is stored on-chain and retrievable via `AnalyticsStorage::get_business_report`.
+    /// Each call produces a new report with a fresh ID; existing stored reports
+    /// are never mutated — they remain immutable snapshots of the ledger state
+    /// at the moment of generation.
+    ///
+    /// # Edge cases
+    /// - If no invoices fall within the period window, all counters are 0.
+    /// - A near-zero `current_timestamp` causes timed periods to saturate to
+    ///   `start = 0` via `saturating_sub`, making the window `[0, ts]`.
+    ///
+    /// # Security
+    /// Does not expose private user data from other businesses.
+    /// Callers should authenticate the business address before surfacing results.
     pub fn generate_business_report(
         env: &Env,
         business: &Address,
@@ -904,7 +941,14 @@ impl AnalyticsCalculator {
         Ok(report)
     }
 
-    /// Generate investor report
+    /// Generate and persist an `InvestorReport` for `investor` over `period`.
+    ///
+    /// Filters investments by `funded_at` within `[start_date, end_date]`.
+    /// Returns all-zero counts when the investor has no activity in the window.
+    /// Each call creates an immutable snapshot with a fresh report ID.
+    ///
+    /// # Security
+    /// Aggregated; does not expose other investors' private data.
     pub fn generate_investor_report(
         env: &Env,
         investor: &Address,
@@ -1086,7 +1130,25 @@ impl AnalyticsCalculator {
         Ok(())
     }
 
-    /// Get period dates based on time period
+    /// Compute `(start_date, end_date)` for `period` relative to `current_timestamp`.
+    ///
+    /// All arithmetic uses `saturating_sub` so the result is always well-defined:
+    ///
+    /// | Period    | start                         | end                |
+    /// |-----------|-------------------------------|--------------------|
+    /// | Daily     | `ts.saturating_sub(86_400)`   | `ts`               |
+    /// | Weekly    | `ts.saturating_sub(604_800)`  | `ts`               |
+    /// | Monthly   | `ts.saturating_sub(2_592_000)`| `ts`               |
+    /// | Quarterly | `ts.saturating_sub(7_776_000)`| `ts`               |
+    /// | Yearly    | `ts.saturating_sub(31_536_000)`| `ts`              |
+    /// | AllTime   | `0`                           | `ts`               |
+    ///
+    /// # Edge cases
+    /// - When `current_timestamp` is less than the period duration, `start`
+    ///   saturates to `0`, producing a shorter-than-nominal window.
+    /// - At `current_timestamp = 0`, every variant returns `(0, 0)` — a
+    ///   degenerate zero-length window. Callers must handle this gracefully.
+    /// - `AllTime` always returns `start = 0`, capturing the full history.
     pub fn get_period_dates(current_timestamp: u64, period: TimePeriod) -> (u64, u64) {
         match period {
             TimePeriod::Daily => {

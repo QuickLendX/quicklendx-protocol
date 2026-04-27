@@ -1,7 +1,7 @@
 // Analytics test suites - these modules are activated via lib.rs
 // (mod test_analytics_consistency) and via the integration-test path
 // once all client methods have been exported.
-// mod test_analytics;
+mod test_analytics;
 // mod test_analytics_export_query;
 // mod test_business_report_consistency;
 // Temporarily disabled: these suites target legacy client return shapes/APIs.
