@@ -133,6 +133,10 @@ pub fn mark_invoice_defaulted(
     let invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
+    if is_default_transition_guarded(env, invoice_id) {
+        return Err(QuickLendXError::DuplicateDefaultTransition);
+    }
+
     if invoice.status == InvoiceStatus::Defaulted {
         return Err(QuickLendXError::InvoiceAlreadyDefaulted);
     }
