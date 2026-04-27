@@ -1,13 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { Settlement, SettlementStatus } from "../../types/contract";
-import {
-  parsePaginationParams,
-  applyPagination,
-  PaginationError,
-} from "../../utils/pagination";
+import { applyCacheHeaders, CC_LONG } from "../../middleware/cache-headers";
 
-export const MOCK_SETTLEMENTS: Settlement[] = [
-  {
+const MOCK_SETTLEMENTS: Settlement[] = [
+  labelRecord<Omit<Settlement, "contract_version" | "event_schema_version" | "indexed_at">>({
     id: "0xsettle123",
     invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     amount: "1000000000",
@@ -15,7 +11,7 @@ export const MOCK_SETTLEMENTS: Settlement[] = [
     recipient: "GB...RECIP",
     timestamp: Math.floor(Date.now() / 1000) - 43200,
     status: SettlementStatus.Paid,
-  },
+  }),
 ];
 
 export const getSettlements = async (
@@ -30,8 +26,11 @@ export const getSettlements = async (
     let filtered = [...MOCK_SETTLEMENTS];
     if (invoice_id) filtered = filtered.filter((s) => s.invoice_id === invoice_id);
 
-    const result = applyPagination(filtered, "timestamp", params);
-    res.json(result);
+    if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body: filtered })) {
+      res.status(304).end();
+      return;
+    }
+    res.json(filtered);
   } catch (error) {
     if (error instanceof PaginationError) {
       return res.status(400).json({
@@ -57,6 +56,10 @@ export const getSettlementById = async (
       });
     }
 
+    if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body: settlement })) {
+      res.status(304).end();
+      return;
+    }
     res.json(settlement);
   } catch (error) {
     next(error);

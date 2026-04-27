@@ -1,13 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { Bid, BidStatus } from "../../types/contract";
-import {
-  parsePaginationParams,
-  applyPagination,
-  PaginationError,
-} from "../../utils/pagination";
+import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
 
-export const MOCK_BIDS: Bid[] = [
-  {
+const MOCK_BIDS: Bid[] = [
+  labelRecord<Omit<Bid, "contract_version" | "event_schema_version" | "indexed_at">>({
     bid_id: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
     invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     investor: "GA...ABC",
@@ -16,7 +12,7 @@ export const MOCK_BIDS: Bid[] = [
     timestamp: Math.floor(Date.now() / 1000) - 3600,
     status: BidStatus.Placed,
     expiration_timestamp: Math.floor(Date.now() / 1000) + 86400,
-  },
+  }),
 ];
 
 // applyPagination requires items with `id` field; bids use `bid_id`
@@ -39,12 +35,42 @@ export const getBids = async (
     if (invoice_id) filtered = filtered.filter((b) => b.invoice_id === invoice_id);
     if (investor) filtered = filtered.filter((b) => b.investor === investor);
 
-    const result = applyPagination(normalizeBids(filtered), "timestamp", params);
-    // Strip the synthetic `id` field from response items
-    res.json({
-      ...result,
-      data: result.data.map(({ id: _id, ...bid }) => bid),
-    });
+    // Bids must never be served from cache: the best-bid amount changes with
+    // every new placement and serving stale data could mislead investors.
+    applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body: filtered });
+    res.json(filtered);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getBestBid = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { invoiceId } = req.params;
+    const bestBid = await SnapshotService.getBestBid(invoiceId);
+    if (!bestBid) {
+      return res.status(404).json({ error: "No best bid found for this invoice" });
+    }
+    res.json(bestBid);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getTopBids = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { invoiceId } = req.params;
+    const topBids = await SnapshotService.getTopBids(invoiceId);
+    res.json({ top_bids: topBids });
   } catch (error) {
     if (error instanceof PaginationError) {
       return res.status(400).json({

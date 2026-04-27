@@ -1,17 +1,15 @@
 import { Request, Response, NextFunction } from "express";
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../../types/contract";
-import {
-  parsePaginationParams,
-  applyPagination,
-  PaginationError,
-} from "../../utils/pagination";
+import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
 
-// Mock data aligned with contract types
-export const MOCK_INVOICES: Invoice[] = [
-  {
+// Mock data aligned with contract types.
+// labelRecord stamps each record with the contract and event schema version
+// that produced it — exactly as the real indexer would do at ingest time.
+const MOCK_INVOICES: Invoice[] = [
+  labelRecord<Omit<Invoice, "contract_version" | "event_schema_version" | "indexed_at">>({
     id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     business: "GDVLRH4G4...7Y",
-    amount: "1000000000",
+    amount: "1000000000", // 100.00 USDC (7 decimals)
     currency: "CBGHS...ABC",
     due_date: Math.floor(Date.now() / 1000) + 86400 * 30,
     status: InvoiceStatus.Verified,
@@ -34,7 +32,7 @@ export const MOCK_INVOICES: Invoice[] = [
     },
     created_at: Math.floor(Date.now() / 1000) - 86400,
     updated_at: Math.floor(Date.now() / 1000) - 86400,
-  },
+  }),
 ];
 
 export const getInvoices = async (
@@ -43,15 +41,13 @@ export const getInvoices = async (
   next: NextFunction
 ) => {
   try {
-    const params = parsePaginationParams(req.query);
     const { business, status } = req.query;
 
     let filtered = [...MOCK_INVOICES];
     if (business) filtered = filtered.filter((i) => i.business === business);
     if (status) filtered = filtered.filter((i) => i.status === status);
 
-    const result = applyPagination(filtered, "created_at", params);
-    res.json(result);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     if (error instanceof PaginationError) {
       return res.status(400).json({
@@ -77,7 +73,12 @@ export const getInvoiceById = async (
       });
     }
 
+    if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body: invoice })) {
+      res.status(304).end();
+      return;
+    }
     res.json(invoice);
+    res.json({ data: invoice, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }

@@ -1,10 +1,8 @@
 #![cfg(test)]
 
-extern crate std;
-use std::format;
-
 use crate::{
-    invoice::{InvoiceCategory, InvoiceStatus, InvoiceStorage},
+    types::{InvoiceCategory, InvoiceStatus},
+    storage::InvoiceStorage,
     QuickLendXContract, QuickLendXContractClient, QuickLendXError,
 };
 use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};

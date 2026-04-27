@@ -768,41 +768,41 @@ fn test_complete_lifecycle_with_refund() {
 // This test module provides comprehensive coverage for:
 //
 // 1. CANCEL INVOICE FUNCTIONALITY:
-//    ✓ Cancel invoice in Pending status
-//    ✓ Cancel invoice in Verified status
-//    ✓ Cannot cancel invoice in Funded status
-//    ✓ Cannot cancel invoice in other statuses (Paid, Defaulted, Cancelled)
-//    ✓ Event emission on cancellation
-//    ✓ Authorization checks (business owner only)
-//    ✓ Status list updates
+//    - Cancel invoice in Pending status
+//    - Cancel invoice in Verified status
+//    - Cannot cancel invoice in Funded status
+//    - Cannot cancel invoice in other statuses (Paid, Defaulted, Cancelled)
+//    - Event emission on cancellation
+//    - Authorization checks (business owner only)
+//    - Status list updates
 //
 // 2. REFUND PATH FUNCTIONALITY:
-//    ✓ Refund escrow after funding
-//    ✓ Refund updates invoice status to Refunded
-//    ✓ Refund returns funds to investor
-//    ✓ Refund emits events
-//    ✓ Refund idempotency (cannot refund twice)
-//    ✓ Refund prevents subsequent release
-//    ✓ Cannot refund without escrow
+//    - Refund escrow after funding
+//    - Refund updates invoice status to Refunded
+//    - Refund returns funds to investor
+//    - Refund emits events
+//    - Refund idempotency (cannot refund twice)
+//    - Refund prevents subsequent release
+//    - Cannot refund without escrow
 //
 // 3. AUTHORIZATION AND SECURITY:
-//    ✓ Only business owner can cancel
-//    ✓ Non-owner cancel fails
-//    ✓ Admin cannot cancel (business owner only)
+//    - Only business owner can cancel
+//    - Non-owner cancel fails
+//    - Admin cannot cancel (business owner only)
 //
 // 4. EDGE CASES:
-//    ✓ Cancel non-existent invoice fails
-//    ✓ Cancel already cancelled invoice fails
-//    ✓ Multiple cancellation attempts fail
+//    - Cancel non-existent invoice fails
+//    - Cancel already cancelled invoice fails
+//    - Multiple cancellation attempts fail
 //
 // 5. INTEGRATION TESTS:
-//    ✓ Complete lifecycle with cancellation
-//    ✓ Complete lifecycle with refund
+//    - Complete lifecycle with cancellation
+//    - Complete lifecycle with refund
 //
 // ESTIMATED COVERAGE: 95%+
 
 // ============================================================================
-// RACE CONDITION TESTS — bid cancellation and withdrawal
+// RACE CONDITION TESTS - bid cancellation and withdrawal
 // ============================================================================
 
 /// cancel_bid on a Withdrawn bid returns false (terminal state is immutable).
@@ -815,21 +815,32 @@ fn test_cancel_bid_after_withdraw_is_noop() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.upload_invoice(
-        &business, &10_000, &currency, &due_date,
-        &String::from_str(&env, "race test"), &InvoiceCategory::Services, &Vec::new(&env),
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "race test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
 
     // Withdraw first
     client.withdraw_bid(&bid_id);
-    assert_eq!(client.get_bid(&bid_id).unwrap().status, crate::bid::BidStatus::Withdrawn);
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Withdrawn
+    );
 
     // Concurrent cancel must be a no-op
     let result = client.cancel_bid(&bid_id);
     assert!(!result, "cancel after withdraw must return false");
-    assert_eq!(client.get_bid(&bid_id).unwrap().status, crate::bid::BidStatus::Withdrawn,
-        "status must remain Withdrawn");
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Withdrawn,
+        "status must remain Withdrawn"
+    );
 }
 
 /// withdraw_bid on a Cancelled bid returns OperationNotAllowed.
@@ -842,24 +853,35 @@ fn test_withdraw_bid_after_cancel_fails() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.upload_invoice(
-        &business, &10_000, &currency, &due_date,
-        &String::from_str(&env, "race test 2"), &InvoiceCategory::Services, &Vec::new(&env),
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "race test 2"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
 
     // Cancel first
     client.cancel_bid(&bid_id);
-    assert_eq!(client.get_bid(&bid_id).unwrap().status, crate::bid::BidStatus::Cancelled);
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Cancelled
+    );
 
     // Concurrent withdraw must fail
     let result = client.try_withdraw_bid(&bid_id);
     assert!(result.is_err(), "withdraw after cancel must fail");
-    assert_eq!(client.get_bid(&bid_id).unwrap().status, crate::bid::BidStatus::Cancelled,
-        "status must remain Cancelled");
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Cancelled,
+        "status must remain Cancelled"
+    );
 }
 
-/// Double cancel returns false on the second call — idempotent terminal state.
+/// Double cancel returns false on the second call - idempotent terminal state.
 #[test]
 fn test_double_cancel_second_is_noop() {
     let (env, client, admin) = setup_env();
@@ -869,15 +891,26 @@ fn test_double_cancel_second_is_noop() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.upload_invoice(
-        &business, &10_000, &currency, &due_date,
-        &String::from_str(&env, "double cancel"), &InvoiceCategory::Services, &Vec::new(&env),
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "double cancel"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
 
     assert!(client.cancel_bid(&bid_id), "first cancel must succeed");
-    assert!(!client.cancel_bid(&bid_id), "second cancel must return false");
-    assert_eq!(client.get_bid(&bid_id).unwrap().status, crate::bid::BidStatus::Cancelled);
+    assert!(
+        !client.cancel_bid(&bid_id),
+        "second cancel must return false"
+    );
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Cancelled
+    );
 }
 
 /// Double withdraw returns error on the second call.
@@ -890,8 +923,13 @@ fn test_double_withdraw_second_fails() {
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.upload_invoice(
-        &business, &10_000, &currency, &due_date,
-        &String::from_str(&env, "double withdraw"), &InvoiceCategory::Services, &Vec::new(&env),
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "double withdraw"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
@@ -899,10 +937,13 @@ fn test_double_withdraw_second_fails() {
     client.withdraw_bid(&bid_id);
     let result = client.try_withdraw_bid(&bid_id);
     assert!(result.is_err(), "second withdraw must fail");
-    assert_eq!(client.get_bid(&bid_id).unwrap().status, crate::bid::BidStatus::Withdrawn);
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Withdrawn
+    );
 }
 
-/// cancel_bid on an Accepted bid returns false — accepted is a terminal state.
+/// cancel_bid on an Accepted bid returns false - accepted is a terminal state.
 #[test]
 fn test_cancel_bid_after_accept_is_noop() {
     let (env, client, admin) = setup_env();
@@ -914,8 +955,13 @@ fn test_cancel_bid_after_accept_is_noop() {
     let amount = 1_000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let invoice_id = client.upload_invoice(
-        &business, &amount, &currency, &due_date,
-        &String::from_str(&env, "accept race"), &InvoiceCategory::Services, &Vec::new(&env),
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "accept race"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
@@ -923,8 +969,11 @@ fn test_cancel_bid_after_accept_is_noop() {
 
     let result = client.cancel_bid(&bid_id);
     assert!(!result, "cancel after accept must return false");
-    assert_eq!(client.get_bid(&bid_id).unwrap().status, crate::bid::BidStatus::Accepted,
-        "Accepted status must be immutable");
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Accepted,
+        "Accepted status must be immutable"
+    );
 }
 
 /// withdraw_bid on an Accepted bid returns OperationNotAllowed.
@@ -939,8 +988,13 @@ fn test_withdraw_bid_after_accept_fails() {
     let amount = 1_000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let invoice_id = client.upload_invoice(
-        &business, &amount, &currency, &due_date,
-        &String::from_str(&env, "withdraw race"), &InvoiceCategory::Services, &Vec::new(&env),
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "withdraw race"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
@@ -948,11 +1002,14 @@ fn test_withdraw_bid_after_accept_fails() {
 
     let result = client.try_withdraw_bid(&bid_id);
     assert!(result.is_err(), "withdraw after accept must fail");
-    assert_eq!(client.get_bid(&bid_id).unwrap().status, crate::bid::BidStatus::Accepted,
-        "Accepted status must be immutable");
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Accepted,
+        "Accepted status must be immutable"
+    );
 }
 
-/// cancel_bid on an Expired bid returns false — expired is a terminal state.
+/// cancel_bid on an Expired bid returns false - expired is a terminal state.
 #[test]
 fn test_cancel_bid_after_expiry_is_noop() {
     let (env, client, admin) = setup_env();
@@ -962,8 +1019,13 @@ fn test_cancel_bid_after_expiry_is_noop() {
     let due_date = env.ledger().timestamp() + 86400 * 30;
 
     let invoice_id = client.upload_invoice(
-        &business, &10_000, &currency, &due_date,
-        &String::from_str(&env, "expire race"), &InvoiceCategory::Services, &Vec::new(&env),
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "expire race"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
@@ -973,9 +1035,15 @@ fn test_cancel_bid_after_expiry_is_noop() {
     env.ledger().with_mut(|l| l.timestamp = new_ts);
     client.cleanup_expired_bids(&invoice_id);
 
-    assert_eq!(client.get_bid(&bid_id).unwrap().status, crate::bid::BidStatus::Expired);
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Expired
+    );
     let result = client.cancel_bid(&bid_id);
     assert!(!result, "cancel after expiry must return false");
-    assert_eq!(client.get_bid(&bid_id).unwrap().status, crate::bid::BidStatus::Expired,
-        "Expired status must be immutable");
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Expired,
+        "Expired status must be immutable"
+    );
 }

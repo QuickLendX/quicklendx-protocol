@@ -1021,36 +1021,36 @@ fn test_complete_category_and_tag_workflow() {
 // This test module provides comprehensive coverage for invoice categories and tags:
 //
 // 1. CATEGORY QUERIES:
-//    ✓ get_invoices_by_category for all categories
-//    ✓ get_invoices_by_category with empty results
-//    ✓ get_invoices_by_category_and_status (combined filters)
+//    - get_invoices_by_category for all categories
+//    - get_invoices_by_category with empty results
+//    - get_invoices_by_category_and_status (combined filters)
 //
 // 2. TAG QUERIES:
-//    ✓ get_invoices_by_tag (single tag)
-//    ✓ get_invoices_by_tags (multiple tags with AND logic)
-//    ✓ get_invoices_by_tag with nonexistent tag
+//    - get_invoices_by_tag (single tag)
+//    - get_invoices_by_tags (multiple tags with AND logic)
+//    - get_invoices_by_tag with nonexistent tag
 //
 // 3. UPDATE CATEGORY:
-//    ✓ update_invoice_category changes category
-//    ✓ Category lists update correctly
-//    ✓ Business owner authorization (documented)
+//    - update_invoice_category changes category
+//    - Category lists update correctly
+//    - Business owner authorization (documented)
 //
 // 4. ADD TAGS:
-//    ✓ add_invoice_tag adds single tag
-//    ✓ add_invoice_tag adds multiple tags
-//    ✓ Business owner authorization (documented)
+//    - add_invoice_tag adds single tag
+//    - add_invoice_tag adds multiple tags
+//    - Business owner authorization (documented)
 //
 // 5. REMOVE TAGS:
-//    ✓ remove_invoice_tag removes tag
-//    ✓ Other tags remain after removal
-//    ✓ Business owner authorization (documented)
+//    - remove_invoice_tag removes tag
+//    - Other tags remain after removal
+//    - Business owner authorization (documented)
 //
 // 6. VALIDATION:
-//    ✓ Operations fail for nonexistent invoices
-//    ✓ Tag and category validation
+//    - Operations fail for nonexistent invoices
+//    - Tag and category validation
 //
 // 7. INTEGRATION:
-//    ✓ Complete workflow with category and tag operations
+//    - Complete workflow with category and tag operations
 //
 // ESTIMATED COVERAGE: 95%+
 
@@ -1059,7 +1059,7 @@ fn test_complete_category_and_tag_workflow() {
 //
 // These tests guard against stale index entries after category updates.
 // Security assumption: every category bucket must reflect the current state of
-// the invoice exactly — no ghost entries, no missing entries, no duplicates.
+// the invoice exactly - no ghost entries, no missing entries, no duplicates.
 // ============================================================================
 
 /// After update_invoice_category the old bucket must not contain the invoice

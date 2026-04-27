@@ -1,9 +1,8 @@
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use crate::invoice::{Dispute, DisputeStatus, InvoiceStatus, InvoiceStorage};
-use crate::protocol_limits::{
-    MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
-};
+use crate::storage::InvoiceStorage;
+use crate::types::{Dispute, DisputeStatus, InvoiceStatus};
+use crate::protocol_limits::*;
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
 fn dispute_index_key() -> soroban_sdk::Symbol {
@@ -25,17 +24,20 @@ fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
     }
 }
 
+/// @notice Track an invoice ID in the dispute index.
+/// @dev Idempotent helper used by contract entry points to keep query indexes consistent.
+/// @param env The contract environment.
+/// @param invoice_id The invoice to index as dispute-bearing.
+pub(crate) fn track_dispute_invoice(env: &Env, invoice_id: &BytesN<32>) {
+    add_to_dispute_index(env, invoice_id);
+}
+
 fn zero_address(env: &Env) -> Address {
-    Address::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF")
+    Address::from_str(
+        env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    )
 }
-
-
-fn add_to_dispute_index(_env: &Env, _invoice_id: &BytesN<32>) {}
-
-fn get_dispute_index(_env: &Env) -> Vec<BytesN<32>> {
-    Vec::new(_env)
-}
-
 fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> {
     Ok(())
 }
@@ -50,8 +52,8 @@ fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> 
 /// @param env The contract environment.
 /// @param invoice_id The invoice to dispute.
 /// @param creator The address creating the dispute (must be authorized).
-/// @param reason The dispute reason (1–1000 chars).
-/// @param evidence Supporting evidence (1–2000 chars).
+/// @param reason The dispute reason (1-1000 chars).
+/// @param evidence Supporting evidence (1-2000 chars).
 /// @return Ok(()) on success, Err with typed error on failure.
 #[allow(dead_code)]
 pub fn create_dispute(
@@ -176,11 +178,15 @@ pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
     get_dispute_index(env)
 }
 
+/// @notice Read the dispute index for query endpoints.
+/// @param env The contract environment.
+/// @return Invoice IDs that have entered the dispute lifecycle.
+pub(crate) fn indexed_dispute_invoices(env: &Env) -> Vec<BytesN<32>> {
+    get_dispute_index(env)
+}
+
 #[allow(dead_code)]
-pub fn get_invoices_by_dispute_status(
-    env: &Env,
-    status: &DisputeStatus,
-) -> Vec<BytesN<32>> {
+pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<BytesN<32>> {
     let mut result = Vec::new(env);
     for invoice_id in get_dispute_index(env).iter() {
         if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
@@ -191,5 +197,13 @@ pub fn get_invoices_by_dispute_status(
     }
     result
 }
-//! Invoice disputes are represented on [`crate::invoice::Invoice`] and handled by contract
-//! entry points in `lib.rs`. This module is reserved for future dispute-specific helpers.
+
+/// @notice Filter dispute-indexed invoices by dispute status.
+/// @param env The contract environment.
+/// @param status Desired dispute status filter.
+/// @return Invoice IDs whose current dispute status matches `status`.
+pub(crate) fn indexed_invoices_by_status(env: &Env, status: &DisputeStatus) -> Vec<BytesN<32>> {
+    get_invoices_by_dispute_status(env, status)
+}
+// Invoice disputes are represented on [`crate::invoice::Invoice`] and handled by contract
+// entry points in `lib.rs`. This module is reserved for future dispute-specific helpers.
