@@ -1,4 +1,5 @@
 use crate::errors::QuickLendXError;
+use crate::protocol_limits::{check_string_length, MAX_FEEDBACK_LENGTH};
 use crate::storage::DataKey;
 use crate::verification::normalize_tag;
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
@@ -8,6 +9,18 @@ use crate::types::{
     Dispute, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceRating,
     InvoiceStatus, LineItemRecord, PaymentRecord,
 };
+
+/// Maximum normalized tags allowed per invoice.
+///
+/// Limiting tag cardinality prevents unbounded metadata growth and keeps
+/// tag-based query/index operations predictable.
+pub const MAX_INVOICE_TAGS: u32 = 10;
+
+/// Maximum ratings retained per invoice.
+///
+/// Bounding this vector prevents unbounded on-chain storage growth from
+/// repeated rating submissions over time.
+pub const MAX_RATINGS_PER_INVOICE: u32 = 100;
 
 impl Invoice {
     pub fn new(
@@ -26,7 +39,20 @@ impl Invoice {
 
         let mut normalized_tags = Vec::new(env);
         for tag in tags.iter() {
-            normalized_tags.push_back(normalize_tag(env, &tag)?);
+            let normalized = normalize_tag(env, &tag)?;
+            let mut exists = false;
+            for existing in normalized_tags.iter() {
+                if existing == normalized {
+                    exists = true;
+                    break;
+                }
+            }
+            if !exists {
+                if normalized_tags.len() >= MAX_INVOICE_TAGS {
+                    return Err(QuickLendXError::TagLimitExceeded);
+                }
+                normalized_tags.push_back(normalized);
+            }
         }
 
         Ok(Self {
@@ -237,6 +263,9 @@ impl Invoice {
     pub fn add_tag(&mut self, env: &Env, tag: String) -> Result<(), QuickLendXError> {
         let normalized = normalize_tag(env, &tag)?;
         if !self.has_tag(normalized.clone()) {
+            if self.tags.len() >= MAX_INVOICE_TAGS {
+                return Err(QuickLendXError::TagLimitExceeded);
+            }
             self.tags.push_back(normalized);
         }
         Ok(())
@@ -262,11 +291,15 @@ impl Invoice {
         rater: Address,
         rated_at: u64,
     ) -> Result<(), QuickLendXError> {
+        check_string_length(&feedback, MAX_FEEDBACK_LENGTH)?;
         if rating == 0 || rating > 5 {
             return Err(QuickLendXError::InvalidRating);
         }
         if self.status != InvoiceStatus::Funded && self.status != InvoiceStatus::Paid {
             return Err(QuickLendXError::NotFunded);
+        }
+        if self.ratings.len() >= MAX_RATINGS_PER_INVOICE {
+            return Err(QuickLendXError::OperationNotAllowed);
         }
         for existing in self.ratings.iter() {
             if existing.rater == rater {
