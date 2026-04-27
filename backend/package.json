@@ -8,7 +8,10 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "dev": "ts-node-dev src/index.ts",
-    "start": "ts-node src/index.ts"
+    "start": "ts-node src/index.ts",
+    "security:scan": "node scripts/dependency-scan.js audit-report.json high",
+    "sbom:generate": "node scripts/generate-sbom.js sbom/backend-sbom.cdx.json",
+    "sbom:check": "node scripts/validate-sbom.js sbom/backend-sbom.cdx.json"
   },
   "keywords": [],
   "author": "",
