@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { Settlement, SettlementStatus } from "../../types/contract";
 import { applyCacheHeaders, CC_LONG } from "../../middleware/cache-headers";
+import { labelRecord } from "../../services/versioningService";
 
 export const MOCK_SETTLEMENTS: Settlement[] = [
   labelRecord<Omit<Settlement, "contract_version" | "event_schema_version" | "indexed_at">>({
