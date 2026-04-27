@@ -104,7 +104,6 @@ use admin::AdminStorage;
 use crate::types::Bid;
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
-    OverdueScanResult,
 };
 use errors::QuickLendXError;
 use escrow::{

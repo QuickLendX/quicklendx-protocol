@@ -61,7 +61,6 @@ impl Indexes {
             BidStatus::Withdrawn => symbol_short!("withdrawn"),
             BidStatus::Accepted => symbol_short!("accepted"),
             BidStatus::Expired => symbol_short!("expired"),
-            BidStatus::Cancelled => symbol_short!("cancelled"),
         };
         (symbol_short!("bids_stat"), status_symbol)
     }
@@ -117,11 +116,9 @@ impl Indexes {
 pub struct InvoiceStorage;
 
 impl InvoiceStorage {
-    /// Store an invoice
+    /// Store an invoice and update all its secondary indexes.
     pub fn store(env: &Env, invoice: &Invoice) {
-        env.storage()
-            .persistent()
-            .set(&DataKey::Invoice(invoice.id.clone()), invoice);
+        env.storage().persistent().set(&DataKey::Invoice(invoice.id.clone()), invoice);
         Self::add_to_business_index(env, &invoice.business, &invoice.id);
         Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
         if let Some(ref name) = invoice.metadata_customer_name {
@@ -177,31 +174,21 @@ impl InvoiceStorage {
     }
 
     pub fn update(env: &Env, invoice: &Invoice) {
-        if let Some(old_invoice) = Self::get(env, &invoice.id) {
-            if old_invoice.status != invoice.status {
-                Self::remove_from_status_index(env, old_invoice.status, &invoice.id);
+        if let Some(old) = Self::get(env, &invoice.id) {
+            if old.status != invoice.status {
+                Self::remove_from_status_index(env, old.status, &invoice.id);
                 Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
             }
-            if old_invoice.metadata_customer_name != invoice.metadata_customer_name {
-                if let Some(ref old_name) = old_invoice.metadata_customer_name {
-                    Self::remove_from_customer_index(env, old_name, &invoice.id);
-                }
-                if let Some(ref new_name) = invoice.metadata_customer_name {
-                    Self::add_to_customer_index(env, new_name, &invoice.id);
-                }
+            if old.metadata_customer_name != invoice.metadata_customer_name {
+                if let Some(ref name) = old.metadata_customer_name { Self::remove_from_customer_index(env, name, &invoice.id); }
+                if let Some(ref name) = invoice.metadata_customer_name { Self::add_to_customer_index(env, name, &invoice.id); }
             }
-            if old_invoice.metadata_tax_id != invoice.metadata_tax_id {
-                if let Some(ref old_tax_id) = old_invoice.metadata_tax_id {
-                    Self::remove_from_tax_id_index(env, old_tax_id, &invoice.id);
-                }
-                if let Some(ref new_tax_id) = invoice.metadata_tax_id {
-                    Self::add_to_tax_id_index(env, new_tax_id, &invoice.id);
-                }
+            if old.metadata_tax_id != invoice.metadata_tax_id {
+                if let Some(ref tax_id) = old.metadata_tax_id { Self::remove_from_tax_id_index(env, tax_id, &invoice.id); }
+                if let Some(ref tax_id) = invoice.metadata_tax_id { Self::add_to_tax_id_index(env, tax_id, &invoice.id); }
             }
         }
-        env.storage()
-            .persistent()
-            .set(&DataKey::Invoice(invoice.id.clone()), invoice);
+        env.storage().persistent().set(&DataKey::Invoice(invoice.id.clone()), invoice);
     }
 
     pub fn update_invoice(env: &Env, invoice: &Invoice) {
@@ -270,13 +257,11 @@ impl InvoiceStorage {
         matches
     }
 
-    pub fn get_invoices_with_ratings_count(env: &Env) -> u32 {
-        let mut count = 0u32;
-        for invoice_id in Self::get_all_invoice_ids(env).iter() {
-            if let Some(invoice) = Self::get(env, &invoice_id) {
-                if invoice.total_ratings > 0 {
-                    count = count.saturating_add(1);
-                }
+    pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
+        let mut res = Vec::new(env);
+        for id in Self::get_all_invoice_ids(env).iter() {
+            if let Some(inv) = Self::get(env, &id) {
+                if inv.has_tag(tag.clone()) { res.push_back(id); }
             }
         }
         count
@@ -371,6 +356,9 @@ impl InvoiceStorage {
         }
         env.storage().persistent().set(&key, &filtered);
     }
+    pub fn get_by_invoice(env: &Env, id: &BytesN<32>) -> Vec<BytesN<32>> { env.storage().persistent().get(&Indexes::bids_by_invoice(id)).unwrap_or(Vec::new(env)) }
+    pub fn get_by_investor(env: &Env, addr: &Address) -> Vec<BytesN<32>> { env.storage().persistent().get(&Indexes::bids_by_investor(addr)).unwrap_or(Vec::new(env)) }
+    pub fn get_by_status(env: &Env, status: BidStatus) -> Vec<BytesN<32>> { env.storage().persistent().get(&Indexes::bids_by_status(status)).unwrap_or(Vec::new(env)) }
 
     pub fn add_tag_index(env: &Env, tag: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_tag(tag);
@@ -435,6 +423,9 @@ impl InvoiceStorage {
         }
         matches
     }
+    pub fn get_by_invoice(env: &Env, id: &BytesN<32>) -> Vec<BytesN<32>> { env.storage().persistent().get(&Indexes::investments_by_invoice(id)).unwrap_or(Vec::new(env)) }
+    pub fn get_by_investor(env: &Env, addr: &Address) -> Vec<BytesN<32>> { env.storage().persistent().get(&Indexes::investments_by_investor(addr)).unwrap_or(Vec::new(env)) }
+    pub fn get_by_status(env: &Env, s: InvestmentStatus) -> Vec<BytesN<32>> { env.storage().persistent().get(&Indexes::investments_by_status(s)).unwrap_or(Vec::new(env)) }
 
     pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
         Self::get_invoices_by_category(env, category).len()
@@ -505,7 +496,6 @@ pub use crate::investment::InvestmentStorage;
 
 /// Storage operations for platform configuration
 pub struct ConfigStorage;
-
 impl ConfigStorage {
     pub fn set_platform_fees(env: &Env, config: &PlatformFeeConfig) {
         env.storage().instance().set(&StorageKeys::platform_fees(), config);
@@ -515,9 +505,7 @@ impl ConfigStorage {
     }
 }
 
-/// Helper for clean resets (used in migrations/tests)
 pub struct StorageManager;
-
 impl StorageManager {
     pub fn clear_all_mappings(env: &Env) {
         env.storage().persistent().remove(&StorageKeys::invoice_count());

@@ -86,14 +86,13 @@ mod test_dispute {
     fn create_test_invoice(
         env: &Env,
         client: &QuickLendXContractClient,
-        admin: &Address,
+        _admin: &Address,
         business: &Address,
         amount: i128,
     ) -> BytesN<32> {
         let currency = Address::generate(env);
         let due_date = env.ledger().timestamp() + 30 * 24 * 60 * 60;
         client.store_invoice(
-            admin,
             business,
             &amount,
             &currency,
@@ -101,7 +100,7 @@ mod test_dispute {
             &String::from_str(env, "Test invoice for dispute"),
             &InvoiceCategory::Services,
             &Vec::new(env),
-        )
+        ).unwrap()
     }
 
     // -----------------------------------------------------------------------
