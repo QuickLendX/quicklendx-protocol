@@ -1319,4 +1319,138 @@ mod test_dispute {
             DisputeStatus::Resolved
         );
     }
+
+    /// [TC-44] Lifecycle happy path: open dispute, update evidence, then resolve.
+    #[test]
+    fn test_dispute_lifecycle_open_evidence_resolve() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 120_000);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "Incorrect settlement amount"),
+            &String::from_str(&env, "Initial evidence"),
+        );
+        client.update_dispute_evidence(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "Updated supporting evidence"),
+        );
+        client.put_dispute_under_review(&invoice_id, &admin);
+        client.resolve_dispute(
+            &invoice_id,
+            &admin,
+            &String::from_str(&env, "Resolved after evidence review"),
+        );
+
+        let dispute = client.get_dispute_details(&invoice_id).expect("dispute must exist");
+        assert_eq!(
+            dispute.evidence,
+            String::from_str(&env, "Updated supporting evidence")
+        );
+        assert_eq!(client.get_invoice(&invoice_id).dispute_status, DisputeStatus::Resolved);
+    }
+
+    /// [TC-45] Evidence updates are creator-only and reject tampering attempts.
+    #[test]
+    fn test_update_dispute_evidence_creator_only() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let outsider = Address::generate(&env);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 90_000);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+
+        let err = client
+            .try_update_dispute_evidence(
+                &invoice_id,
+                &outsider,
+                &String::from_str(&env, "tampered evidence"),
+            )
+            .unwrap_err()
+            .expect("expected contract error");
+        assert_eq!(err, QuickLendXError::DisputeNotAuthorized);
+    }
+
+    /// [TC-46] Evidence is immutable after review starts or dispute is resolved.
+    #[test]
+    fn test_update_dispute_evidence_rejected_after_review_or_resolution() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 130_000);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+        client.put_dispute_under_review(&invoice_id, &admin);
+
+        let under_review_err = client
+            .try_update_dispute_evidence(
+                &invoice_id,
+                &business,
+                &String::from_str(&env, "new evidence"),
+            )
+            .unwrap_err()
+            .expect("expected contract error");
+        assert_eq!(under_review_err, QuickLendXError::InvalidStatus);
+
+        client.resolve_dispute(&invoice_id, &admin, &String::from_str(&env, "done"));
+        let resolved_err = client
+            .try_update_dispute_evidence(
+                &invoice_id,
+                &business,
+                &String::from_str(&env, "another update"),
+            )
+            .unwrap_err()
+            .expect("expected contract error");
+        assert_eq!(resolved_err, QuickLendXError::InvalidStatus);
+    }
+
+    /// [TC-47] Index/query consistency: lifecycle transitions preserve indexed invoice visibility.
+    #[test]
+    fn test_dispute_index_query_consistency_across_lifecycle() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let id1 = create_test_invoice(&env, &client, &admin, &business, 100_000);
+        let id2 = create_test_invoice(&env, &client, &admin, &business, 200_000);
+
+        client.create_dispute(
+            &id1,
+            &business,
+            &String::from_str(&env, "r1"),
+            &String::from_str(&env, "e1"),
+        );
+        client.create_dispute(
+            &id2,
+            &business,
+            &String::from_str(&env, "r2"),
+            &String::from_str(&env, "e2"),
+        );
+
+        let all_disputes = client.get_invoices_with_disputes();
+        assert!(all_disputes.contains(&id1));
+        assert!(all_disputes.contains(&id2));
+
+        client.put_dispute_under_review(&id1, &admin);
+        let review_ids = client.get_invoices_by_dispute_status(&DisputeStatus::UnderReview);
+        let open_ids = client.get_invoices_by_dispute_status(&DisputeStatus::Disputed);
+        assert!(review_ids.contains(&id1));
+        assert!(!open_ids.contains(&id1));
+        assert!(open_ids.contains(&id2));
+
+        client.resolve_dispute(&id1, &admin, &String::from_str(&env, "resolved"));
+        let resolved_ids = client.get_invoices_by_dispute_status(&DisputeStatus::Resolved);
+        assert!(resolved_ids.contains(&id1));
+        assert!(!resolved_ids.contains(&id2));
+    }
 }
