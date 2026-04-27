@@ -17,12 +17,10 @@ extern crate alloc;
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod scratch_events;
-// #[cfg(test)]
-// mod test_default;
-// #[cfg(test)]
-// mod test_fees;
-// #[cfg(test)]
-// mod test_fees_extended;
+#[cfg(test)]
+mod test_default;
+#[cfg(test)]
+mod test_fees;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 mod admin;
@@ -52,30 +50,31 @@ mod protocol_limits;
 mod reentrancy;
 mod settlement;
 mod storage;
-// #[cfg(test)]
-// #[cfg(test)]
-// mod test_admin;
-// #[cfg(test)]
-// mod test_admin_simple;
-// #[cfg(test)]
-// mod test_admin_standalone;
-// #[cfg(test)]
-// mod test_expired_bids_cleanup;
-// #[cfg(test)]
-// mod test_freshness;
-// #[cfg(test)]
-// mod test_init;
-// #[cfg(test)]
-// mod test_dispute;
-// #[cfg(test)]
-// mod test_investment_consistency;
-// test_investment_queries disabled: depends on crate::pagination + proptest (not in scope)
+#[cfg(test)]
+#[cfg(test)]
+mod test_admin;
+#[cfg(test)]
+mod test_admin_simple;
+#[cfg(test)]
+mod test_admin_standalone;
+#[cfg(test)]
+mod test_expired_bids_cleanup;
+#[cfg(test)]
+mod test_freshness;
+#[cfg(test)]
+mod test_init;
+#[cfg(test)]
+mod test_dispute;
+#[cfg(test)]
+mod test_investment_consistency;
 // #[cfg(test)]
 // mod test_investment_queries;
-// #[cfg(test)]
-// mod test_init_invariants;
-// #[cfg(test)]
-// mod test_max_invoices_per_business;
+#[cfg(test)]
+mod test_investment_transitions;
+#[cfg(test)]
+mod test_init_invariants;
+#[cfg(test)]
+mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_overflow;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -118,6 +117,8 @@ use events::{
     emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
     emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
+use investment::{InsuranceCoverage, Investment, InvestmentStatus, InvestmentStorage};
+use invoice::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStorage};
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee};
 use crate::types::PlatformFeeConfig;
@@ -949,7 +950,7 @@ impl QuickLendXContract {
     }
 
     /// Get bids filtered by status
-    pub fn get_bids_by_status(env: Env, invoice_id: BytesN<32>, status: BidStatus) -> Vec<Bid> {
+    pub fn get_bids_by_status(env: Env, invoice_id: BytesN<32>, status: bid::BidStatus) -> Vec<Bid> {
         BidStorage::get_bids_by_status(&env, &invoice_id, status)
     }
 
@@ -999,10 +1000,10 @@ impl QuickLendXContract {
         // Re-read status after auth to guard against concurrent transitions.
         let bid_fresh =
             BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-        if bid_fresh.status != BidStatus::Placed {
+        if bid_fresh.status != bid::BidStatus::Placed {
             return Err(QuickLendXError::OperationNotAllowed);
         }
-        bid.status = BidStatus::Withdrawn;
+        bid.status = bid::BidStatus::Withdrawn;
         BidStorage::update_bid(&env, &bid);
         emit_bid_withdrawn(&env, &bid);
         Ok(())
@@ -1083,7 +1084,7 @@ impl QuickLendXContract {
             bid_amount,
             expected_return,
             timestamp: current_timestamp,
-            status: BidStatus::Placed,
+            status: bid::BidStatus::Placed,
             expiration_timestamp: Bid::default_expiration_with_env(&env, current_timestamp),
         };
         BidStorage::store_bid(&env, &bid);
@@ -1126,7 +1127,7 @@ impl QuickLendXContract {
         // Enforce KYC: a pending business must not accept bids.
         require_business_not_pending(&env, &invoice.business)?;
 
-        if invoice.status != InvoiceStatus::Verified || bid.status != BidStatus::Placed {
+        if invoice.status != InvoiceStatus::Verified || bid.status != bid::BidStatus::Placed {
             return Err(QuickLendXError::InvalidStatus);
         }
 
@@ -1138,7 +1139,7 @@ impl QuickLendXContract {
             bid.bid_amount,
             &invoice.currency,
         )?;
-        bid.status = BidStatus::Accepted;
+        bid.status = bid::BidStatus::Accepted;
         BidStorage::update_bid(&env, &bid);
         // Remove from old status list before changing status
         InvoiceStorage::remove_from_status_invoices(&env, InvoiceStatus::Verified, &invoice_id);
@@ -2298,7 +2299,7 @@ impl QuickLendXContract {
     pub fn get_bid_history_paged(
         env: Env,
         invoice_id: BytesN<32>,
-        status_filter: Option<BidStatus>,
+        status_filter: Option<bid::BidStatus>,
         offset: u32,
         limit: u32,
     ) -> Vec<Bid> {
@@ -2347,7 +2348,7 @@ impl QuickLendXContract {
     pub fn get_investor_bids_paged(
         env: Env,
         investor: Address,
-        status_filter: Option<BidStatus>,
+        status_filter: Option<bid::BidStatus>,
         offset: u32,
         limit: u32,
     ) -> Vec<Bid> {
@@ -2875,4 +2876,239 @@ impl QuickLendXContract {
         notifications::NotificationSystem::get_user_notification_stats(&env, &user)
     }
 
+    pub fn get_financial_metrics(
+        env: Env,
+        period: analytics::TimePeriod,
+    ) -> Result<analytics::FinancialMetrics, QuickLendXError> {
+        analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period)
+    }
+
+    /// Retrieve a stored investor report by ID
+    pub fn get_investor_report(env: Env, report_id: BytesN<32>) -> Option<analytics::InvestorReport> {
+        analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
+    }
+
+    /// Get a summary of platform and performance metrics
+    pub fn get_analytics_summary(
+        env: Env,
+    ) -> (analytics::PlatformMetrics, analytics::PerformanceMetrics) {
+        let platform = analytics::AnalyticsCalculator::calculate_platform_metrics(&env).unwrap_or(
+            analytics::PlatformMetrics {
+                total_invoices: 0,
+                total_investments: 0,
+                total_volume: 0,
+                total_fees_collected: 0,
+                active_investors: 0,
+                verified_businesses: 0,
+                average_invoice_amount: 0,
+                average_investment_amount: 0,
+                platform_fee_rate: 0,
+                default_rate: 0,
+                success_rate: 0,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+        let performance = analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
+            .unwrap_or(analytics::PerformanceMetrics {
+                platform_uptime: env.ledger().timestamp(),
+                average_settlement_time: 0,
+                average_verification_time: 0,
+                dispute_resolution_time: 0,
+                system_response_time: 0,
+                transaction_success_rate: 0,
+                error_rate: 0,
+                user_satisfaction_score: 0,
+                platform_efficiency: 0,
+            });
+        (platform, performance)
+    }
+
+    // ============================================================================
+    // Dispute Resolution Functions
+    // ============================================================================
+
+    /// @notice Create a dispute on an invoice.
+    /// @dev Only the business owner or investor on the invoice may create a dispute.
+    ///      Validates reason (1ΓÇô1000 chars) and evidence (1ΓÇô2000 chars) to prevent
+    ///      abusive storage growth. Only one dispute per invoice is allowed.
+    /// @param invoice_id The invoice to dispute.
+    /// @param creator The address creating the dispute (must be business or investor).
+    /// @param reason The dispute reason (1ΓÇô1000 chars, non-empty).
+    /// @param evidence Supporting evidence (1ΓÇô2000 chars, non-empty).
+    /// @return Ok(()) on success.
+    pub fn create_dispute(
+        env: Env,
+        invoice_id: BytesN<32>,
+        creator: Address,
+        reason: String,
+        evidence: String,
+    ) -> Result<(), QuickLendXError> {
+        creator.require_auth();
+
+        // Validate reason and evidence payloads
+        validate_dispute_reason(&reason)?;
+        validate_dispute_evidence(&evidence)?;
+
+        // Load invoice and validate eligibility
+        let mut invoice =
+            InvoiceStorage::get_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        validate_dispute_eligibility(&invoice, &creator)?;
+
+        // Set dispute fields on the invoice
+        invoice.dispute_status = DisputeStatus::Disputed;
+        invoice.dispute = Dispute {
+            created_by: creator,
+            created_at: env.ledger().timestamp(),
+            reason,
+            evidence,
+            resolution: String::from_str(&env, ""),
+            resolved_by: Address::from_str(
+                &env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            ),
+            resolved_at: 0,
+        };
+
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// @notice Move a dispute from Disputed to UnderReview status (admin only).
+    /// @param invoice_id The invoice whose dispute to review.
+    /// @param admin The admin address.
+    /// @return Ok(()) on success.
+    pub fn put_dispute_under_review(
+        env: Env,
+        invoice_id: BytesN<32>,
+        admin: Address,
+    ) -> Result<(), QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+
+        let mut invoice =
+            InvoiceStorage::get_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        if invoice.dispute_status != DisputeStatus::Disputed {
+            return Err(QuickLendXError::DisputeNotFound);
+        }
+
+        invoice.dispute_status = DisputeStatus::UnderReview;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// @notice Resolve a dispute with a resolution message (admin only).
+    /// @dev Validates resolution text (1ΓÇô2000 chars). Dispute must be UnderReview.
+    /// @param invoice_id The invoice whose dispute to resolve.
+    /// @param admin The admin address.
+    /// @param resolution Resolution text (1ΓÇô2000 chars, non-empty).
+    /// @return Ok(()) on success.
+    pub fn resolve_dispute(
+        env: Env,
+        invoice_id: BytesN<32>,
+        admin: Address,
+        resolution: String,
+    ) -> Result<(), QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+
+        validate_dispute_resolution(&resolution)?;
+
+        let mut invoice =
+            InvoiceStorage::get_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        if invoice.dispute_status != DisputeStatus::UnderReview {
+            return Err(QuickLendXError::DisputeNotUnderReview);
+        }
+
+        invoice.dispute_status = DisputeStatus::Resolved;
+        invoice.dispute.resolution = resolution;
+        invoice.dispute.resolved_by = admin;
+        invoice.dispute.resolved_at = env.ledger().timestamp();
+
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// @notice Get dispute details for an invoice.
+    /// @param invoice_id The invoice to query.
+    /// @return Some(Dispute) if a dispute exists, None if dispute_status is None.
+    pub fn get_dispute_details(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Option<Dispute> {
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)?;
+        if invoice.dispute_status == DisputeStatus::None {
+            None
+        } else {
+            Some(invoice.dispute)
+        }
+    }
+
+    /// @notice Get the dispute status for an invoice.
+    /// @param invoice_id The invoice to query.
+    /// @return The current DisputeStatus.
+    pub fn get_invoice_dispute_status(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> DisputeStatus {
+        InvoiceStorage::get_invoice(&env, &invoice_id)
+            .map(|inv| inv.dispute_status)
+            .unwrap_or(DisputeStatus::None)
+    }
+
+    /// @notice Get all invoice IDs that have an active or resolved dispute.
+    /// @return Vec of invoice IDs with dispute_status != None.
+    pub fn get_invoices_with_disputes(env: Env) -> Vec<BytesN<32>> {
+        let mut result = Vec::new(&env);
+        // Check across all relevant invoice statuses
+        for status in [
+            InvoiceStatus::Pending,
+            InvoiceStatus::Verified,
+            InvoiceStatus::Funded,
+            InvoiceStatus::Paid,
+            InvoiceStatus::Defaulted,
+        ] {
+            let ids = InvoiceStorage::get_invoices_by_status(&env, &status);
+            for id in ids.iter() {
+                if let Some(inv) = InvoiceStorage::get_invoice(&env, &id) {
+                    if inv.dispute_status != DisputeStatus::None {
+                        result.push_back(id);
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    /// @notice Get invoice IDs filtered by dispute status.
+    /// @param status The DisputeStatus to filter by.
+    /// @return Vec of matching invoice IDs.
+    pub fn get_invoices_by_dispute_status(
+        env: Env,
+        status: DisputeStatus,
+    ) -> Vec<BytesN<32>> {
+        let mut result = Vec::new(&env);
+        for inv_status in [
+            InvoiceStatus::Pending,
+            InvoiceStatus::Verified,
+            InvoiceStatus::Funded,
+            InvoiceStatus::Paid,
+            InvoiceStatus::Defaulted,
+        ] {
+            let ids = InvoiceStorage::get_invoices_by_status(&env, &inv_status);
+            for id in ids.iter() {
+                if let Some(inv) = InvoiceStorage::get_invoice(&env, &id) {
+                    if inv.dispute_status == status {
+                        result.push_back(id);
+                    }
+                }
+            }
+        }
+        result
+    }
 }

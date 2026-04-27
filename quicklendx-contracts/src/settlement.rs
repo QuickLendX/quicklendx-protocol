@@ -266,7 +266,6 @@ pub fn settle_invoice(
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
     let payer = invoice.business.clone();
-    payer.require_auth();
 
     let remaining_due = compute_remaining_due(&invoice)?;
     if payment_amount > remaining_due {

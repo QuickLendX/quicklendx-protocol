@@ -1162,3 +1162,7 @@ pub fn emit_protocol_initialized(
     }
     .publish(env);
 }
+
+pub fn emit_admin_initialized(env: &Env, admin: &Address) {
+    env.events().publish((symbol_short!("admin"),), admin.clone());
+}
