@@ -211,7 +211,7 @@ pub fn scan_funded_invoice_expirations(
     grace_period: u64,
     limit: Option<u32>,
 ) -> Result<OverdueScanResult, QuickLendXError> {
-    let funded_invoices = InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Funded);
+    let funded_invoices = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
     let total_funded = funded_invoices.len();
 
     if total_funded == 0 {

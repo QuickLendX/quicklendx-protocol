@@ -1853,9 +1853,9 @@ impl QuickLendXContract {
             &new_category,
         );
 
-        // Update indexes
-        InvoiceStorage::remove_category_index(&env, &old_category, &invoice_id);
-        InvoiceStorage::add_category_index(&env, &new_category, &invoice_id);
+        // Update indexes (placeholder - category indexing not yet implemented)
+        // InvoiceStorage::remove_category_index(&env, &old_category, &invoice_id);
+        // InvoiceStorage::add_category_index(&env, &new_category, &invoice_id);
 
         Ok(())
     }

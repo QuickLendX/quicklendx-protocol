@@ -1005,8 +1005,9 @@ pub fn validate_invoice_category(
     // This function can be extended to add additional validation logic if needed
     match category {
         crate::invoice::InvoiceCategory::Services => Ok(()),
-        crate::invoice::InvoiceCategory::Products => Ok(()),
+        crate::invoice::InvoiceCategory::Goods => Ok(()),
         crate::invoice::InvoiceCategory::Consulting => Ok(()),
+        crate::invoice::InvoiceCategory::Logistics => Ok(()),
         crate::invoice::InvoiceCategory::Manufacturing => Ok(()),
         crate::invoice::InvoiceCategory::Technology => Ok(()),
         crate::invoice::InvoiceCategory::Healthcare => Ok(()),
@@ -1511,7 +1512,8 @@ pub fn validate_invoice_metadata(
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        let expected_total = record.1.saturating_mul(record.2);
+        let expected_total = i128::from(record.1).checked_mul(record.2)
+            .ok_or(QuickLendXError::InvalidAmount)?;
         if expected_total != record.3 {
             return Err(QuickLendXError::InvalidAmount);
         }

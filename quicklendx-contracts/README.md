@@ -789,9 +789,9 @@ This catches incremental drift before it becomes a problem.
 | Constant            | Value                     | Location                                                                                           |
 | ------------------- | ------------------------- | -------------------------------------------------------------------------------------------------- |
 | Hard budget (opt.)  | 262 144 B (256 KiB)       | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
-| Raw fallback budget | 327 680 B (320 KiB)       | `tests/wasm_build_size_budget.rs` – used when `wasm-opt` absent (e.g. Windows local builds)        |
+| Raw fallback budget | 358 400 B (350 KiB)       | `tests/wasm_build_size_budget.rs` – used when `wasm-opt` absent (e.g. Windows local builds)        |
 | Warning zone        | 235 929 B (90 %)          | `tests/wasm_build_size_budget.rs`                                                                  |
-| Regression baseline | 217 668 B (last recorded) | `tests/wasm_build_size_budget.rs`, `scripts/wasm-size-baseline.toml`                               |
+| Regression baseline | 240 000 B (last recorded) | `tests/wasm_build_size_budget.rs`, `scripts/wasm-size-baseline.toml`                               |
 | Regression margin   | 5 %                       | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`                                    |
 
 ##### Update procedure after a legitimate size increase

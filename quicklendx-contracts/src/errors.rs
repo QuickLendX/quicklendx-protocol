@@ -52,12 +52,13 @@ pub enum QuickLendXError {
     AlreadyRated = 1502,
     NotRater = 1503,
 
-    // KYC / verification (1600–1604)
+    // KYC / verification (1600–1605)
     BusinessNotVerified = 1600,
-    KYCAlreadyPending = 1601,
-    KYCAlreadyVerified = 1602,
-    KYCNotFound = 1603,
-    InvalidKYCStatus = 1604,
+    InvestorNotVerified = 1601,
+    KYCAlreadyPending = 1602,
+    KYCAlreadyVerified = 1603,
+    KYCNotFound = 1604,
+    InvalidKYCStatus = 1605,
 
     // Audit (1700–1702)
     AuditLogNotFound = 1700,
@@ -149,6 +150,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotRater => symbol_short!("NOT_RT"),
             // KYC / verification
             QuickLendXError::BusinessNotVerified => symbol_short!("BUS_NV"),
+            QuickLendXError::InvestorNotVerified => symbol_short!("INV_NV"),
             QuickLendXError::KYCAlreadyPending => symbol_short!("KYC_PD"),
             QuickLendXError::KYCAlreadyVerified => symbol_short!("KYC_VF"),
             QuickLendXError::KYCNotFound => symbol_short!("KYC_NF"),

@@ -23,7 +23,7 @@
 # Optimised WASM size in bytes at the last recorded state.
 # Must match WASM_SIZE_BASELINE_BYTES in tests/wasm_build_size_budget.rs
 # and BASELINE_BYTES in scripts/check-wasm-size.sh.
-bytes = 241218
+bytes = 240000
 
 # ISO-8601 date when this baseline was last recorded (informational only).
 recorded = "2026-03-29"

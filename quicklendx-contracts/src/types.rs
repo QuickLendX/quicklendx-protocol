@@ -11,6 +11,9 @@
 
 use soroban_sdk::{contracttype, Address, BytesN, Env, IntoVal, String, Vec};
 
+// Re-export BidStatus from bid module to avoid duplication
+pub use crate::bid::BidStatus;
+
 /// Search result ranking for invoice search
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -42,16 +45,6 @@ pub enum InvoiceStatus {
     Refunded,
 }
 
-/// Bid status enumeration
-#[contracttype]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BidStatus {
-    Placed,
-    Accepted,
-    Withdrawn,
-    Expired,
-}
-
 /// Investment status enumeration
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -68,6 +61,7 @@ pub enum InvestmentStatus {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DisputeStatus {
     None,
+    Disputed,
     UnderReview,
     Resolved,
 }
@@ -80,6 +74,9 @@ pub enum InvoiceCategory {
     Goods,
     Consulting,
     Logistics,
+    Manufacturing,
+    Technology,
+    Healthcare,
     Other,
 }
 

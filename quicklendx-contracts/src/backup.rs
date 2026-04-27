@@ -417,7 +417,7 @@ impl BackupStorage {
         ];
 
         for status in all_statuses.iter() {
-            let invoices = crate::invoice::InvoiceStorage::get_invoices_by_status(env, status);
+            let invoices = crate::invoice::InvoiceStorage::get_invoices_by_status(env, status.clone());
             for id in invoices.iter() {
                 if let Some(inv) = crate::invoice::InvoiceStorage::get_invoice(env, &id) {
                     all_invoices.push_back(inv);

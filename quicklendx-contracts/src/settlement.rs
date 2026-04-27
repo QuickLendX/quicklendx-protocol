@@ -218,6 +218,7 @@ pub fn record_payment(
     invoice.total_paid = new_total_paid;
     update_inline_payment_history(
         &mut invoice,
+        &payer,
         applied_amount,
         timestamp,
         payment_record.nonce,
@@ -550,6 +551,7 @@ fn compute_remaining_due(invoice: &Invoice) -> Result<i128, QuickLendXError> {
 
 fn update_inline_payment_history(
     invoice: &mut Invoice,
+    payer: &Address,
     amount: i128,
     timestamp: u64,
     nonce: String,
@@ -560,6 +562,7 @@ fn update_inline_payment_history(
 
     invoice.payment_history.push_back(InvoicePaymentRecord {
         amount,
+        payer: payer.clone(),
         timestamp,
         transaction_id: nonce,
     });

@@ -5,7 +5,7 @@
 //! in the contract and release them linearly over time after an optional cliff.
 //! Beneficiaries can claim vested tokens as they unlock.
 
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol};
+use soroban_sdk::{contractevent, contracttype, symbol_short, Address, Env, Symbol};
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
@@ -184,15 +184,9 @@ impl Vesting {
         transfer_funds(env, &token, admin, &contract, total_amount)?;
 
         VestingStorage::store(env, &schedule);
-        env.events().publish(&VestingEvent::NewSchedule {
-            id,
-            beneficiary: beneficiary.clone(),
-            token: token.clone(),
-            total_amount,
-            start_time,
-            cliff_time,
-            end_time,
-        },
+        env.events().publish(
+            (id, beneficiary.clone(), token.clone(), total_amount, start_time, cliff_time, end_time),
+            (),
         );
 
         Ok(id)
@@ -281,12 +275,10 @@ impl Vesting {
         Self::validate_schedule_state(&schedule)?;
         VestingStorage::update(env, &schedule);
 
-        env.events().publish(&VestingEvent::Released {
-            id,
-            beneficiary: beneficiary.clone(),
-            token: schedule.token.clone(),
-            amount: releasable,
-        });
+        env.events().publish(
+            (id, beneficiary.clone(), schedule.token.clone(), releasable),
+            (),
+        );
         Ok(releasable)
     }
 }

@@ -269,15 +269,15 @@ impl Invoice {
             return Err(QuickLendXError::NotFunded);
         }
         for existing in self.ratings.iter() {
-            if existing.rated_by == rater {
+            if existing.rater == rater {
                 return Err(QuickLendXError::AlreadyRated);
             }
         }
         self.ratings.push_back(InvoiceRating {
-            rating,
-            feedback,
-            rated_by: rater,
-            rated_at,
+            rater: rater.clone(),
+            score: rating,
+            comment: feedback,
+            timestamp: rated_at,
         });
         self.total_ratings = self.ratings.len();
         self.average_rating = Some(self.compute_average_rating());
@@ -287,7 +287,7 @@ impl Invoice {
     pub fn get_highest_rating(&self) -> Option<u32> {
         let mut highest: Option<u32> = None;
         for entry in self.ratings.iter() {
-            highest = Some(highest.map_or(entry.rating, |v| v.max(entry.rating)));
+            highest = Some(highest.map_or(entry.score, |v| v.max(entry.score)));
         }
         highest
     }
@@ -295,7 +295,7 @@ impl Invoice {
     pub fn get_lowest_rating(&self) -> Option<u32> {
         let mut lowest: Option<u32> = None;
         for entry in self.ratings.iter() {
-            lowest = Some(lowest.map_or(entry.rating, |v| v.min(entry.rating)));
+            lowest = Some(lowest.map_or(entry.score, |v| v.min(entry.score)));
         }
         lowest
     }
@@ -310,7 +310,7 @@ impl Invoice {
         }
         let mut total = 0u32;
         for entry in self.ratings.iter() {
-            total = total.saturating_add(entry.rating);
+            total = total.saturating_add(entry.score);
         }
         total / self.ratings.len()
     }

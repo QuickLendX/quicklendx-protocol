@@ -322,15 +322,15 @@ impl AnalyticsCalculator {
 
         // Get all invoices by status
         let pending_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Pending);
+            crate::invoice::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Pending);
         let verified_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Verified);
+            crate::invoice::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Verified);
         let funded_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Funded);
+            crate::invoice::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
         let paid_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Paid);
+            crate::invoice::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Paid);
         let defaulted_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Defaulted);
+            crate::invoice::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Defaulted);
 
         let total_invoices = (pending_invoices.len()
             + verified_invoices.len()
@@ -532,7 +532,7 @@ impl AnalyticsCalculator {
         // Initialize category tracking
         let categories = [
             InvoiceCategory::Services,
-            InvoiceCategory::Products,
+            InvoiceCategory::Goods,
             InvoiceCategory::Consulting,
             InvoiceCategory::Manufacturing,
             InvoiceCategory::Technology,
@@ -555,7 +555,7 @@ impl AnalyticsCalculator {
         ]
         .iter()
         {
-            let invoices = crate::invoice::InvoiceStorage::get_invoices_by_status(env, status);
+            let invoices = crate::invoice::InvoiceStorage::get_invoices_by_status(env, status.clone());
             for invoice_id in invoices.iter() {
                 all_invoices.push_back(invoice_id);
             }
@@ -708,7 +708,7 @@ impl AnalyticsCalculator {
         .iter()
         {
             let count =
-                crate::invoice::InvoiceStorage::get_invoices_by_status(env, status).len() as u32;
+                crate::invoice::InvoiceStorage::get_invoices_by_status(env, status.clone()).len() as u32;
             total_transactions += count;
             if *status == InvoiceStatus::Paid {
                 successful_transactions = count;
@@ -723,7 +723,7 @@ impl AnalyticsCalculator {
 
         // Calculate error rate (simplified)
         let defaulted_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Defaulted);
+            crate::invoice::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Defaulted);
         let error_rate = if total_transactions > 0 {
             (defaulted_invoices.len() as u32)
                 .saturating_mul(10000)
@@ -738,7 +738,7 @@ impl AnalyticsCalculator {
 
         // Get paid invoices for rating calculation
         let paid_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Paid);
+            crate::invoice::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Paid);
         for invoice_id in paid_invoices.iter() {
             if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &invoice_id) {
                 if let Some(avg_rating) = invoice.average_rating {
@@ -798,7 +798,7 @@ impl AnalyticsCalculator {
         // Initialize category tracking
         let categories = [
             InvoiceCategory::Services,
-            InvoiceCategory::Products,
+            InvoiceCategory::Goods,
             InvoiceCategory::Consulting,
             InvoiceCategory::Manufacturing,
             InvoiceCategory::Technology,
