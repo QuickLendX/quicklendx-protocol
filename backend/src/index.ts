@@ -8,6 +8,11 @@ import { statusService } from "./services/statusService";
 import { requireAdminAuth, getAdminActor } from "./middleware/adminAuth";
 import { backfillService, BackfillError } from "./services/backfillService";
 import { BackfillActionSchema, BackfillStartRequestSchema } from "./types/backfill";
+import { replayService, ReplayError } from "./services/replayService";
+import { ReplayActionSchema, ReplayStartRequestSchema } from "./types/replay";
+import { DefaultEventValidator } from "./services/eventValidator";
+import { InMemoryRawEventStore } from "./services/rawEventStore";
+import { InMemoryDerivedTableStore } from "./services/derivedTableStore";
 
 dotenv.config();
 
@@ -88,6 +93,73 @@ app.post("/api/admin/backfill/resume", requireAdminAuth, async (req, res) => {
     res.json({ run });
   } catch (error) {
     if (error instanceof BackfillError) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code });
+    }
+    return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });
+  }
+});
+
+// Replay endpoints
+app.post("/api/admin/replay", requireAdminAuth, async (req, res) => {
+  try {
+    const payload = ReplayStartRequestSchema.parse(req.body);
+    const actor = getAdminActor(req);
+    const result = await replayService.startReplay(payload, actor);
+    res.status(payload.dryRun ? 200 : 202).json(result);
+  } catch (error) {
+    if (error instanceof ReplayError) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code });
+    }
+    return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });
+  }
+});
+
+app.get("/api/admin/replay/runs", requireAdminAuth, (req, res) => {
+  res.json({ runs: replayService.listRuns() });
+});
+
+app.get("/api/admin/replay/:runId", requireAdminAuth, (req, res) => {
+  const runId = Array.isArray(req.params.runId) ? req.params.runId[0] : req.params.runId;
+  const run = replayService.getRun(runId);
+  if (!run) {
+    return res.status(404).json({ error: "Replay run not found", code: "RUN_NOT_FOUND" });
+  }
+  res.json({ run });
+});
+
+app.get("/api/admin/replay/:runId/stats", requireAdminAuth, async (req, res) => {
+  try {
+    const runId = Array.isArray(req.params.runId) ? req.params.runId[0] : req.params.runId;
+    const stats = await replayService.getStats(runId);
+    res.json({ stats });
+  } catch (error) {
+    if (error instanceof ReplayError) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code });
+    }
+    return res.status(500).json({ error: "Internal server error", code: "INTERNAL_ERROR" });
+  }
+});
+
+app.post("/api/admin/replay/pause", requireAdminAuth, async (req, res) => {
+  try {
+    const { runId } = ReplayActionSchema.parse(req.body);
+    const run = await replayService.pauseRun(runId, getAdminActor(req));
+    res.json({ run });
+  } catch (error) {
+    if (error instanceof ReplayError) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code });
+    }
+    return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });
+  }
+});
+
+app.post("/api/admin/replay/resume", requireAdminAuth, async (req, res) => {
+  try {
+    const { runId } = ReplayActionSchema.parse(req.body);
+    const run = await replayService.resumeRun(runId, getAdminActor(req));
+    res.json({ run });
+  } catch (error) {
+    if (error instanceof ReplayError) {
       return res.status(error.statusCode).json({ error: error.message, code: error.code });
     }
     return res.status(400).json({ error: "Invalid request payload", code: "VALIDATION_ERROR" });

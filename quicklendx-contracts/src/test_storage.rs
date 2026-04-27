@@ -88,7 +88,7 @@ fn test_storage_keys() {
         let bid_id = BytesN::from_array(&env, &[2; 32]);
         let investment_id = BytesN::from_array(&env, &[3; 32]);
 
-        // DataKey variants produce namespaced keys — same ID in different
+        // DataKey variants produce namespaced keys - same ID in different
         // variants must NOT produce the same key (that was the old bug).
         let invoice_key = DataKey::Invoice(invoice_id.clone());
         let bid_key = DataKey::Bid(invoice_id.clone());
@@ -605,7 +605,7 @@ fn test_storage_key_collision_detection() {
         let bid_key = DataKey::Bid(id.clone());
         let investment_key = DataKey::Investment(id.clone());
 
-        // Prove namespace isolation via pattern matching —
+        // Prove namespace isolation via pattern matching -
         // each key matches only its own variant, never another.
         assert!(matches!(invoice_key, DataKey::Invoice(_)));
         assert!(!matches!(invoice_key, DataKey::Bid(_)));

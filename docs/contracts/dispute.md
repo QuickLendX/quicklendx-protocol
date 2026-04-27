@@ -14,7 +14,8 @@ None → Disputed → UnderReview → Resolved
 
 1. **None**: No dispute exists (default state)
 2. **Disputed**: Dispute created by business or investor
-3. **UnderReview**: Admin has acknowledged and is investigating
+3. **Disputed (Evidence Update Window)**: Creator may replace evidence while still open
+4. **UnderReview**: Admin has acknowledged and is investigating
 4. **Resolved**: Admin has provided final resolution
 
 ## Data Structure
@@ -94,6 +95,27 @@ Creates a new dispute for an invoice.
 - `InvalidDisputeReason` (1905): Reason empty or exceeds 1000 chars
 - `InvalidDisputeEvidence` (1906): Evidence empty or exceeds 2000 chars
 
+#### `update_dispute_evidence(invoice_id: BytesN<32>, creator: Address, evidence: String) -> Result<(), QuickLendXError>`
+
+Updates evidence for an already-open dispute.
+
+**Preconditions:**
+- `creator.require_auth()` passes
+- Invoice exists
+- Dispute status is `Disputed` (not `UnderReview`/`Resolved`)
+- `creator` equals original `dispute.created_by`
+- Evidence: 1–2000 characters
+
+**Security implications:**
+- Prevents third-party tampering with dispute payloads.
+- Locks evidence once review starts to preserve auditability during adjudication.
+
+**Errors:**
+- `InvoiceNotFound`: Invoice does not exist
+- `DisputeNotAuthorized`: Caller is not original dispute creator
+- `InvalidStatus`: Dispute is not in `Disputed` state
+- `InvalidDisputeEvidence`: Evidence empty or oversized
+
 ### Admin Functions
 
 #### `put_dispute_under_review(invoice_id: BytesN<32>, admin: Address) -> Result<(), QuickLendXError>`
@@ -139,11 +161,17 @@ Returns the current dispute status for an invoice.
 
 #### `get_invoices_with_disputes() -> Vec<BytesN<32>>`
 
-Returns all invoice IDs that have an active or resolved dispute (status != None).
+Returns invoice IDs tracked in the dispute index.
 
 #### `get_invoices_by_dispute_status(status: DisputeStatus) -> Vec<BytesN<32>>`
 
-Returns invoice IDs filtered by the given dispute status.
+Returns dispute-indexed invoice IDs filtered by the given dispute status.
+
+### Index Consistency
+
+- Invoice IDs are inserted into the dispute index at dispute creation.
+- The same index entry is preserved across `Disputed → UnderReview → Resolved`.
+- Status-filter queries (`get_invoices_by_dispute_status`) resolve against indexed IDs and current invoice state, ensuring lifecycle transitions never drop disputed invoices from query surfaces.
 
 ## Integration
 
