@@ -426,7 +426,7 @@ fn test_update_platform_metrics_requires_admin() {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    // No admin set — should fail
+    // No admin set - should fail
     let result = client.try_update_platform_metrics();
     assert!(result.is_err());
 }
@@ -437,7 +437,7 @@ fn test_update_performance_metrics_requires_admin() {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    // No admin set — should fail
+    // No admin set - should fail
     let result = client.try_update_performance_metrics();
     assert!(result.is_err());
 }

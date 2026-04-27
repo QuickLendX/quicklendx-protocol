@@ -297,7 +297,7 @@ fn test_fee_only_from_profit_not_principal() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let _ = client.initialize_admin(&admin);
 
-    client.set_platform_fee(&1000); // 10% — worst case
+    client.set_platform_fee(&1000); // 10% - worst case
     let investment = 10_000i128;
     let payment = 10_500i128; // profit=500
     let gross_profit = payment - investment;

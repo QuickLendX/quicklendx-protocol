@@ -6,15 +6,15 @@
 //!
 //! ## Tie-breaker priority (codified in `BidStorage::compare_bids`)
 //!
-//! 1. **Profit** (`expected_return - bid_amount`) — higher wins
-//! 2. **Expected return** — higher wins
-//! 3. **Bid amount** — higher wins
-//! 4. **Timestamp** — newer (higher) wins
-//! 5. **Bid ID** (lexicographic byte order) — higher wins (final stable tiebreaker)
+//! 1. **Profit** (`expected_return - bid_amount`) - higher wins
+//! 2. **Expected return** - higher wins
+//! 3. **Bid amount** - higher wins
+//! 4. **Timestamp** - newer (higher) wins
+//! 5. **Bid ID** (lexicographic byte order) - higher wins (final stable tiebreaker)
 //!
 //! ## Security assumptions
 //! - Best-bid selection is stable: `get_best_bid` always equals `rank_bids[0]`.
-//! - Ranking is insertion-order independent: same bids in any order → same result.
+//! - Ranking is insertion-order independent: same bids in any order -> same result.
 //! - All tie levels are covered so no two distinct bids can ever compare `Equal`.
 //! - Non-`Placed` bids are excluded from ranking and best-bid selection.
 
@@ -91,7 +91,7 @@ fn assert_best_eq_first(env: &Env, invoice: &BytesN<32>) {
 }
 
 // ============================================================================
-// Tier 1 – Profit tie-breaker
+// Tier 1 - Profit tie-breaker
 // ============================================================================
 
 /// Higher profit wins regardless of other fields.
@@ -152,7 +152,7 @@ fn tiebreak_profit_three_bids_descending() {
 }
 
 // ============================================================================
-// Tier 2 – Expected-return tie-breaker (equal profit)
+// Tier 2 - Expected-return tie-breaker (equal profit)
 // ============================================================================
 
 /// When profit is equal, higher expected_return wins.
@@ -211,7 +211,7 @@ fn tiebreak_expected_return_insertion_order_independent() {
 }
 
 // ============================================================================
-// Tier 3 – Bid-amount tie-breaker (equal profit + equal expected_return)
+// Tier 3 - Bid-amount tie-breaker (equal profit + equal expected_return)
 // ============================================================================
 
 /// When profit and expected_return are equal, higher bid_amount wins.
@@ -226,8 +226,8 @@ fn tiebreak_bid_amount_higher_wins() {
         // profit = 1000, expected_return = 6000; bid_amount differs
         let high = make_bid(&env, &invoice, 5_000, 6_000, 10, BidStatus::Placed, 0x01);
         let low  = make_bid(&env, &invoice, 4_000, 5_000, 10, BidStatus::Placed, 0x02);
-        // Wait — profit differs here. Let's use same expected_return, different bid_amount
-        // profit_high = 6000-5000=1000, profit_low = 5000-4000=1000 ✓
+        // Wait - profit differs here. Let's use same expected_return, different bid_amount
+        // profit_high = 6000-5000=1000, profit_low = 5000-4000=1000 -
         store(&env, &low);
         store(&env, &high);
 
@@ -274,7 +274,7 @@ fn tiebreak_bid_amount_insertion_order_independent() {
 }
 
 // ============================================================================
-// Tier 4 – Timestamp tie-breaker (equal profit + expected_return + amount)
+// Tier 4 - Timestamp tie-breaker (equal profit + expected_return + amount)
 // ============================================================================
 
 /// When profit, expected_return, and bid_amount are equal, newer timestamp wins.
@@ -359,7 +359,7 @@ fn tiebreak_timestamp_three_bids_newest_first() {
 }
 
 // ============================================================================
-// Tier 5 – Bid-ID tie-breaker (full economic + timestamp tie)
+// Tier 5 - Bid-ID tie-breaker (full economic + timestamp tie)
 // ============================================================================
 
 /// When all economic fields and timestamp are equal, higher bid_id wins.
@@ -568,7 +568,7 @@ fn non_placed_cancelled_excluded() {
     });
 }
 
-/// All non-Placed bids → empty ranking and None best bid.
+/// All non-Placed bids -> empty ranking and None best bid.
 #[test]
 fn all_non_placed_gives_empty_ranking() {
     let env = Env::default();
@@ -583,12 +583,12 @@ fn all_non_placed_gives_empty_ranking() {
         store(&env, &b2);
 
         let ranked = BidStorage::rank_bids(&env, &invoice);
-        assert_eq!(ranked.len(), 0, "no Placed bids → empty ranking");
+        assert_eq!(ranked.len(), 0, "no Placed bids -> empty ranking");
         assert!(BidStorage::get_best_bid(&env, &invoice).is_none());
     });
 }
 
-/// No bids at all → empty ranking and None best bid.
+/// No bids at all -> empty ranking and None best bid.
 #[test]
 fn no_bids_gives_empty_ranking() {
     let env = Env::default();
