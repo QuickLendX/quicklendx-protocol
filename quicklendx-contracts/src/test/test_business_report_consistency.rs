@@ -6,14 +6,14 @@
 /// is byte-for-byte identical to the value returned at generation time.
 ///
 /// Invariants checked
-/// ──────────────────
+/// ------------------
 /// 1. Timestamp ordering   : `start_date < end_date`, `generated_at == env.ledger().timestamp()`
-/// 2. Volume correctness   : `total_volume == Σ invoice.amount` for invoices in the period
+/// 2. Volume correctness   : `total_volume == - invoice.amount` for invoices in the period
 /// 3. Count correctness    : `invoices_uploaded` equals the number of invoices created in period
-/// 4. Funding ratio        : `invoices_funded ≤ invoices_uploaded`
-/// 5. Rate bounds          : `success_rate  ∈ [0, 10000]`
-///                           `default_rate  ∈ [0, 10000]`
-///                           `success_rate + default_rate ≤ 10000`
+/// 4. Funding ratio        : `invoices_funded - invoices_uploaded`
+/// 5. Rate bounds          : `success_rate  - [0, 10000]`
+///                           `default_rate  - [0, 10000]`
+///                           `success_rate + default_rate - 10000`
 /// 6. Rate formula         : verified against manually-known invoice counts
 /// 7. Report immutability  : a stored report is unchanged after a newer report is generated
 /// 8. Period exclusion     : an invoice whose `created_at` is before the period window
@@ -105,7 +105,7 @@ fn test_report_start_date_strictly_before_end_date() {
         let report = client.generate_business_report(&business, period);
         assert!(
             report.start_date <= report.end_date,
-            "start_date must be ≤ end_date for period {:?}",
+            "start_date must be - end_date for period {:?}",
             period
         );
     }
@@ -349,7 +349,7 @@ fn test_report_rates_within_bps_bounds() {
     );
     assert!(
         report.success_rate + report.default_rate <= 10_000,
-        "success_rate + default_rate ({}) must be ≤ 10000 bps",
+        "success_rate + default_rate ({}) must be - 10000 bps",
         report.success_rate + report.default_rate
     );
 }
@@ -466,7 +466,7 @@ fn test_stored_report_unchanged_after_new_report_generated() {
     env.ledger().set_timestamp(1_000_001u64);
     upload(&env, &client, &business, 9_999, "immut-second");
 
-    // Generate a second report — must not mutate the first stored report
+    // Generate a second report - must not mutate the first stored report
     let _second = client.generate_business_report(&business, &TimePeriod::AllTime);
 
     let retrieved_first = client
@@ -501,15 +501,15 @@ fn test_report_excludes_invoice_outside_period_window() {
 
     // Invoice is created at the current ledger timestamp (2 days).
     // A Daily report has start = 2*86400 - 86400 = 86400 and end = 2*86400.
-    // The invoice's created_at == two_days which is ≤ end → included.
+    // The invoice's created_at == two_days which is - end -> included.
     upload(&env, &client, &business, 5_000, "in-window-inv");
 
     // Advance to 3 days.  Now the daily window is [2*86400, 3*86400].
-    // The invoice was created at 2*86400 = start → still included in [start, end].
+    // The invoice was created at 2*86400 = start -> still included in [start, end].
     env.ledger().set_timestamp(3 * 86_400);
 
     // Advance to 4 days.  Daily window: [3*86400, 4*86400].
-    // The invoice (created at 2*86400) is now BEFORE the window start → excluded.
+    // The invoice (created at 2*86400) is now BEFORE the window start -> excluded.
     env.ledger().set_timestamp(4 * 86_400);
     let report_daily = client.generate_business_report(&business, &TimePeriod::Daily);
 
@@ -695,7 +695,7 @@ fn test_business_report_daily_boundary_invoice_included() {
 
     let report = client.generate_business_report(&business, &TimePeriod::Daily);
 
-    // created_at == day2 == end_date → invoice is in [start, end]
+    // created_at == day2 == end_date -> invoice is in [start, end]
     assert_eq!(
         report.invoices_uploaded, 1,
         "invoice created at end_date boundary must be included in the daily report"

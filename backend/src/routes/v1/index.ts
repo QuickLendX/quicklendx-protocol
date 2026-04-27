@@ -2,6 +2,7 @@ import { Router } from "express";
 import invoiceRoutes from "./invoices";
 import bidRoutes from "./bids";
 import settlementRoutes from "./settlements";
+import portfolioRoutes from "./portfolio";
 import testErrorRoutes from "./test-errors";
 import adminRoutes from "./admin";
 import monitoringRoutes from "./monitoring";

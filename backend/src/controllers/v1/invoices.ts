@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../../types/contract";
-import { labelRecord } from "../../services/versioningService";
+import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
 
 export const MOCK_INVOICES: Invoice[] = [
   labelRecord<Omit<Invoice, "contract_version" | "event_schema_version" | "indexed_at">>({
@@ -41,15 +41,16 @@ export const getInvoices = async (
     const { business, status } = req.query;
 
     let filtered = [...MOCK_INVOICES];
-    if (business) {
-      filtered = filtered.filter((i) => i.business === business);
-    }
-    if (status) {
-      filtered = filtered.filter((i) => i.status === status);
-    }
+    if (business) filtered = filtered.filter((i) => i.business === business);
+    if (status) filtered = filtered.filter((i) => i.status === status);
 
     res.json({ data: filtered });
   } catch (error) {
+    if (error instanceof PaginationError) {
+      return res.status(400).json({
+        error: { message: error.message, code: "INVALID_PAGINATION" },
+      });
+    }
     next(error);
   }
 };
@@ -65,14 +66,16 @@ export const getInvoiceById = async (
 
     if (!invoice) {
       return res.status(404).json({
-        error: {
-          message: "Invoice not found",
-          code: "INVOICE_NOT_FOUND",
-        },
+        error: { message: "Invoice not found", code: "INVOICE_NOT_FOUND" },
       });
     }
 
-    res.json({ data: invoice });
+    if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body: invoice })) {
+      res.status(304).end();
+      return;
+    }
+    res.json(invoice);
+    res.json({ data: invoice, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }

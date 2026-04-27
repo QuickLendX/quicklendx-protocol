@@ -1,19 +1,19 @@
 /// Comprehensive test suite for investment insurance parameter validation.
 ///
 /// # Coverage areas
-/// 1.  Bounds constants – verify the public constants match their documented values.
-/// 2.  `calculate_premium` – pure math, boundary values, overflow safety, invariants.
-/// 3.  Authorization – only the investment owner can call `add_investment_insurance`.
-/// 4.  State validation – insurance is only allowed on Active investments.
-/// 5.  Coverage-percentage validation – below min, above max, exact boundaries.
-/// 6.  Investment-amount validation – zero, negative, tiny (premium rounds to 0).
-/// 7.  Cumulative active-coverage cap – multiple active policies may coexist,
+/// 1.  Bounds constants - verify the public constants match their documented values.
+/// 2.  `calculate_premium` - pure math, boundary values, overflow safety, invariants.
+/// 3.  Authorization - only the investment owner can call `add_investment_insurance`.
+/// 4.  State validation - insurance is only allowed on Active investments.
+/// 5.  Coverage-percentage validation - below min, above max, exact boundaries.
+/// 6.  Investment-amount validation - zero, negative, tiny (premium rounds to 0).
+/// 7.  Cumulative active-coverage cap - multiple active policies may coexist,
 ///     but their total percentage can never exceed the configured cap.
-/// 8.  Premium-vs-coverage invariant – premium must not exceed coverage amount.
-/// 9.  Over-coverage exploit prevention – coverage_amount never exceeds principal.
-/// 10. Query correctness – `query_investment_insurance` returns all historical entries.
-/// 11. Claim handling – single-claim compatibility and multi-policy deactivation.
-/// 12. Cross-investment isolation – operations on one investment do not affect another.
+/// 8.  Premium-vs-coverage invariant - premium must not exceed coverage amount.
+/// 9.  Over-coverage exploit prevention - coverage_amount never exceeds principal.
+/// 10. Query correctness - `query_investment_insurance` returns all historical entries.
+/// 11. Claim handling - single-claim compatibility and multi-policy deactivation.
+/// 12. Cross-investment isolation - operations on one investment do not affect another.
 extern crate alloc;
 use super::*;
 use crate::errors::QuickLendXError;
@@ -98,18 +98,18 @@ fn test_constants_have_expected_values() {
 }
 
 // ============================================================================
-// 2. calculate_premium – pure unit tests (no contract required)
+// 2. calculate_premium - pure unit tests (no contract required)
 // ============================================================================
 
 #[test]
 fn test_calculate_premium_typical_cases() {
-    // 10 000 × 80 % = 8 000 coverage; 8 000 × 2 % = 160 premium
+    // 10 000 - 80 % = 8 000 coverage; 8 000 - 2 % = 160 premium
     assert_eq!(Investment::calculate_premium(10_000, 80), 160);
-    // 10 000 × 50 % = 5 000 coverage; 5 000 × 2 % = 100 premium
+    // 10 000 - 50 % = 5 000 coverage; 5 000 - 2 % = 100 premium
     assert_eq!(Investment::calculate_premium(10_000, 50), 100);
-    // 10 000 × 100 % = 10 000 coverage; 10 000 × 2 % = 200 premium
+    // 10 000 - 100 % = 10 000 coverage; 10 000 - 2 % = 200 premium
     assert_eq!(Investment::calculate_premium(10_000, 100), 200);
-    // 10 000 × 1 % = 100 coverage; 100 × 2 % = 2 premium
+    // 10 000 - 1 % = 100 coverage; 100 - 2 % = 2 premium
     assert_eq!(Investment::calculate_premium(10_000, 1), 2);
 }
 
@@ -129,11 +129,11 @@ fn test_calculate_premium_returns_zero_for_invalid_inputs() {
 
 #[test]
 fn test_calculate_premium_minimum_floor() {
-    // amount = 500, coverage = 1 % → coverage_amount = 5; 5 × 2 % = 0 (integer)
-    // Floor kicks in → premium = 1
+    // amount = 500, coverage = 1 % -> coverage_amount = 5; 5 - 2 % = 0 (integer)
+    // Floor kicks in -> premium = 1
     assert_eq!(Investment::calculate_premium(500, 1), 1);
 
-    // amount = 100, coverage = 1 % → coverage_amount = 1; 1 × 2 % = 0 → floor → 1
+    // amount = 100, coverage = 1 % -> coverage_amount = 1; 1 - 2 % = 0 -> floor -> 1
     assert_eq!(Investment::calculate_premium(100, 1), 1);
 }
 
@@ -147,13 +147,13 @@ fn test_calculate_premium_boundary_coverage_percentages() {
     let p = Investment::calculate_premium(10_000, MAX_COVERAGE_PERCENTAGE);
     assert!(p >= MIN_PREMIUM_AMOUNT);
 
-    // One below min → 0
+    // One below min -> 0
     assert_eq!(
         Investment::calculate_premium(10_000, MIN_COVERAGE_PERCENTAGE - 1),
         0
     );
 
-    // One above max → 0  (over-coverage guard)
+    // One above max -> 0  (over-coverage guard)
     assert_eq!(
         Investment::calculate_premium(10_000, MAX_COVERAGE_PERCENTAGE + 1),
         0
@@ -162,7 +162,7 @@ fn test_calculate_premium_boundary_coverage_percentages() {
 
 #[test]
 fn test_calculate_premium_coverage_never_exceeds_amount() {
-    // For all valid percentages, coverage_amount ≤ amount.
+    // For all valid percentages, coverage_amount - amount.
     let amount: i128 = 9_999;
     for pct in MIN_COVERAGE_PERCENTAGE..=MAX_COVERAGE_PERCENTAGE {
         let premium = Investment::calculate_premium(amount, pct);
@@ -181,21 +181,21 @@ fn test_calculate_premium_coverage_never_exceeds_amount() {
 fn test_calculate_premium_overflow_safety() {
     // i128::MAX amount with maximum coverage_percentage must not panic.
     let result = Investment::calculate_premium(i128::MAX, MAX_COVERAGE_PERCENTAGE);
-    // saturating_mul on i128::MAX × 100 saturates; checked_div then gives
-    // Some(i128::MAX) → premium > 0.  The exact value is less important than
+    // saturating_mul on i128::MAX - 100 saturates; checked_div then gives
+    // Some(i128::MAX) -> premium > 0.  The exact value is less important than
     // the absence of a panic.
     assert!(result >= 0);
 
     // Large but representable amount
     let large: i128 = 1_000_000_000_000_000_000; // 1 quintillion
     let p = Investment::calculate_premium(large, 80);
-    // 1e18 × 80 / 100 = 8e17; 8e17 × 200 / 10_000 = 1.6e16
+    // 1e18 - 80 / 100 = 8e17; 8e17 - 200 / 10_000 = 1.6e16
     assert_eq!(p, 16_000_000_000_000_000);
 }
 
 #[test]
 fn test_calculate_premium_premium_does_not_exceed_coverage() {
-    // With DEFAULT_INSURANCE_PREMIUM_BPS = 200 (2 %), premium ≤ coverage_amount
+    // With DEFAULT_INSURANCE_PREMIUM_BPS = 200 (2 %), premium - coverage_amount
     // for all valid inputs.
     for pct in MIN_COVERAGE_PERCENTAGE..=MAX_COVERAGE_PERCENTAGE {
         let amount: i128 = 1_000_000;
@@ -216,7 +216,7 @@ fn test_calculate_premium_premium_does_not_exceed_coverage() {
 
 #[test]
 fn test_add_insurance_requires_exactly_investor_auth() {
-    // Soroban auth violations result in a host panic — we verify the correct
+    // Soroban auth violations result in a host panic - we verify the correct
     // authorization call is made by supplying only the investor's MockAuth and
     // confirming the invocation succeeds. If the contract called require_auth()
     // on any other address (or not at all), the mock would not match and the
@@ -252,7 +252,7 @@ fn test_add_insurance_requires_exactly_investor_auth() {
 }
 
 // ============================================================================
-// 4. State validation – investment status
+// 4. State validation - investment status
 // ============================================================================
 
 #[test]
@@ -387,7 +387,7 @@ fn test_add_insurance_rejects_zero_coverage_percentage() {
         10,
     );
 
-    // coverage_percentage = 0 is below MIN_COVERAGE_PERCENTAGE → specific error
+    // coverage_percentage = 0 is below MIN_COVERAGE_PERCENTAGE -> specific error
     let err = client
         .try_add_investment_insurance(&id, &provider, &0u32)
         .err()
@@ -531,7 +531,7 @@ fn test_add_insurance_rejects_zero_investment_amount() {
 
 #[test]
 fn test_add_insurance_rejects_tiny_amount_where_premium_rounds_to_zero() {
-    // amount=50, coverage=1 % → coverage_amount = 0 (integer division) → premium = 0
+    // amount=50, coverage=1 % -> coverage_amount = 0 (integer division) -> premium = 0
     let (env, client, contract_id) = setup();
     env.mock_all_auths();
 
@@ -686,7 +686,7 @@ fn test_premium_stored_in_coverage_record() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    // 10 000 × 80 % = 8 000; 8 000 × 2 % = 160
+    // 10 000 - 80 % = 8 000; 8 000 - 2 % = 160
     let id = store_investment(
         &env,
         &contract_id,
@@ -706,7 +706,7 @@ fn test_premium_stored_in_coverage_record() {
 
 #[test]
 fn test_premium_minimum_floor_applied() {
-    // 100 × 1 % = 1 coverage; 1 × 2 % = 0 (integer) → floor → premium = 1
+    // 100 - 1 % = 1 coverage; 1 - 2 % = 0 (integer) -> floor -> premium = 1
     let (env, client, contract_id) = setup();
     env.mock_all_auths();
 
@@ -756,13 +756,13 @@ fn test_coverage_amount_never_exceeds_investment_amount() {
         cov.coverage_amount <= amount,
         "coverage_amount must not exceed investment amount"
     );
-    assert_eq!(cov.coverage_amount, amount); // 100 % → exact match
+    assert_eq!(cov.coverage_amount, amount); // 100 % -> exact match
 }
 
 #[test]
 fn test_over_100_percent_rejected_with_specific_error() {
     // This is the core over-coverage exploit test: an attacker supplying
-    // coverage_percentage = 200 would compute coverage_amount = 2 × principal.
+    // coverage_percentage = 200 would compute coverage_amount = 2 - principal.
     // The explicit range check in lib.rs must catch this before arithmetic.
     let (env, client, contract_id) = setup();
     env.mock_all_auths();
@@ -1029,19 +1029,19 @@ fn test_add_insurance_unit_coverage_percentage_bounds() {
         insurance: Vec::new(&env),
     };
 
-    // coverage_percentage = 0 → InvalidCoveragePercentage
+    // coverage_percentage = 0 -> InvalidCoveragePercentage
     assert_eq!(
         inv.add_insurance(provider.clone(), 0, 10),
         Err(QuickLendXError::InvalidCoveragePercentage)
     );
 
-    // coverage_percentage = 101 → InvalidCoveragePercentage
+    // coverage_percentage = 101 -> InvalidCoveragePercentage
     assert_eq!(
         inv.add_insurance(provider.clone(), 101, 10),
         Err(QuickLendXError::InvalidCoveragePercentage)
     );
 
-    // coverage_percentage = MAX_COVERAGE_PERCENTAGE with valid premium → Ok
+    // coverage_percentage = MAX_COVERAGE_PERCENTAGE with valid premium -> Ok
     let premium = Investment::calculate_premium(1_000, MAX_COVERAGE_PERCENTAGE);
     assert!(inv
         .add_insurance(provider.clone(), MAX_COVERAGE_PERCENTAGE, premium)
@@ -1087,13 +1087,13 @@ fn test_add_insurance_unit_rejects_below_minimum_premium() {
         insurance: Vec::new(&env),
     };
 
-    // premium = 0 → below MIN_PREMIUM_AMOUNT
+    // premium = 0 -> below MIN_PREMIUM_AMOUNT
     assert_eq!(
         inv.add_insurance(provider.clone(), 50, 0),
         Err(QuickLendXError::InvalidAmount)
     );
 
-    // premium = -1 → below MIN_PREMIUM_AMOUNT
+    // premium = -1 -> below MIN_PREMIUM_AMOUNT
     assert_eq!(
         inv.add_insurance(provider.clone(), 50, -1),
         Err(QuickLendXError::InvalidAmount)
@@ -1116,14 +1116,14 @@ fn test_add_insurance_unit_rejects_premium_exceeding_coverage_amount() {
         insurance: Vec::new(&env),
     };
 
-    // coverage_percentage = 10 → coverage_amount = 100
-    // premium = 101 > coverage_amount → should be rejected
+    // coverage_percentage = 10 -> coverage_amount = 100
+    // premium = 101 > coverage_amount -> should be rejected
     assert_eq!(
         inv.add_insurance(provider.clone(), 10, 101),
         Err(QuickLendXError::InvalidAmount)
     );
 
-    // premium = coverage_amount exactly → should be accepted (edge of valid range)
+    // premium = coverage_amount exactly -> should be accepted (edge of valid range)
     assert!(inv.add_insurance(provider.clone(), 10, 100).is_ok());
 }
 
@@ -1162,7 +1162,7 @@ fn test_add_insurance_unit_enforces_cumulative_cap() {
 }
 
 // ============================================================================
-// 14. Payout math correctness — claim amounts match coverage_amount formula
+// 14. Payout math correctness - claim amounts match coverage_amount formula
 // ============================================================================
 
 /// Total payouts from process_all_insurance_claims never exceed investment principal.
@@ -1195,7 +1195,7 @@ fn test_total_claim_payouts_never_exceed_investment_principal() {
     assert_eq!(total_payout, amount); // 60 % + 40 % = 100 %
 }
 
-/// Each claim payout equals investment_amount × coverage_percentage / 100.
+/// Each claim payout equals investment_amount - coverage_percentage / 100.
 #[test]
 fn test_claim_payout_matches_coverage_formula() {
     let env = Env::default();
@@ -1252,7 +1252,7 @@ fn test_process_all_claims_twice_second_call_returns_empty() {
     let first = inv.process_all_insurance_claims(&env);
     assert_eq!(first.len(), 2);
 
-    // Second call must yield nothing — no double-claim possible.
+    // Second call must yield nothing - no double-claim possible.
     let second = inv.process_all_insurance_claims(&env);
     assert_eq!(second.len(), 0);
 }
@@ -1359,7 +1359,7 @@ fn test_total_active_coverage_zero_after_all_claims() {
 }
 
 // ============================================================================
-// 17. Stacked-policy aggregate coverage cap — boundary arithmetic
+// 17. Stacked-policy aggregate coverage cap - boundary arithmetic
 // ============================================================================
 
 /// Exactly 100 % cumulative coverage across three policies is accepted.
@@ -1409,7 +1409,7 @@ fn test_stacked_policies_101pct_rejected() {
 
     inv.add_insurance(pa, 51, Investment::calculate_premium(10_000, 51)).unwrap();
 
-    // 51 + 50 = 101 → must be rejected
+    // 51 + 50 = 101 -> must be rejected
     assert_eq!(
         inv.add_insurance(pb, 50, Investment::calculate_premium(10_000, 50)),
         Err(QuickLendXError::OperationNotAllowed)

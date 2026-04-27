@@ -54,7 +54,7 @@ fn setup_token(
 }
 
 // ============================================================================
-// transfer_funds — negative tests
+// transfer_funds - negative tests
 // ============================================================================
 
 #[test]
@@ -167,7 +167,7 @@ fn test_transfer_funds_contract_sender_insufficient_balance() {
 }
 
 // ============================================================================
-// transfer_funds — positive tests
+// transfer_funds - positive tests
 // ============================================================================
 
 #[test]
@@ -214,7 +214,7 @@ fn test_transfer_funds_investor_success() {
 }
 
 // ============================================================================
-// create_escrow — negative tests
+// create_escrow - negative tests
 // ============================================================================
 
 #[test]
@@ -312,7 +312,7 @@ fn test_create_escrow_insufficient_allowance_no_state_change() {
 }
 
 // ============================================================================
-// create_escrow — positive test
+// create_escrow - positive test
 // ============================================================================
 
 #[test]
@@ -352,7 +352,7 @@ fn test_create_escrow_success() {
 }
 
 // ============================================================================
-// release_escrow — negative and positive tests
+// release_escrow - negative and positive tests
 // ============================================================================
 
 #[test]
@@ -430,7 +430,7 @@ fn test_release_escrow_success() {
 }
 
 // ============================================================================
-// refund_escrow — negative and positive tests
+// refund_escrow - negative and positive tests
 // ============================================================================
 
 #[test]

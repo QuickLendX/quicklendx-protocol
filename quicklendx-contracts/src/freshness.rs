@@ -88,11 +88,11 @@ impl<T> FreshResponse<T> {
     }
 }
 
-// ── Cursor helpers ────────────────────────────────────────────────────────────
+// -- Cursor helpers ------------------------------------------------------------
 
 /// Encode a cursor as `"<ledger_seq>_<offset>"`.
 ///
-/// Uses a fixed-size stack buffer — no heap allocation.
+/// Uses a fixed-size stack buffer - no heap allocation.
 pub fn build_cursor(env: &Env, ledger_seq: u32, offset: u32) -> String {
     // Max: "4294967295_4294967295" = 21 bytes
     let mut buf = [0u8; 22];
@@ -120,7 +120,7 @@ pub fn parse_cursor(env: &Env, cursor: &String) -> Option<(u32, u32)> {
     Some((seq, off))
 }
 
-// ── ISO 8601 helper ───────────────────────────────────────────────────────────
+// -- ISO 8601 helper -----------------------------------------------------------
 
 /// Convert a Unix timestamp (seconds) to an ISO 8601 UTC string.
 ///
@@ -146,7 +146,7 @@ pub fn unix_to_iso8601(env: &Env, unix_secs: u64) -> String {
     String::from_str(env, s)
 }
 
-// ── Internal arithmetic ───────────────────────────────────────────────────────
+// -- Internal arithmetic -------------------------------------------------------
 
 /// Decompose a Unix timestamp into (year, month, day, hour, min, sec).
 fn unix_to_parts(unix_secs: u64) -> (u32, u32, u32, u32, u32, u32) {
@@ -238,7 +238,7 @@ fn u32_to_ascii(mut value: u32, buf: &mut [u8; 10]) -> usize {
     len
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// -- Tests ---------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -252,7 +252,7 @@ mod tests {
         env
     }
 
-    // ── Schema stability ──────────────────────────────────────────────────────
+    // -- Schema stability ------------------------------------------------------
 
     #[test]
     fn test_schema_all_fields_present() {
@@ -271,7 +271,7 @@ mod tests {
         assert!(meta.cursor.len() > 0);
     }
 
-    // ── Zero-lag ──────────────────────────────────────────────────────────────
+    // -- Zero-lag --------------------------------------------------------------
 
     #[test]
     fn test_zero_lag_when_indexed_equals_current() {
@@ -288,7 +288,7 @@ mod tests {
         assert_eq!(meta.index_lag_seconds, 0);
     }
 
-    // ── Lag simulation ────────────────────────────────────────────────────────
+    // -- Lag simulation --------------------------------------------------------
 
     #[test]
     fn test_positive_lag_when_indexed_behind_current() {
@@ -308,7 +308,7 @@ mod tests {
         assert_eq!(meta.index_lag_seconds, 3600);
     }
 
-    // ── Cursor round-trip ─────────────────────────────────────────────────────
+    // -- Cursor round-trip -----------------------------------------------------
 
     #[test]
     fn test_cursor_round_trip() {
@@ -351,7 +351,7 @@ mod tests {
         assert!(parse_cursor(&env, &bad).is_none());
     }
 
-    // ── ISO 8601 timestamp ────────────────────────────────────────────────────
+    // -- ISO 8601 timestamp ----------------------------------------------------
 
     #[test]
     fn test_iso8601_epoch_zero() {
@@ -375,7 +375,7 @@ mod tests {
         assert_eq!(ts.len(), 20);
     }
 
-    // ── Security: no topology fields ─────────────────────────────────────────
+    // -- Security: no topology fields -----------------------------------------
 
     #[test]
     fn test_no_internal_topology_in_metadata() {
@@ -409,12 +409,12 @@ mod tests {
             );
         }
 
-        // Only public ledger fields are present — no extra fields on the struct.
+        // Only public ledger fields are present - no extra fields on the struct.
         assert!(meta.last_indexed_ledger == 1000);
         assert!(meta.index_lag_seconds >= 0);
     }
 
-    // ── FreshResponse wrapper ─────────────────────────────────────────────────
+    // -- FreshResponse wrapper -------------------------------------------------
 
     #[test]
     fn test_fresh_response_wraps_payload() {
@@ -434,7 +434,7 @@ mod tests {
         assert_eq!(resp, cloned);
     }
 
-    // ── Internal helpers ──────────────────────────────────────────────────────
+    // -- Internal helpers ------------------------------------------------------
 
     #[test]
     fn test_u32_to_ascii_zero() {

@@ -171,7 +171,6 @@ impl ProtocolInitializer {
     /// - Emits initialization event for audit trail
     pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
         // Administrative authorization for initial setup.
-        // This ensures the designated admin address has consented to the role.
         params.admin.require_auth();
 
         // Zero-address guard: reject the well-known Stellar zero/burn address.
@@ -182,16 +181,8 @@ impl ProtocolInitializer {
         if params.admin == zero || params.treasury == zero {
             return Err(QuickLendXError::InvalidAddress);
         }
-        Self::initialize_internal(env, params)
-    }
 
-        Self::initialize_internal(env, params)
-    }
-
-        // Delegate to internal initialization logic
-        Self::initialize_internal(env, params)
-    }
-
+        // Initialization lock prevents concurrent calls (re-entrancy protection)
         if Self::is_initialization_locked(env) {
             return Err(QuickLendXError::OperationNotAllowed);
         }
@@ -200,12 +191,6 @@ impl ProtocolInitializer {
         let result = Self::initialize_internal(env, params);
         Self::set_initialization_lock(env, false);
         result
-    }
-
-        Self::initialize_internal(env, params)
-    }
-
-        Self::initialize_internal(env, params)
     }
 
     /// Internal initialization logic with comprehensive validation
@@ -398,7 +383,7 @@ impl ProtocolInitializer {
             if curr == params.admin || curr == params.treasury || curr == contract_address {
                 return Err(QuickLendXError::InvalidCurrency);
             }
-            // Must not be a duplicate (O(n²) — list is expected to be small)
+            // Must not be a duplicate (O(n-) - list is expected to be small)
             for j in (i + 1)..len {
                 if curr == params.initial_currencies.get(j).unwrap() {
                     return Err(QuickLendXError::InvalidCurrency);

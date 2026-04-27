@@ -1,11 +1,11 @@
-//! Dispute timeline endpoint — normalizes dispute lifecycle events into a
+//! Dispute timeline endpoint - normalizes dispute lifecycle events into a
 //! chronologically ordered, redacted sequence suitable for UI consumption.
 //!
 //! # Design
 //!
 //! On-chain dispute state is stored as a flat [`Dispute`] struct embedded in
 //! each [`Invoice`].  This module reconstructs the implicit event sequence
-//! (Opened → UnderReview → Resolved) from that struct, redacts fields that
+//! (Opened -> UnderReview -> Resolved) from that struct, redacts fields that
 //! must not leak to unprivileged callers (evidence, resolution text), and
 //! returns a paginated [`DisputeTimeline`] value.
 //!
@@ -174,16 +174,16 @@ fn paginate(
 /// Returns a paginated, redacted dispute timeline for the given invoice.
 ///
 /// # Arguments
-/// * `env`        — Soroban environment.
-/// * `invoice_id` — The invoice whose dispute timeline is requested.
-/// * `offset`     — Zero-based starting position (0 = first event).
-/// * `limit`      — Maximum entries to return; capped at
+/// * `env`        - Soroban environment.
+/// * `invoice_id` - The invoice whose dispute timeline is requested.
+/// * `offset`     - Zero-based starting position (0 = first event).
+/// * `limit`      - Maximum entries to return; capped at
 ///                  [`TIMELINE_MAX_PAGE_SIZE`] (50).
 ///
 /// # Returns
-/// * `Ok(DisputeTimeline)` — Paginated timeline reflecting on-chain state.
-/// * `Err(DisputeNotFound)` — Invoice exists but has no active dispute.
-/// * `Err(InvoiceNotFound)` — Invoice does not exist.
+/// * `Ok(DisputeTimeline)` - Paginated timeline reflecting on-chain state.
+/// * `Err(DisputeNotFound)` - Invoice exists but has no active dispute.
+/// * `Err(InvoiceNotFound)` - Invoice does not exist.
 ///
 /// # Redaction rules
 /// * Evidence is **never** included.
