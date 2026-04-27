@@ -4,14 +4,25 @@ module.exports = {
   testMatch: ["**/*.test.ts"],
   coverageThreshold: {
     global: {
-      branches: 82,
-      functions: 82,
-      lines: 88,
-      statements: 87,
+      branches: 95,
+      functions: 95,
+      lines: 95,
+      statements: 95,
     },
   },
   collectCoverageFrom: [
     "src/services/webhook/**/*.ts",
     "!src/services/webhook/index.ts",
+    "src/lib/migrations/**/*.ts",
+    "!src/lib/migrations/cli.ts",
+    "src/lib/database.ts",
+  ],
+  moduleNameMapper: {
+    "^@/(.*)$": "<rootDir>/src/$1",
+  },
+  testPathIgnorePatterns: [
+    "src/node_modules/",
+    "node_modules/",
+    "src/migrations/*",
   ],
 };

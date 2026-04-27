@@ -1131,7 +1131,7 @@ fn test_admin_rejects_end_before_start() {
 #[test]
 fn test_admin_rejects_cliff_at_or_after_end() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
-    // cliff_seconds = 1000, start = 1000 → cliff_time = 2000 = end_time
+    // cliff_seconds = 1000, start = 1000 -> cliff_time = 2000 = end_time
     let result = client.try_create_vesting_schedule(
         &admin,
         &token_id,

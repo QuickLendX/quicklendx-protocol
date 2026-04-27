@@ -1,7 +1,7 @@
-// Analytics test suites — these modules are activated via lib.rs
+// Analytics test suites - these modules are activated via lib.rs
 // (mod test_analytics_consistency) and via the integration-test path
 // once all client methods have been exported.
-// mod test_analytics;
+mod test_analytics;
 // mod test_analytics_export_query;
 // mod test_business_report_consistency;
 // Temporarily disabled: these suites target legacy client return shapes/APIs.
@@ -2576,7 +2576,7 @@ fn test_audit_trail_creation() {
     let env = Env::default();
     // Satisfy all require_auth() checks for the duration of this test.
     // This mirrors real invoker boundaries: each address still needs to be
-    // the correct role (admin, business, investor) — mock_all_auths() only
+    // the correct role (admin, business, investor) - mock_all_auths() only
     // removes the cryptographic signature requirement in the test harness.
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
@@ -3103,7 +3103,7 @@ fn test_update_notification_preferences_requires_auth() {
     let mut preferences = client.get_notification_preferences(&user);
     preferences.invoice_created = false;
 
-    // Do not call env.mock_all_auths() — user must authorize.
+    // Do not call env.mock_all_auths() - user must authorize.
     let result = client.try_update_notification_preferences(&user, &preferences);
     assert!(result.is_err());
 }
@@ -3666,7 +3666,7 @@ fn test_unauthorized_dispute_creation() {
     // mock_all_auths() satisfies require_auth() for the setup calls (upload_invoice,
     // verify_invoice).  The unauthorized dispute attempt is tested via try_create_dispute
     // which checks business-logic authorization (creator must be business or investor),
-    // not cryptographic auth — so the error is still returned correctly.
+    // not cryptographic auth - so the error is still returned correctly.
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);

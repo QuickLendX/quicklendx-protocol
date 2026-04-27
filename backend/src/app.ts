@@ -13,6 +13,9 @@ import webhookRoutes from "./routes/webhooks";
 const app = express();
 
 app.set("trust proxy", true);
+// Disable Express's built-in ETag generation so our cache-headers middleware
+// has full control over which responses get ETags and which do not.
+app.set("etag", false);
 
 // Security Middleware
 app.use(helmet());

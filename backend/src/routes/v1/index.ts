@@ -2,10 +2,13 @@ import { Router } from "express";
 import invoiceRoutes from "./invoices";
 import bidRoutes from "./bids";
 import settlementRoutes from "./settlements";
+import portfolioRoutes from "./portfolio";
 import testErrorRoutes from "./test-errors";
 import webhookRoutes from "./webhooks";
 import exportRoutes from "./exports";
 import notificationRoutes from "./notifications";
+import adminRoutes from "./admin";
+import monitoringRoutes from "./monitoring";
 import { lagMonitor } from "../../services/lagMonitor";
 import { degradedGuard } from "../../middleware/degraded-guard";
 
@@ -14,10 +17,12 @@ const router = Router();
 router.use("/invoices", invoiceRoutes);
 router.use("/bids", bidRoutes);
 router.use("/settlements", settlementRoutes);
-router.use("/notifications", notificationRoutes);
 router.use("/test-errors", testErrorRoutes);
 router.use("/webhooks", webhookRoutes);
+router.use("/notifications", notificationRoutes);
 router.use("/exports", exportRoutes);
+router.use("/admin", adminRoutes);
+router.use("/admin/monitoring", monitoringRoutes);
 
 // ---------------------------------------------------------------------------
 // System status endpoint

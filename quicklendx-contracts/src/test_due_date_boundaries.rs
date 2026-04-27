@@ -34,7 +34,7 @@ fn make_business(env: &Env, client: &QuickLendXContractClient, admin: &Address) 
     business
 }
 
-// ── Due date rejection boundaries ────────────────────────────────────────────
+// -- Due date rejection boundaries --------------------------------------------
 
 #[test]
 fn due_date_equal_to_current_timestamp_is_rejected() {
@@ -117,7 +117,7 @@ fn due_date_zero_is_rejected() {
     assert!(result.is_err());
 }
 
-// ── Overdue check boundaries (Invoice::is_overdue) ───────────────────────────
+// -- Overdue check boundaries (Invoice::is_overdue) ---------------------------
 
 #[test]
 fn invoice_not_overdue_at_exact_due_date() {
@@ -170,7 +170,7 @@ fn invoice_overdue_one_second_after_due_date() {
     assert!(invoice.is_overdue(due + 1));
 }
 
-// ── Grace deadline boundaries ────────────────────────────────────────────────
+// -- Grace deadline boundaries ------------------------------------------------
 
 #[test]
 fn grace_deadline_uses_saturating_add() {

@@ -256,7 +256,7 @@ fn test_overdue_boundary_after_due_date_is_overdue() {
 #[test]
 fn test_grace_deadline_boundary_exact_not_defaulted() {
     // At exactly grace_deadline, invoice should NOT be allowed to default
-    // Boundary: current_timestamp <= grace_deadline → no default
+    // Boundary: current_timestamp <= grace_deadline -> no default
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, 50_000);

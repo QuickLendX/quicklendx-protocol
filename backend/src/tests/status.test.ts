@@ -3,6 +3,9 @@ import app from "../index";
 import { adminControlService } from "../services/adminControlService";
 import { auditLogService } from "../services/auditLogService";
 import { statusService, StatusService } from "../services/statusService";
+import { ADMIN_KEY_HEADER } from "../middleware/admin-auth";
+
+const TEST_ADMIN_KEY = "test-status-admin-key";
 
 const ADMIN_TOKEN = "test-admin-token";
 
@@ -15,6 +18,12 @@ describe("Status API", () => {
     statusService.setMaintenanceMode(false);
     statusService.updateLastIndexedLedger(100000);
     statusService.setMockCurrentLedger(100005); // 5 ledgers lag
+    // Provide a known admin key so admin-protected routes are reachable.
+    process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  });
+
+  afterEach(() => {
+    delete process.env.ADMIN_API_KEY;
   });
 
   it("should return operational status when healthy", async () => {

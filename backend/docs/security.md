@@ -41,3 +41,25 @@ Current webhook behavior:
 - Do not treat CORS as authentication; protected endpoints still require proper authN/authZ.
 - Webhook routes should validate HMAC signatures (for example via `X-Webhook-Signature`) before processing payloads.
 - Keep `ALLOWED_ORIGINS` minimal and environment-specific (development/staging/production).
+
+## Dependency Policy and SBOM
+
+The backend CI enforces dependency risk checks and software bill-of-materials generation.
+
+- Vulnerability gate: CI runs `npm audit --json` and evaluates the report with `npm run security:scan`.
+- Blocking threshold: `high` and `critical` vulnerabilities fail CI by default.
+- Failure clarity: the gate prints severity totals and a direct failure reason so remediation is actionable.
+- Audit artifact: `backend-audit-report` is uploaded even on failures to support debugging and review.
+
+SBOM requirements:
+
+- Format: CycloneDX JSON (`specVersion: 1.5`).
+- Generation: `npm run sbom:generate`.
+- Validation: `npm run sbom:check` ensures required SBOM fields are present before upload.
+- Artifact: CI uploads `backend-sbom-<ref>` for main/release runs.
+
+Log and secret safety assumptions:
+
+- Security scripts only print aggregate severity counts and structural validation errors.
+- Scripts do not echo environment variable values or secrets.
+- Do not add tokenized registry URLs or secret-bearing command arguments to CI steps.
