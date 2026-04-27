@@ -16,6 +16,7 @@ module.exports = {
     "src/lib/migrations/**/*.ts",
     "!src/lib/migrations/cli.ts",
     "src/lib/database.ts",
+    "src/middleware/rate-limit.ts",
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
