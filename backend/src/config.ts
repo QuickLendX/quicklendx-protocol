@@ -17,6 +17,13 @@ const schema = z.object({
   STELLAR_RPC_URL: z.url().default("https://soroban-testnet.stellar.org"),
   RATE_LIMIT_POINTS: z.coerce.number().int().min(1).default(100),
 
+  // Database configuration
+  DATABASE_PATH: z.string().default(function () {
+    return process.env.NODE_ENV === "production"
+      ? "/var/lib/quicklendx/backend.db"
+      : ".data/dev.db";
+  }),
+
   // Secrets — required in production, optional elsewhere.
   ADMIN_API_KEY: isProduction
     ? z.string().min(32)
@@ -31,7 +38,6 @@ export type Config = z.infer<typeof schema>;
 function load(): Config {
   const result = schema.safeParse(process.env);
   if (!result.success) {
-    // Print field names only — never print values.
     const fields = result.error.issues.map((i) => i.path.join(".")).join(", ");
     throw new Error(`Invalid configuration: ${fields}`);
   }
