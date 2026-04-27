@@ -17,12 +17,15 @@
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 use crate::errors::QuickLendXError;
-use crate::invoice::{Invoice, InvoiceCategory, InvoiceMetadata, LineItemRecord};
+use crate::invoice::{
+    Invoice, InvoiceCategory, InvoiceMetadata, LineItemRecord, MAX_INVOICE_TAGS,
+    MAX_RATINGS_PER_INVOICE,
+};
 use crate::storage::{Indexes, InvoiceStorage};
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 // Helpers
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 
 /// Create a fresh invoice owned by `business`.
 fn make_invoice(env: &Env, business: &Address) -> Invoice {
@@ -78,9 +81,9 @@ fn make_alt_metadata(env: &Env) -> InvoiceMetadata {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 // 1. Owner can update metadata
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_owner_can_update_metadata() {
@@ -107,9 +110,9 @@ fn test_owner_can_update_metadata() {
     assert_eq!(invoice.metadata_line_items.len(), 1);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 // 2. Non-owner cannot update metadata
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_non_owner_update_metadata_returns_unauthorized() {
@@ -126,9 +129,9 @@ fn test_non_owner_update_metadata_returns_unauthorized() {
     assert_eq!(result, Err(QuickLendXError::Unauthorized));
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 // 3. Non-owner cannot clear metadata
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_non_owner_clear_metadata_returns_unauthorized() {
@@ -151,9 +154,9 @@ fn test_non_owner_clear_metadata_returns_unauthorized() {
     assert_eq!(result, Err(QuickLendXError::Unauthorized));
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 4. No partial writes on auth failure — update
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// 4. No partial writes on auth failure - update
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_no_partial_write_on_unauthorized_update() {
@@ -190,9 +193,9 @@ fn test_no_partial_write_on_unauthorized_update() {
     assert_eq!(invoice.metadata_line_items.len(), pre_items_len);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 5. No partial writes on auth failure — clear
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// 5. No partial writes on auth failure - clear
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_no_partial_write_on_unauthorized_clear() {
@@ -221,9 +224,9 @@ fn test_no_partial_write_on_unauthorized_clear() {
     assert_eq!(invoice.metadata_line_items.len(), 1);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 // 6. Owner can clear metadata
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_owner_can_clear_metadata() {
@@ -248,9 +251,9 @@ fn test_owner_can_clear_metadata() {
     assert_eq!(invoice.metadata_line_items.len(), 0);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 // 7. Clearing already-empty metadata is idempotent
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_clear_empty_metadata_is_idempotent() {
@@ -266,9 +269,9 @@ fn test_clear_empty_metadata_is_idempotent() {
     assert!(invoice.metadata_customer_name.is_none());
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 // 8. Derived indexes update only on owner operations
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_indexes_created_on_owner_update() {
@@ -330,9 +333,9 @@ fn test_indexes_unchanged_after_unauthorized_update() {
     );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 // 9. Indexes removed on owner clear
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_indexes_removed_on_owner_clear() {
@@ -366,9 +369,9 @@ fn test_indexes_removed_on_owner_clear() {
     );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 // 10. Indexes swap correctly on owner metadata change
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_indexes_swap_on_owner_metadata_change() {
@@ -405,9 +408,9 @@ fn test_indexes_swap_on_owner_metadata_change() {
     assert!(new_ids.iter().any(|id| id == invoice.id));
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 // 11. Validation failure does not leak partial state
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_invalid_metadata_does_not_modify_state() {
@@ -441,9 +444,9 @@ fn test_invalid_metadata_does_not_modify_state() {
     );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 // 12. Multiple non-owner attempts all fail consistently
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_multiple_attackers_all_rejected() {
@@ -471,9 +474,9 @@ fn test_multiple_attackers_all_rejected() {
     assert!(invoice.metadata_customer_name.is_none());
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 // 13. Owner update after failed non-owner attempt succeeds
-// ═══════════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_owner_succeeds_after_attacker_fails() {
@@ -495,4 +498,94 @@ fn test_owner_succeeds_after_attacker_fails() {
         invoice.metadata_customer_name,
         Some(metadata.customer_name)
     );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 14. Tag normalization deduplicates at invoice construction
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_invoice_new_deduplicates_trimmed_casefolded_tags() {
+    let env = Env::default();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, "  Tech  "));
+    tags.push_back(String::from_str(&env, "tech"));
+    tags.push_back(String::from_str(&env, "TECH"));
+
+    let invoice = Invoice::new(
+        &env,
+        business,
+        1000,
+        currency,
+        env.ledger().timestamp() + 86400,
+        String::from_str(&env, "Normalized tags"),
+        InvoiceCategory::Services,
+        tags,
+    )
+    .expect("invoice creation should normalize tags");
+
+    assert_eq!(
+        invoice.tags.len(),
+        1,
+        "trim/case-equivalent tags must collapse to one canonical value"
+    );
+    assert_eq!(invoice.tags.get(0).unwrap(), String::from_str(&env, "tech"));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 15. Tag vector cap blocks unbounded growth
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_add_tag_rejects_when_max_tag_count_reached() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let business = Address::generate(&env);
+    let mut invoice = make_invoice(&env, &business);
+
+    for i in 0..MAX_INVOICE_TAGS {
+        let tag = String::from_str(&env, &format!("tag{}", i));
+        invoice.add_tag(&env, tag).expect("tag add should succeed");
+    }
+    assert_eq!(invoice.tags.len(), MAX_INVOICE_TAGS);
+
+    let err = invoice
+        .add_tag(&env, String::from_str(&env, "overflow-tag"))
+        .unwrap_err();
+    assert_eq!(err, QuickLendXError::TagLimitExceeded);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 16. Ratings vector cap blocks unbounded growth
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_add_rating_rejects_when_max_rating_count_reached() {
+    let env = Env::default();
+    let business = Address::generate(&env);
+    let mut invoice = make_invoice(&env, &business);
+
+    // add_rating is only valid when invoice is funded/paid.
+    invoice.status = crate::invoice::InvoiceStatus::Funded;
+
+    for i in 0..MAX_RATINGS_PER_INVOICE {
+        let rater = Address::generate(&env);
+        invoice
+            .add_rating(5, String::from_str(&env, "ok"), rater, i as u64 + 1)
+            .expect("rating add should succeed until max bound");
+    }
+
+    let err = invoice
+        .add_rating(
+            4,
+            String::from_str(&env, "excess"),
+            Address::generate(&env),
+            9999,
+        )
+        .unwrap_err();
+    assert_eq!(err, QuickLendXError::OperationNotAllowed);
 }

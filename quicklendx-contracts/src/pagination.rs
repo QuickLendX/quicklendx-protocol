@@ -7,15 +7,15 @@
 //!
 //! # Invariants
 //!
-//! 1. **Hard cap** — No call returns more than [`MAX_QUERY_LIMIT`] items, even
+//! 1. **Hard cap** - No call returns more than [`MAX_QUERY_LIMIT`] items, even
 //!    if the caller asks for more.
-//! 2. **Empty on overflow** — If `offset >= total_count`, every helper returns
+//! 2. **Empty on overflow** - If `offset >= total_count`, every helper returns
 //!    the empty/zero-length result. Callers never see a panic or wrap-around.
-//! 3. **Stable ordering** — The input slice order is preserved; pagination
+//! 3. **Stable ordering** - The input slice order is preserved; pagination
 //!    never reorders, deduplicates, or skips elements within the current page.
-//! 4. **No unbounded loops** — Every iteration count is bounded by
+//! 4. **No unbounded loops** - Every iteration count is bounded by
 //!    `min(limit, MAX_QUERY_LIMIT, remaining)`.
-//! 5. **No panics** — Only `saturating_*` arithmetic is used and all indexing
+//! 5. **No panics** - Only `saturating_*` arithmetic is used and all indexing
 //!    goes through pre-computed safe bounds.
 
 extern crate alloc;
@@ -32,7 +32,7 @@ pub const MAX_QUERY_LIMIT: u32 = 100;
 /// Clamp a caller-supplied `limit` to [`MAX_QUERY_LIMIT`].
 ///
 /// # Arguments
-/// * `limit` — Raw limit value from the caller. May be `0` or larger than
+/// * `limit` - Raw limit value from the caller. May be `0` or larger than
 ///   [`MAX_QUERY_LIMIT`].
 ///
 /// # Returns
@@ -49,9 +49,9 @@ pub const fn cap_query_limit(limit: u32) -> u32 {
 /// Validate pagination parameters against a known collection size.
 ///
 /// # Arguments
-/// * `offset` — Caller-supplied starting position (0-based).
-/// * `limit` — Caller-supplied max records; will be clamped.
-/// * `total_count` — Size of the underlying result set after any filtering.
+/// * `offset` - Caller-supplied starting position (0-based).
+/// * `limit` - Caller-supplied max records; will be clamped.
+/// * `total_count` - Size of the underlying result set after any filtering.
 ///
 /// # Returns
 /// `(safe_offset, effective_limit, has_more)` where:
@@ -85,12 +85,12 @@ pub const fn validate_pagination_params(
 /// of the given `collection_size`.
 ///
 /// Guarantees `0 <= start <= end <= collection_size` for any `(offset, limit)`
-/// pair — including `u32::MAX` — without panicking.
+/// pair - including `u32::MAX` - without panicking.
 ///
 /// # Arguments
-/// * `offset` — Starting position.
-/// * `limit` — Number of records requested.
-/// * `collection_size` — Size of the collection being paginated.
+/// * `offset` - Starting position.
+/// * `limit` - Number of records requested.
+/// * `collection_size` - Size of the collection being paginated.
 #[inline]
 pub const fn calculate_safe_bounds(
     offset: u32,
@@ -121,7 +121,7 @@ pub const fn calculate_safe_bounds(
 /// # Security
 /// * Never panics, even for `offset` or `limit` equal to `u32::MAX`.
 /// * Enforces [`MAX_QUERY_LIMIT`] to bound allocation size.
-/// * Preserves ordering — no sorting, no deduplication.
+/// * Preserves ordering - no sorting, no deduplication.
 pub fn paginate_slice<T: Clone>(items: &[T], offset: u32, limit: u32) -> Vec<T> {
     let collection_size = u32::try_from(items.len()).unwrap_or(u32::MAX);
     let (start, end) = calculate_safe_bounds(offset, limit, collection_size);

@@ -2,21 +2,21 @@
 //!
 //! ## Security Invariant
 //! Each invoice maps to **at most one** escrow record for its entire lifetime.
-//! Any attempt to create a second escrow for the same `invoice_id` — regardless
-//! of the caller, the escrow's current status, or the amount — must be rejected
+//! Any attempt to create a second escrow for the same `invoice_id` - regardless
+//! of the caller, the escrow's current status, or the amount - must be rejected
 //! with [`QuickLendXError::InvoiceAlreadyFunded`].
 //!
 //! ## Attack Vectors Covered
-//! 1. **Double-accept via `accept_bid`** – business calls `accept_bid` twice on
+//! 1. **Double-accept via `accept_bid`** - business calls `accept_bid` twice on
 //!    the same invoice (same or different bid).
-//! 2. **Direct `create_escrow` bypass** – attacker calls `payments::create_escrow`
+//! 2. **Direct `create_escrow` bypass** - attacker calls `payments::create_escrow`
 //!    directly after a legitimate escrow already exists.
-//! 3. **Post-release overwrite** – attempt to create a new escrow after the
+//! 3. **Post-release overwrite** - attempt to create a new escrow after the
 //!    original has been released (terminal state).
-//! 4. **Post-refund overwrite** – attempt to create a new escrow after the
+//! 4. **Post-refund overwrite** - attempt to create a new escrow after the
 //!    original has been refunded (terminal state).
-//! 5. **Cross-invoice isolation** – funding one invoice must not affect another.
-//! 6. **Storage key collision** – two invoices with different IDs must produce
+//! 5. **Cross-invoice isolation** - funding one invoice must not affect another.
+//! 6. **Storage key collision** - two invoices with different IDs must produce
 //!    independent escrow records that cannot overwrite each other.
 //!
 //! Run: `cargo test test_escrow_uniqueness`
@@ -232,7 +232,7 @@ fn test_create_escrow_direct_duplicate_rejected() {
 }
 
 /// The duplicate guard fires even when the second call uses a *different* investor
-/// or a *different* amount — the key is the invoice_id, not the caller.
+/// or a *different* amount - the key is the invoice_id, not the caller.
 #[test]
 fn test_create_escrow_different_investor_same_invoice_rejected() {
     let (env, client, admin) = setup();
@@ -549,7 +549,7 @@ fn test_failed_accept_leaves_no_escrow_and_no_state_change() {
     let business = verified_business(&env, &client, &admin);
     let investor = verified_investor(&env, &client, 50_000);
 
-    // Investor has balance but zero allowance → transfer will fail.
+    // Investor has balance but zero allowance -> transfer will fail.
     let token_admin = Address::generate(&env);
     let currency = env
         .register_stellar_asset_contract_v2(token_admin)

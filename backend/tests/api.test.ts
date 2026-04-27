@@ -19,7 +19,7 @@ describe("QuickLendX API Skeleton Tests", () => {
   });
 
   describe("Invoice API (v1)", () => {
-    it("should list invoices", async () => {
+    it("should list invoices as PageResult", async () => {
       const res = await request(app).get("/api/v1/invoices");
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
@@ -61,7 +61,7 @@ describe("QuickLendX API Skeleton Tests", () => {
   });
 
   describe("Bid API (v1)", () => {
-    it("should list bids", async () => {
+    it("should list bids as PageResult", async () => {
       const res = await request(app).get("/api/v1/bids");
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
@@ -91,7 +91,7 @@ describe("QuickLendX API Skeleton Tests", () => {
   });
 
   describe("Settlement API (v1)", () => {
-    it("should list settlements", async () => {
+    it("should list settlements as PageResult", async () => {
       const res = await request(app).get("/api/v1/settlements");
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);

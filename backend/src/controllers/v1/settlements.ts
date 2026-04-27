@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Settlement, SettlementStatus } from "../../types/contract";
-import { labelRecord } from "../../services/versioningService";
+import { applyCacheHeaders, CC_LONG } from "../../middleware/cache-headers";
 
 const MOCK_SETTLEMENTS: Settlement[] = [
   labelRecord<Omit<Settlement, "contract_version" | "event_schema_version" | "indexed_at">>({
@@ -20,15 +20,23 @@ export const getSettlements = async (
   next: NextFunction
 ) => {
   try {
+    const params = parsePaginationParams(req.query);
     const { invoice_id } = req.query;
 
     let filtered = [...MOCK_SETTLEMENTS];
-    if (invoice_id) {
-      filtered = filtered.filter((s) => s.invoice_id === invoice_id);
-    }
+    if (invoice_id) filtered = filtered.filter((s) => s.invoice_id === invoice_id);
 
-    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
+    if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body: filtered })) {
+      res.status(304).end();
+      return;
+    }
+    res.json(filtered);
   } catch (error) {
+    if (error instanceof PaginationError) {
+      return res.status(400).json({
+        error: { message: error.message, code: "INVALID_PAGINATION" },
+      });
+    }
     next(error);
   }
 };
@@ -44,14 +52,15 @@ export const getSettlementById = async (
 
     if (!settlement) {
       return res.status(404).json({
-        error: {
-          message: "Settlement not found",
-          code: "SETTLEMENT_NOT_FOUND",
-        },
+        error: { message: "Settlement not found", code: "SETTLEMENT_NOT_FOUND" },
       });
     }
 
-    res.json({ data: settlement, freshness: freshnessService.getFreshness() });
+    if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body: settlement })) {
+      res.status(304).end();
+      return;
+    }
+    res.json(settlement);
   } catch (error) {
     next(error);
   }
