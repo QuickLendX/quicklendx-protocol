@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../../types/contract";
-import { labelRecord } from "../../services/versioningService";
+import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
 
 // Mock data aligned with contract types.
 // labelRecord stamps each record with the contract and event schema version
@@ -75,6 +75,11 @@ export const getInvoiceById = async (
       });
     }
 
+    if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body: invoice })) {
+      res.status(304).end();
+      return;
+    }
+    res.json(invoice);
     res.json({ data: invoice, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);

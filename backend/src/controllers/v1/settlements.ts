@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Settlement, SettlementStatus } from "../../types/contract";
-import { labelRecord } from "../../services/versioningService";
+import { applyCacheHeaders, CC_LONG } from "../../middleware/cache-headers";
 
 const MOCK_SETTLEMENTS: Settlement[] = [
   labelRecord<Omit<Settlement, "contract_version" | "event_schema_version" | "indexed_at">>({
@@ -27,7 +27,11 @@ export const getSettlements = async (
       filtered = filtered.filter((s) => s.invoice_id === invoice_id);
     }
 
-    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
+    if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body: filtered })) {
+      res.status(304).end();
+      return;
+    }
+    res.json(filtered);
   } catch (error) {
     next(error);
   }
@@ -51,7 +55,11 @@ export const getSettlementById = async (
       });
     }
 
-    res.json({ data: settlement, freshness: freshnessService.getFreshness() });
+    if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body: settlement })) {
+      res.status(304).end();
+      return;
+    }
+    res.json(settlement);
   } catch (error) {
     next(error);
   }

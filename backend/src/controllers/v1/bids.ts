@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Bid, BidStatus } from "../../types/contract";
-import { labelRecord } from "../../services/versioningService";
+import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
 
 const MOCK_BIDS: Bid[] = [
   labelRecord<Omit<Bid, "contract_version" | "event_schema_version" | "indexed_at">>({
@@ -31,6 +31,10 @@ export const getBids = async (
       filtered = filtered.filter((b) => b.investor === investor);
     }
 
+    // Bids must never be served from cache: the best-bid amount changes with
+    // every new placement and serving stale data could mislead investors.
+    applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body: filtered });
+    res.json(filtered);
     res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
