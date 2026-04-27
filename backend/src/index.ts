@@ -1,6 +1,9 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { getAdminContext, requireAdminRoles } from "./middleware/rbac";
+import { adminControlService } from "./services/adminControlService";
+import { auditLogService } from "./services/auditLogService";
 import { statusService } from "./services/statusService";
 import { requireAdminAuth, getAdminActor } from "./middleware/adminAuth";
 import { backfillService, BackfillError } from "./services/backfillService";
@@ -11,28 +14,16 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3001;
 
+app.set("trust proxy", true);
+app.use(helmet());
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
+app.use(rateLimitMiddleware);
+app.use(requestLimitsMiddleware);
 
-/**
- * @openapi
- * /api/status:
- *   get:
- *     summary: Get system status
- *     description: Reports maintenance, degraded mode, and index lag.
- *     responses:
- *       200:
- *         description: OK
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Status'
- */
 app.get("/api/status", async (req, res) => {
   try {
     const status = await statusService.getStatus();
-    
-    // Cache safely: 30 seconds max age
     res.setHeader("Cache-Control", "public, max-age=30");
     res.json(status);
   } catch (error) {
@@ -46,7 +37,6 @@ app.post("/api/admin/maintenance", requireAdminAuth, (req, res) => {
   if (typeof enabled !== "boolean") {
     return res.status(400).json({ error: "Invalid enabled flag" });
   }
-  
   statusService.setMaintenanceMode(enabled);
   res.json({ success: true, maintenance: enabled });
 });

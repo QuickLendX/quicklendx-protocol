@@ -1,5 +1,7 @@
 import request from "supertest";
 import app from "../index";
+import { adminControlService } from "../services/adminControlService";
+import { auditLogService } from "../services/auditLogService";
 import { statusService, StatusService } from "../services/statusService";
 
 const ADMIN_TOKEN = "test-admin-token";
@@ -8,6 +10,8 @@ describe("Status API", () => {
   beforeEach(() => {
     process.env.ADMIN_API_TOKEN = ADMIN_TOKEN;
     // Reset service state before each test
+    adminControlService.reset();
+    auditLogService.clear();
     statusService.setMaintenanceMode(false);
     statusService.updateLastIndexedLedger(100000);
     statusService.setMockCurrentLedger(100005); // 5 ledgers lag
@@ -36,7 +40,7 @@ describe("Status API", () => {
 
   it("should return degraded status when index lag is high", async () => {
     statusService.setMockCurrentLedger(100100); // 100 ledgers lag
-    
+
     const res = await request(app).get("/api/status");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("degraded");
@@ -65,7 +69,9 @@ describe("Status API", () => {
   });
 
   it("should handle service errors gracefully", async () => {
-    jest.spyOn(statusService, "getStatus").mockRejectedValueOnce(new Error("Test error"));
+    jest
+      .spyOn(statusService, "getStatus")
+      .mockRejectedValueOnce(new Error("Test error"));
     const res = await request(app).get("/api/status");
     expect(res.status).toBe(500);
     expect(res.body.error).toBe("Internal server error");
@@ -98,5 +104,3 @@ describe("Status API", () => {
     expect(StatusSchema.parse(validData)).toEqual(validData);
   });
 });
-
-

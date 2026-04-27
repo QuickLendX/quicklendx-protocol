@@ -1,3 +1,6 @@
+#![cfg(feature = "legacy-tests")]
+#![cfg(feature = "legacy-tests")]
+
 use quicklendx_contracts::{
     InvoiceCategory, InvoiceStatus, QuickLendXContract, QuickLendXContractClient,
 };

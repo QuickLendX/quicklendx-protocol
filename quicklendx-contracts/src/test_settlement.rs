@@ -910,3 +910,98 @@ fn test_progress_percentage_accuracy() {
     assert_eq!(p3.progress_percent, 100);
     assert_eq!(p3.remaining_due, 0);
 }
+
+/// After an explicit settle, further partial payments must be rejected without side effects.
+#[test]
+fn test_partial_payment_rejected_after_explicit_settlement() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    // Final settle
+    client.settle_invoice(&invoice_id, &1_000);
+
+    let token_client = token::Client::new(&env, &currency);
+    let business_before = token_client.balance(&business);
+    let investor_before = token_client.balance(&investor);
+    let platform_before = token_client.balance(&contract_id);
+    let events_before = env.events().all().events().len();
+    let invoice_before = client.get_invoice(&invoice_id);
+    let investment_before = client.get_invoice_investment(&invoice_id);
+
+    // Attempt further partial payment
+    let result = client.try_process_partial_payment(
+        &invoice_id,
+        &1,
+        &String::from_str(&env, "after-final"),
+    );
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+    // No state or balance changes should have occurred.
+    let invoice_after = client.get_invoice(&invoice_id);
+    assert_eq!(invoice_after.total_paid, invoice_before.total_paid);
+    assert_eq!(invoice_after.status, invoice_before.status);
+    let investment_after = client.get_invoice_investment(&invoice_id);
+    assert_eq!(investment_after.status, investment_before.status);
+    assert_eq!(token_client.balance(&business), business_before);
+    assert_eq!(token_client.balance(&investor), investor_before);
+    assert_eq!(token_client.balance(&contract_id), platform_before);
+    assert_eq!(env.events().all().events().len(), events_before);
+}
+
+/// Repeated settle attempts must be idempotent and produce no additional side effects.
+#[test]
+fn test_settlement_idempotency_no_side_effects() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    let token_client = token::Client::new(&env, &currency);
+    let business_before = token_client.balance(&business);
+    let investor_before = token_client.balance(&investor);
+    let platform_before = token_client.balance(&contract_id);
+    let events_before = env.events().all().events().len();
+
+    // First settle succeeds.
+    client.settle_invoice(&invoice_id, &1_000);
+
+    // Capture post-settlement snapshot.
+    let business_after_first = token_client.balance(&business);
+    let investor_after_first = token_client.balance(&investor);
+    let platform_after_first = token_client.balance(&contract_id);
+    let events_after_first = env.events().all().events().len();
+
+    // Second explicit settle attempt must fail.
+    let result = client.try_settle_invoice(&invoice_id, &1_000);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+
+    // Ensure balances and events unchanged after failed retry.
+    assert_eq!(token_client.balance(&business), business_after_first);
+    assert_eq!(token_client.balance(&investor), investor_after_first);
+    assert_eq!(token_client.balance(&contract_id), platform_after_first);
+    assert_eq!(env.events().all().events().len(), events_after_first);
+
+    // Ensure final accounting invariants still hold.
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_paid, invoice.amount);
+    assert_eq!(invoice.status, InvoiceStatus::Paid);
+    let investment = client.get_invoice_investment(&invoice_id);
+    assert_eq!(investment.status, InvestmentStatus::Completed);
+}
+
