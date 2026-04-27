@@ -1,0 +1,7 @@
+   Compiling quicklendx-contracts v0.1.0 (/mnt/c/Users/fuhad/quicklendx-protocol/quicklendx-contracts)
+error: Option 'error-format' given more than once
+
+error: could not compile `quicklendx-contracts` (lib)
+
+Caused by:
+  process didn't exit successfully: `/home/k1ngd4vid/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name quicklendx_contracts --edition=2021 src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type cdylib --crate-type rlib --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("fuzz-tests", "legacy-tests"))' -C metadata=f548f26bc9da623b --out-dir /mnt/c/Users/fuhad/quicklendx-protocol/quicklendx-contracts/target/debug/deps -C incremental=/mnt/c/Users/fuhad/quicklendx-protocol/quicklendx-contracts/target/debug/incremental -L dependency=/mnt/c/Users/fuhad/quicklendx-protocol/quicklendx-contracts/target/debug/deps --extern soroban_sdk=/mnt/c/Users/fuhad/quicklendx-protocol/quicklendx-contracts/target/debug/deps/libsoroban_sdk-ff2e8ecd90b0eb77.rlib --error-format=json` (exit status: 1)

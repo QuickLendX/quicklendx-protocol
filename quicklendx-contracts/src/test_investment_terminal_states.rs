@@ -10,14 +10,14 @@
 //! - **Refunded**: Investment refunded due to invoice cancellation
 //!
 //! ## Coverage Matrix
-//! | Test | From → To | Invoice Impact | Events | Storage Invariants |
+//! | Test | From -> To | Invoice Impact | Events | Storage Invariants |
 //! |------|-----------|----------------|--------|-------------------|
-//! | test_investment_completion_flow | Active → Completed | Paid | Settlement events | Active index cleaned |
-//! | test_investment_withdrawal_flow | Active → Withdrawn | Funded → Cancelled | Withdrawal events | Active index cleaned |
-//! | test_investment_default_flow | Active → Defaulted | Defaulted | Default events | Active index cleaned |
-//! | test_investment_refund_flow | Active → Refunded | Refunded | Refund events | Active index cleaned |
-//! | test_invalid_terminal_transitions | Terminal → Active | Rejected | - | Error validation |
-//! | test_terminal_state_immutability | Completed → * | Rejected | - | State preservation |
+//! | test_investment_completion_flow | Active -> Completed | Paid | Settlement events | Active index cleaned |
+//! | test_investment_withdrawal_flow | Active -> Withdrawn | Funded -> Cancelled | Withdrawal events | Active index cleaned |
+//! | test_investment_default_flow | Active -> Defaulted | Defaulted | Default events | Active index cleaned |
+//! | test_investment_refund_flow | Active -> Refunded | Refunded | Refund events | Active index cleaned |
+//! | test_invalid_terminal_transitions | Terminal -> Active | Rejected | - | Error validation |
+//! | test_terminal_state_immutability | Completed -> * | Rejected | - | State preservation |
 //!
 //! Run: `cargo test test_investment_terminal_states`
 
@@ -87,7 +87,7 @@ fn investment_is_in_active_index(env: &Env, investment_id: &BytesN<32>) -> bool 
     active_ids.iter().any(|id| id == investment_id)
 }
 
-/// Test investment completion flow (Active → Completed)
+/// Test investment completion flow (Active -> Completed)
 #[test]
 fn test_investment_completion_flow() {
     let env = Env::default();
@@ -138,7 +138,7 @@ fn test_investment_completion_flow() {
     assert!(has_event_with_topic(&env, symbol_short!("inv_setlf"))); // Invoice settled final
 }
 
-/// Test investment withdrawal flow (Active → Withdrawn)  
+/// Test investment withdrawal flow (Active -> Withdrawn)  
 #[test]
 fn test_investment_withdrawal_flow() {
     let env = Env::default();
@@ -194,7 +194,7 @@ fn test_investment_withdrawal_flow() {
     assert_eq!(invoice.status, InvoiceStatus::Cancelled);
 }
 
-/// Test investment default flow (Active → Defaulted)
+/// Test investment default flow (Active -> Defaulted)
 #[test]
 fn test_investment_default_flow() {
     let env = Env::default();
@@ -249,7 +249,7 @@ fn test_investment_default_flow() {
     assert_eq!(invoice.status, InvoiceStatus::Defaulted);
 }
 
-/// Test investment refund flow (Active → Refunded)
+/// Test investment refund flow (Active -> Refunded)
 #[test]
 fn test_investment_refund_flow() {
     let env = Env::default();

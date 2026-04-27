@@ -184,7 +184,7 @@ fn test_dispute_limits() {
 // TAG NORMALIZATION + STRING LIMIT INTERACTION TESTS (#527)
 // ============================================================================
 
-/// A 50-char uppercase tag normalizes to a 50-char lowercase tag — still valid.
+/// A 50-char uppercase tag normalizes to a 50-char lowercase tag - still valid.
 #[test]
 fn test_tag_at_limit_uppercase_normalizes_valid() {
     let (env, client, _admin) = setup();
@@ -192,7 +192,7 @@ fn test_tag_at_limit_uppercase_normalizes_valid() {
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
 
-    // 50 uppercase 'A' characters — normalizes to 50 lowercase 'a' characters.
+    // 50 uppercase 'A' characters - normalizes to 50 lowercase 'a' characters.
     let mut s = std::string::String::with_capacity(50);
     for _ in 0..50 {
         s.push('A');

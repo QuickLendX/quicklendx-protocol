@@ -14,7 +14,7 @@
 //! calls and consecutive pages, and `u32::MAX` edge cases never panic.
 //!
 //! The tests use only the self-contained `pagination` module plus `alloc`
-//! types — no Soroban storage, no contract client, no legacy modules.
+//! types - no Soroban storage, no contract client, no legacy modules.
 
 extern crate alloc;
 
@@ -166,7 +166,7 @@ fn test_paginate_slice_limit_u32_max_small_collection() {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Stable ordering — repeated calls are identical
+// 4. Stable ordering - repeated calls are identical
 // ---------------------------------------------------------------------------
 
 /// Repeated calls with identical args produce `==` results.
@@ -239,7 +239,7 @@ fn test_no_duplicates_across_pages_various_sizes() {
 }
 
 // ---------------------------------------------------------------------------
-// 6. u32::MAX edge cases — no panic for offset or limit at the extreme
+// 6. u32::MAX edge cases - no panic for offset or limit at the extreme
 // ---------------------------------------------------------------------------
 
 /// `(u32::MAX, u32::MAX)` against total=0, 1, MAX_QUERY_LIMIT, MAX+10 is a no-op.
@@ -267,7 +267,7 @@ fn test_calculate_safe_bounds_u32_max_inputs_are_safe() {
 }
 
 // ---------------------------------------------------------------------------
-// 7. Empty collection — empty result for any (offset, limit)
+// 7. Empty collection - empty result for any (offset, limit)
 // ---------------------------------------------------------------------------
 
 /// `paginate_slice(&[], offset, limit)` is empty for any input.
@@ -290,7 +290,7 @@ fn test_empty_collection_always_returns_empty() {
 // 8. Single-element collection is paginated correctly
 // ---------------------------------------------------------------------------
 
-/// Single-element behaviour: `(0, 10)` → [42]; `(1, 10)` → []; `(0, 0)` → [].
+/// Single-element behaviour: `(0, 10)` -> [42]; `(1, 10)` -> []; `(0, 0)` -> [].
 #[test]
 fn test_single_element_collection_paginates_correctly() {
     let items: Vec<u64> = vec![42];
@@ -301,7 +301,7 @@ fn test_single_element_collection_paginates_correctly() {
 }
 
 // ---------------------------------------------------------------------------
-// 9. Boundary: total=100, offset=99 → exactly 1 element; offset=100 → empty
+// 9. Boundary: total=100, offset=99 -> exactly 1 element; offset=100 -> empty
 // ---------------------------------------------------------------------------
 
 /// Boundary around `total_count = 100`.
@@ -322,7 +322,7 @@ fn test_boundary_offset_equals_total_yields_empty() {
 }
 
 // ---------------------------------------------------------------------------
-// 10. Cross-type coverage — u64, [u8; 32], NamedId(String)
+// 10. Cross-type coverage - u64, [u8; 32], NamedId(String)
 // ---------------------------------------------------------------------------
 
 /// Generic `paginate_slice` works for `u64`.
@@ -333,7 +333,7 @@ fn test_generic_paginate_on_u64() {
     assert_eq!(page, vec![5u64, 6, 7]);
 }
 
-/// Generic `paginate_slice` works for `[u8; 32]` — the dominant ID type in
+/// Generic `paginate_slice` works for `[u8; 32]` - the dominant ID type in
 /// Soroban contracts.
 #[test]
 fn test_generic_paginate_on_bytes_32() {
@@ -398,7 +398,7 @@ fn test_cross_consistency_validate_vs_bounds() {
 /// `has_more` is true iff items remain past the current page.
 #[test]
 fn test_has_more_within_window_is_true() {
-    // total=50, offset=0, limit=10 → page ends at 10 < 50
+    // total=50, offset=0, limit=10 -> page ends at 10 < 50
     let (_, _, has_more) = validate_pagination_params(0, 10, 50);
     assert!(has_more);
 }
@@ -406,7 +406,7 @@ fn test_has_more_within_window_is_true() {
 /// `has_more` is false when the page exactly exhausts the collection.
 #[test]
 fn test_has_more_exhausting_page_is_false() {
-    // total=50, offset=40, limit=10 → page ends at 50 == 50
+    // total=50, offset=40, limit=10 -> page ends at 50 == 50
     let (_, _, has_more) = validate_pagination_params(40, 10, 50);
     assert!(!has_more);
 }
@@ -422,19 +422,19 @@ fn test_has_more_past_end_is_false() {
 /// `MAX_QUERY_LIMIT` covers the remainder.
 #[test]
 fn test_has_more_over_cap_limit_clamps_correctly() {
-    // total=50, limit=500 → clamped to 100 → remainder=50 → eff_lim=50, has_more=false
+    // total=50, limit=500 -> clamped to 100 -> remainder=50 -> eff_lim=50, has_more=false
     let (_, eff_lim, has_more) = validate_pagination_params(0, 500, 50);
     assert_eq!(eff_lim, 50);
     assert!(!has_more);
 
-    // total=250, limit=500 → clamped to 100 → eff_lim=100, has_more=true (150 remaining)
+    // total=250, limit=500 -> clamped to 100 -> eff_lim=100, has_more=true (150 remaining)
     let (_, eff_lim2, has_more2) = validate_pagination_params(0, 500, 250);
     assert_eq!(eff_lim2, MAX_QUERY_LIMIT);
     assert!(has_more2);
 }
 
 // ---------------------------------------------------------------------------
-// 13. Proptest — invariants
+// 13. Proptest - invariants
 // ---------------------------------------------------------------------------
 
 proptest! {

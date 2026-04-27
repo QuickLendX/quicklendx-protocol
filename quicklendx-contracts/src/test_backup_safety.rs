@@ -4,7 +4,7 @@
 /// through the contract client) to validate low-level invariants:
 ///
 /// - `validate_backup` rejects every class of corrupt/missing data
-/// - `restore_from_backup` follows the validate → clear → restore → archive
+/// - `restore_from_backup` follows the validate -> clear -> restore -> archive
 ///   sequence at the storage layer
 /// - `cleanup_old_backups` correctly applies both age and count policies
 /// - `generate_backup_id` produces IDs with the correct prefix

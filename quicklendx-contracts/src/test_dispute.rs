@@ -24,7 +24,7 @@
 ///
 /// ## 3. Resolve Dispute (`resolve_dispute`)
 /// - Admin can resolve a dispute in `UnderReview`
-/// - Complete lifecycle: Disputed → UnderReview → Resolved
+/// - Complete lifecycle: Disputed -> UnderReview -> Resolved
 /// - Resolving a `Disputed` (not yet under review) dispute is rejected
 ///   (`DisputeNotUnderReview`)
 /// - Resolving an already-resolved dispute is rejected (`DisputeNotUnderReview`)
@@ -312,7 +312,7 @@ mod test_dispute {
     }
 
     // -----------------------------------------------------------------------
-    // State Transitions — put_dispute_under_review
+    // State Transitions - put_dispute_under_review
     // -----------------------------------------------------------------------
 
     /// [TC-11] Admin can advance a `Disputed` dispute to `UnderReview`.
@@ -415,7 +415,7 @@ mod test_dispute {
     }
 
     // -----------------------------------------------------------------------
-    // State Transitions — resolve_dispute
+    // State Transitions - resolve_dispute
     // -----------------------------------------------------------------------
 
     /// [TC-15] Admin can resolve a dispute that is in `UnderReview`.
@@ -443,7 +443,7 @@ mod test_dispute {
         );
     }
 
-    /// [TC-16] Full lifecycle test: Disputed → UnderReview → Resolved.
+    /// [TC-16] Full lifecycle test: Disputed -> UnderReview -> Resolved.
     #[test]
     fn test_complete_dispute_lifecycle() {
         let (env, client, admin) = setup();
@@ -790,12 +790,12 @@ mod test_dispute {
             client.create_dispute(id, &business, &reason, &evidence);
         }
 
-        // id2, id3, id4 → UnderReview
+        // id2, id3, id4 -> UnderReview
         client.put_dispute_under_review(&id2, &admin);
         client.put_dispute_under_review(&id3, &admin);
         client.put_dispute_under_review(&id4, &admin);
 
-        // id4 → Resolved
+        // id4 -> Resolved
         client.resolve_dispute(&id4, &admin, &String::from_str(&env, "Done"));
 
         // Verify Disputed: id0, id1
@@ -866,7 +866,7 @@ mod test_dispute {
     }
 
     // -----------------------------------------------------------------------
-    // Regression Tests — Dispute Locking
+    // Regression Tests - Dispute Locking
     // -----------------------------------------------------------------------
 
     /// [TC-30] REGRESSION: Resolved dispute cannot be overwritten by a second
@@ -901,7 +901,7 @@ mod test_dispute {
             DisputeStatus::Resolved
         );
 
-        // Attempt overwrite — must fail
+        // Attempt overwrite - must fail
         let overwrite = client.try_resolve_dispute(
             &invoice_id,
             &admin,
@@ -951,7 +951,7 @@ mod test_dispute {
             &String::from_str(&env, "Final resolution"),
         );
 
-        // Attempt to re-open — must fail
+        // Attempt to re-open - must fail
         let reopen = client.try_put_dispute_under_review(&invoice_id, &admin);
         assert!(reopen.is_err(), "Resolved dispute must not be re-opened");
         let err = reopen.unwrap_err().expect("expected contract error");
@@ -1016,7 +1016,7 @@ mod test_dispute {
             &String::from_str(&env, "evidence"),
         );
 
-        // Status is Disputed — resolve must fail
+        // Status is Disputed - resolve must fail
         let result = client.try_resolve_dispute(
             &invoice_id,
             &admin,
@@ -1190,14 +1190,14 @@ mod test_dispute {
         );
     }
 
-    /// [TC-40] REGRESSION: Evidence boundary — exactly 2000 chars must succeed;
+    /// [TC-40] REGRESSION: Evidence boundary - exactly 2000 chars must succeed;
     /// 2001 chars must fail.
     #[test]
     fn test_regression_evidence_boundary_values() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
 
-        // 2000 chars — must succeed
+        // 2000 chars - must succeed
         let id1 = create_test_invoice(&env, &client, &business, 100_000);
         let max_evidence = "e".repeat(2000);
         let ok = client.try_create_dispute(
@@ -1208,7 +1208,7 @@ mod test_dispute {
         );
         assert!(ok.is_ok(), "2000-char evidence must be accepted");
 
-        // 2001 chars — must fail
+        // 2001 chars - must fail
         let id2 = create_test_invoice(&env, &client, &business, 110_000);
         let over_evidence = "e".repeat(2001);
         let err = client.try_create_dispute(
@@ -1224,14 +1224,14 @@ mod test_dispute {
         );
     }
 
-    /// [TC-41] REGRESSION: Resolution boundary — exactly 2000 chars must
+    /// [TC-41] REGRESSION: Resolution boundary - exactly 2000 chars must
     /// succeed; 2001 chars must fail.
     #[test]
     fn test_regression_resolution_boundary_values() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
 
-        // 2000 chars — must succeed
+        // 2000 chars - must succeed
         let id1 = create_test_invoice(&env, &client, &business, 100_000);
         client.create_dispute(
             &id1,
@@ -1248,7 +1248,7 @@ mod test_dispute {
         );
         assert!(ok.is_ok(), "2000-char resolution must be accepted");
 
-        // 2001 chars — must fail
+        // 2001 chars - must fail
         let id2 = create_test_invoice(&env, &client, &business, 110_000);
         client.create_dispute(
             &id2,
@@ -1285,7 +1285,7 @@ mod test_dispute {
         );
     }
 
-    /// [TC-43] REGRESSION: Dispute state is isolated per invoice — resolving
+    /// [TC-43] REGRESSION: Dispute state is isolated per invoice - resolving
     /// one does not affect another.
     #[test]
     fn test_regression_resolution_isolation_across_invoices() {

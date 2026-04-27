@@ -445,7 +445,7 @@ fn best_bid_matches_first_ranked_independent_of_insertion_order_on_ties() {
     }
 }
 
-// ─── Expiration and Cleanup Tests ───────────────────────────────────────────────
+// --- Expiration and Cleanup Tests -----------------------------------------------
 
 /// Best bid remains correct after the highest bid expires.
 #[test]

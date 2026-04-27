@@ -1,6 +1,7 @@
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use crate::invoice::{Dispute, DisputeStatus, InvoiceStatus, InvoiceStorage};
+use crate::storage::InvoiceStorage;
+use crate::types::{Dispute, DisputeStatus, InvoiceStatus};
 use crate::protocol_limits::*;
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
@@ -51,8 +52,8 @@ fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> 
 /// @param env The contract environment.
 /// @param invoice_id The invoice to dispute.
 /// @param creator The address creating the dispute (must be authorized).
-/// @param reason The dispute reason (1–1000 chars).
-/// @param evidence Supporting evidence (1–2000 chars).
+/// @param reason The dispute reason (1-1000 chars).
+/// @param evidence Supporting evidence (1-2000 chars).
 /// @return Ok(()) on success, Err with typed error on failure.
 #[allow(dead_code)]
 pub fn create_dispute(

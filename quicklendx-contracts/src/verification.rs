@@ -1,4 +1,5 @@
-use crate::bid::{BidStatus, BidStorage};
+use crate::bid::BidStorage;
+use crate::types::BidStatus;
 use crate::errors::QuickLendXError;
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
@@ -87,16 +88,16 @@ impl BusinessVerificationStorage {
     /// Validates that a state transition is allowed according to KYC lifecycle rules
     ///
     /// Valid transitions:
-    /// - None → Pending (new submission)
-    /// - Pending → Verified (admin approval)
-    /// - Pending → Rejected (admin rejection)
-    /// - Rejected → Pending (resubmission after rejection)
+    /// - None -> Pending (new submission)
+    /// - Pending -> Verified (admin approval)
+    /// - Pending -> Rejected (admin rejection)
+    /// - Rejected -> Pending (resubmission after rejection)
     ///
     /// Invalid transitions:
-    /// - Verified → *any other state (verified is final)
-    /// - Pending → Pending (duplicate submission)
-    /// - Rejected → Rejected (duplicate rejection)
-    /// - Rejected → Verified (must go through Pending first)
+    /// - Verified -> *any other state (verified is final)
+    /// - Pending -> Pending (duplicate submission)
+    /// - Rejected -> Rejected (duplicate rejection)
+    /// - Rejected -> Verified (must go through Pending first)
     pub fn validate_state_transition(
         old_status: Option<BusinessVerificationStatus>,
         new_status: BusinessVerificationStatus,
@@ -105,17 +106,17 @@ impl BusinessVerificationStorage {
             // New submission (no previous status)
             (None, BusinessVerificationStatus::Pending) => Ok(()),
 
-            // Pending → Verified (admin approval)
+            // Pending -> Verified (admin approval)
             (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Verified) => {
                 Ok(())
             }
 
-            // Pending → Rejected (admin rejection)
+            // Pending -> Rejected (admin rejection)
             (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Rejected) => {
                 Ok(())
             }
 
-            // Rejected → Pending (resubmission after rejection)
+            // Rejected -> Pending (resubmission after rejection)
             (Some(BusinessVerificationStatus::Rejected), BusinessVerificationStatus::Pending) => {
                 Ok(())
             }
@@ -999,18 +1000,20 @@ fn emit_kyc_resubmitted(env: &Env, business: &Address) {
 
 /// Validate invoice category
 pub fn validate_invoice_category(
-    category: &crate::invoice::InvoiceCategory,
+    category: &crate::types::InvoiceCategory,
 ) -> Result<(), QuickLendXError> {
     // All categories are valid as they are defined in the enum
     // This function can be extended to add additional validation logic if needed
     match category {
-        crate::invoice::InvoiceCategory::Services => Ok(()),
-        crate::invoice::InvoiceCategory::Products => Ok(()),
-        crate::invoice::InvoiceCategory::Consulting => Ok(()),
-        crate::invoice::InvoiceCategory::Manufacturing => Ok(()),
-        crate::invoice::InvoiceCategory::Technology => Ok(()),
-        crate::invoice::InvoiceCategory::Healthcare => Ok(()),
-        crate::invoice::InvoiceCategory::Other => Ok(()),
+        crate::types::InvoiceCategory::Services => Ok(()),
+        crate::types::InvoiceCategory::Goods => Ok(()),
+        crate::types::InvoiceCategory::Consulting => Ok(()),
+        crate::types::InvoiceCategory::Logistics => Ok(()),
+        crate::types::InvoiceCategory::Products => Ok(()),
+        crate::types::InvoiceCategory::Manufacturing => Ok(()),
+        crate::types::InvoiceCategory::Technology => Ok(()),
+        crate::types::InvoiceCategory::Healthcare => Ok(()),
+        crate::types::InvoiceCategory::Other => Ok(()),
     }
 }
 
@@ -1020,8 +1023,8 @@ pub fn validate_invoice_category(
 /// length checks and duplicate detection operate on the canonical stored form.
 ///
 /// # Rules enforced
-/// - Tag count ≤ 10.
-/// - Each normalized tag must be 1–50 bytes.
+/// - Tag count - 10.
+/// - Each normalized tag must be 1-50 bytes.
 /// - No two tags may normalize to the same value (e.g. "Tech" and "tech" are duplicates).
 ///
 /// # Errors
@@ -1473,7 +1476,7 @@ pub fn validate_invoice_metadata(
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        let expected_total = record.1.saturating_mul(record.2);
+        let expected_total = (record.1 as i128).saturating_mul(record.2);
         if expected_total != record.3 {
             return Err(QuickLendXError::InvalidAmount);
         }
