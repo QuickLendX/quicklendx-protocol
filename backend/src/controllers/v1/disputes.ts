@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { Dispute, DisputeStatus } from "../../types/contract";
 import { labelRecord } from "../../services/versioningService";
 
-const MOCK_DISPUTES: Dispute[] = [
+export const MOCK_DISPUTES: Dispute[] = [
   labelRecord<Omit<Dispute, "contract_version" | "event_schema_version" | "indexed_at">>({
     id: "0xdispute1",
     invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
@@ -26,7 +26,7 @@ export const getDisputes = async (
       filtered = filtered.filter((d) => d.invoice_id === invoice_id);
     }
 
-    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
+    res.json({ data: filtered });
   } catch (error) {
     next(error);
   }

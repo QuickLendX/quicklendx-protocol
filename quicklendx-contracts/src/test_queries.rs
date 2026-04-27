@@ -1,4 +1,12 @@
-//! Pagination consistency tests for [`crate::pagination`].
+//! Query consistency tests: pagination invariants and escrow query surfaces.
+//!
+//! Section 1 (lines below) covers pagination.
+//! Section 2 covers escrow query consistency across lifecycle transitions
+//! (Issue #831): `get_escrow_details` / `get_escrow_status` must agree at
+//! every state, immutable fields must be stable, and missing-record errors
+//! must be deterministic.
+//!
+//! Pagination section:
 //!
 //! Covers the invariants demanded by the `query-pagination-consistency-tests`
 //! issue: `limit=0` returns empty, offset beyond length returns empty, limits
@@ -6,7 +14,7 @@
 //! calls and consecutive pages, and `u32::MAX` edge cases never panic.
 //!
 //! The tests use only the self-contained `pagination` module plus `alloc`
-//! types — no Soroban storage, no contract client, no legacy modules.
+//! types - no Soroban storage, no contract client, no legacy modules.
 
 extern crate alloc;
 
@@ -158,7 +166,7 @@ fn test_paginate_slice_limit_u32_max_small_collection() {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Stable ordering — repeated calls are identical
+// 4. Stable ordering - repeated calls are identical
 // ---------------------------------------------------------------------------
 
 /// Repeated calls with identical args produce `==` results.
@@ -231,7 +239,7 @@ fn test_no_duplicates_across_pages_various_sizes() {
 }
 
 // ---------------------------------------------------------------------------
-// 6. u32::MAX edge cases — no panic for offset or limit at the extreme
+// 6. u32::MAX edge cases - no panic for offset or limit at the extreme
 // ---------------------------------------------------------------------------
 
 /// `(u32::MAX, u32::MAX)` against total=0, 1, MAX_QUERY_LIMIT, MAX+10 is a no-op.
@@ -259,7 +267,7 @@ fn test_calculate_safe_bounds_u32_max_inputs_are_safe() {
 }
 
 // ---------------------------------------------------------------------------
-// 7. Empty collection — empty result for any (offset, limit)
+// 7. Empty collection - empty result for any (offset, limit)
 // ---------------------------------------------------------------------------
 
 /// `paginate_slice(&[], offset, limit)` is empty for any input.
@@ -282,7 +290,7 @@ fn test_empty_collection_always_returns_empty() {
 // 8. Single-element collection is paginated correctly
 // ---------------------------------------------------------------------------
 
-/// Single-element behaviour: `(0, 10)` → [42]; `(1, 10)` → []; `(0, 0)` → [].
+/// Single-element behaviour: `(0, 10)` -> [42]; `(1, 10)` -> []; `(0, 0)` -> [].
 #[test]
 fn test_single_element_collection_paginates_correctly() {
     let items: Vec<u64> = vec![42];
@@ -293,7 +301,7 @@ fn test_single_element_collection_paginates_correctly() {
 }
 
 // ---------------------------------------------------------------------------
-// 9. Boundary: total=100, offset=99 → exactly 1 element; offset=100 → empty
+// 9. Boundary: total=100, offset=99 -> exactly 1 element; offset=100 -> empty
 // ---------------------------------------------------------------------------
 
 /// Boundary around `total_count = 100`.
@@ -314,7 +322,7 @@ fn test_boundary_offset_equals_total_yields_empty() {
 }
 
 // ---------------------------------------------------------------------------
-// 10. Cross-type coverage — u64, [u8; 32], NamedId(String)
+// 10. Cross-type coverage - u64, [u8; 32], NamedId(String)
 // ---------------------------------------------------------------------------
 
 /// Generic `paginate_slice` works for `u64`.
@@ -325,7 +333,7 @@ fn test_generic_paginate_on_u64() {
     assert_eq!(page, vec![5u64, 6, 7]);
 }
 
-/// Generic `paginate_slice` works for `[u8; 32]` — the dominant ID type in
+/// Generic `paginate_slice` works for `[u8; 32]` - the dominant ID type in
 /// Soroban contracts.
 #[test]
 fn test_generic_paginate_on_bytes_32() {
@@ -390,7 +398,7 @@ fn test_cross_consistency_validate_vs_bounds() {
 /// `has_more` is true iff items remain past the current page.
 #[test]
 fn test_has_more_within_window_is_true() {
-    // total=50, offset=0, limit=10 → page ends at 10 < 50
+    // total=50, offset=0, limit=10 -> page ends at 10 < 50
     let (_, _, has_more) = validate_pagination_params(0, 10, 50);
     assert!(has_more);
 }
@@ -398,7 +406,7 @@ fn test_has_more_within_window_is_true() {
 /// `has_more` is false when the page exactly exhausts the collection.
 #[test]
 fn test_has_more_exhausting_page_is_false() {
-    // total=50, offset=40, limit=10 → page ends at 50 == 50
+    // total=50, offset=40, limit=10 -> page ends at 50 == 50
     let (_, _, has_more) = validate_pagination_params(40, 10, 50);
     assert!(!has_more);
 }
@@ -414,19 +422,19 @@ fn test_has_more_past_end_is_false() {
 /// `MAX_QUERY_LIMIT` covers the remainder.
 #[test]
 fn test_has_more_over_cap_limit_clamps_correctly() {
-    // total=50, limit=500 → clamped to 100 → remainder=50 → eff_lim=50, has_more=false
+    // total=50, limit=500 -> clamped to 100 -> remainder=50 -> eff_lim=50, has_more=false
     let (_, eff_lim, has_more) = validate_pagination_params(0, 500, 50);
     assert_eq!(eff_lim, 50);
     assert!(!has_more);
 
-    // total=250, limit=500 → clamped to 100 → eff_lim=100, has_more=true (150 remaining)
+    // total=250, limit=500 -> clamped to 100 -> eff_lim=100, has_more=true (150 remaining)
     let (_, eff_lim2, has_more2) = validate_pagination_params(0, 500, 250);
     assert_eq!(eff_lim2, MAX_QUERY_LIMIT);
     assert!(has_more2);
 }
 
 // ---------------------------------------------------------------------------
-// 13. Proptest — invariants
+// 13. Proptest - invariants
 // ---------------------------------------------------------------------------
 
 proptest! {
@@ -505,5 +513,295 @@ proptest! {
         prop_assert!(start <= end);
         prop_assert!(end <= total);
         prop_assert!(end.saturating_sub(start) <= MAX_QUERY_LIMIT);
+    }
+}
+
+// ===========================================================================
+// Section 2 — Escrow query consistency (Issue #831)
+//
+// All tests below exercise the two public escrow query surfaces:
+//   • get_escrow_details  → returns the full Escrow struct
+//   • get_escrow_status   → returns just the EscrowStatus enum
+//
+// Invariants verified:
+//   1. details.status == get_escrow_status() at every lifecycle point
+//   2. Immutable fields do not change across transitions
+//   3. Missing-record errors are identical and deterministic on both surfaces
+// ===========================================================================
+
+// The tests below need the full contract; they live in a sub-module so they
+// can access `super::*` from lib.rs (identical pattern to other test_* files).
+#[cfg(test)]
+mod escrow_query_consistency {
+    use crate::errors::QuickLendXError;
+    use crate::invoice::InvoiceCategory;
+    use crate::payments::EscrowStatus;
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        token, Address, BytesN, Env, String, Vec,
+    };
+
+    fn setup_contract() -> (Env, crate::QuickLendXContractClient<'static>, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(crate::QuickLendXContract, ());
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let _ = client.try_initialize_admin(&admin);
+        client.set_admin(&admin);
+        (env, client, admin)
+    }
+
+    fn setup_token(
+        env: &Env,
+        business: &Address,
+        investor: &Address,
+        contract_id: &Address,
+    ) -> Address {
+        let token_admin = Address::generate(env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+        let tc = token::Client::new(env, &currency);
+        let sac = token::StellarAssetClient::new(env, &currency);
+        sac.mint(business, &100_000i128);
+        sac.mint(investor, &100_000i128);
+        let exp = env.ledger().sequence() + 10_000;
+        tc.approve(business, contract_id, &100_000i128, &exp);
+        tc.approve(investor, contract_id, &100_000i128, &exp);
+        currency
+    }
+
+    fn setup_funded_invoice(
+        env: &Env,
+        client: &crate::QuickLendXContractClient<'static>,
+        admin: &Address,
+        amount: i128,
+    ) -> (Address, Address, Address, BytesN<32>, BytesN<32>) {
+        let contract_id = client.address.clone();
+        let business = Address::generate(env);
+        let investor = Address::generate(env);
+
+        client.submit_kyc_application(&business, &String::from_str(env, "B"));
+        client.verify_business(admin, &business);
+        client.submit_investor_kyc(&investor, &String::from_str(env, "I"));
+        client.verify_investor(&investor, &(amount * 10));
+
+        let currency = setup_token(env, &business, &investor, &contract_id);
+        let due = env.ledger().timestamp() + 86_400;
+        let invoice_id = client.store_invoice(
+            &business,
+            &amount,
+            &currency,
+            &due,
+            &String::from_str(env, "Invoice"),
+            &InvoiceCategory::Services,
+            &Vec::new(env),
+        );
+        client.verify_invoice(&invoice_id);
+
+        let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500));
+        client.accept_bid(&invoice_id, &bid_id);
+
+        (business, investor, currency, invoice_id, bid_id)
+    }
+
+    // -----------------------------------------------------------------------
+    // 1. Status agreement at each lifecycle point
+    // -----------------------------------------------------------------------
+
+    /// After funding: details.status == Held and get_escrow_status() == Held.
+    #[test]
+    fn test_status_match_held() {
+        let (env, client, admin) = setup_contract();
+        let amount = 5_000i128;
+        let (_, _, _, invoice_id, _) = setup_funded_invoice(&env, &client, &admin, amount);
+
+        let details = client.get_escrow_details(&invoice_id);
+        let status = client.get_escrow_status(&invoice_id);
+
+        assert_eq!(details.status, EscrowStatus::Held);
+        assert_eq!(status, EscrowStatus::Held);
+        assert_eq!(details.status, status);
+    }
+
+    /// After release: details.status == Released and get_escrow_status() == Released.
+    #[test]
+    fn test_status_match_released() {
+        let (env, client, admin) = setup_contract();
+        let amount = 5_000i128;
+        let (_, _, _, invoice_id, _) = setup_funded_invoice(&env, &client, &admin, amount);
+
+        client.release_escrow_funds(&invoice_id);
+
+        let details = client.get_escrow_details(&invoice_id);
+        let status = client.get_escrow_status(&invoice_id);
+
+        assert_eq!(details.status, EscrowStatus::Released);
+        assert_eq!(status, EscrowStatus::Released);
+        assert_eq!(details.status, status);
+    }
+
+    /// After refund: details.status == Refunded and get_escrow_status() == Refunded.
+    #[test]
+    fn test_status_match_refunded() {
+        let (env, client, admin) = setup_contract();
+        let amount = 5_000i128;
+        let (_, _, _, invoice_id, _) = setup_funded_invoice(&env, &client, &admin, amount);
+
+        client.refund_escrow_funds(&invoice_id, &admin);
+
+        let details = client.get_escrow_details(&invoice_id);
+        let status = client.get_escrow_status(&invoice_id);
+
+        assert_eq!(details.status, EscrowStatus::Refunded);
+        assert_eq!(status, EscrowStatus::Refunded);
+        assert_eq!(details.status, status);
+    }
+
+    // -----------------------------------------------------------------------
+    // 2. Immutable fields stable across transitions
+    // -----------------------------------------------------------------------
+
+    /// Snapshot taken before and after Held → Released; only status changes.
+    #[test]
+    fn test_immutable_fields_stable_held_to_released() {
+        let (env, client, admin) = setup_contract();
+        let amount = 7_000i128;
+        let (business, investor, currency, invoice_id, _) =
+            setup_funded_invoice(&env, &client, &admin, amount);
+
+        let before = client.get_escrow_details(&invoice_id);
+        client.release_escrow_funds(&invoice_id);
+        let after = client.get_escrow_details(&invoice_id);
+
+        assert_eq!(before.escrow_id, after.escrow_id);
+        assert_eq!(before.invoice_id, after.invoice_id);
+        assert_eq!(before.investor, after.investor);
+        assert_eq!(before.business, after.business);
+        assert_eq!(before.amount, after.amount);
+        assert_eq!(before.currency, after.currency);
+        assert_eq!(before.created_at, after.created_at);
+
+        // Sanity: fields match what was set up
+        assert_eq!(before.investor, investor);
+        assert_eq!(before.business, business);
+        assert_eq!(before.amount, amount);
+        assert_eq!(before.currency, currency);
+    }
+
+    /// Snapshot taken before and after Held → Refunded; only status changes.
+    #[test]
+    fn test_immutable_fields_stable_held_to_refunded() {
+        let (env, client, admin) = setup_contract();
+        let amount = 7_000i128;
+        let (_, _, _, invoice_id, _) = setup_funded_invoice(&env, &client, &admin, amount);
+
+        let before = client.get_escrow_details(&invoice_id);
+        client.refund_escrow_funds(&invoice_id, &admin);
+        let after = client.get_escrow_details(&invoice_id);
+
+        assert_eq!(before.escrow_id, after.escrow_id);
+        assert_eq!(before.invoice_id, after.invoice_id);
+        assert_eq!(before.investor, after.investor);
+        assert_eq!(before.business, after.business);
+        assert_eq!(before.amount, after.amount);
+        assert_eq!(before.currency, after.currency);
+        assert_eq!(before.created_at, after.created_at);
+        assert_ne!(before.status, after.status);
+    }
+
+    // -----------------------------------------------------------------------
+    // 3. Missing-record errors — deterministic and identical on both surfaces
+    // -----------------------------------------------------------------------
+
+    /// A random ID with no escrow returns `StorageKeyNotFound` on both surfaces.
+    #[test]
+    fn test_missing_record_both_surfaces_same_error() {
+        let (env, client, _admin) = setup_contract();
+        let ghost = BytesN::from_array(&env, &[0xDE; 32]);
+
+        let de = client.try_get_escrow_details(&ghost).unwrap_err().unwrap();
+        let se = client.try_get_escrow_status(&ghost).unwrap_err().unwrap();
+
+        assert_eq!(de, QuickLendXError::StorageKeyNotFound);
+        assert_eq!(se, QuickLendXError::StorageKeyNotFound);
+        assert_eq!(de, se);
+    }
+
+    /// A verified invoice that was never funded returns `StorageKeyNotFound`
+    /// (not `InvoiceNotFound`).
+    #[test]
+    fn test_verified_invoice_no_escrow_returns_storage_key_not_found() {
+        let (env, client, admin) = setup_contract();
+        let contract_id = client.address.clone();
+
+        let business = Address::generate(&env);
+        client.submit_kyc_application(&business, &String::from_str(&env, "B"));
+        client.verify_business(&admin, &business);
+
+        let investor = Address::generate(&env);
+        let currency = setup_token(&env, &business, &investor, &contract_id);
+
+        let due = env.ledger().timestamp() + 86_400;
+        let invoice_id = client.store_invoice(
+            &business,
+            &1_000i128,
+            &currency,
+            &due,
+            &String::from_str(&env, "Invoice"),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
+        client.verify_invoice(&invoice_id);
+
+        let de = client.try_get_escrow_details(&invoice_id).unwrap_err().unwrap();
+        let se = client.try_get_escrow_status(&invoice_id).unwrap_err().unwrap();
+
+        assert_eq!(de, QuickLendXError::StorageKeyNotFound);
+        assert_eq!(se, QuickLendXError::StorageKeyNotFound);
+    }
+
+    /// Error is deterministic: repeated calls return the same variant.
+    #[test]
+    fn test_missing_record_error_is_stable_across_repeated_calls() {
+        let (env, client, _admin) = setup_contract();
+        let ghost = BytesN::from_array(&env, &[0xCC; 32]);
+
+        for _ in 0..3 {
+            let de = client.try_get_escrow_details(&ghost).unwrap_err().unwrap();
+            let se = client.try_get_escrow_status(&ghost).unwrap_err().unwrap();
+            assert_eq!(de, QuickLendXError::StorageKeyNotFound);
+            assert_eq!(se, QuickLendXError::StorageKeyNotFound);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 4. Cross-invoice isolation
+    // -----------------------------------------------------------------------
+
+    /// Querying one escrow never changes another. Transitions on A do not
+    /// affect B's query results.
+    #[test]
+    fn test_cross_invoice_queries_are_isolated() {
+        let (env, client, admin) = setup_contract();
+        let (_, _, _, invoice_a, _) = setup_funded_invoice(&env, &client, &admin, 4_000);
+        let (_, _, _, invoice_b, _) = setup_funded_invoice(&env, &client, &admin, 6_000);
+
+        // Release A; B must remain Held.
+        client.release_escrow_funds(&invoice_a);
+
+        assert_eq!(client.get_escrow_status(&invoice_a), EscrowStatus::Released);
+        assert_eq!(client.get_escrow_status(&invoice_b), EscrowStatus::Held);
+        assert_eq!(
+            client.get_escrow_details(&invoice_b).status,
+            EscrowStatus::Held
+        );
+
+        // Refund B; A must remain Released.
+        client.refund_escrow_funds(&invoice_b, &admin);
+
+        assert_eq!(client.get_escrow_status(&invoice_a), EscrowStatus::Released);
+        assert_eq!(client.get_escrow_status(&invoice_b), EscrowStatus::Refunded);
     }
 }

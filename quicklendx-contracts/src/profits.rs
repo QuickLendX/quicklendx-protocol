@@ -26,7 +26,7 @@
 //! # Overflow Safety
 //!
 //! - Uses `saturating_*` arithmetic to prevent overflow panics
-//! - Maximum supported amounts: i128::MAX (approximately 1.7 × 10^38)
+//! - Maximum supported amounts: i128::MAX (approximately 1.7 - 10^38)
 //! - Fee basis points capped at 1000 (10%)
 //!
 //! # Security Considerations
@@ -38,6 +38,7 @@
 
 use crate::errors::QuickLendXError;
 use crate::events::emit_platform_fee_updated;
+use crate::types::PlatformFeeConfig;
 use soroban_sdk::{contracttype, symbol_short, Address, Env};
 
 // ============================================================================
@@ -61,16 +62,6 @@ pub const MIN_VALID_AMOUNT: i128 = 0;
 // Data Types
 // ============================================================================
 
-/// Platform fee configuration stored on-chain
-#[contracttype]
-#[derive(Clone)]
-#[cfg_attr(test, derive(Debug))]
-pub struct PlatformFeeConfig {
-    pub fee_bps: u32,
-    pub treasury_address: Option<Address>,
-    pub updated_at: u64,
-    pub updated_by: Address,
-}
 
 /// Complete breakdown of profit and fee calculation
 ///

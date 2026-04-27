@@ -1,14 +1,14 @@
-//! Initialization invariants test suite — Issue #833
+//! Initialization invariants test suite - Issue #833
 //!
 //! Verifies the four core invariants of protocol initialization:
 //!
-//! 1. **One-time init** — `initialize` can only succeed once; any subsequent
+//! 1. **One-time init** - `initialize` can only succeed once; any subsequent
 //!    call with different parameters returns `OperationNotAllowed`.
-//! 2. **Admin/treasury distinct** — admin and treasury must be different
+//! 2. **Admin/treasury distinct** - admin and treasury must be different
 //!    addresses and neither may be the contract address itself.
-//! 3. **Fee bps bounds** — `fee_bps` must be in `[0, 1000]`; values outside
+//! 3. **Fee bps bounds** - `fee_bps` must be in `[0, 1000]`; values outside
 //!    that range are rejected with `InvalidFeeBasisPoints`.
-//! 4. **Limits configuration bounds** — `min_invoice_amount`, `max_due_date_days`,
+//! 4. **Limits configuration bounds** - `min_invoice_amount`, `max_due_date_days`,
 //!    and `grace_period_seconds` are validated at init time and on every update.
 //!
 //! # Security assumptions validated here
@@ -39,7 +39,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>) {
     (env, client)
 }
 
-/// Minimal valid params — all boundary values are within spec.
+/// Minimal valid params - all boundary values are within spec.
 fn valid_params(env: &Env) -> InitializationParams {
     InitializationParams {
         admin: Address::generate(env),
@@ -78,7 +78,7 @@ fn test_init_second_call_different_params_fails() {
     let (env, client) = setup();
     initialized(&env, &client);
 
-    let p2 = valid_params(&env); // fresh addresses → different params
+    let p2 = valid_params(&env); // fresh addresses -> different params
     let result = client.try_initialize(&p2);
     assert_eq!(
         result,
@@ -93,7 +93,7 @@ fn test_init_idempotent_same_params() {
     let (env, client) = setup();
     let p = valid_params(&env);
     client.initialize(&p);
-    // Exact same params → idempotent success
+    // Exact same params -> idempotent success
     assert!(
         client.try_initialize(&p).is_ok(),
         "Re-init with identical params must be idempotent"
@@ -311,7 +311,7 @@ fn test_fee_bps_midrange_accepted() {
     assert_eq!(client.get_fee_bps(), 500);
 }
 
-/// `set_fee_config` must enforce the same 0–1000 bounds.
+/// `set_fee_config` must enforce the same 0-1000 bounds.
 #[test]
 fn test_set_fee_config_bounds_enforced() {
     let (env, client) = setup();
@@ -610,15 +610,14 @@ fn test_init_valid_currencies_accepted() {
 #[test]
 fn test_init_requires_admin_auth() {
     let env = Env::default();
-    // No mock_all_auths — auth is enforced
+    // No mock_all_auths - auth is enforced
     let id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &id);
     let p = valid_params(&env);
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        client.initialize(&p);
-    }));
-    assert!(result.is_err(), "init without auth must panic");
+    // Should fail without authorization (no mock_all_auths)
+    let result = client.try_initialize(&p);
+    assert!(result.is_err(), "init without auth must fail");
 }
 
 // ===========================================================================
@@ -683,7 +682,7 @@ fn test_protocol_config_some_after_init() {
 }
 
 // ===========================================================================
-// 9. BOUNDARY COMBINATION — ALL LIMITS AT EXTREMES
+// 9. BOUNDARY COMBINATION - ALL LIMITS AT EXTREMES
 // ===========================================================================
 
 /// All parameters at their minimum valid values must succeed.
@@ -734,7 +733,7 @@ fn test_admin_transfer_revokes_old_admin_config_access() {
 }
 
 // ===========================================================================
-// 11. DETERMINISTIC VALIDATION — same invalid input → same error
+// 11. DETERMINISTIC VALIDATION - same invalid input -> same error
 // ===========================================================================
 
 /// Validation is deterministic: calling with the same invalid params always

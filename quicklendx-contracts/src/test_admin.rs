@@ -1,14 +1,14 @@
 //! Comprehensive test suite for hardened admin role management.
 //!
 //! Test Coverage:
-//! 1. Initialization — admin setup, double-init prevention, authorization
-//! 2. Transfer — success path, authorization, validation, atomicity
-//! 3. Query Functions — get_admin, is_admin, is_initialized
-//! 4. Authorization — require_admin, require_current_admin
-//! 5. Security — transfer locks, concurrent operations, edge cases
-//! 6. Events — initialization, transfer audit trail
-//! 7. Utilities — with_admin_auth, with_current_admin
-//! 8. Legacy Compatibility — set_admin routing
+//! 1. Initialization - admin setup, double-init prevention, authorization
+//! 2. Transfer - success path, authorization, validation, atomicity
+//! 3. Query Functions - get_admin, is_admin, is_initialized
+//! 4. Authorization - require_admin, require_current_admin
+//! 5. Security - transfer locks, concurrent operations, edge cases
+//! 6. Events - initialization, transfer audit trail
+//! 7. Utilities - with_admin_auth, with_current_admin
+//! 8. Legacy Compatibility - set_admin routing
 //!
 //! Target: 95%+ test coverage for admin.rs
 
@@ -69,10 +69,8 @@ mod test_admin {
 
         let admin = Address::generate(&env);
 
-        // Should panic without authorization
-        let result = std::panic::catch_unwind(|| {
-            client.initialize_admin(&admin);
-        });
+        // Should fail without authorization (no mock_all_auths)
+        let result = client.try_initialize_admin(&admin);
         assert!(result.is_err(), "Initialization without auth must fail");
     }
 

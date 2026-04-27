@@ -41,6 +41,41 @@ pub fn cancel_bid(env: &Env, bid_id: &BytesN<32>) -> bool {
 `require_auth()` is called on `bid.investor` — any other signer causes a
 host-level authorization failure before any state is mutated.
 
+## TTL Boundary and Expiry Semantics
+
+Bid expiry uses a strict boundary check in `Bid::is_expired`:
+
+```rust
+current_timestamp > expiration_timestamp
+```
+
+This creates an explicit, auditable rule:
+
+- At `current_timestamp == expiration_timestamp`, the bid is still valid.
+- At `current_timestamp == expiration_timestamp + 1`, the bid is expired.
+
+### Security rationale
+
+- Avoids ambiguous edge handling between `accept_bid` and cleanup paths.
+- Ensures cleanup and acceptance use the same predicate, preventing drift.
+- Protects against off-by-one regressions where a bid could be accepted after
+  being considered expired elsewhere (or vice versa).
+
+### Admin TTL bounds
+
+The bid TTL configuration is constrained to:
+
+- Minimum: `1` day (`MIN_BID_TTL_DAYS`)
+- Maximum: `30` days (`MAX_BID_TTL_DAYS`)
+
+Values outside this range return `InvalidBidTtl`.
+
+### Expired-bid acceptance guarantee
+
+`accept_bid` triggers expired-bid cleanup before status checks. If a bid has
+crossed the strict boundary (`now > expiration_timestamp`), it transitions out
+of `Placed` and cannot be accepted.
+
 ## cancel_bid vs withdraw_bid
 
 Both operations are investor-only and transition a `Placed` bid to a terminal
@@ -82,3 +117,9 @@ state. They produce **distinct** statuses:
 cd quicklendx-contracts
 cargo test test_bid
 ```
+
+Additional boundary coverage (Issue #795):
+
+- `test_accept_bid_at_exact_expiration_timestamp_succeeds`
+- `test_accept_bid_after_expiration_timestamp_fails`
+- `test_cleanup_expired_bids_exact_boundary_and_off_by_one`

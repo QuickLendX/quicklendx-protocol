@@ -1,14 +1,14 @@
-//! Bid cancellation authorization matrix tests — Issue #793
+//! Bid cancellation authorization matrix tests - Issue #793
 //!
 //! Verifies that `cancel_bid` is exclusively callable by the investor who
-//! placed the bid, and documents the admin-override policy (none — admin has
+//! placed the bid, and documents the admin-override policy (none - admin has
 //! no special cancel privilege).
 //!
 //! # Authorization matrix
 //!
 //! | Caller            | Bid status | Expected outcome          |
 //! |-------------------|------------|---------------------------|
-//! | Bid owner         | Placed     | Ok — status → Cancelled   |
+//! | Bid owner         | Placed     | Ok - status -> Cancelled   |
 //! | Bid owner         | Cancelled  | false (no-op)             |
 //! | Bid owner         | Accepted   | false (no-op)             |
 //! | Bid owner         | Withdrawn  | false (no-op)             |
@@ -16,7 +16,7 @@
 //! | Third party       | Placed     | Auth panic (rejected)     |
 //! | Business owner    | Placed     | Auth panic (rejected)     |
 //! | Admin             | Placed     | Auth panic (rejected)     |
-//! | Non-existent bid  | —          | false (no-op)             |
+//! | Non-existent bid  | -          | false (no-op)             |
 //!
 //! # Security assumptions validated
 //! - `require_auth()` is called on `bid.investor` inside `cancel_bid`; any
@@ -24,7 +24,7 @@
 //! - Admin has **no** special override for `cancel_bid`; cancellation is
 //!   strictly investor-only.
 //! - Cancellation is idempotent on terminal states (Cancelled/Accepted/
-//!   Withdrawn/Expired) — returns false without mutating state.
+//!   Withdrawn/Expired) - returns false without mutating state.
 //! - A cancelled bid cannot be re-cancelled or re-placed.
 
 #![cfg(test)]
@@ -33,7 +33,7 @@ use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
-    testutils::{Address as _, MockAuth, MockAuthInvoke},
+    testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke},
     Address, BytesN, Env, IntoVal, String, Vec,
 };
 
@@ -82,7 +82,7 @@ fn place_bid(
 }
 
 // ===========================================================================
-// 1. HAPPY PATH — investor cancels own Placed bid
+// 1. HAPPY PATH - investor cancels own Placed bid
 // ===========================================================================
 
 #[test]
@@ -90,7 +90,7 @@ fn test_investor_can_cancel_own_placed_bid() {
     let (env, client, admin, business) = setup();
     let (bid_id, investor, _) = place_bid(&env, &client, &admin, &business);
 
-    // mock_all_auths is active — investor auth is satisfied
+    // mock_all_auths is active - investor auth is satisfied
     let result = client.cancel_bid(&bid_id);
     assert!(result, "investor should be able to cancel their own Placed bid");
 
@@ -111,7 +111,7 @@ fn test_cancel_bid_returns_true_on_success() {
 }
 
 // ===========================================================================
-// 2. IDEMPOTENCY — terminal states return false without mutation
+// 2. IDEMPOTENCY - terminal states return false without mutation
 // ===========================================================================
 
 #[test]
@@ -150,7 +150,7 @@ fn test_cancel_nonexistent_bid_returns_false() {
 }
 
 // ===========================================================================
-// 3. AUTHORIZATION MATRIX — unauthorized callers are rejected
+// 3. AUTHORIZATION MATRIX - unauthorized callers are rejected
 // ===========================================================================
 
 /// Third party (random address) cannot cancel someone else's bid.
@@ -226,7 +226,7 @@ fn test_business_owner_cannot_cancel_bid() {
     assert_eq!(bid.status, crate::bid::BidStatus::Placed);
 }
 
-/// Admin has NO special override — cannot cancel bids.
+/// Admin has NO special override - cannot cancel bids.
 #[test]
 fn test_admin_cannot_cancel_bid() {
     let env = Env::default();
@@ -300,7 +300,7 @@ fn test_different_investor_cannot_cancel_others_bid() {
 }
 
 // ===========================================================================
-// 4. STATE INTEGRITY — bid fields unchanged after cancel
+// 4. STATE INTEGRITY - bid fields unchanged after cancel
 // ===========================================================================
 
 #[test]
@@ -349,7 +349,7 @@ fn test_cancel_bid_does_not_affect_other_bids_on_same_invoice() {
 }
 
 // ===========================================================================
-// 5. WITHDRAW vs CANCEL — both are investor-only, distinct operations
+// 5. WITHDRAW vs CANCEL - both are investor-only, distinct operations
 // ===========================================================================
 
 #[test]
@@ -387,13 +387,13 @@ fn test_withdraw_bid_also_requires_investor_auth() {
 fn test_cancel_and_withdraw_produce_different_terminal_states() {
     let (env, client, admin, business) = setup();
 
-    // Bid 1 — cancel
+    // Bid 1 - cancel
     let (bid_id_cancel, _, _) = place_bid(&env, &client, &admin, &business);
     client.cancel_bid(&bid_id_cancel);
     let bid_cancelled = client.get_bid(&bid_id_cancel).unwrap();
     assert_eq!(bid_cancelled.status, crate::bid::BidStatus::Cancelled);
 
-    // Bid 2 — withdraw
+    // Bid 2 - withdraw
     let (bid_id_withdraw, _, _) = place_bid(&env, &client, &admin, &business);
     client.withdraw_bid(&bid_id_withdraw).unwrap();
     let bid_withdrawn = client.get_bid(&bid_id_withdraw).unwrap();
@@ -406,7 +406,7 @@ fn test_cancel_and_withdraw_produce_different_terminal_states() {
 }
 
 // ===========================================================================
-// 6. MULTIPLE BIDS — investor can cancel each of their own bids independently
+// 6. MULTIPLE BIDS - investor can cancel each of their own bids independently
 // ===========================================================================
 
 #[test]
@@ -427,5 +427,42 @@ fn test_investor_can_cancel_multiple_own_bids() {
     assert_eq!(
         client.get_bid(&bid_id_2).unwrap().status,
         crate::bid::BidStatus::Cancelled
+    );
+}
+
+// ===========================================================================
+// 7. TTL/EXPIRY BOUNDARIES — exact-timestamp and off-by-one protections
+// ===========================================================================
+
+/// At exact expiration timestamp, bid remains valid (strict `>` expiry rule).
+#[test]
+fn test_accept_bid_at_exact_expiration_timestamp_succeeds() {
+    let (env, client, admin, business) = setup();
+    client.set_bid_ttl_days(&1u64);
+
+    let (bid_id, _, invoice_id) = place_bid(&env, &client, &admin, &business);
+    let bid = client.get_bid(&bid_id).unwrap();
+    env.ledger().set_timestamp(bid.expiration_timestamp);
+
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+    assert!(result.is_ok(), "bid should remain valid at exact expiry timestamp");
+}
+
+/// One second after expiration timestamp, bid must not be accepted.
+#[test]
+fn test_accept_bid_after_expiration_timestamp_fails() {
+    let (env, client, admin, business) = setup();
+    client.set_bid_ttl_days(&1u64);
+
+    let (bid_id, _, invoice_id) = place_bid(&env, &client, &admin, &business);
+    let bid = client.get_bid(&bid_id).unwrap();
+    env.ledger()
+        .set_timestamp(bid.expiration_timestamp.saturating_add(1));
+
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+    assert!(result.is_err(), "expired bid must not be accepted");
+    assert_eq!(
+        result.unwrap_err().expect("expected contract error"),
+        QuickLendXError::InvalidStatus
     );
 }

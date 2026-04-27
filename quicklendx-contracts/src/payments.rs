@@ -102,11 +102,11 @@ impl EscrowStorage {
 /// * `Ok(escrow_id)` - The new escrow ID
 ///
 /// # Errors
-/// * [`QuickLendXError::InvalidAmount`] – `amount` is zero or negative.
-/// * [`QuickLendXError::InvoiceAlreadyFunded`] – an escrow record already exists for this invoice.
-/// * [`QuickLendXError::InsufficientFunds`] – investor balance is below `amount`.
-/// * [`QuickLendXError::OperationNotAllowed`] – investor has not approved the contract for `amount`.
-/// * [`QuickLendXError::TokenTransferFailed`] – the token contract panicked; no funds moved and
+/// * [`QuickLendXError::InvalidAmount`] - `amount` is zero or negative.
+/// * [`QuickLendXError::InvoiceAlreadyFunded`] - an escrow record already exists for this invoice.
+/// * [`QuickLendXError::InsufficientFunds`] - investor balance is below `amount`.
+/// * [`QuickLendXError::OperationNotAllowed`] - investor has not approved the contract for `amount`.
+/// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; no funds moved and
 ///   no escrow record is written.
 ///
 /// # Atomicity
@@ -149,7 +149,7 @@ pub fn create_escrow(
     Ok(escrow_id)
 }
 
-/// Release escrow funds to business (contract → business).
+/// Release escrow funds to business (contract -> business).
 ///
 /// # Requirements
 /// - Escrow must be in `Held` status.
@@ -161,11 +161,11 @@ pub fn create_escrow(
 ///   the operation can be safely retried.
 ///
 /// # Errors
-/// * [`QuickLendXError::StorageKeyNotFound`] – no escrow record exists for this invoice.
-/// * [`QuickLendXError::InvalidStatus`] – escrow is not in `Held` status (already released/refunded).
-/// * [`QuickLendXError::InsufficientFunds`] – contract balance is below the escrow amount
+/// * [`QuickLendXError::StorageKeyNotFound`] - no escrow record exists for this invoice.
+/// * [`QuickLendXError::InvalidStatus`] - escrow is not in `Held` status (already released/refunded).
+/// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount
 ///   (should never happen in normal operation; indicates a critical invariant violation).
-/// * [`QuickLendXError::TokenTransferFailed`] – the token contract panicked; escrow status is
+/// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the release can be safely retried.
 pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
@@ -193,13 +193,13 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     Ok(())
 }
 
-/// Refund escrow funds to investor (contract → investor). Escrow must be Held.
+/// Refund escrow funds to investor (contract -> investor). Escrow must be Held.
 ///
 /// # Errors
-/// * [`QuickLendXError::StorageKeyNotFound`] – no escrow record exists for this invoice.
-/// * [`QuickLendXError::InvalidStatus`] – escrow is not in `Held` status.
-/// * [`QuickLendXError::InsufficientFunds`] – contract balance is below the escrow amount.
-/// * [`QuickLendXError::TokenTransferFailed`] – the token contract panicked; escrow status is
+/// * [`QuickLendXError::StorageKeyNotFound`] - no escrow record exists for this invoice.
+/// * [`QuickLendXError::InvalidStatus`] - escrow is not in `Held` status.
+/// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount.
+/// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the refund can be safely retried.
 pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
@@ -229,10 +229,10 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
 /// Transfer token funds from one address to another. Uses allowance when `from` is not the contract.
 ///
 /// # Errors
-/// * [`QuickLendXError::InvalidAmount`] – `amount` is zero or negative.
-/// * [`QuickLendXError::InsufficientFunds`] – `from` balance is below `amount`.
-/// * [`QuickLendXError::OperationNotAllowed`] – allowance granted to the contract is below `amount`.
-/// * [`QuickLendXError::TokenTransferFailed`] – the underlying Stellar token call panicked or
+/// * [`QuickLendXError::InvalidAmount`] - `amount` is zero or negative.
+/// * [`QuickLendXError::InsufficientFunds`] - `from` balance is below `amount`.
+/// * [`QuickLendXError::OperationNotAllowed`] - allowance granted to the contract is below `amount`.
+/// * [`QuickLendXError::TokenTransferFailed`] - the underlying Stellar token call panicked or
 ///   returned an error. No funds moved when this error is returned.
 ///
 /// # Security

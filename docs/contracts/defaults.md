@@ -314,3 +314,42 @@ The following events are emitted during default operations:
 | `insurance_claimed` | Insurance claim processed for defaulted invoice |
 
 These events provide a complete audit trail for compliance and dispute resolution.
+
+## Finality Guarantees
+
+### Default Finality
+
+Once an invoice is marked as `Defaulted`, it cannot be refunded, settled, or defaulted again. The `TransitionGuard` in storage ensures idempotency — any subsequent call to `mark_invoice_defaulted`, `handle_default`, or `check_and_handle_expiration` for the same invoice will be rejected without side effects.
+
+### Ordering Rules
+
+The valid terminal states for an invoice are:
+
+| Terminal State | Reachable From |
+|---------------|----------------|
+| `Paid` | `Funded` (via full settlement) |
+| `Defaulted` | `Funded` (via grace-period expiration) |
+| `Refunded` | `Funded` (via admin/business refund) |
+| `Cancelled` | `Pending` or `Verified` |
+
+Once an invoice reaches any terminal state, it **cannot** transition to another terminal state. The contract enforces this through multiple layered guards.
+
+### Guard Mechanisms
+
+1. **`check_and_set_default_guard()`** — Prevents duplicate default transitions at the storage level. Uses a persistent key `(def_guard, invoice_id)` that is atomically checked and set on the first default attempt. Any subsequent default attempt for the same invoice returns `DuplicateDefaultTransition` (error code 2300).
+
+2. **`ensure_payable_status()`** — Called by settlement and partial-payment flows. Rejects invoices in `Defaulted`, `Refunded`, `Paid`, or `Cancelled` status with `InvalidStatus`. Only `Funded` invoices can accept payments.
+
+3. **`refund_escrow_funds()`** — Requires `Funded` status before processing a refund. Defaulted, paid, or already-refunded invoices are rejected, preventing refund of funds that have already been allocated via a default or settlement.
+
+4. **`mark_invoice_defaulted()` guard ordering** — The transition guard is checked *before* the status check, so a second default attempt returns `DuplicateDefaultTransition` rather than `InvoiceAlreadyDefaulted`. This provides a stronger, storage-level guarantee of idempotency.
+
+### Double-Payout Prevention
+
+No single invoice can produce both a default (insurance claim) payout **and** a refund or settlement payout. The guard mechanisms ensure mutual exclusivity:
+
+- A defaulted invoice triggers insurance claims but blocks refunds and settlements.
+- A refunded invoice returns escrow funds to the investor but blocks defaults and settlements.
+- A settled (paid) invoice disburses funds to the investor but blocks defaults and refunds.
+
+This invariant is critical for preventing double-spend scenarios where the same escrowed funds could be paid out through multiple channels.

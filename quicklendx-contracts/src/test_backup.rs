@@ -287,7 +287,7 @@ fn test_update_backup_rejects_invalid_description() {
     fn validate_backup_fails_when_record_missing() {
         let env = setup_env();
         let id = BackupStorage::generate_backup_id(&env);
-        // No record stored — must fail.
+        // No record stored - must fail.
         assert!(BackupStorage::validate_backup(&env, &id).is_err());
     }
  
