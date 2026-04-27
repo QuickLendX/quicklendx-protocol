@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { Bid, BidStatus } from "../../types/contract";
 import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
 
-const MOCK_BIDS: Bid[] = [
+export const MOCK_BIDS: Bid[] = [
   labelRecord<Omit<Bid, "contract_version" | "event_schema_version" | "indexed_at">>({
     bid_id: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
     invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",

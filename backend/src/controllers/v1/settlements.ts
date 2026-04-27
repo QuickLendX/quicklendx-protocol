@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { Settlement, SettlementStatus } from "../../types/contract";
 import { applyCacheHeaders, CC_LONG } from "../../middleware/cache-headers";
 
-const MOCK_SETTLEMENTS: Settlement[] = [
+export const MOCK_SETTLEMENTS: Settlement[] = [
   labelRecord<Omit<Settlement, "contract_version" | "event_schema_version" | "indexed_at">>({
     id: "0xsettle123",
     invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
