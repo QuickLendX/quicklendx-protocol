@@ -481,7 +481,7 @@ fn test_treasury_persists_across_updates() {
 }
 
 // ============================================================================
-// HARDENING EXTENDED TESTS — Initialization Guard & Treasury Validation
+// HARDENING EXTENDED TESTS - Initialization Guard & Treasury Validation
 // ============================================================================
 
 /// Second initialize_fee_system call returns InvalidFeeConfiguration.
@@ -528,7 +528,7 @@ fn test_fee_structures_unchanged_after_rejected_reinit() {
         300
     );
 
-    // Re-init attempt is rejected — custom update must be preserved.
+    // Re-init attempt is rejected - custom update must be preserved.
     let _ = client.try_initialize_fee_system(&admin);
     assert_eq!(
         client
@@ -1449,7 +1449,7 @@ fn test_revenue_accumulation_through_settlements() {
 }
 
 // ============================================================================
-// FEE CONFIG BOUNDS TESTS — fee never exceeds total paid, rounding safety
+// FEE CONFIG BOUNDS TESTS - fee never exceeds total paid, rounding safety
 // ============================================================================
 
 /// Fee BPS of 0 produces zero fee and investor receives full payment.
@@ -1691,7 +1691,7 @@ fn test_overflow_safety_large_amounts() {
 }
 
 // ============================================================================
-// ADDITIONAL FEE CONFIG BOUNDS TESTS — targeted boundary and rounding cases
+// ADDITIONAL FEE CONFIG BOUNDS TESTS - targeted boundary and rounding cases
 // ============================================================================
 
 /// fee_bps=1 (0.01%) is the smallest non-zero rate; fee rounds to 0 for small profits.
@@ -1771,7 +1771,7 @@ fn test_rounding_floor_not_ceiling() {
     assert_eq!(investor_return + platform_fee, 9999);
 }
 
-/// Rounding: platform absorbs the fractional remainder — no dust is created.
+/// Rounding: platform absorbs the fractional remainder - no dust is created.
 #[test]
 fn test_rounding_no_dust_created() {
     let env = Env::default();

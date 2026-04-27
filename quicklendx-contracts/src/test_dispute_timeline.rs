@@ -118,7 +118,7 @@ mod test_dispute_timeline {
     }
 
     // -----------------------------------------------------------------------
-    // Lifecycle ordering — Disputed state (1 entry)
+    // Lifecycle ordering - Disputed state (1 entry)
     // -----------------------------------------------------------------------
 
     #[test]
@@ -167,7 +167,7 @@ mod test_dispute_timeline {
     }
 
     // -----------------------------------------------------------------------
-    // Lifecycle ordering — UnderReview state (2 entries)
+    // Lifecycle ordering - UnderReview state (2 entries)
     // -----------------------------------------------------------------------
 
     #[test]
@@ -216,7 +216,7 @@ mod test_dispute_timeline {
     }
 
     // -----------------------------------------------------------------------
-    // Lifecycle ordering — Resolved state (3 entries)
+    // Lifecycle ordering - Resolved state (3 entries)
     // -----------------------------------------------------------------------
 
     #[test]
@@ -354,7 +354,7 @@ mod test_dispute_timeline {
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
-        // Not yet resolved — resolution text must not appear
+        // Not yet resolved - resolution text must not appear
         let timeline = client.get_dispute_timeline(&invoice_id, &0u32, &10u32);
         for i in 0..timeline.entries.len() {
             let entry = timeline.entries.get(i).unwrap();
@@ -577,7 +577,7 @@ mod test_dispute_timeline {
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(&invoice_id, &admin, &String::from_str(&env, "done"));
 
-        // Request more than TIMELINE_MAX_PAGE_SIZE — should still return all 3
+        // Request more than TIMELINE_MAX_PAGE_SIZE - should still return all 3
         // (3 < 50, so cap doesn't truncate here, but the cap constant is enforced)
         let timeline = client.get_dispute_timeline(&invoice_id, &0u32, &(TIMELINE_MAX_PAGE_SIZE + 100));
         // All 3 entries fit within the cap
