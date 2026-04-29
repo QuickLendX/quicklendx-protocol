@@ -2,7 +2,11 @@ import { Request, Response, NextFunction } from "express";
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../../types/contract";
 import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
 import { labelRecord } from "../../services/versioningService";
+import { freshnessService } from "../../services/freshnessService";
 
+// Mock data aligned with contract types.
+// labelRecord stamps each record with the contract and event schema version
+// that produced it — exactly as the real indexer would do at ingest time.
 export const MOCK_INVOICES: Invoice[] = [
   labelRecord<Omit<Invoice, "contract_version" | "event_schema_version" | "indexed_at">>({
     id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
@@ -45,7 +49,7 @@ export const getInvoices = async (
     if (business) filtered = filtered.filter((i) => i.business === business);
     if (status) filtered = filtered.filter((i) => i.status === status);
 
-    res.json({ data: filtered });
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
   }

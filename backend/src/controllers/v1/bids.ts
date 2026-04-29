@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from "express";
 import { Bid, BidStatus } from "../../types/contract";
 import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
 import { labelRecord } from "../../services/versioningService";
+import { freshnessService } from "../../services/freshnessService";
+import { parsePaginationParams, PaginationError } from "../../utils/pagination";
+import { SnapshotService } from "../../services/snapshotService";
 
 export const MOCK_BIDS: Bid[] = [
   labelRecord<Omit<Bid, "contract_version" | "event_schema_version" | "indexed_at">>({
@@ -36,10 +39,7 @@ export const getBids = async (
     if (invoice_id) filtered = filtered.filter((b) => b.invoice_id === invoice_id);
     if (investor) filtered = filtered.filter((b) => b.investor === investor);
 
-    // Bids must never be served from cache: the best-bid amount changes with
-    // every new placement and serving stale data could mislead investors.
     applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body: filtered });
-    res.json(filtered);
     res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     next(error);
@@ -53,7 +53,7 @@ export const getBestBid = async (
 ) => {
   try {
     const { invoiceId } = req.params;
-    const bestBid = await SnapshotService.getBestBid(invoiceId);
+    const bestBid = await SnapshotService.getBestBid(invoiceId as string);
     if (!bestBid) {
       return res.status(404).json({ error: "No best bid found for this invoice" });
     }
@@ -70,7 +70,7 @@ export const getTopBids = async (
 ) => {
   try {
     const { invoiceId } = req.params;
-    const topBids = await SnapshotService.getTopBids(invoiceId);
+    const topBids = await SnapshotService.getTopBids(invoiceId as string);
     res.json({ top_bids: topBids });
   } catch (error) {
     if (error instanceof PaginationError) {

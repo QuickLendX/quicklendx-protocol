@@ -5,6 +5,8 @@ import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { loadSheddingMiddleware } from "./middleware/load-shedding";
 import { errorHandler } from "./middleware/error-handler";
 import { statusInjector } from "./middleware/status-injector";
+import { csrfMiddleware } from "./middleware/csrf";
+import { webhookCorsOptions } from "./config/cors";
 import v1Routes from "./routes/v1";
 import webhookRoutes from "./routes/webhooks";
 import { webhookCorsOptions } from "./config/cors";

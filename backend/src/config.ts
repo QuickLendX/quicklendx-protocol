@@ -31,6 +31,9 @@ const schema = z.object({
   WEBHOOK_SECRET: isProduction
     ? z.string().min(16)
     : z.string().min(16).optional(),
+  EXPORT_SECRET: isProduction
+    ? z.string().min(32)
+    : z.string().min(32).default("development-only-export-secret-32-chars"),
 });
 
 export type Config = z.infer<typeof schema>;

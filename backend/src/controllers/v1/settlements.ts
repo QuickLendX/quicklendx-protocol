@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from "express";
 import { Settlement, SettlementStatus } from "../../types/contract";
 import { applyCacheHeaders, CC_LONG } from "../../middleware/cache-headers";
 import { labelRecord } from "../../services/versioningService";
+import { freshnessService } from "../../services/freshnessService";
+import { parsePaginationParams, PaginationError } from "../../utils/pagination";
 
 export const MOCK_SETTLEMENTS: Settlement[] = [
   labelRecord<Omit<Settlement, "contract_version" | "event_schema_version" | "indexed_at">>({
@@ -31,7 +33,7 @@ export const getSettlements = async (
       res.status(304).end();
       return;
     }
-    res.json(filtered);
+    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
   } catch (error) {
     if (error instanceof PaginationError) {
       return res.status(400).json({

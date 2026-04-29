@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Dispute, DisputeStatus } from "../../types/contract";
+import { freshnessService } from "../../services/freshnessService";
 import { labelRecord } from "../../services/versioningService";
 
 export const MOCK_DISPUTES: Dispute[] = [
