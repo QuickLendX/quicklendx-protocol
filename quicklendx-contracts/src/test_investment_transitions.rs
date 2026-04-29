@@ -26,10 +26,11 @@
 use super::*;
 use crate::investment::{InvestmentStatus, InvestmentStorage};
 use crate::invoice::InvoiceCategory;
-use crate::types::{InvoiceStatus, Investment};
+use crate::types::{Investment, InvoiceStatus};
+use alloc::vec;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, BytesN, Bytes, Env, String, Vec,
+    token, Address, Bytes, BytesN, Env, String, Vec,
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -99,19 +100,23 @@ impl TestContext {
         self.client
             .submit_investor_kyc(investor, &Bytes::from_slice(&self.env, b"KYC"))
             .unwrap();
-        self.client.verify_investor(&self.admin, investor, &200_000i128);
+        self.client
+            .verify_investor(&self.admin, investor, &200_000i128);
 
         // Create and verify invoice
         let due_date = self.env.ledger().timestamp() + 86_400;
-        let invoice_id = self.client.upload_invoice(
-            business,
-            &invoice_amount,
-            currency,
-            &due_date,
-            &String::from_str(&self.env, "Test invoice"),
-            &InvoiceCategory::Services,
-            &Vec::new(&self.env),
-        ).unwrap();
+        let invoice_id = self
+            .client
+            .upload_invoice(
+                business,
+                &invoice_amount,
+                currency,
+                &due_date,
+                &String::from_str(&self.env, "Test invoice"),
+                &InvoiceCategory::Services,
+                &Vec::new(&self.env),
+            )
+            .unwrap();
         self.client.verify_invoice(&invoice_id).unwrap();
 
         // Place and accept bid to create investment
@@ -160,8 +165,13 @@ fn test_transition_active_to_completed() {
     let currency = ctx.make_token(&business, &investor);
     let invoice_amount = 1_000i128;
 
-    let invoice_id =
-        ctx.setup_funded_invoice(&business, &investor, &currency, invoice_amount, invoice_amount);
+    let invoice_id = ctx.setup_funded_invoice(
+        &business,
+        &investor,
+        &currency,
+        invoice_amount,
+        invoice_amount,
+    );
 
     // Verify initial state
     let investment = ctx.get_investment(&invoice_id);
@@ -169,7 +179,9 @@ fn test_transition_active_to_completed() {
     assert!(ctx.is_in_active_index(&investment.investment_id));
 
     // First settlement should succeed
-    ctx.client.settle_invoice(&invoice_id, &invoice_amount).unwrap();
+    ctx.client
+        .settle_invoice(&invoice_id, &invoice_amount)
+        .unwrap();
     let settled_investment = ctx.get_investment(&invoice_id);
     assert_eq!(settled_investment.status, InvestmentStatus::Completed);
     assert!(!ctx.is_in_active_index(&settled_investment.investment_id));
@@ -226,8 +238,13 @@ fn test_transition_active_to_refunded() {
     let currency = ctx.make_token(&business, &investor);
     let invoice_amount = 1_000i128;
 
-    let invoice_id =
-        ctx.setup_funded_invoice(&business, &investor, &currency, invoice_amount, invoice_amount);
+    let invoice_id = ctx.setup_funded_invoice(
+        &business,
+        &investor,
+        &currency,
+        invoice_amount,
+        invoice_amount,
+    );
 
     // Verify initial state
     let investment = ctx.get_investment(&invoice_id);
@@ -259,8 +276,13 @@ fn test_transition_active_to_withdrawn() {
     let currency = ctx.make_token(&business, &investor);
     let invoice_amount = 1_000i128;
 
-    let invoice_id =
-        ctx.setup_funded_invoice(&business, &investor, &currency, invoice_amount, invoice_amount);
+    let invoice_id = ctx.setup_funded_invoice(
+        &business,
+        &investor,
+        &currency,
+        invoice_amount,
+        invoice_amount,
+    );
 
     // Verify initial state
     let investment = ctx.get_investment(&invoice_id);
@@ -394,8 +416,7 @@ fn test_no_orphan_after_completion() {
     let investor = Address::generate(&ctx.env);
     let currency = ctx.make_token(&business, &investor);
 
-    let invoice_id =
-        ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
+    let invoice_id = ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
     let investment = ctx.get_investment(&invoice_id);
     let investment_id = investment.investment_id.clone();
 
@@ -419,8 +440,7 @@ fn test_no_orphan_after_default() {
     let investor = Address::generate(&ctx.env);
     let currency = ctx.make_token(&business, &investor);
 
-    let invoice_id =
-        ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 500);
+    let invoice_id = ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 500);
     let investment = ctx.get_investment(&invoice_id);
     let investment_id = investment.investment_id.clone();
 
@@ -447,8 +467,7 @@ fn test_no_orphan_after_refund() {
     let investor = Address::generate(&ctx.env);
     let currency = ctx.make_token(&business, &investor);
 
-    let invoice_id =
-        ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
+    let invoice_id = ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
     let investment = ctx.get_investment(&invoice_id);
     let investment_id = investment.investment_id.clone();
 
@@ -476,8 +495,7 @@ fn test_double_settlement_prevention() {
     let investor = Address::generate(&ctx.env);
     let currency = ctx.make_token(&business, &investor);
 
-    let invoice_id =
-        ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
+    let invoice_id = ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
 
     // First settlement
     ctx.client.settle_invoice(&invoice_id, &1_000).unwrap();
@@ -499,8 +517,7 @@ fn test_double_default_prevention() {
     let investor = Address::generate(&ctx.env);
     let currency = ctx.make_token(&business, &investor);
 
-    let invoice_id =
-        ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 500);
+    let invoice_id = ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 500);
 
     // Move time past due
     ctx.env
@@ -583,39 +600,19 @@ fn test_concurrent_investments_independent_transitions() {
 fn test_transitions_guard_consistency() {
     // Test the validate_transition function exhaustively
     let valid_transitions = vec![
-        (
-            InvestmentStatus::Active,
-            InvestmentStatus::Completed,
-            true,
-        ),
+        (InvestmentStatus::Active, InvestmentStatus::Completed, true),
         (InvestmentStatus::Active, InvestmentStatus::Defaulted, true),
         (InvestmentStatus::Active, InvestmentStatus::Refunded, true),
         (InvestmentStatus::Active, InvestmentStatus::Withdrawn, true),
-        (
-            InvestmentStatus::Completed,
-            InvestmentStatus::Active,
-            false,
-        ),
+        (InvestmentStatus::Completed, InvestmentStatus::Active, false),
         (
             InvestmentStatus::Completed,
             InvestmentStatus::Completed,
             false,
         ),
-        (
-            InvestmentStatus::Defaulted,
-            InvestmentStatus::Active,
-            false,
-        ),
-        (
-            InvestmentStatus::Refunded,
-            InvestmentStatus::Active,
-            false,
-        ),
-        (
-            InvestmentStatus::Withdrawn,
-            InvestmentStatus::Active,
-            false,
-        ),
+        (InvestmentStatus::Defaulted, InvestmentStatus::Active, false),
+        (InvestmentStatus::Refunded, InvestmentStatus::Active, false),
+        (InvestmentStatus::Withdrawn, InvestmentStatus::Active, false),
     ];
 
     for (from, to, should_succeed) in valid_transitions {
@@ -646,10 +643,8 @@ fn test_active_index_cant_contain_terminal_investments() {
     let investor = Address::generate(&ctx.env);
     let currency = ctx.make_token(&business, &investor);
 
-    let invoice_id1 =
-        ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
-    let invoice_id2 =
-        ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 500);
+    let invoice_id1 = ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
+    let invoice_id2 = ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 500);
 
     let inv1 = ctx.get_investment(&invoice_id1).investment_id;
     let inv2 = ctx.get_investment(&invoice_id2).investment_id;
@@ -698,7 +693,10 @@ fn test_index_integrity_under_mutations() {
     }
 
     let after_count = ctx.client.get_active_investment_ids().len();
-    assert_eq!(after_count, 0, "All investments should be removed from active index");
+    assert_eq!(
+        after_count, 0,
+        "All investments should be removed from active index"
+    );
     assert!(
         after_count < before_count || before_count == 5,
         "Index should shrink or remain consistent"

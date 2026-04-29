@@ -5,7 +5,7 @@ use crate::verification::normalize_tag;
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 use crate::storage::InvoiceStorage;
-use crate::types::{
+pub use crate::types::{
     Dispute, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceRating,
     InvoiceStatus, LineItemRecord, PaymentRecord,
 };

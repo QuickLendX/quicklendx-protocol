@@ -152,7 +152,6 @@ pub struct InvoiceMetadata {
     pub notes: String,
 }
 
-
 // Invoice logic is implemented in crate::invoice module.
 
 /// Bid data structure

@@ -50,10 +50,7 @@ mod test_dispute {
     use crate::errors::QuickLendXError;
     use crate::invoice::{DisputeStatus, InvoiceCategory};
     use crate::{QuickLendXContract, QuickLendXContractClient};
-    use soroban_sdk::{
-        testutils::{Address as _},
-        Address, BytesN, Env, String, Vec,
-    };
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
     // -----------------------------------------------------------------------
     // Test helpers
@@ -92,15 +89,17 @@ mod test_dispute {
     ) -> BytesN<32> {
         let currency = Address::generate(env);
         let due_date = env.ledger().timestamp() + 30 * 24 * 60 * 60;
-        client.store_invoice(
-            business,
-            &amount,
-            &currency,
-            &due_date,
-            &String::from_str(env, "Test invoice for dispute"),
-            &InvoiceCategory::Services,
-            &Vec::new(env),
-        ).unwrap()
+        client
+            .store_invoice(
+                business,
+                &amount,
+                &currency,
+                &due_date,
+                &String::from_str(env, "Test invoice for dispute"),
+                &InvoiceCategory::Services,
+                &Vec::new(env),
+            )
+            .unwrap()
     }
 
     // -----------------------------------------------------------------------
@@ -118,18 +117,25 @@ mod test_dispute {
         let evidence = String::from_str(&env, "Supporting documentation provided");
 
         let result = client.try_create_dispute(&invoice_id, &business, &reason, &evidence);
-        assert!(result.is_ok(), "Business should be able to create a dispute");
+        assert!(
+            result.is_ok(),
+            "Business should be able to create a dispute"
+        );
 
         // Verify dispute is stored and status is Disputed
         let invoice = client.get_invoice(&invoice_id);
         assert_eq!(invoice.dispute_status, DisputeStatus::Disputed);
 
-        let dispute = client.get_dispute_details(&invoice_id)
+        let dispute = client
+            .get_dispute_details(&invoice_id)
             .expect("Dispute should exist after creation");
         assert_eq!(dispute.created_by, business);
         assert_eq!(dispute.reason, reason);
         assert_eq!(dispute.evidence, evidence);
-        assert_eq!(dispute.resolved_at, 0, "resolved_at must be zero before resolution");
+        assert_eq!(
+            dispute.resolved_at, 0,
+            "resolved_at must be zero before resolution"
+        );
     }
 
     /// [TC-02] `create_dispute` must reject an invoice ID that does not exist.
@@ -335,7 +341,10 @@ mod test_dispute {
         );
 
         let result = client.try_put_dispute_under_review(&invoice_id, &admin);
-        assert!(result.is_ok(), "Admin should advance dispute to UnderReview");
+        assert!(
+            result.is_ok(),
+            "Admin should advance dispute to UnderReview"
+        );
 
         assert_eq!(
             client.get_invoice(&invoice_id).dispute_status,
@@ -434,7 +443,10 @@ mod test_dispute {
 
         let resolution = String::from_str(&env, "Dispute resolved with partial refund");
         let result = client.try_resolve_dispute(&invoice_id, &admin, &resolution);
-        assert!(result.is_ok(), "Admin should be able to resolve a UnderReview dispute");
+        assert!(
+            result.is_ok(),
+            "Admin should be able to resolve a UnderReview dispute"
+        );
 
         assert_eq!(
             client.get_invoice(&invoice_id).dispute_status,
@@ -571,11 +583,7 @@ mod test_dispute {
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
-        let result = client.try_resolve_dispute(
-            &invoice_id,
-            &admin,
-            &String::from_str(&env, ""),
-        );
+        let result = client.try_resolve_dispute(&invoice_id, &admin, &String::from_str(&env, ""));
         assert!(result.is_err());
         let err = result.unwrap_err().expect("expected contract error");
         assert_eq!(err, QuickLendXError::InvalidDisputeReason);
@@ -980,7 +988,10 @@ mod test_dispute {
         let before = client
             .get_dispute_details(&invoice_id)
             .expect("Dispute must exist");
-        assert_eq!(before.resolved_at, 0, "resolved_at must be 0 before resolution");
+        assert_eq!(
+            before.resolved_at, 0,
+            "resolved_at must be 0 before resolution"
+        );
 
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(
@@ -993,7 +1004,10 @@ mod test_dispute {
         let after = client
             .get_dispute_details(&invoice_id)
             .expect("Dispute must exist");
-        assert!(after.resolved_at > 0, "resolved_at must be set after resolution");
+        assert!(
+            after.resolved_at > 0,
+            "resolved_at must be set after resolution"
+        );
         assert_eq!(after.resolved_by, admin, "resolved_by must be the admin");
     }
 
@@ -1099,11 +1113,8 @@ mod test_dispute {
         let business = create_verified_business(&env, &client, &admin);
         let invoice_id = create_test_invoice(&env, &client, &business, 100_000);
 
-        let result = client.try_resolve_dispute(
-            &invoice_id,
-            &admin,
-            &String::from_str(&env, "resolution"),
-        );
+        let result =
+            client.try_resolve_dispute(&invoice_id, &admin, &String::from_str(&env, "resolution"));
         assert!(result.is_err());
         let err = result.unwrap_err().expect("expected contract error");
         assert_eq!(err, QuickLendXError::DisputeNotFound);
@@ -1177,14 +1188,13 @@ mod test_dispute {
             QuickLendXError::InvoiceNotFound
         );
 
-        let resolve_result = client.try_resolve_dispute(
-            &fake_id,
-            &admin,
-            &String::from_str(&env, "resolution"),
-        );
+        let resolve_result =
+            client.try_resolve_dispute(&fake_id, &admin, &String::from_str(&env, "resolution"));
         assert!(resolve_result.is_err());
         assert_eq!(
-            resolve_result.unwrap_err().expect("expected contract error"),
+            resolve_result
+                .unwrap_err()
+                .expect("expected contract error"),
             QuickLendXError::InvoiceNotFound
         );
     }
@@ -1344,12 +1354,17 @@ mod test_dispute {
             &String::from_str(&env, "Resolved after evidence review"),
         );
 
-        let dispute = client.get_dispute_details(&invoice_id).expect("dispute must exist");
+        let dispute = client
+            .get_dispute_details(&invoice_id)
+            .expect("dispute must exist");
         assert_eq!(
             dispute.evidence,
             String::from_str(&env, "Updated supporting evidence")
         );
-        assert_eq!(client.get_invoice(&invoice_id).dispute_status, DisputeStatus::Resolved);
+        assert_eq!(
+            client.get_invoice(&invoice_id).dispute_status,
+            DisputeStatus::Resolved
+        );
     }
 
     /// [TC-45] Evidence updates are creator-only and reject tampering attempts.

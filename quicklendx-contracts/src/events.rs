@@ -1,11 +1,13 @@
 #![allow(deprecated)]
 
-use crate::types::Bid;
 use crate::fees::FeeType;
 use crate::payments::Escrow;
+use crate::types::Bid;
 use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::InvestorVerification;
-use soroban_sdk::{contractevent, contracttype, symbol_short, Address, BytesN, Env, String, Symbol};
+use soroban_sdk::{
+    contractevent, contracttype, symbol_short, Address, BytesN, Env, String, Symbol,
+};
 
 // ============================================================================
 // Structured Event Types
@@ -747,13 +749,6 @@ pub fn emit_escrow_created(env: &Env, escrow: &Escrow) {
     .publish(env);
 }
 
-pub fn emit_admin_initialized(env: &Env, admin: &Address) {
-    AdminInitialized {
-        admin: admin.clone(),
-    }
-    .publish(env);
-}
-
 pub fn emit_escrow_released(
     env: &Env,
     escrow_id: &BytesN<32>,
@@ -1108,14 +1103,44 @@ pub fn emit_admin_set(env: &Env, admin: &Address) {
     .publish(env);
 }
 
-
 pub fn emit_admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
-    AdminTransferred {
-        old_admin: old_admin.clone(),
-        new_admin: new_admin.clone(),
-        timestamp: env.ledger().timestamp(),
-    }
-    .publish(env);
+    env.events().publish(
+        (symbol_short!("adm_trf"),),
+        (
+            old_admin.clone(),
+            new_admin.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+pub fn emit_admin_transfer_initiated(env: &Env, current_admin: &Address, pending_admin: &Address) {
+    env.events().publish(
+        (symbol_short!("adm_req"),),
+        (
+            current_admin.clone(),
+            pending_admin.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+pub fn emit_admin_transfer_cancelled(env: &Env, current_admin: &Address, pending_admin: &Address) {
+    env.events().publish(
+        (symbol_short!("adm_cnl"),),
+        (
+            current_admin.clone(),
+            pending_admin.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+pub fn emit_admin_two_step_updated(env: &Env, admin: &Address, enabled: bool) {
+    env.events().publish(
+        (symbol_short!("adm_2st"),),
+        (admin.clone(), enabled, env.ledger().timestamp()),
+    );
 }
 
 pub fn emit_revenue_distributed(
@@ -1164,5 +1189,6 @@ pub fn emit_protocol_initialized(
 }
 
 pub fn emit_admin_initialized(env: &Env, admin: &Address) {
-    env.events().publish((symbol_short!("admin"),), admin.clone());
+    env.events()
+        .publish((symbol_short!("adm_init"),), (admin.clone(),));
 }

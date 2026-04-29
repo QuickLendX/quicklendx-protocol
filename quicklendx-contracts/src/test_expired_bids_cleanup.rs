@@ -151,7 +151,8 @@ fn test_cleanup_preserves_active_placed_bids() {
     // Verify bid is still Placed
     let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
     assert_eq!(
-        bid.status, BidStatus::Placed,
+        bid.status,
+        BidStatus::Placed,
         "Active bid should remain in Placed status"
     );
 }
@@ -181,7 +182,8 @@ fn test_cleanup_prunes_expired_placed_bids() {
     // Verify bid is transitioned to Expired
     let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
     assert_eq!(
-        bid.status, BidStatus::Expired,
+        bid.status,
+        BidStatus::Expired,
         "Expired bid should be marked as Expired"
     );
 
@@ -257,7 +259,8 @@ fn test_cleanup_preserves_accepted_bids() {
     // Verify record still accessible
     let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
     assert_eq!(
-        bid.status, BidStatus::Accepted,
+        bid.status,
+        BidStatus::Accepted,
         "Accepted bid should preserve its status"
     );
 }
@@ -292,7 +295,8 @@ fn test_cleanup_preserves_withdrawn_bids() {
 
     let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
     assert_eq!(
-        bid.status, BidStatus::Withdrawn,
+        bid.status,
+        BidStatus::Withdrawn,
         "Withdrawn bid should preserve its status"
     );
 }
@@ -332,7 +336,8 @@ fn test_cleanup_preserves_cancelled_bids() {
 
     let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
     assert_eq!(
-        bid.status, BidStatus::Cancelled,
+        bid.status,
+        BidStatus::Cancelled,
         "Cancelled bid should preserve its status"
     );
 }
@@ -381,14 +386,8 @@ fn test_cleanup_with_mixed_bid_statuses() {
 
     let accepted_count = count_bids_by_status(&env, &invoice_id, BidStatus::Accepted);
     let withdrawn_count = count_bids_by_status(&env, &invoice_id, BidStatus::Withdrawn);
-    assert_eq!(
-        accepted_count, 1,
-        "Accepted bid should be preserved"
-    );
-    assert_eq!(
-        withdrawn_count, 1,
-        "Withdrawn bid should be preserved"
-    );
+    assert_eq!(accepted_count, 1, "Accepted bid should be preserved");
+    assert_eq!(withdrawn_count, 1, "Withdrawn bid should be preserved");
 }
 
 // -------------------------------------------------------------------------------
@@ -430,10 +429,7 @@ fn test_cleanup_idempotent_on_expired_bids() {
 
     // Third cleanup
     let cleaned_third = BidStorage::cleanup_expired_bids(&env, &invoice_id);
-    assert_eq!(
-        cleaned_third, 0,
-        "Third cleanup should also find nothing"
-    );
+    assert_eq!(cleaned_third, 0, "Third cleanup should also find nothing");
 
     // Verify index is stable
     let final_count = get_bid_count_for_invoice(&env, &invoice_id);
@@ -512,7 +508,8 @@ fn test_cleanup_idempotent_terminal_bids_always_remain() {
     // Accepted bid should still be findable
     let bid = BidStorage::get_bid(&env, &bid_accepted).unwrap();
     assert_eq!(
-        bid.status, BidStatus::Accepted,
+        bid.status,
+        BidStatus::Accepted,
         "Accepted bid always remains"
     );
 
@@ -631,13 +628,27 @@ fn test_cleanup_bounded_linear_scaling() {
     let investor = create_verified_investor(&env, &client, &admin, 10_000_000_000);
 
     let now = env.ledger().timestamp();
-    let invoice_id = create_invoice(&env, &client, &admin, &business, 1_000_000, now + 86400 * 30);
+    let invoice_id = create_invoice(
+        &env,
+        &client,
+        &admin,
+        &business,
+        1_000_000,
+        now + 86400 * 30,
+    );
 
     // Place many bids (10 bids, well under MAX_BIDS_PER_INVOICE)
     let num_bids = 10u32;
     for i in 0..num_bids {
         let base_amount = 50_000 + (i as i128 * 1_000);
-        create_and_place_bid(&env, &client, &investor, &invoice_id, base_amount, base_amount + 500);
+        create_and_place_bid(
+            &env,
+            &client,
+            &investor,
+            &invoice_id,
+            base_amount,
+            base_amount + 500,
+        );
     }
 
     let initial_count = get_bid_count_for_invoice(&env, &invoice_id);
@@ -730,7 +741,11 @@ fn test_investor_index_pruned_of_expired_bids() {
     // Bid should still be in raw index (refresh_investor_bids doesn't modify here),
     // but bid status is Expired
     let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
-    assert_eq!(bid.status, BidStatus::Expired, "Bid should be marked Expired");
+    assert_eq!(
+        bid.status,
+        BidStatus::Expired,
+        "Bid should be marked Expired"
+    );
 }
 
 // -------------------------------------------------------------------------------
@@ -752,17 +767,24 @@ fn test_comprehensive_cleanup_scenario() {
     let invoice2_id = create_invoice(&env, &client, &admin, &business, 200_000, now + 86400 * 30);
 
     // Invoice 1: 3 Placed + 1 Accepted bids
-    let inv1_placed1 = create_and_place_bid(&env, &client, &investor1, &invoice1_id, 30_000, 30_300);
-    let inv1_placed2 = create_and_place_bid(&env, &client, &investor1, &invoice1_id, 40_000, 40_400);
-    let inv1_accepted = create_and_place_bid(&env, &client, &investor2, &invoice1_id, 50_000, 50_500);
+    let inv1_placed1 =
+        create_and_place_bid(&env, &client, &investor1, &invoice1_id, 30_000, 30_300);
+    let inv1_placed2 =
+        create_and_place_bid(&env, &client, &investor1, &invoice1_id, 40_000, 40_400);
+    let inv1_accepted =
+        create_and_place_bid(&env, &client, &investor2, &invoice1_id, 50_000, 50_500);
     client.accept_bid(&invoice1_id, &inv1_accepted);
-    let inv1_placed3 = create_and_place_bid(&env, &client, &investor2, &invoice1_id, 60_000, 60_600);
+    let inv1_placed3 =
+        create_and_place_bid(&env, &client, &investor2, &invoice1_id, 60_000, 60_600);
 
     // Invoice 2: 2 Placed + 1 Withdrawn bids
-    let inv2_placed1 = create_and_place_bid(&env, &client, &investor1, &invoice2_id, 70_000, 70_700);
-    let inv2_withdrawn = create_and_place_bid(&env, &client, &investor2, &invoice2_id, 80_000, 80_800);
+    let inv2_placed1 =
+        create_and_place_bid(&env, &client, &investor1, &invoice2_id, 70_000, 70_700);
+    let inv2_withdrawn =
+        create_and_place_bid(&env, &client, &investor2, &invoice2_id, 80_000, 80_800);
     client.withdraw_bid(&inv2_withdrawn);
-    let inv2_placed2 = create_and_place_bid(&env, &client, &investor1, &invoice2_id, 90_000, 90_900);
+    let inv2_placed2 =
+        create_and_place_bid(&env, &client, &investor1, &invoice2_id, 90_000, 90_900);
 
     // Verify initial counts
     assert_eq!(get_bid_count_for_invoice(&env, &invoice1_id), 4);

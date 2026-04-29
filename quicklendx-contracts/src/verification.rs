@@ -1,5 +1,4 @@
 use crate::bid::BidStorage;
-use crate::types::BidStatus;
 use crate::errors::QuickLendXError;
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
@@ -7,6 +6,7 @@ use crate::protocol_limits::{
     MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_REJECTION_REASON_LENGTH,
     MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
 };
+use crate::types::BidStatus;
 use crate::types::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 

@@ -62,7 +62,6 @@ pub const MIN_VALID_AMOUNT: i128 = 0;
 // Data Types
 // ============================================================================
 
-
 /// Complete breakdown of profit and fee calculation
 ///
 /// This struct provides full transparency into how funds are distributed
