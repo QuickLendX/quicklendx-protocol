@@ -60,7 +60,17 @@ jobs:
 
       - name: Install wasm-opt (binaryen) for size reduction
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
-        run: brew install binaryen
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y binaryen
+          elif command -v brew >/dev/null 2>&1; then
+            brew install binaryen
+          else
+            echo "No supported package manager found for binaryen install."
+            exit 1
+          fi
+          wasm-opt --version
 
       - name: Build and check WASM size budget (shell script)
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
