@@ -196,7 +196,15 @@ impl Vesting {
         VestingStorage::store(env, &schedule);
         env.events().publish(
             (symbol_short!("vesting"), symbol_short!("created")),
-            (id, beneficiary.clone(), token.clone(), total_amount, start_time, cliff_time, end_time),
+            (
+                id,
+                beneficiary.clone(),
+                token.clone(),
+                total_amount,
+                start_time,
+                cliff_time,
+                end_time,
+            ),
         );
 
         Ok(id)

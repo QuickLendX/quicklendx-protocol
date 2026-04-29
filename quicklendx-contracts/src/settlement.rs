@@ -12,9 +12,9 @@
 use crate::errors::QuickLendXError;
 use crate::events::{emit_invoice_settled, emit_partial_payment};
 use crate::investment::InvestmentStorage;
-use crate::types::InvestmentStatus;
 use crate::payments::transfer_funds;
 use crate::storage::InvoiceStorage;
+use crate::types::InvestmentStatus;
 use crate::types::{Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 

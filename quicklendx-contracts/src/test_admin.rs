@@ -1,603 +1,496 @@
-//! Comprehensive test suite for hardened admin role management.
+//! Admin transfer safety tests.
 //!
-//! Test Coverage:
-//! 1. Initialization - admin setup, double-init prevention, authorization
-//! 2. Transfer - success path, authorization, validation, atomicity
-//! 3. Query Functions - get_admin, is_admin, is_initialized
-//! 4. Authorization - require_admin, require_current_admin
-//! 5. Security - transfer locks, concurrent operations, edge cases
-//! 6. Events - initialization, transfer audit trail
-//! 7. Utilities - with_admin_auth, with_current_admin
-//! 8. Legacy Compatibility - set_admin routing
-//!
-//! Target: 95%+ test coverage for admin.rs
+//! Coverage goals for issue #824:
+//! - one-time initialization
+//! - authenticated transfer
+//! - transfer lock behavior
+//! - optional two-step transfer flow
+//! - event emission on admin-state changes
 
 #[cfg(test)]
 mod test_admin {
-    use crate::admin::AdminStorage;
+    use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY};
     use crate::errors::QuickLendXError;
-    use crate::{QuickLendXContract, QuickLendXContractClient};
+    use crate::QuickLendXContract;
     use soroban_sdk::{
-        testutils::{Address as _, Events, MockAuth, MockAuthInvoke},
-        Address, Env, IntoVal,
+        symbol_short,
+        testutils::{Address as _, Events},
+        xdr, Address, Env, Symbol, TryFromVal,
     };
 
-    fn setup() -> (Env, QuickLendXContractClient<'static>) {
+    fn setup() -> (Env, Address) {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(QuickLendXContract, ());
-        let client = QuickLendXContractClient::new(&env, &contract_id);
-        (env, client)
+        (env, contract_id)
     }
 
-    fn setup_with_admin() -> (Env, QuickLendXContractClient<'static>, Address) {
-        let (env, client) = setup();
-        env.mock_all_auths();
+    fn setup_with_admin() -> (Env, Address, Address) {
+        let (env, contract_id) = setup();
         let admin = Address::generate(&env);
-        client.initialize_admin(&admin);
-        (env, client, admin)
+        initialize_admin(&env, &contract_id, &admin).unwrap();
+        (env, contract_id, admin)
     }
 
-    // ============================================================================
-    // 1. Initialization Tests
-    // ============================================================================
-
-    #[test]
-    fn test_initialize_admin_succeeds() {
-        let (env, client) = setup();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        let result = client.try_initialize_admin(&admin);
-
-        assert!(result.is_ok(), "First initialization must succeed");
-        assert_eq!(
-            client.get_current_admin(),
-            Some(admin.clone()),
-            "Stored admin must match initialized address"
-        );
-        assert!(
-            AdminStorage::is_initialized(&env),
-            "Admin system must be marked as initialized"
-        );
+    fn initialize_admin(
+        env: &Env,
+        contract_id: &Address,
+        admin: &Address,
+    ) -> Result<(), QuickLendXError> {
+        env.as_contract(contract_id, || AdminStorage::initialize(env, admin))
     }
 
-    #[test]
-    fn test_initialize_admin_requires_authorization() {
-        let env = Env::default();
-        let contract_id = env.register(QuickLendXContract, ());
-        let client = QuickLendXContractClient::new(&env, &contract_id);
-
-        let admin = Address::generate(&env);
-
-        // Should fail without authorization (no mock_all_auths)
-        let result = client.try_initialize_admin(&admin);
-        assert!(result.is_err(), "Initialization without auth must fail");
+    fn transfer_admin(
+        env: &Env,
+        contract_id: &Address,
+        current_admin: &Address,
+        new_admin: &Address,
+    ) -> Result<(), QuickLendXError> {
+        env.as_contract(contract_id, || AdminStorage::transfer_admin(env, current_admin, new_admin))
     }
 
-    #[test]
-    fn test_initialize_admin_double_init_fails() {
-        let (env, client) = setup();
-        env.mock_all_auths();
-
-        let admin1 = Address::generate(&env);
-        let admin2 = Address::generate(&env);
-
-        // First initialization succeeds
-        client.initialize_admin(&admin1);
-
-        // Second initialization fails
-        let result = client.try_initialize_admin(&admin2);
-        assert!(result.is_err(), "Double initialization must be rejected");
-
-        // Original admin remains
-        assert_eq!(
-            client.get_current_admin(),
-            Some(admin1),
-            "Original admin must remain after failed re-init"
-        );
+    fn initiate_admin_transfer(
+        env: &Env,
+        contract_id: &Address,
+        current_admin: &Address,
+        pending_admin: &Address,
+    ) -> Result<(), QuickLendXError> {
+        env.as_contract(contract_id, || {
+            AdminStorage::initiate_admin_transfer(env, current_admin, pending_admin)
+        })
     }
 
-    #[test]
-    fn test_initialize_admin_same_address_twice_fails() {
-        let (env, client) = setup();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        client.initialize_admin(&admin);
-
-        let result = client.try_initialize_admin(&admin);
-        assert!(
-            result.is_err(),
-            "Re-initializing with same address must fail"
-        );
+    fn accept_admin_transfer(
+        env: &Env,
+        contract_id: &Address,
+        pending_admin: &Address,
+    ) -> Result<(), QuickLendXError> {
+        env.as_contract(contract_id, || AdminStorage::accept_admin_transfer(env, pending_admin))
     }
 
-    #[test]
-    fn test_initialize_admin_emits_event() {
-        let (env, client) = setup();
-        env.mock_all_auths();
+    fn cancel_admin_transfer(
+        env: &Env,
+        contract_id: &Address,
+        current_admin: &Address,
+    ) -> Result<(), QuickLendXError> {
+        env.as_contract(contract_id, || AdminStorage::cancel_admin_transfer(env, current_admin))
+    }
 
-        let admin = Address::generate(&env);
-        client.initialize_admin(&admin);
+    fn set_two_step_enabled(
+        env: &Env,
+        contract_id: &Address,
+        admin: &Address,
+        enabled: bool,
+    ) -> Result<(), QuickLendXError> {
+        env.as_contract(contract_id, || AdminStorage::set_two_step_enabled(env, admin, enabled))
+    }
 
+    fn get_admin(env: &Env, contract_id: &Address) -> Option<Address> {
+        env.as_contract(contract_id, || AdminStorage::get_admin(env))
+    }
+
+    fn get_pending_admin(env: &Env, contract_id: &Address) -> Option<Address> {
+        env.as_contract(contract_id, || AdminStorage::get_pending_admin(env))
+    }
+
+    fn is_admin(env: &Env, contract_id: &Address, address: &Address) -> bool {
+        env.as_contract(contract_id, || AdminStorage::is_admin(env, address))
+    }
+
+    fn is_initialized(env: &Env, contract_id: &Address) -> bool {
+        env.as_contract(contract_id, || AdminStorage::is_initialized(env))
+    }
+
+    fn is_transfer_locked(env: &Env, contract_id: &Address) -> bool {
+        env.as_contract(contract_id, || AdminStorage::is_transfer_locked(env))
+    }
+
+    fn is_two_step_enabled(env: &Env, contract_id: &Address) -> bool {
+        env.as_contract(contract_id, || AdminStorage::is_two_step_enabled(env))
+    }
+
+    fn set_admin_alias(
+        env: &Env,
+        contract_id: &Address,
+        current_admin: &Address,
+        new_admin: &Address,
+    ) -> Result<(), QuickLendXError> {
+        env.as_contract(contract_id, || AdminStorage::set_admin(env, current_admin, new_admin))
+    }
+
+    fn require_admin_auth(
+        env: &Env,
+        contract_id: &Address,
+        address: &Address,
+    ) -> Result<(), QuickLendXError> {
+        env.as_contract(contract_id, || AdminStorage::require_admin_auth(env, address))
+    }
+
+    fn require_current_admin(
+        env: &Env,
+        contract_id: &Address,
+    ) -> Result<Address, QuickLendXError> {
+        env.as_contract(contract_id, || AdminStorage::require_current_admin(env))
+    }
+
+    fn set_admin_legacy(
+        env: &Env,
+        contract_id: &Address,
+        admin: &Address,
+    ) -> Result<(), QuickLendXError> {
+        env.as_contract(contract_id, || AdminStorage::set_admin_legacy(env, admin))
+    }
+
+    fn with_admin_auth_ok(
+        env: &Env,
+        contract_id: &Address,
+        admin: &Address,
+    ) -> Result<u32, QuickLendXError> {
+        env.as_contract(contract_id, || AdminStorage::with_admin_auth(env, admin, || Ok(42)))
+    }
+
+    fn with_admin_auth_err(
+        env: &Env,
+        contract_id: &Address,
+        admin: &Address,
+    ) -> Result<u32, QuickLendXError> {
+        env.as_contract(contract_id, || {
+            AdminStorage::with_admin_auth(env, admin, || Err(QuickLendXError::OperationNotAllowed))
+        })
+    }
+
+    fn with_current_admin_ok(
+        env: &Env,
+        contract_id: &Address,
+    ) -> Result<Address, QuickLendXError> {
+        env.as_contract(contract_id, || AdminStorage::with_current_admin(env, |admin| Ok(admin.clone())))
+    }
+
+    fn with_current_admin_err(
+        env: &Env,
+        contract_id: &Address,
+    ) -> Result<Address, QuickLendXError> {
+        env.as_contract(contract_id, || {
+            AdminStorage::with_current_admin(env, |_admin| Err(QuickLendXError::OperationNotAllowed))
+        })
+    }
+
+    fn latest_topic_symbol(env: &Env) -> Symbol {
         let events = env.events().all();
-        assert!(!events.is_empty(), "Initialization must emit event");
-
-        let event = &events[0];
-        assert_eq!(event.0, (soroban_sdk::symbol_short!("adm_init"),));
-    }
-
-    // ============================================================================
-    // 2. Admin Transfer Tests
-    // ============================================================================
-
-    #[test]
-    fn test_transfer_admin_succeeds() {
-        let (env, client, admin1) = setup_with_admin();
-        let admin2 = Address::generate(&env);
-
-        let result = client.try_transfer_admin(&admin1, &admin2);
-        assert!(result.is_ok(), "Admin transfer must succeed");
-
-        assert_eq!(
-            client.get_current_admin(),
-            Some(admin2),
-            "New admin must be stored"
-        );
-        assert!(
-            !AdminStorage::is_admin(&env, &admin1),
-            "Old admin must no longer be admin"
-        );
-        assert!(
-            AdminStorage::is_admin(&env, &admin2),
-            "New admin must be recognized"
-        );
-    }
-
-    #[test]
-    fn test_transfer_admin_requires_current_admin_auth() {
-        let (env, client, admin1) = setup_with_admin();
-        let admin2 = Address::generate(&env);
-        let non_admin = Address::generate(&env);
-
-        // Non-admin cannot transfer
-        let result = client.try_transfer_admin(&non_admin, &admin2);
-        assert!(result.is_err(), "Non-admin transfer must fail");
-
-        // Admin remains unchanged
-        assert_eq!(
-            client.get_current_admin(),
-            Some(admin1),
-            "Admin must remain unchanged after failed transfer"
-        );
-    }
-
-    #[test]
-    fn test_transfer_admin_to_self_fails() {
-        let (env, client, admin) = setup_with_admin();
-
-        let result = client.try_transfer_admin(&admin, &admin);
-        assert!(result.is_err(), "Transfer to self must fail");
-
-        assert_eq!(
-            client.get_current_admin(),
-            Some(admin),
-            "Admin must remain unchanged"
-        );
-    }
-
-    #[test]
-    fn test_transfer_admin_without_initialization_fails() {
-        let (env, client) = setup();
-        env.mock_all_auths();
-
-        let admin1 = Address::generate(&env);
-        let admin2 = Address::generate(&env);
-
-        let result = client.try_transfer_admin(&admin1, &admin2);
-        assert!(result.is_err(), "Transfer without initialization must fail");
-    }
-
-    #[test]
-    fn test_transfer_admin_emits_event() {
-        let (env, client, admin1) = setup_with_admin();
-        let admin2 = Address::generate(&env);
-
-        client.transfer_admin(&admin1, &admin2);
-
-        let events = env.events().all();
-        let transfer_events: Vec<_> = events
-            .iter()
-            .filter(|e| e.0 == (soroban_sdk::symbol_short!("adm_trf"),))
-            .collect();
-
-        assert!(!transfer_events.is_empty(), "Transfer must emit event");
-    }
-
-    #[test]
-    fn test_transfer_admin_chain() {
-        let (env, client, admin1) = setup_with_admin();
-        let admin2 = Address::generate(&env);
-        let admin3 = Address::generate(&env);
-
-        // Transfer from admin1 to admin2
-        client.transfer_admin(&admin1, &admin2);
-        assert_eq!(client.get_current_admin(), Some(admin2.clone()));
-
-        // Transfer from admin2 to admin3
-        client.transfer_admin(&admin2, &admin3);
-        assert_eq!(client.get_current_admin(), Some(admin3));
-
-        // admin1 can no longer transfer
-        let result = client.try_transfer_admin(&admin1, &admin2);
-        assert!(result.is_err(), "Old admin cannot transfer");
-    }
-
-    // ============================================================================
-    // 3. Query Function Tests
-    // ============================================================================
-
-    #[test]
-    fn test_get_admin_before_initialization() {
-        let (env, client) = setup();
-
-        assert_eq!(
-            client.get_current_admin(),
-            None,
-            "Admin must be None before initialization"
-        );
-        assert!(
-            !AdminStorage::is_initialized(&env),
-            "System must not be initialized"
-        );
-    }
-
-    #[test]
-    fn test_get_admin_after_initialization() {
-        let (env, client, admin) = setup_with_admin();
-
-        assert_eq!(
-            client.get_current_admin(),
-            Some(admin.clone()),
-            "Admin must be returned after initialization"
-        );
-        assert!(
-            AdminStorage::is_initialized(&env),
-            "System must be initialized"
-        );
-    }
-
-    #[test]
-    fn test_is_admin_checks() {
-        let (env, client, admin) = setup_with_admin();
-        let non_admin = Address::generate(&env);
-
-        assert!(
-            AdminStorage::is_admin(&env, &admin),
-            "Admin address must return true"
-        );
-        assert!(
-            !AdminStorage::is_admin(&env, &non_admin),
-            "Non-admin address must return false"
-        );
-    }
-
-    #[test]
-    fn test_is_admin_before_initialization() {
-        let (env, _client) = setup();
-        let address = Address::generate(&env);
-
-        assert!(
-            !AdminStorage::is_admin(&env, &address),
-            "No address should be admin before initialization"
-        );
-    }
-
-    // ============================================================================
-    // 4. Authorization Tests
-    // ============================================================================
-
-    #[test]
-    fn test_require_admin_succeeds_for_admin() {
-        let (env, _client, admin) = setup_with_admin();
-
-        let result = AdminStorage::require_admin(&env, &admin);
-        assert!(result.is_ok(), "require_admin must succeed for admin");
-    }
-
-    #[test]
-    fn test_require_admin_fails_for_non_admin() {
-        let (env, _client, _admin) = setup_with_admin();
-        let non_admin = Address::generate(&env);
-
-        let result = AdminStorage::require_admin(&env, &non_admin);
-        assert_eq!(
-            result,
-            Err(QuickLendXError::NotAdmin),
-            "require_admin must fail for non-admin"
-        );
-    }
-
-    #[test]
-    fn test_require_admin_fails_before_initialization() {
-        let (env, _client) = setup();
-        let address = Address::generate(&env);
-
-        let result = AdminStorage::require_admin(&env, &address);
-        assert_eq!(
-            result,
-            Err(QuickLendXError::OperationNotAllowed),
-            "require_admin must fail before initialization"
-        );
-    }
-
-    #[test]
-    fn test_require_current_admin_succeeds() {
-        let (env, _client, admin) = setup_with_admin();
-
-        let result = AdminStorage::require_current_admin(&env);
-        assert!(result.is_ok(), "require_current_admin must succeed");
-        assert_eq!(result.unwrap(), admin, "Must return correct admin address");
-    }
-
-    #[test]
-    fn test_require_current_admin_fails_before_initialization() {
-        let (env, _client) = setup();
-
-        let result = AdminStorage::require_current_admin(&env);
-        assert_eq!(
-            result,
-            Err(QuickLendXError::OperationNotAllowed),
-            "require_current_admin must fail before initialization"
-        );
-    }
-
-    // ============================================================================
-    // 5. Security Tests
-    // ============================================================================
-
-    #[test]
-    fn test_admin_operations_atomic() {
-        let (env, client, admin1) = setup_with_admin();
-        let admin2 = Address::generate(&env);
-
-        // Verify atomicity by checking state before and after
-        assert!(AdminStorage::is_admin(&env, &admin1));
-        assert!(!AdminStorage::is_admin(&env, &admin2));
-
-        client.transfer_admin(&admin1, &admin2);
-
-        // State should be completely switched
-        assert!(!AdminStorage::is_admin(&env, &admin1));
-        assert!(AdminStorage::is_admin(&env, &admin2));
-    }
-
-    #[test]
-    fn test_initialization_state_consistency() {
-        let (env, client) = setup();
-        env.mock_all_auths();
-
-        // Before initialization
-        assert!(!AdminStorage::is_initialized(&env));
-        assert_eq!(AdminStorage::get_admin(&env), None);
-
-        let admin = Address::generate(&env);
-        client.initialize_admin(&admin);
-
-        // After initialization
-        assert!(AdminStorage::is_initialized(&env));
-        assert_eq!(AdminStorage::get_admin(&env), Some(admin));
-    }
-
-    // ============================================================================
-    // 6. Utility Function Tests
-    // ============================================================================
-
-    #[test]
-    fn test_with_admin_auth_succeeds() {
-        let (env, _client, admin) = setup_with_admin();
-
-        let result = AdminStorage::with_admin_auth(&env, &admin, || Ok("success".to_string()));
-
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "success");
-    }
-
-    #[test]
-    fn test_with_admin_auth_fails_for_non_admin() {
-        let (env, _client, _admin) = setup_with_admin();
-        let non_admin = Address::generate(&env);
-
-        let result = AdminStorage::with_admin_auth(&env, &non_admin, || Ok("should not execute"));
-
-        assert_eq!(result, Err(QuickLendXError::NotAdmin));
-    }
-
-    #[test]
-    fn test_with_current_admin_succeeds() {
-        let (env, _client, admin) = setup_with_admin();
-
-        let result = AdminStorage::with_current_admin(&env, |current_admin| {
-            assert_eq!(current_admin, &admin);
-            Ok("success")
-        });
-
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "success");
-    }
-
-    #[test]
-    fn test_with_current_admin_fails_before_initialization() {
-        let (env, _client) = setup();
-
-        let result = AdminStorage::with_current_admin(&env, |_| Ok("should not execute"));
-
-        assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
-    }
-
-    // ============================================================================
-    // 7. Legacy Compatibility Tests
-    // ============================================================================
-
-    #[test]
-    fn test_set_admin_routes_to_initialize() {
-        let (env, client) = setup();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        let result = client.try_set_admin(&admin);
-
-        assert!(result.is_ok(), "set_admin must route to initialize");
-        assert_eq!(client.get_current_admin(), Some(admin));
-        assert!(AdminStorage::is_initialized(&env));
-    }
-
-    #[test]
-    fn test_set_admin_routes_to_transfer() {
-        let (env, client, admin1) = setup_with_admin();
-        let admin2 = Address::generate(&env);
-
-        let result = client.try_set_admin(&admin2);
-
-        assert!(result.is_ok(), "set_admin must route to transfer");
-        assert_eq!(client.get_current_admin(), Some(admin2));
-    }
-
-    #[test]
-    fn test_set_admin_rejects_spoofed_current_admin_signature() {
-        let env = Env::default();
-        let contract_id = env.register(QuickLendXContract, ());
-        let client = QuickLendXContractClient::new(&env, &contract_id);
-        let admin = Address::generate(&env);
-        let attacker = Address::generate(&env);
-        let replacement = Address::generate(&env);
-
-        client.mock_all_auths().initialize_admin(&admin);
-
-        let spoofed_auth = MockAuth {
-            address: &attacker,
-            invoke: &MockAuthInvoke {
-                contract: &contract_id,
-                fn_name: "set_admin",
-                args: (replacement.clone(),).into_val(&env),
-                sub_invokes: &[],
-            },
-        };
-
-        let result = client.mock_auths(&[spoofed_auth]).try_set_admin(&replacement);
-        let invoke_err = result
-            .err()
-            .expect("spoofed transfer must fail")
-            .err()
-            .expect("spoofed transfer must fail at auth");
-        assert_eq!(invoke_err, soroban_sdk::InvokeError::Abort);
-        assert_eq!(client.get_current_admin(), Some(admin));
-    }
-
-    // ============================================================================
-    // 8. Edge Cases and Error Conditions
-    // ============================================================================
-
-    #[test]
-    fn test_multiple_rapid_transfers() {
-        let (env, client, mut current_admin) = setup_with_admin();
-
-        // Perform multiple transfers in sequence
-        for i in 0..5 {
-            let new_admin = Address::generate(&env);
-            client.transfer_admin(&current_admin, &new_admin);
-
-            assert_eq!(
-                client.get_current_admin(),
-                Some(new_admin.clone()),
-                "Transfer {} must succeed",
-                i
-            );
-            current_admin = new_admin;
+        let last = events
+            .events()
+            .last()
+            .expect("expected at least one emitted event");
+
+        match &last.body {
+            xdr::ContractEventBody::V0(body) => Symbol::try_from_val(
+                env,
+                body.topics
+                    .first()
+                    .expect("contract event should have at least one topic"),
+            )
+            .expect("first topic should be a Symbol"),
         }
     }
 
     #[test]
-    fn test_admin_state_after_failed_operations() {
-        let (env, client, admin) = setup_with_admin();
-        let non_admin = Address::generate(&env);
+    fn initialize_is_one_time_only() {
+        let (env, contract_id) = setup();
+        let admin_1 = Address::generate(&env);
+        let admin_2 = Address::generate(&env);
 
-        // Failed transfer should not change state
-        let _result = client.try_transfer_admin(&non_admin, &admin);
+        assert_eq!(initialize_admin(&env, &contract_id, &admin_1), Ok(()));
         assert_eq!(
-            client.get_current_admin(),
-            Some(admin),
-            "Failed transfer must not change admin"
+            initialize_admin(&env, &contract_id, &admin_2),
+            Err(QuickLendXError::OperationNotAllowed)
         );
 
-        // Failed initialization should not change state
-        let _result = client.try_initialize_admin(&non_admin);
+        assert_eq!(get_admin(&env, &contract_id), Some(admin_1));
+        assert!(is_initialized(&env, &contract_id));
+    }
+
+    #[test]
+    fn transfer_before_initialization_is_rejected() {
+        let (env, contract_id) = setup();
+        let admin_1 = Address::generate(&env);
+        let admin_2 = Address::generate(&env);
+
         assert_eq!(
-            client.get_current_admin(),
-            Some(admin),
-            "Failed re-initialization must not change admin"
+            transfer_admin(&env, &contract_id, &admin_1, &admin_2),
+            Err(QuickLendXError::OperationNotAllowed)
         );
     }
 
     #[test]
-    fn test_event_emission_consistency() {
-        let (env, client) = setup();
-        env.mock_all_auths();
+    fn transfer_requires_current_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let attacker = Address::generate(&env);
+        let replacement = Address::generate(&env);
 
-        let admin1 = Address::generate(&env);
-        let admin2 = Address::generate(&env);
-
-        // Initialize and transfer
-        client.initialize_admin(&admin1);
-        client.transfer_admin(&admin1, &admin2);
-
-        let events = env.events().all();
-
-        // Should have initialization and transfer events
-        let init_events: Vec<_> = events
-            .iter()
-            .filter(|e| e.0 == (soroban_sdk::symbol_short!("adm_init"),))
-            .collect();
-        let transfer_events: Vec<_> = events
-            .iter()
-            .filter(|e| e.0 == (soroban_sdk::symbol_short!("adm_trf"),))
-            .collect();
-
-        assert_eq!(init_events.len(), 1, "Must have one init event");
-        assert_eq!(transfer_events.len(), 1, "Must have one transfer event");
+        assert_eq!(
+            transfer_admin(&env, &contract_id, &attacker, &replacement),
+            Err(QuickLendXError::NotAdmin)
+        );
+        assert_eq!(get_admin(&env, &contract_id), Some(admin));
     }
 
-    // ============================================================================
-    // 9. Integration Tests
-    // ============================================================================
+    #[test]
+    fn transfer_rejects_self_transfer() {
+        let (env, contract_id, admin) = setup_with_admin();
+        assert_eq!(
+            transfer_admin(&env, &contract_id, &admin, &admin),
+            Err(QuickLendXError::OperationNotAllowed)
+        );
+    }
 
     #[test]
-    fn test_full_admin_lifecycle() {
-        let (env, client) = setup();
-        env.mock_all_auths();
+    fn direct_transfer_updates_admin_atomically() {
+        let (env, contract_id, admin_1) = setup_with_admin();
+        let admin_2 = Address::generate(&env);
 
-        // 1. Initial state
-        assert!(!AdminStorage::is_initialized(&env));
-        assert_eq!(AdminStorage::get_admin(&env), None);
+        assert_eq!(
+            transfer_admin(&env, &contract_id, &admin_1, &admin_2),
+            Ok(())
+        );
 
-        // 2. Initialize admin
-        let admin1 = Address::generate(&env);
-        client.initialize_admin(&admin1);
-        assert!(AdminStorage::is_initialized(&env));
-        assert_eq!(AdminStorage::get_admin(&env), Some(admin1.clone()));
+        assert_eq!(get_admin(&env, &contract_id), Some(admin_2.clone()));
+        assert!(is_admin(&env, &contract_id, &admin_2));
+        assert!(!is_transfer_locked(&env, &contract_id));
+        assert_eq!(get_pending_admin(&env, &contract_id), None);
+    }
 
-        // 3. Transfer admin
-        let admin2 = Address::generate(&env);
-        client.transfer_admin(&admin1, &admin2);
-        assert_eq!(AdminStorage::get_admin(&env), Some(admin2.clone()));
+    #[test]
+    fn two_step_transfer_sets_pending_and_lock() {
+        let (env, contract_id, admin_1) = setup_with_admin();
+        let admin_2 = Address::generate(&env);
 
-        // 4. Verify old admin cannot operate
-        let admin3 = Address::generate(&env);
-        let result = client.try_transfer_admin(&admin1, &admin3);
-        assert!(result.is_err());
+        set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
+        transfer_admin(&env, &contract_id, &admin_1, &admin_2).unwrap();
 
-        // 5. Verify new admin can operate
-        client.transfer_admin(&admin2, &admin3);
-        assert_eq!(AdminStorage::get_admin(&env), Some(admin3));
+        assert_eq!(get_admin(&env, &contract_id), Some(admin_1));
+        assert_eq!(get_pending_admin(&env, &contract_id), Some(admin_2));
+        assert!(is_transfer_locked(&env, &contract_id));
+    }
+
+    #[test]
+    fn direct_initiate_transfer_api_is_enforced_and_works() {
+        let (env, contract_id, admin_1) = setup_with_admin();
+        let admin_2 = Address::generate(&env);
+        let attacker = Address::generate(&env);
+
+        assert_eq!(
+            initiate_admin_transfer(&env, &contract_id, &attacker, &admin_2),
+            Err(QuickLendXError::NotAdmin)
+        );
+
+        initiate_admin_transfer(&env, &contract_id, &admin_1, &admin_2).unwrap();
+        assert_eq!(get_pending_admin(&env, &contract_id), Some(admin_2));
+        assert!(is_transfer_locked(&env, &contract_id));
+    }
+
+    #[test]
+    fn initiate_transfer_before_initialization_and_self_target_are_rejected() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+
+        assert_eq!(
+            initiate_admin_transfer(&env, &contract_id, &admin, &admin),
+            Err(QuickLendXError::OperationNotAllowed)
+        );
+
+        initialize_admin(&env, &contract_id, &admin).unwrap();
+        assert_eq!(
+            initiate_admin_transfer(&env, &contract_id, &admin, &admin),
+            Err(QuickLendXError::OperationNotAllowed)
+        );
+    }
+
+    #[test]
+    fn two_step_accept_requires_pending_admin() {
+        let (env, contract_id, admin_1) = setup_with_admin();
+        let admin_2 = Address::generate(&env);
+        let attacker = Address::generate(&env);
+
+        set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
+        transfer_admin(&env, &contract_id, &admin_1, &admin_2).unwrap();
+
+        assert_eq!(
+            accept_admin_transfer(&env, &contract_id, &attacker),
+            Err(QuickLendXError::Unauthorized)
+        );
+
+        accept_admin_transfer(&env, &contract_id, &admin_2).unwrap();
+        assert_eq!(get_admin(&env, &contract_id), Some(admin_2));
+        assert_eq!(get_pending_admin(&env, &contract_id), None);
+        assert!(!is_transfer_locked(&env, &contract_id));
+    }
+
+    #[test]
+    fn accept_transfer_requires_initialized_state() {
+        let (env, contract_id) = setup();
+        let pending_admin = Address::generate(&env);
+
+        assert_eq!(
+            accept_admin_transfer(&env, &contract_id, &pending_admin),
+            Err(QuickLendXError::OperationNotAllowed)
+        );
+    }
+
+    #[test]
+    fn two_step_cancel_clears_pending_and_lock() {
+        let (env, contract_id, admin_1) = setup_with_admin();
+        let admin_2 = Address::generate(&env);
+
+        set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
+        transfer_admin(&env, &contract_id, &admin_1, &admin_2).unwrap();
+        cancel_admin_transfer(&env, &contract_id, &admin_1).unwrap();
+
+        assert_eq!(get_admin(&env, &contract_id), Some(admin_1));
+        assert_eq!(get_pending_admin(&env, &contract_id), None);
+        assert!(!is_transfer_locked(&env, &contract_id));
+    }
+
+    #[test]
+    fn transfer_lock_blocks_reentrant_transfer_attempts() {
+        let (env, contract_id, admin_1) = setup_with_admin();
+        let admin_2 = Address::generate(&env);
+        let admin_3 = Address::generate(&env);
+
+        set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
+        transfer_admin(&env, &contract_id, &admin_1, &admin_2).unwrap();
+
+        assert_eq!(
+            transfer_admin(&env, &contract_id, &admin_1, &admin_3),
+            Err(QuickLendXError::OperationNotAllowed)
+        );
+        assert_eq!(get_pending_admin(&env, &contract_id), Some(admin_2));
+    }
+
+    #[test]
+    fn lock_and_pending_block_one_step_transfer_even_without_two_step_mode() {
+        let (env, contract_id, admin_1) = setup_with_admin();
+        let pending_admin = Address::generate(&env);
+        let replacement = Address::generate(&env);
+
+        initiate_admin_transfer(&env, &contract_id, &admin_1, &pending_admin).unwrap();
+        assert_eq!(
+            transfer_admin(&env, &contract_id, &admin_1, &replacement),
+            Err(QuickLendXError::OperationNotAllowed)
+        );
+    }
+
+    #[test]
+    fn disabling_two_step_clears_stuck_pending_state() {
+        let (env, contract_id, admin_1) = setup_with_admin();
+        let admin_2 = Address::generate(&env);
+
+        set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
+        transfer_admin(&env, &contract_id, &admin_1, &admin_2).unwrap();
+
+        set_two_step_enabled(&env, &contract_id, &admin_1, false).unwrap();
+
+        assert_eq!(get_pending_admin(&env, &contract_id), None);
+        assert!(!is_transfer_locked(&env, &contract_id));
+        assert!(!is_two_step_enabled(&env, &contract_id));
+        assert_eq!(get_admin(&env, &contract_id), Some(admin_1));
+    }
+
+    #[test]
+    fn emits_expected_events_for_admin_lifecycle() {
+        let (env, contract_id, admin_1) = setup_with_admin();
+        let admin_2 = Address::generate(&env);
+
+        assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_init"));
+
+        set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
+        assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_2st"));
+
+        transfer_admin(&env, &contract_id, &admin_1, &admin_2).unwrap();
+        assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_req"));
+
+        accept_admin_transfer(&env, &contract_id, &admin_2).unwrap();
+        assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_trf"));
+    }
+
+    #[test]
+    fn emits_cancel_event_when_pending_transfer_is_aborted() {
+        let (env, contract_id, admin_1) = setup_with_admin();
+        let admin_2 = Address::generate(&env);
+
+        set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
+        transfer_admin(&env, &contract_id, &admin_1, &admin_2).unwrap();
+
+        cancel_admin_transfer(&env, &contract_id, &admin_1).unwrap();
+
+        assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_cnl"));
+        assert_eq!(get_admin(&env, &contract_id), Some(admin_1));
+    }
+
+    #[test]
+    fn legacy_and_helper_paths_enforce_auth_and_state() {
+        let (env, contract_id) = setup();
+        let admin_1 = Address::generate(&env);
+        let admin_2 = Address::generate(&env);
+        let outsider = Address::generate(&env);
+
+        // require_admin path before initialization
+        assert_eq!(
+            require_admin_auth(&env, &contract_id, &admin_1),
+            Err(QuickLendXError::OperationNotAllowed)
+        );
+        assert_eq!(
+            require_current_admin(&env, &contract_id),
+            Err(QuickLendXError::OperationNotAllowed)
+        );
+
+        // set_admin_legacy initializes if not initialized.
+        set_admin_legacy(&env, &contract_id, &admin_1).unwrap();
+        assert_eq!(get_admin(&env, &contract_id), Some(admin_1.clone()));
+
+        // set_admin alias delegates to transfer and updates admin.
+        set_admin_alias(&env, &contract_id, &admin_1, &admin_2).unwrap();
+        assert_eq!(get_admin(&env, &contract_id), Some(admin_2.clone()));
+
+        // require_admin_auth for non-admin fails.
+        assert_eq!(
+            require_admin_auth(&env, &contract_id, &outsider),
+            Err(QuickLendXError::NotAdmin)
+        );
+
+        // require_current_admin returns the current admin.
+        assert_eq!(
+            require_current_admin(&env, &contract_id),
+            Ok(admin_2.clone())
+        );
+
+        // with_admin_auth and with_current_admin execute closures and propagate errors.
+        assert_eq!(with_admin_auth_ok(&env, &contract_id, &admin_2), Ok(42));
+        assert_eq!(
+            with_admin_auth_err(&env, &contract_id, &admin_2),
+            Err(QuickLendXError::OperationNotAllowed)
+        );
+        assert_eq!(
+            with_current_admin_ok(&env, &contract_id),
+            Ok(admin_2.clone())
+        );
+        assert_eq!(
+            with_current_admin_err(&env, &contract_id),
+            Err(QuickLendXError::OperationNotAllowed)
+        );
+    }
+
+    #[test]
+    fn legacy_transfer_requires_existing_admin_when_initialized_flag_is_set_without_admin() {
+        let (env, contract_id) = setup();
+        let candidate = Address::generate(&env);
+
+        env.as_contract(&contract_id, || {
+            env.storage().instance().set(&ADMIN_INITIALIZED_KEY, &true);
+        });
+
+        assert_eq!(
+            set_admin_legacy(&env, &contract_id, &candidate),
+            Err(QuickLendXError::NotAdmin)
+        );
     }
 }

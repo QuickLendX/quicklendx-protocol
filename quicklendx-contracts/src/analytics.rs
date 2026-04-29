@@ -1083,10 +1083,7 @@ impl AnalyticsCalculator {
         Ok(report)
     }
 
-    fn get_investor_investments(
-        env: &Env,
-        investor: &Address,
-    ) -> Vec<crate::types::Investment> {
+    fn get_investor_investments(env: &Env, investor: &Address) -> Vec<crate::types::Investment> {
         let mut investments = Vec::new(env);
         for investment_id in
             crate::investment::InvestmentStorage::get_investments_by_investor(env, investor).iter()

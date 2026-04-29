@@ -1,8 +1,11 @@
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
-use crate::types::{Dispute, DisputeStatus, InvoiceStatus};
-use crate::protocol_limits::*;
+use crate::types::{Dispute, DisputeStatus};
+use crate::verification::{
+    validate_dispute_eligibility, validate_dispute_evidence, validate_dispute_reason,
+    validate_dispute_resolution,
+};
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
 fn dispute_index_key() -> soroban_sdk::Symbol {
@@ -65,8 +68,8 @@ pub fn create_dispute(
 ) -> Result<(), QuickLendXError> {
     creator.require_auth();
 
-    let mut invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::InvoiceNotFound)?;
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     validate_dispute_reason(reason)?;
     validate_dispute_evidence(evidence)?;
@@ -85,7 +88,7 @@ pub fn create_dispute(
     };
 
     InvoiceStorage::update_invoice(env, &invoice);
-    InvoiceStorage::add_to_dispute_index(env, invoice_id);
+    add_to_dispute_index(env, invoice_id);
 
     Ok(())
 }
@@ -96,8 +99,8 @@ pub fn put_dispute_under_review(
     invoice_id: &BytesN<32>,
 ) -> Result<(), QuickLendXError> {
     AdminStorage::require_admin(env, admin)?;
-    let mut invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::InvoiceNotFound)?;
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     if invoice.dispute_status != DisputeStatus::Disputed {
         return Err(QuickLendXError::DisputeNotFound);
@@ -118,8 +121,8 @@ pub fn resolve_dispute(
 
     validate_dispute_resolution(resolution)?;
 
-    let mut invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::InvoiceNotFound)?;
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     if invoice.dispute_status != DisputeStatus::UnderReview {
         return Err(QuickLendXError::DisputeNotUnderReview);
@@ -143,7 +146,7 @@ pub fn get_dispute_details(env: &Env, invoice_id: &BytesN<32>) -> Option<Dispute
 }
 
 pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
-    InvoiceStorage::get_dispute_index(env)
+    get_dispute_index(env)
 }
 
 /// @notice Read the dispute index for query endpoints.
@@ -156,7 +159,7 @@ pub(crate) fn indexed_dispute_invoices(env: &Env) -> Vec<BytesN<32>> {
 #[allow(dead_code)]
 pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<BytesN<32>> {
     let mut result = Vec::new(env);
-    for invoice_id in InvoiceStorage::get_dispute_index(env).iter() {
+    for invoice_id in get_dispute_index(env).iter() {
         if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
             if invoice.dispute_status == *status {
                 result.push_back(invoice_id);

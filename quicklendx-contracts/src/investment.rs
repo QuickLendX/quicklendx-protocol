@@ -1,6 +1,6 @@
 use crate::errors::QuickLendXError;
 // Re-export from crate::types so other modules can continue to import from crate::investment.
-use crate::types::{InsuranceCoverage, Investment, InvestmentStatus};
+pub use crate::types::{InsuranceCoverage, Investment, InvestmentStatus};
 use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 // --- Storage key for the global active-investment index -----------------------

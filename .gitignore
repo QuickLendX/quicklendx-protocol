@@ -1,4 +1,15 @@
+# Build outputs (all packages / nested workspaces)
 target
+**/target/
+**/coverage/
+**/lcov.info
+
+# Local diagnostics / generated logs
+**/compile-errors*.log
+*.profraw
+*.profdata
+
+# Local tool state
 .omx/
 .remember/
 

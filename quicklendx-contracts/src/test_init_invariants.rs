@@ -22,10 +22,7 @@
 use crate::errors::QuickLendXError;
 use crate::init::{InitializationParams, ProtocolInitializer};
 use crate::{QuickLendXContract, QuickLendXContractClient};
-use soroban_sdk::{
-    testutils::Address as _,
-    Address, Env, Vec,
-};
+use soroban_sdk::{testutils::Address as _, Address, Env, Vec};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,7 +41,7 @@ fn valid_params(env: &Env) -> InitializationParams {
     InitializationParams {
         admin: Address::generate(env),
         treasury: Address::generate(env),
-        fee_bps: 200,               // 2 %
+        fee_bps: 200, // 2 %
         min_invoice_amount: 1_000_000,
         max_due_date_days: 365,
         grace_period_seconds: 604_800, // 7 days

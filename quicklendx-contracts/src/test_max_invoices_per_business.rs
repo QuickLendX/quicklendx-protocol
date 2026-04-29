@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use crate::{
-    types::{InvoiceCategory, InvoiceStatus},
     storage::InvoiceStorage,
+    types::{InvoiceCategory, InvoiceStatus},
     QuickLendXContract, QuickLendXContractClient, QuickLendXError,
 };
 use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};

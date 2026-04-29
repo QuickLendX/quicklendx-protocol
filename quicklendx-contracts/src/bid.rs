@@ -4,7 +4,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_bid_expired, emit_bid_ttl_updated};
-use crate::types::{Bid, BidStatus};
+pub use crate::types::{Bid, BidStatus};
 
 // --- Bid TTL configuration ----------------------------------------------------
 //
@@ -399,7 +399,7 @@ impl BidStorage {
     /// @param investor The address of the investor
     ///
     /// @return newly_expired The number of bids that transitioned from Placed to Expired in this call
-    fn refresh_investor_bids(env: &Env, investor: &Address) -> u32 {
+    pub fn refresh_investor_bids(env: &Env, investor: &Address) -> u32 {
         let current_timestamp = env.ledger().timestamp();
         let bid_ids = Self::get_bids_by_investor_all(env, investor);
         let mut active = Vec::new(env);
@@ -492,7 +492,7 @@ impl BidStorage {
     }
     /// @notice Scans and prunes expired bids from an invoice's bid list.
     /// @dev Maintains O(N) where N is current bids on invoice. Pruning keeps N small.
-    /// 
+    ///
     /// # Invariants
     /// - Invariant 1: Terminal bids (Accepted, Withdrawn, Cancelled) are NEVER modified or removed
     /// - Invariant 2: Active Placed bids are preserved if not yet expired
