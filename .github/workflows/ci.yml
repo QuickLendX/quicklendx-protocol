@@ -39,11 +39,14 @@ jobs:
         run: |
           source $HOME/.cargo/env
           rustup target add wasm32v1-none
-      - name: Install Stellar CLI with Homebrew
+      - name: Detect optional Stellar CLI
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
-          cargo install --locked stellar-cli || true
-          stellar --version || echo 'stellar-cli install skipped; WASM build will fall back to cargo'
+          if command -v stellar >/dev/null 2>&1; then
+            stellar --version
+          else
+            echo "stellar CLI not found; WASM build step will fall back to cargo."
+          fi
 
       - name: Build Cargo project
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
