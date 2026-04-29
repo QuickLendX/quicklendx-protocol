@@ -6,20 +6,12 @@ This is the backend API service skeleton for the QuickLendX protocol. It provide
 
 - **Contract-Aware**: Schemas and types are aligned with the Soroban smart contracts (`Invoice`, `Bid`, `Investment`).
 - **OpenAPI 3.0**: Fully documented API with explicit versioning (`v1`).
-- **API Key Authentication**: Production-grade API key system for service-to-service authentication
-  - CSPRNG-based key generation with SHA-256 hashing
-  - Scope-based authorization with wildcard support
-  - Key rotation and revocation
-  - Complete audit logging
-  - See [API Key Documentation](docs/auth.md) for details
-- **Security**: 
-  - Helmet for secure HTTP headers
-  - Rate limiting to prevent DDoS
-  - Centralized safe error handling
-  - Timing-safe key comparison
-  - Non-leaking error messages
-- **Testing**: Comprehensive integration tests with >95% coverage
-- **TypeScript**: Typed throughout for reliability and alignment with the frontend
+- **Security**:
+  - Helmet for secure HTTP headers.
+  - Rate limiting to prevent DDoS.
+  - Centralized safe error handling.
+- **Testing**: Comprehensive integration tests with >95% coverage.
+- **TypeScript**: Typed throughout for reliability and alignment with the frontend.
 
 ## Getting Started
 
@@ -59,6 +51,22 @@ Run the test suite with coverage:
 
 ```bash
 npm run test:coverage
+```
+
+### Dependency Security and SBOM
+
+Run dependency vulnerability gate locally:
+
+```bash
+npm audit --json > audit-report.json || true
+npm run security:scan
+```
+
+Generate and validate the backend SBOM (CycloneDX JSON):
+
+```bash
+npm run sbom:generate
+npm run sbom:check
 ```
 
 ## Project Structure
@@ -113,13 +121,16 @@ The OpenAPI spec is located in `openapi.yaml`. You can view it using any Swagger
 
 ## Security Assumptions
 
-- **Auth Model**: Production-grade API key system implemented for service-to-service authentication
-  - CSPRNG-based key generation (`crypto.randomBytes`)
-  - SHA-256 hashing (no plaintext storage)
-  - Timing-safe comparison
-  - Scope-based authorization
-  - Complete audit logging
-  - See [docs/auth.md](docs/auth.md) for details
-- **Rate Limits**: Configured for 100 requests per minute per IP
-- **Error Handling**: Internal errors are masked in production; only safe messages and codes are returned
-- **Key Security**: Keys are never logged in plaintext, error messages don't leak key existence
+- **Auth Model**: Initial skeleton uses a Bearer token placeholder in the middleware. Production implementation should integrate with Soroban wallet signatures or JWT.
+- **Rate Limits**: Configured for 100 requests per minute per IP.
+- **Error Handling**: Internal errors are masked in production; only safe messages and codes are returned.
+
+## RBAC
+
+The backend now separates privileged duties across three explicit admin roles:
+
+- `support`: read-only troubleshooting access
+- `operations_admin`: maintenance and backfill operations
+- `super_admin`: dangerous configuration changes and full admin access
+
+See [docs/rbac.md](docs/rbac.md) for the authorization matrix, environment variables, audit logging behavior, and security notes.

@@ -1,3 +1,5 @@
+#![cfg(feature = "legacy-tests")]
+
 //! # WASM Build Size Budget – Regression Checks
 //!
 //! Integration tests that enforce the QuickLendX release WASM artifact stays

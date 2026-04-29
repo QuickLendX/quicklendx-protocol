@@ -8,7 +8,7 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum QuickLendXError {
-    // Invoice lifecycle (1000–1006)
+    // Invoice lifecycle (1000-1006)
     InvoiceNotFound = 1000,
     InvoiceNotAvailableForFunding = 1001,
     InvoiceAlreadyFunded = 1002,
@@ -17,24 +17,24 @@ pub enum QuickLendXError {
     InvoiceNotFunded = 1005,
     InvoiceAlreadyDefaulted = 1006,
 
-    // Authorization (1100–1103)
+    // Authorization (1100-1103)
     Unauthorized = 1100,
     NotBusinessOwner = 1101,
     NotInvestor = 1102,
     NotAdmin = 1103,
 
-    // Input validation (1200–1204)
+    // Input validation (1200-1204)
     InvalidAmount = 1200,
     InvalidAddress = 1201,
     InvalidCurrency = 1202,
     InvalidTimestamp = 1203,
     InvalidDescription = 1204,
 
-    // Storage (1300–1301)
+    // Storage (1300-1301)
     StorageError = 1300,
     StorageKeyNotFound = 1301,
 
-    // Business logic (1400–1405)
+    // Business logic (1400-1405)
     InsufficientFunds = 1400,
     InvalidStatus = 1401,
     OperationNotAllowed = 1402,
@@ -46,29 +46,30 @@ pub enum QuickLendXError {
     /// Bid TTL value is outside the allowed bounds (1..=30 days) or is zero.
     InvalidBidTtl = 1408,
 
-    // Rating (1500–1503)
+    // Rating (1500-1503)
     InvalidRating = 1500,
     NotFunded = 1501,
     AlreadyRated = 1502,
     NotRater = 1503,
 
-    // KYC / verification (1600–1604)
+    // KYC / verification (1600-1604)
     BusinessNotVerified = 1600,
     KYCAlreadyPending = 1601,
     KYCAlreadyVerified = 1602,
     KYCNotFound = 1603,
     InvalidKYCStatus = 1604,
+    InvestorNotVerified = 1605,
 
-    // Audit (1700–1702)
+    // Audit (1700-1702)
     AuditLogNotFound = 1700,
     AuditIntegrityError = 1701,
     AuditQueryError = 1702,
 
-    // Category / tag (1800–1801)
+    // Category / tag (1800-1801)
     InvalidTag = 1800,
     TagLimitExceeded = 1801,
 
-    // Fee configuration (1850–1855)
+    // Fee configuration (1850-1855)
     InvalidFeeConfiguration = 1850,
     TreasuryNotConfigured = 1851,
     InvalidFeeBasisPoints = 1852,
@@ -76,7 +77,7 @@ pub enum QuickLendXError {
     RotationNotFound = 1854,
     RotationExpired = 1855,
 
-    // Dispute (1900–1906)
+    // Dispute (1900-1906)
     DisputeNotFound = 1900,
     DisputeAlreadyExists = 1901,
     DisputeNotAuthorized = 1902,
@@ -85,11 +86,11 @@ pub enum QuickLendXError {
     InvalidDisputeReason = 1905,
     InvalidDisputeEvidence = 1906,
 
-    // Notification (2000–2001)
+    // Notification (2000-2001)
     NotificationNotFound = 2000,
     NotificationBlocked = 2001,
 
-    // Emergency withdraw (2100–2106)
+    // Emergency withdraw (2100-2106)
     ContractPaused = 2100,
     EmergencyWithdrawNotFound = 2101,
     EmergencyWithdrawTimelockNotElapsed = 2102,
@@ -107,6 +108,7 @@ pub enum QuickLendXError {
     /// Write operations are blocked until maintenance ends.
     /// Query the maintenance reason via `get_maintenance_reason`.
     MaintenanceModeActive = 2201,
+    DuplicateDefaultTransition = 2202,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -152,6 +154,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::KYCAlreadyVerified => symbol_short!("KYC_VF"),
             QuickLendXError::KYCNotFound => symbol_short!("KYC_NF"),
             QuickLendXError::InvalidKYCStatus => symbol_short!("KYC_IS"),
+            QuickLendXError::InvestorNotVerified => symbol_short!("INV_NV"),
             // Audit
             QuickLendXError::AuditLogNotFound => symbol_short!("AUD_NF"),
             QuickLendXError::AuditIntegrityError => symbol_short!("AUD_IE"),
@@ -189,6 +192,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::EmergencyWithdrawInsufficientBalance => symbol_short!("EMG_BAL"),
             QuickLendXError::TokenTransferFailed => symbol_short!("TKN_FAIL"),
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
+            QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
         }
     }
 }

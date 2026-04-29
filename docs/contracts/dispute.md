@@ -1,50 +1,45 @@
-# Dispute Resolution
+# Dispute Management
 
-## Overview
+The QuickLendX protocol provides a robust dispute resolution mechanism for invoices. Disputes can be raised by either the business owner or the investor associated with an invoice.
 
-Complete dispute lifecycle management for invoice financing disputes. Enables business owners and investors to raise disputes on funded or settled invoices, with admin-controlled review and resolution process.
+## Lifecycle of a Dispute
 
-Dispute data is embedded within the `Invoice` struct to keep dispute state co-located with the invoice it belongs to. All string fields are bounded by protocol-enforced limits to prevent abusive on-chain storage growth.
+1.  **Disputed**: A dispute is initiated by an authorized party (business or investor).
+2.  **Under Review**: A platform administrator moves the dispute to this status to signal that investigation is in progress.
+3.  **Resolved**: An administrator provides a resolution and closes the dispute.
 
-## Dispute Lifecycle
+## Core Entities
 
-```
-None → Disputed → UnderReview → Resolved
-```
+### Dispute Status
 
 1. **None**: No dispute exists (default state)
 2. **Disputed**: Dispute created by business or investor
-3. **UnderReview**: Admin has acknowledged and is investigating
+3. **Disputed (Evidence Update Window)**: Creator may replace evidence while still open
+4. **UnderReview**: Admin has acknowledged and is investigating
 4. **Resolved**: Admin has provided final resolution
 
-## Data Structure
+### Dispute Data
 
-### DisputeStatus
+The `Dispute` structure contains:
+- `created_by`: Address of the initiator.
+- `created_at`: Ledger timestamp of creation.
+- `reason`: Explanation for the dispute.
+- `evidence`: Supporting evidence/links.
+- `resolution`: Final resolution text (once resolved).
+- `resolved_by`: Address of the administrator who resolved it.
+- `resolved_at`: Ledger timestamp of resolution.
 
-```rust
-pub enum DisputeStatus {
-    None,        // No dispute exists (default)
-    Disputed,    // Dispute has been created
-    UnderReview, // Admin reviewing
-    Resolved,    // Final state
-}
-```
+## Discovery & Indexing
 
-### Dispute
+Disputes are indexed in a centralized, append-only discovery index within `InvoiceStorage`. This avoids technical debt associated with shadowed local counters and ensures all disputes are discoverable by platform interfaces.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `created_by` | `Address` | Dispute initiator (business or investor) |
-| `created_at` | `u64` | Creation timestamp |
-| `reason` | `String` | Dispute reason (1–1000 chars) |
-| `evidence` | `String` | Supporting evidence (1–2000 chars) |
-| `resolution` | `String` | Admin resolution text (1–2000 chars when set) |
-| `resolved_by` | `Address` | Admin who resolved the dispute |
-| `resolved_at` | `u64` | Resolution timestamp (0 if unresolved) |
+### Query Endpoints
 
-## Input Validation — Storage Growth Prevention
+- `get_invoices_with_disputes`: Returns all unique invoice IDs that have ever had a dispute.
+- `get_invoices_by_dispute_status(status)`: Filters the dispute index by current status.
+- `get_dispute_details(invoice_id)`: Retrieves the full dispute record for a specific invoice.
 
-All text fields are validated against protocol limits defined in `protocol_limits.rs` to prevent adversarial callers from inflating on-chain storage costs with oversized payloads.
+## Security Controls
 
 ### Field Length Constraints
 
@@ -94,6 +89,27 @@ Creates a new dispute for an invoice.
 - `InvalidDisputeReason` (1905): Reason empty or exceeds 1000 chars
 - `InvalidDisputeEvidence` (1906): Evidence empty or exceeds 2000 chars
 
+#### `update_dispute_evidence(invoice_id: BytesN<32>, creator: Address, evidence: String) -> Result<(), QuickLendXError>`
+
+Updates evidence for an already-open dispute.
+
+**Preconditions:**
+- `creator.require_auth()` passes
+- Invoice exists
+- Dispute status is `Disputed` (not `UnderReview`/`Resolved`)
+- `creator` equals original `dispute.created_by`
+- Evidence: 1–2000 characters
+
+**Security implications:**
+- Prevents third-party tampering with dispute payloads.
+- Locks evidence once review starts to preserve auditability during adjudication.
+
+**Errors:**
+- `InvoiceNotFound`: Invoice does not exist
+- `DisputeNotAuthorized`: Caller is not original dispute creator
+- `InvalidStatus`: Dispute is not in `Disputed` state
+- `InvalidDisputeEvidence`: Evidence empty or oversized
+
 ### Admin Functions
 
 #### `put_dispute_under_review(invoice_id: BytesN<32>, admin: Address) -> Result<(), QuickLendXError>`
@@ -139,11 +155,17 @@ Returns the current dispute status for an invoice.
 
 #### `get_invoices_with_disputes() -> Vec<BytesN<32>>`
 
-Returns all invoice IDs that have an active or resolved dispute (status != None).
+Returns invoice IDs tracked in the dispute index.
 
 #### `get_invoices_by_dispute_status(status: DisputeStatus) -> Vec<BytesN<32>>`
 
-Returns invoice IDs filtered by the given dispute status.
+Returns dispute-indexed invoice IDs filtered by the given dispute status.
+
+### Index Consistency
+
+- Invoice IDs are inserted into the dispute index at dispute creation.
+- The same index entry is preserved across `Disputed → UnderReview → Resolved`.
+- Status-filter queries (`get_invoices_by_dispute_status`) resolve against indexed IDs and current invoice state, ensuring lifecycle transitions never drop disputed invoices from query surfaces.
 
 ## Integration
 

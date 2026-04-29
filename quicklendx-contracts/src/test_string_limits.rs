@@ -1,6 +1,7 @@
 use super::*;
 use crate::invoice::{InvoiceMetadata, LineItemRecord};
 use crate::protocol_limits::*;
+use crate::verification::MAX_METADATA_LINE_ITEMS;
 use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
@@ -31,36 +32,33 @@ fn create_string(env: &Env, len: u32) -> String {
 #[test]
 fn test_invoice_metadata_limits() {
     let env = Env::default();
+    let mut line_items = Vec::new(&env);
+    line_items.push_back(LineItemRecord(String::from_str(&env, "Item"), 1, 100, 100));
 
-    // Exactly at limits
     let metadata = InvoiceMetadata {
         customer_name: create_string(&env, MAX_NAME_LENGTH),
         customer_address: create_string(&env, MAX_ADDRESS_LENGTH),
         tax_id: create_string(&env, MAX_TAX_ID_LENGTH),
-        line_items: Vec::new(&env),
+        line_items,
         notes: create_string(&env, MAX_NOTES_LENGTH),
     };
-    assert!(metadata.validate().is_ok());
+    assert!(crate::verification::validate_invoice_metadata(&metadata, 100).is_ok());
 
-    // Over name limit
     let mut bad_metadata = metadata.clone();
     bad_metadata.customer_name = create_string(&env, MAX_NAME_LENGTH + 1);
-    assert!(bad_metadata.validate().is_err());
+    assert!(crate::verification::validate_invoice_metadata(&bad_metadata, 100).is_err());
 
-    // Over address limit
     let mut bad_metadata = metadata.clone();
     bad_metadata.customer_address = create_string(&env, MAX_ADDRESS_LENGTH + 1);
-    assert!(bad_metadata.validate().is_err());
+    assert!(crate::verification::validate_invoice_metadata(&bad_metadata, 100).is_err());
 
-    // Over tax_id limit
     let mut bad_metadata = metadata.clone();
     bad_metadata.tax_id = create_string(&env, MAX_TAX_ID_LENGTH + 1);
-    assert!(bad_metadata.validate().is_err());
+    assert!(crate::verification::validate_invoice_metadata(&bad_metadata, 100).is_err());
 
-    // Over notes limit
     let mut bad_metadata = metadata.clone();
     bad_metadata.notes = create_string(&env, MAX_NOTES_LENGTH + 1);
-    assert!(bad_metadata.validate().is_err());
+    assert!(crate::verification::validate_invoice_metadata(&bad_metadata, 100).is_err());
 }
 
 #[test]
@@ -77,9 +75,8 @@ fn test_line_item_description_limit() {
         line_items,
         notes: String::from_str(&env, "Test"),
     };
-    assert!(metadata.validate().is_ok());
+    assert!(crate::verification::validate_invoice_metadata(&metadata, 100).is_ok());
 
-    // Over description limit
     let mut bad_line_items = Vec::new(&env);
     bad_line_items.push_back(LineItemRecord(
         create_string(&env, MAX_DESCRIPTION_LENGTH + 1),
@@ -89,7 +86,7 @@ fn test_line_item_description_limit() {
     ));
     let mut bad_metadata = metadata.clone();
     bad_metadata.line_items = bad_line_items;
-    assert!(bad_metadata.validate().is_err());
+    assert!(crate::verification::validate_invoice_metadata(&bad_metadata, 100).is_err());
 }
 
 #[test]
@@ -188,7 +185,7 @@ fn test_dispute_limits() {
 // TAG NORMALIZATION + STRING LIMIT INTERACTION TESTS (#527)
 // ============================================================================
 
-/// A 50-char uppercase tag normalizes to a 50-char lowercase tag — still valid.
+/// A 50-char uppercase tag normalizes to a 50-char lowercase tag - still valid.
 #[test]
 fn test_tag_at_limit_uppercase_normalizes_valid() {
     let (env, client, _admin) = setup();
@@ -196,7 +193,7 @@ fn test_tag_at_limit_uppercase_normalizes_valid() {
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
 
-    // 50 uppercase 'A' characters — normalizes to 50 lowercase 'a' characters.
+    // 50 uppercase 'A' characters - normalizes to 50 lowercase 'a' characters.
     let mut s = std::string::String::with_capacity(50);
     for _ in 0..50 {
         s.push('A');
@@ -276,5 +273,68 @@ fn test_tag_spaces_only_invalid_after_norm() {
     assert_eq!(
         res.err().unwrap().unwrap(),
         crate::errors::QuickLendXError::InvalidTag
+    );
+}
+
+/// Duplicate tags after trim/lower normalization are rejected.
+#[test]
+fn test_tag_duplicates_rejected_after_normalization() {
+    let env = Env::default();
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, "  Finance "));
+    tags.push_back(String::from_str(&env, "finance"));
+
+    let err = crate::verification::validate_invoice_tags(&env, &tags).unwrap_err();
+    assert_eq!(err, crate::errors::QuickLendXError::InvalidTag);
+}
+
+/// Metadata line item vector is hard bounded to prevent unbounded storage writes.
+#[test]
+fn test_invoice_metadata_line_items_count_limit() {
+    let env = Env::default();
+    let mut line_items = Vec::new(&env);
+    for _ in 0..MAX_METADATA_LINE_ITEMS {
+        line_items.push_back(LineItemRecord(
+            String::from_str(&env, "Item"),
+            1,
+            1,
+            1,
+        ));
+    }
+
+    let metadata_at_limit = InvoiceMetadata {
+        customer_name: String::from_str(&env, "Acme"),
+        customer_address: String::from_str(&env, "Address"),
+        tax_id: String::from_str(&env, "TIN"),
+        line_items: line_items.clone(),
+        notes: String::from_str(&env, "ok"),
+    };
+    assert!(
+        crate::verification::validate_invoice_metadata(
+            &metadata_at_limit,
+            MAX_METADATA_LINE_ITEMS as i128,
+        )
+        .is_ok()
+    );
+
+    line_items.push_back(LineItemRecord(
+        String::from_str(&env, "Item"),
+        1,
+        1,
+        1,
+    ));
+    let metadata_over_limit = InvoiceMetadata {
+        customer_name: String::from_str(&env, "Acme"),
+        customer_address: String::from_str(&env, "Address"),
+        tax_id: String::from_str(&env, "TIN"),
+        line_items,
+        notes: String::from_str(&env, "overflow"),
+    };
+    assert!(
+        crate::verification::validate_invoice_metadata(
+            &metadata_over_limit,
+            (MAX_METADATA_LINE_ITEMS + 1) as i128,
+        )
+        .is_err()
     );
 }

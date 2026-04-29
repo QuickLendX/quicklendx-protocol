@@ -157,6 +157,7 @@ impl FeeManager {
     pub fn initialize(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         // Explicit admin authorization: the caller must be the designated admin.
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
 
         // Guard: reject re-initialization to prevent overwriting live fee config.
         if env.storage().instance().has(&FEES_INIT_KEY) {
@@ -220,6 +221,7 @@ impl FeeManager {
         treasury_address: Address,
     ) -> Result<TreasuryConfig, QuickLendXError> {
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
 
         // Reject self-assignment: treasury must not be the contract itself.
         if treasury_address == env.current_contract_address() {
@@ -262,6 +264,7 @@ impl FeeManager {
     ) -> Result<(), QuickLendXError> {
         // Auth is checked by the caller
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
 
         if fee_bps > MAX_PLATFORM_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
@@ -820,9 +823,9 @@ impl FeeManager {
     /// # Safety invariants enforced
     /// - Revenue config must exist and shares must sum to 10_000 bps.
     /// - If [`Self::get_treasury_address`] is set and `treasury_share_bps > 0`, the revenue
-    ///   config’s `treasury_address` must match that routing target (same on-chain fee treasury).
+    ///   config's `treasury_address` must match that routing target (same on-chain fee treasury).
     /// - Idempotency: when `pending_distribution == 0`, the call returns
-    ///   [`QuickLendXError::OperationNotAllowed`] so a period cannot be “re-settled” until new
+    ///   [`QuickLendXError::OperationNotAllowed`] so a period cannot be "re-settled" until new
     ///   fees are collected (avoids duplicate events / no-op distributions when
     ///   `min_distribution_amount == 0`).
     /// - Pending distribution must meet the minimum threshold when it is positive.

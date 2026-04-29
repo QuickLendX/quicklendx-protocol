@@ -3,7 +3,7 @@ use crate::errors::QuickLendXError;
 pub use crate::types::{InsuranceCoverage, Investment, InvestmentStatus};
 use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec};
 
-// ─── Storage key for the global active-investment index ───────────────────────
+// --- Storage key for the global active-investment index -----------------------
 const ACTIVE_INDEX_KEY: Symbol = symbol_short!("act_inv");
 
 /// Premium rate applied to the covered amount expressed in basis points (1/10,000).
@@ -25,11 +25,11 @@ pub const MAX_COVERAGE_PERCENTAGE: u32 = 100;
 pub const MAX_TOTAL_COVERAGE_PERCENTAGE: u32 = 100;
 
 /// Minimum acceptable premium in base currency units. A zero-premium policy
-/// would represent free insurance — an unbounded liability for the provider
+/// would represent free insurance - an unbounded liability for the provider
 /// with no economic cost to the insured party.
 pub const MIN_PREMIUM_AMOUNT: i128 = 1;
 
-// Local type definitions removed — InsuranceCoverage, InvestmentStatus, and
+// Local type definitions removed - InsuranceCoverage, InvestmentStatus, and
 // Investment are now imported from crate::types (the single source of truth).
 
 impl InvestmentStatus {
@@ -39,7 +39,7 @@ impl InvestmentStatus {
     /// | From      | To                              |
     /// |-----------|----------------------------------|
     /// | Active    | Completed, Defaulted, Refunded, Withdrawn |
-    /// | Withdrawn | (terminal – no further moves)   |
+    /// | Withdrawn | (terminal - no further moves)   |
     /// | Completed | (terminal)                      |
     /// | Defaulted | (terminal)                      |
     /// | Refunded  | (terminal)                      |
@@ -76,20 +76,20 @@ impl Investment {
     /// percentage.
     ///
     /// # Arguments
-    /// * `amount`              – Positive investment principal in base currency units.
-    /// * `coverage_percentage` – Integer percentage in
+    /// * `amount`              - Positive investment principal in base currency units.
+    /// * `coverage_percentage` - Integer percentage in
     ///                           [`MIN_COVERAGE_PERCENTAGE`]`..=`[`MAX_COVERAGE_PERCENTAGE`].
     ///
     /// # Returns
-    /// * The premium in base currency units, always ≥ [`MIN_PREMIUM_AMOUNT`] when
+    /// * The premium in base currency units, always - [`MIN_PREMIUM_AMOUNT`] when
     ///   `coverage_amount > 0`.
-    /// * `0` for any out-of-bounds input — callers **must** treat `0` as a
+    /// * `0` for any out-of-bounds input - callers **must** treat `0` as a
     ///   rejection signal.
     ///
     /// # Math
     /// ```text
-    /// coverage_amount = amount × coverage_percentage / 100
-    /// premium         = coverage_amount × DEFAULT_INSURANCE_PREMIUM_BPS / 10_000
+    /// coverage_amount = amount - coverage_percentage / 100
+    /// premium         = coverage_amount - DEFAULT_INSURANCE_PREMIUM_BPS / 10_000
     /// ```
     /// Both multiplications use `saturating_mul`; division uses `checked_div`
     /// to prevent overflow and division-by-zero panics.
@@ -97,7 +97,7 @@ impl Investment {
     /// # Security
     /// * Rejects `coverage_percentage > MAX_COVERAGE_PERCENTAGE` so that
     ///   `coverage_amount` can never exceed `amount` (over-coverage exploit).
-    /// * Verifies the `coverage_amount ≤ amount` invariant after computation as
+    /// * Verifies the `coverage_amount - amount` invariant after computation as
     ///   an explicit defense-in-depth guard against future arithmetic changes.
     /// * Applies the [`MIN_PREMIUM_AMOUNT`] floor so that zero-premium insurance
     ///   is impossible whenever coverage is non-zero.
@@ -116,7 +116,7 @@ impl Investment {
             .unwrap_or(0);
 
         // Invariant: coverage can never exceed the principal.
-        // Guaranteed by coverage_percentage ≤ 100, but checked explicitly to
+        // Guaranteed by coverage_percentage - 100, but checked explicitly to
         // defend against future arithmetic changes or unexpected saturation.
         if coverage_amount <= 0 || coverage_amount > amount {
             return 0;
@@ -139,22 +139,22 @@ impl Investment {
     /// Attach an insurance coverage record to this investment.
     ///
     /// # Arguments
-    /// * `provider`            – Address of the insurance provider.
-    /// * `coverage_percentage` – Coverage in
+    /// * `provider`            - Address of the insurance provider.
+    /// * `coverage_percentage` - Coverage in
     ///                           [`MIN_COVERAGE_PERCENTAGE`]`..=`[`MAX_COVERAGE_PERCENTAGE`].
-    /// * `premium`             – Pre-computed premium ≥ [`MIN_PREMIUM_AMOUNT`], typically
+    /// * `premium`             - Pre-computed premium - [`MIN_PREMIUM_AMOUNT`], typically
     ///                           produced by [`Investment::calculate_premium`].
     ///
     /// # Returns
-    /// * `Ok(coverage_amount)` – The absolute amount covered in base currency units.
+    /// * `Ok(coverage_amount)` - The absolute amount covered in base currency units.
     ///
     /// # Errors
-    /// * [`InvalidCoveragePercentage`] – `coverage_percentage` out of valid range.
-    /// * [`InvalidAmount`]             – Investment principal ≤ 0, premium below
+    /// * [`InvalidCoveragePercentage`] - `coverage_percentage` out of valid range.
+    /// * [`InvalidAmount`]             - Investment principal - 0, premium below
     ///                                   minimum, `coverage_amount` is zero or
     ///                                   exceeds principal, or premium exceeds
     ///                                   coverage amount.
-    /// * [`OperationNotAllowed`]       – Existing active policies already meet or
+    /// * [`OperationNotAllowed`]       - Existing active policies already meet or
     ///                                   exceed the cumulative cap, or adding the
     ///                                   requested policy would push total active
     ///                                   coverage above
@@ -367,7 +367,7 @@ impl InvestmentStorage {
     /// active-investment index so no orphan `Active` records can accumulate.
     ///
     /// ### Panics
-    /// Panics (contract error) if the transition `old_status → new_status` is
+    /// Panics (contract error) if the transition `old_status -> new_status` is
     /// not in the allowed set defined by `InvestmentStatus::validate_transition`.
     pub fn update_investment(env: &Env, investment: &Investment) {
         // Retrieve the previous status to validate the transition.
@@ -399,7 +399,7 @@ impl InvestmentStorage {
         );
     }
 
-    // ── Active-investment index ───────────────────────────────────────────────
+    // -- Active-investment index -----------------------------------------------
 
     fn add_to_active_index(env: &Env, investment_id: &BytesN<32>) {
         let mut ids: Vec<BytesN<32>> = env
@@ -446,7 +446,7 @@ impl InvestmentStorage {
     ///
     /// Returns `true` when no orphans exist (all active-index entries have
     /// `status == Active`).  Returns `false` if any entry has a terminal status
-    /// but was not removed from the index — indicating a bug in the transition
+    /// but was not removed from the index - indicating a bug in the transition
     /// path.
     ///
     /// ### Security note
@@ -494,5 +494,42 @@ impl InvestmentStorage {
             investments.push_back(investment_id.clone());
             env.storage().instance().set(&key, &investments);
         }
+    }
+
+    // --- Aliases and compatibility methods ---
+
+    pub fn store(env: &Env, investment: &Investment) {
+        Self::store_investment(env, investment);
+    }
+
+    pub fn get(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
+        Self::get_investment(env, investment_id)
+    }
+
+    pub fn update(env: &Env, investment: &Investment) {
+        Self::update_investment(env, investment);
+    }
+
+    pub fn get_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Investment> {
+        Self::get_investment_by_invoice(env, invoice_id)
+    }
+
+    pub fn get_by_investor(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
+        Self::get_investments_by_investor(env, investor)
+    }
+
+    pub fn get_by_status(env: &Env, status: InvestmentStatus) -> Vec<BytesN<32>> {
+        // Fallback for status-based retrieval if needed
+        let mut result = Vec::new(env);
+        // This is inefficient but avoids complex indexing for now
+        // A better way would be a dedicated status index.
+        for id in Self::get_active_investment_ids(env).iter() {
+            if let Some(inv) = Self::get_investment(env, &id) {
+                if inv.status == status {
+                    result.push_back(id);
+                }
+            }
+        }
+        result
     }
 }

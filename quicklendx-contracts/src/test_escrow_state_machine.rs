@@ -72,7 +72,7 @@ fn invoice_id(env: &Env, seed: u8) -> BytesN<32> {
 }
 
 // ============================================================================
-// Invariant 1 – release_escrow only transitions from Held → Released
+// Invariant 1 - release_escrow only transitions from Held -> Released
 // ============================================================================
 
 /// `release_escrow` succeeds when escrow is `Held` and transitions to `Released`.
@@ -134,7 +134,7 @@ fn invariant_refund_from_held_succeeds() {
 }
 
 // ============================================================================
-// Invariant 2 – terminal states are final (no double-execution)
+// Invariant 2 - terminal states are final (no double-execution)
 // ============================================================================
 
 /// Double-release is rejected with `InvalidStatus`.
@@ -194,7 +194,7 @@ fn invariant_double_refund_rejected() {
 }
 
 // ============================================================================
-// Invariant 3 – release and refund are mutually exclusive
+// Invariant 3 - release and refund are mutually exclusive
 // ============================================================================
 
 /// After `release_escrow`, calling `refund_escrow` is rejected with `InvalidStatus`.
@@ -254,7 +254,7 @@ fn invariant_release_after_refund_rejected() {
 }
 
 // ============================================================================
-// Invariant 4 – operations on non-existent escrow are rejected
+// Invariant 4 - operations on non-existent escrow are rejected
 // ============================================================================
 
 /// `release_escrow` on a non-existent invoice returns `StorageKeyNotFound`.
@@ -298,7 +298,7 @@ fn invariant_refund_nonexistent_escrow_rejected() {
 }
 
 // ============================================================================
-// Invariant 5 – create_escrow rejects duplicate creation (no double-funding)
+// Invariant 5 - create_escrow rejects duplicate creation (no double-funding)
 // ============================================================================
 
 /// A second `create_escrow` for the same invoice is rejected with
@@ -330,7 +330,7 @@ fn invariant_duplicate_create_escrow_rejected() {
 }
 
 // ============================================================================
-// Invariant 6 – create_escrow rejects zero/negative amounts
+// Invariant 6 - create_escrow rejects zero/negative amounts
 // ============================================================================
 
 /// `create_escrow` with amount = 0 returns `InvalidAmount`.
@@ -342,7 +342,7 @@ fn invariant_create_escrow_zero_amount_rejected() {
     let contract_id = register_contract(&env);
     let investor = Address::generate(&env);
     let business = Address::generate(&env);
-    // No real token needed — amount is rejected before any transfer attempt.
+    // No real token needed - amount is rejected before any transfer attempt.
     let currency = Address::generate(&env);
     let inv_id = invoice_id(&env, 0x0A);
 
@@ -381,7 +381,7 @@ fn invariant_create_escrow_negative_amount_rejected() {
 }
 
 // ============================================================================
-// Invariant 7 – token balances reflect state transitions (no double-spend)
+// Invariant 7 - token balances reflect state transitions (no double-spend)
 // ============================================================================
 
 /// After `release_escrow`, the business receives the escrowed funds and the
@@ -487,7 +487,7 @@ fn invariant_refund_returns_funds_to_investor() {
 }
 
 // ============================================================================
-// Invariant 8 – escrow record fields are correct after creation
+// Invariant 8 - escrow record fields are correct after creation
 // ============================================================================
 
 /// The stored `Escrow` record has the correct fields and starts in `Held`.
@@ -524,7 +524,7 @@ fn invariant_escrow_record_fields_correct_after_creation() {
 }
 
 // ============================================================================
-// Invariant 9 – independent escrows do not interfere
+// Invariant 9 - independent escrows do not interfere
 // ============================================================================
 
 /// Two escrows for different invoices are fully independent: releasing one
@@ -570,7 +570,7 @@ fn invariant_independent_escrows_do_not_interfere() {
 }
 
 // ============================================================================
-// Invariant 10 – escrow ID lookup is consistent
+// Invariant 10 - escrow ID lookup is consistent
 // ============================================================================
 
 /// `get_escrow_by_invoice` and `get_escrow` (by ID) return the same record.

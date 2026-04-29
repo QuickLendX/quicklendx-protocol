@@ -186,7 +186,7 @@ fn test_get_revenue_split_config() {
 }
 
 // ============================================================================
-// Treasury and Revenue Config – Additional Tests
+// Treasury and Revenue Config - Additional Tests
 // ============================================================================
 
 #[test]
@@ -207,7 +207,7 @@ fn test_distribute_revenue_requires_config() {
 
     let current_period = env.ledger().timestamp() / 2_592_000;
 
-    // Should fail — no revenue config set
+    // Should fail - no revenue config set
     let result = client.try_distribute_revenue(&admin, &current_period);
     assert!(result.is_err(), "Should fail without revenue config");
 
@@ -386,7 +386,7 @@ fn test_distribute_revenue_no_revenue_data_fails() {
 
     client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &100);
 
-    // No fees collected — period has no data
+    // No fees collected - period has no data
     let result = client.try_distribute_revenue(&admin, &9999);
     assert!(
         result.is_err(),
@@ -418,10 +418,13 @@ fn test_double_distribution_same_period_fails() {
     let result = client.try_distribute_revenue(&admin, &current_period);
     assert!(result.is_ok());
 
-    // Second distribution fails — pending is now 0 (idempotency per settlement)
+    // Second distribution fails - pending is now 0 (idempotency per settlement)
     let result = client.try_distribute_revenue(&admin, &current_period);
     assert_eq!(
-        result.err().expect("expected error").expect("contract error"),
+        result
+            .err()
+            .expect("expected error")
+            .expect("contract error"),
         QuickLendXError::OperationNotAllowed
     );
 }
@@ -450,7 +453,10 @@ fn test_double_distribution_min_zero_fails_without_new_collections() {
 
     let result = client.try_distribute_revenue(&admin, &current_period);
     assert_eq!(
-        result.err().expect("expected error").expect("contract error"),
+        result
+            .err()
+            .expect("expected error")
+            .expect("contract error"),
         QuickLendXError::OperationNotAllowed
     );
 }
@@ -484,7 +490,7 @@ fn test_second_distribution_same_period_after_new_collect() {
     assert_eq!(t + d + p, 200);
 }
 
-/// When platform fee treasury routing is configured, revenue split’s treasury share must name
+/// When platform fee treasury routing is configured, revenue split's treasury share must name
 /// the same address so admin cannot silently diverge recipients.
 #[test]
 fn test_distribute_revenue_rejects_treasury_mismatch_with_platform_routing() {
@@ -516,13 +522,16 @@ fn test_distribute_revenue_rejects_treasury_mismatch_with_platform_routing() {
     let current_period = env.ledger().timestamp() / 2_592_000;
     let result = client.try_distribute_revenue(&admin, &current_period);
     assert_eq!(
-        result.err().expect("expected error").expect("contract error"),
+        result
+            .err()
+            .expect("expected error")
+            .expect("contract error"),
         QuickLendXError::InvalidFeeConfiguration
     );
 }
 
 // ============================================================================
-// Revenue Split Safety – Accounting Invariant Tests
+// Revenue Split Safety - Accounting Invariant Tests
 // ============================================================================
 
 /// Helper: collect fees and distribute, then assert the sum invariant holds.
@@ -605,7 +614,7 @@ fn test_sum_invariant_with_one_unit() {
     let treasury = Address::generate(&env);
     client.initialize_fee_system(&admin);
 
-    // 1 unit with 33/33/34 split — only platform should get the 1 unit (remainder)
+    // 1 unit with 33/33/34 split - only platform should get the 1 unit (remainder)
     assert_distribution_sum_invariant(&env, &client, &admin, &treasury, 3300, 3300, 3400, 1);
 }
 
@@ -647,7 +656,7 @@ fn test_sum_invariant_prime_amount() {
 }
 
 // ============================================================================
-// Revenue Split Safety – Invalid Configuration Rejection Tests
+// Revenue Split Safety - Invalid Configuration Rejection Tests
 // ============================================================================
 
 #[test]
@@ -682,13 +691,7 @@ fn test_negative_min_distribution_amount_rejected() {
     client.initialize_fee_system(&admin);
 
     let result = client.try_configure_revenue_distribution(
-        &admin,
-        &treasury,
-        &5000,
-        &2500,
-        &2500,
-        &false,
-        &-1, // negative
+        &admin, &treasury, &5000, &2500, &2500, &false, &-1, // negative
     );
     assert!(
         result.is_err(),
@@ -708,9 +711,8 @@ fn test_shares_sum_over_10000_rejected() {
     client.initialize_fee_system(&admin);
 
     // Sum = 10001
-    let result = client.try_configure_revenue_distribution(
-        &admin, &treasury, &5000, &3000, &2001, &false, &100,
-    );
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2001, &false, &100);
     assert!(result.is_err(), "Shares summing to > 10000 should fail");
 }
 
@@ -726,9 +728,8 @@ fn test_shares_sum_under_10000_rejected() {
     client.initialize_fee_system(&admin);
 
     // Sum = 9999
-    let result = client.try_configure_revenue_distribution(
-        &admin, &treasury, &5000, &3000, &1999, &false, &100,
-    );
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &5000, &3000, &1999, &false, &100);
     assert!(result.is_err(), "Shares summing to < 10000 should fail");
 }
 
@@ -749,7 +750,7 @@ fn test_all_zero_shares_rejected() {
 }
 
 // ============================================================================
-// Revenue Split Safety – Edge Case Distribution Tests
+// Revenue Split Safety - Edge Case Distribution Tests
 // ============================================================================
 
 #[test]
@@ -881,9 +882,8 @@ fn test_zero_min_distribution_amount_allowed() {
     client.initialize_fee_system(&admin);
 
     // min_distribution_amount = 0 should be valid
-    let result = client.try_configure_revenue_distribution(
-        &admin, &treasury, &5000, &2500, &2500, &false, &0,
-    );
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &5000, &2500, &2500, &false, &0);
     assert!(
         result.is_ok(),
         "Zero min_distribution_amount should be allowed"

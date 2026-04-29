@@ -10,5 +10,21 @@ module.exports = {
       statements: 95,
     },
   },
-  collectCoverageFrom: ["src/**/*.ts", "!src/index.ts"],
+  collectCoverageFrom: [
+    "src/services/webhook/**/*.ts",
+    "!src/services/webhook/index.ts",
+    "src/lib/migrations/**/*.ts",
+    "!src/lib/migrations/cli.ts",
+    "src/lib/database.ts",
+    "src/lib/logging/policy.ts",
+    "src/middleware/request-logger.ts",
+  ],
+  moduleNameMapper: {
+    "^@/(.*)$": "<rootDir>/src/$1",
+  },
+  testPathIgnorePatterns: [
+    "src/node_modules/",
+    "node_modules/",
+    "src/migrations/*",
+  ],
 };

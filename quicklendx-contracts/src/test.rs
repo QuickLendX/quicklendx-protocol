@@ -1,7 +1,7 @@
-// Analytics test suites — these modules are activated via lib.rs
+// Analytics test suites - these modules are activated via lib.rs
 // (mod test_analytics_consistency) and via the integration-test path
 // once all client methods have been exported.
-// mod test_analytics;
+mod test_analytics;
 // mod test_analytics_export_query;
 // mod test_business_report_consistency;
 // Temporarily disabled: these suites target legacy client return shapes/APIs.
@@ -106,7 +106,6 @@ pub fn create_funded_invoice(
     let amount = 1_000i128;
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &amount,
         &currency,
@@ -126,6 +125,8 @@ fn test_store_invoice() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -134,7 +135,6 @@ fn test_store_invoice() {
     let description = String::from_str(&env, "Test invoice for services");
 
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &amount,
         &currency,
@@ -161,13 +161,14 @@ fn test_store_invoice_validation() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &1000,
         &currency,
@@ -188,6 +189,7 @@ fn test_get_business_invoices() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business1 = Address::generate(&env);
     let business2 = Address::generate(&env);
@@ -243,6 +245,7 @@ fn test_get_invoices_by_status() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -286,6 +289,7 @@ fn test_get_invoices_by_status_batch() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -355,13 +359,13 @@ fn test_update_invoice_status() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &1000,
         &currency,
@@ -396,13 +400,13 @@ fn test_update_invoice_metadata_and_queries() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &1_000,
         &currency,
@@ -459,13 +463,13 @@ fn test_invoice_metadata_validation() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &1_000,
         &currency,
@@ -524,7 +528,6 @@ fn test_investor_verification_enforced() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -542,7 +545,6 @@ fn test_investor_verification_enforced() {
     client.verify_business(&admin, &business);
 
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &1_000,
         &currency,
@@ -590,6 +592,7 @@ fn test_get_available_invoices() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -634,6 +637,7 @@ fn test_invoice_count_functions() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -677,6 +681,7 @@ fn test_invoice_not_found() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let fake_id = BytesN::from_array(&env, &[0u8; 32]);
 
@@ -689,13 +694,13 @@ fn test_invoice_lifecycle() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &1000,
         &currency,
@@ -725,6 +730,7 @@ fn test_simple_bid_storage() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -735,7 +741,6 @@ fn test_simple_bid_storage() {
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &1000,
         &currency,
@@ -782,6 +787,7 @@ fn test_unique_bid_id_generation() {
     });
     env.mock_all_auths();
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -792,7 +798,6 @@ fn test_unique_bid_id_generation() {
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &1000,
         &currency,
@@ -826,6 +831,7 @@ fn test_bid_expiration_cleanup() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -835,7 +841,6 @@ fn test_bid_expiration_cleanup() {
     client.set_admin(&admin);
 
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &1_000,
         &currency,
@@ -873,6 +878,7 @@ fn test_bid_validation_rules() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -885,7 +891,6 @@ fn test_bid_validation_rules() {
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &1000,
         &currency,
@@ -942,6 +947,7 @@ fn test_withdraw_bid() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -952,7 +958,6 @@ fn test_withdraw_bid() {
 
     // Create and verify invoice
     let invoice_id = client.store_invoice(
-        admin,
         &business,
         &1000,
         &currency,
@@ -993,6 +998,7 @@ fn test_get_bids_for_invoice() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor_a = Address::generate(&env);
@@ -1058,6 +1064,7 @@ fn test_escrow_creation_on_bid_acceptance() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -1115,6 +1122,7 @@ fn test_escrow_release_on_verification() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -1168,6 +1176,7 @@ fn test_escrow_refund() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -1226,6 +1235,7 @@ fn test_escrow_status_tracking() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -1283,6 +1293,7 @@ fn test_escrow_error_cases() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let fake_invoice_id = BytesN::from_array(&env, &[1u8; 32]);
 
@@ -1309,6 +1320,7 @@ fn test_escrow_double_operation_prevention() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -1388,6 +1400,7 @@ fn test_add_invoice_rating() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -1444,6 +1457,7 @@ fn test_add_invoice_rating_validation() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -1513,6 +1527,7 @@ fn test_multiple_ratings() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -1564,6 +1579,7 @@ fn test_duplicate_rating_prevention() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -1633,6 +1649,7 @@ fn test_rating_queries() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business1 = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -1701,6 +1718,7 @@ fn test_rating_statistics() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -1753,6 +1771,7 @@ fn test_rating_on_unfunded_invoice() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -1788,6 +1807,7 @@ fn test_submit_kyc_application() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let kyc_data = String::from_str(&env, "Business registration documents");
@@ -1814,7 +1834,6 @@ fn test_verify_business() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let kyc_data = String::from_str(&env, "Business registration documents");
@@ -1848,6 +1867,7 @@ fn test_verify_invoice_requires_admin() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     env.mock_all_auths();
 
@@ -1883,7 +1903,6 @@ fn test_reject_business() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let kyc_data = String::from_str(&env, "Business registration documents");
@@ -1917,6 +1936,7 @@ fn test_upload_invoice_requires_verification() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -1969,6 +1989,7 @@ fn test_kyc_already_pending() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let kyc_data = String::from_str(&env, "Business registration documents");
@@ -1989,7 +2010,6 @@ fn test_kyc_already_verified() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let kyc_data = String::from_str(&env, "Business registration documents");
@@ -2014,7 +2034,6 @@ fn test_kyc_resubmission_after_rejection() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let kyc_data = String::from_str(&env, "Business registration documents");
@@ -2051,7 +2070,6 @@ fn test_verification_unauthorized_access() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let unauthorized_admin = Address::generate(&env);
@@ -2076,7 +2094,6 @@ fn test_get_verification_lists() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business1 = Address::generate(&env);
     let business2 = Address::generate(&env);
@@ -2117,6 +2134,7 @@ fn test_create_and_restore_backup() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     // Set up admin and protocol limits (allow small amounts for test)
     let admin = Address::generate(&env);
@@ -2189,6 +2207,7 @@ fn test_backup_validation() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     // Set up admin and protocol limits (allow small amounts for test)
     let admin = Address::generate(&env);
@@ -2236,6 +2255,7 @@ fn test_backup_cleanup() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     // Set up admin
     let admin = Address::generate(&env);
@@ -2258,6 +2278,7 @@ fn test_archive_backup() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     // Set up admin
     let admin = Address::generate(&env);
@@ -2286,6 +2307,7 @@ fn test_backup_retention_policy_by_count() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     // Set up admin
     let admin = Address::generate(&env);
@@ -2320,6 +2342,7 @@ fn test_backup_retention_policy_by_age() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     // Set up admin
     let admin = Address::generate(&env);
@@ -2375,6 +2398,7 @@ fn test_backup_retention_policy_combined() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     // Set up admin
     let admin = Address::generate(&env);
@@ -2413,6 +2437,7 @@ fn test_backup_retention_policy_disabled_cleanup() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     // Set up admin
     let admin = Address::generate(&env);
@@ -2439,6 +2464,7 @@ fn test_backup_retention_policy_unlimited() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     // Set up admin
     let admin = Address::generate(&env);
@@ -2465,6 +2491,7 @@ fn test_backup_retention_policy_archived_not_cleaned() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     // Set up admin
     let admin = Address::generate(&env);
@@ -2503,6 +2530,7 @@ fn test_manual_cleanup_backups() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     // Set up admin
     let admin = Address::generate(&env);
@@ -2539,24 +2567,29 @@ fn test_manual_cleanup_backups() {
     assert_eq!(backups.len(), 3);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+// Auth harness: mock_all_auths() is placed at the top of each test so that
+// every require_auth() call (business, admin, investor) is satisfied by the
+// Soroban test environment without weakening any production authorization
+// logic.  Production code is unchanged; only the test setup is corrected.
+#[test]
 fn test_audit_trail_creation() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    // This mirrors real invoker boundaries: each address still needs to be
+    // the correct role (admin, business, investor) - mock_all_auths() only
+    // removes the cryptographic signature requirement in the test harness.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    // Allow unauthenticated calls for test simplicity
-    env.mock_all_auths();
-
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let amount = 1000i128;
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-    // Verify business setup
-    env.mock_all_auths();
+    // Set admin and verify business before uploading invoice.
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
@@ -2577,28 +2610,28 @@ fn test_audit_trail_creation() {
     assert!(!audit_trail.is_empty());
 
     // Verify audit entry details
-    let audit_entry = client.get_audit_entry(&audit_trail.get(0).unwrap()).unwrap();
+    let audit_entry = client
+        .get_audit_entry(&audit_trail.get(0).unwrap())
+        .unwrap();
     // Audit fields validation has been updated in the contract API
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_audit_integrity_validation() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    // Allow unauthenticated calls for test simplicity
-    env.mock_all_auths();
-
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let amount = 1000i128;
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-    // Verify business setup
-    env.mock_all_auths();
+    // Set admin and verify business before uploading invoice.
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
@@ -2620,24 +2653,22 @@ fn test_audit_integrity_validation() {
     assert!(is_valid);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_audit_query_functionality() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    // Allow unauthenticated calls for test simplicity
-    env.mock_all_auths();
-
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let amount = 1000i128;
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-    // Verify business setup
-    env.mock_all_auths();
+    // Set admin and verify business before uploading invoice.
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
@@ -2689,24 +2720,22 @@ fn test_audit_query_functionality() {
     assert_eq!(results.get(0).unwrap().invoice_id, invoice_id1);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_audit_statistics() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    // Allow unauthenticated calls for test simplicity
-    env.mock_all_auths();
-
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let amount = 1000i128;
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
-    // Verify business setup
-    env.mock_all_auths();
+    // Set admin and verify business before uploading invoice.
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
     client.verify_business(&admin, &business);
@@ -2738,6 +2767,7 @@ fn test_notification_preferences_default() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let user = Address::generate(&env);
 
@@ -2757,6 +2787,7 @@ fn test_update_notification_preferences() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let user = Address::generate(&env);
     env.mock_all_auths();
@@ -2783,6 +2814,7 @@ fn test_notification_creation_on_invoice_upload() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let admin = Address::generate(&env);
@@ -2817,6 +2849,7 @@ fn test_notification_creation_on_bid_placement() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -2863,6 +2896,7 @@ fn test_notification_creation_on_invoice_status_change() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let admin = Address::generate(&env);
@@ -2904,6 +2938,7 @@ fn test_notification_delivery_status_update() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let admin = Address::generate(&env);
@@ -2935,7 +2970,10 @@ fn test_notification_delivery_status_update() {
         client.update_notification_status(&notification_id, &NotificationDeliveryStatus::Sent);
         let notification = client.get_notification(&notification_id);
         assert!(notification.is_some());
-        assert_eq!(notification.unwrap().delivery_status, NotificationDeliveryStatus::Sent);
+        assert_eq!(
+            notification.unwrap().delivery_status,
+            NotificationDeliveryStatus::Sent
+        );
     }
 }
 
@@ -2944,6 +2982,7 @@ fn test_user_notification_stats() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let admin = Address::generate(&env);
@@ -2986,6 +3025,7 @@ fn test_get_notification_returns_none_for_unknown_id() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let unknown_id = BytesN::from_array(&env, &[0u8; 32]);
     let notification = client.get_notification(&unknown_id);
@@ -2998,6 +3038,7 @@ fn test_update_notification_status_not_found() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let unknown_id = BytesN::from_array(&env, &[0u8; 32]);
     let result =
@@ -3013,6 +3054,7 @@ fn test_get_user_notifications_empty_for_new_user() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let user = Address::generate(&env);
     let notifications = client.get_user_notifications(&user);
@@ -3025,6 +3067,7 @@ fn test_get_notification_preferences_all_fields() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let user = Address::generate(&env);
     let prefs = client.get_notification_preferences(&user);
@@ -3054,12 +3097,13 @@ fn test_update_notification_preferences_requires_auth() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let user = Address::generate(&env);
     let mut preferences = client.get_notification_preferences(&user);
     preferences.invoice_created = false;
 
-    // Do not call env.mock_all_auths() — user must authorize.
+    // Do not call env.mock_all_auths() - user must authorize.
     let result = client.try_update_notification_preferences(&user, &preferences);
     assert!(result.is_err());
 }
@@ -3070,6 +3114,7 @@ fn test_get_user_notification_stats_detailed() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let empty_user = Address::generate(&env);
     let stats_empty = client.get_user_notification_stats(&empty_user);
@@ -3121,6 +3166,7 @@ fn test_update_notification_status_all_transitions() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let admin = Address::generate(&env);
@@ -3148,13 +3194,25 @@ fn test_update_notification_status_all_transitions() {
     if !ids.is_empty() {
         let nid = ids.get(0).unwrap();
         client.update_notification_status(&nid, &NotificationDeliveryStatus::Sent);
-        assert_eq!(client.get_notification(&nid).unwrap().delivery_status, NotificationDeliveryStatus::Sent);
+        assert_eq!(
+            client.get_notification(&nid).unwrap().delivery_status,
+            NotificationDeliveryStatus::Sent
+        );
         client.update_notification_status(&nid, &NotificationDeliveryStatus::Delivered);
-        assert_eq!(client.get_notification(&nid).unwrap().delivery_status, NotificationDeliveryStatus::Delivered);
+        assert_eq!(
+            client.get_notification(&nid).unwrap().delivery_status,
+            NotificationDeliveryStatus::Delivered
+        );
         client.update_notification_status(&nid, &NotificationDeliveryStatus::Read);
-        assert_eq!(client.get_notification(&nid).unwrap().delivery_status, NotificationDeliveryStatus::Read);
+        assert_eq!(
+            client.get_notification(&nid).unwrap().delivery_status,
+            NotificationDeliveryStatus::Read
+        );
         client.update_notification_status(&nid, &NotificationDeliveryStatus::Failed);
-        assert_eq!(client.get_notification(&nid).unwrap().delivery_status, NotificationDeliveryStatus::Failed);
+        assert_eq!(
+            client.get_notification(&nid).unwrap().delivery_status,
+            NotificationDeliveryStatus::Failed
+        );
     }
 }
 
@@ -3164,6 +3222,7 @@ fn test_check_overdue_invoices_triggers_notifications() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     env.mock_all_auths();
 
@@ -3256,7 +3315,6 @@ fn test_platform_fee_configuration() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     client.set_admin(&admin);
 
@@ -3283,6 +3341,7 @@ fn test_overdue_invoice_notifications() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     env.mock_all_auths();
 
@@ -3350,7 +3409,6 @@ fn test_invoice_expiration_triggers_default() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -3409,7 +3467,6 @@ fn test_partial_payments_trigger_settlement() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -3478,18 +3535,27 @@ fn test_partial_payments_trigger_settlement() {
 
 // Dispute Resolution System Tests (from main)
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_create_dispute() {
     let env = Env::default();
+    // Satisfy all require_auth() checks (business.require_auth in upload_invoice,
+    // creator.require_auth in create_dispute) without weakening production logic.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
+
+    // Set admin and verify business so upload_invoice passes KYC checks.
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create and verify invoice
     let invoice_id = client.upload_invoice(
@@ -3523,18 +3589,40 @@ fn test_create_dispute() {
     assert_eq!(dispute.resolution, String::from_str(&env, ""));
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_create_dispute_as_investor() {
     let env = Env::default();
+    // Satisfy all require_auth() checks (business, investor, creator) without
+    // weakening production authorization logic.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
-    let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
+
+    // Set admin, verify business and investor so KYC checks pass.
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+    client.verify_business(&admin, &business);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor KYC"));
+    client.verify_investor(&investor, &(amount * 2));
+
+    // Register a real token so place_bid / accept_bid can transfer funds.
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&investor, &(amount * 10));
+    let expiry = env.ledger().sequence() + 10_000;
+    tok.approve(&investor, &contract_id, &(amount * 10), &expiry);
+
     let description = String::from_str(&env, "Test invoice");
 
     // Create, verify, and fund invoice
@@ -3572,19 +3660,30 @@ fn test_create_dispute_as_investor() {
     assert_eq!(dispute.evidence, evidence);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_unauthorized_dispute_creation() {
     let env = Env::default();
+    // mock_all_auths() satisfies require_auth() for the setup calls (upload_invoice,
+    // verify_invoice).  The unauthorized dispute attempt is tested via try_create_dispute
+    // which checks business-logic authorization (creator must be business or investor),
+    // not cryptographic auth - so the error is still returned correctly.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let unauthorized = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
+
+    // Set admin and verify business so upload_invoice passes KYC checks.
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create and verify invoice
     let invoice_id = client.upload_invoice(
@@ -3607,18 +3706,26 @@ fn test_unauthorized_dispute_creation() {
     assert!(result.is_err());
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_duplicate_dispute_prevention() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for setup and first dispute creation.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
+
+    // Set admin and verify business so upload_invoice passes KYC checks.
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create and verify invoice
     let invoice_id = client.upload_invoice(
@@ -3647,23 +3754,26 @@ fn test_duplicate_dispute_prevention() {
     assert!(result.is_err());
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_dispute_under_review() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
 
-    // Set admin
-    env.mock_all_auths();
+    // Set admin and verify business so upload_invoice passes KYC checks.
     client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create, verify invoice and create dispute
     let invoice_id = client.upload_invoice(
@@ -3690,23 +3800,26 @@ fn test_dispute_under_review() {
     assert_eq!(dispute_status, DisputeStatus::UnderReview);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_resolve_dispute() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
 
-    // Set admin
-    env.mock_all_auths();
+    // Set admin and verify business so upload_invoice passes KYC checks.
     client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create, verify invoice and create dispute
     let invoice_id = client.upload_invoice(
@@ -3748,19 +3861,29 @@ fn test_resolve_dispute() {
     assert!(dispute.resolved_at > 0);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_get_invoices_with_disputes() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
+    let admin = Address::generate(&env);
     let business1 = Address::generate(&env);
     let business2 = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
+
+    // Set admin and verify both businesses so upload_invoice passes KYC checks.
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business1, &String::from_str(&env, "KYC data 1"));
+    client.verify_business(&admin, &business1);
+    client.submit_kyc_application(&business2, &String::from_str(&env, "KYC data 2"));
+    client.verify_business(&admin, &business2);
 
     // Create invoices
     let invoice_id1 = client.upload_invoice(
@@ -3801,23 +3924,26 @@ fn test_get_invoices_with_disputes() {
     assert!(disputed_invoices.contains(&invoice_id2));
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_get_invoices_by_dispute_status() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for the duration of this test.
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
-    let business = Address::generate(&env);
     let admin = Address::generate(&env);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
 
-    // Set admin
-    env.mock_all_auths();
+    // Set admin and verify business so upload_invoice passes KYC checks.
     client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create, verify invoice and create dispute
     let invoice_id = client.upload_invoice(
@@ -3860,18 +3986,28 @@ fn test_get_invoices_by_dispute_status() {
     assert_eq!(resolved_invoices.get(0).unwrap(), invoice_id);
 }
 
-// TODO: Fix authorization issues in test environment
-// #[test]
+#[test]
 fn test_dispute_validation() {
     let env = Env::default();
+    // Satisfy all require_auth() checks for setup calls (upload_invoice).
+    // The validation errors tested here are business-logic errors (empty reason/evidence),
+    // not auth errors, so they are still returned correctly under mock_all_auths().
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
+    let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
     let amount = 1000i128;
     let due_date = env.ledger().timestamp() + 86400;
     let description = String::from_str(&env, "Test invoice");
+
+    // Set admin and verify business so upload_invoice passes KYC checks.
+    client.set_admin(&admin);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+    client.verify_business(&admin, &business);
 
     // Create and verify invoice
     let invoice_id = client.upload_invoice(
@@ -3906,6 +4042,7 @@ fn test_investment_insurance_lifecycle() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -3981,7 +4118,8 @@ fn test_investment_insurance_lifecycle() {
     assert_eq!(insurance.coverage_percentage, coverage_percentage_a);
     let expected_coverage_a = investment_amount * coverage_percentage_a as i128 / 100;
     assert_eq!(insurance.coverage_amount, expected_coverage_a);
-    let expected_premium_a = Investment::calculate_premium(investment_amount, coverage_percentage_a);
+    let expected_premium_a =
+        Investment::calculate_premium(investment_amount, coverage_percentage_a);
     assert_eq!(insurance.premium_amount, expected_premium_a);
 
     let second_insurance = insured_investment
@@ -3993,7 +4131,8 @@ fn test_investment_insurance_lifecycle() {
     assert_eq!(second_insurance.coverage_percentage, coverage_percentage_b);
     let expected_coverage_b = investment_amount * coverage_percentage_b as i128 / 100;
     assert_eq!(second_insurance.coverage_amount, expected_coverage_b);
-    let expected_premium_b = Investment::calculate_premium(investment_amount, coverage_percentage_b);
+    let expected_premium_b =
+        Investment::calculate_premium(investment_amount, coverage_percentage_b);
     assert_eq!(second_insurance.premium_amount, expected_premium_b);
 
     let stored_invoice = client.get_invoice(&invoice_id);
@@ -4024,6 +4163,7 @@ fn test_query_investment_insurance_single_coverage() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -4101,6 +4241,7 @@ fn test_query_investment_insurance_nonexistent_investment() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let fake_investment_id = BytesN::from_array(
         &env,
@@ -4124,6 +4265,7 @@ fn test_query_investment_insurance_premium_calculation() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -4214,6 +4356,7 @@ fn test_query_investment_insurance_inactive_coverage() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -4296,6 +4439,7 @@ fn test_basic_readme_queries() {
     // Register the contract
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     // Create test addresses
     let admin = Address::generate(&env);
@@ -4446,7 +4590,6 @@ fn test_invariants_after_full_lifecycle() {
 
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -4580,7 +4723,6 @@ fn test_upload_invoice_success() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -4621,6 +4763,7 @@ fn test_upload_invoice_not_verified_business() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
 
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -4649,7 +4792,6 @@ fn test_upload_invoice_invalid_amount() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -4683,7 +4825,6 @@ fn test_upload_invoice_below_minimum_amount() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -4717,7 +4858,6 @@ fn test_upload_invoice_past_due_date() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -4750,7 +4890,6 @@ fn test_verify_invoice_success() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -4794,7 +4933,6 @@ fn test_verify_invoice_not_admin() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let non_admin = Address::generate(&env);
@@ -4834,7 +4972,6 @@ fn test_verify_invoice_already_verified() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -4873,7 +5010,6 @@ fn test_cancel_invoice_pending() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -4917,7 +5053,6 @@ fn test_cancel_invoice_verified() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -4965,7 +5100,6 @@ fn test_cancel_invoice_funded() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -5017,7 +5151,6 @@ fn test_complete_invoice_lifecycle_with_cancellation() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -5075,7 +5208,6 @@ fn test_invoice_lifecycle_counts() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -5143,7 +5275,6 @@ fn test_get_invoices_by_status_cancelled() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -5196,7 +5327,6 @@ fn test_store_invoice_max_due_date_boundary() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -5260,7 +5390,6 @@ fn test_upload_invoice_max_due_date_boundary() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -5325,7 +5454,6 @@ fn test_custom_max_due_date_limits() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
@@ -5391,7 +5519,6 @@ fn test_due_date_bounds_edge_cases() {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
