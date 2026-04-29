@@ -7,6 +7,9 @@ import { errorHandler } from "./middleware/error-handler";
 import { statusInjector } from "./middleware/status-injector";
 import v1Routes from "./routes/v1";
 import webhookRoutes from "./routes/webhooks";
+import { webhookCorsOptions } from "./config/cors";
+import { csrfMiddleware } from "./middleware/csrf";
+import { requestLogger } from "./middleware/request-logger";
 
 const app = express();
 
@@ -34,6 +37,9 @@ app.use(rateLimitMiddleware);
 
 // Inject _system metadata into every JSON response
 app.use(statusInjector);
+
+// Structured request/response logging with automatic field-level redaction
+app.use(requestLogger);
 
 // Routes
 app.use("/api/webhooks", cors(webhookCorsOptions), webhookRoutes);
