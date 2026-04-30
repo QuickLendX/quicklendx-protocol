@@ -35,9 +35,9 @@ use crate::settlement::{
     MAX_FACE_VALUE, MAX_PENALTY_BPS,
 };
 use crate::verification::{
-    compute_effective_limit, compute_tier, guard_bid_placement,
-    per_investment_cap, risk_level_from_score, tier_multiplier, GuardError, InvestorTier,
-    RiskLevel, VerificationStatus, MAX_BASE_LIMIT, MAX_RISK_SCORE,
+    compute_effective_limit, compute_tier, guard_bid_placement, per_investment_cap,
+    risk_level_from_score, tier_multiplier, GuardError, InvestorTier, RiskLevel,
+    VerificationStatus, MAX_BASE_LIMIT, MAX_RISK_SCORE,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

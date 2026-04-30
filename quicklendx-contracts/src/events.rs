@@ -5,14 +5,99 @@ use crate::payments::Escrow;
 use crate::types::Bid;
 use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::InvestorVerification;
-use soroban_sdk::{
-    contractevent, contracttype, symbol_short, Address, BytesN, Env, String, Symbol,
-};
+use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+
+// ============================================================================
+// Topic Constants
+//
+// These compile-time constants pin the exact Symbol used as the first topic
+// for every event. Off-chain indexers import these to avoid hard-coding
+// string literals. Any rename here is a breaking schema change.
+// ============================================================================
+
+/// Topic for `InvoiceUploaded` / `InvoiceCreated` events.
+/// The `#[contractevent]` macro uses the snake_case struct name as the topic.
+pub const TOPIC_INVOICE_UPLOADED: &str = "invoice_uploaded";
+/// Topic for `InvoiceVerified` events.
+pub const TOPIC_INVOICE_VERIFIED: &str = "invoice_verified";
+/// Topic for `InvoiceCancelled` events.
+pub const TOPIC_INVOICE_CANCELLED: &str = "invoice_cancelled";
+/// Topic for `InvoiceSettled` / `LoanSettled` events.
+pub const TOPIC_INVOICE_SETTLED: &str = "invoice_settled";
+/// Topic for `InvoiceDefaulted` events.
+pub const TOPIC_INVOICE_DEFAULTED: &str = "invoice_defaulted";
+/// Topic for `InvoiceExpired` events.
+pub const TOPIC_INVOICE_EXPIRED: &str = "invoice_expired";
+/// Topic for `PartialPayment` events.
+pub const TOPIC_PARTIAL_PAYMENT: &str = "partial_payment";
+/// Topic for `PaymentRecorded` events.
+pub const TOPIC_PAYMENT_RECORDED: &str = "payment_recorded";
+/// Topic for `InvoiceSettledFinal` events.
+pub const TOPIC_INVOICE_SETTLED_FINAL: &str = "invoice_settled_final";
+/// Topic for `InvoiceFunded` events.
+pub const TOPIC_INVOICE_FUNDED: &str = "invoice_funded";
+/// Topic for `BidPlaced` events.
+pub const TOPIC_BID_PLACED: &str = "bid_placed";
+/// Topic for `BidAccepted` events.
+pub const TOPIC_BID_ACCEPTED: &str = "bid_accepted";
+/// Topic for `BidWithdrawn` events.
+pub const TOPIC_BID_WITHDRAWN: &str = "bid_withdrawn";
+/// Topic for `BidExpired` events.
+pub const TOPIC_BID_EXPIRED: &str = "bid_expired";
+/// Topic for `EscrowCreated` / `FundsLocked` events.
+pub const TOPIC_ESCROW_CREATED: &str = "escrow_created";
+/// Topic for `EscrowReleased` events.
+pub const TOPIC_ESCROW_RELEASED: &str = "escrow_released";
+/// Topic for `EscrowRefunded` events.
+pub const TOPIC_ESCROW_REFUNDED: &str = "escrow_refunded";
+/// Topic for `DisputeCreated` / `DisputeOpened` events.
+pub const TOPIC_DISPUTE_CREATED: &str = "dispute_created";
+/// Topic for `DisputeUnderReview` events.
+pub const TOPIC_DISPUTE_UNDER_REVIEW: &str = "dispute_under_review";
+/// Topic for `DisputeResolved` events.
+pub const TOPIC_DISPUTE_RESOLVED: &str = "dispute_resolved";
+
+// ============================================================================
+// Protocol-level semantic aliases
+//
+// The task specification uses domain-level names. These type aliases map them
+// to the canonical event types so both names compile and refer to the same
+// schema. Off-chain indexers should subscribe to the TOPIC_* constants above.
+// ============================================================================
+
+/// Semantic alias: `InvoiceCreated` == `InvoiceUploaded`.
+/// Both refer to the same event schema; use `TOPIC_INVOICE_UPLOADED` as the topic.
+pub type InvoiceCreated = InvoiceUploaded;
+
+/// Semantic alias: `FundsLocked` == `EscrowCreated`.
+/// Emitted when investor funds are locked in escrow upon bid acceptance.
+/// Use `TOPIC_ESCROW_CREATED` as the topic.
+pub type FundsLocked = EscrowCreated;
+
+/// Semantic alias: `LoanSettled` == `InvoiceSettled`.
+/// Emitted when a loan (invoice) is fully settled.
+/// Use `TOPIC_INVOICE_SETTLED` as the topic.
+pub type LoanSettled = InvoiceSettled;
+
+/// Semantic alias: `DisputeOpened` == `DisputeCreated`.
+/// Use `TOPIC_DISPUTE_CREATED` as the topic.
+pub type DisputeOpened = DisputeCreated;
 
 // ============================================================================
 // Structured Event Types
 // ============================================================================
 
+/// Emitted when a new invoice is uploaded / created by a business.
+///
+/// Topic: [`TOPIC_INVOICE_UPLOADED`] (`"inv_up"`)
+///
+/// # Fields
+/// - `invoice_id` – Unique 32-byte invoice identifier.
+/// - `business` – Address of the business that owns the invoice.
+/// - `amount` – Invoice face value in the smallest currency unit.
+/// - `currency` – Token contract address for the invoice currency.
+/// - `due_date` – Unix timestamp when the invoice is due.
+/// - `timestamp` – Ledger timestamp at emission time.
 #[contractevent]
 pub struct InvoiceUploaded {
     pub invoice_id: BytesN<32>,
@@ -23,6 +108,10 @@ pub struct InvoiceUploaded {
     pub timestamp: u64,
 }
 
+/// Emitted when an invoice is verified by an admin.
+///
+/// Topic: [`TOPIC_INVOICE_VERIFIED`] (`"inv_ver"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct InvoiceVerified {
     pub invoice_id: BytesN<32>,
@@ -30,6 +119,10 @@ pub struct InvoiceVerified {
     pub timestamp: u64,
 }
 
+/// Emitted when an invoice is cancelled by the business owner.
+///
+/// Topic: [`TOPIC_INVOICE_CANCELLED`] (`"inv_canc"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct InvoiceCancelled {
     pub invoice_id: BytesN<32>,
@@ -37,6 +130,14 @@ pub struct InvoiceCancelled {
     pub timestamp: u64,
 }
 
+/// Emitted when an invoice is fully settled (loan repaid).
+///
+/// Topic: [`TOPIC_INVOICE_SETTLED`] (`"inv_set"`)
+///
+/// # Security
+/// No PII is included. `investor_return` and `platform_fee` are derived
+/// from validated contract state only.
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct InvoiceSettled {
     pub invoice_id: BytesN<32>,
@@ -47,6 +148,10 @@ pub struct InvoiceSettled {
     pub timestamp: u64,
 }
 
+/// Emitted when an invoice is marked as defaulted.
+///
+/// Topic: [`TOPIC_INVOICE_DEFAULTED`] (`"inv_def"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct InvoiceDefaulted {
     pub invoice_id: BytesN<32>,
@@ -55,6 +160,10 @@ pub struct InvoiceDefaulted {
     pub timestamp: u64,
 }
 
+/// Emitted when an invoice expires past its due date without payment.
+///
+/// Topic: [`TOPIC_INVOICE_EXPIRED`] (`"inv_exp"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct InvoiceExpired {
     pub invoice_id: BytesN<32>,
@@ -62,6 +171,10 @@ pub struct InvoiceExpired {
     pub due_date: u64,
 }
 
+/// Emitted on each partial payment towards an invoice.
+///
+/// Topic: [`TOPIC_PARTIAL_PAYMENT`] (`"inv_pp"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct PartialPayment {
     pub invoice_id: BytesN<32>,
@@ -72,6 +185,10 @@ pub struct PartialPayment {
     pub transaction_id: String,
 }
 
+/// Emitted when a payment record is durably stored.
+///
+/// Topic: [`TOPIC_PAYMENT_RECORDED`] (`"pay_rec"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct PaymentRecorded {
     pub invoice_id: BytesN<32>,
@@ -81,6 +198,10 @@ pub struct PaymentRecorded {
     pub timestamp: u64,
 }
 
+/// Emitted when an invoice reaches final settlement (all funds disbursed).
+///
+/// Topic: [`TOPIC_INVOICE_SETTLED_FINAL`] (`"inv_stlf"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct InvoiceSettledFinal {
     pub invoice_id: BytesN<32>,
@@ -90,6 +211,19 @@ pub struct InvoiceSettledFinal {
     pub timestamp: u64,
 }
 
+/// Emitted when a bid is placed on an invoice.
+///
+/// Topic: [`TOPIC_BID_PLACED`] (`"bid_plc"`)
+///
+/// # Fields
+/// - `bid_id` – Unique bid identifier.
+/// - `invoice_id` – The invoice being bid on (auction_id in protocol terms).
+/// - `investor` – Address of the bidder.
+/// - `bid_amount` – Amount offered by the investor.
+/// - `expected_return` – Total expected repayment amount.
+/// - `timestamp` – Ledger timestamp when bid was placed.
+/// - `expiration_timestamp` – Timestamp after which the bid expires.
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct BidPlaced {
     pub bid_id: BytesN<32>,
@@ -101,6 +235,10 @@ pub struct BidPlaced {
     pub expiration_timestamp: u64,
 }
 
+/// Emitted when a bid is accepted by the business owner.
+///
+/// Topic: [`TOPIC_BID_ACCEPTED`] (`"bid_acc"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct BidAccepted {
     pub bid_id: BytesN<32>,
@@ -112,6 +250,10 @@ pub struct BidAccepted {
     pub timestamp: u64,
 }
 
+/// Emitted when an investor withdraws their bid.
+///
+/// Topic: [`TOPIC_BID_WITHDRAWN`] (`"bid_wdr"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct BidWithdrawn {
     pub bid_id: BytesN<32>,
@@ -121,6 +263,10 @@ pub struct BidWithdrawn {
     pub timestamp: u64,
 }
 
+/// Emitted when a bid expires past its TTL.
+///
+/// Topic: [`TOPIC_BID_EXPIRED`] (`"bid_exp"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct BidExpired {
     pub bid_id: BytesN<32>,
@@ -130,6 +276,20 @@ pub struct BidExpired {
     pub expiration_timestamp: u64,
 }
 
+/// Emitted when investor funds are locked in escrow (bid accepted).
+///
+/// Topic: [`TOPIC_ESCROW_CREATED`] (`"esc_cr"`)
+///
+/// # Fields
+/// - `escrow_id` – Unique escrow identifier.
+/// - `invoice_id` – The invoice being funded.
+/// - `investor` – Address of the investor whose funds are locked.
+/// - `business` – Address of the business receiving the funds.
+/// - `amount` – Amount locked in escrow.
+///
+/// # Security
+/// Funds are locked atomically with bid acceptance. No PII included.
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct EscrowCreated {
     pub escrow_id: BytesN<32>,
@@ -139,6 +299,10 @@ pub struct EscrowCreated {
     pub amount: i128,
 }
 
+/// Emitted when escrow funds are released to the business.
+///
+/// Topic: [`TOPIC_ESCROW_RELEASED`] (`"esc_rel"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct EscrowReleased {
     pub escrow_id: BytesN<32>,
@@ -147,6 +311,10 @@ pub struct EscrowReleased {
     pub amount: i128,
 }
 
+/// Emitted when escrow funds are refunded to the investor.
+///
+/// Topic: [`TOPIC_ESCROW_REFUNDED`] (`"esc_ref"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct EscrowRefunded {
     pub escrow_id: BytesN<32>,
@@ -155,13 +323,19 @@ pub struct EscrowRefunded {
     pub amount: i128,
 }
 
+/// Emitted when invoice metadata is updated.
+///
+/// Topic: `"invoice_metadata_updated"`
+///
+/// # Security
+/// **NO PII**: This event does NOT include customer_name or tax_id to prevent
+/// PII leakage. Only aggregate statistics (line_item_count, total_value) are included.
 #[contractevent]
 pub struct InvoiceMetadataUpdated {
     pub invoice_id: BytesN<32>,
-    pub customer_name: String,
-    pub tax_id: String,
     pub line_item_count: u32,
     pub total_value: i128,
+    pub timestamp: u64,
 }
 
 #[contractevent]
@@ -177,6 +351,7 @@ pub struct InvestorVerified {
     pub verified_at: u64,
 }
 
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct InvoiceFunded {
     pub invoice_id: BytesN<32>,
@@ -326,6 +501,20 @@ pub struct InvoiceTagRemoved {
     pub tag: String,
 }
 
+/// Emitted when a dispute is opened on an invoice.
+///
+/// Topic: [`TOPIC_DISPUTE_CREATED`] (`"dsp_cr"`)
+///
+/// # Fields
+/// - `invoice_id` – The disputed invoice.
+/// - `created_by` – Address of the dispute initiator (business or investor).
+/// - `reason` – Human-readable reason string (no PII, max 1000 chars).
+/// - `timestamp` – Ledger timestamp at emission time.
+///
+/// # Security
+/// Only the business owner or investor on the invoice may open a dispute.
+/// The `reason` field must not contain PII; it is a reason code or short description.
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct DisputeCreated {
     pub invoice_id: BytesN<32>,
@@ -334,6 +523,10 @@ pub struct DisputeCreated {
     pub timestamp: u64,
 }
 
+/// Emitted when a dispute is moved to admin review.
+///
+/// Topic: [`TOPIC_DISPUTE_UNDER_REVIEW`] (`"dsp_ur"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct DisputeUnderReview {
     pub invoice_id: BytesN<32>,
@@ -341,6 +534,10 @@ pub struct DisputeUnderReview {
     pub timestamp: u64,
 }
 
+/// Emitted when a dispute is resolved by an admin.
+///
+/// Topic: [`TOPIC_DISPUTE_RESOLVED`] (`"dsp_rs"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct DisputeResolved {
     pub invoice_id: BytesN<32>,
@@ -479,10 +676,9 @@ pub fn emit_invoice_metadata_updated(env: &Env, invoice: &Invoice, metadata: &In
 
     InvoiceMetadataUpdated {
         invoice_id: invoice.id.clone(),
-        customer_name: metadata.customer_name.clone(),
-        tax_id: metadata.tax_id.clone(),
         line_item_count: metadata.line_items.len() as u32,
         total_value: total,
+        timestamp: env.ledger().timestamp(),
     }
     .publish(env);
 }

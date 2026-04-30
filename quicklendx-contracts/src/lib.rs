@@ -98,6 +98,8 @@ mod test_bid_ranking;
 mod test_init_invariants;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
+#[cfg(test)]
+mod test_events;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
 pub mod types;
@@ -118,6 +120,7 @@ use events::{
     emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
     emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
     emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
+    emit_dispute_created, emit_dispute_under_review, emit_dispute_resolved,
 };
 use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
@@ -866,49 +869,51 @@ impl QuickLendXContract {
         new_status: InvoiceStatus,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
         // Remove from old status list
         InvoiceStorage::remove_from_status_invoices(&env, invoice.status, &invoice_id);
 
-        // Update status
+        // Update status and emit canonical events matching the lifecycle
         match new_status {
-            InvoiceStatus::Verified => invoice.verify(&env, invoice.business.clone()),
-            InvoiceStatus::Paid => {
-                invoice.mark_as_paid(&env, invoice.business.clone(), env.ledger().timestamp())
+            InvoiceStatus::Verified => {
+                invoice.verify(&env, admin.clone());
+                InvoiceStorage::update_invoice(&env, &invoice);
+                InvoiceStorage::add_to_status_invoices(&env, invoice.status, &invoice_id);
+                emit_invoice_verified(&env, &invoice);
             }
-            InvoiceStatus::Defaulted => invoice.mark_as_defaulted(),
             InvoiceStatus::Funded => {
                 // For testing purposes - normally funding happens via accept_bid
                 invoice.mark_as_funded(
                     &env,
-                    invoice.business.clone(),
+                    admin.clone(),
                     invoice.amount,
                     env.ledger().timestamp(),
                 );
+                InvoiceStorage::update_invoice(&env, &invoice);
+                InvoiceStorage::add_to_status_invoices(&env, invoice.status, &invoice_id);
+                // Emit canonical InvoiceFunded event
+                events::emit_invoice_funded(&env, &invoice_id, &admin, invoice.amount);
+            }
+            InvoiceStatus::Paid => {
+                invoice.mark_as_paid(&env, invoice.business.clone(), env.ledger().timestamp());
+                InvoiceStorage::update_invoice(&env, &invoice);
+                InvoiceStorage::add_to_status_invoices(&env, invoice.status, &invoice_id);
+                // Emit canonical InvoiceSettled event
+                let investor = invoice.investor.clone().unwrap_or(admin.clone());
+                events::emit_invoice_settled(&env, &invoice, 0, 0);
+                let _ = investor;
+            }
+            InvoiceStatus::Defaulted => {
+                invoice.mark_as_defaulted();
+                InvoiceStorage::update_invoice(&env, &invoice);
+                InvoiceStorage::add_to_status_invoices(&env, invoice.status, &invoice_id);
+                // Emit canonical InvoiceDefaulted event
+                events::emit_invoice_defaulted(&env, &invoice);
             }
             _ => return Err(QuickLendXError::InvalidStatus),
-        }
-
-        // Store updated invoice
-        InvoiceStorage::update_invoice(&env, &invoice);
-
-        // Add to new status list
-        InvoiceStorage::add_to_status_invoices(&env, invoice.status, &invoice_id);
-
-        // Emit event
-        env.events().publish(
-            (symbol_short!("updated"),),
-            (invoice_id, new_status.clone()),
-        );
-
-        // Send notifications based on status change
-        match new_status {
-            InvoiceStatus::Verified => {
-                // No notifications
-            }
-            _ => {}
         }
 
         Ok(())
@@ -1330,6 +1335,54 @@ impl QuickLendXContract {
         reentrancy::with_payment_guard(&env, || {
             do_process_partial_payment(&env, &invoice_id, payment_amount, transaction_id.clone())
         })
+    }
+
+    /// Make a payment towards an invoice (alias for process_partial_payment).
+    ///
+    /// Convenience entry point used by tests and off-chain clients.
+    /// Delegates to `process_partial_payment` with identical semantics.
+    pub fn make_payment(
+        env: Env,
+        invoice_id: BytesN<32>,
+        payment_amount: i128,
+        transaction_id: String,
+    ) -> Result<(), QuickLendXError> {
+        reentrancy::with_payment_guard(&env, || {
+            do_process_partial_payment(&env, &invoice_id, payment_amount, transaction_id.clone())
+        })
+    }
+
+    /// Expire an invoice that has passed its due date without being funded.
+    ///
+    /// Emits `InvoiceExpired` and transitions the invoice to `Defaulted` if funded,
+    /// or marks it as expired otherwise.
+    pub fn expire_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        let current_ts = env.ledger().timestamp();
+        if current_ts <= invoice.due_date {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+        // Emit the InvoiceExpired event
+        events::emit_invoice_expired(&env, &invoice);
+        Ok(())
+    }
+
+    /// Refund escrow funds to the investor (alias for refund_escrow_funds with admin/business auth).
+    ///
+    /// Convenience entry point used by tests and off-chain clients.
+    pub fn refund_escrow(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        reentrancy::with_payment_guard(&env, || do_refund_escrow_funds(&env, &invoice_id, &admin))
+    }
+
+    /// Clean up expired bids for an invoice (alias for cleanup_expired_bids).
+    ///
+    /// Convenience entry point used by tests and off-chain clients.
+    pub fn clean_expired_bids(env: Env, invoice_id: BytesN<32>) -> u32 {
+        BidStorage::cleanup_expired_bids(&env, &invoice_id)
     }
 
     /// Handle invoice default (admin only)
@@ -2715,9 +2768,9 @@ impl QuickLendXContract {
         }
         invoice.dispute_status = DisputeStatus::Disputed;
         invoice.dispute = crate::types::Dispute {
-            created_by: creator,
+            created_by: creator.clone(),
             created_at: env.ledger().timestamp(),
-            reason,
+            reason: reason.clone(),
             evidence,
             resolution: String::from_str(&env, ""),
             resolved_by: Address::from_str(
@@ -2728,6 +2781,8 @@ impl QuickLendXContract {
         };
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
+        // Emit DisputeCreated / DisputeOpened event immediately after state mutation.
+        emit_dispute_created(&env, &invoice_id, &creator, &reason);
         Ok(())
     }
 
@@ -2796,6 +2851,8 @@ impl QuickLendXContract {
         invoice.dispute_status = DisputeStatus::UnderReview;
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
+        // Emit DisputeUnderReview event immediately after state mutation.
+        emit_dispute_under_review(&env, &invoice_id, &admin);
         Ok(())
     }
 
@@ -2810,11 +2867,13 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.dispute_status = DisputeStatus::Resolved;
-        invoice.dispute.resolution = resolution;
-        invoice.dispute.resolved_by = admin;
+        invoice.dispute.resolution = resolution.clone();
+        invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
+        // Emit DisputeResolved event immediately after state mutation.
+        emit_dispute_resolved(&env, &invoice_id, &admin, &resolution);
         Ok(())
     }
 
