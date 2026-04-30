@@ -13,7 +13,6 @@
 /// - Bid placement guard (combines status + limit + cap)
 /// - Tier qualification logic
 /// - Zero-amount and overflow edge cases
-
 use crate::verification::*;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,7 +27,8 @@ fn test_investor_guard_verified_within_limit_passes() {
         100_000,
         InvestorTier::Basic,
         RiskLevel::Low,
-    ).is_ok());
+    )
+    .is_ok());
 }
 
 #[test]
@@ -62,13 +62,7 @@ fn test_investor_guard_rejected_denied() {
 #[test]
 fn test_investor_guard_not_submitted_denied() {
     assert_eq!(
-        guard_investment_action(
-            None,
-            1,
-            100_000,
-            InvestorTier::Basic,
-            RiskLevel::Low,
-        ),
+        guard_investment_action(None, 1, 100_000, InvestorTier::Basic, RiskLevel::Low,),
         Err(GuardError::NotSubmitted)
     );
 }
@@ -104,7 +98,8 @@ fn test_investor_guard_amount_at_limit_passes() {
         100_000,
         InvestorTier::Basic,
         RiskLevel::Low,
-    ).is_ok());
+    )
+    .is_ok());
 }
 
 #[test]
@@ -133,7 +128,8 @@ fn test_investor_guard_silver_medium_limit() {
         100_000,
         InvestorTier::Silver,
         RiskLevel::Medium,
-    ).is_ok());
+    )
+    .is_ok());
 
     assert_eq!(
         guard_investment_action(
@@ -164,7 +160,8 @@ fn test_investor_guard_high_risk_cap_enforced() {
         100_000,
         InvestorTier::Gold,
         RiskLevel::High,
-    ).is_ok());
+    )
+    .is_ok());
 
     assert_eq!(
         guard_investment_action(
@@ -191,7 +188,8 @@ fn test_investor_guard_very_high_risk_cap_enforced() {
         100_000,
         InvestorTier::Vip,
         RiskLevel::VeryHigh,
-    ).is_ok());
+    )
+    .is_ok());
 
     assert_eq!(
         guard_investment_action(
@@ -218,7 +216,8 @@ fn test_investor_guard_low_risk_no_cap() {
         100_000,
         InvestorTier::Basic,
         RiskLevel::Low,
-    ).is_ok());
+    )
+    .is_ok());
 }
 
 #[test]
@@ -231,7 +230,8 @@ fn test_investor_guard_medium_risk_no_cap() {
         100_000,
         InvestorTier::Basic,
         RiskLevel::Medium,
-    ).is_ok());
+    )
+    .is_ok());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -246,7 +246,8 @@ fn test_bid_placement_verified_within_limit_passes() {
         100_000,
         InvestorTier::Basic,
         RiskLevel::Low,
-    ).is_ok());
+    )
+    .is_ok());
 }
 
 #[test]
@@ -280,13 +281,7 @@ fn test_bid_placement_rejected_denied() {
 #[test]
 fn test_bid_placement_not_submitted_denied() {
     assert_eq!(
-        guard_bid_placement(
-            None,
-            1,
-            100_000,
-            InvestorTier::Basic,
-            RiskLevel::Low,
-        ),
+        guard_bid_placement(None, 1, 100_000, InvestorTier::Basic, RiskLevel::Low,),
         Err(GuardError::NotSubmitted)
     );
 }
@@ -332,26 +327,26 @@ fn test_effective_limit_all_tier_risk_combinations() {
 
     // Expected: base * tier_mult * risk_bps / 10_000
     let expected: Vec<(InvestorTier, RiskLevel, u128)> = vec![
-        (InvestorTier::Basic, RiskLevel::Low, 100_000),       // 1 * 100%
-        (InvestorTier::Basic, RiskLevel::Medium, 75_000),     // 1 * 75%
-        (InvestorTier::Basic, RiskLevel::High, 50_000),       // 1 * 50%
-        (InvestorTier::Basic, RiskLevel::VeryHigh, 25_000),   // 1 * 25%
-        (InvestorTier::Silver, RiskLevel::Low, 200_000),      // 2 * 100%
-        (InvestorTier::Silver, RiskLevel::Medium, 150_000),   // 2 * 75%
-        (InvestorTier::Silver, RiskLevel::High, 100_000),     // 2 * 50%
-        (InvestorTier::Silver, RiskLevel::VeryHigh, 50_000),  // 2 * 25%
-        (InvestorTier::Gold, RiskLevel::Low, 300_000),        // 3 * 100%
-        (InvestorTier::Gold, RiskLevel::Medium, 225_000),     // 3 * 75%
-        (InvestorTier::Gold, RiskLevel::High, 150_000),       // 3 * 50%
-        (InvestorTier::Gold, RiskLevel::VeryHigh, 75_000),    // 3 * 25%
-        (InvestorTier::Platinum, RiskLevel::Low, 500_000),    // 5 * 100%
+        (InvestorTier::Basic, RiskLevel::Low, 100_000), // 1 * 100%
+        (InvestorTier::Basic, RiskLevel::Medium, 75_000), // 1 * 75%
+        (InvestorTier::Basic, RiskLevel::High, 50_000), // 1 * 50%
+        (InvestorTier::Basic, RiskLevel::VeryHigh, 25_000), // 1 * 25%
+        (InvestorTier::Silver, RiskLevel::Low, 200_000), // 2 * 100%
+        (InvestorTier::Silver, RiskLevel::Medium, 150_000), // 2 * 75%
+        (InvestorTier::Silver, RiskLevel::High, 100_000), // 2 * 50%
+        (InvestorTier::Silver, RiskLevel::VeryHigh, 50_000), // 2 * 25%
+        (InvestorTier::Gold, RiskLevel::Low, 300_000),  // 3 * 100%
+        (InvestorTier::Gold, RiskLevel::Medium, 225_000), // 3 * 75%
+        (InvestorTier::Gold, RiskLevel::High, 150_000), // 3 * 50%
+        (InvestorTier::Gold, RiskLevel::VeryHigh, 75_000), // 3 * 25%
+        (InvestorTier::Platinum, RiskLevel::Low, 500_000), // 5 * 100%
         (InvestorTier::Platinum, RiskLevel::Medium, 375_000), // 5 * 75%
-        (InvestorTier::Platinum, RiskLevel::High, 250_000),   // 5 * 50%
+        (InvestorTier::Platinum, RiskLevel::High, 250_000), // 5 * 50%
         (InvestorTier::Platinum, RiskLevel::VeryHigh, 125_000), // 5 * 25%
-        (InvestorTier::Vip, RiskLevel::Low, 1_000_000),      // 10 * 100%
-        (InvestorTier::Vip, RiskLevel::Medium, 750_000),     // 10 * 75%
-        (InvestorTier::Vip, RiskLevel::High, 500_000),       // 10 * 50%
-        (InvestorTier::Vip, RiskLevel::VeryHigh, 250_000),   // 10 * 25%
+        (InvestorTier::Vip, RiskLevel::Low, 1_000_000), // 10 * 100%
+        (InvestorTier::Vip, RiskLevel::Medium, 750_000), // 10 * 75%
+        (InvestorTier::Vip, RiskLevel::High, 500_000),  // 10 * 50%
+        (InvestorTier::Vip, RiskLevel::VeryHigh, 250_000), // 10 * 25%
     ];
 
     for (tier, risk, expected_limit) in expected {
@@ -531,7 +526,13 @@ fn test_full_investor_lifecycle_submit_reject_resubmit_verify_bid() {
     // Step 2: Submit KYC — now Pending
     let status = VerificationStatus::Pending;
     assert_eq!(
-        guard_bid_placement(Some(status), 1, base_limit, InvestorTier::Basic, RiskLevel::Low),
+        guard_bid_placement(
+            Some(status),
+            1,
+            base_limit,
+            InvestorTier::Basic,
+            RiskLevel::Low
+        ),
         Err(GuardError::VerificationPending)
     );
 
@@ -539,7 +540,13 @@ fn test_full_investor_lifecycle_submit_reject_resubmit_verify_bid() {
     assert!(validate_transition(status, VerificationStatus::Rejected).is_ok());
     let status = VerificationStatus::Rejected;
     assert_eq!(
-        guard_bid_placement(Some(status), 1, base_limit, InvestorTier::Basic, RiskLevel::Low),
+        guard_bid_placement(
+            Some(status),
+            1,
+            base_limit,
+            InvestorTier::Basic,
+            RiskLevel::Low
+        ),
         Err(GuardError::VerificationRejected)
     );
 
@@ -553,13 +560,23 @@ fn test_full_investor_lifecycle_submit_reject_resubmit_verify_bid() {
 
     // Step 6: Can now bid within limits
     assert!(guard_bid_placement(
-        Some(status), 50_000, base_limit, InvestorTier::Basic, RiskLevel::Low
-    ).is_ok());
+        Some(status),
+        50_000,
+        base_limit,
+        InvestorTier::Basic,
+        RiskLevel::Low
+    )
+    .is_ok());
 
     // Step 7: Cannot bid over limit
     assert!(guard_bid_placement(
-        Some(status), 100_001, base_limit, InvestorTier::Basic, RiskLevel::Low
-    ).is_err());
+        Some(status),
+        100_001,
+        base_limit,
+        InvestorTier::Basic,
+        RiskLevel::Low
+    )
+    .is_err());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -572,24 +589,94 @@ fn test_tier_advancement_increases_limit() {
     let status = Some(VerificationStatus::Verified);
 
     // Basic: limit = 100_000
-    assert!(guard_investment_action(status, 100_000, base_limit, InvestorTier::Basic, RiskLevel::Low).is_ok());
-    assert!(guard_investment_action(status, 100_001, base_limit, InvestorTier::Basic, RiskLevel::Low).is_err());
+    assert!(guard_investment_action(
+        status,
+        100_000,
+        base_limit,
+        InvestorTier::Basic,
+        RiskLevel::Low
+    )
+    .is_ok());
+    assert!(guard_investment_action(
+        status,
+        100_001,
+        base_limit,
+        InvestorTier::Basic,
+        RiskLevel::Low
+    )
+    .is_err());
 
     // Silver: limit = 200_000
-    assert!(guard_investment_action(status, 200_000, base_limit, InvestorTier::Silver, RiskLevel::Low).is_ok());
-    assert!(guard_investment_action(status, 200_001, base_limit, InvestorTier::Silver, RiskLevel::Low).is_err());
+    assert!(guard_investment_action(
+        status,
+        200_000,
+        base_limit,
+        InvestorTier::Silver,
+        RiskLevel::Low
+    )
+    .is_ok());
+    assert!(guard_investment_action(
+        status,
+        200_001,
+        base_limit,
+        InvestorTier::Silver,
+        RiskLevel::Low
+    )
+    .is_err());
 
     // Gold: limit = 300_000
-    assert!(guard_investment_action(status, 300_000, base_limit, InvestorTier::Gold, RiskLevel::Low).is_ok());
-    assert!(guard_investment_action(status, 300_001, base_limit, InvestorTier::Gold, RiskLevel::Low).is_err());
+    assert!(guard_investment_action(
+        status,
+        300_000,
+        base_limit,
+        InvestorTier::Gold,
+        RiskLevel::Low
+    )
+    .is_ok());
+    assert!(guard_investment_action(
+        status,
+        300_001,
+        base_limit,
+        InvestorTier::Gold,
+        RiskLevel::Low
+    )
+    .is_err());
 
     // Platinum: limit = 500_000
-    assert!(guard_investment_action(status, 500_000, base_limit, InvestorTier::Platinum, RiskLevel::Low).is_ok());
-    assert!(guard_investment_action(status, 500_001, base_limit, InvestorTier::Platinum, RiskLevel::Low).is_err());
+    assert!(guard_investment_action(
+        status,
+        500_000,
+        base_limit,
+        InvestorTier::Platinum,
+        RiskLevel::Low
+    )
+    .is_ok());
+    assert!(guard_investment_action(
+        status,
+        500_001,
+        base_limit,
+        InvestorTier::Platinum,
+        RiskLevel::Low
+    )
+    .is_err());
 
     // Vip: limit = 1_000_000
-    assert!(guard_investment_action(status, 1_000_000, base_limit, InvestorTier::Vip, RiskLevel::Low).is_ok());
-    assert!(guard_investment_action(status, 1_000_001, base_limit, InvestorTier::Vip, RiskLevel::Low).is_err());
+    assert!(guard_investment_action(
+        status,
+        1_000_000,
+        base_limit,
+        InvestorTier::Vip,
+        RiskLevel::Low
+    )
+    .is_ok());
+    assert!(guard_investment_action(
+        status,
+        1_000_001,
+        base_limit,
+        InvestorTier::Vip,
+        RiskLevel::Low
+    )
+    .is_err());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -763,5 +850,6 @@ fn test_minimum_amount_passes_with_sufficient_limit() {
         100_000,
         InvestorTier::Basic,
         RiskLevel::Low,
-    ).is_ok());
+    )
+    .is_ok());
 }

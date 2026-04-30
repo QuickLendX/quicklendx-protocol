@@ -20,7 +20,6 @@
 /// The verification module enforces a **deny-by-default** policy: every
 /// restricted action requires the caller to prove verified status through
 /// a guard function.  Pending, rejected, and unknown actors are blocked.
-
 pub mod fees;
 pub mod profits;
 pub mod settlement;

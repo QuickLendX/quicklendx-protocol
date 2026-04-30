@@ -2,7 +2,7 @@
 ///
 /// Centralized guard coverage to prevent unverified actors from restricted
 /// finance actions in the QuickLendX invoice-financing protocol.
-/// 
+///
 /// ## Purpose
 ///
 /// Every privileged operation (invoice upload, bid placement, settlement
@@ -35,11 +35,9 @@
 /// | `guard_settlement_initiation`| Business      | Verified        | —                   |
 /// | `guard_escrow_release`       | Business      | Verified        | —                   |
 /// | `guard_investment_action`    | Investor      | Verified        | amount ≤ limit      |
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Constants 
+// Constants
 // ─────────────────────────────────────────────────────────────────────────────
-
 /// Basis-point denominator (10_000 = 100%).
 pub const BPS_DENOMINATOR: u128 = 10_000;
 
@@ -63,7 +61,7 @@ pub const MAX_REJECTION_REASON_LENGTH: usize = 512;
 pub const MAX_KYC_DATA_LENGTH: usize = 4_096;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Types 
+// Types
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Verification status shared by both business and investor actors.
@@ -123,10 +121,7 @@ pub enum GuardError {
         effective_limit: u128,
     },
     /// Bid / investment amount exceeds the per-investment risk cap.
-    PerInvestmentCapExceeded {
-        requested: u128,
-        cap: u128,
-    },
+    PerInvestmentCapExceeded { requested: u128, cap: u128 },
     /// Zero investment amount is not permitted.
     ZeroAmount,
     /// An arithmetic overflow occurred during limit computation.
@@ -156,7 +151,7 @@ pub enum TransitionError {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tier / risk helpers 
+// Tier / risk helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Returns the multiplier for a given investor tier.
@@ -223,7 +218,7 @@ pub fn per_investment_cap(risk: RiskLevel) -> Option<u128> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Investment limit computation 
+// Investment limit computation
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Computes the effective investment limit for an investor.
@@ -255,7 +250,7 @@ pub fn compute_effective_limit(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// State transition validation 
+// State transition validation
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Validates whether a state transition is allowed.
@@ -333,7 +328,7 @@ pub fn validate_kyc_data(data: &str) -> Result<(), TransitionError> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Guard functions — deny-by-default 
+// Guard functions — deny-by-default
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Checks whether a business actor is allowed to perform a restricted action.
@@ -451,7 +446,7 @@ pub fn guard_bid_placement(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tier qualification helpers 
+// Tier qualification helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Determines the appropriate tier for an investor based on their track record.
@@ -477,7 +472,7 @@ pub fn compute_tier(total_invested: u128, successful_investments: u32) -> Invest
 }
 
 #[cfg(test)]
-mod tests { 
+mod tests {
     use super::*;
 
     // ── tier_multiplier ────────────────────────────────────────────────────
@@ -595,17 +590,23 @@ mod tests {
 
     #[test]
     fn test_transition_pending_to_verified() {
-        assert!(validate_transition(VerificationStatus::Pending, VerificationStatus::Verified).is_ok());
+        assert!(
+            validate_transition(VerificationStatus::Pending, VerificationStatus::Verified).is_ok()
+        );
     }
 
     #[test]
     fn test_transition_pending_to_rejected() {
-        assert!(validate_transition(VerificationStatus::Pending, VerificationStatus::Rejected).is_ok());
+        assert!(
+            validate_transition(VerificationStatus::Pending, VerificationStatus::Rejected).is_ok()
+        );
     }
 
     #[test]
     fn test_transition_rejected_to_pending() {
-        assert!(validate_transition(VerificationStatus::Rejected, VerificationStatus::Pending).is_ok());
+        assert!(
+            validate_transition(VerificationStatus::Rejected, VerificationStatus::Pending).is_ok()
+        );
     }
 
     #[test]
