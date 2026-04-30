@@ -71,12 +71,49 @@ npm run sbom:check
 
 ## Project Structure
 
-- `src/app.ts`: Express application setup.
-- `src/routes/v1/`: Versioned API routes.
-- `src/controllers/v1/`: Logic handlers.
-- `src/types/contract.ts`: TypeScript interfaces mirroring contract types.
-- `src/middleware/`: Security and utility middleware.
-- `openapi.yaml`: OpenAPI specification.
+- `src/app.ts`: Express application setup
+- `src/routes/v1/`: Versioned API routes
+- `src/controllers/v1/`: Logic handlers
+- `src/types/contract.ts`: TypeScript interfaces mirroring contract types
+- `src/middleware/`: Security and utility middleware
+- `src/models/`: Data models (API keys, etc.)
+- `src/services/`: Business logic services (API key management, audit logging)
+- `src/config/`: Configuration (scopes, etc.)
+- `src/db/`: Database interface
+- `src/tests/`: Test suites
+- `docs/`: API documentation
+- `openapi.yaml`: OpenAPI specification
+
+## API Key System
+
+The backend includes a complete API key authentication system for service-to-service communication.
+
+### Quick Start
+
+See [API Key Quick Start Guide](API_KEY_QUICK_START.md) for getting started.
+
+### Documentation
+
+- **[API Key Documentation](docs/auth.md)** - Complete authentication guide
+- **[Security Checklist](SECURITY_CHECKLIST.md)** - Security validation
+- **[Implementation Summary](API_KEY_IMPLEMENTATION_SUMMARY.md)** - Technical details
+- **[Quick Start](API_KEY_QUICK_START.md)** - Getting started guide
+
+### API Key Endpoints
+
+- `POST /api/v1/keys` - Create new API key
+- `GET /api/v1/keys` - List all keys
+- `GET /api/v1/keys/:id` - Get specific key
+- `POST /api/v1/keys/:id/rotate` - Rotate a key
+- `POST /api/v1/keys/:id/revoke` - Revoke a key
+- `GET /api/v1/keys/:id/audit-logs` - Get audit logs
+- `GET /api/v1/keys/scopes` - Get available scopes (public)
+
+### Running API Key Tests
+
+```bash
+npm test -- --testPathPattern=api-key.test.ts
+```
 
 ## API Documentation
 
