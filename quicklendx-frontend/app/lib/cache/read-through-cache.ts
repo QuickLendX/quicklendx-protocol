@@ -49,7 +49,7 @@ export interface CacheConfig {
 
 export const DEFAULT_CACHE_CONFIG: CacheConfig = {
   default_ttl_ms: 30_000, // 30 s
-  serve_stale: false,     // safe default for financial data
+  serve_stale: false, // safe default for financial data
 };
 
 // ---------------------------------------------------------------------------
@@ -185,7 +185,10 @@ export class ReadThroughCache {
       if (this.config.serve_stale) {
         // Return stale data immediately; revalidate in background
         this._revalidate(key, fetcher, ttlMs).catch((err) =>
-          console.error(`[cache] Background revalidation failed for "${key}":`, err)
+          console.error(
+            `[cache] Background revalidation failed for "${key}":`,
+            err
+          )
         );
         return {
           hit: true,
@@ -204,7 +207,12 @@ export class ReadThroughCache {
 
   /** Explicitly set a value in the cache */
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
-    await this._set(key, value, ttlMs ?? this.config.default_ttl_ms, Date.now());
+    await this._set(
+      key,
+      value,
+      ttlMs ?? this.config.default_ttl_ms,
+      Date.now()
+    );
   }
 
   /** Explicitly invalidate a single key */

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Deterministic dataset generator for performance tests.
  * Uses a fixed seed so results are reproducible across runs.

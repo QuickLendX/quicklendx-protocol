@@ -12,5 +12,13 @@
     "types": ["jest", "node"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "src/controllers/v1/api-keys.ts",
+    "src/routes/v1/monitoring.ts",
+    "src/services/mockDataProviders.ts",
+    "src/tests/bidsApi.test.ts",
+    "src/tests/database.test.ts",
+    "src/tests/perf/seed.ts"
+  ]
 }

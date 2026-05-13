@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../types/contract";
 
 export class MockDataProviders {

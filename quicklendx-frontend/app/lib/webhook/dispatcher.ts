@@ -13,10 +13,7 @@ import type {
   WebhookEnvelopeV2,
   WebhookEventType,
 } from "./types";
-import {
-  DEFAULT_COMPATIBILITY_WINDOW,
-  CURRENT_WEBHOOK_VERSION,
-} from "./types";
+import { DEFAULT_COMPATIBILITY_WINDOW, CURRENT_WEBHOOK_VERSION } from "./types";
 import { buildEnvelopeV2, isPinActive, transformEnvelope } from "./versioning";
 import type { ChainCursor } from "./types";
 
@@ -41,7 +38,9 @@ export function registerSubscriber(config: SubscriberConfig): void {
   subscriberStore.set(config.subscriber_id, config);
 }
 
-export function getSubscriber(subscriberId: string): SubscriberConfig | undefined {
+export function getSubscriber(
+  subscriberId: string
+): SubscriberConfig | undefined {
   return subscriberStore.get(subscriberId);
 }
 

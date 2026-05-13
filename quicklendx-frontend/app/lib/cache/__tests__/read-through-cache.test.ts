@@ -148,7 +148,7 @@ describe("ReadThroughCache – explicit invalidation", () => {
     const d = await cache.get(invoiceDetailKey(INVOICE_ID), detailFetcher);
     const b = await cache.get(bestBidKey(INVOICE_ID), bidFetcher);
 
-    expect(d.hit).toBe(true);  // detail NOT evicted
+    expect(d.hit).toBe(true); // detail NOT evicted
     expect(b.hit).toBe(false); // best-bid evicted
   });
 });
@@ -185,7 +185,7 @@ describe("invalidateOnEvent", () => {
 
     const d = await cache.get(invoiceDetailKey(INVOICE_ID), makeFetcher({}));
     const b = await cache.get(bestBidKey(INVOICE_ID), makeFetcher({}));
-    expect(d.hit).toBe(true);  // detail cache untouched
+    expect(d.hit).toBe(true); // detail cache untouched
     expect(b.hit).toBe(false); // bid cache evicted
   });
 

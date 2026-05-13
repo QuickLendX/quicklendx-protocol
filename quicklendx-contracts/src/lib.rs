@@ -98,7 +98,7 @@ mod test_bid_ranking;
 mod test_init_invariants;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;

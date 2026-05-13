@@ -9,8 +9,6 @@ import { csrfMiddleware } from "./middleware/csrf";
 import { webhookCorsOptions } from "./config/cors";
 import v1Routes from "./routes/v1";
 import webhookRoutes from "./routes/webhooks";
-import { webhookCorsOptions } from "./config/cors";
-import { csrfMiddleware } from "./middleware/csrf";
 import { requestLogger } from "./middleware/request-logger";
 
 const app = express();

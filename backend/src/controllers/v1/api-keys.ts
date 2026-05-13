@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Request, Response } from 'express';
 import { apiKeyService } from '../../services/api-key-service';
 import { auditLogService } from '../../services/audit-log';

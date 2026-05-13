@@ -117,7 +117,9 @@ describe("MonotonicIngester", () => {
     const s = store ?? new InMemoryCursorStore();
     const accepted: ChainCursor[] = [];
     const ingester = new MonotonicIngester(s, {
-      onAccept: (c) => { accepted.push(c); },
+      onAccept: (c) => {
+        accepted.push(c);
+      },
       onGap,
       onDuplicate,
     });

@@ -5,7 +5,7 @@ export const RawEventSchema = z.object({
   ledger: z.number().int().nonnegative(),
   txHash: z.string().min(1),
   type: z.string().min(1),
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
   timestamp: z.number().int().nonnegative(),
   complianceHold: z.boolean().default(false),
   indexedAt: z.string().datetime(), // ISO 8601 timestamp

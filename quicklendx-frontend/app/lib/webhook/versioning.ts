@@ -92,10 +92,9 @@ export function transformEnvelope<T>(
   }
 
   // Apply steps sequentially (cast needed because TS can't track the chain)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let result: any = envelope;
+  let result: unknown = envelope;
   for (let i = 0; i < steps; i++) {
-    result = DOWNGRADE_CHAIN[i](result);
+    result = DOWNGRADE_CHAIN[i](result as WebhookEnvelopeV2<unknown>);
   }
   return result as WebhookEnvelopeV1<T>;
 }
