@@ -5,19 +5,19 @@
 ///
 /// Test inventory (15 invariants):
 ///  1. generated_at == ledger timestamp at generation time
-///  2. start_date ≤ end_date for every TimePeriod variant
+///  2. start_date - end_date for every TimePeriod variant
 ///  3. end_date == ledger timestamp
 ///  4. start_date / end_date match AnalyticsCalculator::get_period_dates
-///  5. total_volume == Σ invoice.amount for invoices in the period
+///  5. total_volume == - invoice.amount for invoices in the period
 ///  6. total_volume == 0 for a business with no invoices
 ///  7. total_volume consistent between the live return and the stored copy
 ///  8. invoices_uploaded == number of invoices created in the period
 ///  9. invoices_uploaded == 0 for a new business
-/// 10. invoices_funded ≤ invoices_uploaded
+/// 10. invoices_funded - invoices_uploaded
 /// 11. invoices_funded == 0 when no invoice is funded
-/// 12. success_rate ∈ [0, 10000] bps, default_rate ∈ [0, 10000] bps, sum ≤ 10000
-/// 13. success_rate formula — all-paid case: 10 000 bps
-/// 14. success_rate formula — partial case: exact bps
+/// 12. success_rate - [0, 10000] bps, default_rate - [0, 10000] bps, sum - 10000
+/// 13. success_rate formula - all-paid case: 10 000 bps
+/// 14. success_rate formula - partial case: exact bps
 /// 15. all-defaulted case: success_rate == 0, default_rate == 10 000
 /// 16. rates == 0 for an empty business
 /// 17. stored report unchanged after a new report is generated (immutability)
@@ -25,9 +25,9 @@
 /// 19. a report for business-A does not count business-B's invoices (isolation)
 /// 20. two reports at different ledger timestamps have different IDs (uniqueness)
 /// 21. all fields in the stored copy match the live return value
-/// 22. Σ category_breakdown counts == invoices_uploaded
+/// 22. - category_breakdown counts == invoices_uploaded
 /// 23. average_funding_time does not overflow u64::MAX
-/// 24. daily boundary — invoice created at end_date is included
+/// 24. daily boundary - invoice created at end_date is included
 /// 25. re-generating a report yields identical computed summaries (idempotence)
 use super::*;
 use crate::analytics::{AnalyticsCalculator, TimePeriod};
@@ -37,7 +37,7 @@ use soroban_sdk::{
     Address, Env, String, Vec,
 };
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+// --- helpers ----------------------------------------------------------------
 
 fn setup(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address) {
     let contract_id = env.register(QuickLendXContract, ());
@@ -69,7 +69,7 @@ fn upload(
     )
 }
 
-// ─── 1. generated_at correctness ────────────────────────────────────────────
+// --- 1. generated_at correctness --------------------------------------------
 
 #[test]
 fn test_report_generated_at_equals_ledger_timestamp() {
@@ -82,7 +82,7 @@ fn test_report_generated_at_equals_ledger_timestamp() {
     assert_eq!(report.generated_at, ts);
 }
 
-// ─── 2. start_date ≤ end_date ───────────────────────────────────────────────
+// --- 2. start_date - end_date -----------------------------------------------
 
 #[test]
 fn test_report_start_date_le_end_date_all_periods() {
@@ -105,7 +105,7 @@ fn test_report_start_date_le_end_date_all_periods() {
     }
 }
 
-// ─── 3. end_date == ledger ts ────────────────────────────────────────────────
+// --- 3. end_date == ledger ts ------------------------------------------------
 
 #[test]
 fn test_report_end_date_equals_ledger_ts() {
@@ -131,7 +131,7 @@ fn test_report_end_date_equals_ledger_ts() {
     }
 }
 
-// ─── 4. period dates match calculator ───────────────────────────────────────
+// --- 4. period dates match calculator ---------------------------------------
 
 #[test]
 fn test_report_period_dates_match_calculator() {
@@ -157,7 +157,7 @@ fn test_report_period_dates_match_calculator() {
     }
 }
 
-// ─── 5. total_volume == Σ invoice amounts ───────────────────────────────────
+// --- 5. total_volume == - invoice amounts -----------------------------------
 
 #[test]
 fn test_report_total_volume_equals_sum_of_amounts() {
@@ -171,7 +171,7 @@ fn test_report_total_volume_equals_sum_of_amounts() {
     assert_eq!(r.total_volume, 7_500);
 }
 
-// ─── 6. zero volume for empty business ──────────────────────────────────────
+// --- 6. zero volume for empty business --------------------------------------
 
 #[test]
 fn test_report_zero_volume_for_empty_business() {
@@ -183,7 +183,7 @@ fn test_report_zero_volume_for_empty_business() {
     assert_eq!(r.total_volume, 0);
 }
 
-// ─── 7. volume consistent between live and stored ───────────────────────────
+// --- 7. volume consistent between live and stored ---------------------------
 
 #[test]
 fn test_report_volume_live_equals_stored() {
@@ -196,7 +196,7 @@ fn test_report_volume_live_equals_stored() {
     assert_eq!(live.total_volume, stored.total_volume);
 }
 
-// ─── 8. invoices_uploaded count ─────────────────────────────────────────────
+// --- 8. invoices_uploaded count ---------------------------------------------
 
 #[test]
 fn test_report_uploaded_count_correct() {
@@ -211,7 +211,7 @@ fn test_report_uploaded_count_correct() {
     assert_eq!(r.invoices_uploaded, 4);
 }
 
-// ─── 9. zero count for new business ─────────────────────────────────────────
+// --- 9. zero count for new business -----------------------------------------
 
 #[test]
 fn test_report_zero_count_for_new_business() {
@@ -227,7 +227,7 @@ fn test_report_zero_count_for_new_business() {
     );
 }
 
-// ─── 10. invoices_funded ≤ invoices_uploaded ────────────────────────────────
+// --- 10. invoices_funded - invoices_uploaded --------------------------------
 
 #[test]
 fn test_report_funded_le_uploaded() {
@@ -245,7 +245,7 @@ fn test_report_funded_le_uploaded() {
     assert!(r.invoices_funded <= r.invoices_uploaded);
 }
 
-// ─── 11. invoices_funded == 0 when nothing funded ───────────────────────────
+// --- 11. invoices_funded == 0 when nothing funded ---------------------------
 
 #[test]
 fn test_report_funded_zero_when_none_funded() {
@@ -258,7 +258,7 @@ fn test_report_funded_zero_when_none_funded() {
     assert_eq!(r.invoices_funded, 0);
 }
 
-// ─── 12. rate bounds ────────────────────────────────────────────────────────
+// --- 12. rate bounds --------------------------------------------------------
 
 #[test]
 fn test_report_rates_within_bps_bounds() {
@@ -276,7 +276,7 @@ fn test_report_rates_within_bps_bounds() {
     assert!(r.success_rate + r.default_rate <= 10_000);
 }
 
-// ─── 13. all-paid → 10 000 bps ──────────────────────────────────────────────
+// --- 13. all-paid -> 10 000 bps ----------------------------------------------
 
 #[test]
 fn test_report_success_rate_formula_all_paid() {
@@ -292,7 +292,7 @@ fn test_report_success_rate_formula_all_paid() {
     assert_eq!(r.default_rate, 0);
 }
 
-// ─── 14. partial case ───────────────────────────────────────────────────────
+// --- 14. partial case -------------------------------------------------------
 
 #[test]
 fn test_report_success_rate_formula_partial() {
@@ -311,7 +311,7 @@ fn test_report_success_rate_formula_partial() {
     assert_eq!(r.default_rate, 2_500); // 1/4
 }
 
-// ─── 15. all-defaulted ──────────────────────────────────────────────────────
+// --- 15. all-defaulted ------------------------------------------------------
 
 #[test]
 fn test_report_all_defaulted() {
@@ -327,7 +327,7 @@ fn test_report_all_defaulted() {
     assert_eq!(r.default_rate, 10_000);
 }
 
-// ─── 16. rates zero for empty business ──────────────────────────────────────
+// --- 16. rates zero for empty business --------------------------------------
 
 #[test]
 fn test_report_rates_zero_for_empty_business() {
@@ -340,7 +340,7 @@ fn test_report_rates_zero_for_empty_business() {
     assert_eq!(r.default_rate, 0);
 }
 
-// ─── 17. report immutability ─────────────────────────────────────────────────
+// --- 17. report immutability -------------------------------------------------
 
 #[test]
 fn test_stored_report_unchanged_after_newer_report() {
@@ -359,7 +359,7 @@ fn test_stored_report_unchanged_after_newer_report() {
     assert_eq!(stored.generated_at, first.generated_at);
 }
 
-// ─── 18. period exclusion ────────────────────────────────────────────────────
+// --- 18. period exclusion ----------------------------------------------------
 
 #[test]
 fn test_report_excludes_out_of_window_invoice() {
@@ -379,7 +379,7 @@ fn test_report_excludes_out_of_window_invoice() {
     assert_eq!(all_time.invoices_uploaded, 1);
 }
 
-// ─── 19. multi-business isolation ────────────────────────────────────────────
+// --- 19. multi-business isolation --------------------------------------------
 
 #[test]
 fn test_report_business_isolation() {
@@ -398,7 +398,7 @@ fn test_report_business_isolation() {
     assert_eq!(rb.total_volume, 9_999);
 }
 
-// ─── 20. report-ID uniqueness ────────────────────────────────────────────────
+// --- 20. report-ID uniqueness ------------------------------------------------
 
 #[test]
 fn test_report_ids_unique_across_ledger_timestamps() {
@@ -412,7 +412,7 @@ fn test_report_ids_unique_across_ledger_timestamps() {
     assert_ne!(r1.report_id, r2.report_id);
 }
 
-// ─── 21. all stored fields equal live ────────────────────────────────────────
+// --- 21. all stored fields equal live ----------------------------------------
 
 #[test]
 fn test_all_stored_fields_match_live() {
@@ -442,7 +442,7 @@ fn test_all_stored_fields_match_live() {
     assert_eq!(stored.generated_at, ts);
 }
 
-// ─── 22. category breakdown sum == invoices_uploaded ────────────────────────
+// --- 22. category breakdown sum == invoices_uploaded ------------------------
 
 #[test]
 fn test_category_breakdown_sum_equals_uploaded() {
@@ -457,7 +457,7 @@ fn test_category_breakdown_sum_equals_uploaded() {
     assert_eq!(breakdown_sum, r.invoices_uploaded);
 }
 
-// ─── 23. average_funding_time not overflowed ────────────────────────────────
+// --- 23. average_funding_time not overflowed --------------------------------
 
 #[test]
 fn test_report_avg_funding_time_not_overflowed() {
@@ -471,7 +471,7 @@ fn test_report_avg_funding_time_not_overflowed() {
     assert!(r.average_funding_time < u64::MAX);
 }
 
-// ─── 24. invoice at end_date boundary is included ────────────────────────────
+// --- 24. invoice at end_date boundary is included ----------------------------
 
 #[test]
 fn test_report_daily_boundary_invoice_included() {
@@ -480,12 +480,12 @@ fn test_report_daily_boundary_invoice_included() {
     env.ledger().set_timestamp(day2);
     let (client, _, business) = setup(&env);
     upload(&env, &client, &business, 1_000, "boundary-inv");
-    // created_at == end_date → included in the daily window
+    // created_at == end_date -> included in the daily window
     let r = client.generate_business_report(&business, &TimePeriod::Daily);
     assert_eq!(r.invoices_uploaded, 1);
 }
 
-// ─── 25. idempotence ─────────────────────────────────────────────────────────
+// --- 25. idempotence ---------------------------------------------------------
 
 #[test]
 fn test_report_regeneration_idempotent() {
@@ -503,7 +503,7 @@ fn test_report_regeneration_idempotent() {
     assert_eq!(r1.period, r2.period);
 }
 
-// ─── get_business_report returns None for unknown ID ─────────────────────────
+// --- get_business_report returns None for unknown ID -------------------------
 
 #[test]
 fn test_get_business_report_none_for_unknown_id() {
@@ -513,7 +513,7 @@ fn test_get_business_report_none_for_unknown_id() {
     assert!(client.get_business_report(&fake_id).is_none());
 }
 
-// ─── get_business_report returns Some after generate ─────────────────────────
+// --- get_business_report returns Some after generate -------------------------
 
 #[test]
 fn test_get_business_report_some_after_generate() {
@@ -525,7 +525,7 @@ fn test_get_business_report_some_after_generate() {
     assert!(client.get_business_report(&report.report_id).is_some());
 }
 
-// ─── get_investor_report returns None for unknown ID ─────────────────────────
+// --- get_investor_report returns None for unknown ID -------------------------
 
 #[test]
 fn test_get_investor_report_none_for_unknown_id() {
@@ -535,7 +535,7 @@ fn test_get_investor_report_none_for_unknown_id() {
     assert!(client.get_investor_report(&fake_id).is_none());
 }
 
-// ─── get_investor_report returns Some after generate ─────────────────────────
+// --- get_investor_report returns Some after generate -------------------------
 
 #[test]
 fn test_get_investor_report_some_after_generate() {
@@ -547,7 +547,7 @@ fn test_get_investor_report_some_after_generate() {
     assert!(client.get_investor_report(&report.report_id).is_some());
 }
 
-// ─── investor report fields match when stored ────────────────────────────────
+// --- investor report fields match when stored --------------------------------
 
 #[test]
 fn test_investor_report_stored_matches_live() {

@@ -9,7 +9,7 @@
 //! - Orphan pointers (e.g., an investment record with no matching invoice)
 //! - Split-brain status (e.g., bid=Placed while invoice=Funded)
 //! - Stale index membership (e.g., invoice in Funded list after it became Paid)
-//! - Query/canonical divergence (`get_invoices_by_status` ≠ `get_invoice`)
+//! - Query/canonical divergence (`get_invoices_by_status` - `get_invoice`)
 //!
 //! # Covered flows
 //!
@@ -20,12 +20,12 @@
 //! | 3 | `mark_invoice_defaulted` | invoice, investment |
 //! | 4 | `settle_invoice` (finalize) | invoice, investment, escrow |
 //! | 5 | Multi-invoice isolation | all modules |
-//! | 6 | Query ↔ canonical record agreement | storage indices |
+//! | 6 | Query - canonical record agreement | storage indices |
 //!
 //! # Security notes
 //!
 //! Each test verifies that no incomplete or inconsistent state can be observed
-//! after a flow completes — specifically targeting state conditions that could
+//! after a flow completes - specifically targeting state conditions that could
 //! be exploited for value extraction (e.g., double-claiming via stale escrow,
 //! or re-bidding a "ghost" funded invoice).
 //!
@@ -40,7 +40,7 @@ use soroban_sdk::{
     token, Address, Env, String, Vec,
 };
 
-// ─── shared test helpers ─────────────────────────────────────────────────────
+// --- shared test helpers -----------------------------------------------------
 
 /// Minimal environment: contract registered, admin set, timestamp > 0.
 fn make_env() -> (Env, QuickLendXContractClient<'static>, Address) {
@@ -82,7 +82,7 @@ fn make_token(
     currency
 }
 
-/// KYC → upload → verify → investor KYC → bid, returning `(invoice_id, bid_id)`.
+/// KYC -> upload -> verify -> investor KYC -> bid, returning `(invoice_id, bid_id)`.
 fn kyc_upload_bid(
     env: &Env,
     client: &QuickLendXContractClient,
@@ -135,7 +135,7 @@ fn assert_invoice_count_invariant(client: &QuickLendXContractClient) {
     );
 }
 
-// ─── Test 1: Accept flow ──────────────────────────────────────────────────────
+// --- Test 1: Accept flow ------------------------------------------------------
 
 /// After `accept_bid_and_fund` every cross-module pointer must be consistent:
 ///
@@ -171,7 +171,7 @@ fn test_accept_bid_cross_module_consistency() {
     // Execute accept.
     client.accept_bid(&invoice_id, &bid_id);
 
-    // ── Invoice assertions ────────────────────────────────────────────────────
+    // -- Invoice assertions ----------------------------------------------------
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(
         invoice.status,
@@ -189,7 +189,7 @@ fn test_accept_bid_cross_module_consistency() {
     );
     assert!(invoice.funded_at.is_some(), "funded_at must be set");
 
-    // ── Bid assertions ────────────────────────────────────────────────────────
+    // -- Bid assertions --------------------------------------------------------
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(
         bid.status,
@@ -198,7 +198,7 @@ fn test_accept_bid_cross_module_consistency() {
     );
     assert_eq!(bid.investor, investor, "bid.investor must match");
 
-    // ── Investment assertions ─────────────────────────────────────────────────
+    // -- Investment assertions -------------------------------------------------
     let investment = client
         .get_invoice_investment(&invoice_id)
         .expect("Investment must exist after accept");
@@ -220,16 +220,16 @@ fn test_accept_bid_cross_module_consistency() {
         "investment.amount must equal bid_amount"
     );
 
-    // ── Escrow assertions ─────────────────────────────────────────────────────
+    // -- Escrow assertions -----------------------------------------------------
     let escrow = client
         .get_escrow_details(&invoice_id)
         .expect("Escrow record must exist after accept");
     assert_eq!(
         escrow.amount, bid_amount,
-        "escrow.amount must equal bid_amount — no orphan amount"
+        "escrow.amount must equal bid_amount - no orphan amount"
     );
 
-    // ── Index membership assertions ───────────────────────────────────────────
+    // -- Index membership assertions -------------------------------------------
     let funded_list = client.get_invoices_by_status(&InvoiceStatus::Funded);
     assert!(
         funded_list.contains(&invoice_id),
@@ -241,11 +241,11 @@ fn test_accept_bid_cross_module_consistency() {
         "Invoice must NOT appear in Verified status index after accept"
     );
 
-    // ── Count invariant ───────────────────────────────────────────────────────
+    // -- Count invariant -------------------------------------------------------
     assert_invoice_count_invariant(&client);
 }
 
-// ─── Test 2: Refund flow ──────────────────────────────────────────────────────
+// --- Test 2: Refund flow ------------------------------------------------------
 
 /// After `refund_escrow_funds` all modules must reflect the refund atomically:
 ///
@@ -282,7 +282,7 @@ fn test_refund_escrow_cross_module_consistency() {
     // Trigger refund.
     client.refund_escrow_funds(&invoice_id, &business);
 
-    // ── Invoice assertions ────────────────────────────────────────────────────
+    // -- Invoice assertions ----------------------------------------------------
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(
         invoice.status,
@@ -290,25 +290,25 @@ fn test_refund_escrow_cross_module_consistency() {
         "Invoice must be Refunded after escrow refund"
     );
 
-    // ── Bid assertions ────────────────────────────────────────────────────────
+    // -- Bid assertions --------------------------------------------------------
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(
         bid.status,
         BidStatus::Cancelled,
-        "Accepted bid must be Cancelled after refund — no orphan Accepted bid"
+        "Accepted bid must be Cancelled after refund - no orphan Accepted bid"
     );
 
-    // ── Investment assertions ─────────────────────────────────────────────────
+    // -- Investment assertions -------------------------------------------------
     let investment = client
         .get_invoice_investment(&invoice_id)
         .expect("Investment record must still be accessible (not deleted)");
     assert_eq!(
         investment.status,
         InvestmentStatus::Refunded,
-        "Investment must be Refunded — no orphan Active investment"
+        "Investment must be Refunded - no orphan Active investment"
     );
 
-    // ── Index membership assertions ───────────────────────────────────────────
+    // -- Index membership assertions -------------------------------------------
     let funded_list = client.get_invoices_by_status(&InvoiceStatus::Funded);
     assert!(
         !funded_list.contains(&invoice_id),
@@ -320,11 +320,11 @@ fn test_refund_escrow_cross_module_consistency() {
         "Invoice must appear in Refunded status index"
     );
 
-    // ── Count invariant ───────────────────────────────────────────────────────
+    // -- Count invariant -------------------------------------------------------
     assert_invoice_count_invariant(&client);
 }
 
-// ─── Test 3: Default flow ─────────────────────────────────────────────────────
+// --- Test 3: Default flow -----------------------------------------------------
 
 /// After `mark_invoice_defaulted` cross-module state must be consistent:
 ///
@@ -359,7 +359,7 @@ fn test_default_cross_module_consistency() {
     // Mark as defaulted (grace_period=0 to bypass any additional offset).
     client.mark_invoice_defaulted(&invoice_id, &Some(0u64));
 
-    // ── Invoice assertions ────────────────────────────────────────────────────
+    // -- Invoice assertions ----------------------------------------------------
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(
         invoice.status,
@@ -367,17 +367,17 @@ fn test_default_cross_module_consistency() {
         "Invoice must be Defaulted"
     );
 
-    // ── Investment assertions ─────────────────────────────────────────────────
+    // -- Investment assertions -------------------------------------------------
     let investment = client
         .get_invoice_investment(&invoice_id)
         .expect("Investment record must still be accessible after default");
     assert_eq!(
         investment.status,
         InvestmentStatus::Defaulted,
-        "Investment must be Defaulted — no ghost Active investment after invoice default"
+        "Investment must be Defaulted - no ghost Active investment after invoice default"
     );
 
-    // ── Index membership assertions ───────────────────────────────────────────
+    // -- Index membership assertions -------------------------------------------
     let funded_list = client.get_invoices_by_status(&InvoiceStatus::Funded);
     assert!(
         !funded_list.contains(&invoice_id),
@@ -389,11 +389,11 @@ fn test_default_cross_module_consistency() {
         "Invoice must appear in Defaulted status index"
     );
 
-    // ── Count invariant ───────────────────────────────────────────────────────
+    // -- Count invariant -------------------------------------------------------
     assert_invoice_count_invariant(&client);
 }
 
-// ─── Test 4: Finalize / Settle flow ──────────────────────────────────────────
+// --- Test 4: Finalize / Settle flow ------------------------------------------
 
 /// After `settle_invoice` all modules must reflect the terminal Paid state:
 ///
@@ -402,7 +402,7 @@ fn test_default_cross_module_consistency() {
 /// - Invoice NOT in Funded list; IS in Paid list
 /// - `settled_at` is set on the invoice
 /// - Count invariant holds
-/// - No Active investment after finalization (a security critical assertion —
+/// - No Active investment after finalization (a security critical assertion -
 ///   an Active investment on a Paid invoice could allow fraudulent re-settlement)
 #[test]
 fn test_finalize_settle_cross_module_consistency() {
@@ -439,7 +439,7 @@ fn test_finalize_settle_cross_module_consistency() {
     // Settle.
     client.settle_invoice(&invoice_id, &invoice_amount);
 
-    // ── Invoice assertions ────────────────────────────────────────────────────
+    // -- Invoice assertions ----------------------------------------------------
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(
         invoice.status,
@@ -452,17 +452,17 @@ fn test_finalize_settle_cross_module_consistency() {
     );
     assert!(invoice.settled_at.is_some(), "settled_at must be set");
 
-    // ── Investment assertions ─────────────────────────────────────────────────
+    // -- Investment assertions -------------------------------------------------
     let investment = client
         .get_invoice_investment(&invoice_id)
         .expect("Investment must still be accessible after settlement");
     assert_eq!(
         investment.status,
         InvestmentStatus::Completed,
-        "Investment must be Completed — no Active investment on a Paid invoice"
+        "Investment must be Completed - no Active investment on a Paid invoice"
     );
 
-    // ── Index membership assertions ───────────────────────────────────────────
+    // -- Index membership assertions -------------------------------------------
     let funded_list = client.get_invoices_by_status(&InvoiceStatus::Funded);
     assert!(
         !funded_list.contains(&invoice_id),
@@ -474,21 +474,21 @@ fn test_finalize_settle_cross_module_consistency() {
         "Settled invoice must appear in Paid status index"
     );
 
-    // ── Count invariant ───────────────────────────────────────────────────────
+    // -- Count invariant -------------------------------------------------------
     assert_invoice_count_invariant(&client);
 }
 
-// ─── Test 5: Multi-invoice isolation ─────────────────────────────────────────
+// --- Test 5: Multi-invoice isolation -----------------------------------------
 
 /// Two independent invoices must not contaminate each other's cross-module state.
 ///
 /// Flow:
-///   - Invoice A → funded → settled → Paid
-///   - Invoice B → funded → refunded → Refunded
+///   - Invoice A -> funded -> settled -> Paid
+///   - Invoice B -> funded -> refunded -> Refunded
 ///
 /// After both transitions:
-///   - A's investment is Completed, B's investment is Refunded — no swap.
-///   - A's bid is Accepted, B's bid is Cancelled — no swap.
+///   - A's investment is Completed, B's investment is Refunded - no swap.
+///   - A's bid is Accepted, B's bid is Cancelled - no swap.
 ///   - Status lists contain exactly the right invoice for each status.
 ///   - Count invariant holds globally.
 #[test]
@@ -539,7 +539,7 @@ fn test_no_orphan_after_sequential_operations() {
     // Refund Invoice B.
     client.refund_escrow_funds(&invoice_b, &business_b);
 
-    // ── A: Paid, investment Completed, bid Accepted ───────────────────────────
+    // -- A: Paid, investment Completed, bid Accepted ---------------------------
     assert_eq!(client.get_invoice(&invoice_a).status, InvoiceStatus::Paid);
     assert_eq!(
         client.get_invoice_investment(&invoice_a).unwrap().status,
@@ -550,7 +550,7 @@ fn test_no_orphan_after_sequential_operations() {
         BidStatus::Accepted
     );
 
-    // ── B: Refunded, investment Refunded, bid Cancelled ───────────────────────
+    // -- B: Refunded, investment Refunded, bid Cancelled -----------------------
     assert_eq!(
         client.get_invoice(&invoice_b).status,
         InvoiceStatus::Refunded
@@ -564,7 +564,7 @@ fn test_no_orphan_after_sequential_operations() {
         BidStatus::Cancelled
     );
 
-    // ── No cross-contamination in index lists ─────────────────────────────────
+    // -- No cross-contamination in index lists ---------------------------------
     let paid_list = client.get_invoices_by_status(&InvoiceStatus::Paid);
     assert!(paid_list.contains(&invoice_a), "A must be in Paid list");
     assert!(!paid_list.contains(&invoice_b), "B must NOT be in Paid list");
@@ -579,11 +579,11 @@ fn test_no_orphan_after_sequential_operations() {
         "A must NOT be in Refunded list"
     );
 
-    // ── Global count invariant ────────────────────────────────────────────────
+    // -- Global count invariant ------------------------------------------------
     assert_invoice_count_invariant(&client);
 }
 
-// ─── Test 6: Query ↔ canonical record agreement ───────────────────────────────
+// --- Test 6: Query - canonical record agreement -------------------------------
 
 /// `get_invoices_by_status` index must exactly match what `get_invoice` reports.
 ///
@@ -606,7 +606,7 @@ fn test_query_canonical_record_agreement() {
     );
     client.accept_bid(&inv1, &bid1);
 
-    // Second invoice needs a fresh investor KYC slot (reuse same investor — limit allows it).
+    // Second invoice needs a fresh investor KYC slot (reuse same investor - limit allows it).
     let due_date2 = env.ledger().timestamp() + 86_400;
     let inv2 = client.upload_invoice(
         &business,
@@ -621,7 +621,7 @@ fn test_query_canonical_record_agreement() {
     let bid2 = client.place_bid(&investor, &inv2, &4_000i128, &5_000i128);
     client.accept_bid(&inv2, &bid2);
 
-    // Both appear in the Funded index — verify each canonical record agrees.
+    // Both appear in the Funded index - verify each canonical record agrees.
     let funded_ids = client.get_invoices_by_status(&InvoiceStatus::Funded);
     assert!(
         funded_ids.len() >= 2,
@@ -660,7 +660,7 @@ fn test_query_canonical_record_agreement() {
         "Canonical record must report Paid after settlement"
     );
 
-    // inv2 must still be Funded — no accidental side effects.
+    // inv2 must still be Funded - no accidental side effects.
     assert!(
         funded_ids_after.contains(&inv2),
         "inv2 must remain in Funded index after inv1 is settled"

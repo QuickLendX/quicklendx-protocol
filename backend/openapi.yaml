@@ -1,7 +1,52 @@
 openapi: 3.0.0
 info:
   title: QuickLendX Protocol API
-  description: Backend API service for the QuickLendX invoice factoring protocol.
+  description: |
+    Backend API service for the QuickLendX invoice factoring protocol.
+
+    ## Pagination
+
+    All list endpoints use **cursor-based pagination** for stable, efficient traversal.
+
+    ### Request parameters
+
+    | Parameter | Type    | Default | Max | Description                                      |
+    |-----------|---------|---------|-----|--------------------------------------------------|
+    | `limit`   | integer | 20      | 100 | Number of items per page. Clamped to [1, 100].   |
+    | `cursor`  | string  | —       | —   | Opaque cursor from a previous response's `next_cursor`. |
+
+    ### Response shape
+
+    Every list endpoint returns a `PageResult` object:
+
+    ```json
+    {
+      "data": [ ... ],
+      "next_cursor": "eyJpZCI6Ii4uLiIsInNvcnRfdmFsIjoxNzQ1NTk5fQ",
+      "has_more": true
+    }
+    ```
+
+    - `data` — the current page of items.
+    - `next_cursor` — opaque string to pass as `cursor` on the next request; `null` when there are no more pages.
+    - `has_more` — `true` when more items exist beyond this page.
+
+    ### Sort order
+
+    | Endpoint       | Primary sort key | Direction | Tiebreaker |
+    |----------------|-----------------|-----------|------------|
+    | `/invoices`    | `created_at`    | DESC      | `id` ASC   |
+    | `/bids`        | `timestamp`     | DESC      | `bid_id` ASC |
+    | `/settlements` | `timestamp`     | DESC      | `id` ASC   |
+    | `/portfolio`   | `invested_at`   | DESC      | `id` ASC   |
+
+    ### Security
+
+    - Limit is always clamped server-side; clients cannot trigger unbounded scans.
+    - Cursors are opaque base64url-encoded tokens; do not parse or construct them manually.
+    - A malformed or tampered cursor returns `400 INVALID_PAGINATION`.
+    - No `total` count is exposed to prevent data-inference attacks.
+
   version: 1.0.0
   contact:
     name: QuickLendX Team
@@ -17,7 +62,7 @@ paths:
       summary: Health check
       description: Returns the status of the API service and connectivity.
       responses:
-        '200':
+        "200":
           description: Service is healthy
           content:
             application/json:
@@ -34,11 +79,118 @@ paths:
                     type: string
                     format: date-time
 
+  /admin/status:
+    get:
+      summary: Read internal admin status
+      description: Returns troubleshooting details for authenticated admin roles.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Internal admin status
+        "401":
+          description: Missing bearer token
+        "403":
+          description: Invalid token or insufficient role
+
+  /admin/audit-logs:
+    get:
+      summary: Read admin audit logs
+      description: Returns recent authorization and admin action audit entries.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Audit log entries
+
+  /admin/maintenance:
+    post:
+      summary: Toggle maintenance mode
+      description: Restricted to operations admin and super-admin.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ enabled ]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Maintenance mode updated
+
+  /admin/backfill:
+    post:
+      summary: Queue a backfill job
+      description: Restricted to operations admin and super-admin.
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope:
+                  type: string
+                  example: ledger:100000-100500
+      responses:
+        "202":
+          description: Backfill job queued
+
+  /admin/config/dangerous:
+    post:
+      summary: Update dangerous admin configuration
+      description: Restricted to super-admin only.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ allowEmergencyConfigChanges, maintenanceWindowMinutes ]
+              properties:
+                allowEmergencyConfigChanges:
+                  type: boolean
+                maintenanceWindowMinutes:
+                  type: integer
+                  minimum: 1
+                  maximum: 1440
+      responses:
+        "200":
+          description: Dangerous config updated
+
   /invoices:
     get:
-      summary: List invoices
-      description: Retrieve a list of invoices with optional filtering.
+      summary: List invoices (paginated)
+      description: |
+        Returns a cursor-paginated list of invoices sorted by `created_at DESC, id ASC`.
+
+        **Example — first page:**
+        ```
+        GET /invoices?limit=20
+        ```
+
+        **Example — next page:**
+        ```
+        GET /invoices?limit=20&cursor=<next_cursor from previous response>
+        ```
       parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
         - name: business
           in: query
           schema:
@@ -47,16 +199,16 @@ paths:
         - name: status
           in: query
           schema:
-            $ref: '#/components/schemas/InvoiceStatus'
+            $ref: "#/components/schemas/InvoiceStatus"
       responses:
-        '200':
+        "200":
           description: List of invoices
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Invoice'
+                  $ref: "#/components/schemas/Invoice"
 
   /invoices/{id}:
     get:
@@ -68,19 +220,23 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Invoice details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Invoice'
-        '404':
+                $ref: "#/components/schemas/Invoice"
+        "404":
           description: Invoice not found
 
   /bids:
     get:
-      summary: List bids
+      summary: List bids (paginated)
+      description: |
+        Returns a cursor-paginated list of bids sorted by `timestamp DESC, bid_id ASC`.
       parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
         - name: invoice_id
           in: query
           schema:
@@ -90,32 +246,36 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: List of bids
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Bid'
+                  $ref: "#/components/schemas/Bid"
 
   /settlements:
     get:
-      summary: List settlements
+      summary: List settlements (paginated)
+      description: |
+        Returns a cursor-paginated list of settlements sorted by `timestamp DESC, id ASC`.
       parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
         - name: invoice_id
           in: query
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: List of settlements
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Settlement'
+                  $ref: "#/components/schemas/Settlement"
 
   /settlements/{id}:
     get:
@@ -127,14 +287,41 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Settlement details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Settlement'
-        '404':
+                $ref: "#/components/schemas/Settlement"
+        "404":
           description: Settlement not found
+
+  /portfolio:
+    get:
+      summary: List investor portfolio (paginated)
+      description: |
+        Returns a cursor-paginated list of portfolio entries for a given investor,
+        sorted by `invested_at DESC, id ASC`.
+
+        The `investor` query parameter is **required**.
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
+        - name: investor
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Investor address (Stellar public key)
+      responses:
+        '200':
+          description: Paginated portfolio entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioPageResult'
+        '400':
+          $ref: '#/components/responses/PaginationError'
 
   /invoices/{id}/disputes:
     get:
@@ -146,32 +333,224 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: List of disputes
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Dispute'
+                  $ref: "#/components/schemas/Dispute"
+
+  /notifications/preferences/{userId}:
+    get:
+      summary: Get user notification preferences
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: User notification preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserNotificationPreferences'
+        '404':
+          description: User preferences not found
+    put:
+      summary: Update user notification preferences
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNotificationPreferences'
+      responses:
+        '200':
+          description: Preferences updated successfully
+        '400':
+          description: Invalid request data
+
+  /notifications/unsubscribe/{userId}:
+    post:
+      summary: Unsubscribe user from email notifications
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: Successfully unsubscribed
+
+  /exports/generate:
+    post:
+      summary: Generate a signed data export link
+      description: Returns a short-lived link to download all user-scoped data (invoices, bids, settlements) in CSV or JSON format.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+          description: The desired export format.
+      responses:
+        "200":
+          description: Export link generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  download_url:
+                    type: string
+                    example: "/api/v1/exports/download/SIGNED_TOKEN"
+                  expires_in:
+                    type: string
+                    example: "1 hour"
+        "401":
+          description: Authentication required
+
+  /exports/download/{token}:
+    get:
+      summary: Download exported data
+      description: Serves the export file using a signed token.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Signed token representing the export request.
+      responses:
+        "200":
+          description: Export file content
+          content:
+            application/json:
+              schema:
+                type: object
+            text/csv:
+              schema:
+                type: string
+        "401":
+          description: Invalid or expired token
+
+  /events:
+    post:
+      summary: Process blockchain events for notifications
+      description: Internal endpoint for indexer to post events that trigger notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/Event'
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/Event'
+      responses:
+        '200':
+          description: Events processed successfully
+        '500':
+          description: Internal server error
 
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-token
+
   schemas:
+    FreshnessMetadata:
+      type: object
+      description: >
+        Data freshness metadata. Clients SHOULD warn users when indexLagSeconds > 30
+        and SHOULD block irreversible financial actions when indexLagSeconds > 120.
+        Only public ledger data is exposed — no node addresses or network topology.
+      required:
+        - lastIndexedLedger
+        - indexLagSeconds
+        - lastUpdatedAt
+        - cursor
+      properties:
+        lastIndexedLedger:
+          type: integer
+          format: int64
+          description: Last ledger sequence number processed by the indexer.
+          example: 1042857
+        indexLagSeconds:
+          type: number
+          format: double
+          description: >
+            Seconds the indexer is behind the chain tip.
+            0 when the indexer is current. Computed as lagLedgers × 5 (Stellar ~5 s/ledger).
+          example: 10
+        lastUpdatedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 UTC timestamp of the indexed ledger close time.
+          example: "2024-03-15T10:22:41Z"
+        cursor:
+          type: string
+          description: >
+            Opaque pagination/replay cursor. Do not parse — treat as a black box.
+            Format is an implementation detail and may change.
+          example: "1042857_0"
+
+    FreshnessEnvelope:
+      type: object
+      description: Generic response wrapper pairing a data payload with freshness metadata.
+      required:
+        - data
+        - freshness
+      properties:
+        freshness:
+          $ref: '#/components/schemas/FreshnessMetadata'
+
     InvoiceStatus:
       type: string
-      enum: [Pending, Verified, Funded, Paid, Defaulted, Cancelled]
+      enum: [ Pending, Verified, Funded, Paid, Defaulted, Cancelled ]
 
     InvoiceCategory:
       type: string
-      enum: [Services, Products, Consulting, Manufacturing, Technology, Healthcare, Other]
+      enum:
+        [
+          Services,
+          Products,
+          Consulting,
+          Manufacturing,
+          Technology,
+          Healthcare,
+          Other,
+        ]
 
     LineItem:
       type: object
       properties:
         description: { type: string }
-        quantity: { type: integer, format: int128 }
-        unit_price: { type: integer, format: int128 }
-        total: { type: integer, format: int128 }
+        quantity: { type: string, description: "i128 as string" }
+        unit_price: { type: string, description: "i128 as string" }
+        total: { type: string, description: "i128 as string" }
 
     InvoiceMetadata:
       type: object
@@ -182,7 +561,7 @@ components:
         line_items:
           type: array
           items:
-            $ref: '#/components/schemas/LineItem'
+            $ref: "#/components/schemas/LineItem"
         notes: { type: string }
 
     Invoice:
@@ -190,22 +569,22 @@ components:
       properties:
         id: { type: string }
         business: { type: string }
-        amount: { type: integer, format: int128 }
+        amount: { type: string, description: "i128 as string" }
         currency: { type: string }
         due_date: { type: integer, format: int64 }
-        status: { $ref: '#/components/schemas/InvoiceStatus' }
+        status: { $ref: "#/components/schemas/InvoiceStatus" }
         description: { type: string }
-        category: { $ref: '#/components/schemas/InvoiceCategory' }
+        category: { $ref: "#/components/schemas/InvoiceCategory" }
         tags:
           type: array
           items: { type: string }
-        metadata: { $ref: '#/components/schemas/InvoiceMetadata' }
+        metadata: { $ref: "#/components/schemas/InvoiceMetadata" }
         created_at: { type: integer, format: int64 }
         updated_at: { type: integer, format: int64 }
 
     BidStatus:
       type: string
-      enum: [Placed, Withdrawn, Accepted, Expired, Cancelled]
+      enum: [ Placed, Withdrawn, Accepted, Expired, Cancelled ]
 
     Bid:
       type: object
@@ -213,30 +592,45 @@ components:
         bid_id: { type: string }
         invoice_id: { type: string }
         investor: { type: string }
-        bid_amount: { type: integer, format: int128 }
-        expected_return: { type: integer, format: int128 }
+        bid_amount: { type: string, description: "i128 as string" }
+        expected_return: { type: string, description: "i128 as string" }
         timestamp: { type: integer, format: int64 }
-        status: { $ref: '#/components/schemas/BidStatus' }
+        status: { $ref: "#/components/schemas/BidStatus" }
         expiration_timestamp: { type: integer, format: int64 }
 
     SettlementStatus:
       type: string
-      enum: [Pending, Paid, Defaulted]
+      enum: [ Pending, Paid, Defaulted ]
 
     Settlement:
       type: object
       properties:
         id: { type: string }
         invoice_id: { type: string }
-        amount: { type: integer, format: int128 }
+        amount: { type: string, description: "i128 as string" }
         payer: { type: string }
         recipient: { type: string }
         timestamp: { type: integer, format: int64 }
-        status: { $ref: '#/components/schemas/SettlementStatus' }
+        status: { $ref: "#/components/schemas/SettlementStatus" }
+
+    InvestmentStatus:
+      type: string
+      enum: [Active, Completed, Defaulted, Refunded]
+
+    PortfolioEntry:
+      type: object
+      properties:
+        id: { type: string }
+        investor: { type: string }
+        invoice_id: { type: string }
+        invested_amount: { type: string, description: "i128 as string" }
+        expected_return: { type: string, description: "i128 as string" }
+        status: { $ref: '#/components/schemas/InvestmentStatus' }
+        invested_at: { type: integer, format: int64 }
 
     DisputeStatus:
       type: string
-      enum: [None, Disputed, UnderReview, Resolved]
+      enum: [ None, Disputed, UnderReview, Resolved ]
 
     Dispute:
       type: object
@@ -245,12 +639,6 @@ components:
         invoice_id: { type: string }
         initiator: { type: string }
         reason: { type: string }
-        status: { $ref: '#/components/schemas/DisputeStatus' }
+        status: { $ref: "#/components/schemas/DisputeStatus" }
         created_at: { type: integer, format: int64 }
         resolved_at: { type: integer, format: int64 }
-
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT

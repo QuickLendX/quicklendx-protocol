@@ -6,6 +6,9 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[dev-dependencies]
+proptest = "1.4"
+
 [profile.release]
 opt-level = "z"
 overflow-checks = true
@@ -19,3 +22,7 @@ lto = true
 [profile.release-with-logs]
 inherits = "release"
 debug-assertions = true
+
+[features]
+# Enable property-based fuzz tests (disabled by default to keep CI fast)
+fuzz-tests = []

@@ -1,4 +1,4 @@
-//! Tests for issue #543 – bid TTL configuration bounds and default behaviour.
+//! Tests for issue #543 - bid TTL configuration bounds and default behaviour.
 //!
 //! Validates:
 //! - Default TTL (7 days) is used when no admin override exists
@@ -29,7 +29,7 @@ use soroban_sdk::{
 
 const SECONDS_PER_DAY: u64 = 86_400;
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
+// --- helpers -----------------------------------------------------------------
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
@@ -90,7 +90,7 @@ fn funded_setup(
     (business, investor, invoice_id)
 }
 
-// ─── 1. Default TTL ───────────────────────────────────────────────────────────
+// --- 1. Default TTL -----------------------------------------------------------
 
 /// Fresh contract returns DEFAULT_BID_TTL_DAYS with no custom override.
 #[test]
@@ -130,7 +130,7 @@ fn test_bid_uses_default_ttl_expiration() {
     );
 }
 
-// ─── 2. Bound enforcement ─────────────────────────────────────────────────────
+// --- 2. Bound enforcement -----------------------------------------------------
 
 /// Zero TTL must be rejected with InvalidBidTtl.
 #[test]
@@ -144,7 +144,7 @@ fn test_zero_ttl_rejected() {
     );
 }
 
-/// Value below minimum (u64 wraps, but any value < 1 is 0 for u64 — test
+/// Value below minimum (u64 wraps, but any value < 1 is 0 for u64 - test
 /// that 0 is the only sub-minimum possible and is rejected).
 #[test]
 fn test_below_minimum_ttl_rejected() {
@@ -209,7 +209,7 @@ fn test_all_valid_ttl_values_accepted() {
     }
 }
 
-// ─── 3. Config state after set ────────────────────────────────────────────────
+// --- 3. Config state after set ------------------------------------------------
 
 /// After admin sets TTL, `get_bid_ttl_config` reports `is_custom = true` and
 /// the correct `current_days`.
@@ -233,7 +233,7 @@ fn test_get_bid_ttl_days_reflects_update() {
     assert_eq!(client.get_bid_ttl_days(), 21);
 }
 
-// ─── 4. Bid expiration uses configured TTL ────────────────────────────────────
+// --- 4. Bid expiration uses configured TTL ------------------------------------
 
 /// Bid placed after TTL update uses the new expiration window.
 #[test]
@@ -342,7 +342,7 @@ fn test_bid_expired_after_ttl_boundary() {
     );
 }
 
-// ─── 5. Reset to default ──────────────────────────────────────────────────────
+// --- 5. Reset to default ------------------------------------------------------
 
 /// `reset_bid_ttl_to_default` restores the default and clears `is_custom`.
 #[test]
@@ -381,7 +381,7 @@ fn test_bid_uses_default_after_reset() {
 #[test]
 fn test_reset_when_already_default_is_idempotent() {
     let (_, client, _) = setup();
-    // No prior set — already at default.
+    // No prior set - already at default.
     let result = client.reset_bid_ttl_to_default();
     assert_eq!(result, DEFAULT_BID_TTL_DAYS);
     assert_eq!(client.get_bid_ttl_days(), DEFAULT_BID_TTL_DAYS);
@@ -389,7 +389,7 @@ fn test_reset_when_already_default_is_idempotent() {
     assert!(!cfg.is_custom);
 }
 
-// ─── 6. Multiple updates ──────────────────────────────────────────────────────
+// --- 6. Multiple updates ------------------------------------------------------
 
 /// Multiple sequential updates each take effect immediately.
 #[test]
@@ -401,7 +401,7 @@ fn test_multiple_sequential_ttl_updates() {
     }
 }
 
-/// Set → reset → set cycle works correctly.
+/// Set -> reset -> set cycle works correctly.
 #[test]
 fn test_set_reset_set_cycle() {
     let (_, client, _) = setup();

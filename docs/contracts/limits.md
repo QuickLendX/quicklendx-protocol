@@ -1,129 +1,102 @@
-# Contract String Length Limits
+# Protocol Limits
 
-To ensure predictable storage usage and prevent potential resource abuse, the QuickLendX protocol enforces maximum length limits on user-supplied strings and minimum/maximum value constraints on numeric inputs.
+## Overview
+
+The QuickLendX protocol enforces hard limits on invoice amounts, due-date horizons,
+and all user-supplied string/vector fields to prevent storage DoS and ensure
+economic viability.
+
+## Numeric Limits
+
+| Parameter | Default | Min | Max | Error |
+|-----------|---------|-----|-----|-------|
+| `min_invoice_amount` | 1,000,000 (prod) / 10 (test) | 1 | i128::MAX | `InvalidAmount` |
+| `max_due_date_days` | 365 | 1 | 730 | `InvoiceDueDateInvalid` |
+| `grace_period_seconds` | 604,800 | 0 | 2,592,000 | `InvalidTimestamp` |
+| `min_bid_amount` | 10 | 1 | — | `InvalidAmount` |
+| `min_bid_bps` | 100 | 0 | 10,000 | `InvalidAmount` |
+| `max_invoices_per_business` | 100 | 0 (unlimited) | u32::MAX | `MaxInvoicesPerBusinessExceeded` |
+
+### Grace period constraint
+
+`grace_period_seconds` must not exceed `max_due_date_days × 86,400`.
+A 1-day horizon cannot have a 2-day grace period.
 
 ## String Length Limits
 
-These limits are defined in `src/protocol_limits.rs` and enforced across the contract modules.
+Defined in `src/protocol_limits.rs`, enforced before any storage write.
 
-| Input Field | Maximum Length (Bytes) | Module |
-|-------------|-------------------------|--------|
-| Invoice Description | 500 | `invoice` |
-| Rating Feedback | 200 | `invoice` |
-| Customer Name (Metadata) | 100 | `invoice` |
-| Customer Address (Metadata) | 200 | `invoice` |
-| Tax ID (Metadata) | 50 | `invoice` |
-| Notes (Metadata) | 1000 | `invoice` |
-| Dispute Reason | 500 | `defaults` (disputes) |
-| Dispute Evidence | 1000 | `defaults` (disputes) |
-| Dispute Resolution | 2000 | `defaults` (disputes) |
-| Notification Title | 100 | `notifications` |
-| Notification Message | 500 | `notifications` |
-| KYC Data | 5000 | `verification` |
-| Rejection Reason | 1000 | `verification` |
+| Field | Constant | Max bytes | Error |
+|-------|----------|-----------|-------|
+| Invoice description | `MAX_DESCRIPTION_LENGTH` | 1,024 | `InvalidDescription` |
+| Customer name | `MAX_NAME_LENGTH` | 150 | `InvalidDescription` |
+| Customer address | `MAX_ADDRESS_LENGTH` | 300 | `InvalidDescription` |
+| Tax ID | `MAX_TAX_ID_LENGTH` | 50 | `InvalidDescription` |
+| Notes | `MAX_NOTES_LENGTH` | 2,000 | `InvalidDescription` |
+| Tag | `MAX_TAG_LENGTH` | 50 | `InvalidTag` |
+| Dispute reason | `MAX_DISPUTE_REASON_LENGTH` | 1,000 | `InvalidDisputeReason` |
+| Dispute evidence | `MAX_DISPUTE_EVIDENCE_LENGTH` | 2,000 | `InvalidDisputeEvidence` |
+| Dispute resolution | `MAX_DISPUTE_RESOLUTION_LENGTH` | 2,000 | `InvalidDisputeReason` |
+| KYC data | `MAX_KYC_DATA_LENGTH` | 5,000 | `InvalidDescription` |
+| Rejection reason | `MAX_REJECTION_REASON_LENGTH` | 500 | `InvalidDescription` |
+| Feedback | `MAX_FEEDBACK_LENGTH` | 1,000 | `InvalidDescription` |
+| Notification title | `MAX_NOTIFICATION_TITLE_LENGTH` | 150 | `InvalidDescription` |
+| Notification message | `MAX_NOTIFICATION_MESSAGE_LENGTH` | 1,000 | `InvalidDescription` |
+| Transaction ID | `MAX_TRANSACTION_ID_LENGTH` | 124 | `InvalidDescription` |
 
-## Numeric Value Limits
+## Vector Limits
 
-The protocol enforces minimum and maximum values for critical numeric inputs to ensure platform integrity and prevent abuse.
+| Field | Max count | Error |
+|-------|-----------|-------|
+| Tags per invoice | 10 | `TagLimitExceeded` |
+| Bids per invoice | 50 | `MaxBidsPerInvoiceExceeded` |
+| Active invoices per business | 100 (configurable) | `MaxInvoicesPerBusinessExceeded` |
 
-### Invoice Amount Limits
+Tags are also normalized (trimmed, ASCII-lowercased) before the length check.
+Duplicate normalized tags are rejected with `InvalidTag`.
 
-| Limit | Default Value | Configurable | Description |
-|-------|---------------|--------------|-------------|
-| `min_invoice_amount` | 1,000,000 (production)<br>1,000 (test) | Yes (admin only) | Minimum acceptable invoice value in smallest currency unit (e.g., stroops). Prevents dust invoices and ensures economic viability. |
-| `min_bid_amount` | 100 | Yes (admin only) | Absolute minimum bid amount for dust protection |
-| `min_bid_bps` | 100 (1%) | Yes (admin only) | Minimum bid as percentage of invoice amount |
-| `max_due_date_days` | 365 | Yes (admin only) | Maximum days in the future for invoice due dates |
-| `grace_period_seconds` | 604,800 (7 days) | Yes (admin only) | Grace period after due date before default |
+## Validation Flow
 
-### Validation Flow
-
-When an invoice is created via `store_invoice` or `upload_invoice`:
-
-1. **Basic validation**: Amount must be positive (`> 0`)
-2. **Protocol limits validation**: Amount must meet or exceed `min_invoice_amount`
-3. **Due date validation**: Must be in the future and within `max_due_date_days`
-
-```rust
-// Validation is performed in protocol_limits::ProtocolLimitsContract::validate_invoice
-if amount < limits.min_invoice_amount {
-    return Err(QuickLendXError::InvalidAmount);
-}
+```
+store_invoice / upload_invoice
+  └─ amount > 0                          → InvalidAmount
+  └─ due_date > now                      → InvoiceDueDateInvalid
+  └─ ProtocolLimitsContract::validate_invoice
+       └─ amount >= min_invoice_amount   → InvalidAmount
+       └─ due_date <= now + max_days×86400 → InvoiceDueDateInvalid
+  └─ validate_invoice_tags
+       └─ count <= 10                    → TagLimitExceeded
+       └─ each tag 1–50 bytes            → InvalidTag
+       └─ no duplicates                  → InvalidTag
 ```
 
-### Admin Configuration
+## Security Notes
 
-The admin can update protocol limits using `set_protocol_limits`:
+- All limits are checked **before** any storage write (fail-fast).
+- Limits are configurable by admin only; non-admin calls return `NotAdmin`.
+- The grace-period/horizon constraint prevents impossible configurations.
+- String limits prevent storage DoS from oversized payloads.
 
-```rust
-client.set_protocol_limits(
-    &admin,
-    &5_000_000,  // min_invoice_amount (5 tokens with 6 decimals)
-    &100,        // min_bid_amount
-    &100,        // min_bid_bps (1%)
-    &180,        // max_due_date_days (6 months)
-    &86400       // grace_period_seconds (1 day)
-);
+## Test Coverage (Issue #826)
+
+`src/test_protocol_limits_boundary.rs` — 35 tests across 10 groups:
+
+| Group | Tests |
+|-------|-------|
+| Invoice amount bounds | 6 |
+| Due-date horizon bounds | 5 |
+| Protocol limits parameter bounds | 9 |
+| Description string limits | 2 |
+| Tag vector and string limits | 7 |
+| KYC data string limits | 3 |
+| Rejection reason string limits | 2 |
+| Dispute string limits | 6 |
+| check_string_length unit tests | 3 |
+| Consistency across store/upload | 3 |
+
+Run with:
+
+```bash
+cd quicklendx-contracts
+cargo test test_protocol_limits_boundary
 ```
-
-## Error Handling
-
-### String Length Errors
-
-When a string exceeds its defined limit, the contract will return an `InvalidDescription` (Code 1204) error. 
-
-> [!NOTE]
-> `InvalidDescription` is used as a generic "invalid input string" error to maintain contract compatibility while adhering to SDK limitations on error variant counts.
-
-### Amount Validation Errors
-
-When an amount fails validation, the contract returns:
-- `InvalidAmount` (Code 1200) - For amounts ≤ 0 or below `min_invoice_amount`
-- `InvoiceDueDateInvalid` (Code 1004) - For due dates outside acceptable range
-
-## Validation Logic
-
-### String Validation
-
-Validation is performed using the `check_string_length` helper:
-
-```rust
-pub fn check_string_length(s: &String, max_len: u32) -> Result<(), QuickLendXError> {
-    if s.len() > max_len {
-        return Err(QuickLendXError::InvalidDescription);
-    }
-    Ok(())
-}
-```
-
-### Invoice Validation
-
-Complete invoice validation including amount and due date:
-
-```rust
-pub fn validate_invoice(env: Env, amount: i128, due_date: u64) -> Result<(), QuickLendXError> {
-    let limits = Self::get_protocol_limits(env.clone());
-    let current_time = env.ledger().timestamp();
-
-    // Check minimum amount
-    if amount < limits.min_invoice_amount {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
-    // Check maximum due date
-    let max_due_date = current_time.saturating_add(limits.max_due_date_days.saturating_mul(86400));
-    if due_date > max_due_date {
-        return Err(QuickLendXError::InvoiceDueDateInvalid);
-    }
-
-    Ok(())
-}
-```
-
-## Security Considerations
-
-- **Single source of truth**: All limits are centralized in `protocol_limits.rs`
-- **Admin-only updates**: Only the designated admin can modify protocol limits
-- **Validation at entry points**: Both `store_invoice` and `upload_invoice` enforce limits
-- **Immutable after creation**: Invoice amounts cannot be changed after creation
-- **Test vs production defaults**: Different defaults allow for easier testing while maintaining production security

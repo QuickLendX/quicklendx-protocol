@@ -1,5 +1,5 @@
 use crate::errors::QuickLendXError;
-use crate::invoice::Invoice;
+use crate::types::Invoice;
 use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, Vec};
 
 const RETENTION_POLICY_KEY: soroban_sdk::Symbol = symbol_short!("bkup_pol");
@@ -74,8 +74,7 @@ impl BackupStorage {
             return Err(QuickLendXError::StorageError);
         }
 
-        if backup.description.len() == 0
-            || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
+        if backup.description.len() == 0 || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
         {
             return Err(QuickLendXError::InvalidDescription);
         }
@@ -102,7 +101,7 @@ impl BackupStorage {
             .unwrap_or_else(|| BackupRetentionPolicy::default())
     }
 
-    /// Set the backup retention policy (admin only — caller must enforce auth).
+    /// Set the backup retention policy (admin only - caller must enforce auth).
     pub fn set_retention_policy(env: &Env, policy: &BackupRetentionPolicy) {
         env.storage().instance().set(&RETENTION_POLICY_KEY, policy);
     }
@@ -136,7 +135,6 @@ impl BackupStorage {
 
         BytesN::from_array(env, &id_bytes)
     }
-
 
     /// Persist a backup record (metadata only).
     ///
@@ -221,7 +219,6 @@ impl BackupStorage {
         env.storage().instance().remove(&data_key);
     }
 
-
     /// Validate backup data integrity.
     ///
     /// Checks that:
@@ -230,8 +227,7 @@ impl BackupStorage {
     /// 3. The payload length matches `backup.invoice_count`.
     /// 4. Every invoice in the payload has a positive `amount`.
     pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-        let backup =
-            Self::get_backup(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let backup = Self::get_backup(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         // Validate metadata alone first (cheap).
         Self::validate_backup_metadata(&backup, None)?;
@@ -254,7 +250,6 @@ impl BackupStorage {
         Ok(())
     }
 
-
     /// Restore all invoices from a backup in a safe, validated sequence.
     ///
     /// # Restore ordering
@@ -264,13 +259,13 @@ impl BackupStorage {
     ///
     /// ```text
     /// Step 1  validate_backup()
-    ///         ─────────────────
+    ///         -----------------
     ///         Full integrity check BEFORE any mutation.  If the backup is
     ///         corrupt or the invoice_count mismatches, we abort here and
     ///         leave existing storage completely untouched.
     ///
     /// Step 2  InvoiceStorage::clear_all()
-    ///         ────────────────────────────
+    ///         ----------------------------
     ///         Atomically removes every invoice record, status bucket,
     ///         category index, tag index, business index, and metadata index.
     ///         After this step storage is empty.  There is no rollback
@@ -278,14 +273,14 @@ impl BackupStorage {
     ///         caller has accepted that the current state will be discarded.
     ///
     /// Step 3  InvoiceStorage::store_invoice() per invoice
-    ///         ────────────────────────────────────────────
+    ///         --------------------------------------------
     ///         Re-registers each invoice from the backup payload, rebuilding
     ///         all secondary indexes from scratch.  The write order within
     ///         this step does not matter because `store_invoice` is
     ///         self-contained.
     ///
     /// Step 4  Mark the backup as Archived
-    ///         ────────────────────────────
+    ///         ----------------------------
     ///         Prevents the same backup from being restored twice, which
     ///         could cause duplicate invoice registrations if the store is
     ///         not cleared between restores.
@@ -293,7 +288,7 @@ impl BackupStorage {
     ///
     /// # Errors
     ///
-    /// Returns an error *only* in step 1.  Steps 2–4 are infallible on a
+    /// Returns an error *only* in step 1.  Steps 2-4 are infallible on a
     /// well-formed Soroban environment; panics in those steps indicate a
     /// platform bug, not a contract bug.
     ///
@@ -301,37 +296,34 @@ impl BackupStorage {
     ///
     /// - The caller **must** enforce admin authentication before invoking this
     ///   function.  The contract entry point is responsible for `require_auth`.
-    /// - Validate → clear → restore is the only safe ordering.  Clearing
+    /// - Validate -> clear -> restore is the only safe ordering.  Clearing
     ///   before validating would leave the contract in an empty state if the
     ///   backup turns out to be corrupt.
     /// - Restoring without clearing first would overlay backup data on stale
     ///   indexes, causing ghost entries in status/category/tag buckets for
     ///   any invoices that existed before the restore.
-    pub fn restore_from_backup(
-        env: &Env,
-        backup_id: &BytesN<32>,
-    ) -> Result<u32, QuickLendXError> {
-        //  Step 1: validate before mutating anything 
+    pub fn restore_from_backup(env: &Env, backup_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
+        //  Step 1: validate before mutating anything
         Self::validate_backup(env, backup_id)?;
 
         // Fetch the validated payload.
-        let data = Self::get_backup_data(env, backup_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let data =
+            Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         let restored_count = data.len();
 
-        //  Step 2: atomically clear all existing invoice state 
-        crate::invoice::InvoiceStorage::clear_all(env);
+        //  Step 2: atomically clear all existing invoice state
+        crate::storage::InvoiceStorage::clear_all(env);
 
         //  Step 3: re-register every invoice, rebuilding all indexes
         for invoice in data.iter() {
-            crate::invoice::InvoiceStorage::store_invoice(env, &invoice);
+            crate::storage::InvoiceStorage::store_invoice(env, &invoice);
         }
 
-        // Step 4: mark the backup as archived to prevent re-use 
+        // Step 4: mark the backup as archived to prevent re-use
         if let Some(mut backup) = Self::get_backup(env, backup_id) {
             backup.status = BackupStatus::Archived;
-            // Ignore the result — the restore itself has already succeeded.
+            // Ignore the result - the restore itself has already succeeded.
             let _ = Self::update_backup(env, &backup);
         }
 
@@ -370,9 +362,7 @@ impl BackupStorage {
         let len = backup_timestamps.len();
         for i in 0..len {
             for j in 0..len - i - 1 {
-                if backup_timestamps.get(j).unwrap().1
-                    > backup_timestamps.get(j + 1).unwrap().1
-                {
+                if backup_timestamps.get(j).unwrap().1 > backup_timestamps.get(j + 1).unwrap().1 {
                     let temp = backup_timestamps.get(j).unwrap().clone();
                     backup_timestamps.set(j, backup_timestamps.get(j + 1).unwrap().clone());
                     backup_timestamps.set(j + 1, temp);
@@ -411,26 +401,25 @@ impl BackupStorage {
         Ok(removed_count)
     }
 
-
     /// Retrieve all invoices from storage across all possible statuses.
     ///
     /// Used when creating a new backup to snapshot the full current state.
     pub fn get_all_invoices(env: &Env) -> Vec<Invoice> {
         let mut all_invoices = Vec::new(env);
         let all_statuses = [
-            crate::invoice::InvoiceStatus::Pending,
-            crate::invoice::InvoiceStatus::Verified,
-            crate::invoice::InvoiceStatus::Funded,
-            crate::invoice::InvoiceStatus::Paid,
-            crate::invoice::InvoiceStatus::Defaulted,
-            crate::invoice::InvoiceStatus::Cancelled,
-            crate::invoice::InvoiceStatus::Refunded,
+            crate::types::InvoiceStatus::Pending,
+            crate::types::InvoiceStatus::Verified,
+            crate::types::InvoiceStatus::Funded,
+            crate::types::InvoiceStatus::Paid,
+            crate::types::InvoiceStatus::Defaulted,
+            crate::types::InvoiceStatus::Cancelled,
+            crate::types::InvoiceStatus::Refunded,
         ];
 
         for status in all_statuses.iter() {
-            let invoices = crate::invoice::InvoiceStorage::get_invoices_by_status(env, status);
+            let invoices = crate::storage::InvoiceStorage::get_invoices_by_status(env, *status);
             for id in invoices.iter() {
-                if let Some(inv) = crate::invoice::InvoiceStorage::get_invoice(env, &id) {
+                if let Some(inv) = crate::storage::InvoiceStorage::get_invoice(env, &id) {
                     all_invoices.push_back(inv);
                 }
             }

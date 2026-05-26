@@ -560,6 +560,30 @@ println!("Unread notifications: {}", stats.unread_count);
    - Consider archiving old notifications
    - Implement retention policies for notification data
 
+
+## Notification Emission Policy
+
+The following invariants are enforced and verified by `src/test_notifications.rs`:
+
+| Property | Guarantee |
+|---|---|
+| Emission consistency | Exactly one `notif` event per successful `create_notification` call |
+| No duplication on retry | Blocked calls (`NotificationBlocked`) emit zero events on every attempt |
+| No PII in payloads | `notif` payload = `(id, recipient, type, priority)` — no title, message, or metadata |
+| `n_status` shape | `(notification_id, status)` only — no recipient or free-text |
+| `pref_up` shape | `(user_address,)` only — no preference field values |
+| Status transitions | Each `update_notification_status` call emits exactly one `n_status` event |
+| Read-only safety | `get_*` queries emit zero events |
+| Error path safety | `NotificationNotFound` returns error and emits no event |
+| ID uniqueness | Notifications at different timestamps have distinct IDs |
+| Payload determinism | Same type + priority always produces the same payload shape |
+
+### Security Assumptions
+
+- **No PII leakage**: Event payloads contain only opaque identifiers (`BytesN<32>`), addresses, enum tags, and numeric values. Free-text fields (title, message) are stored in contract storage for in-app display but are never emitted on-chain.
+- **Tamper-proof timestamps**: All `created_at` and `delivered_at` values come from `env.ledger().timestamp()`, which cannot be manipulated by callers.
+- **Preference enforcement**: The `should_notify` check runs before any storage write or event emission, so blocked notifications leave no on-chain trace.
+
 ## Testing
 
 The notifications module includes comprehensive tests covering:

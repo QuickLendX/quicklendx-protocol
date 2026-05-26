@@ -18,6 +18,10 @@ export class StatusService {
     this.isMaintenanceMode = enabled;
   }
 
+  public isMaintenanceEnabled(): boolean {
+    return this.isMaintenanceMode;
+  }
+
   public async getStatus(): Promise<StatusResponse> {
     const currentLedger = await this.getCurrentBlockchainLedger();
     const lag = currentLedger - this.lastIndexedLedger;
@@ -63,6 +67,14 @@ export class StatusService {
   // Helper to simulate indexing
   public updateLastIndexedLedger(ledger: number): void {
     this.lastIndexedLedger = ledger;
+  }
+
+  public getLastIndexedLedger(): number {
+    return this.lastIndexedLedger;
+  }
+
+  public async getCurrentLedger(): Promise<number> {
+    return this.getCurrentBlockchainLedger();
   }
 }
 

@@ -10,8 +10,8 @@
 
 use crate::emergency::{DEFAULT_EMERGENCY_EXPIRATION_SECS, DEFAULT_EMERGENCY_TIMELOCK_SECS};
 use crate::{QuickLendXContract, QuickLendXContractClient};
-use soroban_sdk::testutils::{Address as _, Ledger, Logs};
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::testutils::{Address as _, Ledger, Logs, MockAuth, MockAuthInvoke};
+use soroban_sdk::{token, Address, Env, IntoVal};
 
 fn setup(env: &Env) -> (QuickLendXContractClient<'static>, Address, Address) {
     env.mock_all_auths();
@@ -58,6 +58,95 @@ fn test_only_admin_can_initiate() {
 
     let result = client.try_initiate_emergency_withdraw(&admin, &token, &amount, &target);
     assert!(result.is_ok());
+}
+
+#[test]
+fn test_spoofed_admin_cannot_initiate_execute_or_cancel() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+
+    client.mock_all_auths().initialize_admin(&admin);
+    client.mock_all_auths().initialize_fee_system(&admin);
+
+    let token_admin = Address::generate(&env);
+    let token_id = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac = token::StellarAssetClient::new(&env, &token_id);
+    sac.mint(&contract_id, &10_000i128);
+
+    let spoofed_initiate = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "initiate_emergency_withdraw",
+            args: (admin.clone(), token_id.clone(), amount, target.clone()).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+    let initiate_result = client
+        .mock_auths(&[spoofed_initiate])
+        .try_initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+    let initiate_err = initiate_result
+        .err()
+        .expect("spoofed initiate must fail")
+        .err()
+        .expect("spoofed initiate must abort at auth");
+    assert_eq!(initiate_err, soroban_sdk::InvokeError::Abort);
+    assert!(client.get_pending_emergency_withdraw().is_none());
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
+
+    let spoofed_execute = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "execute_emergency_withdraw",
+            args: (admin.clone(),).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+    let execute_result = client
+        .mock_auths(&[spoofed_execute])
+        .try_execute_emergency_withdraw(&admin);
+    let execute_err = execute_result
+        .err()
+        .expect("spoofed execute must fail")
+        .err()
+        .expect("spoofed execute must abort at auth");
+    assert_eq!(execute_err, soroban_sdk::InvokeError::Abort);
+    assert!(client.get_pending_emergency_withdraw().is_some());
+
+    let spoofed_cancel = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "cancel_emergency_withdraw",
+            args: (admin.clone(),).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+    let cancel_result = client
+        .mock_auths(&[spoofed_cancel])
+        .try_cancel_emergency_withdraw(&admin);
+    let cancel_err = cancel_result
+        .err()
+        .expect("spoofed cancel must fail")
+        .err()
+        .expect("spoofed cancel must abort at auth");
+    assert_eq!(cancel_err, soroban_sdk::InvokeError::Abort);
+
+    let pending = client
+        .get_pending_emergency_withdraw()
+        .expect("pending withdrawal must remain unchanged");
+    assert!(!pending.cancelled);
 }
 
 #[test]

@@ -873,7 +873,7 @@ fn test_audit_query_time_range_no_match_returns_empty() {
         &Vec::new(&env),
     );
 
-    // Query a time range in the far future — no entries should match
+    // Query a time range in the far future - no entries should match
     let far_future = env.ledger().timestamp() + 1_000_000;
     let filter = AuditQueryFilter {
         invoice_id: None,

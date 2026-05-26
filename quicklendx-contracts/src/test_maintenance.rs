@@ -90,7 +90,7 @@ fn test_admin_can_disable_maintenance_mode() {
 }
 
 // ============================================================================
-// 2. Read-only enforcement — write ops blocked
+// 2. Read-only enforcement - write ops blocked
 // ============================================================================
 
 #[test]
@@ -216,7 +216,7 @@ fn test_maintenance_allows_get_invoice() {
 
     client.set_maintenance_mode(&admin, &true, &reason(&env, "Upgrade"));
 
-    // get_invoice is a read — must succeed.
+    // get_invoice is a read - must succeed.
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 }
@@ -236,7 +236,7 @@ fn test_maintenance_allows_is_maintenance_mode_query() {
 fn test_maintenance_allows_get_maintenance_reason() {
     let env = Env::default();
     let (client, admin) = setup(&env);
-    let msg = "Scheduled DB migration – back in 15 min";
+    let msg = "Scheduled DB migration - back in 15 min";
 
     client.set_maintenance_mode(&admin, &true, &reason(&env, msg));
 
@@ -249,7 +249,7 @@ fn test_maintenance_allows_get_maintenance_reason() {
 }
 
 // ============================================================================
-// 4. Bypass prevention — non-admin cannot toggle
+// 4. Bypass prevention - non-admin cannot toggle
 // ============================================================================
 
 #[test]
@@ -286,7 +286,7 @@ fn test_non_admin_cannot_disable_maintenance() {
 }
 
 // ============================================================================
-// 5. Reason string — stored, returned, cleared on disable
+// 5. Reason string - stored, returned, cleared on disable
 // ============================================================================
 
 #[test]
@@ -333,7 +333,7 @@ fn test_reason_updated_on_re_enable() {
 }
 
 // ============================================================================
-// 6. Reason validation — oversized reason rejected
+// 6. Reason validation - oversized reason rejected
 // ============================================================================
 
 #[test]
@@ -377,7 +377,7 @@ fn test_max_length_reason_accepted() {
 }
 
 // ============================================================================
-// 7. Admin rotation — new admin can exit; old admin cannot
+// 7. Admin rotation - new admin can exit; old admin cannot
 // ============================================================================
 
 #[test]
@@ -400,7 +400,7 @@ fn test_new_admin_can_exit_maintenance_after_rotation() {
 }
 
 // ============================================================================
-// 8. Idempotency — enabling when already enabled is safe
+// 8. Idempotency - enabling when already enabled is safe
 // ============================================================================
 
 #[test]
@@ -409,7 +409,7 @@ fn test_enable_when_already_enabled_is_safe() {
     let (client, admin) = setup(&env);
 
     client.set_maintenance_mode(&admin, &true, &reason(&env, "First reason"));
-    // Enable again with a different reason — should update the reason.
+    // Enable again with a different reason - should update the reason.
     client.set_maintenance_mode(&admin, &true, &reason(&env, "Updated reason"));
 
     assert!(client.is_maintenance_mode());
@@ -425,7 +425,7 @@ fn test_disable_when_already_disabled_is_safe() {
     let (client, admin) = setup(&env);
 
     assert!(!client.is_maintenance_mode());
-    // Disable when already off — must not panic or corrupt state.
+    // Disable when already off - must not panic or corrupt state.
     client.set_maintenance_mode(&admin, &false, &reason(&env, ""));
     assert!(!client.is_maintenance_mode());
     assert!(client.get_maintenance_reason().is_none());

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::errors::QuickLendXError;
-use crate::invoice::{Invoice, InvoiceStatus};
+use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
 /// Audit operation types

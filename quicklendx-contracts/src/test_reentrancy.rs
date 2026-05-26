@@ -303,4 +303,60 @@ fn test_nested_partial_payment_is_rejected_without_recording_progress() {
     assert_eq!(fixture.investor_balance(), investor_before);
     assert_eq!(fixture.contract_balance(), contract_before);
     assert!(!fixture.guard_locked());
+
+#[test]
+fn test_cross_function_reentrancy_accept_then_release_is_blocked() {
+    let fixture = PaymentFixture::new();
+    let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_000, 1_000);
+
+    // Enter guard via accept_bid (simulated)
+    let result = run_nested_attempt(&fixture, || {
+        // While inside one guarded call, try to call another guarded entrypoint
+        QuickLendXContract::release_escrow_funds(
+            fixture.env.clone(),
+            invoice_id.clone(),
+        )
+    });
+
+    assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+    assert!(!fixture.guard_locked(), "guard must clear after cross-function rejection");
+}
+
+#[test]
+fn test_cross_function_reentrancy_settle_then_refund_is_blocked() {
+    let fixture = PaymentFixture::new();
+    let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_000, 900);
+    fixture.fund_invoice(&invoice_id, &bid_id);
+
+    // Enter guard via settle_invoice (simulated)
+    let result = run_nested_attempt(&fixture, || {
+        // While inside settlement, try to trigger a refund
+        QuickLendXContract::refund_escrow_funds(
+            fixture.env.clone(),
+            invoice_id.clone(),
+            fixture.admin.clone(),
+        )
+    });
+
+    assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+    assert!(!fixture.guard_locked());
+}
+
+/// Validates that the reentrancy guard is global and covers partial payments.
+#[test]
+fn test_cross_function_reentrancy_partial_payment_blocks_others() {
+    let fixture = PaymentFixture::new();
+    let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_000, 900);
+    fixture.fund_invoice(&invoice_id, &bid_id);
+
+    let result = run_nested_attempt(&fixture, || {
+        QuickLendXContract::accept_bid(
+            fixture.env.clone(),
+            invoice_id.clone(),
+            bid_id.clone(),
+        )
+    });
+
+    assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+}
 }

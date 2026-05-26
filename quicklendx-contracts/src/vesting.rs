@@ -1,6 +1,7 @@
 //! Token vesting module with time-locked release schedules.
 //!
 //! Supports admin-created vesting schedules that lock protocol tokens or rewards
+//!
 //! in the contract and release them linearly over time after an optional cliff.
 //! Beneficiaries can claim vested tokens as they unlock.
 
@@ -12,6 +13,26 @@ use crate::payments::transfer_funds;
 
 const VESTING_COUNTER_KEY: Symbol = symbol_short!("vest_cnt");
 const VESTING_KEY: Symbol = symbol_short!("vest");
+
+/// Events emitted by the vesting module.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum VestingEvent {
+    NewSchedule {
+        id: u64,
+        beneficiary: Address,
+        token: Address,
+        amount: i128,
+        cliff: u64,
+        start: u64,
+        end: u64,
+    },
+    Released {
+        id: u64,
+        beneficiary: Address,
+        token: Address,
+        amount: i128,
+    },
+}
 
 /// Vesting schedule stored on-chain.
 #[contracttype]
@@ -174,11 +195,11 @@ impl Vesting {
 
         VestingStorage::store(env, &schedule);
         env.events().publish(
-            (symbol_short!("vest_new"),),
+            (symbol_short!("vesting"), symbol_short!("created")),
             (
                 id,
-                beneficiary,
-                token,
+                beneficiary.clone(),
+                token.clone(),
                 total_amount,
                 start_time,
                 cliff_time,
@@ -273,10 +294,9 @@ impl Vesting {
         VestingStorage::update(env, &schedule);
 
         env.events().publish(
-            (symbol_short!("vest_rel"),),
-            (id, beneficiary.clone(), schedule.token, releasable),
+            (symbol_short!("vesting"), symbol_short!("released")),
+            (id, beneficiary.clone(), schedule.token.clone(), releasable),
         );
-
         Ok(releasable)
     }
 }

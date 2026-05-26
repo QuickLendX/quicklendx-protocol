@@ -117,3 +117,33 @@ Expected output:
 running 22 tests
 test result: ok. 22 passed; 0 failed; 0 ignored
 ```
+
+## Metadata Bounds and Normalization
+
+To prevent unbounded storage growth and ambiguous query keys, invoice metadata
+enforces strict limits and canonicalization rules.
+
+### Bounded vectors
+
+- Invoice tags: maximum `10` normalized tags per invoice.
+- Structured metadata line items: maximum `100` line items.
+- Invoice ratings: maximum `100` ratings retained per invoice.
+
+Any attempt to exceed these bounds is rejected before storage mutation.
+
+### Tag normalization rules
+
+Tags are canonicalized using trim + ASCII lowercase before validation and
+duplicate checks. As a result:
+
+- `" Tech "`, `"tech"`, and `"TECH"` are treated as the same tag.
+- Duplicate canonical tags are rejected by invoice tag validation.
+- Per-invoice tag growth is capped even when tags are submitted in different
+  case/whitespace variants.
+
+### Security notes
+
+- Oversized metadata payloads are rejected early, reducing compute/storage DoS
+  surface.
+- Canonical duplicate handling prevents ambiguous indexing/query behavior.
+- Rating/tag caps keep per-invoice state growth predictable over time.

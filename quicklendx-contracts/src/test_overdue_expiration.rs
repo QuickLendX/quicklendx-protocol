@@ -304,7 +304,7 @@ fn test_check_invoice_expiration_grace_boundary_exact() {
     let grace = 5 * 24 * 60 * 60; // 5 days
     let deadline = due_date + grace;
 
-    // Exactly at the grace deadline — should NOT default (current <= deadline)
+    // Exactly at the grace deadline - should NOT default (current <= deadline)
     env.ledger().set_timestamp(deadline);
     let result = client.check_invoice_expiration(&invoice_id, &Some(grace));
     assert!(!result);
@@ -313,7 +313,7 @@ fn test_check_invoice_expiration_grace_boundary_exact() {
         InvoiceStatus::Funded
     );
 
-    // One second past the deadline — should default
+    // One second past the deadline - should default
     env.ledger().set_timestamp(deadline + 1);
     let result = client.check_invoice_expiration(&invoice_id, &Some(grace));
     assert!(result);
@@ -344,7 +344,7 @@ fn test_check_invoice_expiration_returns_false_for_non_funded() {
     env.ledger()
         .set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
 
-    // Verified but not funded — check_and_handle_expiration returns false
+    // Verified but not funded - check_and_handle_expiration returns false
     let result = client.check_invoice_expiration(&invoice_id, &None);
     assert!(!result);
 }
@@ -603,7 +603,7 @@ fn test_cleanup_expired_bids_integration() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 100_000);
-    
+
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400 * 30; // 30 days away
 
@@ -620,25 +620,78 @@ fn test_cleanup_expired_bids_integration() {
 
     // Place 3 bids at different times
     let _bid1 = client.place_bid(&investor, &invoice_id, &1000, &1100);
-    
+
     env.ledger().set_timestamp(env.ledger().timestamp() + 86400); // +1 day
     let _bid2 = client.place_bid(&investor, &invoice_id, &2000, &2200);
 
-    env.ledger().set_timestamp(env.ledger().timestamp() + 86400 * 5); // +5 days (total 6 days)
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 86400 * 5); // +5 days (total 6 days)
     let _bid3 = client.place_bid(&investor, &invoice_id, &3000, &3300);
 
     // After 2 more days, bid 1 and 2 should be expired (7 days TTL)
-    env.ledger().set_timestamp(env.ledger().timestamp() + 86400 * 2); // +2 days (total 8 days)
-    
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 86400 * 2); // +2 days (total 8 days)
+
     // Cleanup - should return 2 (bid 1 and 2 expired)
     let cleaned = client.cleanup_expired_bids(&invoice_id);
     assert_eq!(cleaned, 2, "Should clean 2 expired bids");
 
     // After 6 more days, bid 3 should be expired
-    env.ledger().set_timestamp(env.ledger().timestamp() + 86400 * 6);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 86400 * 6);
     let cleaned2 = client.cleanup_expired_bids(&invoice_id);
     assert_eq!(cleaned2, 1, "Should clean last expired bid");
 
     // Final check
-    assert_eq!(client.cleanup_expired_bids(&invoice_id), 0, "No more bids to clean");
+    assert_eq!(
+        client.cleanup_expired_bids(&invoice_id),
+        0,
+        "No more bids to clean"
+    );
+}
+
+#[test]
+fn test_cleanup_expired_bids_exact_boundary_and_off_by_one() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 50_000);
+
+    client.set_bid_ttl_days(&1u64);
+
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400 * 20;
+    let invoice_id = client.store_invoice(
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "TTL boundary invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &4000, &4300);
+    let bid = client.get_bid(&bid_id).unwrap();
+
+    env.ledger().set_timestamp(bid.expiration_timestamp);
+    let cleaned_at_exact = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(
+        cleaned_at_exact, 0,
+        "cleanup must not expire bids at exact expiration timestamp"
+    );
+
+    env.ledger()
+        .set_timestamp(bid.expiration_timestamp.saturating_add(1));
+    let cleaned_after = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(
+        cleaned_after, 1,
+        "cleanup must expire bid one second after expiration timestamp"
+    );
+
+    assert_eq!(
+        client.cleanup_expired_bids(&invoice_id),
+        0,
+        "cleanup remains idempotent after removing expired bid"
+    );
 }
