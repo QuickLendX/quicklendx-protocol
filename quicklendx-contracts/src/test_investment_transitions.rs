@@ -250,15 +250,21 @@ fn test_transition_active_to_refunded() {
     let investment = ctx.get_investment(&invoice_id);
     assert_eq!(investment.status, InvestmentStatus::Active);
 
-    // Cancel invoice to trigger refund
-    ctx.client.cancel_invoice(&invoice_id).unwrap();
+    // Refund escrow to trigger investment refund
+    ctx.client.refund_escrow_funds(&invoice_id);
 
-    // After cancellation, investment should be Refunded
+    // After refund, investment should be Refunded
     let refunded_investment = ctx.get_investment(&invoice_id);
     assert_eq!(
         refunded_investment.status,
         InvestmentStatus::Refunded,
-        "investment should be Refunded after invoice cancellation"
+        "investment should be Refunded after escrow refund"
+    );
+    let refunded_invoice = ctx.client.get_invoice(&invoice_id);
+    assert_eq!(
+        refunded_invoice.status,
+        InvoiceStatus::Refunded,
+        "invoice status should remain in sync with investment terminal status"
     );
 
     // Verify removal from active index
@@ -664,8 +670,43 @@ fn test_active_index_cant_contain_terminal_investments() {
     // Verify active index only contains truly Active investments
     let active_ids = ctx.client.get_active_investment_ids();
     for active_id in active_ids.iter() {
-        // Note: We'd need the ability to query investment by ID from the client
-        // For now, this is validated by the other tests
+        let investment = ctx.client.get_investment(active_id).unwrap();
+        assert_eq!(
+            investment.status,
+            InvestmentStatus::Active,
+            "active index must not contain terminal investments"
+        );
+    }
+    assert_eq!(active_ids.len(), 0, "no active investments should remain after all terminal transitions");
+}
+
+/// Test: Active set excludes terminal investments after invalid retry paths
+/// Validates: Settled or refunded investments cannot reappear in the active set
+#[test]
+fn test_terminal_investments_do_not_reenter_active_set() {
+    let ctx = TestContext::new();
+    let business = Address::generate(&ctx.env);
+    let investor = Address::generate(&ctx.env);
+    let currency = ctx.make_token(&business, &investor);
+
+    let invoice_id = ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
+    ctx.client.settle_invoice(&invoice_id, &1_000).unwrap();
+
+    let completed_investment = ctx.get_investment(&invoice_id);
+    assert_eq!(completed_investment.status, InvestmentStatus::Completed);
+    assert!(!ctx.is_in_active_index(&completed_investment.investment_id));
+
+    // A subsequent overdue scan must not move a settled investment back into Active.
+    ctx.env
+        .ledger()
+        .set_timestamp(ctx.env.ledger().timestamp() + 86_400 * 40);
+    ctx.client.handle_overdue_invoices(&100u32).unwrap();
+
+    let active_ids = ctx.client.get_active_investment_ids();
+    assert!(!active_ids.contains(&completed_investment.investment_id));
+    for active_id in active_ids.iter() {
+        let investment = ctx.client.get_investment(active_id).unwrap();
+        assert_eq!(investment.status, InvestmentStatus::Active);
     }
 }
 
