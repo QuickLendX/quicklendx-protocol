@@ -403,6 +403,6 @@ export class ReplayService {
 
 // Create singleton instances for the application
 const eventValidator = new DefaultEventValidator();
-const rawEventStore = new InMemoryRawEventStore(eventValidator);
-const derivedTableStore = new InMemoryDerivedTableStore();
+export const rawEventStore = new InMemoryRawEventStore(eventValidator);
+export const derivedTableStore = new InMemoryDerivedTableStore();
 export const replayService = ReplayService.getInstance(rawEventStore, derivedTableStore);

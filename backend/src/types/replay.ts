@@ -135,6 +135,9 @@ export interface DerivedTableStore {
   
   // Rollback transaction
   rollbackTransaction(): Promise<void>;
+  
+  // List invoices currently persisted by the indexer
+  listInvoices?(): Promise<any[]>;
 }
 
 // Security validation interface

@@ -1,6 +1,7 @@
-import { MockDataProviders } from "./mockDataProviders";
 import { DriftReport, DriftItem, BackfillResult } from "../types/reconciliation";
 import { Invoice } from "../types/contract";
+import { rpcClient } from "./rpcClient";
+import { derivedTableStore } from "./replayService";
 
 export class ReconciliationWorker {
   private static reports: DriftReport[] = [];
@@ -16,10 +17,30 @@ export class ReconciliationWorker {
 
     this.isRunning = true;
     try {
-      // Simulate network latency
-      await new Promise(resolve => setTimeout(resolve, 100));
-      const indexed = MockDataProviders.getIndexedInvoices();
-      const onChain = MockDataProviders.getOnChainInvoices();
+      // Small pause to reduce contention with other services
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Read indexed invoices from the derived table store
+      const indexed: Invoice[] = (await derivedTableStore.listInvoices?.()) || [];
+
+      // Fetch canonical on-chain invoices via reliable RPC client
+      let onChain: Invoice[] = [];
+      try {
+        // RPC method name is intentionally generic; tests may mock this call
+        onChain = await rpcClient.call<Invoice[]>("getInvoices", []);
+      } catch (rpcErr) {
+        // Treat RPC failures as no-op but surface via an empty report with an error drift
+        const report: DriftReport = {
+          timestamp: Math.floor(Date.now() / 1000),
+          totalRecordsChecked: 0,
+          driftCount: 0,
+          drifts: [],
+          error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+        } as any;
+
+        this.reports.push(report);
+        return report;
+      }
       const drifts: DriftItem[] = [];
 
       // Check for missing or mismatched records
