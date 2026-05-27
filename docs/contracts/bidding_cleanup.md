@@ -344,3 +344,133 @@ The expired bid cleanup system provides:
 | **Auditability** | Terminal bids always accessible for history |
 
 This design ensures the bidding system scales safely while maintaining protocol invariants and security assumptions.
+
+## TTL Boundary Semantics
+
+### Strict Greater-Than Comparison
+
+The `Bid::is_expired(current_timestamp)` predicate uses a **strict** `>` comparison:
+`current_timestamp > bid.expiration_timestamp`. This means:
+
+| Condition | Expired? | Rationale |
+|-----------|----------|-----------|
+| `current_timestamp == expiration_timestamp` | **No** | Bid valid through the final second |
+| `current_timestamp == expiration_timestamp + 1` | **Yes** | First moment past the window |
+
+This choice prevents off-by-one errors where bids would expire one second too early.
+All cleanup and acceptance paths (`refresh_expired_bids`, `cleanup_expired_bids`,
+`refresh_investor_bids`) rely on the same predicate, guaranteeing consistency
+across call sites.
+
+### Exactness Guarantee
+
+Cleanup transitions **exactly** the set of bids whose TTL has strictly passed.
+No bid is expired before its TTL boundary, and no bid survives past it. This
+is verified by:
+
+1. **Boundary tests**: At `expiration_timestamp`, `is_expired` returns `false`
+   and cleanup touches nothing. At `expiration_timestamp + 1`, `is_expired`
+   returns `true` and cleanup transitions the bid.
+
+2. **Exact-set tests**: In a mixed set of active and expired bids, cleanup
+   transitions every bid past its TTL and leaves every pre-TTL bid untouched.
+
+3. **BidTtlConfig alignment**: Tests configure a known TTL via `set_bid_ttl_days`
+   and verify that `BidTtlConfig.current_days` multiplied by `SECONDS_PER_DAY`
+   produces the exact expiration boundary used by the cleanup logic.
+
+## Active-Bid Count Accuracy
+
+### Count Decrement After Cleanup
+
+`count_active_placed_bids_for_investor` automatically calls
+`refresh_investor_bids` to prune expired bids before counting. This ensures:
+
+- **Before expiry**: All `Placed` bids are counted.
+- **After cleanup**: Expired bids are excluded from the count.
+- **Investor limits released**: When all bids expire, the count drops to zero,
+  allowing `investor_has_reached_bid_limit` to return `false`.
+
+### Multi-Invoice Accuracy
+
+When bids are placed across multiple invoices, expiry on one invoice does not
+affect the count on others until those invoices are also cleaned. The count
+accurately reflects the state after each invoice's cleanup.
+
+## Idempotency With Active Count
+
+Repeated `cleanup_expired_bids` calls on the same invoice at the same ledger
+timestamp:
+1. **First call**: Transitions `Placed → Expired` and prunes the index.
+2. **Subsequent calls**: Return `0` (nothing left to clean).
+3. **Active count**: Remains stable across all calls (unchanged after the first).
+
+This property is verified by calling cleanup 3+ times and asserting the count
+is identical after each.
+
+## Test Coverage
+
+The test suite (`test_expired_bids_cleanup.rs`) validates:
+
+### 1. Cleanup Only Prunes Expired Bids (3 tests)
+- ✅ Active bids preserved
+- ✅ Expired bids pruned and transitioned
+- ✅ Already-expired bids pruned without re-transition
+
+### 2. Index Integrity & Terminal Preservation (2 tests)
+- ✅ Accepted bids never pruned
+- ✅ Withdrawn bids never pruned
+- ✅ Cancelled bids never pruned
+- ✅ Mixed status handling correct
+
+### 3. Idempotency (3 tests)
+- ✅ Multiple cleanups on expired bids
+- ✅ Idempotency with mixed bid ages
+- ✅ Terminal bids always remain
+
+### 4. Edge Cases (3 tests)
+- ✅ Empty invoice (no bids)
+- ✅ All bids expired
+- ✅ No bids expired
+
+### 5. DoS Prevention (2 tests)
+- ✅ Linear scaling O(N)
+- ✅ Accurate cleanup count reporting
+
+### 6. Investor Index (1 test)
+- ✅ Investor index pruned of expired bids
+
+### 7. Integration (1 test)
+- ✅ Multiple invoices, investors, comprehensive scenario
+
+### 8. Exact Expiry Set (2 tests) — NEW
+- ✅ Exact expiry set exactness: none early, none missed against BidTtlConfig
+- ✅ Mixed active/expired: exactly the expired ones transitioned
+
+### 9. Active-Bid Count Decrement (3 tests) — NEW
+- ✅ Active count decremented after cleanup
+- ✅ Active count unchanged when no bids expire
+- ✅ Investor limit released after cleanup (investor_has_reached_bid_limit)
+
+### 10. Idempotent Cleanup Preserves Active Count (2 tests) — NEW
+- ✅ Repeated cleanup preserves active count stability
+- ✅ Repeated cleanup with all active bids (idempotent, zero cleaned)
+
+### 11. Count Accuracy Multi-Invoice (1 test) — NEW
+- ✅ Active count accurate across multiple invoices after cleanup
+
+**Total: 27 comprehensive tests**
+
+The `test_bid_ttl.rs` suite additionally covers:
+
+### TTL Boundary (2 tests) — NEW
+- ✅ Bid at exact TTL boundary: NOT expired (strict `>` semantics)
+- ✅ Bid 1 second past TTL boundary: IS expired
+
+### Count Accuracy With TTL Config (2 tests) — NEW
+- ✅ count_active_placed_bids_for_investor respects configured TTL
+- ✅ Multi-invoice count accuracy after TTL expiry
+
+---
+
+*Last updated: 2026-05-26*
