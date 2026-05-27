@@ -83,7 +83,7 @@ where
 /// - max_due_date_days (365 days)
 /// - grace_period_seconds (7 days)
 /// - 30-day safety margin for delays and disputes
-fn bump_instance<T>(env: &Env, key: &T)
+pub fn bump_instance<T>(env: &Env, key: &T)
 where
     T: soroban_sdk::IntoVal<soroban_sdk::storage::Storage>,
 {
