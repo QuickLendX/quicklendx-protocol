@@ -446,8 +446,8 @@ pub fn calculate_treasury_split(platform_fee: i128, treasury_share_bps: i128) ->
     }
 
     let treasury_amount = platform_fee
-        .saturating_mul(treasury_share_bps)
-        .checked_div(BPS_DENOMINATOR)
+        .checked_mul(treasury_share_bps)
+        .and_then(|v| v.checked_div(BPS_DENOMINATOR))
         .unwrap_or(0);
 
     // Remaining amount is computed by subtraction to avoid dust

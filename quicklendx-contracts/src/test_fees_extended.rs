@@ -922,7 +922,7 @@ fn test_cross_fee_total_min_fees_respects_limit() {
     client.initialize_fee_system(&admin);
 
     // Try to configure fees that together exceed reasonable total min_fee limit
-    // The absolute protocol limit for total min fees is 2.5M stroops
+    // The absolute protocol limit for total min fees is 2.5T stroops (2_500_000_000_000)
     let excessive_min = 2_000_000_000_000; // 2M stroops - already high
 
     let result = client.try_update_fee_structure(
@@ -934,7 +934,7 @@ fn test_cross_fee_total_min_fees_respects_limit() {
         &true,
     );
 
-    // This should fail because individual min_fee alone approaches limit
+    // This should fail because the max_fee exceeds the calculated_max_threshold for Verification
     assert!(result.is_err());
 }
 
@@ -949,7 +949,7 @@ fn test_fee_structure_early_payment_bounds() {
 
     client.initialize_fee_system(&admin);
 
-    // Early payment can have more flexible bounds (500x multiplier)
+    // Early payment has more flexible bounds (500x multiplier)
     let result = client.try_update_fee_structure(
         &admin,
         &crate::fees::FeeType::EarlyPayment,
@@ -973,7 +973,7 @@ fn test_fee_structure_late_payment_bounds() {
 
     client.initialize_fee_system(&admin);
 
-    // Late payment fees can be higher (penalty)
+    // Late payment fees can be higher due to penalty nature
     let result = client.try_update_fee_structure(
         &admin,
         &crate::fees::FeeType::LatePayment,
@@ -1030,6 +1030,42 @@ fn test_multiple_fee_structures_concurrent_valid() {
     assert_eq!(platform.fee_type, crate::fees::FeeType::Platform);
     assert_eq!(processing.fee_type, crate::fees::FeeType::Processing);
     assert_eq!(verification.fee_type, crate::fees::FeeType::Verification);
+}
+
+/// Test that total active min_fees don't exceed protocol maximum
+#[test]
+fn test_cross_fee_total_min_fees_exceeds_limit() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    client.initialize_fee_system(&admin);
+
+    // Current total_active_min_fees from default init: 100 (Platform) + 50 (Processing) + 100 (Verification) = 250
+    // MAX_TOTAL_MIN_FEES = 2_500_000_000_000
+
+    // Update Platform fee to be very large, close to MAX_TOTAL_MIN_FEES
+    client.update_fee_structure(
+        &admin,
+        &crate::fees::FeeType::Platform,
+        &100, // base_fee_bps
+        &2_499_999_999_900, // min_fee (2.4999T)
+        &2_500_000_000_000, // max_fee
+        &true,
+    );
+
+    // Now total_active_min_fees is 2_499_999_999_900 (Platform) + 50 (Processing) + 100 (Verification) = 2_500_000_000_050
+    // This already exceeds MAX_TOTAL_MIN_FEES (2_500_000_000_000).
+    // So, the next update should fail.
+    let result = client.try_update_fee_structure(
+        &admin,
+        &crate::fees::FeeType::EarlyPayment, // A new fee type
+        &100, &1, &1000, &true,
+    );
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().expect("contract error"), QuickLendXError::InvalidFeeConfiguration);
 }
 
 // ============================================================================
