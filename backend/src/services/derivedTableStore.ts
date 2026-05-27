@@ -149,6 +149,10 @@ export class InMemoryDerivedTableStore implements DerivedTableStore {
     return this.tables.invoices.get(id) || null;
   }
 
+  async listInvoices(): Promise<any[]> {
+    return Array.from(this.tables.invoices.values());
+  }
+
   async getBid(id: string): Promise<any | null> {
     return this.tables.bids.get(id) || null;
   }
@@ -407,6 +411,22 @@ export class FileSystemDerivedTableStore implements DerivedTableStore {
     } catch (error: any) {
       if (error.code === "ENOENT") {
         return 0;
+      }
+      throw error;
+    }
+  }
+
+  async listInvoices(): Promise<any[]> {
+    const fs = require("fs").promises;
+    const path = require("path");
+    const filePath = path.join(this.dataDir, this.tablesFiles.invoices);
+    try {
+      const data = await fs.readFile(filePath, "utf8");
+      const lines = data.trim().split("\n").filter((l: string) => l.length > 0);
+      return lines.map((l: string) => JSON.parse(l));
+    } catch (error: any) {
+      if (error.code === "ENOENT") {
+        return [];
       }
       throw error;
     }

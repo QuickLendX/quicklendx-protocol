@@ -138,9 +138,9 @@ export interface DerivedTableStore {
   
   // Rollback transaction
   rollbackTransaction(): Promise<void>;
-
-  /** Rollback: delete all derived rows with ledger > cursor from all tables. Idempotent. Throws if cursor < 0. */
-  rollbackTo(cursor: number): Promise<void>;
+  
+  // List invoices currently persisted by the indexer
+  listInvoices?(): Promise<any[]>;
 }
 
 // Security validation interface

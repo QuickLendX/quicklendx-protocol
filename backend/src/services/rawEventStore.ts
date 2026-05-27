@@ -190,56 +190,54 @@ export class FileSystemRawEventStore implements RawEventStore {
     );
   }
 
-  /**
-   * Rollback: delete all raw events with ledger > cursor and reset
-   * the replay cursor. Idempotent — safe to call multiple times.
-   */
-  async rollbackTo(cursor: number): Promise<void> {
-    if (cursor < 0) {
-      throw new Error("Cannot rollback below genesis: cursor must be >= 0");
-    }
-
+  async getAllEvents(): Promise<RawEvent[]> {
     await fs.mkdir(this.dataDir, { recursive: true });
 
-    try {
-      const data = await fs.readFile(this.eventsFile, "utf8");
-      const lines = data.trim().split("\n").filter(line => line.length > 0);
+    const files = await this.getEventFiles();
+    const events: RawEvent[] = [];
 
-      const keptLines: string[] = [];
-      let deletedCount = 0;
-
-      for (const line of lines) {
-        try {
-          const event = JSON.parse(line) as RawEvent;
-          if (event.ledger > cursor) {
-            deletedCount++;
-          } else {
-            keptLines.push(line);
+    for (const filePath of files) {
+      try {
+        const data = await fs.readFile(filePath, "utf8");
+        const lines = data.split("\n").filter((line) => line.trim().length > 0);
+        for (const line of lines) {
+          try {
+            events.push(JSON.parse(line) as RawEvent);
+          } catch {
+            continue;
           }
-        } catch {
-          // Keep unparseable lines for debugging
-          keptLines.push(line);
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error;
         }
       }
-
-      // Rewrite file with only kept events
-      const content = keptLines.length > 0 ? keptLines.join("\n") + "\n" : "";
-      await fs.writeFile(this.eventsFile, content, "utf8");
-
-      // Reset the replay cursor
-      await this.setReplayCursor(cursor);
-
-      console.warn(
-        `[FileSystemRawEventStore] Rollback to cursor=${cursor}, deleted ${deletedCount} events`
-      );
-    } catch (error: any) {
-      if (error.code === "ENOENT") {
-        // No events file yet — nothing to rollback, just set cursor
-        await this.setReplayCursor(cursor);
-        return;
-      }
-      throw error;
     }
+
+    return events.sort((a, b) => a.ledger - b.ledger);
+  }
+
+  async replaceEvents(events: RawEvent[]): Promise<void> {
+    await fs.mkdir(this.dataDir, { recursive: true });
+
+    const tempFile = path.join(this.dataDir, `events.${Date.now()}.tmp`);
+    const lines = [...events]
+      .sort((a, b) => a.ledger - b.ledger)
+      .map((event) => JSON.stringify(event));
+
+    await fs.writeFile(
+      tempFile,
+      lines.length > 0 ? `${lines.join("\n")}\n` : "",
+      "utf8"
+    );
+
+    const files = await this.getEventFiles();
+    await Promise.all(
+      files
+        .filter((filePath) => filePath !== tempFile)
+        .map((filePath) => fs.rm(filePath, { force: true }))
+    );
+    await fs.rename(tempFile, this.eventsFile);
   }
 
   private async rotateFileIfNeeded(): Promise<void> {
@@ -261,6 +259,21 @@ export class FileSystemRawEventStore implements RawEventStore {
       await fs.rm(this.dataDir, { recursive: true, force: true });
     } catch {
       // Ignore errors during reset
+    }
+  }
+
+  private async getEventFiles(): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(this.dataDir);
+      return entries
+        .filter((entry) => /^events(?:-.*)?\.jsonl$/.test(entry))
+        .sort()
+        .map((entry) => path.join(this.dataDir, entry));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return [];
+      }
+      throw error;
     }
   }
 }
@@ -333,20 +346,12 @@ export class InMemoryRawEventStore implements RawEventStore {
     this.cursor = ledger;
   }
 
-  /**
-   * Rollback: delete all raw events with ledger > cursor and reset
-   * the replay cursor. Idempotent — safe to call multiple times.
-   */
-  async rollbackTo(cursor: number): Promise<void> {
-    if (cursor < 0) {
-      throw new Error("Cannot rollback below genesis: cursor must be >= 0");
-    }
-    const before = this.events.length;
-    this.events = this.events.filter(e => e.ledger <= cursor);
-    this.cursor = cursor;
-    console.warn(
-      `[InMemoryRawEventStore] Rollback to cursor=${cursor}, deleted ${before - this.events.length} events`
-    );
+  async getAllEvents(): Promise<RawEvent[]> {
+    return [...this.events].sort((a, b) => a.ledger - b.ledger);
+  }
+
+  async replaceEvents(events: RawEvent[]): Promise<void> {
+    this.events = [...events].sort((a, b) => a.ledger - b.ledger);
   }
 
   // Test helper
