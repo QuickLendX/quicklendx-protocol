@@ -44,7 +44,6 @@ fn setup_token(
 }
 
 #[test]
-#[ignore = "requires update for current accept_bid/auth flow"]
 fn test_refund_transfers_and_updates_status() {
     let (env, client, _, _) = setup_env();
     let contract_id = client.address.clone();
@@ -67,8 +66,7 @@ fn test_refund_transfers_and_updates_status() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    // Bypass admin verify path in this test by updating status directly
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.verify_invoice(&invoice_id);
 
     // Prepare investor and place bid
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
@@ -104,7 +102,6 @@ fn test_refund_transfers_and_updates_status() {
 }
 
 #[test]
-#[ignore = "requires update for current accept_bid/auth flow"]
 fn test_refund_idempotency_and_release_blocked() {
     let (env, client, _, _) = setup_env();
     let contract_id = client.address.clone();
@@ -127,8 +124,7 @@ fn test_refund_idempotency_and_release_blocked() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    // Avoid admin-only path in this test; update status directly
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.verify_invoice(&invoice_id);
 
     // Investor setup and bid
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
@@ -163,7 +159,6 @@ fn test_refund_idempotency_and_release_blocked() {
 }
 
 #[test]
-#[ignore = "requires update for current accept_bid/auth flow"]
 fn test_refund_authorization_current_behavior_and_security_note() {
     let (env, client, _, contract_id) = setup_env();
     let business = Address::generate(&env);
@@ -216,7 +211,6 @@ fn test_refund_authorization_current_behavior_and_security_note() {
 }
 
 #[test]
-#[ignore = "requires update for current accept_bid/auth flow"]
 fn test_refund_fails_when_caller_is_neither_admin_nor_business() {
     let (env, client, _, contract_id) = setup_env();
     let business = Address::generate(&env);
@@ -236,7 +230,7 @@ fn test_refund_fails_when_caller_is_neither_admin_nor_business() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.verify_invoice(&invoice_id);
 
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
     client.verify_investor(&investor, &10_000i128);
@@ -255,6 +249,58 @@ fn test_refund_fails_when_caller_is_neither_admin_nor_business() {
     assert!(
         result.is_err(),
         "Refund must fail if caller is neither business nor admin"
+    );
+}
+
+#[test]
+fn test_refund_exact_amount_recipient_and_idempotency() {
+    let (env, client, _, contract_id) = setup_env();
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+
+    let amount = 2_500i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Exact refund amount invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
+    client.verify_investor(&investor, &10_000i128);
+    token_client.approve(
+        &investor,
+        &contract_id,
+        &10_000i128,
+        &(env.ledger().sequence() + 10_000),
+    );
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let investor_balance_before_refund = token_client.balance(&investor);
+    let contract_balance_before_refund = token_client.balance(&contract_id);
+    assert_eq!(contract_balance_before_refund, amount);
+    assert_eq!(investor_balance_before_refund, 10_000i128 - amount);
+
+    client.refund_escrow_funds(&invoice_id, &business);
+
+    assert_eq!(token_client.balance(&investor), 10_000i128);
+    assert_eq!(token_client.balance(&contract_id), 0i128);
+    assert_eq!(client.get_escrow_status(&invoice_id), EscrowStatus::Refunded);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Refunded);
+
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
+    assert!(
+        matches!(result, Err(Ok(QuickLendXError::InvalidStatus))),
+        "Second refund must be rejected to avoid double refund"
     );
 }
 
@@ -278,7 +324,7 @@ fn test_refund_fails_if_invoice_status_not_funded() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.verify_invoice(&invoice_id);
 
     let result = client.try_refund_escrow_funds(&invoice_id, &admin);
     assert!(
@@ -288,7 +334,6 @@ fn test_refund_fails_if_invoice_status_not_funded() {
 }
 
 #[test]
-#[ignore = "requires update for current accept_bid/auth flow"]
 fn test_refund_events_emitted_correctly() {
     use soroban_sdk::{testutils::Events, Symbol, TryFromVal, TryIntoVal};
 
@@ -309,7 +354,7 @@ fn test_refund_events_emitted_correctly() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.verify_invoice(&invoice_id);
 
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
     client.verify_investor(&investor, &10_000i128);

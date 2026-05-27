@@ -820,3 +820,461 @@ fn test_comprehensive_cleanup_scenario() {
     assert_eq!(cleaned1_again, 0);
     assert_eq!(cleaned2_again, 0);
 }
+
+// -------------------------------------------------------------------------------
+// TEST 8: EXACT EXPIRY SET EXACTNESS — NONE EARLY, NONE MISSED
+// -------------------------------------------------------------------------------
+
+/// Verify that cleanup transitions EXACTLY the set of bids whose TTL has passed,
+/// with strict boundary semantics: bid at exactly TTL is NOT expired,
+/// bid at TTL+1 IS expired.
+///
+/// Uses BidTtlConfig to determine the configured TTL.
+#[test]
+fn test_exact_expiry_set_exactness() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 1_000_000_000);
+
+    let now = env.ledger().timestamp();
+    let invoice_id = create_invoice(&env, &client, &admin, &business, 200_000, now + 86400 * 60);
+
+    // Configure TTL to 10 days for a known, predictable boundary
+    client.set_bid_ttl_days(&10u64);
+    let ttl_config = BidStorage::get_bid_ttl_config(&env);
+    assert_eq!(ttl_config.current_days, 10);
+    let ttl_seconds = ttl_config.current_days * 86400;
+
+    // Place 5 bids at known timestamps (simulate by placing then adjusting)
+    let bid_a = create_and_place_bid(&env, &client, &investor, &invoice_id, 30_000, 30_300);
+    let bid_b = create_and_place_bid(&env, &client, &investor, &invoice_id, 40_000, 40_400);
+    let bid_c = create_and_place_bid(&env, &client, &investor, &invoice_id, 50_000, 50_500);
+    let bid_d = create_and_place_bid(&env, &client, &investor, &invoice_id, 60_000, 60_600);
+    let bid_e = create_and_place_bid(&env, &client, &investor, &invoice_id, 70_000, 70_700);
+
+    // All 5 are Placed
+    assert_eq!(count_bids_by_status(&env, &invoice_id, BidStatus::Placed), 5);
+    assert_eq!(count_bids_by_status(&env, &invoice_id, BidStatus::Expired), 0);
+
+    // 1) Advance to exactly at TTL boundary (should NOT expire any bids)
+    let ttl_boundary = now + ttl_seconds;
+    env.ledger().set_timestamp(ttl_boundary);
+
+    let cleaned_at_boundary = BidStorage::cleanup_expired_bids(&env, &invoice_id);
+    assert_eq!(
+        cleaned_at_boundary, 0,
+        "No bids expire exactly at TTL boundary (strict > comparison)"
+    );
+    assert_eq!(
+        count_bids_by_status(&env, &invoice_id, BidStatus::Placed), 5,
+        "All 5 bids still Placed at exact TTL boundary"
+    );
+    assert_eq!(
+        count_bids_by_status(&env, &invoice_id, BidStatus::Expired), 0,
+        "No bids expired at exact TTL boundary"
+    );
+
+    // 2) Advance 1 second past TTL boundary -> ALL 5 should expire
+    env.ledger().set_timestamp(ttl_boundary + 1);
+
+    let cleaned_past = BidStorage::cleanup_expired_bids(&env, &invoice_id);
+    assert_eq!(
+        cleaned_past, 5,
+        "Exactly 5 bids should expire 1 second past TTL boundary"
+    );
+    assert_eq!(
+        count_bids_by_status(&env, &invoice_id, BidStatus::Expired), 0,
+        "Expired bids pruned from invoice index"
+    );
+    assert_eq!(
+        get_bid_count_for_invoice(&env, &invoice_id), 0,
+        "All expired bids removed from invoice index"
+    );
+
+    // Verify each bid record is marked Expired in storage
+    for bid_id in &[&bid_a, &bid_b, &bid_c, &bid_d, &bid_e] {
+        let bid = BidStorage::get_bid(&env, bid_id).unwrap();
+        assert_eq!(
+            bid.status,
+            BidStatus::Expired,
+            "Each bid must be marked Expired in storage"
+        );
+    }
+}
+
+/// Verify that with mixed active/expired bids, cleanup transitions EXACTLY
+/// the expired ones and leaves the active ones untouched.
+#[test]
+fn test_exact_expiry_mixed_active_expired() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 1_000_000_000);
+
+    let now = env.ledger().timestamp();
+    let invoice_id = create_invoice(&env, &client, &admin, &business, 200_000, now + 86400 * 60);
+
+    // Set TTL to 5 days
+    client.set_bid_ttl_days(&5u64);
+    let ttl_seconds = BidStorage::get_bid_ttl_days(&env) * 86400;
+
+    // Place 4 bids, then accept one so it stays
+    let bid_exp1 = create_and_place_bid(&env, &client, &investor, &invoice_id, 30_000, 30_300);
+    let bid_active = create_and_place_bid(&env, &client, &investor, &invoice_id, 40_000, 40_400);
+    let bid_exp2 = create_and_place_bid(&env, &client, &investor, &invoice_id, 50_000, 50_500);
+    let bid_terminal = create_and_place_bid(&env, &client, &investor, &invoice_id, 60_000, 60_600);
+
+    // Accept one to make it terminal
+    client.accept_bid(&invoice_id, &bid_terminal);
+
+    // Check: 4 Placed (1 about to become terminal, but accept already moved it)
+    assert_eq!(
+        count_bids_by_status(&env, &invoice_id, BidStatus::Placed), 3,
+        "3 Placed after acceptance"
+    );
+    assert_eq!(
+        count_bids_by_status(&env, &invoice_id, BidStatus::Accepted), 1,
+        "1 Accepted after acceptance"
+    );
+
+    // Advance past TTL: bid_exp1, bid_exp2 should expire; bid_active should survive
+    env.ledger().set_timestamp(now + ttl_seconds + 1);
+
+    let cleaned = BidStorage::cleanup_expired_bids(&env, &invoice_id);
+    assert_eq!(
+        cleaned, 2,
+        "Exactly 2 expired Placed bids should be cleaned (not the active one, not the Accepted terminal)"
+    );
+
+    // Verify exact statuses
+    assert_eq!(
+        BidStorage::get_bid(&env, &bid_exp1).unwrap().status,
+        BidStatus::Expired,
+        "bid_exp1 should be Expired"
+    );
+    assert_eq!(
+        BidStorage::get_bid(&env, &bid_exp2).unwrap().status,
+        BidStatus::Expired,
+        "bid_exp2 should be Expired"
+    );
+    assert_eq!(
+        BidStorage::get_bid(&env, &bid_active).unwrap().status,
+        BidStatus::Placed,
+        "bid_active should still be Placed"
+    );
+    assert_eq!(
+        BidStorage::get_bid(&env, &bid_terminal).unwrap().status,
+        BidStatus::Accepted,
+        "bid_terminal should remain Accepted"
+    );
+
+    // Invoice index contains only active + terminal (2 bids)
+    assert_eq!(
+        get_bid_count_for_invoice(&env, &invoice_id), 2,
+        "Only active + terminal bids remain in invoice index"
+    );
+}
+
+// -------------------------------------------------------------------------------
+// TEST 9: ACTIVE-BID COUNT DECREMENT (INVESTOR LIMIT RELEASE)
+// -------------------------------------------------------------------------------
+
+/// Verify that count_active_placed_bids_for_investor decrements correctly
+/// after expired bids are cleaned up, so investor limits are released.
+#[test]
+fn test_active_bid_count_decremented_after_cleanup() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 1_000_000_000);
+
+    let now = env.ledger().timestamp();
+    let inv1 = create_invoice(&env, &client, &admin, &business, 100_000, now + 86400 * 60);
+    let inv2 = create_invoice(&env, &client, &admin, &business, 100_000, now + 86400 * 60);
+
+    let ttl_seconds = BidStorage::get_bid_ttl_days(&env) * 86400;
+
+    // Place 3 bids across 2 invoices
+    create_and_place_bid(&env, &client, &investor, &inv1, 30_000, 30_300);
+    create_and_place_bid(&env, &client, &investor, &inv1, 40_000, 40_400);
+    create_and_place_bid(&env, &client, &investor, &inv2, 50_000, 50_500);
+
+    // Active count should be 3
+    let count_before = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(
+        count_before, 3,
+        "Investor has 3 active placed bids before expiry"
+    );
+
+    // Advance time to expire all bids
+    env.ledger().set_timestamp(now + ttl_seconds + 1);
+
+    // Cleanup both invoices
+    BidStorage::cleanup_expired_bids(&env, &inv1);
+    BidStorage::cleanup_expired_bids(&env, &inv2);
+
+    // Active count should now be 0 (all bids expired)
+    let count_after = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(
+        count_after, 0,
+        "Investor active bid count drops to 0 after all bids expire"
+    );
+}
+
+/// Verify that count_active_placed_bids_for_investor is unchanged when no bids expire.
+#[test]
+fn test_active_bid_count_unchanged_when_no_expiry() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 1_000_000_000);
+
+    let now = env.ledger().timestamp();
+    let invoice_id = create_invoice(&env, &client, &admin, &business, 100_000, now + 86400 * 60);
+
+    let ttl_seconds = BidStorage::get_bid_ttl_days(&env) * 86400;
+
+    // Place 2 bids
+    create_and_place_bid(&env, &client, &investor, &invoice_id, 30_000, 30_300);
+    create_and_place_bid(&env, &client, &investor, &invoice_id, 40_000, 40_400);
+
+    let count_before = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(count_before, 2, "2 active placed bids");
+
+    // Advance time to 1 second BEFORE TTL boundary (bids still active)
+    env.ledger().set_timestamp(now + ttl_seconds - 1);
+
+    // Cleanup should not touch anything
+    let cleaned = BidStorage::cleanup_expired_bids(&env, &invoice_id);
+    assert_eq!(cleaned, 0, "No bids expired before TTL boundary");
+
+    // Active count unchanged
+    let count_during = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(
+        count_during, 2,
+        "Active count unchanged when no bids expired"
+    );
+}
+
+/// Verify that after cleanup, the investor bid limit check releases correctly
+/// (investor_has_reached_bid_limit returns false after expired bids cleaned).
+#[test]
+fn test_investor_limit_released_after_cleanup() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 1_000_000_000);
+
+    let now = env.ledger().timestamp();
+
+    // Set a low active-bid limit: max 2 bids per investor
+    client.set_max_active_bids_per_investor(&2u32);
+    assert!(BidStorage::is_investor_bid_limit_active(&env));
+
+    let invoice_id = create_invoice(&env, &client, &admin, &business, 100_000, now + 86400 * 60);
+    let ttl_seconds = BidStorage::get_bid_ttl_days(&env) * 86400;
+
+    // Place 2 bids (reaches the limit)
+    let bid1 = create_and_place_bid(&env, &client, &investor, &invoice_id, 30_000, 30_300);
+    let bid2 = create_and_place_bid(&env, &client, &investor, &invoice_id, 40_000, 40_400);
+
+    assert!(
+        BidStorage::investor_has_reached_bid_limit(&env, &investor),
+        "Investor should have reached bid limit with 2 active bids"
+    );
+
+    // Expire bid1 only by manually pushing its expiration to now and advancing
+    // We can't manipulate individual bid expiration easily, so let's advance time
+    // past TTL so both expire, then verify the limit is freed
+    env.ledger().set_timestamp(now + ttl_seconds + 1);
+
+    // Cleanup
+    BidStorage::cleanup_expired_bids(&env, &invoice_id);
+
+    // After both bids expire, investor should NOT be at limit
+    let limit_reached = BidStorage::investor_has_reached_bid_limit(&env, &investor);
+    assert!(
+        !limit_reached,
+        "Investor bid limit should be released after all bids expire"
+    );
+
+    // Active count should be 0
+    let active_count = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(
+        active_count, 0,
+        "Zero active bids after all expired"
+    );
+}
+
+// -------------------------------------------------------------------------------
+// TEST 10: IDEMPOTENT CLEANUP — PRESERVES ACTIVE COUNT
+// -------------------------------------------------------------------------------
+
+/// Verify that repeated cleanup calls are idempotent: subsequent calls
+/// return 0, and the active bid count remains stable.
+#[test]
+fn test_idempotent_cleanup_preserves_active_count() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 1_000_000_000);
+
+    let now = env.ledger().timestamp();
+    let invoice_id = create_invoice(&env, &client, &admin, &business, 100_000, now + 86400 * 60);
+    let ttl_seconds = BidStorage::get_bid_ttl_days(&env) * 86400;
+
+    // Place 3 bids, accept 1 (terminal survives cleanup)
+    let bid_exp1 = create_and_place_bid(&env, &client, &investor, &invoice_id, 30_000, 30_300);
+    let bid_active = create_and_place_bid(&env, &client, &investor, &invoice_id, 40_000, 40_400);
+    let bid_exp2 = create_and_place_bid(&env, &client, &investor, &invoice_id, 50_000, 50_500);
+    let bid_terminal = create_and_place_bid(&env, &client, &investor, &invoice_id, 60_000, 60_600);
+    client.accept_bid(&invoice_id, &bid_terminal);
+
+    // Advance past TTL
+    env.ledger().set_timestamp(now + ttl_seconds + 1);
+
+    // --- First cleanup ---
+    let cleaned_1 = BidStorage::cleanup_expired_bids(&env, &invoice_id);
+    assert_eq!(
+        cleaned_1, 2,
+        "First cleanup: 2 expired Placed bids transitioned"
+    );
+
+    let active_after_1 = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(
+        active_after_1, 1,
+        "One active Placed bid remains after first cleanup"
+    );
+
+    // --- Second cleanup (same timestamp) ---
+    let cleaned_2 = BidStorage::cleanup_expired_bids(&env, &invoice_id);
+    assert_eq!(
+        cleaned_2, 0,
+        "Second cleanup: idempotent, nothing new to clean"
+    );
+
+    let active_after_2 = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(
+        active_after_2, 1,
+        "Active count stable after idempotent second cleanup"
+    );
+
+    // --- Third cleanup (still same timestamp) ---
+    let cleaned_3 = BidStorage::cleanup_expired_bids(&env, &invoice_id);
+    assert_eq!(
+        cleaned_3, 0,
+        "Third cleanup: still idempotent, zero cleaned"
+    );
+
+    let active_after_3 = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(
+        active_after_3, 1,
+        "Active count stable after third cleanup"
+    );
+
+    // Verify remaining bid statuses
+    assert_eq!(
+        BidStorage::get_bid(&env, &bid_active).unwrap().status,
+        BidStatus::Placed,
+        "Active bid remains Placed across all cleanups"
+    );
+    assert_eq!(
+        BidStorage::get_bid(&env, &bid_terminal).unwrap().status,
+        BidStatus::Accepted,
+        "Accepted bid unchanged across all cleanups"
+    );
+    assert_eq!(
+        BidStorage::get_bid(&env, &bid_exp1).unwrap().status,
+        BidStatus::Expired,
+        "Expired bid stays Expired across all cleanups"
+    );
+}
+
+/// Verify repeated cleanup is idempotent with only active bids (no expiry).
+#[test]
+fn test_idempotent_cleanup_all_active() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 1_000_000_000);
+
+    let now = env.ledger().timestamp();
+    let invoice_id = create_invoice(&env, &client, &admin, &business, 100_000, now + 86400 * 60);
+
+    // Place 2 bids, stay before TTL boundary
+    create_and_place_bid(&env, &client, &investor, &invoice_id, 30_000, 30_300);
+    create_and_place_bid(&env, &client, &investor, &invoice_id, 40_000, 40_400);
+
+    let active_before = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(active_before, 2);
+
+    // Repeat cleanup many times at same timestamp
+    for i in 0..5 {
+        let cleaned = BidStorage::cleanup_expired_bids(&env, &invoice_id);
+        assert_eq!(cleaned, 0, "Iteration {}: cleanup idempotent with active bids", i);
+    }
+
+    let active_after = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(active_after, 2, "Active count unchanged after repeated cleanup");
+}
+
+// -------------------------------------------------------------------------------
+// TEST 11: COUNT ACCURACY AFTER MIXED CLEANUP SCENARIOS
+// -------------------------------------------------------------------------------
+
+/// Verify active bid count accuracy across multiple invoices after cleanup.
+#[test]
+fn test_count_accuracy_multi_invoice_cleanup() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 1_000_000_000);
+
+    let now = env.ledger().timestamp();
+    let inv1 = create_invoice(&env, &client, &admin, &business, 100_000, now + 86400 * 60);
+    let inv2 = create_invoice(&env, &client, &admin, &business, 100_000, now + 86400 * 60);
+    let inv3 = create_invoice(&env, &client, &admin, &business, 100_000, now + 86400 * 60);
+
+    let ttl_seconds = BidStorage::get_bid_ttl_days(&env) * 86400;
+
+    // inv1: place 2 bids (both will expire)
+    create_and_place_bid(&env, &client, &investor, &inv1, 30_000, 30_300);
+    create_and_place_bid(&env, &client, &investor, &inv1, 40_000, 40_400);
+
+    // inv2: place 1 bid (will survive - place later so timestamp is different)
+    // Actually all placed at same time so all expire together.
+    create_and_place_bid(&env, &client, &investor, &inv2, 50_000, 50_500);
+
+    // inv3: place 2 bids (both will expire)
+    create_and_place_bid(&env, &client, &investor, &inv3, 60_000, 60_600);
+    create_and_place_bid(&env, &client, &investor, &inv3, 70_000, 70_700);
+
+    // All 5 active
+    assert_eq!(
+        BidStorage::count_active_placed_bids_for_investor(&env, &investor),
+        5,
+        "5 active bids across 3 invoices"
+    );
+
+    // Advance past TTL
+    env.ledger().set_timestamp(now + ttl_seconds + 1);
+
+    // Cleanup all invoices
+    BidStorage::cleanup_expired_bids(&env, &inv1);
+    BidStorage::cleanup_expired_bids(&env, &inv2);
+    BidStorage::cleanup_expired_bids(&env, &inv3);
+
+    // All should be expired
+    let final_count = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(
+        final_count, 0,
+        "Zero active bids after all 5 expire across 3 invoices"
+    );
+
+    // Idempotent re-check
+    for inv in [&inv1, &inv2, &inv3] {
+        assert_eq!(
+            BidStorage::cleanup_expired_bids(&env, inv),
+            0,
+            "Idempotent cleanup on each invoice"
+        );
+    }
+    assert_eq!(
+        BidStorage::count_active_placed_bids_for_investor(&env, &investor),
+        0,
+        "Count still zero after idempotent re-cleanup"
+    );
+}

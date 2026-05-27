@@ -1,186 +1,69 @@
-# Backend Retention Policies and Cleanup Jobs
+# Retention Enforcement
 
 ## Overview
 
-The retention service (`src/services/retention.ts`) defines TTL-based cleanup
-jobs for four data categories.  Every job is safe, observable, and designed to
-never delete records that are required for compliance, reconciliation, or
-in-flight backfills.
+`src/services/retention.ts` now runs a scheduled retention worker that enforces
+TTL cleanup for:
 
----
+- `rawEventStore.ts`
+- audit log files managed by `auditService.ts`
+- snapshot rows managed through `snapshotService.ts`
 
-## Data categories and TTLs
+Each run archives the rows it is about to purge, applies the purge with
+rollback protection, and writes a `RETENTION_RUN` audit entry summarizing what
+was removed.
 
-| Category | Default TTL | Reconciliation window | Compliance hold | Notes |
-|:---|---:|---:|:---:|:---|
-| `raw_events` | 90 days | 24 h | ✓ | Ledger events from the Soroban indexer |
-| `snapshots` | 30 days | 1 h | — | Derived / aggregated table snapshots |
-| `webhook_logs` | 14 days | 30 min | — | Webhook delivery attempt records |
-| `operational_logs` | 7 days | 15 min | — | Server-side debug / info logs |
+## Default retention windows
 
----
+The worker reads its policy from `src/config.ts`.
 
-## Safety guarantees
+| Store | Env var | Default | Reasoning |
+| --- | --- | ---: | --- |
+| Raw events | `RETENTION_RAW_EVENTS_DAYS` | 30 days | Strictest window because raw event payloads are the most likely to contain KYC-adjacent data. |
+| Audit logs | `RETENTION_AUDIT_LOG_DAYS` | 90 days | Keeps operator traceability longer than raw business payloads. |
+| Snapshots | `RETENTION_SNAPSHOTS_DAYS` | 14 days | Derived data can be recreated and should stay lean for query performance. |
+| Batch size | `RETENTION_BATCH_SIZE` | 500 rows per store per run | Limits blast radius and run latency. |
+| Schedule | `RETENTION_INTERVAL_MS` | 24 hours | Default daily enforcement cadence. |
+| Archive dir | `RETENTION_ARCHIVE_DIR` | `.data/retention-archives` | Stores purge batches before deletion. |
 
-### 1. Compliance hold (raw_events only)
+## Safety rules
 
-Any `RawEvent` with `complianceHold: true` is **never deleted**, regardless of
-age or TTL.  This flag covers AML/KYC audit trails that must be retained for
-up to 7 years under financial regulations.
+The worker refuses to purge data that may still be needed:
 
-```
-if record.complianceHold → skip, increment skippedHold
-```
+- Raw events with `complianceHold: true` are never purged.
+- If a replay is open, raw events at or above the earliest active replay cursor
+  are retained.
+- If reconciliation is running, expired raw events, audit logs, and snapshots
+  are protected for that run.
+- Purges are capped by `RETENTION_BATCH_SIZE`.
+- If archiving or a later store update fails, the worker restores previously
+  mutated stores before surfacing the error.
 
-### 2. Reconciliation window
+## Audit trail
 
-Records younger than `reconciliationWindowMs` are never deleted even if they
-exceed the TTL.  This prevents a cleanup job from racing a backfill or
-re-index operation that may still be writing records with past timestamps.
+Every successful live run appends a `RETENTION_RUN` entry through
+`src/services/auditService.ts` with:
 
-```
-if (now - record.createdAt) < reconciliationWindowMs → skip, increment skippedWindow
-```
+- run timing
+- replay/reconciliation protection state
+- cutoff timestamps
+- scanned, eligible, protected, archived, and purged counts
 
-### 3. Dry-run mode
+If the audit summary cannot be written, the worker rolls back the purge so that
+every live deletion remains auditable.
 
-Every job accepts `{ dryRun: true }`.  In dry-run mode the job computes and
-returns what *would* be deleted without mutating the store.  Use this to audit
-before enabling a new retention policy in production.
-
-### 4. Batch limit
-
-Each run deletes at most `batchSize` records.  This bounds the latency impact
-on the running process and allows incremental cleanup across multiple scheduled
-runs.  Records beyond the batch limit are left intact and will be picked up on
-the next run.
-
-### 5. Observable results
-
-Every job returns a `CleanupResult`:
-
-```typescript
-interface CleanupResult {
-  category: string;      // which data category was cleaned
-  deleted: number;       // records removed (or would be removed in dry-run)
-  skippedHold: number;   // records skipped due to compliance hold
-  skippedWindow: number; // records skipped due to reconciliation window
-  dryRun: boolean;
-  deletedIds: string[];  // IDs of removed (or candidate) records
-}
-```
-
-Log or emit `CleanupResult` to your observability pipeline after each run.
-
----
-
-## API
-
-### Individual jobs
-
-```typescript
-import {
-  cleanRawEvents,
-  cleanSnapshots,
-  cleanWebhookLogs,
-  cleanOperationalLogs,
-  RetentionStore,
-  DEFAULT_CONFIG,
-} from "./src/services/retention";
-
-const store = new RetentionStore(); // or inject your DB-backed implementation
-
-// Run with defaults
-const result = cleanRawEvents(store);
-
-// Run with custom config and fixed clock (useful for testing)
-const result = cleanRawEvents(
-  store,
-  { ttlMs: 90 * 86400_000, reconciliationWindowMs: 86400_000, batchSize: 1000 },
-  { now: Date.now(), dryRun: false }
-);
-```
-
-### Run all jobs
-
-```typescript
-import { runAllCleanupJobs } from "./src/services/retention";
-
-const results = runAllCleanupJobs(store, {}, { dryRun: false });
-results.forEach((r) => console.log(r));
-```
-
----
-
-## Scheduling
-
-Wire `runAllCleanupJobs` into a cron job or a scheduled task runner.
-A daily run at off-peak hours is recommended:
-
-```typescript
-// Example: run every day at 02:00 UTC
-import cron from "node-cron";
-cron.schedule("0 2 * * *", () => {
-  const results = runAllCleanupJobs(store);
-  results.forEach((r) =>
-    logger.info("retention_cleanup", { ...r })
-  );
-});
-```
-
----
-
-## Configuration reference
-
-```typescript
-interface RetentionConfig {
-  ttlMs: number;                  // max age before deletion (ms)
-  reconciliationWindowMs: number; // minimum age before deletion (ms)
-  batchSize: number;              // max records deleted per run
-}
-```
-
-Override any category by passing a partial config map to `runAllCleanupJobs`:
-
-```typescript
-runAllCleanupJobs(store, {
-  raw_events: { ttlMs: 180 * 86400_000, reconciliationWindowMs: 86400_000, batchSize: 500 },
-});
-```
-
----
-
-## Security considerations
-
-| Risk | Mitigation |
-|:---|:---|
-| Deleting compliance-required records | `complianceHold` flag checked before any deletion |
-| Racing a backfill / re-index | `reconciliationWindowMs` prevents deletion of recently-created records |
-| Bulk accidental deletion | `batchSize` cap limits blast radius per run |
-| Silent data loss | `CleanupResult.deletedIds` provides a full audit trail |
-| Untested policy changes | `dryRun` mode lets you preview deletions before applying |
-
----
-
-## Testing
-
-Test file: `backend/tests/retention.test.ts`
-
-~55 tests across 7 sections:
-
-| Section | Tests | What's validated |
-|:---|:---|:---|
-| DEFAULT_CONFIG | 6 | TTL values, positive window and batchSize |
-| cleanRawEvents | 12 | Delete/keep by age, compliance hold, window, batchSize, dry-run, boundary |
-| cleanSnapshots | 7 | Delete/keep by age, window, batchSize, dry-run, no hold |
-| cleanWebhookLogs | 6 | Delete/keep by age, window, batchSize, dry-run |
-| cleanOperationalLogs | 6 | Delete/keep by age, window, batchSize, dry-run |
-| runAllCleanupJobs | 5 | All categories, combined clean, dry-run, default config |
-| Safety — does not delete required | 8 | Held records, windowed records, mixed batch, batchSize continuity, deletedIds accuracy |
-| CleanupResult shape | 3 | All fields present, dryRun default, deletedIds is array |
+## Running tests
 
 ```bash
 cd backend
-npm test -- --testPathPattern=retention
-npm run test:coverage -- --testPathPattern=retention
+npm test -- retention.test.ts
 ```
+
+The retention test suite covers:
+
+- nothing to purge
+- TTL boundary timestamps
+- active replay and reconciliation protection
+- archive-then-delete failure rollback
+- large batch truncation
+- dry-run behavior

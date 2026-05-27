@@ -1,493 +1,353 @@
-import { describe, it, expect, beforeEach } from "@jest/globals";
+import { describe, expect, it, beforeEach } from "@jest/globals";
 import {
-  RetentionStore,
-  RetentionConfig,
-  DEFAULT_CONFIG,
-  cleanRawEvents,
-  cleanSnapshots,
-  cleanWebhookLogs,
-  cleanOperationalLogs,
-  runAllCleanupJobs,
-  RawEvent,
-  Snapshot,
-  WebhookLog,
-  OperationalLog,
+  createRetentionWorker,
+  RetentionDependencies,
+  RetentionPolicy,
 } from "../src/services/retention";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+import { RawEvent } from "../src/types/replay";
+import { AuditEntry } from "../src/types/audit";
+import { SnapshotRetentionRecord } from "../src/services/snapshotService";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const NOW = 1_000_000_000_000; // fixed reference timestamp
+const NOW = Date.parse("2026-05-26T12:00:00.000Z");
 
-/** Config with short TTLs for deterministic tests. */
-const cfg = (ttlMs: number, reconciliationWindowMs = 0, batchSize = 1000): RetentionConfig => ({
-  ttlMs,
-  reconciliationWindowMs,
-  batchSize,
-});
+function rawEvent(
+  id: string,
+  ledger: number,
+  indexedAtMs: number,
+  complianceHold = false
+): RawEvent {
+  return {
+    id,
+    ledger,
+    txHash: `tx-${id}`,
+    type: "InvoiceCreated",
+    payload: { invoiceId: id },
+    timestamp: indexedAtMs,
+    complianceHold,
+    indexedAt: new Date(indexedAtMs).toISOString(),
+  };
+}
 
-const rawEvent = (id: string, ageMs: number, complianceHold = false): RawEvent => ({
-  id,
-  ledger: 1,
-  type: "invoice_created",
-  payload: {},
-  createdAt: NOW - ageMs,
-  complianceHold,
-});
+function auditEntry(id: string, timestampMs: number): AuditEntry {
+  return {
+    id,
+    timestamp: new Date(timestampMs).toISOString(),
+    actor: "tester",
+    operation: "CONFIG_CHANGE",
+    params: { id },
+    redactedParams: { id },
+    ip: "127.0.0.1",
+    userAgent: "jest",
+    effect: "test",
+    success: true,
+  };
+}
 
-const snapshot = (id: string, ageMs: number): Snapshot => ({
-  id,
-  table: "invoices",
-  createdAt: NOW - ageMs,
-});
+function snapshotRecord(
+  table: "best_bids" | "top_bids_snapshots",
+  invoiceId: string,
+  lastUpdated: number
+): SnapshotRetentionRecord {
+  if (table === "best_bids") {
+    return {
+      table,
+      invoiceId,
+      lastUpdated,
+      payload: {
+        invoice_id: invoiceId,
+        bid_id: `bid-${invoiceId}`,
+        investor: "investor",
+        bid_amount: "1000",
+        expected_return: "10",
+        timestamp: lastUpdated,
+        expiration_timestamp: lastUpdated + 1000,
+        block_timestamp: lastUpdated,
+        transaction_sequence: 1,
+        ledger_index: 1,
+        last_updated: lastUpdated,
+      },
+    };
+  }
 
-const webhookLog = (id: string, ageMs: number): WebhookLog => ({
-  id,
-  endpoint: "https://example.com/hook",
-  statusCode: 200,
-  createdAt: NOW - ageMs,
-});
+  return {
+    table,
+    invoiceId,
+    lastUpdated,
+    payload: {
+      invoice_id: invoiceId,
+      top_bids: [{ bid_id: `bid-${invoiceId}`, rank: 1 }],
+      last_updated: lastUpdated,
+    },
+  };
+}
 
-const opLog = (id: string, ageMs: number): OperationalLog => ({
-  id,
-  level: "info",
-  message: "test",
-  createdAt: NOW - ageMs,
-});
+class MemoryRawEventStore {
+  constructor(public events: RawEvent[] = []) {}
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+  async getAllEvents(): Promise<RawEvent[]> {
+    return [...this.events];
+  }
 
-describe("retention service", () => {
-  let store: RetentionStore;
+  async replaceEvents(events: RawEvent[]): Promise<void> {
+    this.events = [...events];
+  }
+}
 
+class MemoryAuditLogStore {
+  constructor(public entries: AuditEntry[] = []) {}
+
+  getAllEntries(): AuditEntry[] {
+    return [...this.entries];
+  }
+
+  replaceEntries(entries: AuditEntry[]): void {
+    this.entries = [...entries];
+  }
+}
+
+class MemorySnapshotStore {
+  public failReplace = false;
+
+  constructor(public records: SnapshotRetentionRecord[] = []) {}
+
+  async getAllRetentionRecords(): Promise<SnapshotRetentionRecord[]> {
+    return [...this.records];
+  }
+
+  async replaceRetentionRecords(records: SnapshotRetentionRecord[]): Promise<void> {
+    if (this.failReplace) {
+      throw new Error("snapshot replace failed");
+    }
+    this.records = [...records];
+  }
+}
+
+function makeWorker(overrides: {
+  policy?: Partial<RetentionPolicy>;
+  replayActive?: boolean;
+  minimumReplayLedger?: number | null;
+  reconciliationActive?: boolean;
+  rawEvents?: RawEvent[];
+  auditEntries?: AuditEntry[];
+  snapshots?: SnapshotRetentionRecord[];
+  failSnapshotReplace?: boolean;
+}) {
+  const rawStore = new MemoryRawEventStore(overrides.rawEvents ?? []);
+  const auditStore = new MemoryAuditLogStore(overrides.auditEntries ?? []);
+  const snapshotStore = new MemorySnapshotStore(overrides.snapshots ?? []);
+  snapshotStore.failReplace = overrides.failSnapshotReplace ?? false;
+  const appendedAudits: Array<Record<string, unknown>> = [];
+  const archivedFiles: string[] = [];
+
+  const dependencies: Partial<RetentionDependencies> = {
+    rawEventStore: rawStore,
+    auditLogStore: auditStore,
+    snapshotStore,
+    auditTrail: {
+      append: (entry) => {
+        appendedAudits.push(entry as unknown as Record<string, unknown>);
+        return entry as any;
+      },
+    },
+    replayInspector: {
+      getActiveRetentionLock: () => ({
+        active: overrides.replayActive ?? false,
+        minimumLedger: overrides.minimumReplayLedger ?? null,
+        runIds: overrides.replayActive ? ["run-1"] : [],
+      }),
+    },
+    reconciliationInspector: {
+      isReconciliationRunning: () => overrides.reconciliationActive ?? false,
+    },
+    archiveWriter: async (filePath) => {
+      archivedFiles.push(filePath);
+    },
+  };
+
+  const policy: Partial<RetentionPolicy> = {
+    rawEventsMs: 30 * DAY_MS,
+    auditLogsMs: 90 * DAY_MS,
+    snapshotsMs: 14 * DAY_MS,
+    batchSize: 2,
+    intervalMs: 60_000,
+    archiveDir: "/tmp/retention-tests",
+    actor: "system:retention-worker",
+    ...overrides.policy,
+  };
+
+  return {
+    worker: createRetentionWorker(policy, dependencies),
+    rawStore,
+    auditStore,
+    snapshotStore,
+    appendedAudits,
+    archivedFiles,
+  };
+}
+
+describe("RetentionWorker", () => {
   beforeEach(() => {
-    store = new RetentionStore();
+    jest.restoreAllMocks();
   });
 
-  // ── DEFAULT_CONFIG ─────────────────────────────────────────────────────────
+  it("records a zero-purge run and leaves stores unchanged when nothing expired", async () => {
+    const { worker, rawStore, auditStore, snapshotStore, appendedAudits, archivedFiles } =
+      makeWorker({
+        rawEvents: [rawEvent("fresh", 1, NOW - 5 * DAY_MS)],
+        auditEntries: [auditEntry("audit-fresh", NOW - 5 * DAY_MS)],
+        snapshots: [snapshotRecord("best_bids", "inv-1", NOW - 2 * DAY_MS)],
+      });
 
-  describe("DEFAULT_CONFIG", () => {
-    it("raw_events TTL is 90 days", () => {
-      expect(DEFAULT_CONFIG.raw_events.ttlMs).toBe(90 * DAY_MS);
-    });
-    it("snapshots TTL is 30 days", () => {
-      expect(DEFAULT_CONFIG.snapshots.ttlMs).toBe(30 * DAY_MS);
-    });
-    it("webhook_logs TTL is 14 days", () => {
-      expect(DEFAULT_CONFIG.webhook_logs.ttlMs).toBe(14 * DAY_MS);
-    });
-    it("operational_logs TTL is 7 days", () => {
-      expect(DEFAULT_CONFIG.operational_logs.ttlMs).toBe(7 * DAY_MS);
-    });
-    it("all categories have a positive reconciliationWindowMs", () => {
-      for (const c of Object.values(DEFAULT_CONFIG)) {
-        expect(c.reconciliationWindowMs).toBeGreaterThan(0);
-      }
-    });
-    it("all categories have a positive batchSize", () => {
-      for (const c of Object.values(DEFAULT_CONFIG)) {
-        expect(c.batchSize).toBeGreaterThan(0);
-      }
-    });
+    const result = await worker.runOnce({ now: NOW });
+
+    expect(result.rawEvents.purged).toBe(0);
+    expect(result.auditLogs.purged).toBe(0);
+    expect(result.snapshots.purged).toBe(0);
+    expect(rawStore.events).toHaveLength(1);
+    expect(auditStore.entries).toHaveLength(1);
+    expect(snapshotStore.records).toHaveLength(1);
+    expect(appendedAudits).toHaveLength(1);
+    expect(archivedFiles).toHaveLength(0);
   });
 
-  // ── cleanRawEvents ─────────────────────────────────────────────────────────
-
-  describe("cleanRawEvents", () => {
-    it("deletes events older than TTL", () => {
-      store.rawEvents = [rawEvent("old", 100 * DAY_MS)];
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(1);
-      expect(store.rawEvents).toHaveLength(0);
+  it("purges records at the TTL boundary but not one millisecond before it", async () => {
+    const cutoff = NOW - 30 * DAY_MS;
+    const { worker, rawStore } = makeWorker({
+      rawEvents: [
+        rawEvent("boundary", 10, cutoff),
+        rawEvent("before-boundary", 11, cutoff + 1),
+      ],
     });
 
-    it("keeps events younger than TTL", () => {
-      store.rawEvents = [rawEvent("new", 10 * DAY_MS)];
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(0);
-      expect(store.rawEvents).toHaveLength(1);
-    });
+    const result = await worker.runOnce({ now: NOW });
 
-    it("never deletes events with complianceHold=true", () => {
-      store.rawEvents = [rawEvent("held", 200 * DAY_MS, true)];
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(0);
-      expect(result.skippedHold).toBe(1);
-      expect(store.rawEvents).toHaveLength(1);
-    });
-
-    it("deletes non-held events but preserves held ones in the same batch", () => {
-      store.rawEvents = [
-        rawEvent("held", 200 * DAY_MS, true),
-        rawEvent("old", 100 * DAY_MS, false),
-      ];
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(1);
-      expect(result.skippedHold).toBe(1);
-      expect(store.rawEvents.map((e) => e.id)).toEqual(["held"]);
-    });
-
-    it("keeps events within the reconciliation window even if older than TTL", () => {
-      const window = 2 * DAY_MS;
-      // age = 1 day < window = 2 days → must be kept
-      store.rawEvents = [rawEvent("recent", 1 * DAY_MS)];
-      const result = cleanRawEvents(store, cfg(0, window), { now: NOW });
-      expect(result.deleted).toBe(0);
-      expect(result.skippedWindow).toBe(1);
-    });
-
-    it("respects batchSize limit", () => {
-      store.rawEvents = Array.from({ length: 10 }, (_, i) =>
-        rawEvent(`e${i}`, 100 * DAY_MS)
-      );
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS, 0, 3), { now: NOW });
-      expect(result.deleted).toBe(3);
-      expect(store.rawEvents).toHaveLength(7);
-    });
-
-    it("dry-run returns correct counts without mutating store", () => {
-      store.rawEvents = [rawEvent("old", 100 * DAY_MS)];
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW, dryRun: true });
-      expect(result.dryRun).toBe(true);
-      expect(result.deleted).toBe(1);
-      expect(store.rawEvents).toHaveLength(1); // unchanged
-    });
-
-    it("dry-run includes deletedIds", () => {
-      store.rawEvents = [rawEvent("old1", 100 * DAY_MS), rawEvent("old2", 100 * DAY_MS)];
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW, dryRun: true });
-      expect(result.deletedIds).toEqual(["old1", "old2"]);
-    });
-
-    it("returns category=raw_events", () => {
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW });
-      expect(result.category).toBe("raw_events");
-    });
-
-    it("empty store returns zero counts", () => {
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(0);
-      expect(result.skippedHold).toBe(0);
-      expect(result.skippedWindow).toBe(0);
-    });
-
-    it("record exactly at TTL boundary is eligible", () => {
-      store.rawEvents = [rawEvent("boundary", 90 * DAY_MS)];
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(1);
-    });
-
-    it("record one ms before TTL is not eligible", () => {
-      store.rawEvents = [rawEvent("almost", 90 * DAY_MS - 1)];
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(0);
-    });
+    expect(result.rawEvents.purged).toBe(1);
+    expect(rawStore.events.map((event) => event.id)).toEqual(["before-boundary"]);
   });
 
-  // ── cleanSnapshots ─────────────────────────────────────────────────────────
-
-  describe("cleanSnapshots", () => {
-    it("deletes snapshots older than TTL", () => {
-      store.snapshots = [snapshot("s1", 31 * DAY_MS)];
-      const result = cleanSnapshots(store, cfg(30 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(1);
-      expect(store.snapshots).toHaveLength(0);
+  it("keeps compliance-held and replay-protected raw events while purging older safe events", async () => {
+    const old = NOW - 31 * DAY_MS;
+    const { worker, rawStore, appendedAudits } = makeWorker({
+      replayActive: true,
+      minimumReplayLedger: 50,
+      rawEvents: [
+        rawEvent("held-kyc", 1, old, true),
+        rawEvent("protected-replay", 99, old),
+        rawEvent("purge-me", 10, old),
+      ],
     });
 
-    it("keeps snapshots younger than TTL", () => {
-      store.snapshots = [snapshot("s1", 5 * DAY_MS)];
-      const result = cleanSnapshots(store, cfg(30 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(0);
-      expect(store.snapshots).toHaveLength(1);
-    });
+    const result = await worker.runOnce({ now: NOW });
 
-    it("respects reconciliation window", () => {
-      const window = 1 * DAY_MS;
-      store.snapshots = [snapshot("s1", 30 * 60 * 1000)]; // 30 min old < 1 day window
-      const result = cleanSnapshots(store, cfg(0, window), { now: NOW });
-      expect(result.deleted).toBe(0);
-      expect(result.skippedWindow).toBe(1);
-    });
-
-    it("respects batchSize", () => {
-      store.snapshots = Array.from({ length: 5 }, (_, i) => snapshot(`s${i}`, 31 * DAY_MS));
-      const result = cleanSnapshots(store, cfg(30 * DAY_MS, 0, 2), { now: NOW });
-      expect(result.deleted).toBe(2);
-      expect(store.snapshots).toHaveLength(3);
-    });
-
-    it("dry-run does not mutate store", () => {
-      store.snapshots = [snapshot("s1", 31 * DAY_MS)];
-      cleanSnapshots(store, cfg(30 * DAY_MS), { now: NOW, dryRun: true });
-      expect(store.snapshots).toHaveLength(1);
-    });
-
-    it("returns category=snapshots", () => {
-      const result = cleanSnapshots(store, cfg(30 * DAY_MS), { now: NOW });
-      expect(result.category).toBe("snapshots");
-    });
-
-    it("skippedHold is always 0 (snapshots have no compliance hold)", () => {
-      store.snapshots = [snapshot("s1", 31 * DAY_MS)];
-      const result = cleanSnapshots(store, cfg(30 * DAY_MS), { now: NOW });
-      expect(result.skippedHold).toBe(0);
-    });
+    expect(result.rawEvents.eligible).toBe(3);
+    expect(result.rawEvents.protected).toBe(2);
+    expect(result.rawEvents.purged).toBe(1);
+    expect(rawStore.events.map((event) => event.id).sort()).toEqual([
+      "held-kyc",
+      "protected-replay",
+    ]);
+    expect(appendedAudits).toHaveLength(1);
   });
 
-  // ── cleanWebhookLogs ───────────────────────────────────────────────────────
-
-  describe("cleanWebhookLogs", () => {
-    it("deletes webhook logs older than TTL", () => {
-      store.webhookLogs = [webhookLog("w1", 15 * DAY_MS)];
-      const result = cleanWebhookLogs(store, cfg(14 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(1);
-      expect(store.webhookLogs).toHaveLength(0);
+  it("protects all expired rows during an active reconciliation run", async () => {
+    const old = NOW - 120 * DAY_MS;
+    const { worker, rawStore, auditStore, snapshotStore } = makeWorker({
+      reconciliationActive: true,
+      rawEvents: [rawEvent("raw-1", 1, old)],
+      auditEntries: [auditEntry("audit-1", old)],
+      snapshots: [snapshotRecord("top_bids_snapshots", "inv-1", old)],
     });
 
-    it("keeps webhook logs younger than TTL", () => {
-      store.webhookLogs = [webhookLog("w1", 3 * DAY_MS)];
-      const result = cleanWebhookLogs(store, cfg(14 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(0);
-    });
+    const result = await worker.runOnce({ now: NOW });
 
-    it("respects reconciliation window", () => {
-      const window = 30 * 60 * 1000; // 30 min
-      store.webhookLogs = [webhookLog("w1", 10 * 60 * 1000)]; // 10 min old
-      const result = cleanWebhookLogs(store, cfg(0, window), { now: NOW });
-      expect(result.deleted).toBe(0);
-      expect(result.skippedWindow).toBe(1);
-    });
-
-    it("respects batchSize", () => {
-      store.webhookLogs = Array.from({ length: 6 }, (_, i) => webhookLog(`w${i}`, 15 * DAY_MS));
-      const result = cleanWebhookLogs(store, cfg(14 * DAY_MS, 0, 4), { now: NOW });
-      expect(result.deleted).toBe(4);
-      expect(store.webhookLogs).toHaveLength(2);
-    });
-
-    it("dry-run does not mutate store", () => {
-      store.webhookLogs = [webhookLog("w1", 15 * DAY_MS)];
-      cleanWebhookLogs(store, cfg(14 * DAY_MS), { now: NOW, dryRun: true });
-      expect(store.webhookLogs).toHaveLength(1);
-    });
-
-    it("returns category=webhook_logs", () => {
-      const result = cleanWebhookLogs(store, cfg(14 * DAY_MS), { now: NOW });
-      expect(result.category).toBe("webhook_logs");
-    });
+    expect(result.rawEvents.protected).toBe(1);
+    expect(result.auditLogs.protected).toBe(1);
+    expect(result.snapshots.protected).toBe(1);
+    expect(rawStore.events).toHaveLength(1);
+    expect(auditStore.entries).toHaveLength(1);
+    expect(snapshotStore.records).toHaveLength(1);
   });
 
-  // ── cleanOperationalLogs ───────────────────────────────────────────────────
-
-  describe("cleanOperationalLogs", () => {
-    it("deletes operational logs older than TTL", () => {
-      store.operationalLogs = [opLog("o1", 8 * DAY_MS)];
-      const result = cleanOperationalLogs(store, cfg(7 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(1);
-      expect(store.operationalLogs).toHaveLength(0);
+  it("limits each purge to the configured batch size", async () => {
+    const old = NOW - 120 * DAY_MS;
+    const { worker, rawStore, auditStore, snapshotStore } = makeWorker({
+      rawEvents: [
+        rawEvent("raw-1", 1, old),
+        rawEvent("raw-2", 2, old),
+        rawEvent("raw-3", 3, old),
+      ],
+      auditEntries: [
+        auditEntry("audit-1", old),
+        auditEntry("audit-2", old),
+        auditEntry("audit-3", old),
+      ],
+      snapshots: [
+        snapshotRecord("best_bids", "inv-1", old),
+        snapshotRecord("best_bids", "inv-2", old),
+        snapshotRecord("best_bids", "inv-3", old),
+      ],
     });
 
-    it("keeps operational logs younger than TTL", () => {
-      store.operationalLogs = [opLog("o1", 2 * DAY_MS)];
-      const result = cleanOperationalLogs(store, cfg(7 * DAY_MS), { now: NOW });
-      expect(result.deleted).toBe(0);
-    });
+    const result = await worker.runOnce({ now: NOW });
 
-    it("respects reconciliation window", () => {
-      const window = 15 * 60 * 1000; // 15 min
-      store.operationalLogs = [opLog("o1", 5 * 60 * 1000)]; // 5 min old
-      const result = cleanOperationalLogs(store, cfg(0, window), { now: NOW });
-      expect(result.deleted).toBe(0);
-      expect(result.skippedWindow).toBe(1);
-    });
-
-    it("respects batchSize", () => {
-      store.operationalLogs = Array.from({ length: 10 }, (_, i) => opLog(`o${i}`, 8 * DAY_MS));
-      const result = cleanOperationalLogs(store, cfg(7 * DAY_MS, 0, 5), { now: NOW });
-      expect(result.deleted).toBe(5);
-      expect(store.operationalLogs).toHaveLength(5);
-    });
-
-    it("dry-run does not mutate store", () => {
-      store.operationalLogs = [opLog("o1", 8 * DAY_MS)];
-      cleanOperationalLogs(store, cfg(7 * DAY_MS), { now: NOW, dryRun: true });
-      expect(store.operationalLogs).toHaveLength(1);
-    });
-
-    it("returns category=operational_logs", () => {
-      const result = cleanOperationalLogs(store, cfg(7 * DAY_MS), { now: NOW });
-      expect(result.category).toBe("operational_logs");
-    });
+    expect(result.rawEvents.purged).toBe(2);
+    expect(result.auditLogs.purged).toBe(2);
+    expect(result.snapshots.purged).toBe(2);
+    expect(rawStore.events).toHaveLength(1);
+    expect(auditStore.entries).toHaveLength(1);
+    expect(snapshotStore.records).toHaveLength(1);
   });
 
-  // ── runAllCleanupJobs ──────────────────────────────────────────────────────
+  it("rolls back raw events and audit logs if snapshot replacement fails after archiving", async () => {
+    const old = NOW - 120 * DAY_MS;
+    const { worker, rawStore, auditStore, snapshotStore, appendedAudits, archivedFiles } =
+      makeWorker({
+        failSnapshotReplace: true,
+        rawEvents: [rawEvent("raw-1", 1, old)],
+        auditEntries: [auditEntry("audit-1", old)],
+        snapshots: [snapshotRecord("best_bids", "inv-1", old)],
+      });
 
-  describe("runAllCleanupJobs", () => {
-    it("returns results for all four categories", () => {
-      const results = runAllCleanupJobs(store, {}, { now: NOW });
-      expect(results).toHaveLength(4);
-      const categories = results.map((r) => r.category);
-      expect(categories).toContain("raw_events");
-      expect(categories).toContain("snapshots");
-      expect(categories).toContain("webhook_logs");
-      expect(categories).toContain("operational_logs");
-    });
+    await expect(worker.runOnce({ now: NOW })).rejects.toThrow(
+      "snapshot replace failed"
+    );
 
-    it("cleans all categories in one call", () => {
-      store.rawEvents = [rawEvent("e1", 100 * DAY_MS)];
-      store.snapshots = [snapshot("s1", 31 * DAY_MS)];
-      store.webhookLogs = [webhookLog("w1", 15 * DAY_MS)];
-      store.operationalLogs = [opLog("o1", 8 * DAY_MS)];
-
-      runAllCleanupJobs(
-        store,
-        {
-          raw_events: cfg(90 * DAY_MS),
-          snapshots: cfg(30 * DAY_MS),
-          webhook_logs: cfg(14 * DAY_MS),
-          operational_logs: cfg(7 * DAY_MS),
-        },
-        { now: NOW }
-      );
-
-      expect(store.rawEvents).toHaveLength(0);
-      expect(store.snapshots).toHaveLength(0);
-      expect(store.webhookLogs).toHaveLength(0);
-      expect(store.operationalLogs).toHaveLength(0);
-    });
-
-    it("dry-run across all categories mutates nothing", () => {
-      store.rawEvents = [rawEvent("e1", 100 * DAY_MS)];
-      store.snapshots = [snapshot("s1", 31 * DAY_MS)];
-      store.webhookLogs = [webhookLog("w1", 15 * DAY_MS)];
-      store.operationalLogs = [opLog("o1", 8 * DAY_MS)];
-
-      runAllCleanupJobs(
-        store,
-        {
-          raw_events: cfg(90 * DAY_MS),
-          snapshots: cfg(30 * DAY_MS),
-          webhook_logs: cfg(14 * DAY_MS),
-          operational_logs: cfg(7 * DAY_MS),
-        },
-        { now: NOW, dryRun: true }
-      );
-
-      expect(store.rawEvents).toHaveLength(1);
-      expect(store.snapshots).toHaveLength(1);
-      expect(store.webhookLogs).toHaveLength(1);
-      expect(store.operationalLogs).toHaveLength(1);
-    });
-
-    it("uses DEFAULT_CONFIG when no config override provided", () => {
-      // With default TTLs (7–90 days) and NOW as reference, records aged 0 ms
-      // should never be deleted.
-      store.rawEvents = [rawEvent("e1", 0)];
-      const results = runAllCleanupJobs(store, {}, { now: NOW });
-      const rawResult = results.find((r) => r.category === "raw_events")!;
-      expect(rawResult.deleted).toBe(0);
-    });
+    expect(rawStore.events.map((event) => event.id)).toEqual(["raw-1"]);
+    expect(auditStore.entries.map((entry) => entry.id)).toEqual(["audit-1"]);
+    expect(snapshotStore.records.map((record) => record.invoiceId)).toEqual(["inv-1"]);
+    expect(appendedAudits).toHaveLength(0);
+    expect(archivedFiles).toHaveLength(3);
   });
 
-  // ── Safety: does not delete required records ───────────────────────────────
+  it("does not mutate stores or write audit summaries during dry runs", async () => {
+    const old = NOW - 120 * DAY_MS;
+    const { worker, rawStore, auditStore, snapshotStore, appendedAudits, archivedFiles } =
+      makeWorker({
+        rawEvents: [rawEvent("raw-1", 1, old)],
+        auditEntries: [auditEntry("audit-1", old)],
+        snapshots: [snapshotRecord("best_bids", "inv-1", old)],
+      });
 
-  describe("safety — does not delete required records", () => {
-    it("compliance-held raw events survive any TTL", () => {
-      store.rawEvents = [rawEvent("held", 365 * DAY_MS, true)];
-      cleanRawEvents(store, cfg(1), { now: NOW }); // TTL = 1 ms
-      expect(store.rawEvents).toHaveLength(1);
-    });
+    const result = await worker.runOnce({ now: NOW, dryRun: true });
 
-    it("records inside reconciliation window survive even with TTL=0", () => {
-      const window = 1 * DAY_MS;
-      store.rawEvents = [rawEvent("recent", 1 * 60 * 1000)]; // 1 min old
-      cleanRawEvents(store, cfg(0, window), { now: NOW });
-      expect(store.rawEvents).toHaveLength(1);
-    });
-
-    it("mix of held, windowed, and eligible — only eligible are deleted", () => {
-      store.rawEvents = [
-        rawEvent("held", 200 * DAY_MS, true),   // compliance hold
-        rawEvent("recent", 1 * 60 * 1000),       // inside window
-        rawEvent("old", 100 * DAY_MS),            // eligible
-      ];
-      const result = cleanRawEvents(
-        store,
-        cfg(90 * DAY_MS, 1 * DAY_MS),
-        { now: NOW }
-      );
-      expect(result.deleted).toBe(1);
-      expect(result.skippedHold).toBe(1);
-      expect(result.skippedWindow).toBe(1);
-      expect(store.rawEvents.map((e) => e.id).sort()).toEqual(["held", "recent"]);
-    });
-
-    it("batchSize cap leaves remaining records intact for next run", () => {
-      store.rawEvents = Array.from({ length: 5 }, (_, i) =>
-        rawEvent(`e${i}`, 100 * DAY_MS)
-      );
-      cleanRawEvents(store, cfg(90 * DAY_MS, 0, 2), { now: NOW });
-      // 2 deleted, 3 remain — all 3 are still eligible for the next run
-      expect(store.rawEvents).toHaveLength(3);
-      const result2 = cleanRawEvents(store, cfg(90 * DAY_MS, 0, 2), { now: NOW });
-      expect(result2.deleted).toBe(2);
-      expect(store.rawEvents).toHaveLength(1);
-    });
-
-    it("deletedIds in result exactly matches what was removed from store", () => {
-      store.rawEvents = [
-        rawEvent("keep", 10 * DAY_MS),
-        rawEvent("del1", 100 * DAY_MS),
-        rawEvent("del2", 100 * DAY_MS),
-      ];
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW });
-      expect(result.deletedIds.sort()).toEqual(["del1", "del2"]);
-      expect(store.rawEvents.map((e) => e.id)).toEqual(["keep"]);
-    });
-
-    it("snapshot reconciliation window protects records needed for backfill", () => {
-      const window = 1 * 60 * 60 * 1000; // 1 h
-      store.snapshots = [snapshot("backfill", 30 * 60 * 1000)]; // 30 min old
-      cleanSnapshots(store, cfg(0, window), { now: NOW });
-      expect(store.snapshots).toHaveLength(1);
-    });
-
-    it("webhook log reconciliation window protects in-flight retries", () => {
-      const window = 30 * 60 * 1000; // 30 min
-      store.webhookLogs = [webhookLog("retry", 5 * 60 * 1000)]; // 5 min old
-      cleanWebhookLogs(store, cfg(0, window), { now: NOW });
-      expect(store.webhookLogs).toHaveLength(1);
-    });
-
-    it("operational log reconciliation window protects recent debug logs", () => {
-      const window = 15 * 60 * 1000; // 15 min
-      store.operationalLogs = [opLog("debug", 2 * 60 * 1000)]; // 2 min old
-      cleanOperationalLogs(store, cfg(0, window), { now: NOW });
-      expect(store.operationalLogs).toHaveLength(1);
-    });
+    expect(result.dryRun).toBe(true);
+    expect(result.rawEvents.purged).toBe(1);
+    expect(result.auditLogs.purged).toBe(1);
+    expect(result.snapshots.purged).toBe(1);
+    expect(result.rawEvents.archived).toBe(0);
+    expect(rawStore.events).toHaveLength(1);
+    expect(auditStore.entries).toHaveLength(1);
+    expect(snapshotStore.records).toHaveLength(1);
+    expect(appendedAudits).toHaveLength(0);
+    expect(archivedFiles).toHaveLength(0);
   });
 
-  // ── CleanupResult shape ────────────────────────────────────────────────────
+  it("uses the strictest default window for raw events", async () => {
+    const { worker } = makeWorker({});
+    const result = await worker.runOnce({ now: NOW, dryRun: true });
 
-  describe("CleanupResult shape", () => {
-    it("all fields are present on a result", () => {
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW });
-      expect(result).toHaveProperty("category");
-      expect(result).toHaveProperty("deleted");
-      expect(result).toHaveProperty("skippedHold");
-      expect(result).toHaveProperty("skippedWindow");
-      expect(result).toHaveProperty("dryRun");
-      expect(result).toHaveProperty("deletedIds");
-    });
-
-    it("dryRun defaults to false", () => {
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW });
-      expect(result.dryRun).toBe(false);
-    });
-
-    it("deletedIds is an array", () => {
-      const result = cleanRawEvents(store, cfg(90 * DAY_MS), { now: NOW });
-      expect(Array.isArray(result.deletedIds)).toBe(true);
-    });
+    expect(result.rawEvents.retentionMs).toBeLessThan(result.auditLogs.retentionMs);
+    expect(result.snapshots.retentionMs).toBeLessThan(result.auditLogs.retentionMs);
   });
 });
