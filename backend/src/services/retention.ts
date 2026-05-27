@@ -1,317 +1,427 @@
-/**
- * Retention policy and safe cleanup jobs for the QuickLendX backend.
- *
- * # Data categories
- *
- * | Category          | Default TTL | Compliance hold | Notes                              |
- * |-------------------|-------------|-----------------|-------------------------------------|
- * | raw_events        | 90 days     | yes (7 years)   | Ledger events from Soroban indexer  |
- * | snapshots         | 30 days     | no              | Derived/aggregated table snapshots  |
- * | webhook_logs      | 14 days     | no              | Delivery attempt records            |
- * | operational_logs  | 7 days      | no              | Server-side debug/info logs         |
- *
- * # Safety guarantees
- *
- * 1. **Compliance hold** — raw_events with `complianceHold: true` are NEVER
- *    deleted regardless of age.  This covers AML/KYC audit trails.
- * 2. **Reconciliation window** — records younger than `reconciliationWindowMs`
- *    are never deleted even if they exceed the TTL.  This prevents cleanup
- *    from racing a backfill or re-index job.
- * 3. **Dry-run mode** — every job accepts a `dryRun` flag that returns what
- *    would be deleted without mutating state.
- * 4. **Batch limit** — each run deletes at most `batchSize` records to bound
- *    the latency impact on the running process.
- * 5. **Observable** — every run returns a `CleanupResult` with counts and
- *    the IDs that were (or would be) removed.
- */
+import path from "path";
+import { promises as fs } from "fs";
+import { retentionConfig } from "../config";
+import { auditService } from "./auditService";
+import { ReconciliationWorker } from "./reconciliationWorker";
+import { replayService } from "./replayService";
+import {
+  FileSystemRawEventStore,
+  InMemoryRawEventStore,
+} from "./rawEventStore";
+import type { SnapshotRetentionRecord } from "./snapshotService";
+import { DefaultEventValidator } from "./eventValidator";
+import { AuditEntry } from "../types/audit";
+import { RawEvent } from "../types/replay";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-/** Unix timestamp in milliseconds. */
-type Ms = number;
-
-export interface RetentionConfig {
-  /** Maximum age of a record before it is eligible for deletion (ms). */
-  ttlMs: Ms;
-  /**
-   * Records younger than this window are never deleted, even if they exceed
-   * the TTL.  Protects in-progress backfills and reconciliation jobs.
-   */
-  reconciliationWindowMs: Ms;
-  /** Maximum records removed per cleanup run. */
+export interface RetentionPolicy {
+  rawEventsMs: number;
+  auditLogsMs: number;
+  snapshotsMs: number;
   batchSize: number;
+  intervalMs: number;
+  archiveDir: string;
+  actor: string;
 }
 
-export interface RawEvent {
-  id: string;
-  ledger: number;
-  type: string;
-  payload: unknown;
-  createdAt: Ms;
-  /** When true the record is subject to a compliance hold and must not be deleted. */
-  complianceHold: boolean;
+export interface RetentionCategorySummary {
+  retentionMs: number;
+  cutoff: string;
+  scanned: number;
+  eligible: number;
+  protected: number;
+  purged: number;
+  archived: number;
+  archivePath: string | null;
 }
 
-export interface Snapshot {
-  id: string;
-  table: string;
-  createdAt: Ms;
-}
-
-export interface WebhookLog {
-  id: string;
-  endpoint: string;
-  statusCode: number;
-  createdAt: Ms;
-}
-
-export interface OperationalLog {
-  id: string;
-  level: "debug" | "info" | "warn" | "error";
-  message: string;
-  createdAt: Ms;
-}
-
-export interface CleanupResult {
-  category: string;
-  deleted: number;
-  skippedHold: number;
-  skippedWindow: number;
+export interface RetentionRunSummary {
+  runId: string;
+  startedAt: string;
+  completedAt: string;
   dryRun: boolean;
-  deletedIds: string[];
+  replayActive: boolean;
+  reconciliationActive: boolean;
+  minimumReplayLedger: number | null;
+  rawEvents: RetentionCategorySummary;
+  auditLogs: RetentionCategorySummary;
+  snapshots: RetentionCategorySummary;
 }
 
-// ── Default configuration ─────────────────────────────────────────────────────
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-export const DEFAULT_CONFIG: Record<string, RetentionConfig> = {
-  raw_events: {
-    ttlMs: 90 * DAY_MS,
-    reconciliationWindowMs: 24 * 60 * 60 * 1000, // 24 h
-    batchSize: 1000,
-  },
-  snapshots: {
-    ttlMs: 30 * DAY_MS,
-    reconciliationWindowMs: 60 * 60 * 1000, // 1 h
-    batchSize: 500,
-  },
-  webhook_logs: {
-    ttlMs: 14 * DAY_MS,
-    reconciliationWindowMs: 30 * 60 * 1000, // 30 min
-    batchSize: 500,
-  },
-  operational_logs: {
-    ttlMs: 7 * DAY_MS,
-    reconciliationWindowMs: 15 * 60 * 1000, // 15 min
-    batchSize: 2000,
-  },
-};
-
-// ── In-memory store (mirrors what a DB layer would expose) ────────────────────
-
-/**
- * RetentionStore holds all four record types in memory.
- *
- * In production this would be replaced by parameterised SQL DELETE queries.
- * The interface is kept intentionally thin so the swap is mechanical.
- */
-export class RetentionStore {
-  rawEvents: RawEvent[] = [];
-  snapshots: Snapshot[] = [];
-  webhookLogs: WebhookLog[] = [];
-  operationalLogs: OperationalLog[] = [];
+export interface RetentionTimer {
+  stop(): void;
 }
 
-// ── Cleanup jobs ──────────────────────────────────────────────────────────────
-
-/**
- * Determine whether a record is eligible for deletion.
- *
- * A record is eligible when ALL of the following hold:
- * - `now - createdAt >= ttlMs`  (record has aged out)
- * - `now - createdAt >= reconciliationWindowMs`  (always true when ttl >= window)
- * - `complianceHold !== true`  (not subject to a compliance hold)
- */
-function isEligible(
-  createdAt: Ms,
-  complianceHold: boolean,
-  now: Ms,
-  cfg: RetentionConfig
-): { eligible: boolean; reason?: "hold" | "window" } {
-  if (complianceHold) return { eligible: false, reason: "hold" };
-  const age = now - createdAt;
-  if (age < cfg.reconciliationWindowMs) return { eligible: false, reason: "window" };
-  if (age < cfg.ttlMs) return { eligible: false, reason: "window" };
-  return { eligible: true };
+export interface ReplayRetentionInspector {
+  getActiveRetentionLock(): {
+    active: boolean;
+    minimumLedger: number | null;
+    runIds: string[];
+  };
 }
 
-/**
- * Clean up raw events older than the configured TTL.
- *
- * Records with `complianceHold: true` are NEVER deleted.
- */
-export function cleanRawEvents(
-  store: RetentionStore,
-  cfg: RetentionConfig = DEFAULT_CONFIG.raw_events,
-  opts: { dryRun?: boolean; now?: Ms } = {}
-): CleanupResult {
-  const now = opts.now ?? Date.now();
-  const dryRun = opts.dryRun ?? false;
+export interface RetentionRawEventStore {
+  getAllEvents(): Promise<RawEvent[]>;
+  replaceEvents(events: RawEvent[]): Promise<void>;
+}
 
-  let deleted = 0;
-  let skippedHold = 0;
-  let skippedWindow = 0;
-  const deletedIds: string[] = [];
-  const remaining: RawEvent[] = [];
+export interface RetentionAuditLogStore {
+  getAllEntries(): AuditEntry[];
+  replaceEntries(entries: AuditEntry[]): void;
+}
 
-  for (const ev of store.rawEvents) {
-    if (deleted >= cfg.batchSize) {
-      remaining.push(ev);
-      continue;
+export interface RetentionSnapshotStore {
+  getAllRetentionRecords(): Promise<SnapshotRetentionRecord[]>;
+  replaceRetentionRecords(records: SnapshotRetentionRecord[]): Promise<void>;
+}
+
+export interface RetentionDependencies {
+  rawEventStore: RetentionRawEventStore;
+  auditLogStore: RetentionAuditLogStore;
+  snapshotStore: RetentionSnapshotStore;
+  auditTrail: {
+    append: typeof auditService.append;
+  };
+  replayInspector: ReplayRetentionInspector;
+  reconciliationInspector: {
+    isReconciliationRunning(): boolean;
+  };
+  archiveWriter: (filePath: string, payload: unknown) => Promise<void>;
+}
+
+interface CategorizedRetentionState<T> {
+  original: T[];
+  kept: T[];
+  purged: T[];
+  protectedCount: number;
+  summary: RetentionCategorySummary;
+}
+
+function buildDefaultDependencies(): RetentionDependencies {
+  const defaultRawEventStore = new FileSystemRawEventStore(new DefaultEventValidator());
+
+  return {
+    rawEventStore: defaultRawEventStore,
+    auditLogStore: auditService,
+    snapshotStore: {
+      getAllRetentionRecords: async () => {
+        const { SnapshotService } = await import("./snapshotService");
+        return SnapshotService.getAllRetentionRecords();
+      },
+      replaceRetentionRecords: async (records) => {
+        const { SnapshotService } = await import("./snapshotService");
+        return SnapshotService.replaceRetentionRecords(records);
+      },
+    },
+    auditTrail: auditService,
+    replayInspector: replayService,
+    reconciliationInspector: ReconciliationWorker,
+    archiveWriter: async (filePath, payload) => {
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+    },
+  };
+}
+
+export class RetentionWorker {
+  constructor(
+    private readonly policy: RetentionPolicy = retentionConfig,
+    private readonly dependencies: RetentionDependencies = buildDefaultDependencies()
+  ) {}
+
+  async runOnce(options: { dryRun?: boolean; now?: number } = {}): Promise<RetentionRunSummary> {
+    const now = options.now ?? Date.now();
+    const startedAt = new Date(now).toISOString();
+    const runId = `ret_${now}_${Math.random().toString(36).slice(2, 8)}`;
+    const dryRun = options.dryRun ?? false;
+    const replayLock = this.dependencies.replayInspector.getActiveRetentionLock();
+    const reconciliationActive =
+      this.dependencies.reconciliationInspector.isReconciliationRunning();
+
+    const [rawEvents, auditEntries, snapshots] = await Promise.all([
+      this.dependencies.rawEventStore.getAllEvents(),
+      Promise.resolve(this.dependencies.auditLogStore.getAllEntries()),
+      this.dependencies.snapshotStore.getAllRetentionRecords(),
+    ]);
+
+    const rawState = this.planRawEventRetention(
+      rawEvents,
+      now,
+      replayLock.minimumLedger,
+      replayLock.active,
+      reconciliationActive
+    );
+    const auditState = this.planTimestampRetention(
+      auditEntries,
+      now,
+      this.policy.auditLogsMs,
+      (entry) => entry.timestamp,
+      replayLock.active || reconciliationActive
+    );
+    const snapshotState = this.planTimestampRetention(
+      snapshots,
+      now,
+      this.policy.snapshotsMs,
+      (snapshot) => snapshot.lastUpdated,
+      replayLock.active || reconciliationActive
+    );
+
+    if (!dryRun) {
+      await this.commitRetentionRun(
+        runId,
+        rawState,
+        auditState,
+        snapshotState,
+        startedAt,
+        replayLock.active,
+        replayLock.minimumLedger,
+        reconciliationActive
+      );
     }
-    const { eligible, reason } = isEligible(ev.createdAt, ev.complianceHold, now, cfg);
-    if (eligible) {
-      deletedIds.push(ev.id);
-      deleted++;
-      if (!dryRun) continue; // drop from remaining
-    } else {
-      if (reason === "hold") skippedHold++;
-      else skippedWindow++;
-    }
-    remaining.push(ev);
+
+    return {
+      runId,
+      startedAt,
+      completedAt: new Date(options.now ?? Date.now()).toISOString(),
+      dryRun,
+      replayActive: replayLock.active,
+      reconciliationActive,
+      minimumReplayLedger: replayLock.minimumLedger,
+      rawEvents: rawState.summary,
+      auditLogs: auditState.summary,
+      snapshots: snapshotState.summary,
+    };
   }
 
-  if (!dryRun) store.rawEvents = remaining;
+  start(): RetentionTimer {
+    const timer = setInterval(() => {
+      void this.runOnce().catch((error) => {
+        console.error("[Retention] Scheduled run failed:", error);
+      });
+    }, this.policy.intervalMs);
 
-  return { category: "raw_events", deleted, skippedHold, skippedWindow, dryRun, deletedIds };
-}
-
-/**
- * Clean up derived table snapshots older than the configured TTL.
- */
-export function cleanSnapshots(
-  store: RetentionStore,
-  cfg: RetentionConfig = DEFAULT_CONFIG.snapshots,
-  opts: { dryRun?: boolean; now?: Ms } = {}
-): CleanupResult {
-  const now = opts.now ?? Date.now();
-  const dryRun = opts.dryRun ?? false;
-
-  let deleted = 0;
-  let skippedWindow = 0;
-  const deletedIds: string[] = [];
-  const remaining: Snapshot[] = [];
-
-  for (const snap of store.snapshots) {
-    if (deleted >= cfg.batchSize) {
-      remaining.push(snap);
-      continue;
-    }
-    const { eligible, reason } = isEligible(snap.createdAt, false, now, cfg);
-    if (eligible) {
-      deletedIds.push(snap.id);
-      deleted++;
-      if (!dryRun) continue;
-    } else {
-      if (reason === "window") skippedWindow++;
-    }
-    remaining.push(snap);
+    return {
+      stop: () => clearInterval(timer),
+    };
   }
 
-  if (!dryRun) store.snapshots = remaining;
+  private async commitRetentionRun(
+    runId: string,
+    rawState: CategorizedRetentionState<RawEvent>,
+    auditState: CategorizedRetentionState<AuditEntry>,
+    snapshotState: CategorizedRetentionState<SnapshotRetentionRecord>,
+    startedAt: string,
+    replayActive: boolean,
+    minimumReplayLedger: number | null,
+    reconciliationActive: boolean
+  ): Promise<void> {
+    const mutated = {
+      rawEvents: false,
+      auditLogs: false,
+      snapshots: false,
+    };
 
-  return { category: "snapshots", deleted, skippedHold: 0, skippedWindow, dryRun, deletedIds };
-}
+    try {
+      rawState.summary.archivePath = await this.archiveCategory(
+        runId,
+        "raw-events",
+        rawState.purged
+      );
+      auditState.summary.archivePath = await this.archiveCategory(
+        runId,
+        "audit-logs",
+        auditState.purged
+      );
+      snapshotState.summary.archivePath = await this.archiveCategory(
+        runId,
+        "snapshots",
+        snapshotState.purged
+      );
+      rawState.summary.archived = rawState.purged.length;
+      auditState.summary.archived = auditState.purged.length;
+      snapshotState.summary.archived = snapshotState.purged.length;
 
-/**
- * Clean up webhook delivery logs older than the configured TTL.
- */
-export function cleanWebhookLogs(
-  store: RetentionStore,
-  cfg: RetentionConfig = DEFAULT_CONFIG.webhook_logs,
-  opts: { dryRun?: boolean; now?: Ms } = {}
-): CleanupResult {
-  const now = opts.now ?? Date.now();
-  const dryRun = opts.dryRun ?? false;
+      if (rawState.purged.length > 0) {
+        await this.dependencies.rawEventStore.replaceEvents(rawState.kept);
+        mutated.rawEvents = true;
+      }
 
-  let deleted = 0;
-  let skippedWindow = 0;
-  const deletedIds: string[] = [];
-  const remaining: WebhookLog[] = [];
+      if (auditState.purged.length > 0) {
+        this.dependencies.auditLogStore.replaceEntries(auditState.kept);
+        mutated.auditLogs = true;
+      }
 
-  for (const log of store.webhookLogs) {
-    if (deleted >= cfg.batchSize) {
-      remaining.push(log);
-      continue;
+      if (snapshotState.purged.length > 0) {
+        await this.dependencies.snapshotStore.replaceRetentionRecords(snapshotState.kept);
+        mutated.snapshots = true;
+      }
+
+      const completedAt = new Date().toISOString();
+      this.dependencies.auditTrail.append({
+        actor: this.policy.actor,
+        operation: "RETENTION_RUN",
+        params: {
+          runId,
+          startedAt,
+          completedAt,
+          replayActive,
+          reconciliationActive,
+          minimumReplayLedger,
+          rawEvents: rawState.summary,
+          auditLogs: auditState.summary,
+          snapshots: snapshotState.summary,
+        },
+        redactedParams: {
+          runId,
+          startedAt,
+          completedAt,
+          replayActive,
+          reconciliationActive,
+          minimumReplayLedger,
+          rawEvents: rawState.summary,
+          auditLogs: auditState.summary,
+          snapshots: snapshotState.summary,
+        },
+        ip: "127.0.0.1",
+        userAgent: "retention-worker",
+        effect: `Purged ${rawState.summary.purged} raw events, ${auditState.summary.purged} audit logs, and ${snapshotState.summary.purged} snapshots`,
+        success: true,
+      });
+    } catch (error) {
+      await this.rollbackRetentionRun(mutated, rawState, auditState, snapshotState);
+      throw error;
     }
-    const { eligible, reason } = isEligible(log.createdAt, false, now, cfg);
-    if (eligible) {
-      deletedIds.push(log.id);
-      deleted++;
-      if (!dryRun) continue;
-    } else {
-      if (reason === "window") skippedWindow++;
-    }
-    remaining.push(log);
   }
 
-  if (!dryRun) store.webhookLogs = remaining;
-
-  return { category: "webhook_logs", deleted, skippedHold: 0, skippedWindow, dryRun, deletedIds };
-}
-
-/**
- * Clean up operational logs older than the configured TTL.
- */
-export function cleanOperationalLogs(
-  store: RetentionStore,
-  cfg: RetentionConfig = DEFAULT_CONFIG.operational_logs,
-  opts: { dryRun?: boolean; now?: Ms } = {}
-): CleanupResult {
-  const now = opts.now ?? Date.now();
-  const dryRun = opts.dryRun ?? false;
-
-  let deleted = 0;
-  let skippedWindow = 0;
-  const deletedIds: string[] = [];
-  const remaining: OperationalLog[] = [];
-
-  for (const log of store.operationalLogs) {
-    if (deleted >= cfg.batchSize) {
-      remaining.push(log);
-      continue;
+  private async rollbackRetentionRun(
+    mutated: { rawEvents: boolean; auditLogs: boolean; snapshots: boolean },
+    rawState: CategorizedRetentionState<RawEvent>,
+    auditState: CategorizedRetentionState<AuditEntry>,
+    snapshotState: CategorizedRetentionState<SnapshotRetentionRecord>
+  ): Promise<void> {
+    if (mutated.snapshots) {
+      await this.dependencies.snapshotStore.replaceRetentionRecords(snapshotState.original);
     }
-    const { eligible, reason } = isEligible(log.createdAt, false, now, cfg);
-    if (eligible) {
-      deletedIds.push(log.id);
-      deleted++;
-      if (!dryRun) continue;
-    } else {
-      if (reason === "window") skippedWindow++;
+    if (mutated.auditLogs) {
+      this.dependencies.auditLogStore.replaceEntries(auditState.original);
     }
-    remaining.push(log);
+    if (mutated.rawEvents) {
+      await this.dependencies.rawEventStore.replaceEvents(rawState.original);
+    }
   }
 
-  if (!dryRun) store.operationalLogs = remaining;
+  private async archiveCategory<T>(runId: string, name: string, rows: T[]): Promise<string | null> {
+    if (rows.length === 0) {
+      return null;
+    }
 
-  return { category: "operational_logs", deleted, skippedHold: 0, skippedWindow, dryRun, deletedIds };
+    const archivePath = path.join(
+      this.policy.archiveDir,
+      `${runId}-${name}.json`
+    );
+    await this.dependencies.archiveWriter(archivePath, rows);
+    return archivePath;
+  }
+
+  private planRawEventRetention(
+    events: RawEvent[],
+    now: number,
+    minimumReplayLedger: number | null,
+    replayActive: boolean,
+    reconciliationActive: boolean
+  ): CategorizedRetentionState<RawEvent> {
+    const cutoff = new Date(now - this.policy.rawEventsMs).toISOString();
+    const expired = events.filter((event) => event.indexedAt <= cutoff);
+    const protectedEvents = expired.filter((event) =>
+      event.complianceHold ||
+      reconciliationActive ||
+      (replayActive && minimumReplayLedger !== null && event.ledger >= minimumReplayLedger)
+    );
+    const purged = expired
+      .filter((event) => !event.complianceHold)
+      .filter(
+        (event) =>
+          !reconciliationActive &&
+          !(replayActive && minimumReplayLedger !== null && event.ledger >= minimumReplayLedger)
+      )
+      .slice(0, this.policy.batchSize);
+    const purgedIds = new Set(purged.map((event) => event.id));
+    const kept = events.filter((event) => !purgedIds.has(event.id));
+
+    return {
+      original: events,
+      kept,
+      purged,
+      protectedCount: protectedEvents.length,
+      summary: {
+        retentionMs: this.policy.rawEventsMs,
+        cutoff,
+        scanned: events.length,
+        eligible: expired.length,
+        protected: protectedEvents.length,
+        purged: purged.length,
+        archived: 0,
+        archivePath: null,
+      },
+    };
+  }
+
+  private planTimestampRetention<T>(
+    rows: T[],
+    now: number,
+    retentionMs: number,
+    getTimestamp: (row: T) => string | number,
+    protectAllExpired: boolean
+  ): CategorizedRetentionState<T> {
+    const cutoffDate = new Date(now - retentionMs);
+    const cutoff = cutoffDate.toISOString();
+    const expired = rows.filter((row) => {
+      const rawValue = getTimestamp(row);
+      const timestamp =
+        typeof rawValue === "number" ? rawValue : new Date(rawValue).getTime();
+      return timestamp <= cutoffDate.getTime();
+    });
+    const purged = protectAllExpired ? [] : expired.slice(0, this.policy.batchSize);
+    const purgedIds = new Set(purged);
+    const kept = rows.filter((row) => !purgedIds.has(row));
+
+    return {
+      original: rows,
+      kept,
+      purged,
+      protectedCount: protectAllExpired ? expired.length : 0,
+      summary: {
+        retentionMs,
+        cutoff,
+        scanned: rows.length,
+        eligible: expired.length,
+        protected: protectAllExpired ? expired.length : 0,
+        purged: purged.length,
+        archived: 0,
+        archivePath: null,
+      },
+    };
+  }
 }
 
-/**
- * Run all four cleanup jobs in sequence and return their combined results.
- *
- * This is the entry point for a scheduled cron job.
- */
-export function runAllCleanupJobs(
-  store: RetentionStore,
-  config: Partial<Record<string, RetentionConfig>> = {},
-  opts: { dryRun?: boolean; now?: Ms } = {}
-): CleanupResult[] {
-  return [
-    cleanRawEvents(store, config.raw_events ?? DEFAULT_CONFIG.raw_events, opts),
-    cleanSnapshots(store, config.snapshots ?? DEFAULT_CONFIG.snapshots, opts),
-    cleanWebhookLogs(store, config.webhook_logs ?? DEFAULT_CONFIG.webhook_logs, opts),
-    cleanOperationalLogs(store, config.operational_logs ?? DEFAULT_CONFIG.operational_logs, opts),
-  ];
+export function createRetentionWorker(
+  policy: Partial<RetentionPolicy> = {},
+  dependencies: Partial<RetentionDependencies> = {}
+): RetentionWorker {
+  return new RetentionWorker(
+    { ...retentionConfig, ...policy },
+    { ...buildDefaultDependencies(), ...dependencies }
+  );
+}
+
+export const retentionWorker = createRetentionWorker();
+
+export function createInMemoryRetentionWorker(
+  rawEventStore: InMemoryRawEventStore,
+  dependencies: Partial<RetentionDependencies> = {},
+  policy: Partial<RetentionPolicy> = {}
+): RetentionWorker {
+  return createRetentionWorker(policy, {
+    rawEventStore,
+    ...dependencies,
+  });
 }

@@ -1,6 +1,31 @@
 import pool from './database';
 import { BestBidSnapshot, TopBidsSnapshot, BidEvent, TopBid } from '../types/snapshot';
 
+type SnapshotTableName = "best_bids" | "top_bids_snapshots";
+
+export interface SnapshotRetentionRecord {
+  table: SnapshotTableName;
+  invoiceId: string;
+  lastUpdated: number;
+  payload: Record<string, unknown>;
+}
+
+interface QueryResultLike<T = any> {
+  rows: T[];
+}
+
+interface SnapshotQueryable {
+  query<T = any>(sql: string, params?: unknown[]): Promise<QueryResultLike<T>>;
+}
+
+interface SnapshotClient extends SnapshotQueryable {
+  release(): void;
+}
+
+interface SnapshotPoolLike extends SnapshotQueryable {
+  connect(): Promise<SnapshotClient>;
+}
+
 export class SnapshotService {
   private static readonly TOP_BIDS_COUNT = 5;
 
@@ -251,5 +276,91 @@ export class SnapshotService {
 
     // Then lowest ledger index
     return newBid.ledger_index < currentBest.ledger_index;
+  }
+
+  static async getAllRetentionRecords(
+    db: SnapshotQueryable = pool as unknown as SnapshotQueryable
+  ): Promise<SnapshotRetentionRecord[]> {
+    const bestBids = await db.query<any>(
+      `SELECT invoice_id, bid_id, investor, bid_amount, expected_return,
+              timestamp, expiration_timestamp, block_timestamp,
+              transaction_sequence, ledger_index, last_updated
+       FROM best_bids`
+    );
+    const topBids = await db.query<any>(
+      `SELECT invoice_id, top_bids, last_updated
+       FROM top_bids_snapshots`
+    );
+
+    return [
+      ...bestBids.rows.map((row) => ({
+        table: "best_bids" as const,
+        invoiceId: row.invoice_id,
+        lastUpdated: Number(row.last_updated),
+        payload: { ...row },
+      })),
+      ...topBids.rows.map((row) => ({
+        table: "top_bids_snapshots" as const,
+        invoiceId: row.invoice_id,
+        lastUpdated: Number(row.last_updated),
+        payload: { ...row },
+      })),
+    ].sort((a, b) => a.lastUpdated - b.lastUpdated);
+  }
+
+  static async replaceRetentionRecords(
+    records: SnapshotRetentionRecord[],
+    db: SnapshotPoolLike = pool as unknown as SnapshotPoolLike
+  ): Promise<void> {
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM best_bids");
+      await client.query("DELETE FROM top_bids_snapshots");
+
+      for (const record of records) {
+        if (record.table === "best_bids") {
+          const row = record.payload;
+          await client.query(
+            `INSERT INTO best_bids (
+              invoice_id, bid_id, investor, bid_amount, expected_return,
+              timestamp, expiration_timestamp, block_timestamp,
+              transaction_sequence, ledger_index, last_updated
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            [
+              row.invoice_id,
+              row.bid_id,
+              row.investor,
+              row.bid_amount,
+              row.expected_return,
+              row.timestamp,
+              row.expiration_timestamp,
+              row.block_timestamp,
+              row.transaction_sequence,
+              row.ledger_index,
+              row.last_updated,
+            ]
+          );
+          continue;
+        }
+
+        await client.query(
+          `INSERT INTO top_bids_snapshots (invoice_id, top_bids, last_updated)
+           VALUES ($1, $2, $3)`,
+          [
+            record.payload.invoice_id,
+            JSON.stringify(record.payload.top_bids),
+            record.payload.last_updated,
+          ]
+        );
+      }
+
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }

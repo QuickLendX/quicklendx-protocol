@@ -224,6 +224,28 @@ export class ReplayService {
     this.failureAtLedger = ledger;
   }
 
+  public getActiveRetentionLock(): {
+    active: boolean;
+    minimumLedger: number | null;
+    runIds: string[];
+  } {
+    const activeRuns = [...this.runs.values()].filter((run) =>
+      run.status === "pending" || run.status === "running" || run.status === "paused"
+    );
+
+    if (activeRuns.length === 0) {
+      return { active: false, minimumLedger: null, runIds: [] };
+    }
+
+    return {
+      active: true,
+      minimumLedger: Math.min(
+        ...activeRuns.map((run) => Math.max(run.fromLedger, run.cursorLedger))
+      ),
+      runIds: activeRuns.map((run) => run.id),
+    };
+  }
+
   private validateRequest(payload: ReplayStartRequest): void {
     if (payload.toLedger < payload.fromLedger) {
       throw new ReplayError("toLedger must be >= fromLedger", "INVALID_LEDGER_RANGE", 400);

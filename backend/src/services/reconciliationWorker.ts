@@ -113,4 +113,8 @@ export class ReconciliationWorker {
   static getAllReports(): DriftReport[] {
     return this.reports;
   }
+
+  static isReconciliationRunning(): boolean {
+    return this.isRunning;
+  }
 }
