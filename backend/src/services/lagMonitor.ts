@@ -156,6 +156,37 @@ export class LagMonitor {
     const s = await this.getLagStatus();
     return s.isCritical;
   }
+
+  // -------------------------------------------------------------------------
+  // Ingestion metrics (added for reorg handling)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Record a successful batch ingestion.
+   * Called after commitBatch succeeds in ingestBatch.
+   */
+  recordIngestion(cursor: number, eventCount: number): void {
+    // In production, this would increment a Prometheus counter
+    // and update the last-seen cursor gauge.
+    // For now, we log at debug level.
+    if (process.env["NODE_ENV"] !== "test") {
+      console.debug(
+        `[LagMonitor] ingestion: cursor=${cursor}, events=${eventCount}`
+      );
+    }
+  }
+
+  /**
+   * Record a reorg rollback event.
+   * Called when rollbackTo is executed in rollbackAndReingest.
+   */
+  recordRollback(cursor: number): void {
+    // In production, this would increment a rollback counter
+    // and emit an alert if rollbacks are frequent.
+    console.warn(
+      `[LagMonitor] rollback: cursor=${cursor}, timestamp=${new Date().toISOString()}`
+    );
+  }
 }
 
 export const lagMonitor = LagMonitor.getInstance();
