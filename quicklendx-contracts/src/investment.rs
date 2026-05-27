@@ -1,5 +1,5 @@
 use crate::errors::QuickLendXError;
-use crate::storage::PERSISTENT_TTL_THRESHOLD;
+use crate::storage::bump_persistent;
 // Re-export from crate::types so other modules can continue to import from crate::investment.
 pub use crate::types::{InsuranceCoverage, Investment, InvestmentStatus};
 use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec};
@@ -338,13 +338,13 @@ impl InvestmentStorage {
 
     pub fn store_investment(env: &Env, investment: &Investment) {
         env.storage()
-            .instance()
+            .persistent()
             .set(&investment.investment_id, investment);
-        env.storage().instance().extend_ttl(&investment.investment_id, PERSISTENT_TTL_THRESHOLD);
+        bump_persistent(env, &investment.investment_id);
 
         let invoice_index_key = Self::invoice_index_key(&investment.invoice_id);
-        env.storage().instance().set(&invoice_index_key, &investment.investment_id);
-        env.storage().instance().extend_ttl(&invoice_index_key, PERSISTENT_TTL_THRESHOLD);
+        env.storage().persistent().set(&invoice_index_key, &investment.investment_id);
+        bump_persistent(env, &invoice_index_key);
 
         // Add to investor index
         Self::add_to_investor_index(env, &investment.investor, &investment.investment_id);
@@ -356,16 +356,19 @@ impl InvestmentStorage {
     }
 
     pub fn get_investment(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
-        let result = env.storage().instance().get(investment_id);
+        let result = env.storage().persistent().get(investment_id);
         if result.is_some() {
-            env.storage().instance().extend_ttl(investment_id, PERSISTENT_TTL_THRESHOLD);
+            bump_persistent(env, investment_id);
         }
         result
     }
 
     pub fn get_investment_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Investment> {
         let index_key = Self::invoice_index_key(invoice_id);
-        let investment_id: Option<BytesN<32>> = env.storage().instance().get(&index_key);
+        let investment_id: Option<BytesN<32>> = env.storage().persistent().get(&index_key);
+        if investment_id.is_some() {
+            bump_persistent(env, &index_key);
+        }
         investment_id
             .and_then(|id| Self::get_investment(env, &id))
             .filter(|inv| inv.invoice_id == *invoice_id)
@@ -385,7 +388,7 @@ impl InvestmentStorage {
         // Retrieve the previous status to validate the transition.
         let previous_status = env
             .storage()
-            .instance()
+            .persistent()
             .get::<_, Investment>(&investment.investment_id)
             .map(|i| i.status)
             .unwrap_or(InvestmentStatus::Active); // safe default for new records
@@ -402,13 +405,13 @@ impl InvestmentStorage {
         }
 
         env.storage()
-            .instance()
+            .persistent()
             .set(&investment.investment_id, investment);
-        env.storage().instance().extend_ttl(&investment.investment_id, PERSISTENT_TTL_THRESHOLD);
+        bump_persistent(env, &investment.investment_id);
 
         let invoice_index_key = Self::invoice_index_key(&investment.invoice_id);
-        env.storage().instance().set(&invoice_index_key, &investment.investment_id);
-        env.storage().instance().extend_ttl(&invoice_index_key, PERSISTENT_TTL_THRESHOLD);
+        env.storage().persistent().set(&invoice_index_key, &investment.investment_id);
+        bump_persistent(env, &invoice_index_key);
     }
 
     // -- Active-investment index -----------------------------------------------
@@ -416,7 +419,7 @@ impl InvestmentStorage {
     fn add_to_active_index(env: &Env, investment_id: &BytesN<32>) {
         let mut ids: Vec<BytesN<32>> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&ACTIVE_INDEX_KEY)
             .unwrap_or_else(|| Vec::new(env));
         // Deduplicate
@@ -426,13 +429,14 @@ impl InvestmentStorage {
             }
         }
         ids.push_back(investment_id.clone());
-        env.storage().instance().set(&ACTIVE_INDEX_KEY, &ids);
+        env.storage().persistent().set(&ACTIVE_INDEX_KEY, &ids);
+        bump_persistent(env, &ACTIVE_INDEX_KEY);
     }
 
     fn remove_from_active_index(env: &Env, investment_id: &BytesN<32>) {
         let ids: Vec<BytesN<32>> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&ACTIVE_INDEX_KEY)
             .unwrap_or_else(|| Vec::new(env));
         let mut updated = Vec::new(env);
@@ -441,17 +445,23 @@ impl InvestmentStorage {
                 updated.push_back(id);
             }
         }
-        env.storage().instance().set(&ACTIVE_INDEX_KEY, &updated);
+        env.storage().persistent().set(&ACTIVE_INDEX_KEY, &updated);
+        bump_persistent(env, &ACTIVE_INDEX_KEY);
     }
 
     /// Return all investment IDs currently in `Active` status.
     ///
     /// Used by `validate_no_orphan_investments` and off-chain monitoring.
     pub fn get_active_investment_ids(env: &Env) -> Vec<BytesN<32>> {
-        env.storage()
-            .instance()
+        let result: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
             .get(&ACTIVE_INDEX_KEY)
-            .unwrap_or_else(|| Vec::new(env))
+            .unwrap_or_else(|| Vec::new(env));
+        if !result.is_empty() {
+            bump_persistent(env, &ACTIVE_INDEX_KEY);
+        }
+        result
     }
 
     /// Scan the active index and verify every listed investment is still `Active`.
@@ -484,10 +494,15 @@ impl InvestmentStorage {
     /// Get all investments for an investor
     pub fn get_investments_by_investor(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
         let key = Self::investor_index_key(investor);
-        env.storage()
-            .instance()
+        let result: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
             .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+            .unwrap_or_else(|| Vec::new(env));
+        if !result.is_empty() {
+            bump_persistent(env, &key);
+        }
+        result
     }
 
     /// Add investment to investor index
@@ -504,7 +519,8 @@ impl InvestmentStorage {
         }
         if !exists {
             investments.push_back(investment_id.clone());
-            env.storage().instance().set(&key, &investments);
+            env.storage().persistent().set(&key, &investments);
+            bump_persistent(env, &key);
         }
     }
 

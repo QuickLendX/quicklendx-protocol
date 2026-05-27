@@ -108,9 +108,9 @@ The Soroban host serializes the enum discriminant with the payload, guaranteeing
 - TTL threshold covers: max_due_date_days (365 days) + grace_period_seconds (7 days) + 30-day safety margin
 - TTL extension is applied on every read/write of long-lived keys in all storage modules:
   - InvoiceStorage (persistent storage): store, get, update, and all index operations (business, status, customer, tax_id, tag, category)
-  - BidStorage (instance storage): store_bid, get_bid, update_bid
-  - InvestmentStorage (instance storage): store_investment, get_investment, update_investment
-  - EscrowStorage (instance storage): store_escrow, get_escrow, update_escrow, get_escrow_by_invoice
+  - BidStorage (persistent storage): store_bid, get_bid, update_bid, index writes/reads
+  - InvestmentStorage (persistent storage): store_investment, get_investment, update_investment, investor/active indexes
+  - EscrowStorage (persistent storage): store_escrow, get_escrow, update_escrow, get_escrow_by_invoice
 
 ### Upgrade Safety
 - Storage keys are designed to be backward compatible

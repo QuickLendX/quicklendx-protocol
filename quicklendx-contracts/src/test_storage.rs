@@ -1437,7 +1437,7 @@ fn test_ttl_extension_get_renews_ttl() {
     });
 }
 
-// === INSTANCE STORAGE TTL TESTS ===
+// === BID/INVESTMENT/ESCROW TTL TESTS ===
 
 #[test]
 fn test_ttl_extension_bid_survival() {
