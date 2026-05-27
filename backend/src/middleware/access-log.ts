@@ -12,9 +12,11 @@
 
 import { Request, Response, NextFunction } from "express";
 import { redactPii, hashForLog, isPiiField, isSensitiveField } from "../services/kycService";
+import { getCorrelationId } from "../lib/requestContext";
 
 // Log entry interface
 export interface AccessLogEntry {
+  correlationId?: string;
   timestamp: string;
   action: "read" | "write" | "update" | "delete";
   resource: string;
@@ -36,9 +38,11 @@ const MAX_LOGS = 10000;
 /**
  * Log an access event to sensitive data
  */
-export function logAccess(entry: Omit<AccessLogEntry, "timestamp">): void {
+export function logAccess(entry: Omit<AccessLogEntry, "timestamp" | "correlationId">): void {
+  const correlationId = getCorrelationId();
   const logEntry: AccessLogEntry = {
     ...entry,
+    correlationId: correlationId ?? undefined,
     timestamp: new Date().toISOString()
   };
 
@@ -50,7 +54,8 @@ export function logAccess(entry: Omit<AccessLogEntry, "timestamp">): void {
   }
 
   // In production, this would send to a logging service (e.g., Winston, ELK stack)
-  console.log(`[ACCESS] ${logEntry.action.toUpperCase()} ${logEntry.resource} - User: ${logEntry.userId || "anonymous"} - IP: ${logEntry.ipAddress || "unknown"}`);
+  const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+  console.log(`${correlationPrefix}[ACCESS] ${logEntry.action.toUpperCase()} ${logEntry.resource} - User: ${logEntry.userId || "anonymous"} - IP: ${logEntry.ipAddress || "unknown"}`);
 }
 
 /**

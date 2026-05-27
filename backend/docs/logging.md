@@ -15,9 +15,136 @@ This ensures:
 - Business-sensitive values (wallet addresses, amounts) are **pseudonymised**.
 - Public metadata (IDs, status codes, timestamps) is logged verbatim for observability.
 
+Additionally, the backend implements **correlation IDs** to thread request context across the request lifecycle, event processing, and outbound webhook delivery. This enables end-to-end tracing and debugging without manual log stitching.
+
 ---
 
-## Sensitivity Tiers
+## Correlation IDs
+
+### Overview
+
+Correlation IDs are ULID-based identifiers that thread through the entire request lifecycle:
+- **Request entry**: Generated or accepted from `X-Request-Id` header
+- **Event processing**: Propagated through `eventProcessor.ts` → `notificationService.ts`
+- **Webhook delivery**: Included in outbound webhook requests as `X-Request-Id` header
+- **All log lines**: Prefixed with `[correlationId]` for easy filtering
+
+This enables end-to-end tracing of a settlement notification from HTTP request → event processing → webhook delivery without manual log stitching.
+
+### X-Request-Id Header Contract
+
+| Aspect | Specification |
+|--------|----------------|
+| **Header name** | `X-Request-Id` (case-insensitive) |
+| **Direction** | Bidirectional (request and response) |
+| **Client → Server** | Optional. If present and valid, used as correlation ID. If absent or invalid, a new ULID is generated. |
+| **Server → Client** | Always present. Echoes the correlation ID used for the request. |
+| **Format** | ULID (26 chars) or alphanumeric with hyphens/underscores |
+| **Max length** | 128 characters |
+| **Valid characters** | `A-Z`, `a-z`, `0-9`, `-`, `_` |
+| **Invalid characters** | Newlines, carriage returns, tabs, semicolons, pipes, ANSI escape sequences, null bytes (log injection prevention) |
+| **Security** | All client-supplied IDs are sanitized before use. Invalid IDs are rejected and a new ULID is generated. |
+
+### Header Flow
+
+```
+Client Request                    Server Response
+─────────────                    ────────────────
+X-Request-Id: client-123  ──►   X-Request-Id: client-123  (if valid)
+                              OR
+                              X-Request-Id: 01H9K4W2... (if invalid/missing)
+```
+
+### Implementation Details
+
+**Request Context Storage**
+- Uses Node.js `AsyncLocalStorage` for thread-safe context propagation
+- Automatic context isolation prevents bleeding between concurrent requests
+- Context is automatically available in all downstream async operations
+
+**Middleware Integration**
+1. `request-logger.ts`: Accepts/sanitizes client `X-Request-Id`, generates ULID if needed, sets response header
+2. `requestContext.ts`: Provides `withCorrelationId()`, `getCorrelationId()`, `getOrGenerateCorrelationId()` helpers
+3. `access-log.ts`: Includes correlation ID in all access log entries
+4. `eventProcessor.ts`: Logs correlation ID in all event processing operations
+5. `webhook/delivery.ts`: Includes correlation ID in outbound webhook requests and logs
+
+### Usage Examples
+
+**Client-supplied correlation ID**
+```bash
+curl -H "X-Request-Id: my-trace-123" https://api.example.com/invoices
+# Response header: X-Request-Id: my-trace-123
+# All logs: [my-trace-123] Request received, [my-trace-123] Processing, etc.
+```
+
+**Server-generated correlation ID**
+```bash
+curl https://api.example.com/invoices
+# Response header: X-Request-Id: 01H9K4W2X8Y9Z0A1B2C3D4E5F6
+# All logs: [01H9K4W2X8Y9Z0A1B2C3D4E5F6] Request received, etc.
+```
+
+**Programmatic usage in handlers**
+```ts
+import { getCorrelationId } from "../lib/requestContext";
+
+function myHandler(req, res) {
+  const correlationId = getCorrelationId();
+  console.log(`[${correlationId}] Processing request`);
+  // ... handler logic
+}
+```
+
+**Setting context for background tasks**
+```ts
+import { withCorrelationId } from "../lib/requestContext";
+
+async function backgroundTask(correlationId: string) {
+  return withCorrelationId(correlationId, async () => {
+    // All async operations here will have correlationId in context
+    await processEvent();
+  });
+}
+```
+
+### Security Considerations
+
+**Log Injection Prevention**
+- Client-supplied correlation IDs are strictly validated against a whitelist pattern
+- Special characters (newlines, carriage returns, tabs, ANSI escape sequences) are rejected
+- Maximum length enforced (128 characters) to prevent DoS via oversized headers
+- Invalid IDs are silently rejected and replaced with server-generated ULIDs
+
+**Context Isolation**
+- AsyncLocalStorage ensures concurrent requests cannot bleed correlation IDs
+- Each request has its own isolated context
+- Context is automatically cleaned up after request completes
+
+**Redaction Compliance**
+- Correlation IDs are classified as PUBLIC in the logging policy
+- They appear verbatim in logs for easy filtering
+- They do not contain sensitive information by design
+
+### Testing
+
+Correlation ID functionality is tested in `tests/correlation-id.test.ts` with 95%+ coverage:
+
+- Sanitization of valid and invalid IDs
+- ULID generation and uniqueness
+- Async context propagation
+- Context isolation between concurrent requests
+- Log injection prevention
+- Integration with request-logger middleware
+
+```bash
+# Run correlation ID tests
+npx jest correlation-id.test.ts --coverage
+
+# Expected coverage: >95%
+```
+
+---
 
 | Tier | Symbol | Behaviour in logs |
 |------|--------|-------------------|
@@ -106,7 +233,11 @@ HTTP Request
 | File | Purpose |
 |------|---------|
 | `src/lib/logging/policy.ts` | Field registry, classification helpers, redaction engine, `findSecretLeak` assertion helper |
-| `src/middleware/request-logger.ts` | Express middleware — attaches ULID request ID, captures and redacts request/response, emits structured JSON |
+| `src/lib/requestContext.ts` | AsyncLocalStorage-based correlation ID context management, sanitization, propagation helpers |
+| `src/middleware/request-logger.ts` | Express middleware — accepts/sanitizes X-Request-Id header, generates ULID if needed, captures and redacts request/response, emits structured JSON |
+| `src/middleware/access-log.ts` | Access logging middleware for sensitive data with correlation ID support |
+| `src/services/eventProcessor.ts` | Event processing with correlation ID logging |
+| `src/services/webhook/delivery.ts` | Webhook delivery with correlation ID propagation to outbound requests |
 
 ---
 

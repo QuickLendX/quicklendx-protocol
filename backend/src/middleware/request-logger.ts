@@ -25,6 +25,11 @@ import {
   SafeRequestSnapshot,
   SafeResponseSnapshot,
 } from "../lib/logging/policy";
+import {
+  sanitizeCorrelationId,
+  generateCorrelationId,
+  withCorrelationId,
+} from "../lib/requestContext";
 
 // ── Structured log entry ──────────────────────────────────────────────────────
 
@@ -102,12 +107,17 @@ export function createRequestLogger(
       return next();
     }
 
-    const requestId = ulid();
+    // Accept correlation ID from trusted header, or generate a new ULID
+    const clientSuppliedId = req.headers["x-request-id"] as string | undefined;
+    const sanitizedId = sanitizeCorrelationId(clientSuppliedId);
+    const correlationId = sanitizedId ?? generateCorrelationId();
+
     const startMs = Date.now();
 
-    // Attach the request ID so downstream handlers can reference it
-    (req as any).requestId = requestId;
-    res.setHeader("X-Request-Id", requestId);
+    // Attach the correlation ID so downstream handlers can reference it
+    (req as any).requestId = correlationId;
+    (req as any).correlationId = correlationId;
+    res.setHeader("X-Request-Id", correlationId);
 
     // Build a safe snapshot of the incoming request
     const safeRequest = sanitiseRequest({
@@ -133,7 +143,7 @@ export function createRequestLogger(
     res.on("finish", () => {
       try {
         const entry: RequestLogEntry = {
-          requestId,
+          requestId: correlationId,
           timestamp: new Date().toISOString(),
           method: req.method,
           path: req.path,
@@ -145,7 +155,7 @@ export function createRequestLogger(
         logger.info(entry);
       } catch (err) {
         logger.error("request-logger: redaction error", {
-          requestId,
+          requestId: correlationId,
           err: String(err),
         });
       }

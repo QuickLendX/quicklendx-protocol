@@ -3,6 +3,7 @@ import type { IncomingMessage } from "node:http";
 import type { WebhookEgressPolicy } from "./egressPolicy";
 import { validateWebhookUrl, WebhookUrlValidationError } from "./urlValidation";
 import { createWebhookSecureLookup } from "./secureLookup";
+import { getCorrelationId } from "../../lib/requestContext";
 
 export class WebhookDeliveryError extends Error {
   readonly code: string;
@@ -84,6 +85,9 @@ function requestOnceHttps(
   agent: SecureAgent,
 ): Promise<OnceResult> {
   return new Promise((resolve, reject) => {
+    const correlationId = getCorrelationId();
+    const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+    
     const req = https.request(
       target,
       {
@@ -92,12 +96,14 @@ function requestOnceHttps(
         headers: {
           "content-type": "application/json",
           "content-length": Buffer.byteLength(jsonBody),
+          ...(correlationId ? { "x-request-id": correlationId } : {}),
         },
         timeout: policy.timeoutMs,
       },
       (res) => {
         readBodyWithByteLimit(res, policy.maxResponseBytes)
           .then((body) => {
+            console.log(`${correlationPrefix}WebhookDelivery: Response ${res.statusCode} from ${target.href}`);
             resolve({
               statusCode: res.statusCode ?? 0,
               headers: res.headers,
@@ -110,6 +116,7 @@ function requestOnceHttps(
 
     req.on("timeout", () => {
       req.destroy();
+      console.log(`${correlationPrefix}WebhookDelivery: Timeout for ${target.href}`);
       reject(
         new WebhookDeliveryError("TIMEOUT", "Webhook delivery exceeded timeout"),
       );
@@ -117,6 +124,7 @@ function requestOnceHttps(
 
     req.on("error", (err) => {
       if ((err as NodeJS.ErrnoException).code === "EADDRNOTAVAIL") {
+        console.log(`${correlationPrefix}WebhookDelivery: Egress blocked for ${target.href}`);
         reject(
           new WebhookDeliveryError(
             "EGRESS_BLOCKED",
@@ -125,6 +133,7 @@ function requestOnceHttps(
         );
         return;
       }
+      console.log(`${correlationPrefix}WebhookDelivery: Transport error for ${target.href}: ${err instanceof Error ? err.message : "unknown"}`);
       reject(
         new WebhookDeliveryError(
           "TRANSPORT_ERROR",
@@ -151,6 +160,9 @@ export async function deliverWebhookJson(
   policy: WebhookEgressPolicy,
   options?: WebhookDeliveryOptions,
 ): Promise<WebhookDeliveryResult> {
+  const correlationId = getCorrelationId();
+  const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+  
   const body = JSON.stringify(payload);
   const agent = options?.createAgent?.() ?? createWebhookAgent();
   const doRequest = options?.requestImpl ?? requestOnceHttps;
@@ -158,14 +170,18 @@ export async function deliverWebhookJson(
   let currentUrl = rawUrl;
   let redirectCount = 0;
 
+  console.log(`${correlationPrefix}WebhookDelivery: Starting delivery to ${rawUrl}`);
+
   for (;;) {
     let validated: URL;
     try {
       validated = validateWebhookUrl(currentUrl, policy);
     } catch (e) {
       if (e instanceof WebhookUrlValidationError) {
+        console.log(`${correlationPrefix}WebhookDelivery: URL validation failed for ${currentUrl}: ${e.message}`);
         throw new WebhookDeliveryError(e.code, e.message);
       }
+      console.log(`${correlationPrefix}WebhookDelivery: Unexpected validation error for ${currentUrl}`);
       throw new WebhookDeliveryError(
         "VALIDATION_FAILED",
         e instanceof Error ? e.message : "Webhook URL validation failed",
@@ -176,6 +192,7 @@ export async function deliverWebhookJson(
 
     if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
       if (redirectCount >= policy.maxRedirects) {
+        console.log(`${correlationPrefix}WebhookDelivery: Too many redirects for ${rawUrl}`);
         throw new WebhookDeliveryError(
           "TOO_MANY_REDIRECTS",
           "Webhook exceeded maximum redirect count",
@@ -183,9 +200,11 @@ export async function deliverWebhookJson(
       }
       redirectCount += 1;
       currentUrl = new URL(res.headers.location, validated).href;
+      console.log(`${correlationPrefix}WebhookDelivery: Following redirect to ${currentUrl}`);
       continue;
     }
 
+    console.log(`${correlationPrefix}WebhookDelivery: Completed delivery to ${validated.href} with status ${res.statusCode}`);
     return {
       finalUrl: validated.href,
       statusCode: res.statusCode,

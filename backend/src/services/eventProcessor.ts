@@ -1,5 +1,6 @@
 import { notificationService } from './notificationService';
 import { NotificationEvent, NotificationType } from '../types/contract';
+import { getCorrelationId, withCorrelationId } from '../lib/requestContext';
 
 export class EventProcessor {
   private static instance: EventProcessor;
@@ -22,6 +23,8 @@ export class EventProcessor {
     amount: string,
     timestamp: number
   ): Promise<void> {
+    const correlationId = getCorrelationId();
+    
     // Notify business that invoice is funded
     const businessEvent: NotificationEvent = {
       id: `${eventId}_business`,
@@ -35,6 +38,8 @@ export class EventProcessor {
     await notificationService.processNotification(businessEvent);
 
     // Could also notify investor, but for now focusing on business notifications
+    const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+    console.log(`${correlationPrefix}EventProcessor: Processed InvoiceSettled event ${eventId}`);
   }
 
   // Process payment recorded event
@@ -45,6 +50,8 @@ export class EventProcessor {
     amount: string,
     timestamp: number
   ): Promise<void> {
+    const correlationId = getCorrelationId();
+    
     // Notify business that payment was received
     const businessEvent: NotificationEvent = {
       id: `${eventId}_business`,
@@ -56,6 +63,9 @@ export class EventProcessor {
     };
 
     await notificationService.processNotification(businessEvent);
+    
+    const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+    console.log(`${correlationPrefix}EventProcessor: Processed PaymentRecorded event ${eventId}`);
   }
 
   // Process dispute created event
@@ -65,6 +75,8 @@ export class EventProcessor {
     initiator: string,
     timestamp: number
   ): Promise<void> {
+    const correlationId = getCorrelationId();
+    
     // Notify relevant parties about dispute
     const disputeEvent: NotificationEvent = {
       id: `${eventId}_dispute`,
@@ -75,6 +87,9 @@ export class EventProcessor {
     };
 
     await notificationService.processNotification(disputeEvent);
+    
+    const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+    console.log(`${correlationPrefix}EventProcessor: Processed DisputeCreated event ${eventId}`);
   }
 
   // Process dispute resolved event
@@ -84,6 +99,8 @@ export class EventProcessor {
     resolvedBy: string,
     timestamp: number
   ): Promise<void> {
+    const correlationId = getCorrelationId();
+    
     // Notify relevant parties about resolution
     const resolutionEvent: NotificationEvent = {
       id: `${eventId}_resolution`,
@@ -94,11 +111,15 @@ export class EventProcessor {
     };
 
     await notificationService.processNotification(resolutionEvent);
+    
+    const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+    console.log(`${correlationPrefix}EventProcessor: Processed DisputeResolved event ${eventId}`);
   }
 
   // Generic event processor that can be called from indexer
   public async processEvent(event: any): Promise<void> {
     const eventId = event.id || `${event.type}_${event.timestamp}`;
+    const correlationId = getCorrelationId();
 
     switch (event.type) {
       case 'InvoiceSettled':
@@ -141,7 +162,8 @@ export class EventProcessor {
         break;
 
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+        console.log(`${correlationPrefix}Unhandled event type: ${event.type}`);
     }
   }
 }
