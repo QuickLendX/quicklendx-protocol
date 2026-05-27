@@ -56,6 +56,10 @@ are infrequent but must be visible within a short window.  A 10-second
   purposes.
 - After 40 s the cache must revalidate before serving.
 
+**Portfolio** — `GET /api/v1/portfolio`
+
+Portfolio records represent the investor's current active, completed, defaulted, or refunded investments. They change when bids are accepted or invoices settle, which is moderately frequent during peak trading. A 10-second short TTL caching (`CC_SHORT`) is applied to allow fast UI updates while avoiding database load on repeated visits.
+
 ### 2.2 Cacheable endpoints (long TTL)
 
 **Settlements** — `GET /api/v1/settlements`, `GET /api/v1/settlements/:id`
@@ -70,7 +74,7 @@ window is safe because:
 
 ### 2.3 Non-cacheable endpoints (no-store)
 
-**Bids** — `GET /api/v1/bids`
+**Bids** — `GET /api/v1/bids`, `GET /api/v1/bids/best/:invoiceId`, `GET /api/v1/bids/top/:invoiceId`
 
 > **Correctness invariant**: a client must never act on a stale bid list.
 
@@ -103,7 +107,10 @@ is mandatory for the same reasons as bids.
 |----------|-----------|----------|
 | `GET /api/v1/invoices` | `public, max-age=10, stale-while-revalidate=30` | `CC_SHORT` |
 | `GET /api/v1/invoices/:id` | `public, max-age=10, stale-while-revalidate=30` | `CC_SHORT` |
+| `GET /api/v1/portfolio` | `public, max-age=10, stale-while-revalidate=30` | `CC_SHORT` |
 | `GET /api/v1/bids` | `no-store` | `CC_NO_STORE` |
+| `GET /api/v1/bids/best/:invoiceId` | `no-store` | `CC_NO_STORE` |
+| `GET /api/v1/bids/top/:invoiceId` | `no-store` | `CC_NO_STORE` |
 | `GET /api/v1/settlements` | `public, max-age=60, stale-while-revalidate=120` | `CC_LONG` |
 | `GET /api/v1/settlements/:id` | `public, max-age=60, stale-while-revalidate=120` | `CC_LONG` |
 | `GET /api/v1/invoices/:id/disputes` | `no-store` | `CC_NO_STORE` |

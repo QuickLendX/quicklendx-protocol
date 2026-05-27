@@ -4,6 +4,7 @@ import {
   applyPagination,
   PaginationError,
 } from "../../utils/pagination";
+import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
 
 export interface PortfolioEntry {
   id: string;
@@ -44,6 +45,11 @@ export const getPortfolio = async (
 
     const filtered = MOCK_PORTFOLIO.filter((p) => p.investor === investor);
     const result = applyPagination(filtered, "invested_at", params);
+
+    if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body: result })) {
+      res.status(304).end();
+      return;
+    }
     res.json(result);
   } catch (error) {
     if (error instanceof PaginationError) {

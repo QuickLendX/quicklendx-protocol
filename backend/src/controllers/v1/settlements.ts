@@ -29,11 +29,12 @@ export const getSettlements = async (
     let filtered = [...MOCK_SETTLEMENTS];
     if (invoice_id) filtered = filtered.filter((s) => s.invoice_id === invoice_id);
 
-    if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body: filtered })) {
+    const body = { data: filtered, freshness: freshnessService.getFreshness() };
+    if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body })) {
       res.status(304).end();
       return;
     }
-    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
+    res.json(body);
   } catch (error) {
     if (error instanceof PaginationError) {
       return res.status(400).json({

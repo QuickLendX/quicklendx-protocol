@@ -22,7 +22,12 @@ export const getInvoices = async (
 
     const filtered = invoiceStore.findInvoices(filter);
 
-    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
+    const body = { data: filtered, freshness: freshnessService.getFreshness() };
+    if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body })) {
+      res.status(304).end();
+      return;
+    }
+    res.json(body);
   } catch (error) {
     next(error);
   }
