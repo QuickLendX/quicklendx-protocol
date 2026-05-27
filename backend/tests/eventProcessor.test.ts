@@ -9,6 +9,16 @@ jest.mock('../src/services/notificationService', () => ({
   },
 }));
 
+// Mock the settlement orchestrator to avoid DB dependency
+jest.mock('../src/services/settlementOrchestrator', () => ({
+  settlementOrchestrator: {
+    createPending: jest.fn(),
+    startProcessing: jest.fn(),
+    completeProcessing: jest.fn(),
+    failProcessing: jest.fn(),
+  },
+}));
+
 import { notificationService } from '../src/services/notificationService';
 
 describe("EventProcessor", () => {
