@@ -92,13 +92,19 @@ export function computeETag(body: string): string {
 export function extractLastModified(
   data: unknown
 ): Date | null {
-  const records = Array.isArray(data) ? data : [data];
+  let records = Array.isArray(data) ? data : [data];
+
+  if (data && typeof data === "object" && !Array.isArray(data) && "data" in data) {
+    const inner = (data as Record<string, unknown>).data;
+    records = Array.isArray(inner) ? inner : [inner];
+  }
+
   let maxTs = 0;
 
   for (const record of records) {
     if (record === null || typeof record !== "object") continue;
     const r = record as Record<string, unknown>;
-    for (const field of ["updated_at", "timestamp", "created_at"] as const) {
+    for (const field of ["updated_at", "timestamp", "created_at", "invested_at"] as const) {
       const v = r[field];
       if (typeof v === "number" && v > maxTs) {
         maxTs = v;

@@ -17,6 +17,7 @@ const router = Router();
 router.use("/invoices", invoiceRoutes);
 router.use("/bids", bidRoutes);
 router.use("/settlements", settlementRoutes);
+router.use("/portfolio", portfolioRoutes);
 router.use("/test-errors", testErrorRoutes);
 router.use("/webhooks", webhookRoutes);
 router.use("/notifications", notificationRoutes);

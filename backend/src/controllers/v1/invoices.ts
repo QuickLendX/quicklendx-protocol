@@ -49,7 +49,12 @@ export const getInvoices = async (
     if (business) filtered = filtered.filter((i) => i.business === business);
     if (status) filtered = filtered.filter((i) => i.status === status);
 
-    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
+    const body = { data: filtered, freshness: freshnessService.getFreshness() };
+    if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body })) {
+      res.status(304).end();
+      return;
+    }
+    res.json(body);
   } catch (error) {
     next(error);
   }
