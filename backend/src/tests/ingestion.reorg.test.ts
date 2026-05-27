@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, jest } from "@jest/globals";
 import {
   ingestBatch,
   rollbackAndReingest,
@@ -177,7 +177,7 @@ describe("rollbackAndReingest", () => {
     await ingestBatch(store, [makeEvent(3)], 3);
 
     // Simulate fetchBatch that returns canonical events from cursor 2 onward
-    const fetchBatch = vi.fn(async (cursor: number) => {
+    const fetchBatch = jest.fn(async (cursor: number) => {
       if (cursor <= 3) {
         return {
           rawEvents: [makeEvent(cursor, { payload: { canonical: true } })],
@@ -196,7 +196,7 @@ describe("rollbackAndReingest", () => {
   });
 
   it("handles empty chain gracefully", async () => {
-    const fetchBatch = vi.fn(async () => ({ rawEvents: [] }));
+    const fetchBatch = jest.fn(async () => ({ rawEvents: [] }));
 
     const result = await rollbackAndReingest(store, 0, fetchBatch);
 
@@ -208,7 +208,7 @@ describe("rollbackAndReingest", () => {
     await ingestBatch(store, [makeEvent(1)], 1);
     await store.rollbackTo(0);
 
-    const fetchBatch = vi.fn(async (cursor: number) => {
+    const fetchBatch = jest.fn(async (cursor: number) => {
       if (cursor === 1) {
         return { rawEvents: [makeEvent(1)] };
       }
