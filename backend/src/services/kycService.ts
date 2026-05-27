@@ -251,3 +251,17 @@ export function getKycData(kycRecord: KycRecord): Record<string, any> {
 export function isEncryptionInitialized(): boolean {
   return encryptionConfig !== null;
 }
+export interface KycPayload {
+  [key: string]: any;
+}
+
+export interface EncryptedRecord {
+  encryptedData: string;
+}
+
+export interface KmsClient {
+  encrypt(data: string): Promise<string>;
+  decrypt(data: string): Promise<string>;
+}
+
+export class LocalKeyProvider

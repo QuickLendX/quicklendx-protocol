@@ -31,7 +31,7 @@ class ExportService {
     const invoices = invoiceStore.findInvoices({ business: userId });
     const bids = MOCK_BIDS.filter((b) => b.investor === userId);
     const settlements = MOCK_SETTLEMENTS.filter(
-      (s) => s.payer === userId || s.recipient === userId
+      (s: any) => s.payer === userId || s.recipient === userId
     );
 
     return { invoices, bids, settlements };
