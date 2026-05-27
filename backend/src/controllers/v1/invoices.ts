@@ -2,13 +2,12 @@ import { Request, Response, NextFunction } from "express";
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../../types/contract";
 import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
 import { freshnessService } from "../../services/freshnessService";
-import { invoiceStore } from "../../services/invoiceStore";
 import { labelRecord } from "../../services/versioningService";
 
 export const MOCK_INVOICES: Invoice[] = [
   labelRecord<Omit<Invoice, "contract_version" | "event_schema_version" | "indexed_at">>({
-    id: "invoice-001",
-    business: "GBIZ0000000000000000000000000000000000000000000000000",
+    id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    business: "GA...BIZ",
     amount: "1000000000",
     currency: "USDC",
     due_date: Math.floor(Date.now() / 1000) + 86400 * 30,
@@ -36,15 +35,13 @@ export const getInvoices = async (
   try {
     const { business, status } = req.query;
 
-    const filter: { business?: string; status?: InvoiceStatus } = {};
-    if (typeof business === 'string') {
-      filter.business = business;
+    let filtered = [...MOCK_INVOICES];
+    if (typeof business === "string") {
+      filtered = filtered.filter((i) => i.business === business);
     }
-    if (typeof status === 'string') {
-      filter.status = status as InvoiceStatus;
+    if (typeof status === "string") {
+      filtered = filtered.filter((i) => i.status === (status as InvoiceStatus));
     }
-
-    const filtered = invoiceStore.findInvoices(filter);
 
     const body = { data: filtered, freshness: freshnessService.getFreshness() };
     if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body })) {
@@ -63,8 +60,8 @@ export const getInvoiceById = async (
   next: NextFunction
 ) => {
   try {
-    const { id } = req.params;
-    const invoice = invoiceStore.findInvoiceById(id as string);
+    const id = req.params.id as string;
+    const invoice = MOCK_INVOICES.find((i) => i.id === id);
 
     if (!invoice) {
       return res.status(404).json({

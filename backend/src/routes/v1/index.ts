@@ -83,6 +83,7 @@ router.post("/events", async (req, res) => {
     if (validation.errors) {
       res.status(400).json({
         success: false,
+        processed: 0,
         results: validation.errors.map((error) => ({
           status: "rejected",
           error,
@@ -145,11 +146,21 @@ router.post("/events", async (req, res) => {
       }
     }
 
-    const hasRejected = response.some((result) => result.status === "rejected");
-    const hasFailed = response.some((result) => result.status === "failed");
+    const hasRejected = response.some((r) => r.status === "rejected");
+    const hasFailed = response.some((r) => r.status === "failed");
+    const hasProcessed = response.some((r) => r.status === "processed" || r.status === "duplicate");
+    const processed = response.filter((r) => r.status === "processed").length;
 
-    res.status(hasRejected ? 400 : hasFailed ? 500 : 200).json({
+    // Mixed batch (some valid, some invalid) → 400
+    // All invalid or any processing failure → 500
+    // All valid and processed → 200
+    const status = (hasRejected && hasProcessed) ? 400
+      : (hasRejected || hasFailed) ? 500
+      : 200;
+
+    res.status(status).json({
       success: !hasRejected && !hasFailed,
+      processed,
       results: response,
     });
   } catch (error) {

@@ -24,17 +24,22 @@ const AUTH_TAG_LENGTH = 16;
 // Sensitive fields that require encryption
 export const SENSITIVE_FIELDS = [
   "tax_id",
-  "customer_name", 
+  "taxId",
+  "customer_name",
   "customer_address",
   "date_of_birth",
+  "dateOfBirth",
   "ssn",
   "passport_number",
+  "passportNumber",
   "national_id",
   "phone_number",
   "email",
   "bank_account",
+  "bankAccountNumber",
+  "routingNumber",
   "kyc_document",
-  "kyc_data"
+  "kyc_data",
 ] as const;
 
 // Fields that should be redacted in logs

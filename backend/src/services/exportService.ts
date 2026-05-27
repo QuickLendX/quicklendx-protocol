@@ -1,4 +1,4 @@
-import { invoiceStore } from "./invoiceStore";
+import { MOCK_INVOICES } from "../controllers/v1/invoices";
 import { MOCK_BIDS } from "../controllers/v1/bids";
 import { MOCK_SETTLEMENTS } from "../controllers/v1/settlements";
 import { config } from "../config";
@@ -28,7 +28,7 @@ class ExportService {
   public async getUserData(userId: string): Promise<ExportData["data"]> {
     // Filter mock data for the user
     // A user can be a business (invoices) or an investor (bids) or a payer/recipient (settlements)
-    const invoices = invoiceStore.findInvoices({ business: userId });
+    const invoices = MOCK_INVOICES.filter((i) => i.business === userId);
     const bids = MOCK_BIDS.filter((b) => b.investor === userId);
     const settlements = MOCK_SETTLEMENTS.filter(
       (s) => s.payer === userId || s.recipient === userId

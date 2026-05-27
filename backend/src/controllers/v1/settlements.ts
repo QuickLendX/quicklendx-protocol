@@ -4,12 +4,11 @@ import { applyCacheHeaders, CC_LONG } from "../../middleware/cache-headers";
 import { labelRecord } from "../../services/versioningService";
 import { freshnessService } from "../../services/freshnessService";
 import { parsePaginationParams, PaginationError } from "../../utils/pagination";
-import { settlementOrchestrator } from "../../services/settlementOrchestrator";
 
 export const MOCK_SETTLEMENTS: Settlement[] = [
   labelRecord<Omit<Settlement, "contract_version" | "event_schema_version" | "indexed_at">>({
-    id: "settlement-001",
-    invoice_id: "invoice-001",
+    id: "0xsettle123",
+    invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     amount: "1000000000",
     payer: "GPAYER000000000000000000000000000000000000000000000000",
     recipient: "GRECIP000000000000000000000000000000000000000000000000",
@@ -27,11 +26,9 @@ export const getSettlements = async (
     parsePaginationParams(req.query);
     const { invoice_id, status } = req.query;
 
-    const filters: { invoice_id?: string; status?: SettlementStatus } = {};
-    if (invoice_id) filters.invoice_id = invoice_id as string;
-    if (status) filters.status = status as SettlementStatus;
-
-    const settlements = settlementOrchestrator.list(filters);
+    let settlements = [...MOCK_SETTLEMENTS];
+    if (invoice_id) settlements = settlements.filter((s) => s.invoice_id === (invoice_id as string));
+    if (status) settlements = settlements.filter((s) => s.status === (status as SettlementStatus));
 
     const body = { data: settlements, freshness: freshnessService.getFreshness() };
     if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body })) {
@@ -55,8 +52,8 @@ export const getSettlementById = async (
   next: NextFunction
 ) => {
   try {
-    const { id } = req.params;
-    const settlement = settlementOrchestrator.getById(id as string);
+    const id = req.params.id as string;
+    const settlement = MOCK_SETTLEMENTS.find((s) => s.id === id);
 
     if (!settlement) {
       return res.status(404).json({
