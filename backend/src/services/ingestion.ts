@@ -8,7 +8,7 @@
  *  - Chain reorgs are handled via rollbackTo + re-ingestion.
  */
 
-import { lagMonitor } from "./lagMonitor";
+// lagMonitor is loaded dynamically to avoid circular deps in test env
 
 export interface IndexedEvent {
   ledger: number;
@@ -72,7 +72,7 @@ export async function ingestBatch(
 
   // Record metric for monitoring (non-fatal if it fails)
   try {
-    lagMonitor.recordIngestion(batchCursor, events.length);
+    (await import('./lagMonitor')).lagMonitor.recordIngestion(batchCursor, events.length);
   } catch {
     // Metrics failure must not break ingestion
   }
@@ -106,7 +106,7 @@ export async function rollbackAndReingest(
 
   // Emit rollback metric (non-fatal if it fails)
   try {
-    lagMonitor.recordRollback(targetCursor);
+    (await import('./lagMonitor')).lagMonitor.recordRollback(targetCursor);
   } catch {
     // Metrics failure must not break recovery
   }
