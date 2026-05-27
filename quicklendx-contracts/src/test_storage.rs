@@ -13,8 +13,8 @@ use soroban_sdk::{testutils::Address as _, vec, Address, BytesN, Env, String, Ve
 use crate::bid::{Bid, BidStatus};
 use crate::investment::{Investment, InvestmentStatus};
 use crate::invoice::{
-    Dispute, InoiceStorage, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceStatus,
-    LineItemRecord, PaymentRecord, TOTAL_INCOICE_COUNT_KEY,
+    Dispute, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceStatus,
+    LineItemRecord, PaymentRecord,
 };
 use crate::profits::{PlatformFee, PlatformFeeConfig};
 use crate::storage::{
@@ -832,11 +832,13 @@ fn create_complex_invoice(env: &Env) -> Invoice {
         env,
         PaymentRecord {
             amount: 1000,
+            payer: Address::generate(env),
             timestamp: 1234567890,
             transaction_id: String::from_str(env, "TXN001"),
         },
         PaymentRecord {
             amount: 2000,
+            payer: Address::generate(env),
             timestamp: 1234567900,
             transaction_id: String::from_str(env, "TXN002"),
         },
@@ -1083,7 +1085,7 @@ fn clear_all_empties_status_buckets() {
 
     InvoiceStorage::clear_all(&env);
 
-    let pending = InvoiceStorage::get_invoices_by_status(&env, &InvoiceStatus::Pending);
+    let pending = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Pending);
     assert_eq!(
         pending.len(),
         0,
