@@ -4,7 +4,6 @@
 
 use crate::errors::QuickLendXError;
 use crate::events::emit_escrow_created;
-use crate::storage::bump_instance;
 use soroban_sdk::token;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
 
@@ -36,24 +35,22 @@ pub struct EscrowStorage;
 impl EscrowStorage {
     pub fn store_escrow(env: &Env, escrow: &Escrow) {
         env.storage().instance().set(&escrow.escrow_id, escrow);
-        bump_instance(env, &escrow.escrow_id);
         // Also store by invoice_id for easy lookup
-        let invoice_key = (symbol_short!("escrow"), &escrow.invoice_id);
-        env.storage().instance().set(&invoice_key, &escrow.escrow_id);
-        bump_instance(env, &invoice_key);
+        env.storage().instance().set(
+            &(symbol_short!("escrow"), &escrow.invoice_id),
+            &escrow.escrow_id,
+        );
     }
 
     pub fn get_escrow(env: &Env, escrow_id: &BytesN<32>) -> Option<Escrow> {
-        let result = env.storage().instance().get(escrow_id);
-        if result.is_some() {
-            bump_instance(env, escrow_id);
-        }
-        result
+        env.storage().instance().get(escrow_id)
     }
 
     pub fn get_escrow_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Escrow> {
-        let invoice_key = (symbol_short!("escrow"), invoice_id);
-        let escrow_id: Option<BytesN<32>> = env.storage().instance().get(&invoice_key);
+        let escrow_id: Option<BytesN<32>> = env
+            .storage()
+            .instance()
+            .get(&(symbol_short!("escrow"), invoice_id));
         if let Some(id) = escrow_id {
             Self::get_escrow(env, &id)
         } else {
@@ -63,7 +60,6 @@ impl EscrowStorage {
 
     pub fn update_escrow(env: &Env, escrow: &Escrow) {
         env.storage().instance().set(&escrow.escrow_id, escrow);
-        bump_instance(env, &escrow.escrow_id);
     }
 
     pub fn generate_unique_escrow_id(env: &Env) -> BytesN<32> {

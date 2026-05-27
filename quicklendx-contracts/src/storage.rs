@@ -13,7 +13,7 @@ use crate::types::{
 
 /// TTL extension threshold for persistent storage entries.
 ///
-/// This value ensures that long-lived entries (invoices, bids, escrows, investments)
+/// This value ensures that long-lived entries (invoices)
 /// survive the maximum possible invoice lifecycle without being archived.
 /// Calculated as: max_due_date_days (365) * 86400 + grace_period_seconds (604800)
 /// = 31,536,000 + 604,800 = 32,140,800 seconds (~371 days).
@@ -34,17 +34,17 @@ const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800;
 /// Extend the TTL of a persistent storage entry to prevent archival.
 ///
 /// This function should be called on every read/write of long-lived keys
-/// (invoices, bids, escrows, investments) to ensure they survive the maximum
-/// invoice lifecycle without being archived by Soroban's TTL mechanism.
+/// (invoices) to ensure they survive the maximum invoice lifecycle without
+/// being archived by Soroban's TTL mechanism.
 ///
 /// # Arguments
 /// * `env` - The contract environment
 /// * `key` - The storage key to bump (must implement IntoVal<Storage>)
 ///
 /// # Security Note
-/// Without TTL extension, funded invoices and escrow records could be archived
-/// mid-lifecycle, causing permanent fund loss. This function extends the TTL
-/// to cover the maximum invoice duration plus a safety margin.
+/// Without TTL extension, funded invoices could be archived mid-lifecycle,
+/// causing permanent fund loss. This function extends the TTL to cover the
+/// maximum invoice duration plus a safety margin.
 ///
 /// # TTL Calculation
 /// The TTL is set to `PERSISTENT_TTL_THRESHOLD` (34,732,800 seconds ~402 days),
@@ -52,43 +52,12 @@ const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800;
 /// - max_due_date_days (365 days)
 /// - grace_period_seconds (7 days)
 /// - 30-day safety margin for delays and disputes
-fn bump_persistent<T>(env: &Env, key: &T)
+pub fn bump_persistent<T>(env: &Env, key: &T)
 where
     T: soroban_sdk::IntoVal<soroban_sdk::storage::Storage>,
 {
     env.storage()
         .persistent()
-        .extend_ttl(key, PERSISTENT_TTL_THRESHOLD);
-}
-
-/// Extend the TTL of an instance storage entry to prevent archival.
-///
-/// This function should be called on every read/write of long-lived keys
-/// stored in instance storage (bids, investments, escrows) to ensure they
-/// survive the maximum invoice lifecycle without being archived.
-///
-/// # Arguments
-/// * `env` - The contract environment
-/// * `key` - The storage key to bump (must implement IntoVal<Storage>)
-///
-/// # Security Note
-/// Instance storage has different TTL semantics than persistent storage.
-/// Without TTL extension, bids, investments, and escrow records could be archived
-/// mid-lifecycle, causing permanent fund loss. This function extends the TTL
-/// to cover the maximum invoice duration plus a safety margin.
-///
-/// # TTL Calculation
-/// The TTL is set to `PERSISTENT_TTL_THRESHOLD` (34,732,800 seconds ~402 days),
-/// which covers:
-/// - max_due_date_days (365 days)
-/// - grace_period_seconds (7 days)
-/// - 30-day safety margin for delays and disputes
-pub fn bump_instance<T>(env: &Env, key: &T)
-where
-    T: soroban_sdk::IntoVal<soroban_sdk::storage::Storage>,
-{
-    env.storage()
-        .instance()
         .extend_ttl(key, PERSISTENT_TTL_THRESHOLD);
 }
 

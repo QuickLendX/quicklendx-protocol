@@ -1,5 +1,4 @@
 use crate::errors::QuickLendXError;
-use crate::storage::bump_instance;
 // Re-export from crate::types so other modules can continue to import from crate::investment.
 pub use crate::types::{InsuranceCoverage, Investment, InvestmentStatus};
 use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec};
@@ -340,11 +339,11 @@ impl InvestmentStorage {
         env.storage()
             .instance()
             .set(&investment.investment_id, investment);
-        bump_instance(env, &investment.investment_id);
 
-        let invoice_index_key = Self::invoice_index_key(&investment.invoice_id);
-        env.storage().instance().set(&invoice_index_key, &investment.investment_id);
-        bump_instance(env, &invoice_index_key);
+        env.storage().instance().set(
+            &Self::invoice_index_key(&investment.invoice_id),
+            &investment.investment_id,
+        );
 
         // Add to investor index
         Self::add_to_investor_index(env, &investment.investor, &investment.investment_id);
@@ -356,11 +355,7 @@ impl InvestmentStorage {
     }
 
     pub fn get_investment(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
-        let result = env.storage().instance().get(investment_id);
-        if result.is_some() {
-            bump_instance(env, investment_id);
-        }
-        result
+        env.storage().instance().get(investment_id)
     }
 
     pub fn get_investment_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Investment> {
@@ -404,11 +399,11 @@ impl InvestmentStorage {
         env.storage()
             .instance()
             .set(&investment.investment_id, investment);
-        bump_instance(env, &investment.investment_id);
 
-        let invoice_index_key = Self::invoice_index_key(&investment.invoice_id);
-        env.storage().instance().set(&invoice_index_key, &investment.investment_id);
-        bump_instance(env, &invoice_index_key);
+        env.storage().instance().set(
+            &Self::invoice_index_key(&investment.invoice_id),
+            &investment.investment_id,
+        );
     }
 
     // -- Active-investment index -----------------------------------------------
