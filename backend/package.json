@@ -11,7 +11,13 @@
     "start": "ts-node src/index.ts",
     "security:scan": "node scripts/dependency-scan.js audit-report.json high",
     "sbom:generate": "node scripts/generate-sbom.js sbom/backend-sbom.cdx.json",
-    "sbom:check": "node scripts/validate-sbom.js sbom/backend-sbom.cdx.json"
+    "sbom:check": "node scripts/validate-sbom.js sbom/backend-sbom.cdx.json",
+    "migrate": "ts-node src/lib/migrations/cli.ts",
+    "migrate:check": "npm run migrate -- --check",
+    "migrate:dry-run": "npm run migrate -- --dry-run",
+    "migrate:validate": "npm run migrate -- --validate-only",
+    "migrate:up": "npm run migrate",
+    "migrate:down": "ts-node src/lib/migrations/cli.ts down"
   },
   "keywords": [],
   "author": "",
