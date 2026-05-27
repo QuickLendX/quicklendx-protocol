@@ -1,6 +1,7 @@
 import { notificationService } from './notificationService';
 import { NotificationEvent, NotificationType } from '../types/contract';
 import { getCorrelationId, withCorrelationId } from '../lib/requestContext';
+import { settlementOrchestrator } from './settlementOrchestrator';
 
 export class EventProcessor {
   private static instance: EventProcessor;
@@ -37,7 +38,16 @@ export class EventProcessor {
 
     await notificationService.processNotification(businessEvent);
 
-    // Could also notify investor, but for now focusing on business notifications
+    // Create a pending settlement to track the debt lifecycle
+    settlementOrchestrator.createPending({
+      invoice_id: invoiceId,
+      amount,
+      payer: business,
+      recipient: investor,
+      timestamp,
+      event_id: eventId,
+    });
+
     const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
     console.log(`${correlationPrefix}EventProcessor: Processed InvoiceSettled event ${eventId}`);
   }
@@ -63,6 +73,10 @@ export class EventProcessor {
     };
 
     await notificationService.processNotification(businessEvent);
+
+    // Advance the settlement lifecycle: Pending -> Processing -> Paid
+    settlementOrchestrator.startProcessing(invoiceId, `${eventId}_processing`);
+    settlementOrchestrator.completeProcessing(invoiceId, `${eventId}_complete`);
     
     const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
     console.log(`${correlationPrefix}EventProcessor: Processed PaymentRecorded event ${eventId}`);
@@ -164,6 +178,9 @@ export class EventProcessor {
       default:
         const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
         console.log(`${correlationPrefix}Unhandled event type: ${event.type}`);
+        const err = new Error(`Unknown event type: ${event.type}`) as Error & { status: number };
+        err.status = 400;
+        throw err;
     }
   }
 }

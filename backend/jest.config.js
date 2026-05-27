@@ -11,6 +11,7 @@ module.exports = {
     },
   },
   collectCoverageFrom: [
+    "src/db/**/*.ts",
     "src/services/webhook/**/*.ts",
     "!src/services/webhook/index.ts",
     "src/lib/migrations/**/*.ts",
@@ -21,6 +22,8 @@ module.exports = {
     "src/middleware/request-logger.ts",
     "src/middleware/access-log.ts",
     "src/services/eventProcessor.ts",
+    "src/tests/spec-loader.ts",
+    "src/tests/openapi-contract.test.ts",
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
