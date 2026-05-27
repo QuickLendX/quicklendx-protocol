@@ -17,7 +17,7 @@
 //! - Bids expire correctly at the configured TTL boundary
 
 use super::*;
-use crate::bid::{
+use crate::bid::{BidStorage, 
     BidStatus, BidTtlConfig, DEFAULT_BID_TTL_DAYS, MAX_BID_TTL_DAYS, MIN_BID_TTL_DAYS,
 };
 use crate::errors::QuickLendXError;
@@ -416,3 +416,174 @@ fn test_set_reset_set_cycle() {
     assert_eq!(client.get_bid_ttl_days(), 25);
     assert!(client.get_bid_ttl_config().is_custom);
 }
+
+// ---------------------------------------------------------------------------
+// 7. BOUNDARY TTL EXPIRY — EXACT TIMESTAMP SEMANTICS
+// ---------------------------------------------------------------------------
+
+/// Verify the strict `>` comparison: bid at exact TTL is NOT expired,
+/// but bid 1 second past TTL IS expired.
+#[test]
+fn test_bid_exact_ttl_boundary_not_expired() {
+    let (env, client, admin) = setup();
+    client.set_bid_ttl_days(&MIN_BID_TTL_DAYS);
+    let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid = client.get_bid(&bid_id).unwrap();
+
+    // Exact TTL boundary: timestamp == expiration_timestamp
+    env.ledger().set_timestamp(bid.expiration_timestamp);
+
+    // is_expired must return false (strict > comparison)
+    assert!(
+        !bid.is_expired(env.ledger().timestamp()),
+        "Bid must NOT be expired at exact expiration timestamp"
+    );
+
+    // Also verify via cleanup
+    let cleaned = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned, 0, "Cleanup must not remove bid at exact TTL boundary");
+
+    // Status still Placed
+    let bid_after = client.get_bid(&bid_id).unwrap();
+    assert_eq!(
+        bid_after.status,
+        BidStatus::Placed,
+        "Bid must remain Placed at exact TTL boundary"
+    );
+}
+
+/// Verify bid IS expired 1 second past the TTL boundary.
+#[test]
+fn test_bid_expired_one_second_past_ttl() {
+    let (env, client, admin) = setup();
+    client.set_bid_ttl_days(&MIN_BID_TTL_DAYS);
+    let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid = client.get_bid(&bid_id).unwrap();
+
+    // 1 second past TTL boundary
+    env.ledger().set_timestamp(bid.expiration_timestamp + 1);
+
+    // is_expired must return true
+    assert!(
+        bid.is_expired(env.ledger().timestamp()),
+        "Bid MUST be expired 1 second past expiration timestamp"
+    );
+
+    // Cleanup should remove it
+    let cleaned = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned, 1, "Cleanup must remove the expired bid");
+
+    let bid_after = client.get_bid(&bid_id).unwrap();
+    assert_eq!(
+        bid_after.status,
+        BidStatus::Expired,
+        "Bid must be Expired 1 second past TTL boundary"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 8. COUNT_ACTIVE_PLACED_BIDS_FOR_INVESTOR — ACCURACY & DECREMENT
+// ---------------------------------------------------------------------------
+
+/// Verify that count_active_placed_bids_for_investor is accurate before and
+/// after cleanup when configured with a non-default TTL.
+#[test]
+fn test_count_active_bids_respects_ttl_config() {
+    let (env, client, admin) = setup();
+    let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
+
+    let now = env.ledger().timestamp();
+
+    // Set TTL to 2 days
+    client.set_bid_ttl_days(&2u64);
+    assert_eq!(client.get_bid_ttl_days(), 2);
+
+    // Place 1 bid
+    client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+
+    // Count should be 1 before expiry
+    let active_before = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(active_before, 1, "One active bid before expiry");
+
+    // Advance past 2-day TTL
+    env.ledger().set_timestamp(now + 2 * SECONDS_PER_DAY + 1);
+
+    let cleaned = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(cleaned, 1, "One bid cleaned after TTL expiry");
+
+    // Count should now be 0
+    let active_after = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(
+        active_after, 0,
+        "Zero active bids after TTL expiry with 2-day TTL config"
+    );
+}
+
+/// Verify count_active_placed_bids_for_investor works correctly across
+/// multiple invoices with different TTL-aware cleanup.
+#[test]
+fn test_count_active_bids_multi_invoice_after_ttl_expiry() {
+    let (env, client, admin) = setup();
+    let (business, investor, invoice1) = funded_setup(&env, &client, &admin, 10_000);
+
+    let now = env.ledger().timestamp();
+
+    // Set TTL to 3 days
+    client.set_bid_ttl_days(&3u64);
+    let ttl_seconds = 3 * SECONDS_PER_DAY;
+
+    // Create second invoice using a generated currency (whitelist is empty, so all currencies pass)
+    let due_date = now + 30 * SECONDS_PER_DAY;
+    let invoice2 = client.upload_invoice(
+        &business,
+        &10_000,
+        &Address::generate(&env),
+        &due_date,
+        &String::from_str(&env, "Invoice 2"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice2);
+
+    // Place 1 bid on invoice1, 2 bids on invoice2
+    client.place_bid(&investor, &invoice1, &5_000, &6_000);
+    client.place_bid(&investor, &invoice2, &5_000, &6_000);
+    client.place_bid(&investor, &invoice2, &6_000, &7_000);
+
+    assert_eq!(
+        BidStorage::count_active_placed_bids_for_investor(&env, &investor),
+        3,
+        "3 active bids across 2 invoices"
+    );
+
+    // Advance past TTL
+    env.ledger().set_timestamp(now + ttl_seconds + 1);
+
+    // Cleanup invoice1 only
+    let cleaned1 = client.cleanup_expired_bids(&invoice1);
+    assert_eq!(cleaned1, 1, "1 bid expired on invoice1");
+
+    // Count should now be 2 (the two on invoice2 still in index before we clean it)
+    // Note: count_active_placed_bids_for_investor calls refresh_investor_bids internally,
+    // which iterates the investor's bid list and checks each bid against is_expired.
+    let count_after_inv1 = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(
+        count_after_inv1, 2,
+        "2 active bids remain after invoice1 cleanup (invoice2 not yet cleaned)"
+    );
+
+    // Cleanup invoice2
+    let cleaned2 = client.cleanup_expired_bids(&invoice2);
+    assert_eq!(cleaned2, 2, "2 bids expired on invoice2");
+
+    // All bids expired
+    let count_final = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    assert_eq!(
+        count_final, 0,
+        "0 active bids after all invoices cleaned"
+    );
+}
+
+

@@ -20,11 +20,12 @@ export const getSettlements = async (
 
     const settlements = settlementOrchestrator.list(filters);
 
-    if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body: settlements })) {
+    const body = { data: filtered, freshness: freshnessService.getFreshness() };
+    if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body })) {
       res.status(304).end();
       return;
     }
-    res.json({ data: settlements, freshness: freshnessService.getFreshness() });
+    res.json(body);
   } catch (error) {
     if (error instanceof PaginationError) {
       return res.status(400).json({

@@ -60,6 +60,8 @@ mod test_admin_standalone;
 mod test_dispute;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_ttl;
 #[cfg(test)]
 mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
