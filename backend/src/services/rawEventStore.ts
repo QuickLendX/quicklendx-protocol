@@ -60,6 +60,33 @@ export class FileSystemRawEventStore implements RawEventStore {
     await this.rotateFileIfNeeded();
   }
 
+  async hasEventId(eventId: string): Promise<boolean> {
+    await fs.mkdir(this.dataDir, { recursive: true });
+
+    try {
+      const data = await fs.readFile(this.eventsFile, "utf8");
+      const lines = data.trim().split("\n").filter(line => line.length > 0);
+
+      for (const line of lines) {
+        try {
+          const event = JSON.parse(line) as RawEvent;
+          if (event.id === eventId) {
+            return true;
+          }
+        } catch {
+          // Ignore malformed historical rows while scanning for idempotency.
+        }
+      }
+
+      return false;
+    } catch (error) {
+      if ((error as any).code === "ENOENT") {
+        return false;
+      }
+      throw error;
+    }
+  }
+
   async getEventsByLedgerRange(
     fromLedger: number, 
     toLedger: number, 
@@ -305,6 +332,10 @@ export class InMemoryRawEventStore implements RawEventStore {
     // Sort and add to store
     sanitizedEvents.sort((a, b) => a.ledger - b.ledger);
     this.events.push(...sanitizedEvents);
+  }
+
+  async hasEventId(eventId: string): Promise<boolean> {
+    return this.events.some(event => event.id === eventId);
   }
 
   async getEventsByLedgerRange(

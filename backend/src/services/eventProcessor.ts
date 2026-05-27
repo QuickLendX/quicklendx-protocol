@@ -113,14 +113,20 @@ export class EventProcessor {
   public async processEvent(event: any): Promise<void> {
     const eventId = event.id || `${event.type}_${event.timestamp}`;
 
+    // Accept both legacy (flat) and new (payload-wrapped) event shapes
+    const get = (field: string) =>
+      event.payload && event.payload[field] !== undefined
+        ? event.payload[field]
+        : event[field];
+
     switch (event.type) {
       case 'InvoiceSettled':
         await this.processInvoiceSettled(
           eventId,
-          event.invoice_id,
-          event.business,
-          event.investor,
-          event.amount || event.investor_return,
+          get('invoice_id'),
+          get('business'),
+          get('investor'),
+          get('amount') || get('investor_return'),
           event.timestamp
         );
         break;
@@ -128,9 +134,9 @@ export class EventProcessor {
       case 'PaymentRecorded':
         await this.processPaymentRecorded(
           eventId,
-          event.invoice_id,
-          event.payer,
-          event.amount,
+          get('invoice_id'),
+          get('payer'),
+          get('amount'),
           event.timestamp
         );
         break;
@@ -138,8 +144,8 @@ export class EventProcessor {
       case 'DisputeCreated':
         await this.processDisputeCreated(
           eventId,
-          event.invoice_id,
-          event.initiator,
+          get('invoice_id'),
+          get('initiator'),
           event.timestamp
         );
         break;
@@ -147,14 +153,16 @@ export class EventProcessor {
       case 'DisputeResolved':
         await this.processDisputeResolved(
           eventId,
-          event.invoice_id,
-          event.resolved_by || event.admin,
+          get('invoice_id'),
+          get('resolved_by') || get('admin'),
           event.timestamp
         );
         break;
 
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        const err = new Error(`Unknown event type: ${event.type}`) as Error & { status: number };
+        err.status = 400;
+        throw err;
     }
   }
 }
