@@ -170,6 +170,12 @@ pub fn accept_bid_and_fund(
 /// Can be triggered by the Admin or the Business owner of the invoice.
 /// Invoice must be in Funded status.
 ///
+/// # Correctness
+/// - Refunds the exact `escrow.amount` stored for the invoice.
+/// - Sends funds to the stored `escrow.investor`, never to a caller-controlled recipient.
+/// - Uses `payments::refund_escrow` which rejects any escrow not in `Held` status,
+///   making repeated refund attempts fail and preventing double refunds.
+///
 /// # Errors
 /// * `InvoiceNotFound`, `StorageKeyNotFound`, `InvalidStatus`, `Unauthorized`, `NotAdmin`
 pub fn refund_escrow_funds(

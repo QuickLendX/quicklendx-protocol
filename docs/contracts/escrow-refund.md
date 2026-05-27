@@ -13,6 +13,16 @@ The `refund_escrow_funds` operation now enforces an explicit authorization matri
 | **Investor** | No | Investors are the recipients of releases, not refund triggers. |
 | **Others** | No | No unauthorized parties should be able to trigger movement of funds. |
 
+## Refund Correctness
+
+`refund_escrow_funds` reads the stored escrow record for the invoice and refunds the exact escrow amount to the recorded investor address. The currency and amount are taken from the persisted escrow data, so refunds cannot be redirected or underpaid.
+
+## Idempotency and Guardrails
+
+Refund requests are accepted only when the escrow is still in `Held` status. After a successful refund, the escrow status becomes `Refunded` and any subsequent refund attempt is rejected with `InvalidStatus`. This prevents double-refund attacks and ensures token balances reconverge to their pre-escrow state.
+
+This correctness guarantee applies to any path that triggers a refund decision, including protocol cleanup, invoice cancellation decisions, or expiration/default handling triggered after funding.
+
 ## Status Invariants
 
 To prevent unauthorized fund theft or protocol state corruption, strict status invariants are enforced at both the entry point and the payment logic layer.
