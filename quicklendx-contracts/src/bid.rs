@@ -4,6 +4,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_bid_expired, emit_bid_ttl_updated};
+use crate::storage::PERSISTENT_TTL_THRESHOLD;
 pub use crate::types::{Bid, BidStatus};
 
 /// Storage keys for the per-invoice bid index.
@@ -193,16 +194,22 @@ impl BidStorage {
 
     pub fn store_bid(env: &Env, bid: &Bid) {
         env.storage().instance().set(&bid.bid_id, bid);
+        env.storage().instance().extend_ttl(&bid.bid_id, PERSISTENT_TTL_THRESHOLD);
         // Add to investor index
         Self::add_to_investor_bids(env, &bid.investor, &bid.bid_id);
         // Add to global index
         Self::add_to_all_bids(env, &bid.bid_id);
     }
     pub fn get_bid(env: &Env, bid_id: &BytesN<32>) -> Option<Bid> {
-        env.storage().instance().get(bid_id)
+        let result = env.storage().instance().get(bid_id);
+        if result.is_some() {
+            env.storage().instance().extend_ttl(bid_id, PERSISTENT_TTL_THRESHOLD);
+        }
+        result
     }
     pub fn update_bid(env: &Env, bid: &Bid) {
         env.storage().instance().set(&bid.bid_id, bid);
+        env.storage().instance().extend_ttl(&bid.bid_id, PERSISTENT_TTL_THRESHOLD);
     }
     pub fn get_bids_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
         let count: u32 = env

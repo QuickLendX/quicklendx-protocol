@@ -1437,3 +1437,261 @@ fn test_ttl_extension_get_renews_ttl() {
     });
 }
 
+// === INSTANCE STORAGE TTL TESTS ===
+
+#[test]
+fn test_ttl_extension_bid_survival() {
+    let env = Env::default();
+    with_registered_contract(&env, || {
+        let bid_id = BytesN::from_array(&env, &[1; 32]);
+        let invoice_id = BytesN::from_array(&env, &[2; 32]);
+        let investor = Address::generate(&env);
+
+        let bid = Bid {
+            bid_id: bid_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            bid_amount: 5000,
+            expected_return: 5500,
+            timestamp: 1000,
+            status: BidStatus::Placed,
+            expiration_timestamp: 2000,
+        };
+
+        BidStorage::store(&env, &bid);
+
+        // Advance ledger past default TTL
+        env.ledger().set_timestamp(35_000_000);
+
+        // Bid should still be readable after TTL extension
+        let retrieved = BidStorage::get(&env, &bid_id);
+        assert!(retrieved.is_some(), "Bid should survive past default TTL");
+
+        let retrieved_bid = retrieved.unwrap();
+        assert_eq!(retrieved_bid.bid_id, bid_id);
+        assert_eq!(retrieved_bid.status, BidStatus::Placed);
+    });
+}
+
+#[test]
+fn test_ttl_extension_investment_survival() {
+    let env = Env::default();
+    with_registered_contract(&env, || {
+        let investment_id = BytesN::from_array(&env, &[1; 32]);
+        let invoice_id = BytesN::from_array(&env, &[2; 32]);
+        let investor = Address::generate(&env);
+
+        let investment = Investment {
+            investment_id: investment_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            amount: 5000,
+            funded_at: 1000,
+            status: InvestmentStatus::Active,
+            insurance: Vec::new(&env),
+        };
+
+        InvestmentStorage::store(&env, &investment);
+
+        // Advance ledger past default TTL
+        env.ledger().set_timestamp(35_000_000);
+
+        // Investment should still be readable after TTL extension
+        let retrieved = InvestmentStorage::get(&env, &investment_id);
+        assert!(retrieved.is_some(), "Investment should survive past default TTL");
+
+        let retrieved_investment = retrieved.unwrap();
+        assert_eq!(retrieved_investment.investment_id, investment_id);
+        assert_eq!(retrieved_investment.status, InvestmentStatus::Active);
+    });
+}
+
+#[test]
+fn test_ttl_extension_escrow_survival() {
+    let env = Env::default();
+    with_registered_contract(&env, || {
+        let escrow_id = BytesN::from_array(&env, &[1; 32]);
+        let invoice_id = BytesN::from_array(&env, &[2; 32]);
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let currency = Address::generate(&env);
+
+        let escrow = crate::payments::Escrow {
+            escrow_id: escrow_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            business: business.clone(),
+            amount: 5000,
+            currency: currency.clone(),
+            created_at: 1000,
+            status: crate::payments::EscrowStatus::Held,
+        };
+
+        crate::payments::EscrowStorage::store(&env, &escrow);
+
+        // Advance ledger past default TTL
+        env.ledger().set_timestamp(35_000_000);
+
+        // Escrow should still be readable after TTL extension
+        let retrieved = crate::payments::EscrowStorage::get(&env, &escrow_id);
+        assert!(retrieved.is_some(), "Escrow should survive past default TTL");
+
+        let retrieved_escrow = retrieved.unwrap();
+        assert_eq!(retrieved_escrow.escrow_id, escrow_id);
+        assert_eq!(retrieved_escrow.status, crate::payments::EscrowStatus::Held);
+    });
+}
+
+#[test]
+fn test_ttl_extension_escrow_by_invoice_survival() {
+    let env = Env::default();
+    with_registered_contract(&env, || {
+        let escrow_id = BytesN::from_array(&env, &[1; 32]);
+        let invoice_id = BytesN::from_array(&env, &[2; 32]);
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let currency = Address::generate(&env);
+
+        let escrow = crate::payments::Escrow {
+            escrow_id: escrow_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            business: business.clone(),
+            amount: 5000,
+            currency: currency.clone(),
+            created_at: 1000,
+            status: crate::payments::EscrowStatus::Held,
+        };
+
+        crate::payments::EscrowStorage::store(&env, &escrow);
+
+        // Advance ledger past default TTL
+        env.ledger().set_timestamp(35_000_000);
+
+        // Escrow should still be retrievable by invoice_id after TTL extension
+        let retrieved = crate::payments::EscrowStorage::get_escrow_by_invoice(&env, &invoice_id);
+        assert!(retrieved.is_some(), "Escrow should be retrievable by invoice_id past default TTL");
+
+        let retrieved_escrow = retrieved.unwrap();
+        assert_eq!(retrieved_escrow.escrow_id, escrow_id);
+    });
+}
+
+#[test]
+fn test_ttl_extension_bid_update_renews_ttl() {
+    let env = Env::default();
+    with_registered_contract(&env, || {
+        let bid_id = BytesN::from_array(&env, &[1; 32]);
+        let invoice_id = BytesN::from_array(&env, &[2; 32]);
+        let investor = Address::generate(&env);
+
+        let bid = Bid {
+            bid_id: bid_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            bid_amount: 5000,
+            expected_return: 5500,
+            timestamp: 1000,
+            status: BidStatus::Placed,
+            expiration_timestamp: 2000,
+        };
+
+        BidStorage::store(&env, &bid);
+
+        // Advance to near TTL threshold
+        env.ledger().set_timestamp(34_000_000);
+
+        // Update bid (should renew TTL)
+        let mut updated_bid = bid.clone();
+        updated_bid.status = BidStatus::Accepted;
+        BidStorage::update(&env, &updated_bid);
+
+        // Advance past original TTL threshold
+        env.ledger().set_timestamp(36_000_000);
+
+        // Bid should still be readable after update renewed TTL
+        let retrieved = BidStorage::get(&env, &bid_id);
+        assert!(retrieved.is_some(), "Bid should survive after TTL renewal via update");
+        assert_eq!(retrieved.unwrap().status, BidStatus::Accepted);
+    });
+}
+
+#[test]
+fn test_ttl_extension_investment_update_renews_ttl() {
+    let env = Env::default();
+    with_registered_contract(&env, || {
+        let investment_id = BytesN::from_array(&env, &[1; 32]);
+        let invoice_id = BytesN::from_array(&env, &[2; 32]);
+        let investor = Address::generate(&env);
+
+        let investment = Investment {
+            investment_id: investment_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            amount: 5000,
+            funded_at: 1000,
+            status: InvestmentStatus::Active,
+            insurance: Vec::new(&env),
+        };
+
+        InvestmentStorage::store(&env, &investment);
+
+        // Advance to near TTL threshold
+        env.ledger().set_timestamp(34_000_000);
+
+        // Update investment (should renew TTL)
+        let mut updated_investment = investment.clone();
+        updated_investment.status = InvestmentStatus::Completed;
+        InvestmentStorage::update(&env, &updated_investment);
+
+        // Advance past original TTL threshold
+        env.ledger().set_timestamp(36_000_000);
+
+        // Investment should still be readable after update renewed TTL
+        let retrieved = InvestmentStorage::get(&env, &investment_id);
+        assert!(retrieved.is_some(), "Investment should survive after TTL renewal via update");
+        assert_eq!(retrieved.unwrap().status, InvestmentStatus::Completed);
+    });
+}
+
+#[test]
+fn test_ttl_extension_escrow_update_renews_ttl() {
+    let env = Env::default();
+    with_registered_contract(&env, || {
+        let escrow_id = BytesN::from_array(&env, &[1; 32]);
+        let invoice_id = BytesN::from_array(&env, &[2; 32]);
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let currency = Address::generate(&env);
+
+        let escrow = crate::payments::Escrow {
+            escrow_id: escrow_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            business: business.clone(),
+            amount: 5000,
+            currency: currency.clone(),
+            created_at: 1000,
+            status: crate::payments::EscrowStatus::Held,
+        };
+
+        crate::payments::EscrowStorage::store(&env, &escrow);
+
+        // Advance to near TTL threshold
+        env.ledger().set_timestamp(34_000_000);
+
+        // Update escrow (should renew TTL)
+        let mut updated_escrow = escrow.clone();
+        updated_escrow.status = crate::payments::EscrowStatus::Released;
+        crate::payments::EscrowStorage::update(&env, &updated_escrow);
+
+        // Advance past original TTL threshold
+        env.ledger().set_timestamp(36_000_000);
+
+        // Escrow should still be readable after update renewed TTL
+        let retrieved = crate::payments::EscrowStorage::get(&env, &escrow_id);
+        assert!(retrieved.is_some(), "Escrow should survive after TTL renewal via update");
+        assert_eq!(retrieved.unwrap().status, crate::payments::EscrowStatus::Released);
+    });
+}
+

@@ -1,4 +1,5 @@
 use crate::errors::QuickLendXError;
+use crate::storage::PERSISTENT_TTL_THRESHOLD;
 // Re-export from crate::types so other modules can continue to import from crate::investment.
 pub use crate::types::{InsuranceCoverage, Investment, InvestmentStatus};
 use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec};
@@ -339,11 +340,11 @@ impl InvestmentStorage {
         env.storage()
             .instance()
             .set(&investment.investment_id, investment);
+        env.storage().instance().extend_ttl(&investment.investment_id, PERSISTENT_TTL_THRESHOLD);
 
-        env.storage().instance().set(
-            &Self::invoice_index_key(&investment.invoice_id),
-            &investment.investment_id,
-        );
+        let invoice_index_key = Self::invoice_index_key(&investment.invoice_id);
+        env.storage().instance().set(&invoice_index_key, &investment.investment_id);
+        env.storage().instance().extend_ttl(&invoice_index_key, PERSISTENT_TTL_THRESHOLD);
 
         // Add to investor index
         Self::add_to_investor_index(env, &investment.investor, &investment.investment_id);
@@ -355,7 +356,11 @@ impl InvestmentStorage {
     }
 
     pub fn get_investment(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
-        env.storage().instance().get(investment_id)
+        let result = env.storage().instance().get(investment_id);
+        if result.is_some() {
+            env.storage().instance().extend_ttl(investment_id, PERSISTENT_TTL_THRESHOLD);
+        }
+        result
     }
 
     pub fn get_investment_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Investment> {
@@ -399,11 +404,11 @@ impl InvestmentStorage {
         env.storage()
             .instance()
             .set(&investment.investment_id, investment);
+        env.storage().instance().extend_ttl(&investment.investment_id, PERSISTENT_TTL_THRESHOLD);
 
-        env.storage().instance().set(
-            &Self::invoice_index_key(&investment.invoice_id),
-            &investment.investment_id,
-        );
+        let invoice_index_key = Self::invoice_index_key(&investment.invoice_id);
+        env.storage().instance().set(&invoice_index_key, &investment.investment_id);
+        env.storage().instance().extend_ttl(&invoice_index_key, PERSISTENT_TTL_THRESHOLD);
     }
 
     // -- Active-investment index -----------------------------------------------

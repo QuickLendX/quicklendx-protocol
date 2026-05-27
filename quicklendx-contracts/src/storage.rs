@@ -29,7 +29,7 @@ use crate::types::{
 /// If this TTL is too short, funded invoices could be archived mid-lifecycle,
 /// causing permanent fund loss. If too long, it increases storage costs.
 /// The current value balances safety with reasonable cost.
-const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800;
+pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800;
 
 /// Extend the TTL of a persistent storage entry to prevent archival.
 ///

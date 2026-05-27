@@ -4,6 +4,7 @@
 
 use crate::errors::QuickLendXError;
 use crate::events::emit_escrow_created;
+use crate::storage::PERSISTENT_TTL_THRESHOLD;
 use soroban_sdk::token;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
 
@@ -35,22 +36,24 @@ pub struct EscrowStorage;
 impl EscrowStorage {
     pub fn store_escrow(env: &Env, escrow: &Escrow) {
         env.storage().instance().set(&escrow.escrow_id, escrow);
+        env.storage().instance().extend_ttl(&escrow.escrow_id, PERSISTENT_TTL_THRESHOLD);
         // Also store by invoice_id for easy lookup
-        env.storage().instance().set(
-            &(symbol_short!("escrow"), &escrow.invoice_id),
-            &escrow.escrow_id,
-        );
+        let invoice_key = (symbol_short!("escrow"), &escrow.invoice_id);
+        env.storage().instance().set(&invoice_key, &escrow.escrow_id);
+        env.storage().instance().extend_ttl(&invoice_key, PERSISTENT_TTL_THRESHOLD);
     }
 
     pub fn get_escrow(env: &Env, escrow_id: &BytesN<32>) -> Option<Escrow> {
-        env.storage().instance().get(escrow_id)
+        let result = env.storage().instance().get(escrow_id);
+        if result.is_some() {
+            env.storage().instance().extend_ttl(escrow_id, PERSISTENT_TTL_THRESHOLD);
+        }
+        result
     }
 
     pub fn get_escrow_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Escrow> {
-        let escrow_id: Option<BytesN<32>> = env
-            .storage()
-            .instance()
-            .get(&(symbol_short!("escrow"), invoice_id));
+        let invoice_key = (symbol_short!("escrow"), invoice_id);
+        let escrow_id: Option<BytesN<32>> = env.storage().instance().get(&invoice_key);
         if let Some(id) = escrow_id {
             Self::get_escrow(env, &id)
         } else {
@@ -60,6 +63,7 @@ impl EscrowStorage {
 
     pub fn update_escrow(env: &Env, escrow: &Escrow) {
         env.storage().instance().set(&escrow.escrow_id, escrow);
+        env.storage().instance().extend_ttl(&escrow.escrow_id, PERSISTENT_TTL_THRESHOLD);
     }
 
     pub fn generate_unique_escrow_id(env: &Env) -> BytesN<32> {
