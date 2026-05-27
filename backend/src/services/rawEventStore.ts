@@ -190,6 +190,58 @@ export class FileSystemRawEventStore implements RawEventStore {
     );
   }
 
+  /**
+   * Rollback: delete all raw events with ledger > cursor and reset
+   * the replay cursor. Idempotent — safe to call multiple times.
+   */
+  async rollbackTo(cursor: number): Promise<void> {
+    if (cursor < 0) {
+      throw new Error("Cannot rollback below genesis: cursor must be >= 0");
+    }
+
+    await fs.mkdir(this.dataDir, { recursive: true });
+
+    try {
+      const data = await fs.readFile(this.eventsFile, "utf8");
+      const lines = data.trim().split("\n").filter(line => line.length > 0);
+
+      const keptLines: string[] = [];
+      let deletedCount = 0;
+
+      for (const line of lines) {
+        try {
+          const event = JSON.parse(line) as RawEvent;
+          if (event.ledger > cursor) {
+            deletedCount++;
+          } else {
+            keptLines.push(line);
+          }
+        } catch {
+          // Keep unparseable lines for debugging
+          keptLines.push(line);
+        }
+      }
+
+      // Rewrite file with only kept events
+      const content = keptLines.length > 0 ? keptLines.join("\n") + "\n" : "";
+      await fs.writeFile(this.eventsFile, content, "utf8");
+
+      // Reset the replay cursor
+      await this.setReplayCursor(cursor);
+
+      console.warn(
+        `[FileSystemRawEventStore] Rollback to cursor=${cursor}, deleted ${deletedCount} events`
+      );
+    } catch (error: any) {
+      if (error.code === "ENOENT") {
+        // No events file yet — nothing to rollback, just set cursor
+        await this.setReplayCursor(cursor);
+        return;
+      }
+      throw error;
+    }
+  }
+
   private async rotateFileIfNeeded(): Promise<void> {
     try {
       const stats = await fs.stat(this.eventsFile);
@@ -279,6 +331,22 @@ export class InMemoryRawEventStore implements RawEventStore {
 
   async setReplayCursor(ledger: number): Promise<void> {
     this.cursor = ledger;
+  }
+
+  /**
+   * Rollback: delete all raw events with ledger > cursor and reset
+   * the replay cursor. Idempotent — safe to call multiple times.
+   */
+  async rollbackTo(cursor: number): Promise<void> {
+    if (cursor < 0) {
+      throw new Error("Cannot rollback below genesis: cursor must be >= 0");
+    }
+    const before = this.events.length;
+    this.events = this.events.filter(e => e.ledger <= cursor);
+    this.cursor = cursor;
+    console.warn(
+      `[InMemoryRawEventStore] Rollback to cursor=${cursor}, deleted ${before - this.events.length} events`
+    );
   }
 
   // Test helper

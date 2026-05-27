@@ -5,7 +5,10 @@
  *  - An event batch and its cursor update are committed atomically.
  *  - A failure anywhere in the batch rolls back all derived writes for that batch.
  *  - Re-processing the same batch (same cursor) is a no-op (idempotent).
+ *  - Chain reorgs are handled via rollbackTo + re-ingestion.
  */
+
+import { lagMonitor } from "./lagMonitor";
 
 export interface IndexedEvent {
   ledger: number;
@@ -19,6 +22,13 @@ export interface IngestionStore {
   getCursor(): Promise<number | null>;
   /** Persist a batch of events and advance the cursor in one atomic operation. */
   commitBatch(events: IndexedEvent[], newCursor: number): Promise<void>;
+  /**
+   * Atomically delete all events with ledger > cursor.
+   * Resets the committed cursor to `cursor`.
+   * Idempotent: calling with the same cursor multiple times is safe.
+   * Throws if cursor < 0 (below genesis).
+   */
+  rollbackTo(cursor: number): Promise<void>;
 }
 
 export interface IngestionResult {
@@ -60,6 +70,13 @@ export async function ingestBatch(
   // Delegate the atomic commit to the store.
   await store.commitBatch(events, batchCursor);
 
+  // Record metric for monitoring (non-fatal if it fails)
+  try {
+    lagMonitor.recordIngestion(batchCursor, events.length);
+  } catch {
+    // Metrics failure must not break ingestion
+  }
+
   return {
     committed: true,
     cursor: batchCursor,
@@ -67,6 +84,66 @@ export async function ingestBatch(
     skipped: false,
   };
 }
+
+/**
+ * Rollback to a safe cursor and re-ingest the canonical chain.
+ *
+ * 1. Calls store.rollbackTo(targetCursor) to delete orphaned data.
+ * 2. Emits a rollback metric for monitoring.
+ * 3. Fetches batches starting from targetCursor + 1 and re-ingests them
+ *    using the standard ingestBatch function.
+ *
+ * The fetchBatch callback should return { rawEvents } for a given cursor,
+ * or an empty array when no more batches are available.
+ */
+export async function rollbackAndReingest(
+  store: IngestionStore,
+  targetCursor: number,
+  fetchBatch: (cursor: number) => Promise<{ rawEvents: IndexedEvent[] }>
+): Promise<{ newCursor: number }> {
+  // 1. Rollback to the last known good cursor
+  await store.rollbackTo(targetCursor);
+
+  // Emit rollback metric (non-fatal if it fails)
+  try {
+    lagMonitor.recordRollback(targetCursor);
+  } catch {
+    // Metrics failure must not break recovery
+  }
+
+  // 2. Re-ingest from targetCursor + 1 forward until caught up
+  let currentCursor = targetCursor;
+  const maxIterations = 10_000; // safety valve
+
+  for (let i = 0; i < maxIterations; i++) {
+    const nextCursor = currentCursor + 1;
+    try {
+      const batch = await fetchBatch(nextCursor);
+      if (!batch.rawEvents || batch.rawEvents.length === 0) {
+        // No more batches available — we're caught up
+        break;
+      }
+
+      const result = await ingestBatch(store, batch.rawEvents, nextCursor);
+      currentCursor = result.cursor;
+
+      if (result.skipped) {
+        // Already at or past this cursor, keep going
+        continue;
+      }
+    } catch (err) {
+      throw new Error(
+        `Re-ingestion failed at cursor ${nextCursor}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  return { newCursor: currentCursor };
+}
+
+// ---------------------------------------------------------------------------
+// Event validation (internal)
+// ---------------------------------------------------------------------------
 
 function validateEvent(event: IndexedEvent): void {
   if (!event.txHash || typeof event.txHash !== "string") {
@@ -80,8 +157,12 @@ function validateEvent(event: IndexedEvent): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// In-memory store for testing and local development
+// ---------------------------------------------------------------------------
+
 /**
- * In-memory store for testing and local development.
+ * InMemoryIngestionStore
  *
  * commitBatch is atomic in the sense that it either succeeds fully or
  * throws without mutating state (the array swap happens only on success).
@@ -100,6 +181,14 @@ export class InMemoryIngestionStore implements IngestionStore {
     // If anything above threw, we haven't mutated state yet.
     this.events = newEvents;
     this.cursor = newCursor;
+  }
+
+  async rollbackTo(cursor: number): Promise<void> {
+    if (cursor < 0) {
+      throw new Error("Cannot rollback below genesis: cursor must be >= 0");
+    }
+    this.events = this.events.filter(e => e.ledger <= cursor);
+    this.cursor = cursor;
   }
 
   /** Test helper — returns all indexed events. */
