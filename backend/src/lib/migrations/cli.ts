@@ -47,7 +47,8 @@ async function main(): Promise<void> {
   console.log("🚀 QuickLendX Migration Runner\n");
 
   const args = parseArgs();
-  const command = args._?.[0] || "up";
+  const parsedArgs: any = args;
+const command = parsedArgs._?.[0] || "up";
 
   try {
     let result;
