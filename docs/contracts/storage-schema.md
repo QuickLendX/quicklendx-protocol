@@ -101,6 +101,19 @@ The Soroban host serializes the enum discriminant with the payload, guaranteeing
 - Primary keys use entity IDs (BytesN<32>) for uniqueness
 - Index keys combine symbols with entity-specific data
 
+### TTL Extension for Persistent and Instance Storage
+- **Critical**: Both persistent and instance storage entries must have their TTL extended to prevent archival
+- Without TTL extension, funded invoices, bids, investments, and escrow records could be archived mid-lifecycle, causing permanent fund loss
+- The `bump_persistent` helper extends TTL for persistent storage entries (InvoiceStorage)
+- The `bump_instance` helper extends TTL for instance storage entries (BidStorage, InvestmentStorage, EscrowStorage)
+- Both helpers use `PERSISTENT_TTL_THRESHOLD` (34,732,800 seconds ~402 days)
+- TTL threshold covers: max_due_date_days (365 days) + grace_period_seconds (7 days) + 30-day safety margin
+- TTL extension is applied on every read/write of long-lived keys in all storage modules:
+  - InvoiceStorage (persistent storage): store, get, update, and all index operations
+  - BidStorage (instance storage): store_bid, get_bid, update_bid
+  - InvestmentStorage (instance storage): store_investment, get_investment, update_investment
+  - EscrowStorage (instance storage): store_escrow, get_escrow, update_escrow, get_escrow_by_invoice
+
 ### Upgrade Safety
 - Storage keys are designed to be backward compatible
 - New fields can be added to structs without breaking existing data
