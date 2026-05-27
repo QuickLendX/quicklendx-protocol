@@ -190,15 +190,13 @@ describe("EventProcessor", () => {
       });
     });
 
-    it("should ignore unknown event types", async () => {
+    it("should throw on unknown event types", async () => {
       const event = {
         type: "UnknownEvent",
         id: "unknown123",
         timestamp: 1234567894,
       };
-
-      await eventProcessor.processEvent(event);
-
+      await expect(eventProcessor.processEvent(event)).rejects.toThrow(/Unknown event type/);
       expect(mockNotificationService.processNotification).not.toHaveBeenCalled();
     });
   });
