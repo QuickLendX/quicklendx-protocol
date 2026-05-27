@@ -16,6 +16,9 @@ const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   STELLAR_RPC_URL: z.url().default("https://soroban-testnet.stellar.org"),
   RATE_LIMIT_POINTS: z.coerce.number().int().min(1).default(100),
+  RATE_LIMIT_PER_KEY_POINTS: z.coerce.number().int().min(1).default(60),
+  RATE_LIMIT_RECONCILIATION_POINTS: z.coerce.number().int().min(1).default(10),
+  RATE_LIMIT_EXPORT_POINTS: z.coerce.number().int().min(1).default(5),
 
   // Database configuration
   DATABASE_PATH: z.string().default(function () {

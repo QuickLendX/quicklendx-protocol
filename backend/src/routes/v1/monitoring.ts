@@ -4,9 +4,11 @@ import { apiKeyAuth, AuthenticatedRequest } from "../../middleware/apiKeyAuth";
 import { statusService } from "../../services/statusService";
 import { getInvariantCounters } from "../../services/invariantService";
 import { webhookQueueService } from "../../services/webhookQueueService";
+import { reconciliationRateLimitMiddleware } from "../../middleware/rate-limit";
 
 const router = Router();
 router.use(apiKeyAuth);
+router.use(reconciliationRateLimitMiddleware);
 
 router.get("/health", (_req: AuthenticatedRequest, res: Response) => {
   type SubStatus = "ok" | "degraded" | "unavailable";
