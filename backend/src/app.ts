@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import { rateLimitMiddleware } from "./middleware/rate-limit";
+import { rateLimitMiddleware, perKeyRateLimitMiddleware } from "./middleware/rate-limit";
 import { loadSheddingMiddleware } from "./middleware/load-shedding";
 import { errorHandler } from "./middleware/error-handler";
 import { statusInjector } from "./middleware/status-injector";
@@ -32,8 +32,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rate Limiting
+// Rate Limiting (IP-based + per-API-key layered)
 app.use(rateLimitMiddleware);
+app.use(perKeyRateLimitMiddleware);
 
 // Inject _system metadata into every JSON response
 app.use(statusInjector);

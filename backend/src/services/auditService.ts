@@ -174,6 +174,82 @@ class AuditService {
     (process.env as Record<string, string>).AUDIT_DIR = dir;
     this.ensureAuditDir();
   }
+
+  getAllEntries(): AuditEntry[] {
+    const dir = getAuditDir();
+    if (!fs.existsSync(dir)) return [];
+
+    const entries: AuditEntry[] = [];
+    const files = fs
+      .readdirSync(dir)
+      .filter((file) => file.startsWith("audit-") && file.endsWith(".jsonl"))
+      .sort();
+
+    for (const file of files) {
+      const filePath = path.join(dir, file);
+      const lines = fs.readFileSync(filePath, "utf8").split("\n");
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          entries.push(AuditEntrySchema.parse(JSON.parse(line)));
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    return entries.sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+  }
+
+  replaceEntries(entries: AuditEntry[]): void {
+    const dir = getAuditDir();
+    const parentDir = path.dirname(dir);
+    const tempDir = path.join(parentDir, `${path.basename(dir)}.tmp-${Date.now()}`);
+    const backupDir = path.join(parentDir, `${path.basename(dir)}.bak-${Date.now()}`);
+    const grouped = new Map<string, string[]>();
+
+    fs.mkdirSync(tempDir, { recursive: true });
+
+    for (const entry of entries) {
+      const validated = AuditEntrySchema.parse(entry);
+      const date = validated.timestamp.slice(0, 10);
+      const existing = grouped.get(date) ?? [];
+      existing.push(JSON.stringify(validated));
+      grouped.set(date, existing);
+    }
+
+    for (const [date, lines] of grouped.entries()) {
+      fs.writeFileSync(
+        path.join(tempDir, `audit-${date}.jsonl`),
+        `${lines.join("\n")}\n`,
+        "utf8"
+      );
+    }
+
+    if (fs.existsSync(dir)) {
+      fs.renameSync(dir, backupDir);
+    }
+
+    try {
+      fs.renameSync(tempDir, dir);
+      if (fs.existsSync(backupDir)) {
+        fs.rmSync(backupDir, { recursive: true, force: true });
+      }
+    } catch (error) {
+      if (fs.existsSync(dir)) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+      if (fs.existsSync(backupDir)) {
+        fs.renameSync(backupDir, dir);
+      }
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+      throw error;
+    }
+  }
 }
 
 export { AuditService };
@@ -186,4 +262,7 @@ export const auditService = {
   clearAll: () => AuditService.getInstance().clearAll(),
   setAuditDir: (...args: Parameters<AuditService["setAuditDir"]>) =>
     AuditService.getInstance().setAuditDir(...args),
+  getAllEntries: () => AuditService.getInstance().getAllEntries(),
+  replaceEntries: (...args: Parameters<AuditService["replaceEntries"]>) =>
+    AuditService.getInstance().replaceEntries(...args),
 };

@@ -40,3 +40,12 @@ The `InMemoryIngestionStore` implementation satisfies this contract and is used 
 - Cursor can only advance, never regress. The idempotency check enforces this.
 - Validation runs before any write, so invalid payloads cannot corrupt the index.
 - The store interface is injected, making it straightforward to swap in a real DB-backed implementation with proper ACID transactions.
+
+
+# Indexer — Transaction Semantics
+
+## Overview
+
+The ingestion layer (`src/services/ingestion.ts`) processes on-chain event batches atomically. Either the full batch is committed together with the cursor advance, or nothing is written.
+
+## Unit of work

@@ -173,6 +173,7 @@ describe("ingestBatch — crash simulation", () => {
       commitBatch: async () => {
         throw new Error("simulated disk failure");
       },
+      rollbackTo: async (_cursor: number) => { throw new Error("not implemented"); },
     };
 
     await expect(ingestBatch(crashingStore, [makeEvent(20)], 20)).rejects.toThrow(
@@ -195,6 +196,7 @@ describe("ingestBatch — crash simulation", () => {
         if (callCount === 1) throw new Error("transient failure");
         return store.commitBatch(events, cursor);
       },
+      rollbackTo: async (cursor: number) => store.rollbackTo(cursor),
     };
 
     const events = [makeEvent(30)];
@@ -222,6 +224,7 @@ describe("ingestBatch — crash simulation", () => {
         }
         return store.commitBatch(events, cursor);
       },
+      rollbackTo: async (cursor: number) => store.rollbackTo(cursor),
     };
 
     // Batch 1: succeeds
