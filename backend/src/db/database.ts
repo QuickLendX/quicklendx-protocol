@@ -1,7 +1,12 @@
 /**
- * Simple in-memory database for API keys and audit logs
- * In production, replace with PostgreSQL, MySQL, or another persistent database
+ * Persistent database for API keys and audit logs backed by better-sqlite3.
+ *
+ * All key hashes are SHA-256 — raw secrets are never stored.
+ * Prefix lookups are O(1) via a UNIQUE index on api_keys.prefix.
+ * Audit rows are INSERT-only (append-only, no updates or deletes).
  */
+
+import { getDatabase } from '../lib/database';
 
 export interface DbApiKey {
   id: string;
@@ -27,98 +32,174 @@ export interface DbAuditLog {
   metadata: string | null;
 }
 
+const ALL_API_KEY_COLS = [
+  'id', 'key_hash', 'prefix', 'name', 'scopes',
+  'created_at', 'last_used_at', 'expires_at', 'revoked', 'created_by',
+] as const;
+
+const ALL_AUDIT_COLS = [
+  'id', 'event_type', 'key_id', 'actor', 'timestamp',
+  'ip_address', 'endpoint', 'metadata',
+] as const;
+
+function rowToDbApiKey(row: any): DbApiKey {
+  return {
+    id: row.id,
+    key_hash: row.key_hash,
+    prefix: row.prefix,
+    name: row.name,
+    scopes: row.scopes,
+    created_at: row.created_at,
+    last_used_at: row.last_used_at ?? null,
+    expires_at: row.expires_at ?? null,
+    revoked: row.revoked,
+    created_by: row.created_by,
+  };
+}
+
+function rowToDbAuditLog(row: any): DbAuditLog {
+  return {
+    id: row.id,
+    event_type: row.event_type,
+    key_id: row.key_id,
+    actor: row.actor,
+    timestamp: row.timestamp,
+    ip_address: row.ip_address ?? null,
+    endpoint: row.endpoint ?? null,
+    metadata: row.metadata ?? null,
+  };
+}
+
 class Database {
-  private apiKeys: Map<string, DbApiKey> = new Map();
-  private auditLogs: DbAuditLog[] = [];
-  private keysByPrefix: Map<string, string> = new Map();
+  private _db: ReturnType<typeof getDatabase> | null = null;
 
-  constructor() {
-    this.initialize();
+  private getDb(): ReturnType<typeof getDatabase> {
+    if (!this._db) {
+      this._db = getDatabase();
+    }
+    return this._db;
   }
 
-  private initialize() {
-    // Initialize in-memory storage
-    // In production, this would connect to a real database
-  }
+  // ---- API Key operations ----
 
-  // API Key operations
   createApiKey(key: DbApiKey): void {
-    this.apiKeys.set(key.id, key);
-    this.keysByPrefix.set(key.prefix, key.id);
+    this.getDb().prepare(`
+      INSERT INTO api_keys (id, key_hash, prefix, name, scopes, created_at, last_used_at, expires_at, revoked, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      key.id, key.key_hash, key.prefix, key.name, key.scopes,
+      key.created_at, key.last_used_at, key.expires_at, key.revoked, key.created_by,
+    );
   }
 
   getApiKeyById(id: string): DbApiKey | undefined {
-    return this.apiKeys.get(id);
+    const row = this.getDb().prepare('SELECT * FROM api_keys WHERE id = ?').get(id);
+    return row ? rowToDbApiKey(row) : undefined;
   }
 
   getApiKeyByPrefix(prefix: string): DbApiKey | undefined {
-    const id = this.keysByPrefix.get(prefix);
-    return id ? this.apiKeys.get(id) : undefined;
+    const row = this.getDb().prepare('SELECT * FROM api_keys WHERE prefix = ?').get(prefix);
+    return row ? rowToDbApiKey(row) : undefined;
   }
 
   updateApiKey(id: string, updates: Partial<DbApiKey>): boolean {
-    const key = this.apiKeys.get(id);
-    if (!key) return false;
+    const existing = this.getApiKeyById(id);
+    if (!existing) return false;
 
-    const updated = { ...key, ...updates };
-    this.apiKeys.set(id, updated);
+    const keys = Object.keys(updates) as (keyof DbApiKey)[];
+    if (keys.length === 0) return true;
+
+    const setClause = keys.map((k) => `${k} = ?`).join(', ');
+    const values = keys.map((k) => updates[k] ?? null);
+
+    this.getDb().prepare(`UPDATE api_keys SET ${setClause} WHERE id = ?`).run(...values, id);
     return true;
   }
 
   deleteApiKey(id: string): boolean {
-    const key = this.apiKeys.get(id);
-    if (!key) return false;
+    const existing = this.getApiKeyById(id);
+    if (!existing) return false;
 
-    this.keysByPrefix.delete(key.prefix);
-    return this.apiKeys.delete(id);
+    this.getDb().prepare('DELETE FROM api_key_audit_log WHERE key_id = ?').run(id);
+    this.getDb().prepare('DELETE FROM api_keys WHERE id = ?').run(id);
+    return true;
   }
 
   listApiKeys(filters?: { created_by?: string; revoked?: boolean }): DbApiKey[] {
-    let keys = Array.from(this.apiKeys.values());
+    let sql = 'SELECT * FROM api_keys';
+    const clauses: string[] = [];
+    const params: unknown[] = [];
 
     if (filters?.created_by) {
-      keys = keys.filter(k => k.created_by === filters.created_by);
+      clauses.push('created_by = ?');
+      params.push(filters.created_by);
     }
 
     if (filters?.revoked !== undefined) {
-      keys = keys.filter(k => (k.revoked === 1) === filters.revoked);
+      clauses.push('revoked = ?');
+      params.push(filters.revoked ? 1 : 0);
     }
 
-    return keys;
+    if (clauses.length > 0) {
+      sql += ' WHERE ' + clauses.join(' AND ');
+    }
+
+    sql += ' ORDER BY created_at DESC';
+
+    const rows = this.getDb().prepare(sql).all(...params);
+    return rows.map(rowToDbApiKey);
   }
 
-  // Audit log operations
+  // ---- Audit log operations ----
+
   createAuditLog(log: DbAuditLog): void {
-    this.auditLogs.push(log);
-  }
-
-  getAuditLogs(filters?: { key_id?: string; event_type?: string }): DbAuditLog[] {
-    let logs = [...this.auditLogs];
-
-    if (filters?.key_id) {
-      logs = logs.filter(l => l.key_id === filters.key_id);
-    }
-
-    if (filters?.event_type) {
-      logs = logs.filter(l => l.event_type === filters.event_type);
-    }
-
-    return logs.sort((a, b) => 
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    this.getDb().prepare(`
+      INSERT INTO api_key_audit_log (id, event_type, key_id, actor, timestamp, ip_address, endpoint, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      log.id, log.event_type, log.key_id, log.actor,
+      log.timestamp, log.ip_address, log.endpoint, log.metadata,
     );
   }
 
-  // Utility methods for testing
+  getAuditLogs(filters?: { key_id?: string; event_type?: string }): DbAuditLog[] {
+    let sql = 'SELECT * FROM api_key_audit_log';
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+
+    if (filters?.key_id) {
+      clauses.push('key_id = ?');
+      params.push(filters.key_id);
+    }
+
+    if (filters?.event_type) {
+      clauses.push('event_type = ?');
+      params.push(filters.event_type);
+    }
+
+    if (clauses.length > 0) {
+      sql += ' WHERE ' + clauses.join(' AND ');
+    }
+
+    sql += ' ORDER BY timestamp DESC';
+
+    const rows = this.getDb().prepare(sql).all(...params);
+    return rows.map(rowToDbAuditLog);
+  }
+
+  // ---- Utility ----
+
   clear(): void {
-    this.apiKeys.clear();
-    this.auditLogs = [];
-    this.keysByPrefix.clear();
+    this.getDb().prepare('DELETE FROM api_key_audit_log').run();
+    this.getDb().prepare('DELETE FROM api_keys').run();
   }
 
   getStats() {
+    const apiKeyCount = (this.getDb().prepare('SELECT COUNT(*) AS count FROM api_keys').get() as any).count;
+    const auditCount = (this.getDb().prepare('SELECT COUNT(*) AS count FROM api_key_audit_log').get() as any).count;
     return {
-      apiKeys: this.apiKeys.size,
-      auditLogs: this.auditLogs.length,
+      apiKeys: apiKeyCount,
+      auditLogs: auditCount,
     };
   }
 }

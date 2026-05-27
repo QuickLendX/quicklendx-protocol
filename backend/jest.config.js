@@ -11,6 +11,7 @@ module.exports = {
     },
   },
   collectCoverageFrom: [
+    "src/db/**/*.ts",
     "src/services/webhook/**/*.ts",
     "!src/services/webhook/index.ts",
     "src/lib/migrations/**/*.ts",
