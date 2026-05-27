@@ -280,6 +280,12 @@ export class FileSystemRawEventStore implements RawEventStore {
     }
   }
 
+  async rollbackTo(cursor: number): Promise<void> {
+    if (cursor < 0) throw new Error("cursor must be non-negative");
+    await this.deleteEventsByLedgerRange(cursor + 1, Number.MAX_SAFE_INTEGER);
+    await this.setReplayCursor(cursor);
+  }
+
   // Test helper method
   async reset(): Promise<void> {
     try {
@@ -375,6 +381,12 @@ export class InMemoryRawEventStore implements RawEventStore {
 
   async setReplayCursor(ledger: number): Promise<void> {
     this.cursor = ledger;
+  }
+
+  async rollbackTo(cursor: number): Promise<void> {
+    if (cursor < 0) throw new Error("cursor must be non-negative");
+    this.events = this.events.filter(e => e.ledger <= cursor);
+    this.cursor = cursor;
   }
 
   async getAllEvents(): Promise<RawEvent[]> {

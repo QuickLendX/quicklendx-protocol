@@ -1,9 +1,22 @@
 import { Request, Response, NextFunction } from "express";
-import { SettlementStatus } from "../../types/contract";
+import { Settlement, SettlementStatus } from "../../types/contract";
 import { applyCacheHeaders, CC_LONG } from "../../middleware/cache-headers";
+import { labelRecord } from "../../services/versioningService";
 import { freshnessService } from "../../services/freshnessService";
 import { parsePaginationParams, PaginationError } from "../../utils/pagination";
 import { settlementOrchestrator } from "../../services/settlementOrchestrator";
+
+export const MOCK_SETTLEMENTS: Settlement[] = [
+  labelRecord<Omit<Settlement, "contract_version" | "event_schema_version" | "indexed_at">>({
+    id: "settlement-001",
+    invoice_id: "invoice-001",
+    amount: "1000000000",
+    payer: "GPAYER000000000000000000000000000000000000000000000000",
+    recipient: "GRECIP000000000000000000000000000000000000000000000000",
+    timestamp: Math.floor(Date.now() / 1000) - 3600,
+    status: SettlementStatus.Pending,
+  }),
+];
 
 export const getSettlements = async (
   req: Request,
@@ -20,7 +33,7 @@ export const getSettlements = async (
 
     const settlements = settlementOrchestrator.list(filters);
 
-    const body = { data: filtered, freshness: freshnessService.getFreshness() };
+    const body = { data: settlements, freshness: freshnessService.getFreshness() };
     if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body })) {
       res.status(304).end();
       return;
@@ -43,7 +56,7 @@ export const getSettlementById = async (
 ) => {
   try {
     const { id } = req.params;
-    const settlement = settlementOrchestrator.getById(id);
+    const settlement = settlementOrchestrator.getById(id as string);
 
     if (!settlement) {
       return res.status(404).json({
