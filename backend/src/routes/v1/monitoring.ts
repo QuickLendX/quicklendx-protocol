@@ -8,6 +8,7 @@ import { ReconciliationWorker } from "../../services/reconciliationWorker";
 
 const router = Router();
 router.use(apiKeyAuth);
+router.use(reconciliationRateLimitMiddleware);
 
 router.get("/health", (_req: AuthenticatedRequest, res: Response) => {
   type SubStatus = "ok" | "degraded" | "unavailable";
