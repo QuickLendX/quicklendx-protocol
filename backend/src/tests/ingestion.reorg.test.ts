@@ -190,7 +190,7 @@ describe("rollbackAndReingest", () => {
     const result = await rollbackAndReingest(store, 1, fetchBatch);
 
     expect(result.newCursor).toBe(3);
-    expect(fetchBatch).toHaveBeenCalledTimes(2); // cursors 2 and 3
+    expect(fetchBatch).toHaveBeenCalledTimes(3); // cursors 2, 3, 4 (4 returns empty)
     expect(store.getEvents()).toHaveLength(3);
     expect(store.getEvents()[1].payload.canonical).toBe(true);
   });
