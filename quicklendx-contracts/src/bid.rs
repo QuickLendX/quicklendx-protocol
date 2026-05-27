@@ -6,6 +6,24 @@ use crate::errors::QuickLendXError;
 use crate::events::{emit_bid_expired, emit_bid_ttl_updated};
 pub use crate::types::{Bid, BidStatus};
 
+/// Storage keys for the per-invoice bid index.
+///
+/// Instead of storing a single `Vec<BytesN<32>>` under one key (which causes
+/// O(n) read+write on every mutation), we use an indexed layout:
+///
+/// - `Count(invoice_id)` -> `u32` — number of bid entries for this invoice
+/// - `Entry(invoice_id, idx)` -> `BytesN<32>` — individual bid ID at position `idx`
+///
+/// This makes `add_bid_to_invoice` O(1) (write one entry + increment count)
+/// instead of O(n) (read full Vec, append, write full Vec), reducing gas
+/// on the hot bidding path.
+#[derive(Clone)]
+#[contracttype]
+pub enum BidIndexKey {
+    Count(BytesN<32>),
+    Entry(BytesN<32>, u32),
+}
+
 // --- Bid TTL configuration ----------------------------------------------------
 //
 // TTL is stored in whole days and is admin-configurable within [MIN, MAX].
@@ -137,8 +155,12 @@ impl BidStorage {
             env.storage().instance().set(&Self::all_bids_key(), &bids);
         }
     }
-    fn invoice_key(invoice_id: &BytesN<32>) -> (soroban_sdk::Symbol, BytesN<32>) {
-        (symbol_short!("bids"), invoice_id.clone())
+    fn invoice_bid_count_key(invoice_id: &BytesN<32>) -> BidIndexKey {
+        BidIndexKey::Count(invoice_id.clone())
+    }
+
+    fn invoice_bid_entry_key(invoice_id: &BytesN<32>, index: u32) -> BidIndexKey {
+        BidIndexKey::Entry(invoice_id.clone(), index)
     }
 
     fn investor_bids_key(investor: &Address) -> (soroban_sdk::Symbol, Address) {
@@ -183,10 +205,24 @@ impl BidStorage {
         env.storage().instance().set(&bid.bid_id, bid);
     }
     pub fn get_bids_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
-        env.storage()
+        let count: u32 = env
+            .storage()
             .instance()
-            .get(&Self::invoice_key(invoice_id))
-            .unwrap_or_else(|| Vec::new(env))
+            .get(&Self::invoice_bid_count_key(invoice_id))
+            .unwrap_or(0);
+        let mut bids = Vec::new(env);
+        let mut idx: u32 = 0;
+        while idx < count {
+            if let Some(bid_id) = env
+                .storage()
+                .instance()
+                .get(&Self::invoice_bid_entry_key(invoice_id, idx))
+            {
+                bids.push_back(bid_id);
+            }
+            idx += 1;
+        }
+        bids
     }
 
     pub fn get_active_bid_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
@@ -473,22 +509,11 @@ impl BidStorage {
         count
     }
     pub fn add_bid_to_invoice(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
-        let mut bids = Self::get_bids_for_invoice(env, invoice_id);
-        let mut exists = false;
-        let mut idx: u32 = 0;
-        while idx < bids.len() {
-            if bids.get(idx).unwrap() == *bid_id {
-                exists = true;
-                break;
-            }
-            idx += 1;
-        }
-        if !exists {
-            bids.push_back(bid_id.clone());
-            env.storage()
-                .instance()
-                .set(&Self::invoice_key(invoice_id), &bids);
-        }
+        let count_key = Self::invoice_bid_count_key(invoice_id);
+        let count: u32 = env.storage().instance().get(&count_key).unwrap_or(0);
+        let entry_key = Self::invoice_bid_entry_key(invoice_id, count);
+        env.storage().instance().set(&entry_key, bid_id);
+        env.storage().instance().set(&count_key, &(count + 1));
     }
     /// @notice Scans and prunes expired bids from an invoice's bid list.
     /// @dev Maintains O(N) where N is current bids on invoice. Pruning keeps N small.
@@ -510,46 +535,70 @@ impl BidStorage {
     /// @return cleaned_count Total number of bids cleaned (transitioned to Expired or already Expired bids removed from index).
     pub fn refresh_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let current_timestamp = env.ledger().timestamp();
-        let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
-        let mut active = Vec::new(env);
+        let count_key = Self::invoice_bid_count_key(invoice_id);
+        let old_count: u32 = env.storage().instance().get(&count_key).unwrap_or(0);
         let mut cleaned_count = 0u32;
-        let mut changed = false;
+        let mut write_idx: u32 = 0;
+        let mut read_idx: u32 = 0;
 
-        for bid_id in bid_ids.iter() {
-            if let Some(mut bid) = Self::get_bid(env, &bid_id) {
-                // Invariant 1: Preservation - terminal bids are NEVER touched by cleanup.
-                let is_terminal = bid.status == BidStatus::Accepted
-                    || bid.status == BidStatus::Withdrawn
-                    || bid.status == BidStatus::Cancelled;
+        while read_idx < old_count {
+            let entry_key = Self::invoice_bid_entry_key(invoice_id, read_idx);
+            let should_keep = env
+                .storage()
+                .instance()
+                .get::<_, BytesN<32>>(&entry_key)
+                .map_or(false, |bid_id| {
+                    if let Some(mut bid) = Self::get_bid(env, &bid_id) {
+                        let is_terminal = bid.status == BidStatus::Accepted
+                            || bid.status == BidStatus::Withdrawn
+                            || bid.status == BidStatus::Cancelled;
 
-                if is_terminal {
-                    active.push_back(bid_id);
-                } else if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
-                    bid.status = BidStatus::Expired;
-                    Self::update_bid(env, &bid);
-                    emit_bid_expired(env, &bid);
-                    cleaned_count = cleaned_count.saturating_add(1);
-                    changed = true;
-                } else if bid.status == BidStatus::Expired {
-                    // Already expired but still in the index - clean it up
-                    cleaned_count = cleaned_count.saturating_add(1);
-                    changed = true;
-                } else {
-                    // Placed but deadline not yet reached - keep active
-                    active.push_back(bid_id);
+                        if is_terminal {
+                            true
+                        } else if bid.status == BidStatus::Placed
+                            && bid.is_expired(current_timestamp)
+                        {
+                            bid.status = BidStatus::Expired;
+                            Self::update_bid(env, &bid);
+                            emit_bid_expired(env, &bid);
+                            cleaned_count = cleaned_count.saturating_add(1);
+                            false
+                        } else if bid.status == BidStatus::Expired {
+                            cleaned_count = cleaned_count.saturating_add(1);
+                            false
+                        } else {
+                            true
+                        }
+                    } else {
+                        cleaned_count = cleaned_count.saturating_add(1);
+                        false
+                    }
+                });
+
+            if should_keep {
+                if write_idx != read_idx {
+                    let src = Self::invoice_bid_entry_key(invoice_id, read_idx);
+                    let dst = Self::invoice_bid_entry_key(invoice_id, write_idx);
+                    if let Some(bid_id) = env.storage().instance().get::<_, BytesN<32>>(&src) {
+                        env.storage().instance().set(&dst, &bid_id);
+                    }
                 }
-            } else {
-                // Orphaned bid ID (record missing) - clean it up
-                cleaned_count = cleaned_count.saturating_add(1);
-                changed = true;
+                write_idx += 1;
             }
+            read_idx += 1;
         }
 
-        // Only update storage if the list actually shrank to save gas/fees
-        if active.len() < bid_ids.len() || changed {
+        // Remove stale entries beyond the new write_idx
+        while write_idx < old_count {
             env.storage()
                 .instance()
-                .set(&Self::invoice_key(invoice_id), &active);
+                .remove(&Self::invoice_bid_entry_key(invoice_id, write_idx));
+            write_idx += 1;
+        }
+
+        if cleaned_count > 0 {
+            let new_count = old_count.saturating_sub(cleaned_count);
+            env.storage().instance().set(&count_key, &new_count);
         }
         cleaned_count
     }

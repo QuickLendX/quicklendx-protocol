@@ -21,7 +21,10 @@ To support efficient queries, the protocol maintains several secondary indexes u
 
 ### Bids
 - **Global Index**: A list of all bid IDs in the protocol.
-- **Invoice Bid Index**: Lists all bids placed on a specific invoice.
+- **Invoice Bid Index**: Indexed storage for bids placed on a specific invoice, using a count + entry layout for O(1) append:
+  - `BidIndexKey::Count(invoice_id)` -> `u32` — number of bid entries for the invoice
+  - `BidIndexKey::Entry(invoice_id, index)` -> `BytesN<32>` — individual bid ID at position `index`
+  - This replaces the previous `Vec<BytesN<32>>`-under-one-key approach, reducing instruction cost on the hot `add_bid_to_invoice` path from O(n) to O(1).
 - **Investor Bid Index**: Lists all bids placed by a specific investor.
 
 ### Investments
