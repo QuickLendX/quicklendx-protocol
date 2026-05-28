@@ -117,6 +117,9 @@ export interface RawEventStore {
   
   // Set replay cursor
   setReplayCursor(ledger: number): Promise<void>;
+
+  /** Rollback: delete all events with ledger > cursor and reset replay cursor. Idempotent. Throws if cursor < 0. */
+  rollbackTo(cursor: number): Promise<void>;
 }
 
 // Derived table store interface
@@ -135,6 +138,9 @@ export interface DerivedTableStore {
   
   // Rollback transaction
   rollbackTransaction(): Promise<void>;
+  
+  // List invoices currently persisted by the indexer
+  listInvoices?(): Promise<any[]>;
 }
 
 // Security validation interface

@@ -1,41 +1,8 @@
 import { Request, Response, NextFunction } from "express";
-import { Invoice, InvoiceStatus, InvoiceCategory } from "../../types/contract";
+import { InvoiceStatus } from "../../types/contract";
 import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
-import { labelRecord } from "../../services/versioningService";
 import { freshnessService } from "../../services/freshnessService";
-
-// Mock data aligned with contract types.
-// labelRecord stamps each record with the contract and event schema version
-// that produced it — exactly as the real indexer would do at ingest time.
-export const MOCK_INVOICES: Invoice[] = [
-  labelRecord<Omit<Invoice, "contract_version" | "event_schema_version" | "indexed_at">>({
-    id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-    business: "GDVLRH4G4...7Y",
-    amount: "1000000000",
-    currency: "CBGHS...ABC",
-    due_date: Math.floor(Date.now() / 1000) + 86400 * 30,
-    status: InvoiceStatus.Verified,
-    description: "Cloud Services - March 2026",
-    category: InvoiceCategory.Technology,
-    tags: ["cloud", "saas"],
-    metadata: {
-      customer_name: "TechCorp Inc",
-      customer_address: "123 Silicon Valley",
-      tax_id: "TX-12345",
-      line_items: [
-        {
-          description: "AWS Instance usage",
-          quantity: "1",
-          unit_price: "1000000000",
-          total: "1000000000",
-        },
-      ],
-      notes: "Monthly recurring billing",
-    },
-    created_at: Math.floor(Date.now() / 1000) - 86400,
-    updated_at: Math.floor(Date.now() / 1000) - 86400,
-  }),
-];
+import { invoiceStore } from "../../services/invoiceStore";
 
 export const getInvoices = async (
   req: Request,
@@ -45,11 +12,22 @@ export const getInvoices = async (
   try {
     const { business, status } = req.query;
 
-    let filtered = [...MOCK_INVOICES];
-    if (business) filtered = filtered.filter((i) => i.business === business);
-    if (status) filtered = filtered.filter((i) => i.status === status);
+    const filter: { business?: string; status?: InvoiceStatus } = {};
+    if (typeof business === 'string') {
+      filter.business = business;
+    }
+    if (typeof status === 'string') {
+      filter.status = status as InvoiceStatus;
+    }
 
-    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
+    const filtered = invoiceStore.findInvoices(filter);
+
+    const body = { data: filtered, freshness: freshnessService.getFreshness() };
+    if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body })) {
+      res.status(304).end();
+      return;
+    }
+    res.json(body);
   } catch (error) {
     next(error);
   }
@@ -62,7 +40,7 @@ export const getInvoiceById = async (
 ) => {
   try {
     const { id } = req.params;
-    const invoice = MOCK_INVOICES.find((i) => i.id === id);
+    const invoice = invoiceStore.findInvoiceById(id as string);
 
     if (!invoice) {
       return res.status(404).json({

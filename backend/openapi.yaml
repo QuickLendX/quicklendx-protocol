@@ -642,3 +642,119 @@ components:
         status: { $ref: "#/components/schemas/DisputeStatus" }
         created_at: { type: integer, format: int64 }
         resolved_at: { type: integer, format: int64 }
+
+    PortfolioPageResult:
+      type: object
+      description: Paginated result wrapper for portfolio entries.
+      required:
+        - data
+        - next_cursor
+        - has_more
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortfolioEntry'
+        next_cursor:
+          type: string
+          nullable: true
+          description: Opaque cursor for the next page; null when no more pages exist.
+        has_more:
+          type: boolean
+          description: true when more items exist beyond this page.
+
+    ErrorEnvelope:
+      type: object
+      description: Standard error response envelope used across all controllers.
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - message
+            - code
+          properties:
+            message:
+              type: string
+              description: Human-readable error description.
+            code:
+              type: string
+              description: Machine-readable error code (SCREAMING_SNAKE_CASE).
+            details:
+              description: Optional extra details (omitted in production).
+
+    NotificationType:
+      type: string
+      enum:
+        - invoice_funded
+        - payment_received
+        - dispute_opened
+        - dispute_resolved
+
+    UserNotificationPreferences:
+      type: object
+      properties:
+        userId:
+          type: string
+        email_enabled:
+          type: boolean
+        email_address:
+          type: string
+          format: email
+        notifications:
+          type: object
+          additionalProperties:
+            type: boolean
+
+    UpdateNotificationPreferences:
+      type: object
+      properties:
+        email_enabled:
+          type: boolean
+        email_address:
+          type: string
+          format: email
+        notifications:
+          type: object
+          additionalProperties:
+            type: boolean
+
+    Event:
+      type: object
+      description: A blockchain event to be processed for notifications.
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          description: Event type identifier (e.g. InvoiceCreated, BidPlaced).
+        data:
+          type: object
+          description: Event payload; shape varies by type.
+
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      description: Number of items per page. Clamped to [1, 100].
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    CursorParam:
+      name: cursor
+      in: query
+      description: Opaque cursor from a previous response's next_cursor field.
+      schema:
+        type: string
+
+  responses:
+    PaginationError:
+      description: Invalid pagination parameters (bad limit or malformed cursor).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'

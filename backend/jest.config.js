@@ -11,6 +11,7 @@ module.exports = {
     },
   },
   collectCoverageFrom: [
+    "src/db/**/*.ts",
     "src/services/webhook/**/*.ts",
     "!src/services/webhook/index.ts",
     "src/lib/migrations/**/*.ts",
@@ -18,9 +19,13 @@ module.exports = {
     "src/lib/database.ts",
     "src/lib/logging/policy.ts",
     "src/middleware/request-logger.ts",
+    "src/tests/spec-loader.ts",
+    "src/tests/openapi-contract.test.ts",
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
+    // Mock pg (not installed) so contract tests can import app.ts cleanly.
+    "^pg$": "<rootDir>/src/__mocks__/pg.ts",
   },
   testPathIgnorePatterns: [
     "src/node_modules/",
