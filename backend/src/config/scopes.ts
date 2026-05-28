@@ -170,3 +170,25 @@ export function hasRequiredScopes(grantedScopes: string[], requiredScopes: strin
 export function getScopesByCategory(category: ScopeDefinition['category']): ScopeDefinition[] {
   return SCOPE_REGISTRY.filter(s => s.category === category);
 }
+
+/**
+ * Map a set of granted scopes to an administrative role.
+ * Returns an `AdminRole` string when the scopes confer admin privileges,
+ * or `null` when no administrative role is implied.
+ */
+import { AdminRole } from "../types/rbac";
+
+export function roleFromScopes(grantedScopes: string[]): AdminRole | null {
+  // Full admin grants highest privilege
+  if (grantedScopes.includes('admin:*')) return 'super_admin';
+
+  // Operations-level privileges: management scopes or write:*
+  if (grantedScopes.includes('write:*') || grantedScopes.includes('admin:keys')) {
+    return 'operations_admin';
+  }
+
+  // Support-level privileges: read access
+  if (grantedScopes.includes('read:*')) return 'support';
+
+  return null;
+}
