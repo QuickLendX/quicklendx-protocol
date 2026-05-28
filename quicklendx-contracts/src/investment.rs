@@ -35,6 +35,9 @@ pub const MIN_PREMIUM_AMOUNT: i128 = 1;
 impl InvestmentStatus {
     /// Validate that a status transition is legal.
     ///
+    /// Terminal states are immutable. Once an investment reaches Completed,
+    /// Defaulted, Refunded, or Withdrawn, no further transition is permitted.
+    ///
     /// ### Allowed transitions
     /// | From      | To                              |
     /// |-----------|----------------------------------|
@@ -365,6 +368,10 @@ impl InvestmentStorage {
 
     /// Update an investment, enforcing the transition guard and maintaining the
     /// active-investment index so no orphan `Active` records can accumulate.
+    ///
+    /// Terminal-state transitions are validated before the update is persisted.
+    /// If a transition leaves `Active`, the investment is removed from the
+    /// active index immediately.
     ///
     /// ### Panics
     /// Panics (contract error) if the transition `old_status -> new_status` is

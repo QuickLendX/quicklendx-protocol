@@ -10,6 +10,7 @@ export const AuditOperationSchema = z.enum([
   "BACKFILL_ABORT",
   "ADMIN_API_KEY_ADD",
   "ADMIN_API_KEY_REVOKE",
+  "RETENTION_RUN",
 ]);
 
 export type AuditOperation = z.infer<typeof AuditOperationSchema>;

@@ -91,6 +91,38 @@ export class InMemoryDerivedTableStore implements DerivedTableStore {
     this.inTransaction = false;
   }
 
+  /**
+   * Rollback: delete all derived rows with ledger > cursor from all tables.
+   * Idempotent — safe to call multiple times.
+   * Throws if called during an active transaction.
+   */
+  async rollbackTo(cursor: number): Promise<void> {
+    if (cursor < 0) {
+      throw new Error("Cannot rollback below genesis: cursor must be >= 0");
+    }
+
+    if (this.inTransaction) {
+      throw new Error("Cannot rollback during an active transaction");
+    }
+
+    const filterMap = (map: Map<string, any>) => {
+      const entries = Array.from(map.entries()).filter(([_, row]) => {
+        // Keep rows where ledger <= cursor, or rows without a ledger field
+        return row.ledger !== undefined ? row.ledger <= cursor : true;
+      });
+      map.clear();
+      for (const [key, value] of entries) {
+        map.set(key, value);
+      }
+    };
+
+    filterMap(this.tables.invoices);
+    filterMap(this.tables.bids);
+    filterMap(this.tables.settlements);
+    filterMap(this.tables.disputes);
+    filterMap(this.tables.notifications);
+  }
+
   // Direct table access methods for event processor
   async upsertInvoice(invoice: any): Promise<void> {
     this.tables.invoices.set(invoice.id, invoice);
@@ -115,6 +147,10 @@ export class InMemoryDerivedTableStore implements DerivedTableStore {
   // Query methods for testing
   async getInvoice(id: string): Promise<any | null> {
     return this.tables.invoices.get(id) || null;
+  }
+
+  async listInvoices(): Promise<any[]> {
+    return Array.from(this.tables.invoices.values());
   }
 
   async getBid(id: string): Promise<any | null> {
@@ -295,6 +331,61 @@ export class FileSystemDerivedTableStore implements DerivedTableStore {
     }
   }
 
+  /**
+   * Rollback: delete all derived rows with ledger > cursor from all table files.
+   * Idempotent — safe to call multiple times.
+   */
+  async rollbackTo(cursor: number): Promise<void> {
+    if (cursor < 0) {
+      throw new Error("Cannot rollback below genesis: cursor must be >= 0");
+    }
+
+    const fs = require("fs").promises;
+    const path = require("path");
+
+    await fs.mkdir(this.dataDir, { recursive: true });
+
+    for (const [table, filename] of Object.entries(this.tablesFiles)) {
+      const filePath = path.join(this.dataDir, filename);
+      try {
+        const data = await fs.readFile(filePath, "utf8");
+        const lines = data.trim().split("\n").filter((line: string) => line.length > 0);
+
+        const keptLines: string[] = [];
+        let deletedCount = 0;
+
+        for (const line of lines) {
+          try {
+            const record = JSON.parse(line);
+            if (record.ledger !== undefined && record.ledger > cursor) {
+              deletedCount++;
+            } else {
+              keptLines.push(line);
+            }
+          } catch {
+            // Keep unparseable lines
+            keptLines.push(line);
+          }
+        }
+
+        const content = keptLines.length > 0 ? keptLines.join("\n") + "\n" : "";
+        await fs.writeFile(filePath, content, "utf8");
+
+        if (deletedCount > 0) {
+          console.warn(
+            `[FileSystemDerivedTableStore] Rollback table=${table} to cursor=${cursor}, deleted ${deletedCount} rows`
+          );
+        }
+      } catch (error: any) {
+        if (error.code === "ENOENT") {
+          // File doesn't exist yet — nothing to rollback
+          continue;
+        }
+        throw error;
+      }
+    }
+  }
+
   // Direct table access methods
   async upsertRecord(table: keyof typeof this.tablesFiles, record: any): Promise<void> {
     const fs = require("fs").promises;
@@ -320,6 +411,22 @@ export class FileSystemDerivedTableStore implements DerivedTableStore {
     } catch (error: any) {
       if (error.code === "ENOENT") {
         return 0;
+      }
+      throw error;
+    }
+  }
+
+  async listInvoices(): Promise<any[]> {
+    const fs = require("fs").promises;
+    const path = require("path");
+    const filePath = path.join(this.dataDir, this.tablesFiles.invoices);
+    try {
+      const data = await fs.readFile(filePath, "utf8");
+      const lines = data.trim().split("\n").filter((l: string) => l.length > 0);
+      return lines.map((l: string) => JSON.parse(l));
+    } catch (error: any) {
+      if (error.code === "ENOENT") {
+        return [];
       }
       throw error;
     }

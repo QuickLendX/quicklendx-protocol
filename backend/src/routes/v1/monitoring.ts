@@ -4,9 +4,11 @@ import { apiKeyAuth, AuthenticatedRequest } from "../../middleware/apiKeyAuth";
 import { statusService } from "../../services/statusService";
 import { getInvariantCounters } from "../../services/invariantService";
 import { webhookQueueService } from "../../services/webhookQueueService";
+import { ReconciliationWorker } from "../../services/reconciliationWorker";
 
 const router = Router();
 router.use(apiKeyAuth);
+router.use(reconciliationRateLimitMiddleware);
 
 router.get("/health", (_req: AuthenticatedRequest, res: Response) => {
   type SubStatus = "ok" | "degraded" | "unavailable";
@@ -182,3 +184,14 @@ router.post("/webhook/:id/fail", (req: AuthenticatedRequest, res: Response) => {
 });
 
 export default router;
+
+// Reconciliation metrics endpoint
+router.get("/reconciliation", async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const latest = ReconciliationWorker.getLatestReport();
+    res.json({ latest });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to read reconciliation";
+    res.status(500).json({ error: { message, code: "RECONCILIATION_READ_ERROR" } });
+  }
+});

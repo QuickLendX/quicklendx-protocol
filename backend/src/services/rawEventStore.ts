@@ -60,6 +60,33 @@ export class FileSystemRawEventStore implements RawEventStore {
     await this.rotateFileIfNeeded();
   }
 
+  async hasEventId(eventId: string): Promise<boolean> {
+    await fs.mkdir(this.dataDir, { recursive: true });
+
+    try {
+      const data = await fs.readFile(this.eventsFile, "utf8");
+      const lines = data.trim().split("\n").filter(line => line.length > 0);
+
+      for (const line of lines) {
+        try {
+          const event = JSON.parse(line) as RawEvent;
+          if (event.id === eventId) {
+            return true;
+          }
+        } catch {
+          // Ignore malformed historical rows while scanning for idempotency.
+        }
+      }
+
+      return false;
+    } catch (error) {
+      if ((error as any).code === "ENOENT") {
+        return false;
+      }
+      throw error;
+    }
+  }
+
   async getEventsByLedgerRange(
     fromLedger: number, 
     toLedger: number, 
@@ -190,6 +217,56 @@ export class FileSystemRawEventStore implements RawEventStore {
     );
   }
 
+  async getAllEvents(): Promise<RawEvent[]> {
+    await fs.mkdir(this.dataDir, { recursive: true });
+
+    const files = await this.getEventFiles();
+    const events: RawEvent[] = [];
+
+    for (const filePath of files) {
+      try {
+        const data = await fs.readFile(filePath, "utf8");
+        const lines = data.split("\n").filter((line) => line.trim().length > 0);
+        for (const line of lines) {
+          try {
+            events.push(JSON.parse(line) as RawEvent);
+          } catch {
+            continue;
+          }
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error;
+        }
+      }
+    }
+
+    return events.sort((a, b) => a.ledger - b.ledger);
+  }
+
+  async replaceEvents(events: RawEvent[]): Promise<void> {
+    await fs.mkdir(this.dataDir, { recursive: true });
+
+    const tempFile = path.join(this.dataDir, `events.${Date.now()}.tmp`);
+    const lines = [...events]
+      .sort((a, b) => a.ledger - b.ledger)
+      .map((event) => JSON.stringify(event));
+
+    await fs.writeFile(
+      tempFile,
+      lines.length > 0 ? `${lines.join("\n")}\n` : "",
+      "utf8"
+    );
+
+    const files = await this.getEventFiles();
+    await Promise.all(
+      files
+        .filter((filePath) => filePath !== tempFile)
+        .map((filePath) => fs.rm(filePath, { force: true }))
+    );
+    await fs.rename(tempFile, this.eventsFile);
+  }
+
   private async rotateFileIfNeeded(): Promise<void> {
     try {
       const stats = await fs.stat(this.eventsFile);
@@ -209,6 +286,21 @@ export class FileSystemRawEventStore implements RawEventStore {
       await fs.rm(this.dataDir, { recursive: true, force: true });
     } catch {
       // Ignore errors during reset
+    }
+  }
+
+  private async getEventFiles(): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(this.dataDir);
+      return entries
+        .filter((entry) => /^events(?:-.*)?\.jsonl$/.test(entry))
+        .sort()
+        .map((entry) => path.join(this.dataDir, entry));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return [];
+      }
+      throw error;
     }
   }
 }
@@ -240,6 +332,10 @@ export class InMemoryRawEventStore implements RawEventStore {
     // Sort and add to store
     sanitizedEvents.sort((a, b) => a.ledger - b.ledger);
     this.events.push(...sanitizedEvents);
+  }
+
+  async hasEventId(eventId: string): Promise<boolean> {
+    return this.events.some(event => event.id === eventId);
   }
 
   async getEventsByLedgerRange(
@@ -279,6 +375,14 @@ export class InMemoryRawEventStore implements RawEventStore {
 
   async setReplayCursor(ledger: number): Promise<void> {
     this.cursor = ledger;
+  }
+
+  async getAllEvents(): Promise<RawEvent[]> {
+    return [...this.events].sort((a, b) => a.ledger - b.ledger);
+  }
+
+  async replaceEvents(events: RawEvent[]): Promise<void> {
+    this.events = [...events].sort((a, b) => a.ledger - b.ledger);
   }
 
   // Test helper

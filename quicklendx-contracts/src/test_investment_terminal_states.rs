@@ -295,9 +295,45 @@ fn test_investment_refund_flow() {
     // Verify invoice state
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Refunded);
-    
+
     // Verify refund events
     assert!(has_event_with_topic(&env, symbol_short!("esc_ref"))); // Escrow refunded
+}
+
+/// Test: Active-index query never returns terminal investments
+#[test]
+fn test_active_index_excludes_terminal_investments() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000_000);
+
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+
+    let invoice_amount = 1000i128;
+    let investment_amount = 1000i128;
+
+    let (invoice_id, _bid_id) = setup_funded_investment_for_terminal_tests(
+        &env,
+        &client,
+        &business,
+        &investor,
+        &currency,
+        invoice_amount,
+        investment_amount,
+    );
+
+    client.refund_escrow_funds(&invoice_id);
+    let active_ids = InvestmentStorage::get_active_investment_ids(&env);
+    for active_id in active_ids.iter() {
+        let investment = InvestmentStorage::get_investment(&env, &active_id).unwrap();
+        assert_eq!(investment.status, InvestmentStatus::Active);
+    }
+    assert_eq!(active_ids.len(), 0, "terminal investments must not appear in get_active_investment_ids");
 }
 
 /// Test invalid terminal state transitions (should fail)

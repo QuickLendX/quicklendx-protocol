@@ -39,8 +39,9 @@ export const getBids = async (
     if (invoice_id) filtered = filtered.filter((b) => b.invoice_id === invoice_id);
     if (investor) filtered = filtered.filter((b) => b.investor === investor);
 
-    applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body: filtered });
-    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
+    const body = { data: filtered, freshness: freshnessService.getFreshness() };
+    applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body });
+    res.json(body);
   } catch (error) {
     next(error);
   }
@@ -57,6 +58,7 @@ export const getBestBid = async (
     if (!bestBid) {
       return res.status(404).json({ error: "No best bid found for this invoice" });
     }
+    applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body: bestBid });
     res.json(bestBid);
   } catch (error) {
     next(error);
@@ -71,7 +73,9 @@ export const getTopBids = async (
   try {
     const { invoiceId } = req.params;
     const topBids = await SnapshotService.getTopBids(invoiceId as string);
-    res.json({ top_bids: topBids });
+    const body = { top_bids: topBids };
+    applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body });
+    res.json(body);
   } catch (error) {
     if (error instanceof PaginationError) {
       return res.status(400).json({

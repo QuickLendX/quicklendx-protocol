@@ -45,6 +45,7 @@ export enum DisputeStatus {
 
 export enum SettlementStatus {
   Pending = "Pending",
+  Processing = "Processing",
   Paid = "Paid",
   Defaulted = "Defaulted",
 }

@@ -97,6 +97,17 @@
 //! **Why**: Prevents off-chain monitoring from incorrectly tracking investments
 //! as "still funding" when they've already settled.
 //!
+//! ### 2.1 Invoice / Investment Status Synchronization
+//! Investment terminal status must always match the parent invoice terminal state:
+//!
+//! - `InvoiceStatus::Paid` → `InvestmentStatus::Completed`
+//! - `InvoiceStatus::Defaulted` → `InvestmentStatus::Defaulted`
+//! - `InvoiceStatus::Refunded` → `InvestmentStatus::Refunded`
+//!
+//! This synchronization avoids investor accounting drift between invoice and
+//! investment records. Every terminal transition path updates the invoice first,
+//! then applies the matching investment status through `InvestmentStorage::update_investment`.
+//!
 //! ### 3. Double-Payout Prevention (Idempotency)
 //! State transitions are idempotent: repeating the same transition has no effect
 //! beyond the first occurrence:
