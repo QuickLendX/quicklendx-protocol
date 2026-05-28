@@ -1,4 +1,8 @@
 import { Request, Response } from 'express';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
+import { getDatabase, closeDatabase } from '../lib/database';
 import { apiKeyService } from '../services/api-key-service';
 import { db } from '../db/database';
 import { requireAdminRoles, getAdminContext } from '../middleware/rbac';
@@ -12,6 +16,57 @@ describe('rbac middleware (API-key backed)', () => {
     res.json = jest.fn().mockReturnValue(res as Response);
     return res as Response;
   };
+
+  // Use an isolated test database per run to avoid interfering with dev DB
+  const TEST_DB_DIR = path.resolve(__dirname, '../../.data');
+  const TEST_DB_PATH = path.join(TEST_DB_DIR, `test-rbac-${crypto.randomUUID()}.db`);
+
+  beforeAll(() => {
+    process.env.DATABASE_PATH = TEST_DB_PATH;
+    closeDatabase();
+    const conn = getDatabase();
+
+    // Create minimal tables needed by api-key service
+    conn.exec(`
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id TEXT PRIMARY KEY,
+        key_hash TEXT NOT NULL,
+        prefix TEXT NOT NULL,
+        name TEXT NOT NULL,
+        scopes TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT,
+        expires_at TEXT,
+        revoked INTEGER NOT NULL DEFAULT 0,
+        created_by TEXT NOT NULL
+      )
+    `);
+    conn.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(prefix)
+    `);
+    conn.exec(`
+      CREATE TABLE IF NOT EXISTS api_key_audit_log (
+        id TEXT PRIMARY KEY,
+        event_type TEXT NOT NULL CHECK(event_type IN ('created','used','rotated','revoked')),
+        key_id TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        ip_address TEXT,
+        endpoint TEXT,
+        metadata TEXT,
+        FOREIGN KEY (key_id) REFERENCES api_keys(id) ON DELETE CASCADE
+      )
+    `);
+  });
+
+  afterAll(() => {
+    closeDatabase();
+    try {
+      if (fs.existsSync(TEST_DB_PATH)) fs.unlinkSync(TEST_DB_PATH);
+      try { fs.unlinkSync(TEST_DB_PATH + '-wal'); } catch {}
+      try { fs.unlinkSync(TEST_DB_PATH + '-shm'); } catch {}
+    } catch {}
+  });
 
   beforeEach(() => {
     next.mockReset();
