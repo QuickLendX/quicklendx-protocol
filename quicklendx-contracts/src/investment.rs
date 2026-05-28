@@ -303,6 +303,17 @@ impl Investment {
 
 pub struct InvestmentStorage;
 
+/// Storage operations for investments.
+/// 
+/// ## Invariants Maintained
+/// - Each invoice can have at most one investment record. The `get_investment_by_invoice`
+///   lookup enforces this via a single invoice-to-investment mapping key.
+/// - Each investment exists in exactly one status index (Active, Completed, Defaulted, 
+///   Refunded, or Withdrawn) based on its `status` field.
+/// - The active investment index (`act_inv`) contains ONLY investments with `status == Active`.
+///   During any status transition leaving Active, the investment is removed from this index.
+/// - `validate_no_orphan_investments()` verifies that every investment in the active index
+///   still has `status == Active`, detecting any index drift.
 impl InvestmentStorage {
     fn invoice_index_key(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
         (symbol_short!("inv_map"), invoice_id.clone())
