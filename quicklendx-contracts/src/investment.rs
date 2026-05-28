@@ -358,7 +358,7 @@ impl InvestmentStorage {
     pub fn get_investment(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
         let result = env.storage().persistent().get(investment_id);
         if result.is_some() {
-            bump_persistent(env, investment_id);
+            bump_persistent(env, &investment_id);
         }
         result
     }

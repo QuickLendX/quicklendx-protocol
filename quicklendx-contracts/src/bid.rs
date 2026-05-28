@@ -215,7 +215,7 @@ impl BidStorage {
     pub fn get_bid(env: &Env, bid_id: &BytesN<32>) -> Option<Bid> {
         let result = env.storage().persistent().get(bid_id);
         if result.is_some() {
-            bump_persistent(env, bid_id);
+            bump_persistent(env, &bid_id);
         }
         result
     }
