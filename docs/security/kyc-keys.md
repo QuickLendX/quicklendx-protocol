@@ -111,14 +111,20 @@ After rotation:
 
 ## Sensitive Fields Redaction
 
-The following fields are automatically redacted to `"[REDACTED]"` on every `decrypt()` call, regardless of caller:
+The following fields are automatically redacted to `"[REDACTED]"` on every `decrypt()` call, regardless of caller. All fields are set unconditionally — callers cannot distinguish "field was present" from "field was absent".
 
+**camelCase (new API):**
 - `ssn`
 - `taxId`
 - `dateOfBirth`
 - `passportNumber`
 - `bankAccountNumber`
 - `routingNumber`
+
+**snake_case (legacy API — preserved for backward compatibility):**
+- `tax_id`, `customer_name`, `customer_address`, `date_of_birth`
+- `passport_number`, `national_id`, `phone_number`, `email`
+- `bank_account`, `kyc_document`, `kyc_data`
 
 This ensures that even authorised callers receive a safe view. Raw values are only accessible inside the encryption boundary.
 
