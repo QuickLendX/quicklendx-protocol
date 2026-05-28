@@ -10,6 +10,30 @@ use soroban_sdk::{
     Address, Env, String, Vec,
 };
 
+// ---------------------------------------------------------------------------
+// upload_invoice enforcement helpers
+// ---------------------------------------------------------------------------
+
+fn kyc_data(env: &Env) -> String {
+    String::from_str(
+        env,
+        "{\"business_name\":\"TestBiz\",\"tax_id\":\"123456789\",\
+         \"registration_number\":\"REG123\",\"address\":\"123 Business St\",\
+         \"phone\":\"+1234567890\",\"email\":\"testbiz@example.com\"}",
+    )
+}
+
+fn setup_verified_business(
+    env: &Env,
+    client: &QuickLendXContractClient<'static>,
+    admin: &Address,
+) -> Address {
+    let business = Address::generate(env);
+    client.submit_kyc_application(&business, &kyc_data(env));
+    client.verify_business(admin, &business);
+    business
+}
+
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
@@ -341,7 +365,7 @@ fn test_pagination_offset_saturation() {
     let (env, client, admin) = setup();
     
     // Add exactly 5 currencies for predictable testing
-    let currencies: std::vec::Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
+    let currencies: alloc::vec::Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
@@ -373,7 +397,7 @@ fn test_pagination_limit_saturation() {
     let (env, client, admin) = setup();
     
     // Add exactly 3 currencies
-    let currencies: std::vec::Vec<Address> = (0..3).map(|_| Address::generate(&env)).collect();
+    let currencies: alloc::vec::Vec<Address> = (0..3).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
@@ -405,7 +429,7 @@ fn test_pagination_overflow_protection() {
     let (env, client, admin) = setup();
     
     // Add 10 currencies for comprehensive testing
-    let currencies: std::vec::Vec<Address> = (0..10).map(|_| Address::generate(&env)).collect();
+    let currencies: alloc::vec::Vec<Address> = (0..10).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
@@ -439,7 +463,7 @@ fn test_pagination_consistency_and_ordering() {
     let (env, client, admin) = setup();
     
     // Add currencies in a specific order
-    let currencies: std::vec::Vec<Address> = (0..7).map(|_| Address::generate(&env)).collect();
+    let currencies: alloc::vec::Vec<Address> = (0..7).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
@@ -506,7 +530,7 @@ fn test_pagination_after_modifications() {
     let (env, client, admin) = setup();
     
     // Add initial currencies
-    let currencies: std::vec::Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
+    let currencies: alloc::vec::Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
@@ -545,7 +569,7 @@ fn test_pagination_security_boundaries() {
     let (env, client, admin) = setup();
     
     // Add currencies as admin
-    let currencies: std::vec::Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
+    let currencies: alloc::vec::Vec<Address> = (0..5).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
@@ -578,7 +602,7 @@ fn test_pagination_large_dataset_boundaries() {
     
     // Add a larger number of currencies to test performance boundaries
     let large_count = 50u32; // Reasonable size for testing
-    let currencies: std::vec::Vec<Address> = (0..large_count).map(|_| Address::generate(&env)).collect();
+    let currencies: alloc::vec::Vec<Address> = (0..large_count).map(|_| Address::generate(&env)).collect();
 
     // Add currencies in batches to test bulk operations
     let batch_size = 10usize;
@@ -629,7 +653,7 @@ fn test_pagination_concurrent_modification_boundaries() {
     let (env, client, admin) = setup();
     
     // Add initial dataset
-    let currencies: std::vec::Vec<Address> = (0..10).map(|_| Address::generate(&env)).collect();
+    let currencies: alloc::vec::Vec<Address> = (0..10).map(|_| Address::generate(&env)).collect();
     for currency in &currencies {
         client.add_currency(&admin, currency);
     }
@@ -682,7 +706,7 @@ fn test_pagination_address_handling_boundaries() {
     assert_eq!(result.len(), 1, "duplicate adds should result in single entry");
     
     // Test with many unique addresses
-    let unique_currencies: std::vec::Vec<Address> = (0..15).map(|_| Address::generate(&env)).collect();
+    let unique_currencies: alloc::vec::Vec<Address> = (0..15).map(|_| Address::generate(&env)).collect();
     for currency in &unique_currencies {
         client.add_currency(&admin, currency);
     }
@@ -714,7 +738,7 @@ fn test_pagination_storage_efficiency() {
     assert_eq!(empty_result.len(), 0, "empty storage should return empty efficiently");
     
     // Add currencies and test storage growth
-    let currencies: std::vec::Vec<Address> = (0..20).map(|_| Address::generate(&env)).collect();
+    let currencies: alloc::vec::Vec<Address> = (0..20).map(|_| Address::generate(&env)).collect();
     for (i, currency) in currencies.iter().enumerate() {
         client.add_currency(&admin, currency);
         
@@ -736,4 +760,173 @@ fn test_pagination_storage_efficiency() {
     // Verify count is also reset
     let count_after_clear = client.currency_count();
     assert_eq!(count_after_clear, 0u32, "count should be zero after clear");
+}
+
+// ---------------------------------------------------------------------------
+// upload_invoice currency-whitelist enforcement
+// ---------------------------------------------------------------------------
+
+/// `upload_invoice` rejects a non-whitelisted currency just like `store_invoice`.
+/// This verifies that the KYC-authenticated path also enforces the whitelist.
+#[test]
+fn test_upload_invoice_with_non_whitelisted_currency_fails() {
+    let (env, client, admin) = setup();
+    let allowed_currency = Address::generate(&env);
+    let blocked_currency = Address::generate(&env);
+    client.add_currency(&admin, &allowed_currency);
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let res = client.try_upload_invoice(
+        &business,
+        &1000i128,
+        &blocked_currency,
+        &due_date,
+        &String::from_str(&env, "Desc"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert!(res.is_err(), "upload_invoice must reject non-whitelisted currency");
+}
+
+/// `upload_invoice` accepts a whitelisted currency for a verified business.
+#[test]
+fn test_upload_invoice_with_whitelisted_currency_succeeds() {
+    let (env, client, admin) = setup();
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Desc"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let got = client.get_invoice(&invoice_id);
+    assert_eq!(got.amount, 1000i128);
+    assert_eq!(got.currency, currency);
+}
+
+// ---------------------------------------------------------------------------
+// remove_currency immediately blocks store_invoice
+// ---------------------------------------------------------------------------
+
+/// After `remove_currency` the token may no longer be used in `store_invoice`
+/// as long as another currency remains in the whitelist (so the list stays non-empty
+/// and the allow-all empty-list rule does not apply).
+#[test]
+fn test_remove_currency_immediately_blocks_store_invoice() {
+    let (env, client, admin) = setup();
+    let currency_a = Address::generate(&env);
+    let currency_b = Address::generate(&env);
+    // Whitelist both so the list stays non-empty after currency_a is removed.
+    client.add_currency(&admin, &currency_a);
+    client.add_currency(&admin, &currency_b);
+
+    let business = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // Confirm currency_a works before removal.
+    let ok = client.try_store_invoice(
+        &business,
+        &500i128,
+        &currency_a,
+        &due_date,
+        &String::from_str(&env, "Before remove"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert!(ok.is_ok(), "store_invoice must succeed with currency_a before removal");
+
+    client.remove_currency(&admin, &currency_a);
+    // List is now [currency_b] — non-empty, so the whitelist is still enforced.
+
+    // currency_a is now rejected.
+    let err = client.try_store_invoice(
+        &business,
+        &500i128,
+        &currency_a,
+        &due_date,
+        &String::from_str(&env, "After remove"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert!(err.is_err(), "store_invoice must reject currency_a immediately after remove_currency");
+
+    // currency_b is still accepted.
+    let ok_b = client.try_store_invoice(
+        &business,
+        &500i128,
+        &currency_b,
+        &due_date,
+        &String::from_str(&env, "currency_b still allowed"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert!(ok_b.is_ok(), "store_invoice must still accept currency_b");
+}
+
+// ---------------------------------------------------------------------------
+// set_currencies atomically replaces — old currency blocked, new one allowed
+// ---------------------------------------------------------------------------
+
+/// Replacing the whitelist via `set_currencies` immediately blocks the old
+/// currency and allows the new one for `store_invoice`.
+#[test]
+fn test_set_currencies_blocks_old_and_allows_new_for_store_invoice() {
+    let (env, client, admin) = setup();
+    let currency_a = Address::generate(&env);
+    let currency_b = Address::generate(&env);
+    client.add_currency(&admin, &currency_a);
+
+    let business = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    // currency_a currently allowed.
+    let ok = client.try_store_invoice(
+        &business,
+        &500i128,
+        &currency_a,
+        &due_date,
+        &String::from_str(&env, "Desc"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert!(ok.is_ok(), "currency_a must be accepted before set_currencies");
+
+    // Atomically replace with currency_b.
+    let mut new_list = Vec::new(&env);
+    new_list.push_back(currency_b.clone());
+    client.set_currencies(&admin, &new_list);
+
+    // currency_a now blocked.
+    let err_a = client.try_store_invoice(
+        &business,
+        &500i128,
+        &currency_a,
+        &due_date,
+        &String::from_str(&env, "Desc"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert!(err_a.is_err(), "currency_a must be blocked after set_currencies");
+
+    // currency_b now allowed.
+    let ok_b = client.try_store_invoice(
+        &business,
+        &500i128,
+        &currency_b,
+        &due_date,
+        &String::from_str(&env, "Desc"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert!(ok_b.is_ok(), "currency_b must be accepted after set_currencies");
 }
