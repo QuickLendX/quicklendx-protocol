@@ -165,13 +165,17 @@ export class ContractValidator {
       const expectedType = schemaObj.type;
 
       if (actualType !== expectedType) {
-        errors.push({
-          path: path || 'root',
-          message: `Type mismatch`,
-          expected: expectedType,
-          actual: actualType,
-        });
-        return;
+        if (expectedType === 'integer' && actualType === 'number') {
+          // Allow number as integer type check, value checks will validate it
+        } else {
+          errors.push({
+            path: path || 'root',
+            message: `Type mismatch`,
+            expected: expectedType,
+            actual: actualType,
+          });
+          return;
+        }
       }
     }
 
