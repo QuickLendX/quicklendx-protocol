@@ -107,8 +107,7 @@ mod test_max_invoices_per_business;
 pub mod types;
 mod verification;
 mod vesting;
-use crate::types::Bid;
-use crate::types::PlatformFeeConfig;
+// types are imported below via `use crate::types::*;`
 use admin::AdminStorage;
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,

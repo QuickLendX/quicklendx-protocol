@@ -46,7 +46,7 @@ impl EscrowStorage {
     pub fn get_escrow(env: &Env, escrow_id: &BytesN<32>) -> Option<Escrow> {
         let result = env.storage().persistent().get(escrow_id);
         if result.is_some() {
-            bump_persistent(env, escrow_id);
+            bump_persistent(env, &escrow_id);
         }
         result
     }
