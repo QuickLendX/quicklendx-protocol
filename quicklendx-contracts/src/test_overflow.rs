@@ -21,6 +21,7 @@
 use core::cmp::Ordering;
 
 use crate::bid::{Bid, BidStatus, BidStorage};
+use crate::errors::QuickLendXError;
 use crate::fees::FeeType;
 use crate::invoice::{Invoice, InvoiceCategory};
 use crate::profits::{self, calculate_treasury_split, verify_no_dust};
@@ -59,19 +60,17 @@ fn test_volume_accumulation_overflow() {
     assert_eq!(volume_data.total_volume, large_val * 2);
 }
 
-/// Volume saturates at i128::MAX: adding more does not panic and total stays at or below MAX.
+/// Volume overflow returns a clean arithmetic error rather than saturating or panicking.
 #[test]
-fn test_volume_accumulation_saturates_at_max() {
+fn test_volume_accumulation_overflow_errors() {
     let (env, client, _admin) = setup_test();
     let user = Address::generate(&env);
 
     let near_max = i128::MAX - 100;
     let _ = client.update_user_transaction_volume(&user, &near_max);
-    let _ = client.update_user_transaction_volume(&user, &1000); // would exceed MAX
+    let result = client.update_user_transaction_volume(&user, &1000); // would overflow MAX
 
-    let volume_data = client.get_user_volume_data(&user);
-    assert_eq!(volume_data.total_volume, i128::MAX);
-    assert_eq!(volume_data.transaction_count, 2);
+    assert_eq!(result, Err(QuickLendXError::ArithmeticOverflow));
 }
 
 // =============================================================================
@@ -387,6 +386,25 @@ fn test_calculate_treasury_split_large_amounts() {
     assert!(treasury >= 0);
     assert!(remaining >= 0);
     assert_eq!(treasury.saturating_add(remaining), platform_fee);
+}
+
+#[test]
+fn test_calculate_treasury_split_checked_overflow_errors() {
+    let platform_fee = i128::MAX / 2;
+    let treasury_share_bps = 5000i128;
+
+    let result = profits::calculate_treasury_split_checked(platform_fee, treasury_share_bps);
+    assert_eq!(result, Err(QuickLendXError::ArithmeticOverflow));
+}
+
+#[test]
+fn test_profit_calculation_checked_overflow_errors() {
+    let result = profits::PlatformFee::calculate_with_fee_bps_checked(
+        i128::MAX / 2,
+        i128::MAX / 2 + 1_000_000_000,
+        10_000,
+    );
+    assert_eq!(result, Err(QuickLendXError::ArithmeticOverflow));
 }
 
 /// Pagination for investor investments: large offset + limit must not panic.

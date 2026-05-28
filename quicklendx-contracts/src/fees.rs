@@ -309,7 +309,11 @@ impl FeeManager {
         }
 
         let profit = payment_amount.saturating_sub(investment_amount);
-        let platform_fee = profit.saturating_mul(config.fee_bps as i128) / BPS_DENOMINATOR;
+        let platform_fee = profit
+            .checked_mul(config.fee_bps as i128)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?
+            .checked_div(BPS_DENOMINATOR)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
         let investor_return = payment_amount.saturating_sub(platform_fee);
 
         Ok((investor_return, platform_fee))
@@ -535,7 +539,8 @@ impl FeeManager {
     /// 5. Apply the late-payment surcharge to the `LatePayment` fee only.
     ///
     /// # Security notes
-    /// - Uses saturating arithmetic to avoid overflow-based panics.
+    /// - Uses checked BPS multiplication to fail safely on overflow.
+    /// - Uses checked addition for total fee aggregation.
     /// - Iterates only over configured fee structures, keeping work deterministic.
     /// - Uses integer division throughout, so rounding always truncates toward zero.
     pub fn calculate_total_fees(
@@ -569,19 +574,30 @@ impl FeeManager {
             }
             let mut fee = Self::calculate_base_fee(&structure, transaction_amount)?;
             if structure.fee_type != FeeType::LatePayment {
-                fee =
-                    fee.saturating_sub(fee.saturating_mul(tier_discount as i128) / BPS_DENOMINATOR);
+                let discount_amount = fee
+                    .checked_mul(tier_discount as i128)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?
+                    .checked_div(BPS_DENOMINATOR)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?;
+                fee = fee.saturating_sub(discount_amount);
             }
             if is_early_payment && structure.fee_type == FeeType::Platform {
-                fee = fee.saturating_sub(
-                    fee.saturating_mul(EARLY_PLATFORM_DISCOUNT_BPS) / BPS_DENOMINATOR,
-                );
+                let early_discount = fee
+                    .checked_mul(EARLY_PLATFORM_DISCOUNT_BPS)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?
+                    .checked_div(BPS_DENOMINATOR)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?;
+                fee = fee.saturating_sub(early_discount);
             }
             if is_late_payment && structure.fee_type == FeeType::LatePayment {
-                fee = fee
-                    .saturating_add(fee.saturating_mul(LATE_FEE_SURCHARGE_BPS) / BPS_DENOMINATOR);
+                let late_surcharge = fee
+                    .checked_mul(LATE_FEE_SURCHARGE_BPS)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?
+                    .checked_div(BPS_DENOMINATOR)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?;
+                fee = fee.saturating_add(late_surcharge);
             }
-            total_fees = total_fees.saturating_add(fee);
+            total_fees = total_fees.checked_add(fee).ok_or(QuickLendXError::ArithmeticOverflow)?;
         }
         Ok(total_fees)
     }
@@ -590,8 +606,15 @@ impl FeeManager {
     ///
     /// The clamp happens before tier discounts or timing modifiers so that the contract
     /// always applies discounts and penalties to a bounded intermediate value.
+    ///
+    /// Uses checked BPS multiplication to detect overflow and return
+    /// `QuickLendXError::ArithmeticOverflow` instead of wrapping.
     fn calculate_base_fee(structure: &FeeStructure, amount: i128) -> Result<i128, QuickLendXError> {
-        let fee = amount.saturating_mul(structure.base_fee_bps as i128) / BPS_DENOMINATOR;
+        let fee = amount
+            .checked_mul(structure.base_fee_bps as i128)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?
+            .checked_div(BPS_DENOMINATOR)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
         let fee = if fee < structure.min_fee {
             structure.min_fee
         } else if fee > structure.max_fee {
@@ -630,14 +653,23 @@ impl FeeManager {
     ///
     /// Tier thresholds are monotonic and based only on persisted cumulative volume,
     /// which keeps the derived tier deterministic for repeated inputs.
+    ///
+    /// Uses checked volume accumulation so overflow is rejected by
+    /// `QuickLendXError::ArithmeticOverflow`.
     pub fn update_user_volume(
         env: &Env,
         user: &Address,
         transaction_amount: i128,
     ) -> Result<UserVolumeData, QuickLendXError> {
         let mut volume_data = Self::get_user_volume(env, user);
-        volume_data.total_volume = volume_data.total_volume.saturating_add(transaction_amount);
-        volume_data.transaction_count = volume_data.transaction_count.saturating_add(1);
+        volume_data.total_volume = volume_data
+            .total_volume
+            .checked_add(transaction_amount)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
+        volume_data.transaction_count = volume_data
+            .transaction_count
+            .checked_add(1)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
         volume_data.last_updated = env.ledger().timestamp();
         volume_data.current_tier = if volume_data.total_volume >= 1_000_000_000_000 {
             VolumeTier::Platinum
@@ -824,6 +856,8 @@ impl FeeManager {
     /// - Revenue config must exist and shares must sum to 10_000 bps.
     /// - If [`Self::get_treasury_address`] is set and `treasury_share_bps > 0`, the revenue
     ///   config's `treasury_address` must match that routing target (same on-chain fee treasury).
+    /// - Uses checked BPS multiplication for revenue shares to avoid overflow when
+    ///   pending distribution and share rates are large.
     /// - Idempotency: when `pending_distribution == 0`, the call returns
     ///   [`QuickLendXError::OperationNotAllowed`] so a period cannot be "re-settled" until new
     ///   fees are collected (avoids duplicate events / no-op distributions when
@@ -876,13 +910,21 @@ impl FeeManager {
         let amount = revenue_data.pending_distribution;
 
         // Calculate shares: treasury and developer via floor division, platform gets remainder
-        let treasury_amount =
-            amount.saturating_mul(config.treasury_share_bps as i128) / BPS_DENOMINATOR;
-        let developer_amount =
-            amount.saturating_mul(config.developer_share_bps as i128) / BPS_DENOMINATOR;
+        let treasury_amount = amount
+            .checked_mul(config.treasury_share_bps as i128)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?
+            .checked_div(BPS_DENOMINATOR)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
+        let developer_amount = amount
+            .checked_mul(config.developer_share_bps as i128)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?
+            .checked_div(BPS_DENOMINATOR)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
         let platform_amount = amount
-            .saturating_sub(treasury_amount)
-            .saturating_sub(developer_amount);
+            .checked_sub(treasury_amount)
+            .ok_or(QuickLendXError::InvalidFeeConfiguration)?
+            .checked_sub(developer_amount)
+            .ok_or(QuickLendXError::InvalidFeeConfiguration)?;
 
         // Safety: each amount must be non-negative
         if treasury_amount < 0 || developer_amount < 0 || platform_amount < 0 {

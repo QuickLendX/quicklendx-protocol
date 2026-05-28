@@ -132,6 +132,13 @@ Verified by `verify_conservation(&result)` in every test path.
 **Purpose:** Compute each individual fee type independently so they can be audited
 and applied selectively.
 
+**Audited functions:**
+
+- `FeeManager::calculate_total_fees`
+- `FeeManager::update_user_volume`
+- `FeeManager::distribute_revenue`
+- `FeeManager::calculate_base_fee`
+
 **Fee types and caps:**
 
 | Function | Applied to | Max rate |
@@ -162,6 +169,14 @@ fee = amount × rate_bps / BPS_DENOMINATOR
 
 **Purpose:** Compute profit metrics for investors and aggregate platform revenue
 across settlement events.
+
+**Audited functions:**
+
+- `PlatformFee::calculate_with_fee_bps`
+- `PlatformFee::calculate_with_fee_bps_checked`
+- `calculate_profit`
+- `calculate_treasury_split`
+- `calculate_treasury_split_checked`
 
 **Key functions:**
 
