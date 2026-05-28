@@ -161,7 +161,7 @@ export function createRequestLogger(
       }
     });
 
-    next();
+    withCorrelationId(correlationId, next);
   };
 }
 
