@@ -195,3 +195,15 @@ router.get("/reconciliation", async (_req: AuthenticatedRequest, res: Response) 
     res.status(500).json({ error: { message, code: "RECONCILIATION_READ_ERROR" } });
   }
 });
+
+import { backfillService } from "../../services/backfillService";
+
+router.get("/backfill-progress", async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const progress = backfillService.getDriftProgress();
+    res.json({ progress });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to read backfill progress";
+    res.status(500).json({ error: { message, code: "BACKFILL_PROGRESS_ERROR" } });
+  }
+});
