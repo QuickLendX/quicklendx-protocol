@@ -9,6 +9,7 @@ import exportRoutes from "./exports";
 import notificationRoutes from "./notifications";
 import adminRoutes from "./admin";
 import monitoringRoutes from "./monitoring";
+import reconciliationRoutes from "./reconciliation";
 import { lagMonitor } from "../../services/lagMonitor";
 import { degradedGuard } from "../../middleware/degraded-guard";
 import { eventProcessor } from "../../services/eventProcessor";
@@ -36,6 +37,7 @@ router.use("/notifications", notificationRoutes);
 router.use("/exports", exportRoutes);
 router.use("/admin", adminRoutes);
 router.use("/admin/monitoring", monitoringRoutes);
+router.use("/reconciliation", reconciliationRoutes);
 
 // ---------------------------------------------------------------------------
 // System status endpoint

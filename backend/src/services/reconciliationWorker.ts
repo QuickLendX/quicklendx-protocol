@@ -2,6 +2,7 @@ import { DriftReport, DriftItem, BackfillResult } from "../types/reconciliation"
 import { Invoice } from "../types/contract";
 import { rpcClient } from "./rpcClient";
 import { derivedTableStore } from "./replayService";
+import { backfillService } from "./backfillService";
 
 export class ReconciliationWorker {
   private static reports: DriftReport[] = [];
@@ -79,31 +80,7 @@ export class ReconciliationWorker {
   }
 
   static async triggerBoundedBackfill(report: DriftReport): Promise<BackfillResult> {
-    const result: BackfillResult = {
-      successCount: 0,
-      failCount: 0,
-      errors: [],
-    };
-
-    // Process only up to backfillBatchSize items
-    const toProcess = report.drifts.slice(0, this.backfillBatchSize);
-
-    for (const drift of toProcess) {
-      try {
-        if (ReconciliationWorker.failBackfill) {
-          throw new Error("Simulated failure");
-        }
-        // Simulate backfill logic
-        console.log(`Backfilling ${drift.type} ${drift.id}...`);
-
-        result.successCount++;
-      } catch (error: any) {
-        result.failCount++;
-        result.errors.push(`Failed to backfill ${drift.id}: ${error.message}`);
-      }
-    }
-
-    return result;
+    return backfillService.triggerDriftBackfill(report, this.backfillBatchSize, ReconciliationWorker.failBackfill);
   }
 
   static getLatestReport(): DriftReport | null {

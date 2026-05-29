@@ -13,6 +13,7 @@ use alloc::vec::Vec;
 use crate::pagination::{
     calculate_safe_bounds, paginate_slice, validate_pagination_params, MAX_QUERY_LIMIT,
 };
+#[cfg(feature = "fuzz-tests")]
 use proptest::prelude::*;
 
 // ---------------------------------------------------------------------------
@@ -307,6 +308,7 @@ fn test_query_is_stable_across_repeated_calls() {
 // 9. Proptest - status-filter + pagination invariants.
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "fuzz-tests")]
 fn status_strategy() -> impl Strategy<Value = MockInvestmentStatus> {
     prop_oneof![
         Just(MockInvestmentStatus::Active),
@@ -317,6 +319,7 @@ fn status_strategy() -> impl Strategy<Value = MockInvestmentStatus> {
     ]
 }
 
+#[cfg(feature = "fuzz-tests")]
 fn investment_strategy() -> impl Strategy<Value = MockInvestment> {
     (any::<u8>(), status_strategy()).prop_map(|(byte, status)| MockInvestment {
         id: [byte; 32],
@@ -324,6 +327,7 @@ fn investment_strategy() -> impl Strategy<Value = MockInvestment> {
     })
 }
 
+#[cfg(feature = "fuzz-tests")]
 proptest! {
     /// For any random dataset (up to 200 items), any filter status, and any
     /// `(offset, limit)` triple, the filter-then-paginate pipeline must:
