@@ -19,13 +19,9 @@ This document describes the backend role-based access control model for operatio
 
 ## Credential Model
 
-Each role is mapped to a dedicated bearer token provided through environment variables:
+Administrative credentials are persisted API keys stored in the backend database. Keys are created, rotated, and revoked via the API key management endpoints. Only SHA-256 hashes of keys are stored — plaintext keys are returned to callers only at creation time.
 
-- `QLX_SUPPORT_TOKEN`
-- `QLX_OPERATIONS_TOKEN`
-- `QLX_SUPER_ADMIN_TOKEN`
-
-The request never self-declares a role. The backend derives the role exclusively by matching the presented bearer token against configured server-side secrets.
+Incoming admin requests present a bearer token in `Authorization: Bearer <key>`. The middleware verifies the key against the persisted store and maps the key's granted scopes to an administrative role. Plaintext key values are never logged or stored.
 
 ## Protected Endpoints
 
@@ -39,13 +35,11 @@ The request never self-declares a role. The backend derives the role exclusively
 
 ## Fail-Closed Behavior
 
-- If no RBAC tokens are configured, all protected admin endpoints return `503 RBAC_NOT_CONFIGURED`.
-- If two roles share the same token value, protected admin endpoints return `500 RBAC_MISCONFIGURED`.
 - Missing bearer credentials return `401 AUTH_REQUIRED`.
-- Invalid credentials return `403 FORBIDDEN`.
+- Invalid, revoked, or expired credentials return `403 FORBIDDEN`.
 - Authenticated but unauthorized roles return `403 INSUFFICIENT_ROLE`.
 
-These rules prevent silent privilege escalation and make misconfiguration obvious during deployment.
+The middleware resolves roles from the persisted API key store at request time; this enables key rotation without process restarts and provides per-key auditability. If a key does not map to any administrative role (i.e., lacks admin scopes), the request is rejected with `INSUFFICIENT_ROLE`.
 
 ## Audit Logging
 
