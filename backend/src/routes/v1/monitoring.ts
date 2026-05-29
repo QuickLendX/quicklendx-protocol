@@ -11,7 +11,6 @@ import { ReconciliationWorker } from "../../services/reconciliationWorker";
 
 const router = Router();
 router.use(apiKeyAuth);
-router.use(reconciliationRateLimitMiddleware);
 
 router.get("/health", (_req: AuthenticatedRequest, res: Response) => {
   type SubStatus = "ok" | "degraded" | "unavailable";
@@ -205,8 +204,6 @@ router.post("/webhook/:id/fail", (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-export default router;
-
 // Reconciliation metrics endpoint
 router.get("/reconciliation", async (_req: AuthenticatedRequest, res: Response) => {
   try {
@@ -218,14 +215,4 @@ router.get("/reconciliation", async (_req: AuthenticatedRequest, res: Response) 
   }
 });
 
-import { backfillService } from "../../services/backfillService";
-
-router.get("/backfill-progress", async (_req: AuthenticatedRequest, res: Response) => {
-  try {
-    const progress = backfillService.getDriftProgress();
-    res.json({ progress });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to read backfill progress";
-    res.status(500).json({ error: { message, code: "BACKFILL_PROGRESS_ERROR" } });
-  }
-});
+export default router;
