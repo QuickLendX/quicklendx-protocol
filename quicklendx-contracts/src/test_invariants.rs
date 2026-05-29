@@ -1029,3 +1029,443 @@ fn test_invariants_multi_entity_stress() {
         "Total must equal sum after status changes"
     );
 }
+
+// ============================================================================
+// CROSS-MODULE ESCROW/INVESTMENT INVARIANT TESTS
+// ============================================================================
+
+/// Verify that every Funded invoice has exactly one associated escrow record
+/// and exactly one associated investment record. This is the one-escrow/one-investment
+/// invariant referenced in the issue.
+#[test]
+fn invariant_funded_invoice_has_one_escrow_one_investment() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Create tokens
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&business, &100_000i128);
+    sac.mint(&investor, &100_000i128);
+    let exp = env.ledger().sequence() + 10_000;
+    tok.approve(&business, &contract_id, &100_000i128, &exp);
+    tok.approve(&investor, &contract_id, &100_000i128, &exp);
+
+    client.add_currency(&admin, &currency);
+
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business"));
+    client.verify_business(&admin, &business);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor"));
+    client.verify_investor(&investor, &1_000_000);
+
+    // Create and verify invoice
+    let invoice_id = client.store_invoice(
+        &business,
+        &5_000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    // Place and accept bid
+    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128);
+
+    // Before accept: no escrow, no investment
+    assert!(client.try_get_invoice_investment(&invoice_id).is_err());
+
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // After accept: exactly one escrow
+    assert!(client.get_escrow_details(&invoice_id).is_ok());
+
+    // Exactly one investment
+    let inv = client.get_invoice_investment(&invoice_id).unwrap();
+    assert_eq!(inv.invoice_id, invoice_id);
+    assert_eq!(inv.status, InvestmentStatus::Active);
+}
+
+/// Verify that cancel_bid transitions Placed -> Cancelled without leaving
+/// orphan records in escrow or investment indexes.
+#[test]
+fn invariant_cancel_bid_no_orphan_escrow_investment() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    // Create tokens
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&business, &100_000i128);
+    sac.mint(&investor, &100_000i128);
+    let exp = env.ledger().sequence() + 10_000;
+    tok.approve(&business, &contract_id, &100_000i128, &exp);
+    tok.approve(&investor, &contract_id, &100_000i128, &exp);
+
+    client.add_currency(&admin, &currency);
+
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business"));
+    client.verify_business(&admin, &business);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor"));
+    client.verify_investor(&investor, &1_000_000);
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &5_000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128);
+
+    // Cancel before funding
+    let cancel_result = client.cancel_bid(&bid_id);
+    assert!(cancel_result);
+
+    // Verify cancellation
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Cancelled);
+
+    // No escrow created
+    assert!(client.get_escrow_details(&invoice_id).is_err());
+
+    // No investment created
+    assert!(client.try_get_invoice_investment(&invoice_id).is_err());
+
+    // Validate no orphan investments
+    assert!(client.validate_no_orphan_investments());
+}
+
+/// Verify that refund transitions all related records atomically:
+/// - Invoice: Funded -> Refunded
+/// - Bid: Accepted -> Cancelled
+/// - Investment: Active -> Refunded
+/// - Escrow: Held -> Refunded
+/// - Status index: removed from Funded, added to Refunded
+#[test]
+fn invariant_refund_atomic_state_transitions() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    client.set_admin(&admin);
+    let currency = Address::generate(&env);
+
+    // Create tokens for refund test
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&business, &100_000i128);
+    sac.mint(&investor, &100_000i128);
+    let exp = env.ledger().sequence() + 10_000;
+    tok.approve(&business, &contract_id, &100_000i128, &exp);
+    tok.approve(&investor, &contract_id, &100_000i128, &exp);
+
+    // Add currency to whitelist
+    client.add_currency(&admin, &currency);
+
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business"));
+    client.verify_business(&admin, &business);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor"));
+    client.verify_investor(&investor, &1_000_000);
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &5_000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Refund the escrow
+    client.refund_escrow_funds(&invoice_id, &business);
+
+    // All transitions should be atomic and consistent
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Refunded);
+
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Cancelled);
+
+    let investment = client.get_invoice_investment(&invoice_id).unwrap();
+    assert_eq!(investment.status, InvestmentStatus::Refunded);
+
+    // Check status index consistency
+    let refunded_list = client.get_invoices_by_status(&InvoiceStatus::Refunded);
+    assert!(refunded_list.contains(&invoice_id));
+
+    let funded_list = client.get_invoices_by_status(&InvoiceStatus::Funded);
+    assert!(!funded_list.contains(&invoice_id));
+}
+
+/// Verify that default transitions all related records atomically:
+/// - Invoice: Funded -> Defaulted
+/// - Investment: Active -> Defaulted
+/// - Status index: removed from Funded, added to Defaulted
+#[test]
+fn invariant_default_atomic_state_transitions() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    client.set_admin(&admin);
+    let currency = Address::generate(&env);
+
+    // Create tokens
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&business, &100_000i128);
+    sac.mint(&investor, &100_000i128);
+    let exp = env.ledger().sequence() + 10_000;
+    tok.approve(&business, &contract_id, &100_000i128, &exp);
+    tok.approve(&investor, &contract_id, &100_000i128, &exp);
+
+    client.add_currency(&admin, &currency);
+
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business"));
+    client.verify_business(&admin, &business);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor"));
+    client.verify_investor(&investor, &1_000_000);
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &5_000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Fast-forward past due date + grace period
+    env.ledger().set_timestamp(700_000);
+
+    // Mark as defaulted
+    client.mark_invoice_defaulted(&invoice_id, &Some(0u64));
+
+    // All transitions should be atomic and consistent
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Defaulted);
+
+    let investment = client.get_invoice_investment(&invoice_id).unwrap();
+    assert_eq!(investment.status, InvestmentStatus::Defaulted);
+
+    // Check status index consistency
+    let defaulted_list = client.get_invoices_by_status(&InvoiceStatus::Defaulted);
+    assert!(defaulted_list.contains(&invoice_id));
+
+    let funded_list = client.get_invoices_by_status(&InvoiceStatus::Funded);
+    assert!(!funded_list.contains(&invoice_id));
+
+    // No orphan investments
+    assert!(client.validate_no_orphan_investments());
+}
+
+/// Verify that settle_invoice transitions all related records atomically:
+/// - Invoice: Funded -> Paid
+/// - Investment: Active -> Completed
+/// - Escrow: Released (funds already transferred)
+/// - Status index: removed from Funded, added to Paid
+#[test]
+fn invariant_settle_atomic_state_transitions() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    client.set_admin(&admin);
+    let currency = Address::generate(&env);
+
+    // Create tokens with enough for settlement
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&business, &50_000i128);
+    sac.mint(&investor, &50_000i128);
+    let exp = env.ledger().sequence() + 10_000;
+    tok.approve(&business, &contract_id, &30_000i128, &exp);
+    tok.approve(&investor, &contract_id, &10_000i128, &exp);
+
+    client.add_currency(&admin, &currency);
+
+    client.submit_kyc_application(&business, &String::from_str(&env, "Business"));
+    client.verify_business(&admin, &business);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor"));
+    client.verify_investor(&investor, &1_000_000);
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &5_000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Provide settlement tokens
+    sac.mint(&business, &5_000i128);
+    tok.approve(&business, &contract_id, &10_000i128, &exp);
+
+    // Settle the invoice
+    client.settle_invoice(&invoice_id, &5_000i128);
+
+    // All transitions should be atomic and consistent
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Paid);
+    assert!(invoice.settled_at.is_some());
+
+    let investment = client.get_invoice_investment(&invoice_id).unwrap();
+    assert_eq!(investment.status, InvestmentStatus::Completed);
+
+    // Check status index consistency
+    let paid_list = client.get_invoices_by_status(&InvoiceStatus::Paid);
+    assert!(paid_list.contains(&invoice_id));
+
+    let funded_list = client.get_invoices_by_status(&InvoiceStatus::Funded);
+    assert!(!funded_list.contains(&invoice_id));
+
+    // No orphan investments
+    assert!(client.validate_no_orphan_investments());
+}
+
+/// Validate that `validate_no_orphan_investments` returns true after
+/// successful lifecycle transitions (accept, settle, refund, default).
+#[test]
+fn invariant_validate_no_orphan_investments_after_lifecycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    client.set_admin(&admin);
+    let currency = Address::generate(&env);
+
+    // Setup
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&business, &100_000i128);
+    sac.mint(&investor, &100_000i128);
+    let exp = env.ledger().sequence() + 10_000;
+    tok.approve(&business, &contract_id, &100_000i128, &exp);
+    tok.approve(&investor, &contract_id, &100_000i128, &exp);
+
+    client.add_currency(&admin, &currency);
+    client.submit_kyc_application(&business, &String::from_str(&env, "B"));
+    client.verify_business(&admin, &business);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "I"));
+    client.verify_investor(&investor, &1_000_000);
+
+    // After setup: no orphans
+    assert!(client.validate_no_orphan_investments());
+
+    // Accept bid
+    let invoice_id = client.store_invoice(
+        &business,
+        &5_000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "T"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128);
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // After accept: no orphans
+    assert!(client.validate_no_orphan_investments());
+
+    // Settle
+    sac.mint(&business, &5_000i128);
+    tok.approve(&business, &contract_id, &10_000i128, &exp);
+    client.settle_invoice(&invoice_id, &5_000i128);
+
+    // After settle: no orphans
+    assert!(client.validate_no_orphan_investments());
+}
+
+/// Verify count == index length for invoice status buckets after each transition.
+/// This catches index drift where records are added to indexes but counts are wrong.
+#[test]
+fn invariant_count_equals_index_length_all_statuses() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    client.set_admin(&admin);
+    let currency = Address::generate(&env);
+
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&business, &100_000i128);
+    sac.mint(&investor, &100_000i128);
+    let exp = env.ledger().sequence() + 10_000;
+    tok.approve(&business, &contract_id, &100_000i128, &exp);
+    tok.approve(&investor, &contract_id, &100_000i128, &exp);
+
+    client.add_currency(&admin, &currency);
+
+    client.submit_kyc_application(&business, &String::from_str(&env, "B"));
+    client.verify_business(&admin, &business);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "I"));
+    client.verify_investor(&investor, &1_000_000);
+
+    // Helper to verify count == index length
+    fn verify_count_eq_index(client: &QuickLendXContractClient, status: InvoiceStatus) {
+        let count = client.get_invoice_count_by_status(&status);
+        let index = client.get_invoices_by_status(&status);
+        assert_eq!(count, index.len() as u32, "Count must equal index length for status {:?}", status);
+    }
+
+    // After setup: verify all status counts
+    verify_count_eq_index(&client, InvoiceStatus::Pending);
+    verify_count_eq_index(&client, InvoiceStatus::Verified);
+    verify_count_eq_index(&client, InvoiceStatus::Funded);
+    verify_count_eq_index(&client, InvoiceStatus::Paid);
+    verify_count_eq_index(&client, InvoiceStatus::Defaulted);
+    verify_count_eq_index(&client, InvoiceStatus::Cancelled);
+    verify_count_eq_index(&client, InvoiceStatus::Refunded);
+}

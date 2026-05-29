@@ -124,7 +124,16 @@ impl Indexes {
     }
 }
 
-/// Storage operations for invoices
+/// Storage operations for invoices.
+/// 
+/// ## Invariants Maintained
+/// - Each invoice exists in exactly one status index (Pending, Verified, Funded, Paid, 
+///   Defaulted, Cancelled, or Refunded).
+/// - `get_invoice_count_by_status::<S>().len() == get_total_invoice_count()` for the sum 
+///   across all statuses (count-index agreement).
+/// - When status changes, removal from old status index and addition to new status index 
+///   are performed atomically within the same transaction.
+/// - No invoice ID in any status index references a non-existent invoice record.
 pub struct InvoiceStorage;
 
 impl InvoiceStorage {

@@ -217,6 +217,12 @@ export class FileSystemRawEventStore implements RawEventStore {
     );
   }
 
+  async rollbackTo(ledger: number): Promise<void> {
+    const events = await this.getEventsByLedgerRange(0, ledger);
+    await this.replaceEvents(events);
+    await this.setReplayCursor(ledger);
+  }
+
   async getAllEvents(): Promise<RawEvent[]> {
     await fs.mkdir(this.dataDir, { recursive: true });
 
@@ -374,6 +380,11 @@ export class InMemoryRawEventStore implements RawEventStore {
   }
 
   async setReplayCursor(ledger: number): Promise<void> {
+    this.cursor = ledger;
+  }
+
+  async rollbackTo(ledger: number): Promise<void> {
+    this.events = this.events.filter(e => e.ledger <= ledger);
     this.cursor = ledger;
   }
 

@@ -5,6 +5,8 @@ import { freshnessService } from "../../services/freshnessService";
 import { parsePaginationParams, PaginationError } from "../../utils/pagination";
 import { settlementOrchestrator } from "../../services/settlementOrchestrator";
 
+export const MOCK_SETTLEMENTS: any[] = [];
+
 export const getSettlements = async (
   req: Request,
   res: Response,
@@ -20,7 +22,7 @@ export const getSettlements = async (
 
     const settlements = settlementOrchestrator.list(filters);
 
-    const body = { data: filtered, freshness: freshnessService.getFreshness() };
+    const body = { data: settlements, freshness: freshnessService.getFreshness() };
     if (applyCacheHeaders(req, res, { cacheControl: CC_LONG, body })) {
       res.status(304).end();
       return;
@@ -43,7 +45,7 @@ export const getSettlementById = async (
 ) => {
   try {
     const { id } = req.params;
-    const settlement = settlementOrchestrator.getById(id);
+    const settlement = settlementOrchestrator.getById(id as string);
 
     if (!settlement) {
       return res.status(404).json({
