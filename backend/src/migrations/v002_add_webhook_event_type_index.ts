@@ -10,11 +10,7 @@
  * This migration demonstrates:
  *   - Safe additive schema changes (non-breaking)
  *   - Index creation for query performance
- *   - Forward-only design (no down function)
- *
- * Forward-Only: This migration has no `down` migration.
- * If rollback is ever required, the index can be dropped manually:
- *   DROP INDEX IF EXISTS idx_webhook_active_events;
+ *   - Rollback drops the index (performance degradation acceptable for emergency rollback)
  */
 
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
@@ -30,6 +26,9 @@ export default {
       ON webhook_subscriptions(is_active, events)
       WHERE is_active = 1
     `);
+  },
+  down: async (ctx: MigrationContext): Promise<void> => {
+    await ctx.db.exec(`DROP INDEX IF EXISTS idx_webhook_active_events`);
   },
   validate: async (ctx: MigrationContext): Promise<string[]> => {
     const warnings: string[] = [];

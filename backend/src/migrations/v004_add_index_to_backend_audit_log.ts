@@ -5,7 +5,7 @@
  * Created: 2026-04-26
  *
  * Purpose: Speed up audit log queries by adding composite index on (actor, timestamp).
- * Standard forward-only migration — no rollback path.
+ * Rollback drops the index (performance degradation acceptable for emergency rollback).
  *
  * Performance rationale:
  *   The backend_audit_log table receives ~10k writes/day and supports queries like:
@@ -25,6 +25,9 @@ export default {
       CREATE INDEX IF NOT EXISTS idx_backend_audit_actor_timestamp
       ON backend_audit_log(actor, timestamp DESC)
     `);
+  },
+  down: async (ctx: MigrationContext): Promise<void> => {
+    await ctx.db.exec(`DROP INDEX IF EXISTS idx_backend_audit_actor_timestamp`);
   },
   validate: async (ctx: MigrationContext): Promise<string[]> => {
     const warnings: string[] = [];
