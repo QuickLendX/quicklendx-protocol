@@ -247,6 +247,18 @@ This is achieved by computing:
 
 This subtraction-based approach ensures exact equality with no rounding errors.
 
+## Proven Identity
+
+The no-dust accounting identity `investor_return + platform_fee == payment_amount` is
+proven by the contract test-suite. See the table-driven, property-based, and settlement
+flow tests in [quicklendx-contracts/src/test_settlement_accounting_identity.rs](quicklendx-contracts/src/test_settlement_accounting_identity.rs)
+which validate the identity across all fee-bps values in `0..=10000`, the smallest
+non-zero payment amount, and near-`i128` boundary values.
+
+The same suite also asserts that `platform_fee` never exceeds `payment_amount`, and that
+the settlement path preserves the identity after partial payments followed by final
+settlement.
+
 ## Overflow Safety
 
 ### Integer Arithmetic

@@ -462,7 +462,20 @@ pub fn calculate_treasury_split(platform_fee: i128, treasury_share_bps: i128) ->
 
 /// Validate that a calculation produces no dust
 ///
-/// Verifies that `investor_return + platform_fee == payment_amount`
+/// Verifies the conservation identity:
+///
+/// ```text
+/// investor_return + platform_fee == payment_amount
+/// ```
+///
+/// Rounding direction note:
+/// - Platform fees are computed using integer floor division (rounding down).
+/// - In Rust integer arithmetic, this is truncation toward zero; all protocol
+///   amounts are non-negative here, so truncation and floor are equivalent.
+/// - The `investor_return` is then calculated as `payment_amount - platform_fee`.
+/// - This subtraction-based approach guarantees that any fractional remainder
+///   from the fee calculation is absorbed by the platform (favors the investor),
+///   and that the identity above always holds (no dust is produced).
 ///
 /// # Returns
 /// `true` if calculation is dust-free, `false` otherwise

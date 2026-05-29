@@ -76,6 +76,10 @@ mod test_investment_consistency;
 // mod test_pause;
 #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_profit_fee;
+#[cfg(test)]
+mod test_profit_fee;
+#[cfg(test)]
+mod test_settlement_accounting_identity;
 #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_refund;
 #[cfg(all(test, feature = "legacy-tests"))]
