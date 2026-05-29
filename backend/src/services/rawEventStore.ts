@@ -217,10 +217,16 @@ export class FileSystemRawEventStore implements RawEventStore {
     );
   }
 
-  async rollbackTo(ledger: number): Promise<void> {
-    const events = await this.getEventsByLedgerRange(0, ledger);
-    await this.replaceEvents(events);
-    await this.setReplayCursor(ledger);
+  async rollbackTo(cursor: number): Promise<void> {
+    if (typeof cursor !== "number" || cursor < 0) {
+      throw new Error("Invalid cursor for rollback");
+    }
+
+    // Read all events, keep only those with ledger <= cursor
+    const all = await this.getAllEvents();
+    const kept = all.filter((e) => e.ledger <= cursor);
+    await this.replaceEvents(kept);
+    await this.setReplayCursor(cursor);
   }
 
   async getAllEvents(): Promise<RawEvent[]> {
@@ -412,5 +418,15 @@ export class InMemoryRawEventStore implements RawEventStore {
   // Test helper
   getEvents(): RawEvent[] {
     return [...this.events];
+  }
+
+  async rollbackTo(cursor: number): Promise<void> {
+    if (typeof cursor !== "number" || cursor < 0) {
+      throw new Error("Invalid cursor for rollback");
+    }
+    // Delete any events with ledger > cursor
+    this.events = this.events.filter((e) => e.ledger <= cursor);
+    // Reset the replay cursor
+    this.cursor = cursor;
   }
 }

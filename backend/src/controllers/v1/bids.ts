@@ -3,7 +3,7 @@ import { Bid, BidStatus } from "../../types/contract";
 import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
 import { labelRecord } from "../../services/versioningService";
 import { freshnessService } from "../../services/freshnessService";
-import { parsePaginationParams, PaginationError } from "../../utils/pagination";
+import { parsePaginationParams, PaginationError, applyPagination } from "../../utils/pagination";
 import { SnapshotService } from "../../services/snapshotService";
 
 export const MOCK_BIDS: Bid[] = [
@@ -39,10 +39,17 @@ export const getBids = async (
     if (invoice_id) filtered = filtered.filter((b) => b.invoice_id === invoice_id);
     if (investor) filtered = filtered.filter((b) => b.investor === investor);
 
-    const body = { data: filtered, freshness: freshnessService.getFreshness() };
+    const normalized = normalizeBids(filtered);
+    const page = applyPagination(normalized, "timestamp", params);
+
+    const data = page.data.map(({ id, ...rest }) => rest as Bid);
+    const body = { data, next_cursor: page.next_cursor, has_more: page.has_more, freshness: freshnessService.getFreshness() };
     applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body });
     res.json(body);
   } catch (error) {
+    if (error instanceof PaginationError) {
+      return res.status(400).json({ error: { message: error.message, code: "INVALID_PAGINATION" } });
+    }
     next(error);
   }
 };

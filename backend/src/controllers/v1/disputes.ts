@@ -3,10 +3,11 @@ import { Dispute, DisputeStatus } from "../../types/contract";
 import { freshnessService } from "../../services/freshnessService";
 import { labelRecord } from "../../services/versioningService";
 import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
+import { parsePaginationParams, PaginationError, applyPagination } from "../../utils/pagination";
 
 export const MOCK_DISPUTES: Dispute[] = [
   labelRecord<Omit<Dispute, "contract_version" | "event_schema_version" | "indexed_at">>({
-    id: "0xdispute1",
+    id: "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     initiator: "GA...BUYER",
     reason: "Goods not delivered as per description",
@@ -21,6 +22,7 @@ export const getDisputes = async (
   next: NextFunction
 ) => {
   try {
+    const params = parsePaginationParams(req.query);
     const { id: invoice_id } = req.params;
 
     let filtered = [...MOCK_DISPUTES];
@@ -28,10 +30,14 @@ export const getDisputes = async (
       filtered = filtered.filter((d) => d.invoice_id === invoice_id);
     }
 
-    const body = { data: filtered };
+    const page = applyPagination(filtered, "created_at", params);
+    const body = { data: page.data, next_cursor: page.next_cursor, has_more: page.has_more };
     applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body });
     res.json(body);
   } catch (error) {
+    if (error instanceof PaginationError) {
+      return res.status(400).json({ error: { message: error.message, code: "INVALID_PAGINATION" } });
+    }
     next(error);
   }
 };

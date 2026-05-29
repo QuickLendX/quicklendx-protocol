@@ -202,13 +202,11 @@ paths:
             $ref: "#/components/schemas/InvoiceStatus"
       responses:
         "200":
-          description: List of invoices
+          description: Paginated list of invoices
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Invoice"
+                $ref: "#/components/schemas/InvoicePageResult"
 
   /invoices/{id}:
     get:
@@ -247,13 +245,11 @@ paths:
             type: string
       responses:
         "200":
-          description: List of bids
+          description: Paginated list of bids
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Bid"
+                $ref: "#/components/schemas/BidPageResult"
 
   /settlements:
     get:
@@ -334,13 +330,11 @@ paths:
             type: string
       responses:
         "200":
-          description: List of disputes
+          description: Paginated list of disputes for an invoice
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Dispute"
+                $ref: "#/components/schemas/DisputePageResult"
 
   /notifications/preferences/{userId}:
     get:
@@ -662,6 +656,62 @@ components:
         has_more:
           type: boolean
           description: true when more items exist beyond this page.
+
+    InvoicePageResult:
+      type: object
+      description: Paginated result wrapper for invoices.
+      required:
+        - data
+        - next_cursor
+        - has_more
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invoice'
+        next_cursor:
+          type: string
+          nullable: true
+          description: Opaque cursor for the next page; null when no more pages exist.
+        has_more:
+          type: boolean
+          description: true when more items exist beyond this page.
+
+    BidPageResult:
+      type: object
+      description: Paginated result wrapper for bids.
+      required:
+        - data
+        - next_cursor
+        - has_more
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Bid'
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+
+    DisputePageResult:
+      type: object
+      description: Paginated result wrapper for disputes.
+      required:
+        - data
+        - next_cursor
+        - has_more
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Dispute'
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
 
     ErrorEnvelope:
       type: object
