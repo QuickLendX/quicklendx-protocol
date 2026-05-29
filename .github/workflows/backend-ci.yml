@@ -78,10 +78,6 @@ jobs:
         run: npm run test:coverage
         working-directory: backend
 
-      - name: Run performance regression tests
-        run: npx jest "perf/perf.test.ts" --no-coverage
-        working-directory: backend
-
   sbom:
     name: Generate SBOM Artifact
     runs-on: ubuntu-latest

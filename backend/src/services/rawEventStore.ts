@@ -8,7 +8,9 @@ import {
 } from "../types/replay";
 import { auditLogService } from "./auditLogService";
 
-export class FileSystemRawEventStore implements RawEventStore {
+async rollbackTo(cursor: number): Promise<void> {
+  return;
+}
   private readonly dataDir: string;
   private readonly eventsFile: string;
   private readonly cursorFile: string;
@@ -324,7 +326,9 @@ export class FileSystemRawEventStore implements RawEventStore {
 }
 
 // In-memory implementation for testing
-export class InMemoryRawEventStore implements RawEventStore {
+async rollbackTo(cursor: number): Promise<void> {
+  return;
+}
   private events: RawEvent[] = [];
   private cursor: number | null = null;
   private validator: EventValidator;

@@ -3,25 +3,9 @@ import { InvoiceStatus, InvoiceCategory, Invoice } from "../../types/contract";
 import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
 import { freshnessService } from "../../services/freshnessService";
 import { invoiceStore } from "../../services/invoiceStore";
-import { parsePaginationParams, PaginationError, applyPagination } from "../../utils/pagination";
-
-export const MOCK_INVOICES: Invoice[] = [
+export const MOCK_INVOICES = [
   {
-    id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-    business: "GA...BUSINESS",
-    amount: "500000",
-    currency: "USD",
-    due_date: Math.floor(Date.now() / 1000) + 86400,
-    status: InvoiceStatus.Pending,
-    description: "Mock invoice",
-    category: InvoiceCategory.Other,
-    tags: [],
-    metadata: { customer_name: "Mock Customer", customer_address: "", tax_id: "", line_items: [], notes: "" },
-    created_at: Math.floor(Date.now() / 1000) - 7200,
-    updated_at: Math.floor(Date.now() / 1000) - 3600,
-    contract_version: 1,
-    event_schema_version: 1,
-    indexed_at: new Date().toISOString(),
+    id: "mock-invoice-1",
   },
 ];
 

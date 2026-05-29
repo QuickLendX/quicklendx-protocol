@@ -715,3 +715,17 @@ export class KycService {
     return [...this.log];
   }
 }
+export interface KycPayload {
+  [key: string]: any;
+}
+
+export interface EncryptedRecord {
+  encryptedData: string;
+}
+
+export interface KmsClient {
+  encrypt(data: string): Promise<string>;
+  decrypt(data: string): Promise<string>;
+}
+
+export class LocalKeyProvider

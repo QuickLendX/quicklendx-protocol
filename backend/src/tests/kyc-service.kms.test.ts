@@ -348,7 +348,7 @@ describe("KycService — key rotation", () => {
     await service.rotateKey(record, newProvider);
 
     const log = service.getAccessLog();
-    const rotateEntry = log.find((e) => e.action === "rotate");
+    const rotateEntry = log.find((e: any) => e.action === "rotate");
     expect(rotateEntry).toBeDefined();
     expect(rotateEntry!.keyId).toBe("local-v2");
   });
