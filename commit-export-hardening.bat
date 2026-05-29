@@ -4,8 +4,8 @@ REM This script completes the git operations for issue #1063
 
 echo Creating feature branch: feature/export-hardening
 git checkout -b feature/export-hardening || git checkout feature/export-hardening
-
-echo.
+```
+```diff
 echo Staging all changes...
 git add -A
 

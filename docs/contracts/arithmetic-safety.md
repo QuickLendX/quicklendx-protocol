@@ -81,6 +81,16 @@ rounding error inherent in integer division.
 
 ## 4. Module Reference
 
+### Audited Functions (2026-05-27)
+
+- `FeeManager::calculate_total_fees` — all BPS multiplies and adjustments now use checked arithmetic and return `QuickLendXError::ArithmeticOverflow` on overflow.
+- `FeeManager::update_user_volume` — cumulative `total_volume` uses checked addition and returns `QuickLendXError::ArithmeticOverflow` on overflow.
+- `FeeManager::distribute_revenue` — revenue split multiplies are checked; distribution will return `QuickLendXError::ArithmeticOverflow` on arithmetic overflow.
+- `profits::calculate_treasury_split` — multiplication by BPS is checked before division to avoid wrapping in intermediate steps.
+- `FeeManager::get_analytics` — `distributed_pct` calculation uses checked multiplication to prevent overflow.
+- `FeeManager::validate_cross_fee_consistency` — accumulation of `total_active_min_fees` uses checked addition to prevent overflow.
+
+
 ### 4.1 `settlement.rs` — Invoice Settlement
 
 **Purpose:** Compute the definitive payout split when a debtor pays an invoice.

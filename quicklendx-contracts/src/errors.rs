@@ -74,6 +74,8 @@ pub enum QuickLendXError {
     InvalidFeeConfiguration = 1850,
     TreasuryNotConfigured = 1851,
     InvalidFeeBasisPoints = 1852,
+    /// Arithmetic overflow detected during checked arithmetic operations
+    ArithmeticOverflow = 1856,
     RotationAlreadyPending = 1853,
     RotationNotFound = 1854,
     RotationExpired = 1855,
@@ -194,6 +196,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::EmergencyWithdrawInsufficientBalance => symbol_short!("EMG_BAL"),
             QuickLendXError::TokenTransferFailed => symbol_short!("TKN_FAIL"),
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
+            QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
         }
     }
