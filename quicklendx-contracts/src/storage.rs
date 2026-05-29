@@ -5,10 +5,61 @@
 
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
+use crate::protocol_limits;
 use crate::types::{
     Bid, BidStatus, Investment, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
     PlatformFeeConfig,
 };
+
+/// TTL extension threshold for persistent storage entries.
+///
+/// This value ensures that long-lived entries (invoices)
+/// survive the maximum possible invoice lifecycle without being archived.
+/// Calculated as: max_due_date_days (365) * 86400 + grace_period_seconds (604800)
+/// = 31,536,000 + 604,800 = 32,140,800 seconds (~371 days).
+///
+/// We add a 30-day safety margin (2,592,000 seconds) to account for:
+/// - Ledger time drift between funding and settlement
+/// - Potential delays in dispute resolution
+/// - Network congestion during settlement periods
+///
+/// Final TTL: 32,140,800 + 2,592,000 = 34,732,800 seconds (~402 days)
+///
+/// # Security Note
+/// If this TTL is too short, funded invoices could be archived mid-lifecycle,
+/// causing permanent fund loss. If too long, it increases storage costs.
+/// The current value balances safety with reasonable cost.
+pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800;
+
+/// Extend the TTL of a persistent storage entry to prevent archival.
+///
+/// This function should be called on every read/write of long-lived keys
+/// (invoices) to ensure they survive the maximum invoice lifecycle without
+/// being archived by Soroban's TTL mechanism.
+///
+/// # Arguments
+/// * `env` - The contract environment
+/// * `key` - The storage key to bump (must implement IntoVal<Storage>)
+///
+/// # Security Note
+/// Without TTL extension, funded invoices could be archived mid-lifecycle,
+/// causing permanent fund loss. This function extends the TTL to cover the
+/// maximum invoice duration plus a safety margin.
+///
+/// # TTL Calculation
+/// The TTL is set to `PERSISTENT_TTL_THRESHOLD` (34,732,800 seconds ~402 days),
+/// which covers:
+/// - max_due_date_days (365 days)
+/// - grace_period_seconds (7 days)
+/// - 30-day safety margin for delays and disputes
+pub fn bump_persistent<T>(env: &Env, key: &T)
+where
+    T: soroban_sdk::IntoVal<soroban_sdk::storage::Storage>,
+{
+    env.storage()
+        .persistent()
+        .extend_ttl(key, PERSISTENT_TTL_THRESHOLD);
+}
 
 /// Storage keys for the contract
 pub struct StorageKeys;
@@ -139,9 +190,11 @@ pub struct InvoiceStorage;
 impl InvoiceStorage {
     /// Store an invoice and update all its secondary indexes.
     pub fn store(env: &Env, invoice: &Invoice) {
+        let key = DataKey::Invoice(invoice.id.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::Invoice(invoice.id.clone()), invoice);
+            .set(&key, invoice);
+        bump_persistent(env, &key);
         Self::add_to_business_index(env, &invoice.business, &invoice.id);
         Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
         if let Some(ref name) = invoice.metadata_customer_name {
@@ -195,9 +248,12 @@ impl InvoiceStorage {
     }
 
     pub fn get(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Invoice(invoice_id.clone()))
+        let key = DataKey::Invoice(invoice_id.clone());
+        let result = env.storage().persistent().get(&key);
+        if result.is_some() {
+            bump_persistent(env, &key);
+        }
+        result
     }
 
     pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
@@ -227,9 +283,11 @@ impl InvoiceStorage {
                 }
             }
         }
+        let key = DataKey::Invoice(invoice.id.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::Invoice(invoice.id.clone()), invoice);
+            .set(&key, invoice);
+        bump_persistent(env, &key);
     }
 
     pub fn update_invoice(env: &Env, invoice: &Invoice) {
@@ -340,9 +398,11 @@ impl InvoiceStorage {
         let mut invoices = Self::get_by_business(env, business);
         if !invoices.contains(invoice_id) {
             invoices.push_back(invoice_id.clone());
+            let key = Indexes::invoices_by_business(business);
             env.storage()
                 .persistent()
-                .set(&Indexes::invoices_by_business(business), &invoices);
+                .set(&key, &invoices);
+            bump_persistent(env, &key);
         }
     }
 
@@ -350,9 +410,11 @@ impl InvoiceStorage {
         let mut invoices = Self::get_by_business(env, business);
         if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
             invoices.remove(pos as u32);
+            let key = Indexes::invoices_by_business(business);
             env.storage()
                 .persistent()
-                .set(&Indexes::invoices_by_business(business), &invoices);
+                .set(&key, &invoices);
+            bump_persistent(env, &key);
         }
     }
 
@@ -360,9 +422,11 @@ impl InvoiceStorage {
         let mut invoices = Self::get_by_status(env, status.clone());
         if !invoices.contains(invoice_id) {
             invoices.push_back(invoice_id.clone());
+            let key = Indexes::invoices_by_status(status);
             env.storage()
                 .persistent()
-                .set(&Indexes::invoices_by_status(status), &invoices);
+                .set(&key, &invoices);
+            bump_persistent(env, &key);
         }
     }
 
@@ -370,9 +434,11 @@ impl InvoiceStorage {
         let mut invoices = Self::get_by_status(env, status.clone());
         if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
             invoices.remove(pos as u32);
+            let key = Indexes::invoices_by_status(status);
             env.storage()
                 .persistent()
-                .set(&Indexes::invoices_by_status(status), &invoices);
+                .set(&key, &invoices);
+            bump_persistent(env, &key);
         }
     }
 
@@ -386,6 +452,7 @@ impl InvoiceStorage {
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
+            bump_persistent(env, &key);
         }
     }
 
@@ -403,6 +470,7 @@ impl InvoiceStorage {
             }
         }
         env.storage().persistent().set(&key, &filtered);
+        bump_persistent(env, &key);
     }
 
     pub fn add_to_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
@@ -415,6 +483,7 @@ impl InvoiceStorage {
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
+            bump_persistent(env, &key);
         }
     }
 
@@ -432,6 +501,7 @@ impl InvoiceStorage {
             }
         }
         env.storage().persistent().set(&key, &filtered);
+        bump_persistent(env, &key);
     }
     pub fn add_tag_index(env: &Env, tag: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_tag(tag);
@@ -443,6 +513,7 @@ impl InvoiceStorage {
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
+            bump_persistent(env, &key);
         }
     }
 
@@ -460,6 +531,7 @@ impl InvoiceStorage {
             }
         }
         env.storage().persistent().set(&key, &filtered);
+        bump_persistent(env, &key);
     }
 
     pub fn add_category_index(env: &Env, category: &InvoiceCategory, invoice_id: &BytesN<32>) {
@@ -472,6 +544,7 @@ impl InvoiceStorage {
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
+            bump_persistent(env, &key);
         }
     }
 
@@ -489,6 +562,7 @@ impl InvoiceStorage {
             }
         }
         env.storage().persistent().set(&key, &filtered);
+        bump_persistent(env, &key);
     }
 
     pub fn get_invoices_by_customer(env: &Env, customer_name: &String) -> Vec<BytesN<32>> {
