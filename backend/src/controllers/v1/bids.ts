@@ -1,31 +1,75 @@
 import { Request, Response, NextFunction } from "express";
 import { Bid, BidStatus } from "../../types/contract";
+import { CreateBidBody, createBidBodySchema } from "../../validators/bids";
 import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
 import { labelRecord } from "../../services/versioningService";
 import { freshnessService } from "../../services/freshnessService";
 import { parsePaginationParams, PaginationError } from "../../utils/pagination";
 import { SnapshotService } from "../../services/snapshotService";
+import { bidStore } from "../../services/bidStore";
+import crypto from "crypto";
 
-export const MOCK_BIDS: Bid[] = [
-  labelRecord<Omit<Bid, "contract_version" | "event_schema_version" | "indexed_at">>({
-    bid_id: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-    invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-    investor: "GA...ABC",
-    bid_amount: "950000000",
-    expected_return: "50000000",
-    timestamp: Math.floor(Date.now() / 1000) - 3600,
-    status: BidStatus.Placed,
-    expiration_timestamp: Math.floor(Date.now() / 1000) + 86400,
-  }),
-];
+/**
+ * Create a new bid.
+ * Requires authentication (apiKeyAuth middleware).
+ * Validates:
+ * - Invoice exists and is Verified status
+ * - No duplicate active bid from same investor on same invoice
+ * - Bid amount >= 1
+ * - Expected return >= bid amount
+ */
+export const createBid = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.apiKey) {
+      return res.status(401).json({
+        error: {
+          message: "Authentication required",
+          code: "UNAUTHORIZED",
+        },
+      });
+    }
 
-// applyPagination requires items with `id` field; bids use `bid_id`
-type BidWithId = Bid & { id: string };
+    const validated = createBidBodySchema.parse(req.body);
 
-function normalizeBids(bids: Bid[]): BidWithId[] {
-  return bids.map((b) => ({ ...b, id: b.bid_id }));
-}
+    // Generate deterministic bid_id (contract-like ID)
+    const bidId = "0x" + crypto.randomBytes(32).toString("hex");
+    const timestamp = Math.floor(Date.now() / 1000);
 
+    const bid = await bidStore.createBid({
+      ...validated,
+      bid_id: bidId,
+      investor: req.apiKey.created_by, // Use API key creator as investor
+      timestamp,
+      created_by: req.apiKey.created_by,
+    });
+
+    res.status(201).json({ data: bid });
+  } catch (error: any) {
+    if (error.message.includes("Invoice not found") ||
+        error.message.includes("Cannot place bid") ||
+        error.message.includes("already has an active bid") ||
+        error.message.includes("Bid amount must be") ||
+        error.message.includes("Expected return")) {
+      return res.status(400).json({
+        error: {
+          message: error.message,
+          code: "INVALID_BID",
+        },
+      });
+    }
+    next(error);
+  }
+};
+
+/**
+ * Get bids for an invoice with optional filtering and pagination.
+ * Returns ranked bids (best first) by default.
+ * Filters: invoice_id (required), investor (optional), status (optional)
+ */
 export const getBids = async (
   req: Request,
   res: Response,
@@ -33,45 +77,31 @@ export const getBids = async (
 ) => {
   try {
     const params = parsePaginationParams(req.query);
-    const { invoice_id, investor } = req.query;
+    const { invoice_id, investor, status } = req.query;
 
-    let filtered = [...MOCK_BIDS];
-    if (invoice_id) filtered = filtered.filter((b) => b.invoice_id === invoice_id);
-    if (investor) filtered = filtered.filter((b) => b.investor === investor);
-
-    applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body: filtered });
-    res.json({ data: filtered, freshness: freshnessService.getFreshness() });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const getBestBid = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { invoiceId } = req.params;
-    const bestBid = await SnapshotService.getBestBid(invoiceId as string);
-    if (!bestBid) {
-      return res.status(404).json({ error: "No best bid found for this invoice" });
+    if (!invoice_id) {
+      return res.status(400).json({
+        error: {
+          message: "invoice_id is required",
+          code: "MISSING_REQUIRED_FIELD",
+        },
+      });
     }
-    res.json(bestBid);
-  } catch (error) {
-    next(error);
-  }
-};
 
-export const getTopBids = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { invoiceId } = req.params;
-    const topBids = await SnapshotService.getTopBids(invoiceId as string);
-    res.json({ top_bids: topBids });
+    const filters = {
+      investor: investor as string | undefined,
+      status: status as BidStatus | undefined,
+    };
+
+    const page = await bidStore.getBidsPaginated(
+      invoice_id as string,
+      params.limit,
+      params.cursor,
+      filters
+    );
+
+    applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body: page });
+    res.json({ data: page.data, next_cursor: page.next_cursor, has_more: page.has_more });
   } catch (error) {
     if (error instanceof PaginationError) {
       return res.status(400).json({
@@ -81,3 +111,45 @@ export const getTopBids = async (
     next(error);
   }
 };
+
+/**
+ * Get the best bid for an invoice.
+ * Returns the highest-ranked Placed bid, or 404 if none exist.
+ */
+export const getBestBid = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { invoiceId } = req.params;
+    const bestBid = await bidStore.getBestBid(invoiceId as string);
+    if (!bestBid) {
+      return res.status(404).json({ error: "No best bid found for this invoice" });
+    }
+    res.json({ data: bestBid });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get ranked bids for an invoice.
+ * Returns all Placed bids sorted by contract ranking logic (best first).
+ */
+export const getTopBids = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { invoiceId } = req.params;
+    const topBids = await bidStore.getRankedBids(invoiceId as string, 100);
+    res.json({ data: topBids });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Legacy mock export for compatibility with existing export/reporting services.
+export const MOCK_BIDS: any[] = [];
