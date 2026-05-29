@@ -94,6 +94,8 @@ The funded overdue scan is intentionally bounded so one contract call cannot wal
 
 - Default batch size: `25`
 - Maximum explicit batch size: `100`
+- A single call can never process more than the resolved scan window, which is clamped to
+  `min(max_overdue_scan_batch_limit, total_funded)`.
 - Traversal order: funded index insertion order
 - Progress tracking: persistent rotating cursor in instance storage
 - Cursor normalization: if the funded set shrinks and the cursor is out of range, scanning restarts at `0`
