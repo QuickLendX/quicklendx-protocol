@@ -229,27 +229,184 @@ paths:
 
   /bids:
     get:
-      summary: List bids (paginated)
+      summary: List ranked bids for an invoice (paginated)
       description: |
-        Returns a cursor-paginated list of bids sorted by `timestamp DESC, bid_id ASC`.
+        Returns a cursor-paginated list of ranked bids for a given invoice, sorted by
+        contract ranking semantics: (1) profit DESC, (2) expected_return DESC, (3) bid_amount DESC,
+        (4) timestamp DESC, (5) bid_id ASC.
+        
+        Only returns Placed bids. Query parameter `invoice_id` is **required**.
+      security:
+        - {}  # Optional authentication
       parameters:
         - $ref: '#/components/parameters/LimitParam'
         - $ref: '#/components/parameters/CursorParam'
         - name: invoice_id
           in: query
+          required: true
           schema:
             type: string
+            format: hex
+            example: "0x1234567890abcdef..."
+          description: Invoice ID to filter bids
         - name: investor
           in: query
           schema:
             type: string
+            format: stellar-address
+            example: "GBSXVD727UNXJZ7ZM4VCXBTK3UMPXR7O6LLXS7XVOECGDYH3XFNV7C5K"
+          description: Optional filter by investor address
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/BidStatus"
+          description: Optional filter by bid status (default Placed only)
       responses:
         "200":
-          description: Paginated list of bids
+          description: Paginated ranked bids
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BidPageResult"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Bid"
+                  next_cursor:
+                    type: string
+                    nullable: true
+                  has_more:
+                    type: boolean
+        "400":
+          $ref: '#/components/responses/PaginationError'
+    post:
+      summary: Place a new bid on a Verified invoice
+      description: |
+        Creates a new bid for an investor on a Verified invoice.
+        
+        Requires authentication (Bearer token in Authorization header).
+        
+        **Validation rules:**
+        - Invoice must be in Verified status
+        - Investor cannot have an active bid on the same invoice (no duplicates)
+        - bid_amount must be > 0
+        - expected_return must be >= bid_amount
+        - expiration_timestamp must be a positive integer
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - invoice_id
+                - bid_amount
+                - expected_return
+                - expiration_timestamp
+              properties:
+                invoice_id:
+                  type: string
+                  format: hex
+                  example: "0x1234567890abcdef..."
+                  description: Invoice ID to bid on
+                bid_amount:
+                  type: string
+                  pattern: "^[0-9]+$"
+                  example: "1000000"
+                  description: Bid amount (as numeric string for JSON safety)
+                expected_return:
+                  type: string
+                  pattern: "^[0-9]+$"
+                  example: "1500000"
+                  description: Expected return (must be >= bid_amount, as numeric string)
+                expiration_timestamp:
+                  type: integer
+                  example: 1745599232
+                  description: Unix timestamp when this bid expires
+      responses:
+        "201":
+          description: Bid created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Bid"
+        "400":
+          description: Invalid bid parameters (non-Verified invoice, duplicate bid, validation failure)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      code:
+                        type: string
+                        enum:
+                          - INVALID_BID
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /bids/{invoiceId}/best:
+    get:
+      summary: Get the best bid for an invoice
+      description: |
+        Returns the highest-ranked (best) bid for an invoice, or 404 if no Placed bids exist.
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: hex
+          description: Invoice ID
+      responses:
+        "200":
+          description: Best bid for the invoice
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Bid"
+        "404":
+          description: No bids found for this invoice
+
+  /bids/{invoiceId}/ranked:
+    get:
+      summary: Get all ranked bids for an invoice
+      description: |
+        Returns all Placed bids for an invoice ranked by contract semantics.
+        (best first: profit DESC, expected_return DESC, bid_amount DESC, timestamp DESC, bid_id ASC)
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: hex
+          description: Invoice ID
+      responses:
+        "200":
+          description: Ranked bids
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Bid"
 
   /settlements:
     get:
