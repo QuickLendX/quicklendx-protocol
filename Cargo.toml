@@ -26,3 +26,7 @@ debug-assertions = true
 [features]
 # Enable property-based fuzz tests (disabled by default to keep CI fast)
 fuzz-tests = []
+
+[lints.rust]
+# Deny warnings by default to catch them in CI, while respecting #![allow] directives in code
+warnings = "deny"
