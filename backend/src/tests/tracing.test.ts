@@ -214,6 +214,32 @@ describe("tracing spans", () => {
     expect(endEntries).toHaveLength(1);
   });
 
+  it("assigns parent_span_id when creating a child span inside an active span", () => {
+    withSpan("pipeline.explicit-parent", {}, () => {
+      const child = startSpan("pipeline.explicit-child", {
+        service: "invariant",
+      });
+      endSpan(child);
+    });
+
+    const entries = collectSpanEntries(
+      writeSpy.mock.calls as Array<[any, ...any[]]>,
+    );
+    const parentStart = entries.find(
+      (entry) =>
+        entry.event === "start" && entry.name === "pipeline.explicit-parent",
+    );
+    const childStart = entries.find(
+      (entry) =>
+        entry.event === "start" && entry.name === "pipeline.explicit-child",
+    );
+
+    const safeParentStart = expectDefined(parentStart, "explicit parent start");
+    const safeChildStart = expectDefined(childStart, "explicit child start");
+
+    expect(safeChildStart.parent_span_id).toBe(safeParentStart.span_id);
+  });
+
   it("marks sync throw spans as errors", () => {
     expect(() =>
       withSpan("pipeline.sync-throw", { stage: "ingestion" }, () => {

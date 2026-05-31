@@ -63,7 +63,7 @@ export function startSpan(name: string, attrs: SpanAttributes = {}): Span {
     name,
     traceId: buildTraceId(parent),
     spanId: ulid(),
-    parentSpanId: parent?.spanId ?? null,
+    parentSpanId: parent ? parent.spanId : null,
     attrs,
     startedAtMs: Date.now(),
     startedAtNs: process.hrtime.bigint(),
