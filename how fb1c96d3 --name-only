@@ -1,0 +1,130 @@
+* [33mfb1c96d3[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/test-seed-determinism[m[33m, [m[1;31morigin/feature/reentrancy-fault-injection[m[33m, [m[1;32mfeature/types-cargo-fuzz[m[33m, [m[1;32mfeature/reentrancy-fault-injection[m[33m)[m feat: add hostile reentrancy fault-injection tests and documentation
+*   [33m4641b6b8[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m Merge PR #1149: Feature/metadata input validation (admin merge, -X theirs)
+[32m|[m[33m\[m  
+[32m|[m *   [33m30166827[m Merge branch 'main' into feature/metadata-input-validation
+[32m|[m [34m|[m[35m\[m  
+* [34m|[m [35m\[m   [33m180cf90a[m Merge pull request #1150 from pharwasz/feature/correlation-ids
+[36m|[m[1;31m\[m [34m\[m [35m\[m  
+[36m|[m * [34m|[m [35m|[m [33m0d9aeff1[m fix: restore proper class structure in rawEventStore.ts (upstream bug)
+[36m|[m * [34m|[m [35m|[m [33m41c4cf13[m fix: complete truncated requestContext.ts
+[36m|[m * [34m|[m [35m|[m [33m6d070a07[m fix: remove conflict markers from jest.config.js
+[36m|[m * [34m|[m [35m|[m [33m788419ae[m feat: thread correlation ids through request and webhook logging
+[36m|[m [35m|[m [34m|[m[35m/[m  
+[36m|[m [35m|[m[35m/[m[34m|[m   
+* [35m|[m [34m|[m   [33meda224eb[m Merge pull request #1148 from VictorEzenma/uiux/tooltip-inline-help-spec
+[1;32m|[m[1;33m\[m [35m\[m [34m\[m  
+[1;32m|[m * [35m|[m [34m|[m [33mae485ecc[m Merge branch 'main' into uiux/tooltip-inline-help-spec
+[1;32m|[m [1;34m|[m[35m\[m[35m|[m [34m|[m 
+[1;32m|[m * [35m|[m [34m|[m [33m714ce68b[m docs(uiux): add tooltip and inline-help component spec
+[1;32m|[m * [35m|[m [34m|[m [33mffae8f59[m docs(uiux): add microcopy and content style guide for financial UI
+[1;32m|[m * [35m|[m [34m|[m [33m89a4a852[m test(invoice): add string and metadata input-validation bounds coverage
+[1;32m|[m * [35m|[m [34m|[m [33mae0b6941[m fix: resolve duplicate enum variants and align storage ttl signatures
+[1;32m|[m * [35m|[m [34m|[m [33m91e8a4c3[m test(invoice): verify all input-validation constraints pass successfully
+[1;32m|[m * [35m|[m [34m|[m [33m6c4d5f74[m chore: prepare branch for PR
+[1;32m|[m * [35m|[m [34m|[m [33m3605b02a[m docs(invoice): document field length limits, storage-bloat note, and test summary
+[1;32m|[m * [35m|[m [34m|[m [33md11cda31[m test(invoice): add string and metadata input-validation bounds coverage
+[1;32m|[m * [35m|[m [34m|[m [33md04e44d3[m docs(uiux): add tooltip and inline-help component spec
+* [1;35m|[m [35m|[m [34m|[m   [33mbd1d0180[m Merge pull request #1147 from koder-ns/feat/Enforce-abd-test-reentary
+[1;36m|[m[31m\[m [1;35m\[m [35m\[m [34m\[m  
+[1;36m|[m * [1;35m|[m [35m|[m [34m|[m [33md9157a90[m enforce-and-test
+[1;36m|[m [1;35m|[m[1;35m/[m [35m/[m [34m/[m  
+* [1;35m|[m [35m|[m [34m|[m   [33mf44c24e7[m Merge pull request #1146 from koder-ns/feat/Add-audit-trail-integrity-tests
+[32m|[m[33m\[m [1;35m\[m [35m\[m [34m\[m  
+[32m|[m * [1;35m|[m [35m|[m [34m|[m [33ma02c02cf[m audit trail
+[32m|[m [1;35m|[m[1;35m/[m [35m/[m [34m/[m  
+* [1;35m|[m [35m|[m [34m|[m   [33m1b3bc4ff[m Merge pull request #1151 from VictorEzenma/uiux/microcopy-content-style-guide
+[35m|[m[35m\[m [1;35m\[m [35m\[m [34m\[m  
+[35m|[m [35m|[m[35m_[m[1;35m|[m[35m/[m [34m/[m  
+[35m|[m[35m/[m[35m|[m [1;35m|[m [34m|[m   
+[35m|[m * [1;35m|[m [34m|[m   [33m963cf5d8[m Merge branch 'main' into uiux/microcopy-content-style-guide
+[35m|[m [36m|[m[35m\[m [1;35m\[m [34m\[m  
+[35m|[m [36m|[m[35m/[m [1;35m/[m [34m/[m  
+[35m|[m[35m/[m[36m|[m [1;35m|[m [34m|[m   
+* [36m|[m [1;35m|[m [34m|[m   [33mc10b52a7[m Merge PR #1145: feat: add persisted bid placement and ranking endpoints (admin merge, -X theirs)
+[1;32m|[m[1;33m\[m [36m\[m [1;35m\[m [34m\[m  
+[1;32m|[m * [36m|[m [1;35m|[m [34m|[m [33m8bfd74dc[m feat: add persisted bid placement and ranking endpoints
+* [1;33m|[m [36m|[m [1;35m|[m [34m|[m [33m05f4effa[m chore: keep .github/workflows from upstream main (token lacks workflow scope)
+* [1;33m|[m [36m|[m [1;35m|[m [34m|[m   [33m041f37a9[m Merge PR #1123: test: improve migration coverage (admin merge, -X theirs)
+[1;34m|[m[1;35m\[m [1;33m\[m [36m\[m [1;35m\[m [34m\[m  
+[1;34m|[m * [1;33m|[m [36m|[m [1;35m|[m [34m|[m [33m1684c8fd[m fix(ci): remove non-existent perf test from backend workflow
+* [1;35m|[m [1;33m|[m [36m|[m [1;35m|[m [34m|[m   [33m60955093[m Merge PR #1124: Feat/migration rollback checksum (admin merge, -X theirs)
+[1;36m|[m[31m\[m [1;35m\[m [1;33m\[m [36m\[m [1;35m\[m [34m\[m  
+[1;36m|[m * [1;35m|[m [1;33m|[m [36m|[m [1;35m|[m [34m|[m [33m099cd9ff[m feat: add migration rollback support and checksum verification
+[1;36m|[m [1;35m|[m[1;35m/[m [1;33m/[m [36m/[m [1;35m/[m [34m/[m  
+[1;36m|[m * [1;33m|[m [36m|[m [1;35m/[m [34m/[m [33m9a687f79[m test: improve migration coverage
+[1;36m|[m [1;35m|[m [1;33m|[m[1;35m_[m[36m|[m[1;35m/[m [34m/[m  
+[1;36m|[m [1;35m|[m[1;35m/[m[1;33m|[m [36m|[m [34m|[m   
+* [1;35m|[m [1;33m|[m [36m|[m [34m|[m   [33m1e3da2df[m Merge PR #1126: Feature/prometheus metrics (admin merge, -X theirs)
+[32m|[m[33m\[m [1;35m\[m [1;33m\[m [36m\[m [34m\[m  
+[32m|[m * [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33m21b3598c[m stuff
+[32m|[m * [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33m812f1e3a[m feat: implement checked arithmetic for overflow safety in fee management and related modules
+[32m|[m * [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33m05ffef50[m feat: add prometheus metrics endpoint for indexer and queue health
+* [33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m   [33mba786469[m Merge PR #1127: feat: implement cursor pagination for bids, disputes, invoices, and s… (admin merge, -X theirs)
+[34m|[m[35m\[m [33m\[m [1;35m\[m [1;33m\[m [36m\[m [34m\[m  
+[34m|[m * [33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33m9b00ca36[m feat: implement cursor pagination for bids, disputes, invoices, and settlements
+[34m|[m [1;35m|[m [33m|[m[1;35m/[m [1;33m/[m [36m/[m [34m/[m  
+[34m|[m [1;35m|[m[1;35m/[m[33m|[m [1;33m|[m [36m|[m [34m|[m   
+* [1;35m|[m [33m|[m [1;33m|[m [36m|[m [34m|[m   [33mfb92e613[m Merge PR #1130: feat: add graceful shutdown with request drain and queue flush (admin merge, -X theirs)
+[36m|[m[1;31m\[m [1;35m\[m [33m\[m [1;33m\[m [36m\[m [34m\[m  
+[36m|[m * [1;35m|[m [33m|[m [1;33m|[m [36m|[m [34m|[m [33m85ab33a5[m fix: resolve test suite failures in CI
+[36m|[m * [1;35m|[m [33m|[m [1;33m|[m [36m|[m [34m|[m [33m0cfbb578[m fix: resolve all TypeScript type errors failing the Test and Coverage CI job
+[36m|[m * [1;35m|[m [33m|[m [1;33m|[m [36m|[m [34m|[m [33m4821fbc3[m fix: sync package-lock.json with js-yaml and @types/js-yaml direct deps
+[36m|[m * [1;35m|[m [33m|[m [1;33m|[m [36m|[m [34m|[m [33m83d86f27[m docs: add pull request description for graceful shutdown (#1073)
+[36m|[m * [1;35m|[m [33m|[m [1;33m|[m [36m|[m [34m|[m [33maf9daf5a[m feat: add graceful shutdown with request drain and queue flush
+[36m|[m [1;35m|[m[1;35m/[m [33m/[m [1;33m/[m [36m/[m [34m/[m  
+* [1;35m|[m [33m|[m [1;33m|[m [36m|[m [34m|[m   [33mc27e4d2b[m Merge pull request #1121 from Martins-O/uiux/modal-dialog-component-spec
+[1;32m|[m[1;33m\[m [1;35m\[m [33m\[m [1;33m\[m [36m\[m [34m\[m  
+[1;32m|[m * [1;35m|[m [33m|[m [1;33m|[m [36m|[m [34m|[m [33m59ab74df[m docs(uiux): add modal and confirmation-dialog component spec
+* [1;33m|[m [1;35m|[m [33m|[m [1;33m|[m [36m|[m [34m|[m   [33m000729ef[m Merge pull request #1122 from fwseyi/test/invoice-lifecycle-e2e
+[1;34m|[m[1;35m\[m [1;33m\[m [1;35m\[m [33m\[m [1;33m\[m [36m\[m [34m\[m  
+[1;34m|[m * [1;33m|[m [1;35m|[m [33m|[m [1;33m|[m [36m|[m [34m|[m [33m2ec11788[m test(e2e): implement full invoice lifecycle integration test
+* [1;35m|[m [1;33m|[m [1;35m|[m [33m|[m [1;33m|[m [36m|[m [34m|[m   [33m79030809[m Merge pull request #1125 from Danitello123/feature/export-hardening
+[1;36m|[m[33m\[m [1;35m\[m [1;33m\[m [1;35m\[m [33m\[m [1;33m\[m [36m\[m [34m\[m  
+[1;36m|[m [33m|[m [1;35m|[m[33m_[m[1;33m|[m[33m_[m[1;35m|[m[33m/[m [1;33m/[m [36m/[m [34m/[m  
+[1;36m|[m [33m|[m[33m/[m[1;35m|[m [1;33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m   
+[1;36m|[m * [1;35m|[m [1;33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33m5130017e[m feat: harden data exports with validation, audit, caps, and integrity digest
+* [31m|[m [1;35m|[m [1;33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m   [33m54f19463[m Merge pull request #1128 from lamborghini21/feature/storage-ttl-extension
+[32m|[m[33m\[m [31m\[m [1;35m\[m [1;33m\[m [1;35m\[m [1;33m\[m [36m\[m [34m\[m  
+[32m|[m * [31m\[m [1;35m\[m [1;33m\[m [1;35m\[m [1;33m\[m [36m\[m [34m\[m   [33m6a0e7281[m chore: merge TTL compilation fixes
+[32m|[m [34m|[m[35m\[m [31m\[m [1;35m\[m [1;33m\[m [1;35m\[m [1;33m\[m [36m\[m [34m\[m  
+[32m|[m [34m|[m * [31m|[m [1;35m|[m [1;33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33m9c2b8ac8[m fix(storage): ensure bump_persistent calls use references and finalize TTL changes
+[32m|[m [34m|[m * [31m|[m [1;35m|[m [1;33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33mf91b93c6[m fix(storage): remove duplicate type imports to resolve E0252
+[32m|[m [34m|[m * [31m|[m [1;35m|[m [1;33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33m0c608b3f[m fix(storage): remove duplicate type imports to resolve E0252
+[32m|[m [34m|[m[34m/[m [31m/[m [1;35m/[m [1;33m/[m [1;35m/[m [1;33m/[m [36m/[m [34m/[m  
+[32m|[m * [31m|[m [1;35m|[m [1;33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33m6122324f[m feat(storage): extend TTL across bid, investment, and escrow storage for persistent survival
+[32m|[m * [31m|[m [1;35m|[m [1;33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33mf5707839[m feat(storage): add TTL extension to instance storage (bid/investment/escrow) - Made PERSISTENT_TTL_THRESHOLD public for cross-module use - Added TTL extension to BidStorage (store_bid, get_bid, update_bid) - Added TTL extension to InvestmentStorage (store_investment, get_investment, update_investment) - Added TTL extension to EscrowStorage (store_escrow, get_escrow, update_escrow, get_escrow_by_invoice) - Added 6 TTL survival tests for instance storage entities - Updated documentation to reflect both persistent and instance storage TTL extension
+[32m|[m * [31m|[m [1;35m|[m [1;33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33mdda04393[m fix(storage): resolve test_storage compile errors for storage TTL branch
+[32m|[m * [31m|[m [1;35m|[m [1;33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33mb42c61f9[m fix(storage): revert instance storage TTL extension, keep only persistent storage TTL Instance storage does not support extend_ttl in the same way as persistent storage. Reverting to only apply TTL extension to persistent storage (InvoiceStorage) to fix CI build failure.
+[32m|[m * [31m|[m [1;35m|[m [1;33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33m5b530a5a[m fix(storage): make bump_instance function public for cross-module usage
+[32m|[m * [31m|[m [1;35m|[m [1;33m|[m [1;35m|[m [1;33m|[m [36m|[m [34m|[m [33m20057f14[m feat(storage): extend persistent TTL for invoice/bid/escrow entries to prevent archival
+[32m|[m [1;35m|[m [31m|[m[1;35m_[m[1;35m|[m[1;35m_[m[1;33m|[m[1;35m/[m [1;33m/[m [36m/[m [34m/[m  
+[32m|[m [1;35m|[m[1;35m/[m[31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m   
+* [1;35m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m   [33m475e97c9[m Merge pull request #1132 from CNduka001/feature/resumable-backfill
+[36m|[m[1;31m\[m [1;35m\[m [31m\[m [1;35m\[m [1;33m\[m [1;33m\[m [36m\[m [34m\[m  
+[36m|[m * [1;35m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m [33m2d488d09[m feat: make drift backfill resumable with persisted progress
+[36m|[m * [1;35m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m [33m938c8b3a[m fix: scope cors allow-list and csrf coverage per request surface
+[36m|[m [1;35m|[m[1;35m/[m [31m/[m [1;35m/[m [1;33m/[m [1;33m/[m [36m/[m [34m/[m  
+* [1;35m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m   [33m7a972ad9[m Merge pull request #1133 from KayProject/feature/currency-whitelist-enforcement-tests
+[1;32m|[m[1;33m\[m [1;35m\[m [31m\[m [1;35m\[m [1;33m\[m [1;33m\[m [36m\[m [34m\[m  
+[1;32m|[m * [1;35m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m [33mad5934d3[m test(currency): verify whitelist enforcement across all currency-accepting entrypoints
+[1;32m|[m [1;35m|[m[1;35m/[m [31m/[m [1;35m/[m [1;33m/[m [1;33m/[m [36m/[m [34m/[m  
+* [1;35m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m   [33m5b5c422d[m Merge pull request #1134 from AbilityTechy/feature/rbac-hashed-tokens
+[1;34m|[m[1;35m\[m [1;35m\[m [31m\[m [1;35m\[m [1;33m\[m [1;33m\[m [36m\[m [34m\[m  
+[1;34m|[m * [1;35m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m [33m41e719e6[m test(rbac): add API-key-backed RBAC tests with isolated sqlite setup
+[1;34m|[m * [1;35m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m [33mf7422b2b[m feat: back rbac with hashed rotatable api keys and scoped roles
+[1;34m|[m [1;35m|[m[1;35m/[m [31m/[m [1;35m/[m [1;33m/[m [1;33m/[m [36m/[m [34m/[m  
+* [1;35m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m   [33mbfdac73f[m Merge pull request #1135 from felladaniel36-hash/#1091-Add-access-control-matrix-tests-for-every-admin-gated-entrypoint-in-lib.rs-FIX
+[1;36m|[m[31m\[m [1;35m\[m [31m\[m [1;35m\[m [1;33m\[m [1;33m\[m [36m\[m [34m\[m  
+[1;36m|[m * [1;35m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m [33m20d3f08f[m #1091 Add access-control matrix tests for every admin-gated entrypoint in lib.rs FIXED
+* [31m|[m [1;35m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m   [33m21b379b6[m Merge pull request #1136 from Chrisland58/feature/vesting-release-tests
+[32m|[m[33m\[m [31m\[m [1;35m\[m [31m\[m [1;35m\[m [1;33m\[m [1;33m\[m [36m\[m [34m\[m  
+[32m|[m * [31m|[m [1;35m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m [33mb25a5579[m test(vesting): add cliff, monotonicity, and over-release protection coverage
+[32m|[m [1;35m|[m [31m|[m[1;35m/[m [31m/[m [1;35m/[m [1;33m/[m [1;33m/[m [36m/[m [34m/[m  
+[32m|[m [1;35m|[m[1;35m/[m[31m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m   
+* [1;35m|[m [31m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m   [33m19c4746e[m Merge pull request #1137 from Chrisland58/feature/kyc-kms
+[34m|[m[35m\[m [1;35m\[m [31m\[m [31m\[m [1;35m\[m [1;33m\[m [1;33m\[m [36m\[m [34m\[m  
+[34m|[m * [1;35m|[m [31m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m [33m64d122fd[m feat: add kms-backed envelope encryption and rotation for kyc data
+[34m|[m * [1;35m|[m [31m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m [33ma660a483[m feat: add kms-backed envelope encryption and rotation for kyc data
+[34m|[m [1;35m|[m[1;35m/[m [31m/[m [31m/[m [1;35m/[m [1;33m/[m [1;33m/[m [36m/[m [34m/[m  
+* [1;35m|[m [31m|[m [31m|[m [1;35m|[m [1;33m|[m [1;33m|[m [36m|[m [34m|[m   [33ma52ee6b8[m Merge pull request #1138 from Thoni76/feature/checked-arithmetic-audit
+[36m|[m[1;31m\[m [1;35m\[m [31m\[m [31m\[m [1;35m\[m [1;33m\[m [1;33m\[m [36m\[m [34m\[m  
