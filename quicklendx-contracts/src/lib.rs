@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(dead_code, unused_imports, unused_variables, unused_comparisons, deprecated)]
 
 //! QuickLendX contracts library - minimal surface.
 //!
@@ -19,37 +20,35 @@ extern crate alloc;
 mod scratch_events;
 #[cfg(test)]
 mod test_default;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_fees;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
-mod admin;
-mod analytics;
-mod audit;
-mod backup;
-mod bid;
-mod currency;
-mod defaults;
-mod dispute;
-mod emergency;
-mod errors;
-mod escrow;
-mod events;
-mod fees;
+pub mod admin;
+pub mod analytics;
+pub mod audit;
+pub mod backup;
+pub mod bid;
+pub mod currency;
+pub mod defaults;
+pub mod dispute;
+pub mod emergency;
+pub mod errors;
+pub mod escrow;
+pub mod events;
+pub mod fees;
 pub mod freshness;
-mod init;
-mod investment;
-mod investment_queries;
-mod invoice;
-mod invoice_search;
-mod notifications;
-mod pause;
-mod payments;
-mod profits;
-mod protocol_limits;
-mod reentrancy;
-mod settlement;
-mod storage;
+pub mod init;
+pub mod investment;
+pub mod investment_queries;
+pub mod invoice;
+pub mod invoice_search;
+pub mod notifications;
+pub mod pause;
+pub mod payments;
+pub mod profits;
+pub mod protocol_limits;
+pub mod reentrancy;
+pub mod settlement;
+pub mod storage;
 #[cfg(test)]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -70,27 +69,28 @@ mod test_init;
 mod test_investment_consistency;
 // #[cfg(test)]
 // mod test_investment_queries;
-#[cfg(all(test, feature = "legacy-tests"))]
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_overflow;
-#[cfg(all(test, feature = "legacy-tests"))]
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_pause;
-#[cfg(all(test, feature = "legacy-tests"))]
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_profit_fee;
-#[cfg(all(test, feature = "legacy-tests"))]
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_refund;
-#[cfg(all(test, feature = "legacy-tests"))]
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_storage;
-// #[cfg(test)]
-// mod test_protocol_limits_boundary;
-// #[cfg(test)]
-// mod test_string_limits;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
+mod test_protocol_limits_boundary;
+#[cfg(test)]
+mod test_string_limits;
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_types;
-#[cfg(all(test, feature = "legacy-tests"))]
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_vesting;
-// #[cfg(test)]
-// mod test_notifications;
-// #[cfg(test)]
+#[cfg(test)]
+mod test_invoice_metadata;
+#[cfg(test)]
+mod test_input_matrix;
 #[cfg(test)]
 mod test_analytics_consistency;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -105,8 +105,9 @@ mod test_events;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
 pub mod types;
-mod verification;
-mod vesting;
+pub use types::*;
+pub mod verification;
+pub mod vesting;
 use admin::AdminStorage;
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
@@ -573,6 +574,8 @@ impl QuickLendXContract {
         // Validate amount and due date using protocol limits
         // Validate due date is not too far in the future using protocol limits
         protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
+
+        protocol_limits::check_string_length(&description, protocol_limits::MAX_DESCRIPTION_LENGTH)?;
 
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
@@ -1703,7 +1706,7 @@ impl QuickLendXContract {
         env: Env,
         investor: Address,
     ) -> Option<analytics::InvestorAnalytics> {
-        verification::get_investor_analytics(&env, &investor)
+        analytics::AnalyticsStorage::get_investor_analytics(&env, &investor)
     }
 
     /// Get investors by tier
@@ -2537,13 +2540,7 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         AdminStorage::require_admin(&env, &admin)?;
-        backup::BackupStorage::validate_backup(&env, &backup_id)?;
-        let invoices = backup::BackupStorage::get_backup_data(&env, &backup_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-        InvoiceStorage::clear_all(&env);
-        for inv in invoices.iter() {
-            InvoiceStorage::store_invoice(&env, &inv);
-        }
+        backup::BackupStorage::restore_from_backup(&env, &backup_id)?;
         Ok(())
     }
 
@@ -2747,20 +2744,11 @@ impl QuickLendXContract {
     pub fn generate_investor_report(
         env: Env,
         investor: Address,
-        invoice_id: BytesN<32>,
-        amount: i128,
-    ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        investor.require_auth();
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-        if invoice.status != InvoiceStatus::Verified {
-            return Err(QuickLendXError::InvalidStatus);
-        }
-        let ts = env.ledger().timestamp();
-        invoice.mark_as_funded(&env, investor, amount, ts);
-        InvoiceStorage::update_invoice(&env, &invoice);
-        Ok(())
+        period: analytics::TimePeriod,
+    ) -> Result<analytics::InvestorReport, QuickLendXError> {
+        let report =
+            analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)?;
+        Ok(report)
     }
 
     // =========================================================================

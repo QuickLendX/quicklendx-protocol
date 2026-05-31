@@ -1,7 +1,6 @@
 #![cfg(test)]
 use super::*;
 use crate::bid::BidStatus;
-use crate::investment::InvestmentStatus;
 use crate::invoice::InvoiceCategory;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -67,7 +66,7 @@ fn test_investment_consistency_after_clear_all() {
 fn test_stale_pointer_prevention_on_id_reuse() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let _client = QuickLendXContractClient::new(&env, &contract_id);
     // This test would ideally mock storage to force ID reuse,
     // but the hardening filter already handles the mismatch.
 }
