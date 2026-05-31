@@ -13,15 +13,12 @@ module.exports = {
   collectCoverageFrom: [
     "src/lib/migrations/**/*.ts",
     "!src/lib/migrations/cli.ts",
-<<<<<<< HEAD
-=======
     "src/lib/database.ts",
     "src/lib/logging/policy.ts",
     "src/lib/requestContext.ts",
     "src/middleware/request-logger.ts",
     "src/middleware/access-log.ts",
     "src/services/eventProcessor.ts",
->>>>>>> 176e66ca (feat: thread correlation ids through request and webhook logging)
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
