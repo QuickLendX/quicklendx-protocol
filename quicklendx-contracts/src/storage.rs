@@ -12,7 +12,7 @@ use crate::types::{
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
-pub const PERSISTENT_TTL_THRESHOLD: u64 = 518_400; // ~30 days at 5s/ledger
+pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800; // ~30 days at 5s/ledger
 
 pub fn extend_persistent_ttl<T>(env: &Env, key: &T) 
 where
