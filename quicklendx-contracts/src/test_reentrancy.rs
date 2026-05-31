@@ -303,6 +303,41 @@ fn test_nested_partial_payment_is_rejected_without_recording_progress() {
     assert_eq!(fixture.investor_balance(), investor_before);
     assert_eq!(fixture.contract_balance(), contract_before);
     assert!(!fixture.guard_locked());
+}
+
+#[test]
+fn test_guard_clears_after_successful_accept_bid() {
+    let fixture = PaymentFixture::new();
+    let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_000, 1_000);
+
+    fixture.client().accept_bid(&invoice_id, &bid_id).unwrap();
+    assert!(!fixture.guard_locked(), "guard must clear after successful guard-protected operation");
+}
+
+#[test]
+fn test_settle_invoice_failure_clears_guard() {
+    let fixture = PaymentFixture::new();
+    let invalid_invoice = BytesN::from_array(&fixture.env, &[0u8; 32]);
+
+    let result: Result<(), QuickLendXError> = fixture.env.as_contract(&fixture.contract_id, || {
+        QuickLendXContract::settle_invoice(fixture.env.clone(), invalid_invoice.clone(), 1_000)
+    });
+
+    assert_eq!(result, Err(QuickLendXError::InvoiceNotFound));
+    assert!(!fixture.guard_locked(), "guard must clear after payment entrypoint error");
+}
+
+#[test]
+fn test_nested_emergency_withdraw_is_rejected_without_attempting_execution() {
+    let fixture = PaymentFixture::new();
+
+    let result = run_nested_attempt(&fixture, || {
+        QuickLendXContract::execute_emergency_withdraw(fixture.env.clone(), fixture.admin.clone())
+    });
+
+    assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+    assert!(!fixture.guard_locked());
+}
 
 #[test]
 fn test_cross_function_reentrancy_accept_then_release_is_blocked() {

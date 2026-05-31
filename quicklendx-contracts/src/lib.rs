@@ -420,8 +420,9 @@ impl QuickLendXContract {
     }
 
     /// Execute emergency withdraw after timelock has elapsed (admin only).
+    /// Protected by payment reentrancy guard.
     pub fn execute_emergency_withdraw(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        emergency::EmergencyWithdraw::execute(&env, &admin)
+        reentrancy::with_payment_guard(&env, || emergency::EmergencyWithdraw::execute(&env, &admin))
     }
 
     /// Get pending emergency withdrawal if any.
@@ -1124,7 +1125,8 @@ impl QuickLendXContract {
         Ok(bid_id)
     }
 
-    /// Accept a bid (business only)
+    /// Accept a bid (business only).
+    /// Protected by payment reentrancy guard.
     pub fn accept_bid(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1333,7 +1335,8 @@ impl QuickLendXContract {
         Ok(investment.insurance)
     }
 
-    /// Process a partial payment towards an invoice
+    /// Process a partial payment towards an invoice.
+    /// Protected by payment reentrancy guard.
     pub fn process_partial_payment(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1346,6 +1349,7 @@ impl QuickLendXContract {
     }
 
     /// Make a payment towards an invoice (alias for process_partial_payment).
+    /// Protected by payment reentrancy guard.
     ///
     /// Convenience entry point used by tests and off-chain clients.
     /// Delegates to `process_partial_payment` with identical semantics.
