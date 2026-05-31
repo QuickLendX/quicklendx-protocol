@@ -90,9 +90,10 @@ pub enum QuickLendXError {
     InvalidDisputeReason = 1905,
     InvalidDisputeEvidence = 1906,
 
-    // Notification (2000-2001)
+    // Notification (2000-2002)
     NotificationNotFound = 2000,
     NotificationBlocked = 2001,
+    NotificationDuplicate = 2002,
 
     // Emergency withdraw (2100-2106)
     ContractPaused = 2100,
@@ -186,6 +187,7 @@ impl From<QuickLendXError> for Symbol {
             // Notification
             QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
+            QuickLendXError::NotificationDuplicate => symbol_short!("NOT_DUP"),
             QuickLendXError::MaxBidsPerInvoiceExceeded => symbol_short!("MAX_BIDS"),
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),

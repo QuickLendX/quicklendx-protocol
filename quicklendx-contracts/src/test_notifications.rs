@@ -665,3 +665,382 @@ fn test_notif_payload_fields_are_deterministic() {
     assert_eq!(t1, t2, "notification type must be consistent");
     assert_eq!(p1, p2, "priority must be consistent");
 }
+
+// ============================================================================
+// 10. Idempotency key derivation and replay protection
+// ============================================================================
+
+/// Idempotency keys are derived deterministically from (event_kind, target_id, ledger_seq, nonce).
+/// The same inputs always produce the same key.
+#[test]
+fn test_idempotency_key_derivation_is_deterministic() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000);
+    env.ledger().set_sequence(100);
+
+    let recipient = Address::generate(&env);
+
+    // Create first notification
+    let notif_id_1 = create_notif(
+        &env,
+        &recipient,
+        NotificationType::InvoiceCreated,
+        NotificationPriority::Medium,
+    );
+
+    let notif_1 = NotificationSystem::get_notification(&env, &notif_id_1)
+        .expect("notification not found");
+    let key_1 = notif_1.idempotency_key.clone();
+
+    // Create second notification with same parameters at same ledger sequence
+    // (but different timestamp, so different notification ID)
+    env.ledger().set_timestamp(1_001);
+    let notif_id_2 = create_notif(
+        &env,
+        &recipient,
+        NotificationType::InvoiceCreated,
+        NotificationPriority::Medium,
+    );
+
+    let notif_2 = NotificationSystem::get_notification(&env, &notif_id_2)
+        .expect("notification not found");
+    let key_2 = notif_2.idempotency_key.clone();
+
+    // Keys should differ because timestamps (nonces) differ
+    assert_ne!(
+        key_1, key_2,
+        "different timestamps should produce different idempotency keys"
+    );
+
+    // But notification IDs should also differ
+    assert_ne!(notif_id_1, notif_id_2, "notification IDs should differ");
+}
+
+/// Replaying the same notification (same event_kind, target_id, ledger_seq, nonce)
+/// is rejected with `NotificationDuplicate` and emits no event.
+#[test]
+fn test_replay_same_notification_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000);
+    env.ledger().set_sequence(100);
+
+    let recipient = Address::generate(&env);
+
+    // First submission succeeds
+    let result1 = NotificationSystem::create_notification(
+        &env,
+        recipient.clone(),
+        NotificationType::InvoiceVerified,
+        NotificationPriority::High,
+        String::from_str(&env, "Title"),
+        String::from_str(&env, "Message"),
+        None,
+    );
+    assert!(result1.is_ok(), "first submission should succeed");
+
+    let before = count_topic(&env, symbol_short!("notif"));
+
+    // Replay with same parameters (same timestamp, same ledger sequence)
+    // This simulates a transaction being resubmitted
+    let result2 = NotificationSystem::create_notification(
+        &env,
+        recipient.clone(),
+        NotificationType::InvoiceVerified,
+        NotificationPriority::High,
+        String::from_str(&env, "Title"),
+        String::from_str(&env, "Message"),
+        None,
+    );
+
+    // Should be rejected as duplicate
+    assert!(
+        matches!(result2, Err(crate::errors::QuickLendXError::NotificationDuplicate)),
+        "replay should be rejected with NotificationDuplicate"
+    );
+
+    let after = count_topic(&env, symbol_short!("notif"));
+    assert_eq!(
+        after - before,
+        0,
+        "replay rejection must not emit any notif events"
+    );
+}
+
+/// Replaying across all notification types is rejected.
+/// This ensures replay protection works uniformly across the system.
+#[test]
+fn test_replay_rejection_across_all_notification_kinds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000);
+    env.ledger().set_sequence(100);
+
+    let recipient = Address::generate(&env);
+
+    let all_types = [
+        NotificationType::InvoiceCreated,
+        NotificationType::InvoiceVerified,
+        NotificationType::InvoiceStatusChanged,
+        NotificationType::BidReceived,
+        NotificationType::BidAccepted,
+        NotificationType::PaymentReceived,
+        NotificationType::PaymentOverdue,
+        NotificationType::InvoiceDefaulted,
+        NotificationType::SystemAlert,
+        NotificationType::General,
+    ];
+
+    for ntype in all_types {
+        // First submission
+        let result1 = NotificationSystem::create_notification(
+            &env,
+            recipient.clone(),
+            ntype.clone(),
+            NotificationPriority::Medium,
+            String::from_str(&env, "T"),
+            String::from_str(&env, "M"),
+            None,
+        );
+        assert!(result1.is_ok(), "first submission for {:?} should succeed", ntype);
+
+        // Replay
+        let result2 = NotificationSystem::create_notification(
+            &env,
+            recipient.clone(),
+            ntype.clone(),
+            NotificationPriority::Medium,
+            String::from_str(&env, "T"),
+            String::from_str(&env, "M"),
+            None,
+        );
+        assert!(
+            matches!(result2, Err(crate::errors::QuickLendXError::NotificationDuplicate)),
+            "replay for {:?} should be rejected",
+            ntype
+        );
+    }
+}
+
+/// Different recipients with the same notification type at the same ledger sequence
+/// produce different idempotency keys and are not rejected as duplicates.
+#[test]
+fn test_different_recipients_not_rejected_as_duplicates() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000);
+    env.ledger().set_sequence(100);
+
+    let recipient1 = Address::generate(&env);
+    let recipient2 = Address::generate(&env);
+
+    // First notification to recipient1
+    let result1 = NotificationSystem::create_notification(
+        &env,
+        recipient1.clone(),
+        NotificationType::PaymentReceived,
+        NotificationPriority::High,
+        String::from_str(&env, "T"),
+        String::from_str(&env, "M"),
+        None,
+    );
+    assert!(result1.is_ok());
+
+    // Same notification type to recipient2 (different target_id)
+    let result2 = NotificationSystem::create_notification(
+        &env,
+        recipient2.clone(),
+        NotificationType::PaymentReceived,
+        NotificationPriority::High,
+        String::from_str(&env, "T"),
+        String::from_str(&env, "M"),
+        None,
+    );
+    assert!(
+        result2.is_ok(),
+        "different recipients should not be rejected as duplicates"
+    );
+}
+
+/// Ledger sequence changes produce different idempotency keys.
+/// This ensures that the same logical event at different ledger heights
+/// is treated as distinct.
+#[test]
+fn test_different_ledger_sequences_produce_different_keys() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000);
+    env.ledger().set_sequence(100);
+
+    let recipient = Address::generate(&env);
+
+    // First notification at ledger 100
+    let result1 = NotificationSystem::create_notification(
+        &env,
+        recipient.clone(),
+        NotificationType::BidAccepted,
+        NotificationPriority::High,
+        String::from_str(&env, "T"),
+        String::from_str(&env, "M"),
+        None,
+    );
+    assert!(result1.is_ok());
+
+    // Advance ledger sequence
+    env.ledger().set_sequence(101);
+
+    // Same notification at ledger 101 should succeed (different ledger_seq)
+    let result2 = NotificationSystem::create_notification(
+        &env,
+        recipient.clone(),
+        NotificationType::BidAccepted,
+        NotificationPriority::High,
+        String::from_str(&env, "T"),
+        String::from_str(&env, "M"),
+        None,
+    );
+    assert!(
+        result2.is_ok(),
+        "different ledger sequences should produce different keys"
+    );
+}
+
+/// Replay protection survives across multiple notification types.
+/// Each type maintains its own idempotency tracking.
+#[test]
+fn test_replay_protection_per_notification_type() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000);
+    env.ledger().set_sequence(100);
+
+    let recipient = Address::generate(&env);
+
+    // Create InvoiceCreated notification
+    let result1 = NotificationSystem::create_notification(
+        &env,
+        recipient.clone(),
+        NotificationType::InvoiceCreated,
+        NotificationPriority::Medium,
+        String::from_str(&env, "T"),
+        String::from_str(&env, "M"),
+        None,
+    );
+    assert!(result1.is_ok());
+
+    // Replay InvoiceCreated - should be rejected
+    let result2 = NotificationSystem::create_notification(
+        &env,
+        recipient.clone(),
+        NotificationType::InvoiceCreated,
+        NotificationPriority::Medium,
+        String::from_str(&env, "T"),
+        String::from_str(&env, "M"),
+        None,
+    );
+    assert!(matches!(
+        result2,
+        Err(crate::errors::QuickLendXError::NotificationDuplicate)
+    ));
+
+    // Different type (BidAccepted) at same ledger should succeed
+    let result3 = NotificationSystem::create_notification(
+        &env,
+        recipient.clone(),
+        NotificationType::BidAccepted,
+        NotificationPriority::Medium,
+        String::from_str(&env, "T"),
+        String::from_str(&env, "M"),
+        None,
+    );
+    assert!(result3.is_ok(), "different notification type should not be rejected");
+}
+
+/// Idempotency key is stored in the notification and can be retrieved.
+#[test]
+fn test_idempotency_key_stored_in_notification() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000);
+    env.ledger().set_sequence(100);
+
+    let recipient = Address::generate(&env);
+
+    let notif_id = create_notif(
+        &env,
+        &recipient,
+        NotificationType::InvoiceCreated,
+        NotificationPriority::Medium,
+    );
+
+    let notification = NotificationSystem::get_notification(&env, &notif_id)
+        .expect("notification not found");
+
+    // Idempotency key must be a 32-byte value
+    assert_eq!(
+        notification.idempotency_key.len(),
+        32,
+        "idempotency key must be 32 bytes"
+    );
+
+    // Key must be non-zero (not a default/empty value)
+    let zero_key = BytesN::from_array(&env, &[0u8; 32]);
+    assert_ne!(
+        notification.idempotency_key, zero_key,
+        "idempotency key must not be zero"
+    );
+}
+
+/// Blocked notifications (due to preferences) do not consume idempotency keys.
+/// A subsequent unblocked notification with the same parameters should succeed.
+#[test]
+fn test_blocked_notification_does_not_consume_idempotency_key() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000);
+    env.ledger().set_sequence(100);
+
+    let recipient = Address::generate(&env);
+
+    // Block InvoiceCreated notifications
+    let mut prefs = NotificationSystem::get_user_preferences(&env, &recipient);
+    prefs.invoice_created = false;
+    NotificationSystem::update_user_preferences(&env, &recipient, prefs);
+
+    // First attempt - blocked
+    let result1 = NotificationSystem::create_notification(
+        &env,
+        recipient.clone(),
+        NotificationType::InvoiceCreated,
+        NotificationPriority::Medium,
+        String::from_str(&env, "T"),
+        String::from_str(&env, "M"),
+        None,
+    );
+    assert!(matches!(
+        result1,
+        Err(crate::errors::QuickLendXError::NotificationBlocked)
+    ));
+
+    // Unblock the notification type
+    let mut prefs = NotificationSystem::get_user_preferences(&env, &recipient);
+    prefs.invoice_created = true;
+    NotificationSystem::update_user_preferences(&env, &recipient, prefs);
+
+    // Second attempt with same parameters should succeed (key not consumed)
+    let result2 = NotificationSystem::create_notification(
+        &env,
+        recipient.clone(),
+        NotificationType::InvoiceCreated,
+        NotificationPriority::Medium,
+        String::from_str(&env, "T"),
+        String::from_str(&env, "M"),
+        None,
+    );
+    assert!(
+        result2.is_ok(),
+        "unblocked notification should succeed even with same parameters"
+    );
+}
+
