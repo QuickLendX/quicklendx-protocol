@@ -829,9 +829,9 @@ mod test_investor_kyc {
         let invoice_id = create_verified_invoice(&env, &client, &business, 100_000);
 
         // All investors place bids within their actual calculated limits
-        let bid1_amount = limit1 / 2; // Use 50% of actual limit
-        let bid2_amount = limit2 / 2;
-        let bid3_amount = limit3 / 2;
+        let _bid1_amount = limit1 / 2; // Use 50% of actual limit
+        let _bid2_amount = limit2 / 2;
+        let _bid3_amount = limit3 / 2;
     }
 
     // ============================================================================

@@ -29,6 +29,7 @@ pub enum QuickLendXError {
     InvalidCurrency = 1202,
     InvalidTimestamp = 1203,
     InvalidDescription = 1204,
+    ArithmeticOverflow = 1205,
 
     // Storage (1300-1301)
     StorageError = 1300,
