@@ -3,7 +3,7 @@
 **Version**: 1.0  
 **Status**: Active  
 **Last Updated**: 2026-04-28  
-**Document Owner**: Product & Design Team  
+**Document Owner**: Product & Design Team
 
 ---
 
@@ -31,6 +31,7 @@
 ### Purpose
 
 The Business Dashboard is the primary control center for businesses using QuickLendX. It provides a consolidated view of:
+
 - **Invoice Pipeline**: Status of all invoices through the lifecycle
 - **Funding Progress**: Real-time visualization of funding progression
 - **Settlement History**: Records of completed transactions and payouts
@@ -40,6 +41,7 @@ The Business Dashboard is the primary control center for businesses using QuickL
 ### Target User
 
 **Business Owners / Finance Managers** who:
+
 - Upload and manage invoices (1-100+ per month)
 - Need to track funding progress in real-time
 - Require transparency on fees, settlements, and payout schedules
@@ -184,14 +186,14 @@ The Business Dashboard is the primary control center for businesses using QuickL
 
 ### Visual Hierarchy
 
-| Priority | Content | Placement | Rationale |
-|----------|---------|-----------|-----------|
-| 1 | At-a-Glance Metrics | Top, 4-6 KPIs | Users need instant cash position |
-| 2 | Alerts & Actions | Below metrics, max 3 items | Time-sensitive items visible |
-| 3 | Pipeline Status | Central fold | Shows distribution, directs to details |
-| 4 | Funding Progress | Mid-page | User's primary concern (when will I get paid?) |
-| 5 | Settlement History | Lower fold | Reference data, less urgent |
-| 6 | Disputes | Bottom, collapsible | Most users have no disputes; some need quick access |
+| Priority | Content             | Placement                  | Rationale                                           |
+| -------- | ------------------- | -------------------------- | --------------------------------------------------- |
+| 1        | At-a-Glance Metrics | Top, 4-6 KPIs              | Users need instant cash position                    |
+| 2        | Alerts & Actions    | Below metrics, max 3 items | Time-sensitive items visible                        |
+| 3        | Pipeline Status     | Central fold               | Shows distribution, directs to details              |
+| 4        | Funding Progress    | Mid-page                   | User's primary concern (when will I get paid?)      |
+| 5        | Settlement History  | Lower fold                 | Reference data, less urgent                         |
+| 6        | Disputes            | Bottom, collapsible        | Most users have no disputes; some need quick access |
 
 ---
 
@@ -202,6 +204,8 @@ The Business Dashboard is the primary control center for businesses using QuickL
 **Purpose**: Answer the question "What's my cash status right now?" in <2 seconds.
 
 #### Metric Cards (6 Cards, Responsive Grid)
+
+Use the canonical KPI card pattern in [metric-card.md](metric-card.md) for value treatment, trend semantics, estimation labeling, tooltip behavior, and drill-down affordance.
 
 ```
 ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
@@ -221,22 +225,24 @@ The Business Dashboard is the primary control center for businesses using QuickL
 
 #### Metric Details
 
-| Metric | Formula | Updates | Context | 
-|--------|---------|---------|---------|
-| **Total Invoices** | Count of all invoices | Real-time | Trend (↑/↓ vs last week) |
-| **Total Funded** | Sum of `invoice.funded_amount` | Real-time | $ vs % of targets |
-| **Pending Funding** | Sum of unfunded invoices | Real-time | Shows urgency |
-| **Expected Payout** | `sum(funded_amount × (1 - fees))` | Real-time | **Critical**: Shows net cash, not gross |
-| **Avg Time-to-Fund** | Median days from upload to full funding | Daily | Trend line over time |
-| **Active Disputes** | Count of disputed invoices | Real-time | Risk indicator |
+| Metric               | Formula                                 | Updates   | Context                                 |
+| -------------------- | --------------------------------------- | --------- | --------------------------------------- |
+| **Total Invoices**   | Count of all invoices                   | Real-time | Trend (↑/↓ vs last week)                |
+| **Total Funded**     | Sum of `invoice.funded_amount`          | Real-time | $ vs % of targets                       |
+| **Pending Funding**  | Sum of unfunded invoices                | Real-time | Shows urgency                           |
+| **Expected Payout**  | `sum(funded_amount × (1 - fees))`       | Real-time | **Critical**: Shows net cash, not gross |
+| **Avg Time-to-Fund** | Median days from upload to full funding | Daily     | Trend line over time                    |
+| **Active Disputes**  | Count of disputed invoices              | Real-time | Risk indicator                          |
 
 **Security Considerations**:
+
 - ✅ Show "Total Funded" (gross), NOT investor names or exact bid amounts
 - ✅ "Expected Payout" must include fee deductions upfront (transparency)
 - ✅ Do not show investor details unless there's explicit data-sharing agreement
 - ✅ Disputes should never expose reasons that identify invoice contents
 
 **Interactive Elements**:
+
 - Click card → Drill down to detailed view
 - Hover metric → Tooltip with calculation formula
 - Click trend arrow → Show historical chart
@@ -275,20 +281,22 @@ The Business Dashboard is the primary control center for businesses using QuickL
 
 #### Alert Types & Priority
 
-| Type | Color | Trigger | Action | Auto-Resolve |
-|------|-------|---------|--------|--------------|
-| **Dispute** | 🔴 Red | Investor files dispute | Respond to dispute | Manual |
-| **Overdue** | 🟠 Orange | Settlement delayed >24h | Contact support | Auto (when settled) |
-| **Action** | 🟡 Yellow | Invoices in pending state | View & manage | Auto (state change) |
-| **Success** | ✓ Green | Invoice milestone reached | Review & next step | Manual (dismiss) |
+| Type        | Color     | Trigger                   | Action             | Auto-Resolve        |
+| ----------- | --------- | ------------------------- | ------------------ | ------------------- |
+| **Dispute** | 🔴 Red    | Investor files dispute    | Respond to dispute | Manual              |
+| **Overdue** | 🟠 Orange | Settlement delayed >24h   | Contact support    | Auto (when settled) |
+| **Action**  | 🟡 Yellow | Invoices in pending state | View & manage      | Auto (state change) |
+| **Success** | ✓ Green   | Invoice milestone reached | Review & next step | Manual (dismiss)    |
 
 **Behavior Rules**:
+
 - Max 5 alerts visible; older items grouped as "2 more alerts"
 - High-priority (Dispute, Overdue) always shown first
 - Users can dismiss alerts; dismissed alerts reappear if state changes
 - Alerts auto-resolve when underlying condition changes
 
 **Security Considerations**:
+
 - ✅ Never expose dispute details (reason, investor name) in alert preview
 - ✅ Link to full detail page requires authentication
 - ✅ Dismissing alert does NOT change underlying issue; just hides UI
@@ -325,20 +333,22 @@ The Business Dashboard is the primary control center for businesses using QuickL
 
 #### Status Definitions (User-Facing)
 
-| Status | Icon | Business Definition | Typical Timeline | User Action |
-|--------|------|---------------------|------------------|-------------|
-| **Created** | 📄 | Invoice uploaded; waiting for first bid | < 1 hour | Monitor for interest |
-| **Pending** | ⏳ | Bids received; in evaluation phase | 1-3 days | Accept or reject bids |
-| **Funded** | 💰 | Bid accepted; funds in escrow; payment processing | 1-7 days | Wait for settlement |
-| **Settled** | ✓ | Invoice paid in full; funds transferred to business | Instant | Review receipt |
-| **Disputed** | ⚠️ | Investor claimed issue; under review | 3-30 days | Respond with evidence |
+| Status       | Icon | Business Definition                                 | Typical Timeline | User Action           |
+| ------------ | ---- | --------------------------------------------------- | ---------------- | --------------------- |
+| **Created**  | 📄   | Invoice uploaded; waiting for first bid             | < 1 hour         | Monitor for interest  |
+| **Pending**  | ⏳   | Bids received; in evaluation phase                  | 1-3 days         | Accept or reject bids |
+| **Funded**   | 💰   | Bid accepted; funds in escrow; payment processing   | 1-7 days         | Wait for settlement   |
+| **Settled**  | ✓    | Invoice paid in full; funds transferred to business | Instant          | Review receipt        |
+| **Disputed** | ⚠️   | Investor claimed issue; under review                | 3-30 days        | Respond with evidence |
 
 **Interaction Patterns**:
+
 1. Click a status box → Filter dashboard to show only invoices in that status
 2. Click count number → Drill down to list view with sortable columns
 3. Click trend arrow → Show historical pipeline diagram (last 30/60/90 days)
 
 **Data Integrity**:
+
 - ✅ Sum of all statuses ≤ Total Invoices (some invoices may be in default state)
 - ✅ No invoice appears in multiple statuses simultaneously
 - ✅ Pipeline respects immutability (Created → Pending is forward-only; no backward transitions)
@@ -383,18 +393,19 @@ The Business Dashboard is the primary control center for businesses using QuickL
 
 #### Progress Card Data
 
-| Field | Source | Updates | Display Rule |
-|-------|--------|---------|--------------|
-| **Invoice ID** | `invoice.id` | Static | Clickable → detail view |
-| **Amount** | `invoice.amount` | Static | Formatted with currency |
-| **Bid Count** | Count of `bid` records for invoice | Real-time | Shows market interest |
-| **Progress %** | `funded_amount / invoice.amount` | Real-time | Visual bar + text |
-| **Funded $ / Target $** | `funded_amount` / `invoice.amount` | Real-time | Exact numbers below bar |
-| **Remaining $** | `invoice.amount - funded_amount` | Real-time | Highlight if >50% |
-| **Due Date** | `invoice.due_date` | Static | Days remaining (e.g., "7 days") |
-| **Expected Funding** | Based on bid velocity & amounts | Calculated daily | Confidence %ile |
+| Field                   | Source                             | Updates          | Display Rule                    |
+| ----------------------- | ---------------------------------- | ---------------- | ------------------------------- |
+| **Invoice ID**          | `invoice.id`                       | Static           | Clickable → detail view         |
+| **Amount**              | `invoice.amount`                   | Static           | Formatted with currency         |
+| **Bid Count**           | Count of `bid` records for invoice | Real-time        | Shows market interest           |
+| **Progress %**          | `funded_amount / invoice.amount`   | Real-time        | Visual bar + text               |
+| **Funded $ / Target $** | `funded_amount` / `invoice.amount` | Real-time        | Exact numbers below bar         |
+| **Remaining $**         | `invoice.amount - funded_amount`   | Real-time        | Highlight if >50%               |
+| **Due Date**            | `invoice.due_date`                 | Static           | Days remaining (e.g., "7 days") |
+| **Expected Funding**    | Based on bid velocity & amounts    | Calculated daily | Confidence %ile                 |
 
 **Expected Funding Calculation** (Heuristic, not guaranteed):
+
 ```
 confidence = MIN(
   100,
@@ -406,12 +417,14 @@ confidence = MIN(
 ```
 
 **Security Considerations**:
+
 - ✅ Show aggregated bid count, NOT individual investor names or amounts
 - ✅ "Expected funding" is a heuristic, never guaranteed; label clearly as estimate
 - ✅ Do not expose bid evaluation algorithm; users should not game the system
 - ✅ Confidence intervals must be calculated server-side; never trust client math
 
 **Interactive Elements**:
+
 - Hover on progress bar → Tooltip showing exact breakdown (e.g., "$4,000 funded by 2 investors")
 - Click invoice ID → Navigate to invoice detail page
 - "Adjust Terms" → Modal to modify interest rate or due date (triggers new bids)
@@ -487,20 +500,21 @@ confidence = MIN(
 
 #### Settlement Receipt Fields
 
-| Field | Source | Visibility | Notes |
-|-------|--------|------------|-------|
-| **Transaction ID** | `settlement.id` | Public | Unique, audit trail |
-| **Settlement Date** | `settlement.completed_at` | Public | When user received funds |
-| **Invoice ID** | `invoice.id` | Public | Link to invoice |
-| **Amount** | `invoice.amount` | Public | Gross before fees |
-| **Fees** | Calculated | Public | Item-by-item breakdown |
-| **Net Payout** | `invoice.amount - fees` | Public | **Critical**: What user actually gets |
-| **Status** | `settlement.status` | Public | Settled, Pending, Delayed |
-| **Debtor Name** | `invoice.debtor` | Semi-public | Obfuscated for privacy |
-| **Investor Count** | Count of `investment` records | Public | Shows market participation |
-| **Transfer Method** | `settlement.transfer_method` | Private | Bank account obfuscated |
+| Field               | Source                        | Visibility  | Notes                                 |
+| ------------------- | ----------------------------- | ----------- | ------------------------------------- |
+| **Transaction ID**  | `settlement.id`               | Public      | Unique, audit trail                   |
+| **Settlement Date** | `settlement.completed_at`     | Public      | When user received funds              |
+| **Invoice ID**      | `invoice.id`                  | Public      | Link to invoice                       |
+| **Amount**          | `invoice.amount`              | Public      | Gross before fees                     |
+| **Fees**            | Calculated                    | Public      | Item-by-item breakdown                |
+| **Net Payout**      | `invoice.amount - fees`       | Public      | **Critical**: What user actually gets |
+| **Status**          | `settlement.status`           | Public      | Settled, Pending, Delayed             |
+| **Debtor Name**     | `invoice.debtor`              | Semi-public | Obfuscated for privacy                |
+| **Investor Count**  | Count of `investment` records | Public      | Shows market participation            |
+| **Transfer Method** | `settlement.transfer_method`  | Private     | Bank account obfuscated               |
 
 **Security Considerations**:
+
 - ✅ Debtor names shown to business (they know their customers), NOT to investors
 - ✅ Individual investor names hidden; only count/aggregates shown
 - ✅ Bank account numbers: Last 4 digits only
@@ -509,6 +523,7 @@ confidence = MIN(
 - ✅ Ensure PII (debtor name, bank details) marked as sensitive in logs
 
 **Downloadable Formats**:
+
 - **PDF**: Human-readable, printed/archived, branded
 - **JSON**: Machine-readable for accounting software integrations
 - **CSV**: Bulk export for spreadsheets
@@ -645,15 +660,16 @@ confidence = MIN(
 
 #### Dispute States & Visual Indicators
 
-| Status | Icon | Display | Urgency | Business Action |
-|--------|------|---------|---------|-----------------|
-| **Opened** | 🔴 | Red alert, pinned | URGENT | Respond ASAP |
-| **Under Review** | 🟠 | Orange warning | High | Submit evidence |
-| **In Mediation** | 🟡 | Yellow notice | Medium | Await decision |
-| **Resolved** | ✓ | Green success | Low | Archive / review |
-| **Appealed** | 🔴 | Red (escalated) | URGENT | Respond to appeal |
+| Status           | Icon | Display           | Urgency | Business Action   |
+| ---------------- | ---- | ----------------- | ------- | ----------------- |
+| **Opened**       | 🔴   | Red alert, pinned | URGENT  | Respond ASAP      |
+| **Under Review** | 🟠   | Orange warning    | High    | Submit evidence   |
+| **In Mediation** | 🟡   | Yellow notice     | Medium  | Await decision    |
+| **Resolved**     | ✓    | Green success     | Low     | Archive / review  |
+| **Appealed**     | 🔴   | Red (escalated)   | URGENT  | Respond to appeal |
 
 **Security Considerations**:
+
 - ✅ Business sees claim details but NOT investor identity
 - ✅ Investor sees business's response but NOT company name (shown anonymously)
 - ✅ Both parties can only see documents they uploaded or that mediator approves
@@ -667,16 +683,17 @@ confidence = MIN(
 
 ### Button Styles & Interactions
 
-| Button Type | Use Case | Appearance | Action |
-|------------|----------|-----------|--------|
+| Button Type       | Use Case                          | Appearance   | Action                                          |
+| ----------------- | --------------------------------- | ------------ | ----------------------------------------------- |
 | **Primary (CTA)** | Most important action per section | Blue, filled | "Accept Bid", "Submit Response", "Fund Invoice" |
-| **Secondary** | Supporting actions | Gray outline | "View Details", "Download Receipt" |
-| **Danger** | Destructive action | Red outline | "Withdraw Invoice", "Reject All Bids" |
-| **Disabled** | Action unavailable | Gray, faded | When state doesn't allow action |
-| **Loading** | Action in progress | Spinner | Replace button text during async ops |
-| **Icon Button** | Compact, repeated | Icon only | Download, expand, filter, sort |
+| **Secondary**     | Supporting actions                | Gray outline | "View Details", "Download Receipt"              |
+| **Danger**        | Destructive action                | Red outline  | "Withdraw Invoice", "Reject All Bids"           |
+| **Disabled**      | Action unavailable                | Gray, faded  | When state doesn't allow action                 |
+| **Loading**       | Action in progress                | Spinner      | Replace button text during async ops            |
+| **Icon Button**   | Compact, repeated                 | Icon only    | Download, expand, filter, sort                  |
 
 **Interaction Rules**:
+
 - Buttons show loading state with spinner until API response
 - Failed actions show error toast (bottom-right)
 - Successful actions show success toast with undo option (where applicable)
@@ -709,6 +726,7 @@ confidence = MIN(
 ```
 
 **Behavior**:
+
 - Default focus on cancel button (safe default)
 - Danger action button is red with warning icon
 - Optional text field for user feedback/reason
@@ -731,6 +749,7 @@ Table Row (Loading):
 ```
 
 **Principles**:
+
 - Use skeleton loaders for sections that might take >500ms to load
 - Keep existing data visible while refreshing (no flickering)
 - Show spinners for small async operations (<500ms expected)
@@ -752,6 +771,7 @@ Hover on metric card:
 ```
 
 **Rules**:
+
 - Tooltips appear on hover after 300ms delay (avoids flashing)
 - Include formula/calculation method
 - Link to full documentation if needed
@@ -772,6 +792,7 @@ $5,000 - $8,000 (Range format)
 ```
 
 **Rules**:
+
 - Always include currency symbol ($)
 - Use comma thousands separator for amounts ≥ 1,000
 - Show 2 decimal places for exactness (accounting important)
@@ -786,6 +807,7 @@ $5,000 - $8,000 (Range format)
 ```
 
 **Rules**:
+
 - Progress bars show filled (blue) vs. remaining (light gray)
 - Percentages rounded to nearest integer
 - Trends show direction (↑ green, ↓ red) with % change
@@ -802,6 +824,7 @@ May 1, 2026(5 days)       (Due dates with countdown)
 ```
 
 **Rules**:
+
 - Use user's locale for date format (MM/DD/YYYY in US)
 - Include time for event timestamps (dispute filed, settlement completed)
 - Use relative time for events <7 days old; absolute date for older
@@ -826,6 +849,7 @@ May 1, 2026(5 days)       (Due dates with countdown)
 ```
 
 **Empty State Scenarios**:
+
 - No invoices → Encourage upload with CTA
 - No disputes (ideal case) → Positive message
 - No settlement history → Show placeholder
@@ -846,7 +870,7 @@ graph LR
     E["✓ Settled<br/>Funds Transferred"]
     F["⚠️ Disputed<br/>Under Review"]
     G["❌ Withdrawn<br/>Cancelled"]
-    
+
     A -->|Submit| B
     B -->|Accept Bid| C
     C -->|Payment Received| D
@@ -857,7 +881,7 @@ graph LR
     F -->|Resolved Against| G
     A -->|Cancel| G
     B -->|No Interest| G
-    
+
     style A fill:#e8f4f8
     style B fill:#fff3cd
     style C fill:#d4edda
@@ -870,6 +894,7 @@ graph LR
 ### User Action Flows
 
 #### Flow 1: Accept a Bid
+
 ```
 Dashboard
     → Click Invoice (in "Pending" status)
@@ -883,6 +908,7 @@ Dashboard
 ```
 
 #### Flow 2: Respond to Dispute
+
 ```
 Dashboard
     → Alerts section shows "⚠️ Dispute Filed"
@@ -900,6 +926,7 @@ Dashboard
 ```
 
 #### Flow 3: Download Settlement Receipt
+
 ```
 Dashboard
     → Settlement Receipts section
@@ -918,18 +945,19 @@ Dashboard
 
 ### Data Exposure Matrix
 
-| Data Type | Business Sees | Investor Sees | Platform Admin | Notes |
-|-----------|---------------|---------------|----------------|-------|
-| **Invoice Amount** | ✓ (own only) | ✓ (can bid) | ✓ | Core to marketplace |
-| **Invoice Due Date** | ✓ | ✓ | ✓ | Determines interest window |
-| **Debtor Name** | ✓ (own customers) | ✗ | ✓ | Business privacy requirement |
-| **Settlement Amount** | ✓ | ✗ | ✓ | Own transaction only |
-| **Investor Name** | ✗ | N/A | ✓ | Investor privacy requirement |
-| **Bid Amount** | ✗ (only total funded) | ✓ (own only) | ✓ | Prevent information leakage |
-| **Dispute Evidence** | ✓ (own disputes) | ✓ (their disputes) | ✓ | Only related parties see |
-| **Payment Status** | ✓ | ✗ (only settled status) | ✓ | No unnecessary PII exposure |
+| Data Type             | Business Sees         | Investor Sees           | Platform Admin | Notes                        |
+| --------------------- | --------------------- | ----------------------- | -------------- | ---------------------------- |
+| **Invoice Amount**    | ✓ (own only)          | ✓ (can bid)             | ✓              | Core to marketplace          |
+| **Invoice Due Date**  | ✓                     | ✓                       | ✓              | Determines interest window   |
+| **Debtor Name**       | ✓ (own customers)     | ✗                       | ✓              | Business privacy requirement |
+| **Settlement Amount** | ✓                     | ✗                       | ✓              | Own transaction only         |
+| **Investor Name**     | ✗                     | N/A                     | ✓              | Investor privacy requirement |
+| **Bid Amount**        | ✗ (only total funded) | ✓ (own only)            | ✓              | Prevent information leakage  |
+| **Dispute Evidence**  | ✓ (own disputes)      | ✓ (their disputes)      | ✓              | Only related parties see     |
+| **Payment Status**    | ✓                     | ✗ (only settled status) | ✓              | No unnecessary PII exposure  |
 
 **Rules**:
+
 - ✅ Businesses see aggregated bid count, NOT individual investor details
 - ✅ Investors never see business name or customer list
 - ✅ Disputes show evidence but NOT party identities (mediation is anonymous)
@@ -961,6 +989,7 @@ Investor User (Not shown in this dashboard)
 ```
 
 **Implementation**:
+
 - All API endpoints require authentication (JWT token)
 - Business can only access their own data (verified via user ID)
 - Admin endpoints require elevated permissions (role-based)
@@ -978,6 +1007,7 @@ Investor User (Not shown in this dashboard)
 ```
 
 **Rules**:
+
 - Aggregate investor data; never individualize
 - Respect privacy settings (what users agreed to share)
 - Error messages must not reveal system internals
@@ -989,16 +1019,17 @@ Investor User (Not shown in this dashboard)
 
 ### Breakpoints
 
-| Device | Width | Layout | Adjustments |
-|--------|-------|--------|-------------|
-| **Mobile (Portrait)** | 320-599px | Single column | Stack all sections vertically; full-width cards |
-| **Mobile (Landscape)** | 600-767px | Single column | 2-column grid for metrics; single for tables |
-| **Tablet** | 768-1023px | 2-column grid | 2 metrics per row; full-width tables |
-| **Desktop** | 1024px+ | 3+ column grid | 3 metrics per row; scrollable tables |
+| Device                 | Width      | Layout         | Adjustments                                     |
+| ---------------------- | ---------- | -------------- | ----------------------------------------------- |
+| **Mobile (Portrait)**  | 320-599px  | Single column  | Stack all sections vertically; full-width cards |
+| **Mobile (Landscape)** | 600-767px  | Single column  | 2-column grid for metrics; single for tables    |
+| **Tablet**             | 768-1023px | 2-column grid  | 2 metrics per row; full-width tables            |
+| **Desktop**            | 1024px+    | 3+ column grid | 3 metrics per row; scrollable tables            |
 
 ### Responsive Behavior
 
 #### Metrics Section
+
 ```
 Desktop (1024px+):
 ┌────────┐ ┌────────┐ ┌────────┐
@@ -1026,6 +1057,7 @@ Mobile (320px):
 ```
 
 #### Table Display
+
 ```
 Desktop: Full table, all columns visible, horizontal scroll if needed
 
@@ -1062,14 +1094,14 @@ Mobile: Single-column card stack, hide numeric columns:
 
 #### Color Contrast
 
-| Element | Foreground | Background | Ratio | Status |
-|---------|-----------|-----------|-------|--------|
-| Body text | #333333 | #FFFFFF | 12.6:1 | ✓ AAA |
-| Button text | #FFFFFF | #0066CC | 5.5:1 | ✓ AA |
-| Disabled text | #999999 | #F5F5F5 | 4.5:1 | ✓ AA |
-| Success (green) | Text on #D1E7DD | 5.2:1 | ✓ AA |
-| Warning (orange) | Text on #FFF3CD | 3.5:1 | ⚠️ Use white text |
-| Error (red) | Text on #F8D7DA | 7.1:1 | ✓ AAA |
+| Element          | Foreground      | Background | Ratio             | Status |
+| ---------------- | --------------- | ---------- | ----------------- | ------ |
+| Body text        | #333333         | #FFFFFF    | 12.6:1            | ✓ AAA  |
+| Button text      | #FFFFFF         | #0066CC    | 5.5:1             | ✓ AA   |
+| Disabled text    | #999999         | #F5F5F5    | 4.5:1             | ✓ AA   |
+| Success (green)  | Text on #D1E7DD | 5.2:1      | ✓ AA              |
+| Warning (orange) | Text on #FFF3CD | 3.5:1      | ⚠️ Use white text |
+| Error (red)      | Text on #F8D7DA | 7.1:1      | ✓ AAA             |
 
 **Rule**: Do NOT rely on color alone; use icons + color + text.
 
@@ -1086,7 +1118,7 @@ Tab Order: Left-to-right, top-to-bottom
   7. Dispute cards
   8. Footer links
 
-Focus Indicators: 
+Focus Indicators:
   ✓ 3px blue outline around focused element
   ✓ Visible at all zoom levels (>= 100%)
   ✓ No focus hidden via CSS (no outline: none without replacement)
@@ -1179,15 +1211,16 @@ Alternative (Toast, bottom-right):
 
 **Error Types & Display**:
 
-| Error | User Message | Severity | Action | Auto-Dismiss |
-|-------|--------------|----------|--------|--------------|
-| **Validation** | "Invoice amount must be > $100" | Low | Highlight field | No |
-| **Network** | "Connection lost. Retrying..." | Medium | Auto-retry | After retry |
-| **Server** | "Server error. Contact support." | High | Show support link | No |
-| **Auth** | "Session expired. Please log in." | High | Redirect to login | No |
-| **Permission** | "You don't have access to this." | Medium | Show help text | No |
+| Error          | User Message                      | Severity | Action            | Auto-Dismiss |
+| -------------- | --------------------------------- | -------- | ----------------- | ------------ |
+| **Validation** | "Invoice amount must be > $100"   | Low      | Highlight field   | No           |
+| **Network**    | "Connection lost. Retrying..."    | Medium   | Auto-retry        | After retry  |
+| **Server**     | "Server error. Contact support."  | High     | Show support link | No           |
+| **Auth**       | "Session expired. Please log in." | High     | Redirect to login | No           |
+| **Permission** | "You don't have access to this."  | Medium   | Show help text    | No           |
 
 **Rules**:
+
 - Be specific (not "Error"; explain what went wrong)
 - Suggest recovery (not just "Failed")
 - Use "Error:" prefix for accessibility
@@ -1219,12 +1252,12 @@ User clicks "Accept Bid" button
 
 ### Load Time Targets
 
-| Page | Metric | Target | Strategy |
-|------|--------|--------|----------|
-| **Dashboard Load** | First Contentful Paint (FCP) | <1.5s | Skeleton loaders, lazy loading |
-| **Metric Cards** | Time to Interactive (TTI) | <2s | No render-blocking scripts |
-| **Invoice List** | Large Contentful Paint (LCP) | <2.5s | Optimize images, load only visible items |
-| **Settlement Table** | Interactive to next action | <200ms | Pagination, not infinite scroll |
+| Page                 | Metric                       | Target | Strategy                                 |
+| -------------------- | ---------------------------- | ------ | ---------------------------------------- |
+| **Dashboard Load**   | First Contentful Paint (FCP) | <1.5s  | Skeleton loaders, lazy loading           |
+| **Metric Cards**     | Time to Interactive (TTI)    | <2s    | No render-blocking scripts               |
+| **Invoice List**     | Large Contentful Paint (LCP) | <2.5s  | Optimize images, load only visible items |
+| **Settlement Table** | Interactive to next action   | <200ms | Pagination, not infinite scroll          |
 
 ### Data Fetching Strategy
 
@@ -1241,7 +1274,7 @@ Dashboard Load Sequence:
    ├─ Settlement receipts (paginated, first 10)
    └─ Disputes (if any)
 
-3. (User-triggered) 
+3. (User-triggered)
    ├─ Detailed invoice pages (on click)
    └─ Dispute detail pages (on click)
 ```
@@ -1287,7 +1320,8 @@ User deletes invoice / changes status:
 
 #### Decision 1: Aggregated Investor Data (Not Individualized)
 
-**Rationale**: 
+**Rationale**:
+
 - **Privacy**: Businesses don't need to know which investors funded which portions
 - **Simplicity**: One number (3 investors) is clearer than three rows
 - **Prevent Gaming**: If users know investor preferences, they might adjust terms to attract specific investors
@@ -1298,6 +1332,7 @@ User deletes invoice / changes status:
 #### Decision 2: Dispute Status Shows Investor Claim (Not Business Response)
 
 **Rationale**:
+
 - **Clarity**: Business needs to understand what they're responding to
 - **Privacy**: Investor's response not shown to business until they submit their own (prevents coordinated responses)
 - **Fairness**: Both parties see full evidence; mediation is neutral
@@ -1308,6 +1343,7 @@ User deletes invoice / changes status:
 #### Decision 3: Settlement Receipts Include Debtor Name
 
 **Rationale**:
+
 - **Practicality**: Business needs to match receipts to their own records (debtor name is identifying)
 - **Accounting**: Receipts must be reconcilable with A/R records
 - **Security**: Debtor name is NOT shared with investors (one-way transparency)
@@ -1318,6 +1354,7 @@ User deletes invoice / changes status:
 #### Decision 4: Expected Funding is Estimate, Not Guarantee
 
 **Rationale**:
+
 - **Honesty**: Bid velocity is unpredictable; avoid false confidence
 - **Prevent Gaming**: If users rely on estimate, they might make poor decisions
 - **Data Freshness**: Confidence updates daily, not real-time (stale data is dangerous)
@@ -1327,6 +1364,7 @@ User deletes invoice / changes status:
 #### Decision 5: Dashboard Focuses on Business (Not Investor) View
 
 **Rationale**:
+
 - **Distinct Use Cases**: Business needs cash-flow visibility; investor needs return tracking
 - **Data Separation**: Business data not mixed with investor data (prevents leakage)
 - **UX Clarity**: Focused on one audience; simpler, clearer interface
@@ -1385,6 +1423,6 @@ User deletes invoice / changes status:
 
 **Document Version**: 1.0  
 **Approved By**: [Product Lead]  
-**Last Updated**: 2026-04-28  
+**Last Updated**: 2026-04-28
 
 For questions or feedback, contact: product-team@quicklendx.io
