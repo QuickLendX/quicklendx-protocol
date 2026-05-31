@@ -7,58 +7,19 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 
 use crate::protocol_limits;
 use crate::types::{
-    Bid, BidStatus, Investment, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
+    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
     PlatformFeeConfig,
 };
 
-/// TTL extension threshold for persistent storage entries.
-///
-/// This value ensures that long-lived entries (invoices)
-/// survive the maximum possible invoice lifecycle without being archived.
-/// Calculated as: max_due_date_days (365) * 86400 + grace_period_seconds (604800)
-/// = 31,536,000 + 604,800 = 32,140,800 seconds (~371 days).
-///
-/// We add a 30-day safety margin (2,592,000 seconds) to account for:
-/// - Ledger time drift between funding and settlement
-/// - Potential delays in dispute resolution
-/// - Network congestion during settlement periods
-///
-/// Final TTL: 32,140,800 + 2,592,000 = 34,732,800 seconds (~402 days)
-///
-/// # Security Note
-/// If this TTL is too short, funded invoices could be archived mid-lifecycle,
-/// causing permanent fund loss. If too long, it increases storage costs.
-/// The current value balances safety with reasonable cost.
-pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800;
+/// Default TTL threshold for persistent storage (adjust the value as needed)
+pub const PERSISTENT_TTL_THRESHOLD: u64 = 518_400; // ~30 days at 5s/ledger
 
-/// Extend the TTL of a persistent storage entry to prevent archival.
-///
-/// This function should be called on every read/write of long-lived keys
-/// (invoices) to ensure they survive the maximum invoice lifecycle without
-/// being archived by Soroban's TTL mechanism.
-///
-/// # Arguments
-/// * `env` - The contract environment
-/// * `key` - The storage key to bump (must implement IntoVal<Storage>)
-///
-/// # Security Note
-/// Without TTL extension, funded invoices could be archived mid-lifecycle,
-/// causing permanent fund loss. This function extends the TTL to cover the
-/// maximum invoice duration plus a safety margin.
-///
-/// # TTL Calculation
-/// The TTL is set to `PERSISTENT_TTL_THRESHOLD` (34,732,800 seconds ~402 days),
-/// which covers:
-/// - max_due_date_days (365 days)
-/// - grace_period_seconds (7 days)
-/// - 30-day safety margin for delays and disputes
-pub fn bump_persistent<T>(env: &Env, key: &T)
+pub fn extend_persistent_ttl<T>(env: &Env, key: &T) 
 where
-    T: soroban_sdk::IntoVal<soroban_sdk::storage::Storage>,
+    T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
 {
-    env.storage()
-        .persistent()
-        .extend_ttl(key, PERSISTENT_TTL_THRESHOLD);
+    let ttl_u32: u32 = PERSISTENT_TTL_THRESHOLD.try_into().unwrap_or(0);
+    env.storage().persistent().extend_ttl(key, ttl_u32, ttl_u32);
 }
 
 /// Storage keys for the contract

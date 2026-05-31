@@ -48,7 +48,7 @@ fn store(
 ) -> Result<soroban_sdk::BytesN<32>, crate::errors::QuickLendXError> {
     let currency = Address::generate(env);
     let due = env.ledger().timestamp() + 86_400;
-    client.try_store_invoice(
+    match client.try_store_invoice(
         business,
         &amount,
         &currency,
@@ -56,7 +56,11 @@ fn store(
         &String::from_str(env, desc),
         &InvoiceCategory::Services,
         &tags,
-    )
+    ) {
+        Ok(Ok(id)) => Ok(id),
+        Err(Ok(err)) => Err(err),
+        _ => panic!("unexpected contract call result"),
+    }
 }
 
 // ===========================================================================

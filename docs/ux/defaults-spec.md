@@ -11,6 +11,8 @@ The goal is to make default-related states clear, actionable, and accurate
 without implying that QuickLendX can guarantee repayment, recovery, insurance
 coverage, notification delivery, or a particular legal outcome.
 
+For overarching microcopy and terminology conventions, please refer to the Content Style Guide.
+
 ## Source of Truth
 
 Product copy and status timing must be based on contract state and indexed
@@ -65,14 +67,14 @@ Operators need to know:
 
 ## Status Model
 
-| UX Status | Contract basis | User meaning | Primary tone |
-| --- | --- | --- | --- |
-| On time | `Funded` and `now <= due_date` | Payment due date has not passed | Neutral |
-| Overdue, in grace | `Funded`, `now > due_date`, and `now <= due_date + grace_period` | Payment is late, but default cannot yet be marked | Warning |
-| Defaultable | `Funded` and `now > due_date + grace_period` | Grace period has expired; operator may mark default | Urgent |
-| Default pending action | Off-chain/operator queue or scan found eligible invoice, if available | Default action may be processed after review/automation | Urgent, qualified |
-| Defaulted | Invoice status `Defaulted` | Invoice reached terminal default state | Critical, factual |
-| Not default eligible | Not funded, paid, cancelled, refunded, verified, pending, or invalid | Default action does not apply | Neutral or blocked |
+| UX Status              | Contract basis                                                        | User meaning                                            | Primary tone       |
+| ---------------------- | --------------------------------------------------------------------- | ------------------------------------------------------- | ------------------ |
+| On time                | `Funded` and `now <= due_date`                                        | Payment due date has not passed                         | Neutral            |
+| Overdue, in grace      | `Funded`, `now > due_date`, and `now <= due_date + grace_period`      | Payment is late, but default cannot yet be marked       | Warning            |
+| Defaultable            | `Funded` and `now > due_date + grace_period`                          | Grace period has expired; operator may mark default     | Urgent             |
+| Default pending action | Off-chain/operator queue or scan found eligible invoice, if available | Default action may be processed after review/automation | Urgent, qualified  |
+| Defaulted              | Invoice status `Defaulted`                                            | Invoice reached terminal default state                  | Critical, factual  |
+| Not default eligible   | Not funded, paid, cancelled, refunded, verified, pending, or invalid  | Default action does not apply                           | Neutral or blocked |
 
 Do not invent intermediate statuses that sound contractual unless they map to a
 real data source. Labels such as "collection started", "guaranteed payout", or
@@ -90,12 +92,12 @@ Each funded invoice detail view should be able to present these timestamps:
 
 Recommended timeline labels:
 
-| Timeline point | Label | Supporting copy |
-| --- | --- | --- |
-| Before due date | Payment due | "Payment is due by this date." |
-| After due date, before grace deadline | Grace period active | "Payment is overdue. Default cannot be marked until the grace deadline passes." |
-| After grace deadline, before default | Eligible for default review | "Grace period has ended. An authorized operator may mark this invoice as defaulted." |
-| After default event | Defaulted | "This invoice has been marked defaulted on-chain." |
+| Timeline point                        | Label                       | Supporting copy                                                                      |
+| ------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------ |
+| Before due date                       | Payment due                 | "Payment is due by this date."                                                       |
+| After due date, before grace deadline | Grace period active         | "Payment is overdue. Default cannot be marked until the grace deadline passes."      |
+| After grace deadline, before default  | Eligible for default review | "Grace period has ended. An authorized operator may mark this invoice as defaulted." |
+| After default event                   | Defaulted                   | "This invoice has been marked defaulted on-chain."                                   |
 
 Use exact dates and times. Avoid relative-only copy like "soon" or "today" for
 default-critical deadlines. Relative text may be used as a supplement, for
@@ -229,13 +231,13 @@ unnecessary sensitive invoice detail in notification text or event payloads.
 
 Recommended notification moments:
 
-| Moment | Recipient | Priority | Message intent |
-| --- | --- | --- | --- |
-| Due date approaching | Business | Medium | Remind business of upcoming payment deadline |
-| Due date passed | Business and investor | High | State overdue status and grace deadline |
-| Grace midpoint | Business | High | Remind that default risk increases as deadline approaches |
-| Grace deadline passed | Business, investor, operator | High | State default eligibility and next review/action |
-| Default marked | Business and investor | High | State terminal default status and where to review records |
+| Moment                | Recipient                    | Priority | Message intent                                            |
+| --------------------- | ---------------------------- | -------- | --------------------------------------------------------- |
+| Due date approaching  | Business                     | Medium   | Remind business of upcoming payment deadline              |
+| Due date passed       | Business and investor        | High     | State overdue status and grace deadline                   |
+| Grace midpoint        | Business                     | High     | Remind that default risk increases as deadline approaches |
+| Grace deadline passed | Business, investor, operator | High     | State default eligibility and next review/action          |
+| Default marked        | Business and investor        | High     | State terminal default status and where to review records |
 
 Required notification qualifiers:
 
@@ -246,50 +248,9 @@ Required notification qualifiers:
 Avoid sending repeated high-priority warnings without new information. Duplicate
 warnings can create panic and reduce trust.
 
-## Copy Rules
+## Copy Rules, Errors, and Empty States
 
-Use:
-
-- "overdue"
-- "grace period"
-- "eligible for default review"
-- "may be marked defaulted"
-- "marked defaulted"
-- "insurance status"
-- "recovery options may be available"
-
-Avoid:
-
-- "guaranteed"
-- "risk-free"
-- "automatic recovery"
-- "certain payout"
-- "insurance will cover this"
-- "default is cancelled"
-- "funds are safe"
-
-For dates, always include enough precision for the action:
-
-- Good: "Grace period ends May 8, 2026, 09:00 UTC."
-- Good: "Default may be marked after May 8, 2026, 09:00 UTC."
-- Avoid: "Default tomorrow."
-
-## Error and Empty States
-
-Map protocol reasons to user-safe messages:
-
-| Protocol condition | UX message |
-| --- | --- |
-| Invoice not found | "Invoice could not be found. Check the invoice ID or refresh." |
-| Not funded | "Only funded invoices can enter the default process." |
-| Already defaulted | "This invoice has already been marked defaulted." |
-| Grace not expired | "Grace period is still active. Default cannot be marked yet." |
-| Unauthorized | "You do not have permission to perform this action." |
-| Scan batch incomplete | "This view reflects the current scan batch. More funded invoices may remain to be checked." |
-| Data stale | "Status may be out of date. Refresh before taking action." |
-
-Do not expose raw error names as the only explanation. Raw codes may be included
-for support diagnostics after a plain-language message.
+Please refer to the Content Style Guide for approved and prohibited terminology, date formatting rules, and guidelines on crafting error and empty state messages.
 
 ## Security and Trust Requirements
 

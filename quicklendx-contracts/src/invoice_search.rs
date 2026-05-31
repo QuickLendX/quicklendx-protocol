@@ -1,4 +1,4 @@
-use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{BytesN, Env, String, Vec};
 
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
@@ -260,7 +260,7 @@ mod tests {
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::{Address, Env, String, Vec};
 
-    use crate::types::{DisputeStatus, Invoice, InvoiceCategory, InvoiceStatus, SearchRank};
+    use crate::types::{Invoice, InvoiceCategory, InvoiceStatus, SearchRank};
 
     fn setup_test_env() -> Env {
         let env = Env::default();
@@ -330,9 +330,9 @@ mod tests {
         // Create test invoices
         let invoice1 =
             create_test_invoice(&env, &business, "consulting services", Some("ABC Corp"));
-        let invoice2 =
+        let _invoice2 =
             create_test_invoice(&env, &business, "software development", Some("XYZ Ltd"));
-        let invoice3 = create_test_invoice(&env, &business, "marketing campaign", None);
+        let _invoice3 = create_test_invoice(&env, &business, "marketing campaign", None);
 
         // Mock storage (in real test, we'd store them)
         // For this test, we'll test the ranking logic directly

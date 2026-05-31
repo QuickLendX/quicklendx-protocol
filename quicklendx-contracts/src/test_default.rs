@@ -9,7 +9,6 @@
 /// 5. Edge cases - multiple defaults, already defaulted invoices
 use super::*;
 use crate::errors::QuickLendXError;
-use crate::init::InitializationParams;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -42,11 +41,11 @@ fn set_protocol_grace_period(
 fn create_verified_business(
     env: &Env,
     client: &QuickLendXContractClient,
-    admin: &Address,
+    _admin: &Address,
 ) -> Address {
     let business = Address::generate(env);
     client.submit_kyc_application(&business, &String::from_str(env, "KYC data"));
-    client.verify_business(admin, &business);
+    client.verify_business(_admin, &business);
     business
 }
 
@@ -859,14 +858,14 @@ fn test_check_invoice_expiration_with_invalid_grace_period() {
 
 #[test]
 fn test_check_overdue_invoices_propagates_grace_period_error() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 10000);
+    let (env, client, _admin) = setup();
+    let business = create_verified_business(&env, &client, &_admin);
+    let investor = create_verified_investor(&env, &client, &_admin, 10000);
 
     let amount = 1000;
     let due_date = env.ledger().timestamp() + 86400;
     create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor, amount, due_date,
+        &env, &client, &_admin, &business, &investor, amount, due_date,
     );
 
     // Set up protocol config with invalid grace period would require low-level access

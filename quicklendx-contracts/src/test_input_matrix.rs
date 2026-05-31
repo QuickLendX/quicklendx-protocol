@@ -1,6 +1,7 @@
 use super::*;
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
+use crate::types::{InvoiceMetadata, LineItemRecord};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Address, BytesN, Env, String, Vec,
@@ -524,4 +525,44 @@ fn test_no_panics_on_invalid_inputs() {
     ));
     assert_no_host_error(client.try_set_bid_ttl_days(&0));
     assert_no_host_error(client.try_set_bid_ttl_days(&31));
+}
+
+#[test]
+fn test_update_invoice_metadata_oversized_fields() {
+    let (env, client, admin) = setup();
+    let business = verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    
+    let invoice_id = client.upload_invoice(
+        &business,
+        &1000,
+        &currency,
+        &(env.ledger().timestamp() + 86400),
+        &String::from_str(&env, "Valid"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let oversized_name = create_string(&env, 151); // MAX_NAME_LENGTH is 150
+    
+    let mut items = Vec::new(&env);
+    items.push_back(LineItemRecord(
+        String::from_str(&env, "Service"),
+        1,
+        1000,
+        1000,
+    ));
+
+    let metadata = InvoiceMetadata {
+        customer_name: oversized_name,
+        customer_address: String::from_str(&env, "Address"),
+        tax_id: String::from_str(&env, "TAX-123"),
+        line_items: items,
+        notes: String::from_str(&env, "Notes"),
+    };
+
+    assert_contract_err(
+        client.try_update_invoice_metadata(&invoice_id, &metadata),
+        QuickLendXError::InvalidDescription,
+    );
 }
