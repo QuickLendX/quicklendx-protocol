@@ -41,6 +41,7 @@ pub mod investment;
 pub mod investment_queries;
 pub mod invoice;
 pub mod invoice_search;
+pub mod maintenance;
 pub mod notifications;
 pub mod pause;
 pub mod payments;
@@ -289,6 +290,11 @@ impl QuickLendXContract {
     /// Get current protocol limits
     pub fn get_protocol_limits(env: Env) -> protocol_limits::ProtocolLimits {
         protocol_limits::ProtocolLimitsContract::get_protocol_limits(env)
+    }
+
+    /// Admin-only: extends the TTL for all major persistent storage indexes.
+    pub fn extend_protocol_ttl(env: Env, admin: Address) -> Result<maintenance::ExtendReport, QuickLendXError> {
+        maintenance::MaintenanceControl::extend_protocol_ttl(&env, &admin)
     }
 
     /// Initialize the admin address (deprecated: use initialize)
