@@ -161,6 +161,13 @@ describe('POST /events validation and idempotency', () => {
         processNotification,
       },
     }));
+    jest.doMock('../src/services/settlementOrchestrator', () => ({
+      settlementOrchestrator: {
+        createPending: jest.fn(),
+        startProcessing: jest.fn(),
+        completeProcessing: jest.fn(),
+      },
+    }));
     jest.doMock(
       'pg',
       () => ({

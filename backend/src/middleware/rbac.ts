@@ -1,6 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import { auditLogService } from "../services/auditLogService";
 import { AdminRole } from "../types/rbac";
+import { apiKeyService } from "../services/api-key-service";
+import { roleFromScopes } from "../config/scopes";
 
 export interface AdminContext {
   role: AdminRole;
@@ -11,76 +13,15 @@ export type RequestWithAdminContext = Request & {
   adminContext?: AdminContext;
 };
 
-interface TokenConfig {
-  role: AdminRole;
-  envName: string;
-  token: string;
-}
-
-interface RoleResolution {
-  configured: boolean;
-  misconfigured: boolean;
-  reason?: string;
-  tokens: Map<string, AdminContext>;
-}
-
-const TOKEN_ENV_CONFIG: ReadonlyArray<{ role: AdminRole; envName: string }> = [
-  { role: "support", envName: "QLX_SUPPORT_TOKEN" },
-  { role: "operations_admin", envName: "QLX_OPERATIONS_TOKEN" },
-  { role: "super_admin", envName: "QLX_SUPER_ADMIN_TOKEN" },
-];
+// RBAC is backed by persisted, hashed API keys. Role resolution is performed
+// by mapping an API key's granted scopes to an `AdminRole`.
 
 function getClientIp(req: Request): string {
   return req.ip || "unknown";
 }
 
-function buildRoleResolution(): RoleResolution {
-  const configuredTokens: TokenConfig[] = TOKEN_ENV_CONFIG.map(
-    ({ role, envName }) => ({
-      role,
-      envName,
-      token: process.env[envName]?.trim() || "",
-    }),
-  ).filter((entry) => entry.token.length > 0);
-
-  if (configuredTokens.length === 0) {
-    return {
-      configured: false,
-      misconfigured: false,
-      tokens: new Map<string, AdminContext>(),
-    };
-  }
-
-  const duplicateToken = configuredTokens.find((candidate, index) => {
-    return (
-      configuredTokens.findIndex((entry) => entry.token === candidate.token) !==
-      index
-    );
-  });
-
-  if (duplicateToken) {
-    return {
-      configured: true,
-      misconfigured: true,
-      reason: `Duplicate admin token configured for ${duplicateToken.envName}`,
-      tokens: new Map<string, AdminContext>(),
-    };
-  }
-
-  const tokens = new Map<string, AdminContext>();
-  for (const entry of configuredTokens) {
-    tokens.set(entry.token, {
-      role: entry.role,
-      envName: entry.envName,
-    });
-  }
-
-  return {
-    configured: true,
-    misconfigured: false,
-    tokens,
-  };
-}
+// Legacy env-based token configuration was removed in favor of persisted
+// API keys. Verification and role resolution happen at request-time.
 
 function extractBearerToken(req: Request): string | null {
   const authorizationHeader = req.headers.authorization;
@@ -114,45 +55,7 @@ export function requireAdminRoles(
   allowedRoles: readonly AdminRole[],
   action: string,
 ) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const resolution = buildRoleResolution();
-
-    if (!resolution.configured) {
-      auditLogService.recordAuthorization({
-        action,
-        outcome: "denied",
-        role: "anonymous",
-        method: req.method,
-        path: req.path,
-        ip: getClientIp(req),
-        reason: "rbac_not_configured",
-      });
-      return sendError(
-        res,
-        503,
-        "Admin access is disabled until RBAC tokens are configured.",
-        "RBAC_NOT_CONFIGURED",
-      );
-    }
-
-    if (resolution.misconfigured) {
-      auditLogService.recordAuthorization({
-        action,
-        outcome: "denied",
-        role: "anonymous",
-        method: req.method,
-        path: req.path,
-        ip: getClientIp(req),
-        reason: resolution.reason,
-      });
-      return sendError(
-        res,
-        500,
-        "RBAC configuration is invalid. Duplicate or conflicting credentials detected.",
-        "RBAC_MISCONFIGURED",
-      );
-    }
-
+  return async (req: Request, res: Response, next: NextFunction) => {
     const token = extractBearerToken(req);
     if (!token) {
       auditLogService.recordAuthorization({
@@ -172,8 +75,25 @@ export function requireAdminRoles(
       );
     }
 
-    const adminContext = resolution.tokens.get(token);
-    if (!adminContext) {
+    // Verify the API key against the persisted store. The service performs
+    // timing-safe comparison of hashes and checks revocation/expiration.
+    let keyRecord;
+    try {
+      keyRecord = await apiKeyService.verifyApiKey(token);
+    } catch (err) {
+      auditLogService.recordAuthorization({
+        action,
+        outcome: "denied",
+        role: "anonymous",
+        method: req.method,
+        path: req.path,
+        ip: getClientIp(req),
+        reason: "verification_error",
+      });
+      return sendError(res, 500, "Failed to verify admin credential.", "VERIFY_ERROR");
+    }
+
+    if (!keyRecord) {
       auditLogService.recordAuthorization({
         action,
         outcome: "denied",
@@ -191,11 +111,31 @@ export function requireAdminRoles(
       );
     }
 
-    if (!allowedRoles.includes(adminContext.role)) {
+    // Map granted scopes to an AdminRole.
+    const resolvedRole = roleFromScopes(keyRecord.scopes);
+    if (!resolvedRole) {
       auditLogService.recordAuthorization({
         action,
         outcome: "denied",
-        role: adminContext.role,
+        role: "anonymous",
+        method: req.method,
+        path: req.path,
+        ip: getClientIp(req),
+        reason: "unmapped_scopes",
+      });
+      return sendError(
+        res,
+        403,
+        "The provided API key does not grant administrative privileges.",
+        "INSUFFICIENT_ROLE",
+      );
+    }
+
+    if (!allowedRoles.includes(resolvedRole)) {
+      auditLogService.recordAuthorization({
+        action,
+        outcome: "denied",
+        role: resolvedRole,
         method: req.method,
         path: req.path,
         ip: getClientIp(req),
@@ -209,6 +149,11 @@ export function requireAdminRoles(
       );
     }
 
+    const adminContext: AdminContext = {
+      role: resolvedRole,
+      envName: `api_key:${keyRecord.id}`,
+    };
+
     (req as RequestWithAdminContext).adminContext = adminContext;
     auditLogService.recordAuthorization({
       action,
@@ -218,6 +163,8 @@ export function requireAdminRoles(
       path: req.path,
       ip: getClientIp(req),
     });
+    // Update last_used asynchronously
+    void apiKeyService.updateLastUsed(keyRecord.id, req.path, getClientIp(req));
     next();
   };
 }

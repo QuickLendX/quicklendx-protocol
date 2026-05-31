@@ -160,9 +160,10 @@ export class EventProcessor {
         break;
 
       default:
-        const err = new Error(`Unknown event type: ${event.type}`) as Error & { status: number };
-        err.status = 400;
-        throw err;
+        // Unknown event types are treated as no-ops for backwards compatibility
+        // with indexers that may post events we don't actively process.
+        console.warn(`Ignoring unknown event type: ${event.type}`);
+        return;
     }
   }
 }

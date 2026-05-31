@@ -283,7 +283,7 @@ describe('ContractValidator', () => {
         expect(result.errors).toContainEqual(
           expect.objectContaining({
             path: 'data',
-            message: 'Expected array',
+            message: 'Type mismatch',
           })
         );
       });

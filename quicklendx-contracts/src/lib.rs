@@ -51,6 +51,8 @@ pub mod settlement;
 pub mod storage;
 #[cfg(test)]
 mod test_admin;
+#[cfg(test)]
+mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -76,6 +78,11 @@ mod test_investment_consistency;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_profit_fee;
 // #[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
+mod test_profit_fee;
+#[cfg(test)]
+mod test_settlement_accounting_identity;
+#[cfg(all(test, feature = "legacy-tests"))]
 // mod test_refund;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_storage;
@@ -581,6 +588,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidDescription);
         }
 
+        // Enforcement: reject invoices whose currency is not whitelisted (when whitelist is non-empty).
         currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
 
         // Check if business is verified (temporarily disabled for debugging)
@@ -637,6 +645,7 @@ impl QuickLendXContract {
 
         // Basic validation
         verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
+        // Enforcement: reject invoices whose currency is not whitelisted (when whitelist is non-empty).
         currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
 
         // Validate category and tags
@@ -1064,6 +1073,7 @@ impl QuickLendXContract {
         if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
         }
+        // Enforcement: reject bids on invoices whose currency was removed from the whitelist after creation.
         currency::CurrencyWhitelist::require_allowed_currency(&env, &invoice.currency)?;
 
         let verification = do_get_investor_verification(&env, &investor)

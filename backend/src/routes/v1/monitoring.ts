@@ -1,14 +1,17 @@
 // @ts-nocheck
 import { Router, Request, Response } from "express";
 import { apiKeyAuth, AuthenticatedRequest } from "../../middleware/apiKeyAuth";
+import { reconciliationRateLimitMiddleware } from "../../middleware/rate-limit";
 import { statusService } from "../../services/statusService";
-import { getInvariantCounters } from "../../services/invariantService";
+import {
+  getInvariantCounters,
+  getInvariantMetrics,
+} from "../../services/invariantService";
 import { webhookQueueService } from "../../services/webhookQueueService";
 import { ReconciliationWorker } from "../../services/reconciliationWorker";
 
 const router = Router();
 router.use(apiKeyAuth);
-router.use(reconciliationRateLimitMiddleware);
 
 router.get("/health", (_req: AuthenticatedRequest, res: Response) => {
   type SubStatus = "ok" | "degraded" | "unavailable";
@@ -82,12 +85,31 @@ router.get("/cursor", async (_req: AuthenticatedRequest, res: Response) => {
 router.get("/invariants", (_req: AuthenticatedRequest, res: Response) => {
   try {
     const report = getInvariantCounters();
+    if (report === null) {
+      res.status(200).json({
+        message: "No invariant report available yet",
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     res.json(report);
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to compute invariants";
     res.status(500).json({
       error: { message, code: "INVARIANT_CHECK_ERROR" },
+    });
+  }
+});
+
+router.get("/invariants/metrics", (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const metrics = getInvariantMetrics();
+    res.json(metrics);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to get metrics";
+    res.status(500).json({
+      error: { message, code: "INVARIANT_METRICS_ERROR" },
     });
   }
 });
@@ -183,8 +205,6 @@ router.post("/webhook/:id/fail", (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-export default router;
-
 // Reconciliation metrics endpoint
 router.get("/reconciliation", async (_req: AuthenticatedRequest, res: Response) => {
   try {
@@ -195,3 +215,5 @@ router.get("/reconciliation", async (_req: AuthenticatedRequest, res: Response) 
     res.status(500).json({ error: { message, code: "RECONCILIATION_READ_ERROR" } });
   }
 });
+
+export default router;

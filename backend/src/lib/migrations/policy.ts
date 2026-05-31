@@ -8,6 +8,9 @@ interface MigrateArgs {
   verbose?: boolean;
   validateOnly?: boolean;
   check?: boolean;
+  to?: string;
+  all?: boolean;
+  skipChecksumVerify?: boolean;
 }
 
 export class MigrationPolicy {
@@ -68,6 +71,7 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
     verbose = false,
     validateOnly = false,
     check = false,
+    skipChecksumVerify = false,
   } = args as MigrateArgs;
 
   if (check) {
@@ -116,7 +120,7 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
   }
 
   try {
-    const result = await runMigrations({ dryRun, allowDown, verbose });
+    const result = await runMigrations({ dryRun, allowDown, verbose, skipChecksumVerify });
     console.log(`\n✅ Migration run complete in ${result.durationMs}ms`);
     console.log(`   Applied: ${result.applied.length}, Skipped: ${result.skipped}`);
 
@@ -134,5 +138,56 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
   } catch (err: any) {
     console.error("❌ Migration failed:", err.message);
     return { success: false, message: `Migration error: ${err.message}` };
+  }
+}
+
+export async function migrateDownCommand(args: Record<string, unknown>): Promise<{
+  success: boolean;
+  message: string;
+  applied?: number;
+  skipped?: number;
+}> {
+  const {
+    dryRun = false,
+    emergency = false,
+    verbose = false,
+    to,
+    all = false,
+    skipChecksumVerify = false,
+  } = args as MigrateArgs;
+
+  if (!emergency && !MigrationPolicy.isDownAllowed()) {
+    return {
+      success: false,
+      message: "Down migrations require --emergency flag or ALLOW_DOWN_MIGRATIONS=true environment variable.",
+    };
+  }
+
+  if (to && all) {
+    return {
+      success: false,
+      message: "Cannot specify both --to and --all flags.",
+    };
+  }
+
+  try {
+    const result = await runMigrations({ dryRun, allowDown: true, verbose, skipChecksumVerify });
+    console.log(`\n✅ Migration rollback complete in ${result.durationMs}ms`);
+    console.log(`   Rolled back: ${result.applied.length}, Skipped: ${result.skipped}`);
+
+    if (dryRun && result.applied.length > 0) {
+      console.log("\n[DRY-RUN] The following migrations would be rolled back:");
+      result.applied.forEach((m) => console.log(`   ${m.version} ${m.name} by ${m.author}`));
+    }
+
+    return {
+      success: true,
+      message: `Rolled back ${result.applied.length} migrations`,
+      applied: result.applied.length,
+      skipped: result.skipped,
+    };
+  } catch (err: any) {
+    console.error("❌ Migration rollback failed:", err.message);
+    return { success: false, message: `Rollback error: ${err.message}` };
   }
 }

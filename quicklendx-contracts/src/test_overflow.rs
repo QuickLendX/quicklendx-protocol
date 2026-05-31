@@ -21,6 +21,7 @@
 use core::cmp::Ordering;
 
 use crate::bid::{Bid, BidStatus, BidStorage};
+use crate::errors::QuickLendXError;
 use crate::fees::FeeType;
 use crate::invoice::{Invoice, InvoiceCategory};
 use crate::profits::{self, calculate_treasury_split, verify_no_dust};
@@ -59,19 +60,23 @@ fn test_volume_accumulation_overflow() {
     assert_eq!(volume_data.total_volume, large_val * 2);
 }
 
-/// Volume saturates at i128::MAX: adding more does not panic and total stays at or below MAX.
+/// Volume overflow returns a clean arithmetic error rather than saturating or panicking.
 #[test]
-fn test_volume_accumulation_saturates_at_max() {
+fn test_volume_accumulation_overflow_errors() {
     let (env, client, _admin) = setup_test();
     let user = Address::generate(&env);
 
     let near_max = i128::MAX - 100;
-    let _ = client.update_user_transaction_volume(&user, &near_max);
-    let _ = client.update_user_transaction_volume(&user, &1000); // would exceed MAX
+    let res1 = client.update_user_transaction_volume(&user, &near_max);
+    assert!(res1.is_ok());
+    // Second update would overflow; expect an explicit error rather than saturation
+    let res2 = client.update_user_transaction_volume(&user, &1000);
+    assert!(res2.is_err());
 
     let volume_data = client.get_user_volume_data(&user);
-    assert_eq!(volume_data.total_volume, i128::MAX);
-    assert_eq!(volume_data.transaction_count, 2);
+    // Only the first update should have been applied
+    assert_eq!(volume_data.total_volume, near_max);
+    assert_eq!(volume_data.transaction_count, 1);
 }
 
 // =============================================================================
@@ -107,12 +112,16 @@ fn test_revenue_accumulation_saturates_at_max() {
     let mut fees = Map::new(&env);
     fees.set(FeeType::Platform, near_max);
 
-    let _ = client.collect_transaction_fees(&user, &fees, &near_max);
-    let _ = client.collect_transaction_fees(&user, &fees, &100); // would exceed MAX
+    let res1 = client.collect_transaction_fees(&user, &fees, &near_max);
+    assert!(res1.is_ok());
+    // Second collect would overflow: expect an explicit error
+    let res2 = client.collect_transaction_fees(&user, &fees, &100);
+    assert!(res2.is_err());
 
     let period = env.ledger().timestamp() / 2_592_000;
     let analytics = client.get_fee_analytics(&period);
-    assert_eq!(analytics.total_fees, i128::MAX);
+    // Only the first collection was applied
+    assert_eq!(analytics.total_fees, near_max);
 }
 
 // =============================================================================
@@ -389,6 +398,25 @@ fn test_calculate_treasury_split_large_amounts() {
     assert_eq!(treasury.saturating_add(remaining), platform_fee);
 }
 
+#[test]
+fn test_calculate_treasury_split_checked_overflow_errors() {
+    let platform_fee = i128::MAX / 2;
+    let treasury_share_bps = 5000i128;
+
+    let result = profits::calculate_treasury_split_checked(platform_fee, treasury_share_bps);
+    assert_eq!(result, Err(QuickLendXError::ArithmeticOverflow));
+}
+
+#[test]
+fn test_profit_calculation_checked_overflow_errors() {
+    let result = profits::PlatformFee::calculate_with_fee_bps_checked(
+        i128::MAX / 2,
+        i128::MAX / 2 + 1_000_000_000,
+        10_000,
+    );
+    assert_eq!(result, Err(QuickLendXError::ArithmeticOverflow));
+}
+
 /// Pagination for investor investments: large offset + limit must not panic.
 #[test]
 fn test_investor_investments_pagination_overflow_safe() {
@@ -396,4 +424,37 @@ fn test_investor_investments_pagination_overflow_safe() {
     let investor = Address::generate(&env);
 
     let _ = client.get_investor_investments_paged(&investor, &None, &(u32::MAX - 1), &10);
+}
+
+// =============================================================================
+// Fee analytics distributed_pct overflow safety
+// =============================================================================
+
+/// Fee analytics calculation: distributed_pct uses checked_mul to prevent overflow.
+#[test]
+fn test_analytics_distributed_pct_overflow() {
+    let (env, _client, _admin) = setup_test();
+
+    let period = env.ledger().timestamp() / 2_592_000;
+    let revenue_key = (crate::fees::REVENUE_KEY, period);
+
+    // Set up a scenario where total_distributed * 100 would overflow i128
+    let large_distributed = i128::MAX / 100 + 1; // This will cause overflow when multiplied by 100
+    let total_collected = large_distributed; // For simplicity, assume all collected is distributed
+
+    let revenue_data = crate::fees::RevenueData {
+        period,
+        total_collected,
+        fees_by_type: Map::new(&env),
+        total_distributed: large_distributed,
+        pending_distribution: 0,
+        transaction_count: 1,
+    };
+    env.storage().instance().set(&revenue_key, &revenue_data);
+
+    // Call get_analytics directly from FeeManager, expect an error
+    let result = crate::fees::FeeManager::get_analytics(&env, period);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), QuickLendXError::ArithmeticOverflow);
+}
 }

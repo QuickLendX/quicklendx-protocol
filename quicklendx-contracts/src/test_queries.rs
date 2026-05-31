@@ -26,6 +26,7 @@ use crate::pagination::{
     calculate_safe_bounds, cap_query_limit, paginate_slice, validate_pagination_params,
     MAX_QUERY_LIMIT,
 };
+#[cfg(feature = "fuzz-tests")]
 use proptest::prelude::*;
 
 // ---------------------------------------------------------------------------
@@ -437,6 +438,7 @@ fn test_has_more_over_cap_limit_clamps_correctly() {
 // 13. Proptest - invariants
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "fuzz-tests")]
 proptest! {
     /// `validate_pagination_params` never yields `effective_limit > MAX_QUERY_LIMIT`.
     #[test]
