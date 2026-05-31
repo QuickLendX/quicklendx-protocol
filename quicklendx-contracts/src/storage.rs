@@ -6,7 +6,7 @@
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
 use crate::types::{
-    Bid, BidStatus, Investment, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
+    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
     PlatformFeeConfig,
 };
 

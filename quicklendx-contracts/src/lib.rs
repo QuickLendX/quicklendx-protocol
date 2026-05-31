@@ -136,14 +136,14 @@ use verification::{
     get_investor_verification as do_get_investor_verification, normalize_tag, reject_business,
     reject_investor as do_reject_investor, require_business_not_pending,
     require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
-    submit_kyc_application, validate_bid, validate_dispute_eligibility, validate_dispute_evidence,
-    validate_dispute_reason, validate_dispute_resolution, validate_investor_investment,
-    validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
-    verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
-    InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
+    submit_kyc_application, validate_bid, validate_dispute_evidence,
+    validate_dispute_resolution, validate_investor_investment, validate_invoice_metadata,
+    verify_business, verify_investor as do_verify_investor, verify_invoice_data,
+    BusinessVerificationStatus, BusinessVerificationStorage, InvestorRiskLevel,
+    InvestorTier, InvestorVerification, InvestorVerificationStorage,
 };
 
-use crate::storage::{BidStorage, ConfigStorage, InvoiceStorage, StorageManager};
+use crate::storage::{BidStorage, InvoiceStorage};
 use crate::types::*;
 
 #[contract]
@@ -166,7 +166,7 @@ fn cap_query_limit(limit: u32) -> u32 {
 /// @param limit The requested result limit
 /// @return Result indicating validation success or failure
 /// @dev Prevents potential overflow and ensures reasonable query bounds
-fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError> {
+fn validate_query_params(offset: u32, _limit: u32) -> Result<(), QuickLendXError> {
     // Check for potential overflow in offset + limit calculation
     if offset > u32::MAX - MAX_QUERY_LIMIT {
         return Err(QuickLendXError::InvalidAmount);
