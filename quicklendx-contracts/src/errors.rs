@@ -134,6 +134,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidCurrency => symbol_short!("INV_CR"),
             QuickLendXError::InvalidTimestamp => symbol_short!("INV_TM"),
             QuickLendXError::InvalidDescription => symbol_short!("INV_DS"),
+            QuickLendXError::ArithmeticOverflow => symbol_short!("AR_OVF"),
             // Storage
             QuickLendXError::StorageError => symbol_short!("STORE"),
             QuickLendXError::StorageKeyNotFound => symbol_short!("KEY_NF"),

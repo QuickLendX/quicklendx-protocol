@@ -39,20 +39,35 @@ const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days
 pub const DEFAULT_MAX_INVOICES_PER_BUSINESS: u32 = 100; // 0 = unlimited
 
 // String length limits
+/// Maximum length for invoice description (1024 bytes)
 pub const MAX_DESCRIPTION_LENGTH: u32 = 1024;
+/// Maximum length for customer name (150 bytes)
 pub const MAX_NAME_LENGTH: u32 = 150;
+/// Maximum length for customer address (300 bytes)
 pub const MAX_ADDRESS_LENGTH: u32 = 300;
+/// Maximum length for tax ID (50 bytes)
 pub const MAX_TAX_ID_LENGTH: u32 = 50;
+/// Maximum length for notes (2000 bytes)
 pub const MAX_NOTES_LENGTH: u32 = 2000;
+/// Maximum length for a single tag (50 bytes)
 pub const MAX_TAG_LENGTH: u32 = 50;
+/// Maximum length for transaction IDs (124 bytes)
 pub const MAX_TRANSACTION_ID_LENGTH: u32 = 124;
+/// Maximum length for dispute reasons (1000 bytes)
 pub const MAX_DISPUTE_REASON_LENGTH: u32 = 1000;
+/// Maximum length for dispute evidence (2000 bytes)
 pub const MAX_DISPUTE_EVIDENCE_LENGTH: u32 = 2000;
+/// Maximum length for dispute resolutions (2000 bytes)
 pub const MAX_DISPUTE_RESOLUTION_LENGTH: u32 = 2000;
+/// Maximum length for notification titles (150 bytes)
 pub const MAX_NOTIFICATION_TITLE_LENGTH: u32 = 150;
+/// Maximum length for notification messages (1000 bytes)
 pub const MAX_NOTIFICATION_MESSAGE_LENGTH: u32 = 1000;
+/// Maximum length for KYC data (5000 bytes)
 pub const MAX_KYC_DATA_LENGTH: u32 = 5000;
+/// Maximum length for rejection reasons (500 bytes)
 pub const MAX_REJECTION_REASON_LENGTH: u32 = 500;
+/// Maximum length for invoice feedback (1000 bytes)
 pub const MAX_FEEDBACK_LENGTH: u32 = 1000;
 
 pub fn check_string_length(s: &String, max_len: u32) -> Result<(), QuickLendXError> {
