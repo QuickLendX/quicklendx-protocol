@@ -5,6 +5,12 @@ import { getDatabase } from "../database";
 import { config } from "../../config";
 import type { MigrationDefinition, MigrationState, ParsedMigration } from "./types";
 
+export interface DatabaseClient {
+  exec: (sql: string) => void;
+  prepare: (sql: string) => { all: (params?: unknown[]) => unknown[]; get: (params?: unknown[]) => unknown; run: (params?: unknown[]) => unknown };
+  transaction: (fn: () => void) => void;
+}
+
 const MIGRATIONS_TABLE = `
   CREATE TABLE IF NOT EXISTS _migrations (
     version INTEGER PRIMARY KEY,
@@ -89,13 +95,31 @@ function buildContext(db: any, isProd: boolean): any {
   };
 }
 
-export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
-  const { dryRun = false, allowDown = false, verbose = false } = options;
+export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
+  const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb } = options;
   const isProd = config.NODE_ENV === "production";
   const startTime = Date.now();
 
-  const db = getDatabase();
+  const db = providedDb || getDatabase();
   db.exec(MIGRATIONS_TABLE);
+
+  // Verify checksums of applied migrations on startup
+  // In production, checksum verification cannot be bypassed
+  if (skipChecksumVerify && isProd) {
+    throw new Error("Checksum verification cannot be bypassed in production environment.");
+  }
+
+  if (!skipChecksumVerify && !dryRun) {
+    const checksumCheck = await verifyAppliedChecksums(db);
+    if (!checksumCheck.valid) {
+      throw new Error(
+        `Migration checksum verification failed:\n${checksumCheck.errors.map((e) => `  - ${e}`).join("\n")}\n` +
+        "This indicates migration files have been modified after application. " +
+        "Use --skip-checksum-verify to bypass in test environments only."
+      );
+    }
+    if (verbose) console.log("✅ Checksum verification passed for all applied migrations");
+  }
 
   const appliedRows = db.prepare(
     "SELECT version, name, checksum, applied_at, duration_ms, author, meta FROM _migrations ORDER BY version ASC"
@@ -262,14 +286,14 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
   return { applied: appliedThisRun, skipped, durationMs: Date.now() - startTime };
 }
 
-export async function getAppliedVersions(): Promise<number[]> {
-  const db = getDatabase();
-  const rows = db.prepare("SELECT version FROM _migrations ORDER BY version ASC").all() || [];
+export async function getAppliedVersions(db?: DatabaseClient): Promise<number[]> {
+  const database = db || getDatabase();
+  const rows = database.prepare("SELECT version FROM _migrations ORDER BY version ASC").all() || [];
   return rows.map((r: any) => r.version);
 }
 
-export async function isDatabaseInitialized(): Promise<boolean> {
-  const applied = await getAppliedVersions();
+export async function isDatabaseInitialized(db?: DatabaseClient): Promise<boolean> {
+  const applied = await getAppliedVersions(db);
   return applied.length > 0;
 }
 
@@ -289,5 +313,42 @@ export async function validateMigrationFiles(): Promise<{ valid: boolean; errors
     errors.push("Duplicate version numbers detected");
   }
 
+  return { valid: errors.length === 0, errors };
+}
+
+export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ valid: boolean; errors: string[] }> {
+  const errors: string[] = [];
+  const database = db || getDatabase();
+  
+  // Ensure migrations table exists
+  database.exec(MIGRATIONS_TABLE);
+  
+  const appliedRows = database.prepare(
+    "SELECT version, name, checksum FROM _migrations ORDER BY version ASC"
+  ).all() || [];
+  
+  const fileMigrations = await loadMigrationsFromFS();
+  const fileMigrationMap = new Map(fileMigrations.map((m) => [m.version, m]));
+  
+  for (const row of appliedRows) {
+    const fileMig = fileMigrationMap.get(row.version);
+    if (!fileMig) {
+      errors.push(`Applied migration ${row.version}_${row.name} not found in filesystem`);
+      continue;
+    }
+    
+    const filePath = path.join(MIGRATIONS_DIR, fileMig.file);
+    const fileContent = await fs.readFile(filePath, "utf-8");
+    const currentChecksum = computeChecksum(fileContent);
+    
+    if (currentChecksum !== row.checksum) {
+      errors.push(
+        `Checksum mismatch for migration ${row.version}_${row.name}: ` +
+        `expected ${row.checksum}, got ${currentChecksum}. ` +
+        `Migration file may have been modified after application.`
+      );
+    }
+  }
+  
   return { valid: errors.length === 0, errors };
 }

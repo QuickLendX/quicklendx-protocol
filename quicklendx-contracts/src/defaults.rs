@@ -192,6 +192,8 @@ fn normalize_cursor(cursor: u32, funded_count: u32) -> u32 {
     }
 }
 
+/// Resolve the requested scan batch size, clamping to a safe per-call window.
+/// This prevents callers from forcing an unbounded scan workload in a single contract execution.
 fn resolve_scan_limit(limit: Option<u32>) -> u32 {
     limit
         .unwrap_or(DEFAULT_OVERDUE_SCAN_BATCH_LIMIT)
@@ -209,6 +211,9 @@ fn resolve_scan_limit(limit: Option<u32>) -> u32 {
 /// @return Scan result containing overdue count, scanned count, funded snapshot size, and next cursor.
 /// @security Bounded loops protect against excessive per-call work. Callers that need full coverage
 ///           must invoke the scan repeatedly until `next_cursor` wraps to `0`.
+/// @security The scan window is always capped by `max_overdue_scan_batch_limit` and never exceeds
+///           the current funded snapshot size, preventing any single invocation from iterating
+///           an unbounded number of invoices.
 pub fn scan_funded_invoice_expirations(
     env: &Env,
     grace_period: u64,
@@ -227,6 +232,7 @@ pub fn scan_funded_invoice_expirations(
         });
     }
 
+    // Bounded scan window: clamp the requested limit, then cap to the funded snapshot size.
     let scan_limit = resolve_scan_limit(limit).min(total_funded);
     let current_timestamp = env.ledger().timestamp();
     let mut cursor = normalize_cursor(get_overdue_scan_cursor(env), total_funded);

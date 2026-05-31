@@ -160,6 +160,10 @@ Functions that enforce this pattern:
 | `test_invoice_with_non_whitelisted_currency_fails_when_whitelist_set` | `store_invoice` rejects non-whitelisted currency |
 | `test_invoice_with_whitelisted_currency_succeeds` | `store_invoice` accepts whitelisted currency |
 | `test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set` | `place_bid` enforces currency check at bid time |
+| `test_upload_invoice_with_non_whitelisted_currency_fails` | `upload_invoice` (KYC path) rejects non-whitelisted currency |
+| `test_upload_invoice_with_whitelisted_currency_succeeds` | `upload_invoice` (KYC path) accepts whitelisted currency |
+| `test_remove_currency_immediately_blocks_store_invoice` | `remove_currency` immediately blocks `store_invoice`; remaining whitelist still enforces |
+| `test_set_currencies_blocks_old_and_allows_new_for_store_invoice` | `set_currencies` atomically blocks old currency and allows new one for `store_invoice` |
 | `test_add_currency_idempotent` | Duplicate `add_currency` does not grow the list |
 | `test_remove_currency_when_missing_is_noop` | Second removal of absent currency succeeds (no-op) |
 | `test_set_currencies_replaces_whitelist` | Old entries removed; new entries present after `set_currencies` |

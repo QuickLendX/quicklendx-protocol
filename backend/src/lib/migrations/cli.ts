@@ -1,6 +1,12 @@
 /**
  * Migration CLI — structured database migration workflow.
  *
+ * Migration Commands:
+ *  - npm run migrate: Run pending migrations (up)
+ *  - npm run migrate:down: Rollback the last applied migration
+ *  - npm run migrate:down -- --to <version>: Rollback to specific version
+ *  - npm run migrate:down -- --all: Rollback all migrations
+ *
  * Forward-Only Migration Policy:
  *  - Each migration file contains ONLY an `up` function (forward direction).
  *  - Down migrations (rollbacks) are EXPLICITLY opt-in per-migration via `meta.allow_down`.
@@ -12,13 +18,13 @@
  *   Step 1: Identify problematic migration (e.g., v003_add_column has data corruption)
  *   Step 2: Create hotfix approval file with two senior engineer signatures
  *   Step 3: If immediate fix needed, author v004_hotfix_fix with `meta.hotfix = true`
- *   Step 4: Deploy and run: `npm run migrate -- --allow-down --emergency`
+ *   Step 4: Deploy and run: `npm run migrate:down -- --emergency`
  *   Step 5: Document incident in retro issue
  *
  * See backend/docs/migrations.md for complete operational playbook.
  */
 
-import { migrateCommand } from "./policy";
+import { migrateCommand, migrateDownCommand } from "./policy";
 
 function parseArgs(): Record<string, unknown> {
   const args: Record<string, unknown> = {};
@@ -28,6 +34,10 @@ function parseArgs(): Record<string, unknown> {
       const key = arg.slice(2).replace(/-/g, "");
       // Boolean flags default to true
       args[key] = true;
+    } else if (!arg.startsWith("-")) {
+      // Positional arguments
+      if (!args._) args._ = [];
+      (args._ as string[]).push(arg);
     }
   }
   return args;
@@ -37,9 +47,17 @@ async function main(): Promise<void> {
   console.log("🚀 QuickLendX Migration Runner\n");
 
   const args = parseArgs();
+  const parsedArgs: any = args;
+const command = parsedArgs._?.[0] || "up";
 
   try {
-    const result = await migrateCommand(args);
+    let result;
+    if (command === "down") {
+      result = await migrateDownCommand(args);
+    } else {
+      result = await migrateCommand(args);
+    }
+
     if (result.success) {
       process.exit(0);
     } else {

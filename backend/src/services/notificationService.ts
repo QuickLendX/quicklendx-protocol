@@ -1,16 +1,30 @@
 import nodemailer from 'nodemailer';
-import { NotificationEvent, NotificationType, UserNotificationPreferences, NotificationTemplate } from '../types/contract';
+import { ulid } from 'ulid';
+import { getDatabase } from '../lib/database';
+import {
+  NotificationEvent,
+  NotificationType,
+  UserNotificationPreferences,
+  NotificationTemplate,
+} from '../types/contract';
+
+// Map NotificationType enum values to the notify_* column names
+const PREF_COLUMN: Record<NotificationType, string> = {
+  [NotificationType.InvoiceFunded]: 'notify_invoice_funded',
+  [NotificationType.PaymentReceived]: 'notify_payment_received',
+  [NotificationType.DisputeOpened]: 'notify_dispute_opened',
+  [NotificationType.DisputeResolved]: 'notify_dispute_resolved',
+};
 
 export class NotificationService {
   private static instance: NotificationService;
   private transporter: nodemailer.Transporter;
-  private sentNotifications: Set<string> = new Set(); // For idempotency in memory (in prod, use DB)
 
   private constructor() {
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: false, // true for 465, false for other ports
+      secure: false,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
@@ -25,32 +39,89 @@ export class NotificationService {
     return NotificationService.instance;
   }
 
-  // Check if notification was already sent (idempotency)
-  private isNotificationSent(eventId: string): boolean {
-    return this.sentNotifications.has(eventId);
+  // ---------------------------------------------------------------------------
+  // Idempotency helpers (durable, survives restarts)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Returns true if a notification row already exists for (event_id, user_id)
+   * with status 'sent'. A 'failed' row is retryable.
+   */
+  private isNotificationSent(eventId: string, userId: string): boolean {
+    const db = getDatabase();
+    const row = db
+      .prepare(
+        "SELECT status FROM notifications WHERE event_id = ? AND user_id = ? LIMIT 1"
+      )
+      .get(eventId, userId) as { status: string } | undefined;
+    return row?.status === 'sent';
   }
 
-  // Mark notification as sent
-  private markNotificationSent(eventId: string): void {
-    this.sentNotifications.add(eventId);
+  /**
+   * Insert a 'pending' row (idempotent via INSERT OR IGNORE).
+   * Returns the row id that was inserted or already existed.
+   */
+  private insertPending(eventId: string, userId: string, type: NotificationType): string {
+    const db = getDatabase();
+    const id = ulid();
+    const now = new Date().toISOString();
+    db.prepare(`
+      INSERT OR IGNORE INTO notifications
+        (id, event_id, user_id, notification_type, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'pending', ?, ?)
+    `).run(id, eventId, userId, type, now, now);
+
+    // Return the actual id (may differ if row already existed)
+    const row = db
+      .prepare("SELECT id FROM notifications WHERE event_id = ? AND user_id = ?")
+      .get(eventId, userId) as { id: string };
+    return row.id;
   }
 
-  // Get user preferences (mock implementation - in prod, fetch from DB)
-  private async getUserPreferences(userId: string): Promise<UserNotificationPreferences | null> {
-    // Mock preferences - in real implementation, query database
+  private markSent(rowId: string): void {
+    const db = getDatabase();
+    db.prepare(
+      "UPDATE notifications SET status = 'sent', smtp_error = NULL, updated_at = ? WHERE id = ?"
+    ).run(new Date().toISOString(), rowId);
+  }
+
+  private markFailed(rowId: string, error: string): void {
+    const db = getDatabase();
+    // Truncate error to avoid storing full stack traces / PII
+    const safeError = error.slice(0, 500);
+    db.prepare(
+      "UPDATE notifications SET status = 'failed', smtp_error = ?, updated_at = ? WHERE id = ?"
+    ).run(safeError, new Date().toISOString(), rowId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Preferences (persisted, replaces mock)
+  // ---------------------------------------------------------------------------
+
+  private getUserPreferences(userId: string): UserNotificationPreferences | null {
+    const db = getDatabase();
+    const row = db
+      .prepare("SELECT * FROM user_notification_preferences WHERE user_id = ?")
+      .get(userId) as Record<string, any> | undefined;
+
+    if (!row) return null;
+
     return {
-      email_enabled: true,
-      email_address: process.env.DEFAULT_EMAIL || 'user@example.com',
+      email_enabled: row.email_enabled === 1,
+      email_address: row.email_address ?? undefined,
       notifications: {
-        [NotificationType.InvoiceFunded]: true,
-        [NotificationType.PaymentReceived]: true,
-        [NotificationType.DisputeOpened]: true,
-        [NotificationType.DisputeResolved]: true,
+        [NotificationType.InvoiceFunded]: row.notify_invoice_funded === 1,
+        [NotificationType.PaymentReceived]: row.notify_payment_received === 1,
+        [NotificationType.DisputeOpened]: row.notify_dispute_opened === 1,
+        [NotificationType.DisputeResolved]: row.notify_dispute_resolved === 1,
       },
     };
   }
 
-  // Get email template for notification type
+  // ---------------------------------------------------------------------------
+  // Email template (unchanged logic, kept private)
+  // ---------------------------------------------------------------------------
+
   private getEmailTemplate(event: NotificationEvent): NotificationTemplate {
     const baseUrl = process.env.FRONTEND_URL || 'https://quicklendx.com';
 
@@ -58,123 +129,27 @@ export class NotificationService {
       case NotificationType.InvoiceFunded:
         return {
           subject: 'Your Invoice Has Been Funded - QuickLendX',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #2563eb;">Invoice Funded Successfully</h2>
-              <p>Great news! Your invoice has been funded and is ready for fulfillment.</p>
-              <p><strong>Invoice ID:</strong> ${event.invoice_id}</p>
-              <p><strong>Amount:</strong> ${event.amount} XLM</p>
-              <p><strong>Funded At:</strong> ${new Date(event.timestamp).toLocaleString()}</p>
-              <div style="margin: 30px 0;">
-                <a href="${baseUrl}/invoices/${event.invoice_id}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">View Invoice</a>
-              </div>
-              <p style="color: #6b7280; font-size: 14px;">You can unsubscribe from these notifications at any time.</p>
-            </div>
-          `,
-          text: `
-Invoice Funded Successfully
-
-Great news! Your invoice has been funded and is ready for fulfillment.
-
-Invoice ID: ${event.invoice_id}
-Amount: ${event.amount} XLM
-Funded At: ${new Date(event.timestamp).toLocaleString()}
-
-View Invoice: ${baseUrl}/invoices/${event.invoice_id}
-
-You can unsubscribe from these notifications at any time.
-          `,
+          html: `<p>Invoice ${event.invoice_id} funded for ${event.amount} XLM.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Invoice</a>`,
+          text: `Invoice ${event.invoice_id} funded for ${event.amount} XLM.\n${baseUrl}/invoices/${event.invoice_id}`,
         };
-
       case NotificationType.PaymentReceived:
         return {
           subject: 'Payment Received - QuickLendX',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #059669;">Payment Received</h2>
-              <p>A payment has been received for your invoice.</p>
-              <p><strong>Invoice ID:</strong> ${event.invoice_id}</p>
-              <p><strong>Amount:</strong> ${event.amount} XLM</p>
-              <p><strong>Received At:</strong> ${new Date(event.timestamp).toLocaleString()}</p>
-              <div style="margin: 30px 0;">
-                <a href="${baseUrl}/invoices/${event.invoice_id}" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">View Invoice</a>
-              </div>
-              <p style="color: #6b7280; font-size: 14px;">You can unsubscribe from these notifications at any time.</p>
-            </div>
-          `,
-          text: `
-Payment Received
-
-A payment has been received for your invoice.
-
-Invoice ID: ${event.invoice_id}
-Amount: ${event.amount} XLM
-Received At: ${new Date(event.timestamp).toLocaleString()}
-
-View Invoice: ${baseUrl}/invoices/${event.invoice_id}
-
-You can unsubscribe from these notifications at any time.
-          `,
+          html: `<p>Payment of ${event.amount} XLM received for invoice ${event.invoice_id}.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Invoice</a>`,
+          text: `Payment of ${event.amount} XLM received for invoice ${event.invoice_id}.\n${baseUrl}/invoices/${event.invoice_id}`,
         };
-
       case NotificationType.DisputeOpened:
         return {
           subject: 'Dispute Opened - QuickLendX',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #dc2626;">Dispute Opened</h2>
-              <p>A dispute has been opened for your invoice.</p>
-              <p><strong>Invoice ID:</strong> ${event.invoice_id}</p>
-              <p><strong>Opened At:</strong> ${new Date(event.timestamp).toLocaleString()}</p>
-              <div style="margin: 30px 0;">
-                <a href="${baseUrl}/invoices/${event.invoice_id}" style="background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">View Dispute</a>
-              </div>
-              <p style="color: #6b7280; font-size: 14px;">You can unsubscribe from these notifications at any time.</p>
-            </div>
-          `,
-          text: `
-Dispute Opened
-
-A dispute has been opened for your invoice.
-
-Invoice ID: ${event.invoice_id}
-Opened At: ${new Date(event.timestamp).toLocaleString()}
-
-View Dispute: ${baseUrl}/invoices/${event.invoice_id}
-
-You can unsubscribe from these notifications at any time.
-          `,
+          html: `<p>A dispute has been opened for invoice ${event.invoice_id}.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Dispute</a>`,
+          text: `A dispute has been opened for invoice ${event.invoice_id}.\n${baseUrl}/invoices/${event.invoice_id}`,
         };
-
       case NotificationType.DisputeResolved:
         return {
           subject: 'Dispute Resolved - QuickLendX',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #059669;">Dispute Resolved</h2>
-              <p>The dispute for your invoice has been resolved.</p>
-              <p><strong>Invoice ID:</strong> ${event.invoice_id}</p>
-              <p><strong>Resolved At:</strong> ${new Date(event.timestamp).toLocaleString()}</p>
-              <div style="margin: 30px 0;">
-                <a href="${baseUrl}/invoices/${event.invoice_id}" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">View Resolution</a>
-              </div>
-              <p style="color: #6b7280; font-size: 14px;">You can unsubscribe from these notifications at any time.</p>
-            </div>
-          `,
-          text: `
-Dispute Resolved
-
-The dispute for your invoice has been resolved.
-
-Invoice ID: ${event.invoice_id}
-Resolved At: ${new Date(event.timestamp).toLocaleString()}
-
-View Resolution: ${baseUrl}/invoices/${event.invoice_id}
-
-You can unsubscribe from these notifications at any time.
-          `,
+          html: `<p>The dispute for invoice ${event.invoice_id} has been resolved.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Resolution</a>`,
+          text: `The dispute for invoice ${event.invoice_id} has been resolved.\n${baseUrl}/invoices/${event.invoice_id}`,
         };
-
       default:
         return {
           subject: 'QuickLendX Notification',
@@ -184,68 +159,135 @@ You can unsubscribe from these notifications at any time.
     }
   }
 
-  // Send email notification
   private async sendEmail(to: string, template: NotificationTemplate): Promise<void> {
-    try {
-      await this.transporter.sendMail({
-        from: process.env.FROM_EMAIL || 'noreply@quicklendx.com',
-        to,
-        subject: template.subject,
-        text: template.text,
-        html: template.html,
-      });
-    } catch (error) {
-      console.error('Failed to send email:', error);
-      throw error;
-    }
+    await this.transporter.sendMail({
+      from: process.env.FROM_EMAIL || 'noreply@quicklendx.com',
+      to,
+      subject: template.subject,
+      text: template.text,
+      html: template.html,
+    });
   }
 
-  // Process a notification event
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Process a notification event with durable idempotency.
+   *
+   * Idempotency key: (event.id, event.user_id)
+   * - If a 'sent' row exists → skip (already delivered).
+   * - If a 'failed' row exists → retry.
+   * - If no row exists → insert 'pending', attempt send, update to 'sent'/'failed'.
+   */
   public async processNotification(event: NotificationEvent): Promise<void> {
-    // Check idempotency
-    if (this.isNotificationSent(event.id)) {
-      console.log(`Notification ${event.id} already sent, skipping`);
+    // Fast-path: already delivered
+    if (this.isNotificationSent(event.id, event.user_id)) {
+      // debug-level only — no PII
       return;
     }
 
+    const rowId = this.insertPending(event.id, event.user_id, event.type);
+
+    const preferences = this.getUserPreferences(event.user_id);
+    if (!preferences || !preferences.email_enabled || !preferences.email_address) {
+      // No preferences row or email disabled — treat as opted-out, mark sent to avoid retry spam
+      this.markSent(rowId);
+      return;
+    }
+
+    if (!preferences.notifications[event.type]) {
+      // Notification type disabled for this user
+      this.markSent(rowId);
+      return;
+    }
+
+    const template = this.getEmailTemplate(event);
+
     try {
-      // Get user preferences
-      const preferences = await this.getUserPreferences(event.user_id);
-      if (!preferences || !preferences.email_enabled || !preferences.email_address) {
-        console.log(`User ${event.user_id} has disabled email notifications or no email set`);
-        return;
-      }
-
-      // Check if this notification type is enabled
-      if (!preferences.notifications[event.type]) {
-        console.log(`User ${event.user_id} has disabled ${event.type} notifications`);
-        return;
-      }
-
-      // Get email template
-      const template = this.getEmailTemplate(event);
-
-      // Send email
       await this.sendEmail(preferences.email_address, template);
-
-      // Mark as sent for idempotency
-      this.markNotificationSent(event.id);
-
-      console.log(`Notification ${event.id} sent successfully to ${preferences.email_address}`);
-    } catch (error) {
-      console.error(`Failed to process notification ${event.id}:`, error);
+      this.markSent(rowId);
+    } catch (error: any) {
+      this.markFailed(rowId, error?.message ?? String(error));
       throw error;
     }
   }
 
-  // Update user preferences (mock implementation)
-  public async updateUserPreferences(userId: string, preferences: Partial<UserNotificationPreferences>): Promise<void> {
-    // In real implementation, save to database
-    console.log(`Updated preferences for user ${userId}:`, preferences);
+  /**
+   * Upsert user notification preferences.
+   */
+  public updateUserPreferences(
+    userId: string,
+    preferences: Partial<UserNotificationPreferences>
+  ): void {
+    const db = getDatabase();
+    const now = new Date().toISOString();
+
+    const existing = db
+      .prepare("SELECT user_id FROM user_notification_preferences WHERE user_id = ?")
+      .get(userId);
+
+    if (!existing) {
+      db.prepare(`
+        INSERT INTO user_notification_preferences
+          (user_id, email_enabled, email_address,
+           notify_invoice_funded, notify_payment_received,
+           notify_dispute_opened, notify_dispute_resolved, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        userId,
+        preferences.email_enabled !== false ? 1 : 0,
+        preferences.email_address ?? null,
+        preferences.notifications?.[NotificationType.InvoiceFunded] !== false ? 1 : 0,
+        preferences.notifications?.[NotificationType.PaymentReceived] !== false ? 1 : 0,
+        preferences.notifications?.[NotificationType.DisputeOpened] !== false ? 1 : 0,
+        preferences.notifications?.[NotificationType.DisputeResolved] !== false ? 1 : 0,
+        now,
+      );
+    } else {
+      const sets: string[] = ['updated_at = ?'];
+      const params: unknown[] = [now];
+
+      if (preferences.email_enabled !== undefined) {
+        sets.push('email_enabled = ?');
+        params.push(preferences.email_enabled ? 1 : 0);
+      }
+      if (preferences.email_address !== undefined) {
+        sets.push('email_address = ?');
+        params.push(preferences.email_address);
+      }
+      if (preferences.notifications) {
+        const n = preferences.notifications;
+        if (n[NotificationType.InvoiceFunded] !== undefined) {
+          sets.push('notify_invoice_funded = ?');
+          params.push(n[NotificationType.InvoiceFunded] ? 1 : 0);
+        }
+        if (n[NotificationType.PaymentReceived] !== undefined) {
+          sets.push('notify_payment_received = ?');
+          params.push(n[NotificationType.PaymentReceived] ? 1 : 0);
+        }
+        if (n[NotificationType.DisputeOpened] !== undefined) {
+          sets.push('notify_dispute_opened = ?');
+          params.push(n[NotificationType.DisputeOpened] ? 1 : 0);
+        }
+        if (n[NotificationType.DisputeResolved] !== undefined) {
+          sets.push('notify_dispute_resolved = ?');
+          params.push(n[NotificationType.DisputeResolved] ? 1 : 0);
+        }
+      }
+
+      params.push(userId);
+      db.prepare(
+        `UPDATE user_notification_preferences SET ${sets.join(', ')} WHERE user_id = ?`
+      ).run(...params);
+    }
   }
 
-  // Get user preferences
-  public async getUserPreferencesPublic(userId: string): Promise<UserNotificationPreferences | null> {
+  /**
+   * Retrieve persisted preferences for a user (returns null if not found).
+   */
+  public getUserPreferencesPublic(userId: string): UserNotificationPreferences | null {
     return this.getUserPreferences(userId);
   }
 }

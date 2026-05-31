@@ -263,6 +263,19 @@ npm run migrate -- --dry-run
 npm run migrate -- --check
 ```
 
+### Rollback Commands
+
+```bash
+# Rollback the last applied migration (requires emergency flag or ALLOW_DOWN_MIGRATIONS=true)
+npm run migrate:down -- --emergency
+
+# Rollback with dry-run preview
+npm run migrate:down -- --dry-run --emergency
+
+# Skip checksum verification (NOT RECOMMENDED in production)
+npm run migrate:down -- --emergency --skip-checksum-verify
+```
+
 ### Hotfix Rollback (Emergency Only)
 
 ```bash
@@ -270,7 +283,7 @@ npm run migrate -- --check
 ls .hotfix-approvals/003_*.approval  # must exist
 
 # Step 2: Run down migration with both flags
-npm run migrate -- --allow-down --emergency
+npm run migrate:down -- --emergency
 
 # Step 3: Monitor application health
 npm run health-check
@@ -280,6 +293,7 @@ npm run health-check
 
 ```bash
 npm run migrate -- --verbose
+npm run migrate:down -- --verbose --emergency
 ```
 
 ### Validation Only (pre-commit)
@@ -287,6 +301,16 @@ npm run migrate -- --verbose
 ```bash
 # Verify all migration files are well-formed, no version conflicts
 npm run migrate -- --validate-only
+```
+
+### Checksum Verification
+
+On every migration run, the system automatically verifies that applied migration files haven't been tampered with by comparing stored checksums with current file contents. This fails closed on mismatch.
+
+To bypass checksum verification (emergency only):
+```bash
+npm run migrate -- --skip-checksum-verify
+npm run migrate:down -- --emergency --skip-checksum-verify
 ```
 
 ---
@@ -352,7 +376,7 @@ jobs:
     "migrate:dry-run": "npm run migrate -- --dry-run",
     "migrate:validate": "npm run migrate -- --validate-only",
     "migrate:up": "npm run migrate",
-    "migrate:down": "npm run migrate -- --allow-down --emergency",
+    "migrate:down": "ts-node src/lib/migrations/cli.ts down",
     "build": "tsc && cp -r src/migrations dist/migrations && cp -r src/lib/migrations dist/lib/migrations"
   }
 }

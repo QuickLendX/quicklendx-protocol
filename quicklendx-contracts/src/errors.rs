@@ -23,8 +23,9 @@ pub enum QuickLendXError {
     NotInvestor = 1102,
     NotAdmin = 1103,
 
-    // Input validation (1200-1204)
+    // Input validation (1200-1205)
     InvalidAmount = 1200,
+    ArithmeticOverflow = 1205,
     InvalidAddress = 1201,
     InvalidCurrency = 1202,
     InvalidTimestamp = 1203,
@@ -74,6 +75,8 @@ pub enum QuickLendXError {
     InvalidFeeConfiguration = 1850,
     TreasuryNotConfigured = 1851,
     InvalidFeeBasisPoints = 1852,
+    /// Arithmetic overflow detected during checked arithmetic operations
+    ArithmeticOverflow = 1856,
     RotationAlreadyPending = 1853,
     RotationNotFound = 1854,
     RotationExpired = 1855,
@@ -130,6 +133,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
             // Input validation
             QuickLendXError::InvalidAmount => symbol_short!("INV_AMT"),
+            QuickLendXError::ArithmeticOverflow => symbol_short!("AR_OVF"),
             QuickLendXError::InvalidAddress => symbol_short!("INV_ADR"),
             QuickLendXError::InvalidCurrency => symbol_short!("INV_CR"),
             QuickLendXError::InvalidTimestamp => symbol_short!("INV_TM"),
@@ -194,6 +198,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::EmergencyWithdrawInsufficientBalance => symbol_short!("EMG_BAL"),
             QuickLendXError::TokenTransferFailed => symbol_short!("TKN_FAIL"),
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
+            QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
         }
     }

@@ -132,6 +132,31 @@ class WebhookQueueService {
   getDepth(): number {
     return this.count;
   }
+
+  /**
+   * Drain all pending events from the queue and reset it to empty.
+   *
+   * Returns copies of every event whose status is still "pending" so the
+   * caller (e.g. the shutdown handler) can log or persist undelivered work.
+   * Events that have already been marked success or failed are discarded
+   * silently — they have already been handled.
+   *
+   * After flush() the queue depth is zero and counters are reset.
+   */
+  flush(): WebhookEvent[] {
+    const pending: WebhookEvent[] = [];
+    for (let i = 0; i < this.count; i++) {
+      const idx = (this.tail + i) % this.maxSize;
+      const event = this.buffer[idx];
+      if (event && event.status === 'pending') {
+        pending.push({ ...event });
+      }
+    }
+    this.head = 0;
+    this.tail = 0;
+    this.count = 0;
+    return pending;
+  }
 }
 
 export const webhookQueueService = WebhookQueueService.getInstance();

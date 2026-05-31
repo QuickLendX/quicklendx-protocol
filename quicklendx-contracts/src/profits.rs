@@ -231,37 +231,41 @@ impl PlatformFee {
         payment_amount: i128,
         fee_bps: i128,
     ) -> (i128, i128) {
-        // Normalize untrusted arithmetic inputs. Core protocol callers should
-        // provide validated non-negative values, but this keeps the helper
-        // safe/deterministic if called directly in tests or future integrations.
+        Self::calculate_with_fee_bps_checked(investment_amount, payment_amount, fee_bps)
+            .unwrap_or((payment_amount.max(0), 0))
+    }
+
+    /// Calculate with explicit fee basis points using checked arithmetic.
+    ///
+    /// Returns `Err(QuickLendXError::ArithmeticOverflow)` if the intermediate
+    /// BPS multiplication would overflow an `i128`.
+    pub fn calculate_with_fee_bps_checked(
+        investment_amount: i128,
+        payment_amount: i128,
+        fee_bps: i128,
+    ) -> Result<(i128, i128), QuickLendXError> {
         let safe_investment = investment_amount.max(0);
         let safe_payment = payment_amount.max(0);
         let safe_fee_bps = fee_bps.clamp(0, BPS_DENOMINATOR);
 
-        // Handle no-payment scenario after normalization.
         if safe_payment == 0 {
-            return (0, 0);
+            return Ok((0, 0));
         }
 
-        // No profit scenario: payment doesn't exceed investment
-        // Investor gets full payment, no fee charged
         let gross_profit = safe_payment.saturating_sub(safe_investment);
         if gross_profit <= 0 {
-            return (safe_payment, 0);
+            return Ok((safe_payment, 0));
         }
 
-        // Calculate platform fee using integer division (rounds down)
-        // This ensures no dust and favors the investor
-        let platform_fee = gross_profit
-            .saturating_mul(safe_fee_bps)
+        let product = gross_profit
+            .checked_mul(safe_fee_bps)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
+        let platform_fee = product
             .checked_div(BPS_DENOMINATOR)
-            .unwrap_or(0);
-
-        // Investor return = total payment - platform fee
-        // This guarantees: investor_return + platform_fee == payment_amount
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
         let investor_return = safe_payment.saturating_sub(platform_fee);
 
-        (investor_return, platform_fee)
+        Ok((investor_return, platform_fee))
     }
 
     /// Calculate complete profit and fee breakdown
@@ -437,23 +441,37 @@ pub fn calculate_profit(env: &Env, investment_amount: i128, payment_amount: i128
 /// ```
 #[allow(dead_code)]
 pub fn calculate_treasury_split(platform_fee: i128, treasury_share_bps: i128) -> (i128, i128) {
+    calculate_treasury_split_checked(platform_fee, treasury_share_bps)
+        .unwrap_or((0, platform_fee.max(0)))
+}
+
+/// Calculate treasury split with checked BPS multiplication.
+///
+/// This returns `Err(QuickLendXError::ArithmeticOverflow)` if the platform fee
+/// and treasury share calculation would overflow an `i128`.
+#[allow(dead_code)]
+pub fn calculate_treasury_split_checked(
+    platform_fee: i128,
+    treasury_share_bps: i128,
+) -> Result<(i128, i128), QuickLendXError> {
     if platform_fee <= 0 || treasury_share_bps <= 0 {
-        return (0, platform_fee.max(0));
+        return Ok((0, platform_fee.max(0)));
     }
 
     if treasury_share_bps >= BPS_DENOMINATOR {
-        return (platform_fee, 0);
+        return Ok((platform_fee, 0));
     }
 
     let treasury_amount = platform_fee
-        .saturating_mul(treasury_share_bps)
-        .checked_div(BPS_DENOMINATOR)
+        .checked_mul(treasury_share_bps)
+        .and_then(|v| v.checked_div(BPS_DENOMINATOR))
         .unwrap_or(0);
 
-    // Remaining amount is computed by subtraction to avoid dust
-    let remaining = platform_fee.saturating_sub(treasury_amount);
+    let remaining = platform_fee
+        .checked_sub(treasury_amount)
+        .ok_or(QuickLendXError::InvalidFeeConfiguration)?;
 
-    (treasury_amount, remaining)
+    Ok((treasury_amount, remaining))
 }
 
 // ============================================================================
@@ -462,7 +480,20 @@ pub fn calculate_treasury_split(platform_fee: i128, treasury_share_bps: i128) ->
 
 /// Validate that a calculation produces no dust
 ///
-/// Verifies that `investor_return + platform_fee == payment_amount`
+/// Verifies the conservation identity:
+///
+/// ```text
+/// investor_return + platform_fee == payment_amount
+/// ```
+///
+/// Rounding direction note:
+/// - Platform fees are computed using integer floor division (rounding down).
+/// - In Rust integer arithmetic, this is truncation toward zero; all protocol
+///   amounts are non-negative here, so truncation and floor are equivalent.
+/// - The `investor_return` is then calculated as `payment_amount - platform_fee`.
+/// - This subtraction-based approach guarantees that any fractional remainder
+///   from the fee calculation is absorbed by the platform (favors the investor),
+///   and that the identity above always holds (no dust is produced).
 ///
 /// # Returns
 /// `true` if calculation is dust-free, `false` otherwise

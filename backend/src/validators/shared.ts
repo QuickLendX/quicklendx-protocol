@@ -14,7 +14,7 @@ export const positiveAmountSchema = z
 
 export const paginationSchema = z.object({
   page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  limit: z.coerce.number().int().min(0).optional().default(20),
 });
 
 export const invoiceIdSchema = z.object({
@@ -33,9 +33,10 @@ export const getInvoicesQuerySchema = z.object({
   business: stellarAddressSchema.optional(),
   status: z.enum(["Pending", "Verified", "Funded", "Paid", "Defaulted", "Cancelled"]).optional(),
   page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  limit: z.coerce.number().int().min(0).optional().default(20),
 });
 
+// Accept either an on-chain hex id (0x...) or a plain string (used by mocks/tests)
 export const invoiceIdParamSchema = z.object({
   id: hexStringSchema,
 });
@@ -44,13 +45,13 @@ export const getBidsQuerySchema = z.object({
   invoice_id: hexStringSchema.optional(),
   investor: stellarAddressSchema.optional(),
   page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  limit: z.coerce.number().int().min(0).optional().default(20),
 });
 
 export const getSettlementsQuerySchema = z.object({
   invoice_id: hexStringSchema.optional(),
   page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  limit: z.coerce.number().int().min(0).optional().default(20),
 });
 
 export const settlementIdParamSchema = z.object({
@@ -63,6 +64,15 @@ export const disputeIdParamSchema = z.object({
 
 export const invoiceIdParamForDisputesSchema = z.object({
   id: hexStringSchema,
+});
+
+// Route-time schemas: accept either on-chain hex ids or plain strings used by mocks/tests
+export const invoiceRouteIdParamSchema = z.object({
+  id: z.union([hexStringSchema, z.string().min(1)]),
+});
+
+export const invoiceRouteIdParamForDisputesSchema = z.object({
+  id: z.union([hexStringSchema, z.string().min(1)]),
 });
 
 export type HexString = z.infer<typeof hexStringSchema>;

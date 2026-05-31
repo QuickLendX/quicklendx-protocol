@@ -16,11 +16,9 @@
  *   - Backfill existing rows by parsing CSV → JSON
  *   - Deprecate old `details` column in v006 (future)
  *
- * Forward-only: No down migration (data transformation; down would lose parsed data)
- *
- * Rollback plan (manual):
- *   If this migration fails halfway, the new column will be NULL for un-parsed rows.
- *   We can re-run the backfill after fixing parser issues.
+ * Rollback:
+ *   Down migration drops the `details_json` column, losing the parsed JSON data.
+ *   Original `details` column remains intact, so CSV data is preserved.
  */
 
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
@@ -47,6 +45,7 @@ export default {
     description: "Migrate audit_log.details from CSV to JSON structured data",
     requires_batching: true,  // For large tables; current size ~25k rows, safe for one-shot
     estimated_duration_sec: 30,
+    rollback_risk: "medium",
   },
   up: async (ctx: MigrationContext): Promise<void> => {
     // Step 1: Add new column (nullable)
@@ -68,6 +67,11 @@ export default {
       }
     }
   },
+  down: async (ctx: MigrationContext): Promise<void> => {
+    // SQLite doesn't support DROP COLUMN directly in all versions, but we can recreate the table
+    // For simplicity, we'll use ALTER TABLE DROP COLUMN which is supported in SQLite 3.35.0+
+    await ctx.db.exec(`ALTER TABLE backend_audit_log DROP COLUMN details_json`);
+  },
   validate: async (ctx: MigrationContext): Promise<string[]> => {
     const warnings: string[] = [];
 
@@ -79,7 +83,10 @@ export default {
       warnings.push(`${remaining.count} rows remain un-converted — will be processed in next batch`);
     }
 
+    warnings.push(
+      "ROLLBACK WARNING: down migration DROP COLUMN will permanently delete all details_json values. Original details column (CSV) is preserved."
+    );
+
     return warnings;
   },
-  // No down: irreversible data transformation (JSON produced from CSV is not lossy, but would require manual CSV reconstruction)
 } satisfies MigrationDefinition;
