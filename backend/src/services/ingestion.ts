@@ -9,6 +9,7 @@
  */
 
 // lagMonitor is loaded dynamically to avoid circular deps in test env
+import { withSpan } from "../lib/tracing";
 
 export interface IndexedEvent {
   ledger: number;
@@ -53,36 +54,50 @@ export interface IngestionResult {
 export async function ingestBatch(
   store: IngestionStore,
   events: IndexedEvent[],
-  batchCursor: number
+  batchCursor: number,
 ): Promise<IngestionResult> {
-  const currentCursor = await store.getCursor();
+  return withSpan(
+    "ingestion.ingestBatch",
+    { batch_cursor: batchCursor, events_count: events.length },
+    async () => {
+      const currentCursor = await store.getCursor();
 
-  // Idempotency: if we've already processed up to or past this cursor, skip.
-  if (currentCursor !== null && batchCursor <= currentCursor) {
-    return { committed: false, cursor: currentCursor, eventsProcessed: 0, skipped: true };
-  }
+      // Idempotency: if we've already processed up to or past this cursor, skip.
+      if (currentCursor !== null && batchCursor <= currentCursor) {
+        return {
+          committed: false,
+          cursor: currentCursor,
+          eventsProcessed: 0,
+          skipped: true,
+        };
+      }
 
-  // Validate all events before writing anything — prevents partial state.
-  for (const event of events) {
-    validateEvent(event);
-  }
+      // Validate all events before writing anything — prevents partial state.
+      for (const event of events) {
+        validateEvent(event);
+      }
 
-  // Delegate the atomic commit to the store.
-  await store.commitBatch(events, batchCursor);
+      // Delegate the atomic commit to the store.
+      await store.commitBatch(events, batchCursor);
 
-  // Record metric for monitoring (non-fatal if it fails)
-  try {
-    (await import('./lagMonitor')).lagMonitor.recordIngestion(batchCursor, events.length);
-  } catch {
-    // Metrics failure must not break ingestion
-  }
+      // Record metric for monitoring (non-fatal if it fails)
+      try {
+        (await import("./lagMonitor")).lagMonitor.recordIngestion(
+          batchCursor,
+          events.length,
+        );
+      } catch {
+        // Metrics failure must not break ingestion
+      }
 
-  return {
-    committed: true,
-    cursor: batchCursor,
-    eventsProcessed: events.length,
-    skipped: false,
-  };
+      return {
+        committed: true,
+        cursor: batchCursor,
+        eventsProcessed: events.length,
+        skipped: false,
+      };
+    },
+  );
 }
 
 /**
@@ -99,46 +114,52 @@ export async function ingestBatch(
 export async function rollbackAndReingest(
   store: IngestionStore,
   targetCursor: number,
-  fetchBatch: (cursor: number) => Promise<{ rawEvents: IndexedEvent[] }>
+  fetchBatch: (cursor: number) => Promise<{ rawEvents: IndexedEvent[] }>,
 ): Promise<{ newCursor: number }> {
-  // 1. Rollback to the last known good cursor
-  await store.rollbackTo(targetCursor);
+  return withSpan(
+    "ingestion.rollbackAndReingest",
+    { target_cursor: targetCursor },
+    async () => {
+      // 1. Rollback to the last known good cursor
+      await store.rollbackTo(targetCursor);
 
-  // Emit rollback metric (non-fatal if it fails)
-  try {
-    (await import('./lagMonitor')).lagMonitor.recordRollback(targetCursor);
-  } catch {
-    // Metrics failure must not break recovery
-  }
-
-  // 2. Re-ingest from targetCursor + 1 forward until caught up
-  let currentCursor = targetCursor;
-  const maxIterations = 10_000; // safety valve
-
-  for (let i = 0; i < maxIterations; i++) {
-    const nextCursor = currentCursor + 1;
-    try {
-      const batch = await fetchBatch(nextCursor);
-      if (!batch.rawEvents || batch.rawEvents.length === 0) {
-        // No more batches available — we're caught up
-        break;
+      // Emit rollback metric (non-fatal if it fails)
+      try {
+        (await import("./lagMonitor")).lagMonitor.recordRollback(targetCursor);
+      } catch {
+        // Metrics failure must not break recovery
       }
 
-      const result = await ingestBatch(store, batch.rawEvents, nextCursor);
-      currentCursor = result.cursor;
+      // 2. Re-ingest from targetCursor + 1 forward until caught up
+      let currentCursor = targetCursor;
+      const maxIterations = 10_000; // safety valve
 
-      if (result.skipped) {
-        // Already at or past this cursor, keep going
-        continue;
+      for (let i = 0; i < maxIterations; i++) {
+        const nextCursor = currentCursor + 1;
+        try {
+          const batch = await fetchBatch(nextCursor);
+          if (!batch.rawEvents || batch.rawEvents.length === 0) {
+            // No more batches available — we're caught up
+            break;
+          }
+
+          const result = await ingestBatch(store, batch.rawEvents, nextCursor);
+          currentCursor = result.cursor;
+
+          if (result.skipped) {
+            // Already at or past this cursor, keep going
+            continue;
+          }
+        } catch (err) {
+          throw new Error(
+            `Re-ingestion failed at cursor ${nextCursor}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
       }
-    } catch (err) {
-      throw new Error(
-        `Re-ingestion failed at cursor ${nextCursor}: ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
-  }
 
-  return { newCursor: currentCursor };
+      return { newCursor: currentCursor };
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +208,7 @@ export class InMemoryIngestionStore implements IngestionStore {
     if (cursor < 0) {
       throw new Error("Cannot rollback below genesis: cursor must be >= 0");
     }
-    this.events = this.events.filter(e => e.ledger <= cursor);
+    this.events = this.events.filter((e) => e.ledger <= cursor);
     this.cursor = cursor;
   }
 
