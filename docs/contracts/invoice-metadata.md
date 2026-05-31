@@ -158,6 +158,31 @@ The `test_invoice_metadata.rs` module provides 13 tests covering:
 - Clear documentation of field length limits in this file and inline source comments.
 - Timeframe: 96 hours for completion from branch creation.
 
+### Field length limits (enforced)
+
+The contract enforces the following maximum lengths (defined in `protocol_limits.rs`):
+
+- Customer name: 150 characters
+- Customer address: 300 characters
+- Tax ID: 50 characters
+- Notes: 2000 characters
+- Line item description: 1024 characters
+- Tag: 50 characters (max 10 tags per invoice)
+
+These limits are enforced by `validate_invoice_metadata` and related verification helpers. See `quicklendx-contracts/src/protocol_limits.rs` for the canonical values.
+
+### Storage-bloat mitigation
+
+- Metadata vectors (line items, tags, ratings) are bounded by explicit caps (e.g., `MAX_METADATA_LINE_ITEMS`, `MAX_INVOICE_TAGS`) to prevent unbounded storage growth.
+- Validation rejects empty or oversized fields to avoid storing trivially large payloads.
+
+### Test run summary
+
+- Targeted tests executed: `test_string_limits`, `test_invoice_metadata`, `test_input_matrix` — all passed locally (unit tests compiled and ran; no failures).
+- Test run produced compiler warnings only; no test failures.
+
+Include this summary in the PR description along with test output and a storage-bloat note.
+
 ## Storage and Indexing
 
 Invoices are indexed using `(Symbol, Key)` tuples in the contract storage:
