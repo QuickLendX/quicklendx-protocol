@@ -10,6 +10,7 @@
 //! - Addresses are used for identity to leverage Soroban's built-in access control
 
 use soroban_sdk::{contracttype, Address, BytesN, Env, IntoVal, String, Vec};
+use crate::protocol_limits::*;
 
 /// Invoice status enumeration representing the lifecycle of an invoice
 #[contracttype]
@@ -121,9 +122,13 @@ pub struct Invoice {
     pub status: InvoiceStatus,
     pub created_at: u64,
     pub description: String,
+    /// Optional customer display name. Max length enforced: `MAX_NAME_LENGTH`.
     pub metadata_customer_name: Option<String>,
+    /// Optional customer address. Max length enforced: `MAX_ADDRESS_LENGTH`.
     pub metadata_customer_address: Option<String>,
+    /// Optional tax identifier. Max length enforced: `MAX_TAX_ID_LENGTH`.
     pub metadata_tax_id: Option<String>,
+    /// Optional free-text notes. Max length enforced: `MAX_NOTES_LENGTH`.
     pub metadata_notes: Option<String>,
     pub metadata_line_items: Vec<LineItemRecord>,
     pub category: InvoiceCategory,
@@ -145,10 +150,16 @@ pub struct Invoice {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceMetadata {
+    /// Customer display name. Trimmed and validated to be non-empty. Max: `MAX_NAME_LENGTH`.
     pub customer_name: String,
+    /// Customer address. Max: `MAX_ADDRESS_LENGTH`.
     pub customer_address: String,
+    /// Tax identifier (free-form). Max: `MAX_TAX_ID_LENGTH`.
     pub tax_id: String,
+    /// Line items vector. Each item's description validated against `MAX_DESCRIPTION_LENGTH`.
+    /// The vector length is bounded by `MAX_METADATA_LINE_ITEMS` in verification.
     pub line_items: Vec<LineItemRecord>,
+    /// Free-form notes. Max: `MAX_NOTES_LENGTH`.
     pub notes: String,
 }
 

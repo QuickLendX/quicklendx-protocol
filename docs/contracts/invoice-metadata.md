@@ -121,6 +121,43 @@ The `test_invoice_metadata.rs` module provides 13 tests covering:
 - Multiple attacker rejection
 - Recovery after failed attack
 
+## Issue: input-validation & metadata test headings
+
+### Description
+
+- `store_invoice`, `upload_invoice`, and `update_invoice_metadata` accept String fields (customer name, tax id, metadata) that feed search indexes (`get_invoices_by_customer`, `get_invoices_by_tax_id`, `search_invoices`).
+- Add tests enforcing maximum string lengths and rejecting empty/oversized inputs so a single oversize field cannot bloat storage or break pagination.
+
+### Requirements and context
+
+- Reference contract entrypoints: `store_invoice`, `update_invoice_metadata`, `clear_invoice_metadata` and search helpers (`get_invoices_by_customer`, `invoice_search::search_invoices`).
+- Security: enforce bounded string lengths; reject empty required fields.
+- Tests: at-limit, over-limit, empty, unicode-boundary inputs.
+- Document these limits in this file and add `///` comments in the contract source where limits are enforced.
+
+### Suggested execution
+
+- Create a branch: `git checkout -b feature/metadata-input-validation`.
+- Extend tests: `src/test_string_limits.rs`, `src/test_invoice_metadata.rs`, and `src/test_input_matrix.rs` to assert length bounds on every string field and metadata path.
+- Update this document with the field length limits and add inline comments in the source where limits are applied.
+- Validate that search indexes still resolve after clearing metadata.
+
+### Test and commit
+
+- Run: `cargo test test_string_limits test_invoice_metadata test_input_matrix` and ensure all new cases pass.
+- Cover edge cases: max-length, over-length, empty, multibyte characters.
+- Include test output and a storage-bloat note in the PR description.
+
+### Example commit message
+
+`test(invoice): add string and metadata input-validation bounds coverage`
+
+### Guidelines
+
+- Minimum 95% test coverage for the invoice/metadata module.
+- Clear documentation of field length limits in this file and inline source comments.
+- Timeframe: 96 hours for completion from branch creation.
+
 ## Storage and Indexing
 
 Invoices are indexed using `(Symbol, Key)` tuples in the contract storage:
