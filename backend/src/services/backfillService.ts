@@ -6,6 +6,8 @@ import {
   BackfillPreview,
   BackfillAuditEntry,
 } from "../types/backfill";
+import { getDatabase } from "../lib/database";
+import { DriftReport, BackfillResult } from "../types/reconciliation";
 
 const DEFAULT_MAX_LEDGER_RANGE = 5000;
 const DEFAULT_MAX_CONCURRENCY = 4;
@@ -160,6 +162,102 @@ export class BackfillService {
     this.scheduleNextTick(runId);
 
     return { ...run };
+  }
+
+  public getDriftProgress() {
+    const db = getDatabase();
+    return db.prepare(`SELECT * FROM backfill_progress ORDER BY updated_at DESC LIMIT 1`).get();
+  }
+
+  public async triggerDriftBackfill(report: DriftReport, batchSize: number, failBackfill: boolean = false): Promise<BackfillResult> {
+    const db = getDatabase();
+    const runId = `drift_${report.timestamp}`;
+
+    let progress = db.prepare(`SELECT * FROM backfill_progress WHERE run_id = ?`).get(runId) as any;
+
+    if (!progress) {
+      progress = {
+        id: `prog_${Date.now()}`,
+        audit_id: null,
+        run_id: runId,
+        last_processed_id: null,
+        remaining_count: report.drifts.length,
+        total_count: report.drifts.length,
+        status: 'running',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      const insertResult = db.prepare(`
+        INSERT INTO backfill_progress (id, audit_id, run_id, last_processed_id, remaining_count, total_count, status, created_at, updated_at)
+        VALUES (@id, @audit_id, @run_id, @last_processed_id, @remaining_count, @total_count, @status, @created_at, @updated_at)
+      `).run(progress);
+    }
+
+    const result: BackfillResult = {
+      successCount: 0,
+      failCount: 0,
+      errors: [],
+    };
+
+    if (progress.status === 'completed' || progress.status === 'failed') {
+       return result;
+    }
+
+    let startIndex = 0;
+    if (progress.last_processed_id) {
+      const idx = report.drifts.findIndex((d: any) => d.id === progress.last_processed_id);
+      if (idx !== -1) {
+        startIndex = idx + 1;
+      }
+    }
+
+    const toProcess = report.drifts.slice(startIndex, startIndex + batchSize);
+
+    for (const drift of toProcess) {
+      try {
+        if (failBackfill) {
+          throw new Error("Simulated failure");
+        }
+        console.log(`Backfilling ${drift.type} ${drift.id}...`);
+        
+        result.successCount++;
+        progress.last_processed_id = drift.id;
+        progress.remaining_count--;
+        
+        // Log to backfill_audit
+        db.prepare(`
+          INSERT INTO backfill_audit (run_id, timestamp, event_type, actor, metadata, invoice_id)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(runId, new Date().toISOString(), 'completed', 'system', '{}', drift.id);
+
+      } catch (error: any) {
+        result.failCount++;
+        result.errors.push(`Failed to backfill ${drift.id}: ${error.message}`);
+        
+        db.prepare(`
+          INSERT INTO backfill_audit (run_id, timestamp, event_type, actor, metadata, invoice_id)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(runId, new Date().toISOString(), 'failed', 'system', JSON.stringify({ error: error.message }), drift.id);
+      }
+    }
+
+    if (progress.remaining_count <= 0) {
+      progress.status = 'completed';
+    }
+
+    progress.updated_at = new Date().toISOString();
+
+    db.prepare(`
+      UPDATE backfill_progress 
+      SET last_processed_id = @last_processed_id,
+          remaining_count = @remaining_count,
+          status = @status,
+          updated_at = @updated_at
+      WHERE id = @id
+    `).run(progress);
+
+    return result;
   }
 
   public getRun(runId: string): BackfillRun | null {

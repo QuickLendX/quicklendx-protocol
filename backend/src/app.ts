@@ -6,7 +6,7 @@ import { loadSheddingMiddleware } from "./middleware/load-shedding";
 import { errorHandler } from "./middleware/error-handler";
 import { statusInjector } from "./middleware/status-injector";
 import { csrfMiddleware } from "./middleware/csrf";
-import { webhookCorsOptions } from "./config/cors";
+import { corsOptionsDelegate, webhookCorsOptions } from "./config/cors";
 import v1Routes from "./routes/v1";
 import webhookRoutes from "./routes/webhooks";
 import { requestLogger } from "./middleware/request-logger";
@@ -20,7 +20,7 @@ app.set("etag", false);
 
 // Security Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors(corsOptionsDelegate));
 app.use(express.json({ limit: "1mb" }));
 app.set("trust proxy", true);
 

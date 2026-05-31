@@ -8,7 +8,9 @@ import {
 } from "../types/replay";
 import { auditLogService } from "./auditLogService";
 
-export class FileSystemRawEventStore implements RawEventStore {
+async rollbackTo(cursor: number): Promise<void> {
+  return;
+}
   private readonly dataDir: string;
   private readonly eventsFile: string;
   private readonly cursorFile: string;
@@ -217,6 +219,18 @@ export class FileSystemRawEventStore implements RawEventStore {
     );
   }
 
+  async rollbackTo(cursor: number): Promise<void> {
+    if (typeof cursor !== "number" || cursor < 0) {
+      throw new Error("Invalid cursor for rollback");
+    }
+
+    // Read all events, keep only those with ledger <= cursor
+    const all = await this.getAllEvents();
+    const kept = all.filter((e) => e.ledger <= cursor);
+    await this.replaceEvents(kept);
+    await this.setReplayCursor(cursor);
+  }
+
   async getAllEvents(): Promise<RawEvent[]> {
     await fs.mkdir(this.dataDir, { recursive: true });
 
@@ -280,6 +294,12 @@ export class FileSystemRawEventStore implements RawEventStore {
     }
   }
 
+  async rollbackTo(cursor: number): Promise<void> {
+    if (cursor < 0) throw new Error("cursor must be non-negative");
+    await this.deleteEventsByLedgerRange(cursor + 1, Number.MAX_SAFE_INTEGER);
+    await this.setReplayCursor(cursor);
+  }
+
   // Test helper method
   async reset(): Promise<void> {
     try {
@@ -306,7 +326,9 @@ export class FileSystemRawEventStore implements RawEventStore {
 }
 
 // In-memory implementation for testing
-export class InMemoryRawEventStore implements RawEventStore {
+async rollbackTo(cursor: number): Promise<void> {
+  return;
+}
   private events: RawEvent[] = [];
   private cursor: number | null = null;
   private validator: EventValidator;
@@ -377,6 +399,12 @@ export class InMemoryRawEventStore implements RawEventStore {
     this.cursor = ledger;
   }
 
+  async rollbackTo(cursor: number): Promise<void> {
+    if (cursor < 0) throw new Error("cursor must be non-negative");
+    this.events = this.events.filter(e => e.ledger <= cursor);
+    this.cursor = cursor;
+  }
+
   async getAllEvents(): Promise<RawEvent[]> {
     return [...this.events].sort((a, b) => a.ledger - b.ledger);
   }
@@ -394,5 +422,15 @@ export class InMemoryRawEventStore implements RawEventStore {
   // Test helper
   getEvents(): RawEvent[] {
     return [...this.events];
+  }
+
+  async rollbackTo(cursor: number): Promise<void> {
+    if (typeof cursor !== "number" || cursor < 0) {
+      throw new Error("Invalid cursor for rollback");
+    }
+    // Delete any events with ledger > cursor
+    this.events = this.events.filter((e) => e.ledger <= cursor);
+    // Reset the replay cursor
+    this.cursor = cursor;
   }
 }

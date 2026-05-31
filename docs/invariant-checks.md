@@ -31,7 +31,7 @@ The function returns every regression with its `index`, `previous`, and `current
 
 ### 3. Accounting Totals (`checkAccountingTotals`)
 
-For every `Paid` settlement, verifies that a matching `Accepted` bid exists and that `settlement.amount === bid.bid_amount` (BigInt comparison). Violations indicate a missed event or a corrupted write during indexing.
+For every `Paid` settlement, verifies that a matching `Accepted` bid exists and that `settlement.amount === bid.bidAmount` (BigInt comparison). Violations indicate a missed event or a corrupted write during indexing.
 
 Settlements with `Pending` or `Defaulted` status are skipped — only `Paid` settlements carry a final accounting commitment.
 
@@ -50,6 +50,68 @@ Settlements with `Pending` or `Defaulted` status are skipped — only `Paid` set
 ```
 
 `pass` is `false` if any single violation is found anywhere across the three checks.
+
+## Soroban Smart Contract Storage Invariants
+
+The QuickLendX Soroban contracts maintain cross-module consistency between `InvoiceStorage`, `BidStorage`, `InvestmentStorage`, and `EscrowStorage`. The following invariants are validated after each lifecycle transition:
+
+### One-Escrow-One-Investment Invariant
+
+Every **Funded** invoice must have exactly **one** associated escrow record and exactly **one** associated investment record. This prevents:
+- Double-funding via duplicate escrow creation
+- Ghost investments pointing to non-existent invoices
+- Stale escrow records after settlement/refund/default
+
+**Validation:**
+```rust
+// After accept_bid_and_fund, verify:
+assert!(client.get_escrow_details(&invoice_id).is_ok());
+let inv = client.get_invoice_investment(&invoice_id).unwrap();
+assert_eq!(inv.invoice_id, invoice_id);
+```
+
+### No-Orphan-Investment Invariant (`validate_no_orphan_investments`)
+
+Every investment in the active index (`act_inv`) must have `status == Active`. Terminal-state investments (Completed, Defaulted, Refunded, Withdrawn) must be removed from the active index during their transition.
+
+**Security Note:** A terminal investment remaining in the active index could allow re-settlement or other exploits.
+
+### Status Index Count Invariance
+
+The sum of `get_invoice_count_by_status(...)` across all statuses equals `get_total_invoice_count()`. Status indexes are updated atomically with invoice state transitions.
+
+**Validation:**
+```rust
+let total = client.get_total_invoice_count();
+let sum = client.get_invoice_count_by_status(&InvoiceStatus::Pending)
+    + client.get_invoice_count_by_status(&InvoiceStatus::Verified)
+    + client.get_invoice_count_by_status(&InvoiceStatus::Funded)
+    + client.get_invoice_count_by_status(&InvoiceStatus::Paid)
+    + client.get_invoice_count_by_status(&InvoiceStatus::Defaulted)
+    + client.get_invoice_count_by_status(&InvoiceStatus::Cancelled)
+    + client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
+assert_eq!(total, sum, "Invoice count invariant broken");
+```
+
+### Atomic Lifecycle Transitions
+
+Each lifecycle transition (accept, refund, default, settle, cancel) updates **all** related modules atomically:
+
+| Flow | Invoice Status | Bid Status | Investment Status | Escrow Status | Status Index |
+|------|--------------|-----------|-------------------|---------------|------------|
+| Accept bid | Pending → Verified → Funded | Placed → Accepted | None → Active | None → Held | Verified remove, Funded add |
+| Refund | Funded → Refunded | Accepted → Cancelled | Active → Refunded | Held → Refunded | Funded remove, Refunded add |
+| Default | Funded → Defaulted | - | Active → Defaulted | - | Funded remove, Defaulted add |
+| Settle | Funded → Paid | - | Active → Completed | Held → Released | Funded remove, Paid add |
+| Cancel bid | - | Placed → Cancelled | - | - | No module change |
+| Withdraw bid | - | Placed → Withdrawn | - | - | No module change |
+
+### Index-Drift Prevention
+
+Status indexes are updated via explicit `remove_from_status_invoices` and `add_to_status_invoices` calls within each transition. The `StorageIntegrityAudit` module provides a full integrity check that can be called after any operation to verify:
+- No orphan IDs in any status index
+- Every indexed invoice exists in primary storage
+- Every invoice's stored status matches its index membership
 
 ## Data Provider Interface
 
@@ -91,11 +153,19 @@ if (!report.pass) {
 
 ## Tests
 
-See `backend/src/tests/invariant.test.ts` for the full test suite covering:
+Soroban contract invariant tests are located in:
+- `quicklendx-contracts/src/test_cross_module_consistency.rs` — Lifecycle transition tests with cross-module assertions
+- `quicklendx-contracts/src/test_invariants.rs` — Status/index coherence and orphan detection tests
+
+Run with:
+```bash
+cargo test test_cross_module --features legacy-tests
+cargo test test_invariants --features legacy-tests
+```
+
+Tests cover:
 - Clean data (no violations)
-- Orphan bids, settlements, and disputes
-- Cursor regressions at various positions
-- Accounting mismatches (amount mismatch, missing accepted bid)
-- `sampleIds` capping at 5
-- BigInt overflow safety
-- Backward-compat `getInvariantCounters()` shim
+- Orphan bids, settlements, and investments
+- Status index membership after each transition
+- Count-index agreement across all statuses
+- Lifecycle edge cases (cancel, withdraw, multiple bids, multi-invoice isolation)

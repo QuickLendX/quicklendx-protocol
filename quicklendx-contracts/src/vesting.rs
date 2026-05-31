@@ -216,6 +216,31 @@ impl Vesting {
     }
 
     /// Calculate total vested amount for a schedule at current time.
+    ///
+    /// # Vesting curve
+    ///
+    /// The curve is **linear** from `start_time` to `end_time`, gated by a cliff:
+    ///
+    /// ```text
+    /// vested(t) = 0                                          if t < cliff_time
+    ///           = total_amount                               if t >= end_time
+    ///           = total_amount * (t - start_time)           otherwise
+    ///                          / (end_time - start_time)
+    /// ```
+    ///
+    /// Integer division **truncates** (rounds toward zero), so the beneficiary
+    /// may receive up to 1 token less than the real-valued curve until the next
+    /// second boundary.  The final release at `end_time` always delivers the
+    /// exact `total_amount`, eliminating any accumulated rounding dust.
+    ///
+    /// # Overflow safety
+    ///
+    /// - `elapsed` and `duration` are computed with `saturating_sub` on `u64`,
+    ///   so they are always ≥ 0 and ≤ `u64::MAX`.
+    /// - The numerator `total_amount * elapsed` uses `checked_mul` on `i128`;
+    ///   overflow returns `InvalidAmount` rather than wrapping.
+    /// - Because `elapsed < duration` in the linear branch, the quotient is
+    ///   strictly less than `total_amount`, so the result fits in `i128`.
     pub fn vested_amount(env: &Env, schedule: &VestingSchedule) -> Result<i128, QuickLendXError> {
         Self::validate_schedule_state(schedule)?;
 
@@ -230,10 +255,12 @@ impl Vesting {
             return Ok(schedule.total_amount);
         }
 
+        // duration > 0 is guaranteed by validate_schedule_state (end > start).
         let duration = schedule.end_time.saturating_sub(schedule.start_time);
         if duration == 0 {
             return Err(QuickLendXError::InvalidTimestamp);
         }
+        // elapsed < duration because now < end_time, so the quotient < total_amount.
         let elapsed = now.saturating_sub(schedule.start_time);
         let numerator = schedule
             .total_amount
@@ -243,11 +270,21 @@ impl Vesting {
     }
 
     /// Compute how much can be released right now.
+    ///
+    /// `releasable = vested_amount(now) - released_amount`
+    ///
+    /// This is always ≥ 0 because `released_amount` is only ever incremented
+    /// by the return value of a previous `releasable_amount` call, and
+    /// `vested_amount` is monotonically non-decreasing.  `checked_sub` is used
+    /// as a defence-in-depth guard; a negative result would indicate state
+    /// corruption and returns `InvalidAmount`.
     pub fn releasable_amount(
         env: &Env,
         schedule: &VestingSchedule,
     ) -> Result<i128, QuickLendXError> {
         let vested = Self::vested_amount(env, schedule)?;
+        // Defence-in-depth: checked_sub catches any state corruption where
+        // released_amount somehow exceeds vested_amount.
         let releasable = vested
             .checked_sub(schedule.released_amount)
             .ok_or(QuickLendXError::InvalidAmount)?;

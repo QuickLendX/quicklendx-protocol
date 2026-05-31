@@ -520,6 +520,119 @@ fn test_scan_overdue_invoices_cursor_wraps_after_repeated_calls() {
 }
 
 #[test]
+fn test_scan_overdue_invoices_returns_zero_for_empty_funded_set() {
+    let (_env, client, _admin) = setup();
+    let result = client.scan_overdue_invoices(&Some(DEFAULT_GRACE_PERIOD), &Some(10));
+
+    assert_eq!(result.scanned_count, 0);
+    assert_eq!(result.overdue_count, 0);
+    assert_eq!(result.total_funded, 0);
+    assert_eq!(result.next_cursor, 0);
+    assert_eq!(client.get_overdue_scan_cursor(), 0);
+}
+
+#[test]
+fn test_scan_overdue_invoices_limits_work_when_dataset_smaller_than_limit() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100000);
+    let base = env.ledger().timestamp();
+    let grace = 30 * 24 * 60 * 60;
+
+    for _ in 0..5u64 {
+        create_and_fund_invoice(
+            &env,
+            &client,
+            &admin,
+            &business,
+            &investor,
+            1000,
+            base + 1,
+        );
+    }
+
+    env.ledger().set_timestamp(base + 2);
+    let result = client.scan_overdue_invoices(&Some(grace), &Some(10));
+
+    assert_eq!(result.scanned_count, 5);
+    assert_eq!(result.total_funded, 5);
+    assert_eq!(result.next_cursor, 0);
+    assert_eq!(client.get_overdue_scan_cursor(), 0);
+}
+
+#[test]
+fn test_scan_overdue_invoices_wraps_cursor_across_dataset_boundary() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100000);
+    let base = env.ledger().timestamp();
+    let grace = 30 * 24 * 60 * 60;
+
+    for _ in 0..10u64 {
+        create_and_fund_invoice(
+            &env,
+            &client,
+            &admin,
+            &business,
+            &investor,
+            2000,
+            base + 1,
+        );
+    }
+
+    env.ledger().set_timestamp(base + 2);
+
+    for _ in 0..4 {
+        let scanned = client.scan_overdue_invoices(&Some(grace), &Some(2));
+        assert_eq!(scanned.scanned_count, 2);
+    }
+
+    assert_eq!(client.get_overdue_scan_cursor(), 8);
+
+    let wrap_result = client.scan_overdue_invoices(&Some(grace), &Some(3));
+    assert_eq!(wrap_result.scanned_count, 3);
+    assert_eq!(wrap_result.total_funded, 10);
+    assert_eq!(wrap_result.next_cursor, 2);
+    assert_eq!(client.get_overdue_scan_cursor(), 2);
+}
+
+#[test]
+fn test_scan_overdue_invoices_enforces_hard_batch_cap_on_large_dataset() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 1000000);
+    let base = env.ledger().timestamp();
+    let grace = 30 * 24 * 60 * 60;
+    let total_invoices = 200u32;
+
+    for _ in 0..total_invoices {
+        create_and_fund_invoice(
+            &env,
+            &client,
+            &admin,
+            &business,
+            &investor,
+            1000,
+            base + 1,
+        );
+    }
+
+    env.ledger().set_timestamp(base + 2);
+    let first = client.scan_overdue_invoices(&Some(grace), &Some(500));
+
+    assert_eq!(first.scanned_count, client.get_overdue_scan_batch_limit_max());
+    assert_eq!(first.total_funded, total_invoices);
+    assert_eq!(first.next_cursor, client.get_overdue_scan_batch_limit_max());
+    assert_eq!(client.get_overdue_scan_cursor(), client.get_overdue_scan_batch_limit_max());
+
+    let second = client.scan_overdue_invoices(&Some(grace), &Some(150));
+    assert_eq!(second.scanned_count, client.get_overdue_scan_batch_limit_max());
+    assert_eq!(second.total_funded, total_invoices);
+    assert_eq!(second.next_cursor, 0);
+    assert_eq!(client.get_overdue_scan_cursor(), 0);
+}
+
+#[test]
 fn test_check_overdue_invoices_reports_default_batch_limit_configuration() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);

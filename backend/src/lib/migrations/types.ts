@@ -37,8 +37,9 @@ export interface MigrationDefinition {
   authoredAt: string;
   /** Author identifier (GitHub username or team). */
   author: string;
-  /** Optional: explicit rollback function. Omit for forward-only migrations.
+  /** Rollback function. Required for all migrations except forward-only baseline (v001).
    *  Rollbacks are ONLY for critical production incidents.
+   *  Hotfix migrations MUST include a down function.
    */
   down?: (ctx: MigrationContext) => Promise<void>;
   /** Optional: pre-flight validation that runs before `up` in dry-run mode.
