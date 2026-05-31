@@ -61,6 +61,8 @@ mod test_admin_standalone;
 mod test_dispute;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
+#[cfg(test)]
+mod test_cleanup_pagination;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(test)]
@@ -1000,6 +1002,41 @@ impl QuickLendXContract {
     /// Remove bids that have passed their expiration window
     pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> u32 {
         BidStorage::cleanup_expired_bids(&env, &invoice_id)
+    }
+
+    /// Remove expired bids with pagination support for large bid lists.
+    ///
+    /// # Purpose
+    /// Provides paginated cleanup to prevent instruction budget exhaustion when processing
+    /// invoices with many expired bids (up to MAX_BIDS_PER_INVOICE = 50).
+    ///
+    /// # Parameters
+    /// - `offset`: Starting position in the bid list (0-indexed)
+    /// - `limit`: Maximum number of bids to process (capped at MAX_BIDS_PER_INVOICE)
+    ///
+    /// # Returns
+    /// A tuple (cleaned_count, total_remaining) where:
+    /// - `cleaned_count`: Number of bids cleaned in this call
+    /// - `total_remaining`: Total number of bids on invoice after cleanup
+    ///
+    /// # Operator Workflow
+    /// For an invoice with 50 bids at maximum capacity:
+    /// 1. Call with offset=0, limit=25 → processes first 25 bids
+    /// 2. Call with offset=25, limit=25 → processes remaining 25 bids
+    /// 3. Repeat until cleaned_count = 0 (all expired bids removed)
+    ///
+    /// # Gas Safety
+    /// Each call processes at most `limit` bids, keeping instruction usage predictable:
+    /// - limit=10: ~100-200 instructions (very safe)
+    /// - limit=25: ~250-500 instructions (safe)
+    /// - limit=50: ~500-1000 instructions (worst-case, may approach budget)
+    pub fn cleanup_expired_bids_paged(
+        env: Env,
+        invoice_id: BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> (u32, u32) {
+        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, offset, limit)
     }
 
     /// Cancel a placed bid (investor only, Placed --- Cancelled).
