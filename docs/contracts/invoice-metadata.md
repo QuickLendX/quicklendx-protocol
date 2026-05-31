@@ -18,6 +18,7 @@ Invoices now support extended metadata, categorization, and tagging to facilitat
 ### InvoiceCategory
 
 Enum representing the industry or type of invoice:
+
 - `Services`
 - `Products`
 - `Consulting`
@@ -29,6 +30,7 @@ Enum representing the industry or type of invoice:
 ### InvoiceMetadata
 
 Optional struct attached to invoices:
+
 ```rust
 struct InvoiceMetadata {
     customer_name: String,
@@ -101,13 +103,13 @@ Both `update_metadata` and `clear_metadata` perform this check **before** any st
 
 ### Security invariants
 
-| Invariant | Enforced by |
-|-----------|-------------|
-| Only business owner can update metadata | Address comparison + `require_auth()` |
-| Only business owner can clear metadata | Address comparison + `require_auth()` |
-| No partial state on auth failure | Auth check precedes all mutations |
+| Invariant                                   | Enforced by                                                                                  |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Only business owner can update metadata     | Address comparison + `require_auth()`                                                        |
+| Only business owner can clear metadata      | Address comparison + `require_auth()`                                                        |
+| No partial state on auth failure            | Auth check precedes all mutations                                                            |
 | Indexes reflect owner-authorized state only | `InvoiceStorage::update()` reads from the Invoice struct, which is unchanged on auth failure |
-| Validation runs after auth | Auth check is first in both methods |
+| Validation runs after auth                  | Auth check is first in both methods                                                          |
 
 ### Test coverage
 
@@ -186,6 +188,7 @@ Include this summary in the PR description along with test output and a storage-
 ## Storage and Indexing
 
 Invoices are indexed using `(Symbol, Key)` tuples in the contract storage:
+
 - **Category Index**: `("cat_idx", category) -> Vec<InvoiceId>`
 - **Tag Index**: `("tag_idx", tag) -> Vec<InvoiceId>`
 - **Customer Index**: `("meta_c", customer_name) -> Vec<InvoiceId>`
