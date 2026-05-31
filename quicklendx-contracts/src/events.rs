@@ -5,7 +5,7 @@ use crate::payments::Escrow;
 use crate::types::Bid;
 use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::InvestorVerification;
-use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String};
 
 // ============================================================================
 // Topic Constants

@@ -1,4 +1,4 @@
-use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{BytesN, Env, String, Vec};
 
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
