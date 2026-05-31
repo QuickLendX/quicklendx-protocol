@@ -107,8 +107,6 @@ mod test_max_invoices_per_business;
 pub mod types;
 mod verification;
 mod vesting;
-use crate::types::Bid;
-use crate::types::PlatformFeeConfig;
 use admin::AdminStorage;
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
@@ -1495,12 +1493,12 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    /// Reject an investor verification requbusinesses
+    /// Get all verified businesses
     pub fn get_verified_businesses(env: Env) -> Vec<Address> {
         BusinessVerificationStorage::get_verified_businesses(&env)
     }
 
-    /// Get all pending businesses
+    /// Reject an investor verification request
     pub fn reject_investor(
         env: Env,
         investor: Address,
@@ -1688,6 +1686,24 @@ impl QuickLendXContract {
     /// Get all rejected investors
     pub fn get_rejected_investors(env: Env) -> Vec<Address> {
         InvestorVerificationStorage::get_rejected_investors(&env)
+    }
+
+    /// Update investor analytics (test helper)
+    pub fn update_investor_analytics(
+        env: Env,
+        investor: Address,
+        amount: i128,
+        is_success: bool,
+    ) -> Result<(), QuickLendXError> {
+        verification::update_investor_analytics(&env, &investor, amount, is_success)
+    }
+
+    /// Get investor analytics
+    pub fn get_investor_analytics(
+        env: Env,
+        investor: Address,
+    ) -> Option<analytics::InvestorAnalytics> {
+        verification::get_investor_analytics(&env, &investor)
     }
 
     /// Get investors by tier
