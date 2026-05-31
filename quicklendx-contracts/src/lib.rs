@@ -96,6 +96,8 @@ mod test_string_limits;
 // mod test_vesting;
 #[cfg(test)]
 mod test_invoice_metadata;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_invoice_metadata;
 #[cfg(test)]
 mod test_input_matrix;
 #[cfg(test)]
