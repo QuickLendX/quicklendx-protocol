@@ -1,5 +1,11 @@
 #![no_std]
-#![allow(dead_code, unused_imports, unused_variables, unused_comparisons, deprecated)]
+#![allow(
+    dead_code,
+    unused_imports,
+    unused_variables,
+    unused_comparisons,
+    deprecated
+)]
 
 //! QuickLendX contracts library - minimal surface.
 //!
@@ -20,6 +26,10 @@ extern crate alloc;
 mod scratch_events;
 #[cfg(test)]
 mod test_default;
+#[cfg(test)] mod test_escrow_uniqueness;
+#[cfg(test)] mod test_escrow;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_fees;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 pub mod admin;
@@ -29,6 +39,7 @@ pub mod backup;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
+pub mod diagnostics;
 pub mod dispute;
 pub mod emergency;
 pub mod errors;
@@ -53,28 +64,34 @@ pub mod settlement;
 pub mod storage;
 #[cfg(test)]
 mod test_admin;
-#[cfg(test)]
-mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_standalone;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_dispute;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_expired_bids_cleanup;
 #[cfg(test)]
-mod test_cleanup_pagination;
+mod test_audit;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(test)]
-mod test_freshness;
+mod test_cleanup_pagination;
 #[cfg(test)]
-mod test_invariant_self_check;
+mod test_currency;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_dispute;
+#[cfg(test)]
+mod test_escrow_invariant_model;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_expired_bids_cleanup;
+#[cfg(test)]
+mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
 #[cfg(test)]
+mod test_invariant_self_check;
+#[cfg(test)]
 mod test_investment_consistency;
+#[cfg(test)]
+mod test_accept_bid_race;
 // #[cfg(test)]
 // mod test_investment_queries;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -86,8 +103,6 @@ mod test_investment_consistency;
 // #[cfg(all(test, feature = "legacy-tests"))]
 #[cfg(test)]
 mod test_profit_fee;
-#[cfg(test)]
-mod test_settlement_accounting_identity;
 #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_refund;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -95,30 +110,34 @@ mod test_settlement_accounting_identity;
 #[cfg(test)]
 mod test_protocol_limits_boundary;
 #[cfg(test)]
+mod test_settlement_accounting_identity;
+#[cfg(test)]
 mod test_string_limits;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_types;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_vesting;
 #[cfg(test)]
-mod test_invoice_metadata;
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_fuzz_invoice_metadata;
-#[cfg(test)]
-mod test_input_matrix;
-#[cfg(test)]
 mod test_analytics_consistency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_events;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_invoice_metadata;
 #[cfg(test)]
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_invariants;
+#[cfg(test)]
+mod test_input_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_events;
+#[cfg(test)]
+mod test_invoice_metadata;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
+#[cfg(test)]
+mod test_diagnostics;
 pub mod types;
 pub use types::*;
 pub mod verification;
@@ -132,11 +151,11 @@ use escrow::{
     accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds,
 };
 use events::{
-    emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_escrow_created,
-    emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
-    emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
-    emit_dispute_created, emit_dispute_under_review, emit_dispute_resolved,
+    emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_dispute_created,
+    emit_dispute_resolved, emit_dispute_under_review, emit_escrow_created, emit_escrow_released,
+    emit_insurance_added, emit_insurance_premium_collected, emit_investor_verified,
+    emit_invoice_cancelled, emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
+    emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
@@ -150,11 +169,11 @@ use verification::{
     get_investor_verification as do_get_investor_verification, normalize_tag, reject_business,
     reject_investor as do_reject_investor, require_business_not_pending,
     require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
-    submit_kyc_application, validate_bid, validate_dispute_evidence,
-    validate_dispute_resolution, validate_investor_investment, validate_invoice_metadata,
-    verify_business, verify_investor as do_verify_investor, verify_invoice_data,
-    BusinessVerificationStatus, BusinessVerificationStorage, InvestorRiskLevel,
-    InvestorTier, InvestorVerification, InvestorVerificationStorage,
+    submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
+    validate_investor_investment, validate_invoice_metadata, verify_business,
+    verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
+    BusinessVerificationStorage, InvestorRiskLevel, InvestorTier, InvestorVerification,
+    InvestorVerificationStorage,
 };
 
 use crate::storage::{BidStorage, InvoiceStorage};
@@ -263,6 +282,7 @@ fn u64_to_ascii_20(mut value: u64, buf: &mut [u8; 20]) -> usize {
     len
 }
 
+
 #[contractimpl]
 impl QuickLendXContract {
     // ============================================================================
@@ -300,7 +320,10 @@ impl QuickLendXContract {
     }
 
     /// Admin-only: extends the TTL for all major persistent storage indexes.
-    pub fn extend_protocol_ttl(env: Env, admin: Address) -> Result<maintenance::ExtendReport, QuickLendXError> {
+    pub fn extend_protocol_ttl(
+        env: Env,
+        admin: Address,
+    ) -> Result<maintenance::ExtendReport, QuickLendXError> {
         maintenance::MaintenanceControl::extend_protocol_ttl(&env, &admin)
     }
 
@@ -355,6 +378,27 @@ impl QuickLendXContract {
     /// Set fee configuration (admin only)
     pub fn set_fee_config(env: Env, admin: Address, fee_bps: u32) -> Result<(), QuickLendXError> {
         init::ProtocolInitializer::set_fee_config(&env, &admin, fee_bps)
+    }
+
+    /// Dry-run preview for `set_protocol_config` and `set_fee_config` (admin-gated, read-only).
+    ///
+    /// Returns a [`init::ProtocolConfigDiff`] showing projected before/after values and
+    /// validation metadata for the proposed `params`, **without mutating any contract state**.
+    ///
+    /// # Security
+    /// - Requires admin authorization.
+    /// - No storage writes occur; safe for use in monitoring and governance tooling.
+    ///
+    /// # Returns
+    /// * `Ok(ProtocolConfigDiff)` — before/after diff with `would_succeed` and `is_noop` flags.
+    /// * `Err(QuickLendXError::NotAdmin)` — caller is not the current admin.
+    /// * `Err(QuickLendXError::OperationNotAllowed)` — admin subsystem not initialized.
+    pub fn preview_protocol_config(
+        env: Env,
+        admin: Address,
+        params: init::ProtocolConfigParams,
+    ) -> Result<init::ProtocolConfigDiff, QuickLendXError> {
+        init::ProtocolInitializer::preview_protocol_config(&env, &admin, params)
     }
 
     /// Set treasury address (admin only)
@@ -596,7 +640,10 @@ impl QuickLendXContract {
         // Validate due date is not too far in the future using protocol limits
         protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
 
-        protocol_limits::check_string_length(&description, protocol_limits::MAX_DESCRIPTION_LENGTH)?;
+        protocol_limits::check_string_length(
+            &description,
+            protocol_limits::MAX_DESCRIPTION_LENGTH,
+        )?;
 
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
@@ -1084,6 +1131,7 @@ impl QuickLendXContract {
         }
         bid.status = BidStatus::Withdrawn;
         BidStorage::update_bid(&env, &bid);
+        crate::qlx_log!(&env, "bid", "Bid withdrawn");
         emit_bid_withdrawn(&env, &bid);
         Ok(())
     }
@@ -1171,6 +1219,14 @@ impl QuickLendXContract {
         BidStorage::store_bid(&env, &bid);
         // Track bid for this invoice
         BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
+
+        crate::qlx_log!(
+            &env,
+            "bid",
+            "Bid placed: amount={} expected_return={}",
+            bid_amount,
+            expected_return
+        );
 
         // Emit bid placed event
         emit_bid_placed(&env, &bid);
@@ -3028,6 +3084,16 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
     ) -> Result<bool, QuickLendXError> {
         audit::AuditStorage::validate_invoice_audit_integrity(&env, &invoice_id)
+    }
+
+    /// Verify that the invoice-local audit hash chain has no divergence.
+    pub fn verify_audit_chain(env: Env, invoice_id: BytesN<32>) -> bool {
+        audit::AuditStorage::verify_audit_chain(&env, &invoice_id)
+    }
+
+    /// Return the zero-based first audit-chain divergence point, if any.
+    pub fn first_audit_chain_divergence(env: Env, invoice_id: BytesN<32>) -> Option<u32> {
+        audit::AuditStorage::first_audit_chain_divergence(&env, &invoice_id)
     }
 
     // =========================================================================

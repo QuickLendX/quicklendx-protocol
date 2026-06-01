@@ -579,6 +579,9 @@ pub struct BidTtlUpdated {
     pub admin: Address,
     pub timestamp: u64,
 }
+// ... (after TtlExtended)
+
+
 
 #[contractevent]
 pub struct EmergencyWithdrawalInitiated {

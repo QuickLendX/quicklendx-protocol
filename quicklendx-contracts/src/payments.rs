@@ -137,6 +137,8 @@ pub fn create_escrow(
         return Err(QuickLendXError::InvoiceAlreadyFunded);
     }
 
+    crate::qlx_log!(env, "payment", "Creating escrow: amount={}", amount);
+
     // Move funds from investor into contract-controlled escrow
     let contract_address = env.current_contract_address();
     transfer_funds(env, currency, investor, &contract_address, amount)?;
@@ -154,6 +156,7 @@ pub fn create_escrow(
     };
 
     EscrowStorage::store_escrow(env, &escrow);
+    crate::qlx_log!(env, "payment", "Escrow created successfully");
     emit_escrow_created(env, &escrow);
     Ok(escrow_id)
 }
@@ -198,6 +201,7 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     // Update escrow status
     escrow.status = EscrowStatus::Released;
     EscrowStorage::update_escrow(env, &escrow);
+    crate::qlx_log!(env, "payment", "Escrow released to business: amount={}", escrow.amount);
 
     Ok(())
 }
@@ -231,6 +235,7 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
     // Update escrow status
     escrow.status = EscrowStatus::Refunded;
     EscrowStorage::update_escrow(env, &escrow);
+    crate::qlx_log!(env, "payment", "Escrow refunded to investor: amount={}", escrow.amount);
 
     Ok(())
 }
