@@ -100,6 +100,36 @@ jobs:
           source $HOME/.cargo/env
           cargo test --verbose
 
+      - name: Run escrow invariant model
+        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
+        run: |
+          source $HOME/.cargo/env
+          cd quicklendx-contracts
+          CI=1 cargo test test_escrow_invariant_model -- --nocapture
+
+      - name: Install cargo-mutants
+        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
+        run: |
+          source $HOME/.cargo/env
+          cargo install cargo-mutants
+
+      - name: Run cargo-mutants advisory scan
+        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
+        continue-on-error: true
+        run: |
+          source $HOME/.cargo/env
+          cd quicklendx-contracts
+          cargo mutants --in-place=false --json > mutants.json
+
+      - name: Upload cargo-mutants JSON artifact
+        if: always() && (github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true')
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-mutants-survivors
+          path: quicklendx-contracts/mutants.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Test coverage (baseline + admin gate)
         run: |
           source $HOME/.cargo/env
