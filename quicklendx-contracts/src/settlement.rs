@@ -88,6 +88,8 @@ pub fn process_partial_payment(
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     let payer = invoice.business.clone();
 
+    crate::qlx_log!(env, "settlement", "Recording partial payment: amount={}", payment_amount);
+
     let progress = record_payment(
         env,
         invoice_id,
@@ -226,6 +228,14 @@ pub fn record_payment(
     );
     InvoiceStorage::update_invoice(env, &invoice);
 
+    crate::qlx_log!(
+        env,
+        "settlement",
+        "Payment recorded: applied={} total_paid={}",
+        applied_amount,
+        new_total_paid
+    );
+
     emit_payment_recorded(
         env,
         invoice_id,
@@ -256,6 +266,8 @@ pub fn settle_invoice(
     if payment_amount <= 0 {
         return Err(QuickLendXError::InvalidAmount);
     }
+
+    crate::qlx_log!(env, "settlement", "Full settlement initiated: payment={}", payment_amount);
 
     // Early double-settle guard: reject if already finalized.
     if is_finalized(env, invoice_id) {
@@ -487,6 +499,14 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     let mut updated_investment = investment;
     updated_investment.status = InvestmentStatus::Completed;
     InvestmentStorage::update_investment(env, &updated_investment);
+
+    crate::qlx_log!(
+        env,
+        "settlement",
+        "Invoice settled: investor_return={} platform_fee={}",
+        investor_return,
+        platform_fee
+    );
 
     emit_invoice_settled(env, &invoice, investor_return, platform_fee);
     emit_invoice_settled_final(env, invoice_id, invoice.total_paid, paid_at);
