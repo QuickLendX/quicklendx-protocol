@@ -12,6 +12,7 @@ soroban-sdk = { version = "25.1.1", features = ["alloc"] }
 proptest = { version = "1.4", optional = true }
 
 [dev-dependencies]
+proptest = "1.4"
 soroban-sdk = { version = "25.1.1", features = ["testutils"] }
 
 # Optimized for minimal WASM size and network deployment limits (see README size budget).
