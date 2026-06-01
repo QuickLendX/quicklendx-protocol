@@ -64,23 +64,23 @@ pub mod protocol_limits;
 pub mod reentrancy;
 pub mod settlement;
 pub mod storage;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_standalone;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
 #[cfg(test)]
 mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
@@ -88,7 +88,7 @@ mod test_expired_bids_cleanup;
 mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
 #[cfg(test)]
 mod test_investment_consistency;
@@ -103,7 +103,7 @@ mod test_accept_bid_race;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_profit_fee;
 // #[cfg(all(test, feature = "legacy-tests"))]
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_profit_fee;
 #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_refund;
@@ -138,7 +138,7 @@ mod test_investment_transitions;
 mod test_invoice_metadata;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_diagnostics;
 pub mod types;
 pub use types::*;

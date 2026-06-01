@@ -564,6 +564,14 @@ pub struct TtlExtended {
     pub count: u32,
 }
 
+#[contractevent]
+pub struct BidTtlUpdated {
+    pub old_days: u64,
+    pub new_days: u64,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
 pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
     TtlExtended {
         kind: kind.clone(),
