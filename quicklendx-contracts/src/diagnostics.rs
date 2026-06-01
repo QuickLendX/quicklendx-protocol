@@ -84,11 +84,11 @@
 macro_rules! qlx_log {
     // Plain message — no format args
     ($env:expr, $domain:literal, $msg:literal) => {
-        soroban_sdk::log!($env, concat!("[", $domain, "] ", $msg))
+        soroban_sdk::log!($env, $msg)
     };
     // Message with format arguments
     ($env:expr, $domain:literal, $msg:literal, $($arg:tt)*) => {
-        soroban_sdk::log!($env, concat!("[", $domain, "] ", $msg), $($arg)*)
+        soroban_sdk::log!($env, $msg, $($arg)*)
     };
 }
 

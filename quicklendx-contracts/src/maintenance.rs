@@ -12,7 +12,7 @@ use crate::currency::CurrencyWhitelist;
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
 use crate::payments::EscrowStorage;
-use crate::currency::CurrencyWhitelist;
+use crate::storage::{InvoiceStorage, extend_persistent_ttl, DataKey};
 use soroban_sdk::{symbol_short, Address, Env, String, Symbol, contracttype};
 
 /// Storage key for the maintenance mode boolean flag.
@@ -136,11 +136,11 @@ impl MaintenanceControl {
             report.currencies_refreshed += 1;
         }
 
-        Self::emit_ttl_extended(env, "invoice", report.invoices_refreshed);
-        Self::emit_ttl_extended(env, "bid", report.bids_refreshed);
-        Self::emit_ttl_extended(env, "investment", report.investments_refreshed);
-        Self::emit_ttl_extended(env, "escrow", report.escrows_refreshed);
-        Self::emit_ttl_extended(env, "currency", report.currencies_refreshed);
+        crate::events::emit_ttl_extended(env, &String::from_str(env, "invoice"), report.invoices_refreshed);
+        crate::events::emit_ttl_extended(env, &String::from_str(env, "bid"), report.bids_refreshed);
+        crate::events::emit_ttl_extended(env, &String::from_str(env, "investment"), report.investments_refreshed);
+        crate::events::emit_ttl_extended(env, &String::from_str(env, "escrow"), report.escrows_refreshed);
+        crate::events::emit_ttl_extended(env, &String::from_str(env, "currency"), report.currencies_refreshed);
 
         Ok(report)
     }
