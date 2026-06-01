@@ -37,6 +37,7 @@ pub mod events;
 pub mod fees;
 pub mod freshness;
 pub mod init;
+pub mod invariants;
 pub mod investment;
 pub mod investment_queries;
 pub mod invoice;
@@ -65,6 +66,8 @@ mod test_expired_bids_cleanup;
 mod test_bid_ttl;
 #[cfg(test)]
 mod test_freshness;
+#[cfg(test)]
+mod test_invariant_self_check;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
 #[cfg(test)]
