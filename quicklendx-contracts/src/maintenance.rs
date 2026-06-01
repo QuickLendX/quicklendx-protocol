@@ -38,7 +38,7 @@ use crate::bid::BidStorage;
 use crate::investment::InvestmentStorage;
 use crate::payments::EscrowStorage;
 use crate::currency::CurrencyWhitelist;
-use soroban_sdk::{symbol_short, Address, Env, String, Symbol};
+use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol};
 
 /// Storage key for the maintenance mode boolean flag.
 const MAINTENANCE_KEY: Symbol = symbol_short!("maint");
@@ -50,7 +50,8 @@ const MAINTENANCE_REASON_KEY: Symbol = symbol_short!("maint_rsn");
 pub const MAX_REASON_LEN: u32 = 256;
 
 /// Report summarizing the results of a TTL extension operation.
-#[derive(Clone, contracttype)]
+#[contracttype]
+#[derive(Clone)]
 pub struct ExtendReport {
     pub invoices_refreshed: u32,
     pub bids_refreshed: u32,
@@ -58,6 +59,8 @@ pub struct ExtendReport {
     pub escrows_refreshed: u32,
     pub currencies_refreshed: u32,
 }
+
+pub struct MaintenanceControl;
 
 impl MaintenanceControl {
     /// Return `true` if the protocol is currently in maintenance mode.
@@ -191,7 +194,7 @@ impl MaintenanceControl {
 
         // 4. Extend Escrows (find them via invoices)
         for invoice_id in InvoiceStorage::get_all_invoice_ids(env).iter() {
-            if let Some(escrow) = EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
+            if let Some(escrow) = EscrowStorage::get_escrow_by_invoice(env, &invoice_id) {
                 extend_persistent_ttl(env, &escrow.escrow_id);
                 report.escrows_refreshed += 1;
             }
@@ -220,6 +223,6 @@ impl MaintenanceControl {
             crate::events::emit_ttl_extended(env, &String::from_str(env, "currency"), report.currencies_refreshed);
         }
 
-        Ok(report)
+Ok(report)
     }
 }
