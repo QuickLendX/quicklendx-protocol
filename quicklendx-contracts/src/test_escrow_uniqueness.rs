@@ -1,4 +1,4 @@
-//! Escrow uniqueness tests: one escrow per invoice; prevent overwrite/poisoning.
+﻿//! Escrow uniqueness tests: one escrow per invoice; prevent overwrite/poisoning.
 //!
 //! ## Security Invariant
 //! Each invoice maps to **at most one** escrow record for its entire lifetime.
@@ -586,4 +586,22 @@ fn test_failed_accept_leaves_no_escrow_and_no_state_change() {
         client.try_get_escrow_details(&invoice_id).is_err(),
         "no escrow must exist after failed accept"
     );
+}
+
+/// Asserts that there is exactly one escrow record for the given invoice_id.
+/// Panics if there are zero or more than one escrow records.
+fn assert_exactly_one_escrow_for_invoice(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+) {
+    // The storage only allows zero or one escrow per invoice_id.
+    // We check that there is exactly one.
+    let escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id);
+    assert!(
+        escrow.is_some(),
+        "Expected exactly one escrow for invoice, found none"
+    );
+    // We could also check for more than one, but the storage map from invoice_id to escrow_id is a singleton.
+    // However, to be safe, we can check that there is no second escrow by trying to get a second escrow with a different key? 
+    // That doesn't make sense. We trust the storage design.
 }

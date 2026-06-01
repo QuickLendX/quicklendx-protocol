@@ -20,6 +20,10 @@ extern crate alloc;
 mod scratch_events;
 #[cfg(test)]
 mod test_default;
+#[cfg(test)] mod test_escrow_uniqueness;
+#[cfg(test)] mod test_escrow;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_fees;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 pub mod admin;
