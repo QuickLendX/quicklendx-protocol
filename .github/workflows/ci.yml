@@ -33,8 +33,12 @@ jobs:
       - name: Clear toolchain environment
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
+          # Remove any environment overrides that may include platform-specific tuples
           unset RUSTUP_TOOLCHAIN || true
           unset RUST_TOOLCHAIN || true
+          # Remove repo-local rust-toolchain files that can pin a host-specific toolchain
+          rm -f rust-toolchain rust-toolchain.toml || true
+          rm -f quicklendx-contracts/rust-toolchain quicklendx-contracts/rust-toolchain.toml || true
 
       # Replaces manual curl installations with a clean, native multi-platform setup
       - name: Set up Rust & Soroban Target
@@ -43,6 +47,9 @@ jobs:
         with:
           toolchain: stable
           targets: wasm32-unknown-unknown
+        env:
+          # Ensure no host-specific toolchain string is inherited by the action
+          RUSTUP_TOOLCHAIN: ""
 
       # Automatically speeds up your PR builds by caching cargo dependencies
       - name: Rust Cache
