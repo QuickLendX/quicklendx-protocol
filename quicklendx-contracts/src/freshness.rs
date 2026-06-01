@@ -1,5 +1,6 @@
 use soroban_sdk::{contract, contractimpl, contracttype, contracterror, Env, Symbol, Address, panic_with_error};
 
+#[cfg(all(test, feature = "legacy-tests"))]
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
@@ -7,6 +8,7 @@ pub enum DataKey {
     MaxFreshnessDriftSecs,
 }
 
+#[cfg(all(test, feature = "legacy-tests"))]
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum FreshnessError {
@@ -15,9 +17,11 @@ pub enum FreshnessError {
     InvalidConfigValue = 3,
 }
 
+#[cfg(all(test, feature = "legacy-tests"))]
 #[contract]
 pub struct FreshnessContract;
 
+#[cfg(all(test, feature = "legacy-tests"))]
 #[contractimpl]
 impl FreshnessContract {
     
@@ -66,6 +70,7 @@ impl FreshnessContract {
         age
     }
 }
+
 
 #[derive(Clone, Debug)]
 pub struct FreshnessMetadata {
