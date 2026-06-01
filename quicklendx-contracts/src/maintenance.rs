@@ -38,7 +38,7 @@ use crate::bid::BidStorage;
 use crate::investment::InvestmentStorage;
 use crate::payments::EscrowStorage;
 use crate::currency::CurrencyWhitelist;
-use soroban_sdk::{symbol_short, Address, Env, String, Symbol};
+use soroban_sdk::{symbol_short, Address, Env, String, Symbol, contracttype};
 
 /// Storage key for the maintenance mode boolean flag.
 const MAINTENANCE_KEY: Symbol = symbol_short!("maint");
