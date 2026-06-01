@@ -120,6 +120,8 @@ mod test_investment_transitions;
 mod test_events;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
+#[cfg(test)]
+mod test_diagnostics;
 pub mod types;
 pub use types::*;
 pub mod verification;
@@ -356,6 +358,27 @@ impl QuickLendXContract {
     /// Set fee configuration (admin only)
     pub fn set_fee_config(env: Env, admin: Address, fee_bps: u32) -> Result<(), QuickLendXError> {
         init::ProtocolInitializer::set_fee_config(&env, &admin, fee_bps)
+    }
+
+    /// Dry-run preview for `set_protocol_config` and `set_fee_config` (admin-gated, read-only).
+    ///
+    /// Returns a [`init::ProtocolConfigDiff`] showing projected before/after values and
+    /// validation metadata for the proposed `params`, **without mutating any contract state**.
+    ///
+    /// # Security
+    /// - Requires admin authorization.
+    /// - No storage writes occur; safe for use in monitoring and governance tooling.
+    ///
+    /// # Returns
+    /// * `Ok(ProtocolConfigDiff)` — before/after diff with `would_succeed` and `is_noop` flags.
+    /// * `Err(QuickLendXError::NotAdmin)` — caller is not the current admin.
+    /// * `Err(QuickLendXError::OperationNotAllowed)` — admin subsystem not initialized.
+    pub fn preview_protocol_config(
+        env: Env,
+        admin: Address,
+        params: init::ProtocolConfigParams,
+    ) -> Result<init::ProtocolConfigDiff, QuickLendXError> {
+        init::ProtocolInitializer::preview_protocol_config(&env, &admin, params)
     }
 
     /// Set treasury address (admin only)
