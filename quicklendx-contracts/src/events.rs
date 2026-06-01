@@ -559,11 +559,27 @@ pub struct ProfitFeeBreakdown {
 }
 
 #[contractevent]
-pub struct BidTtlUpdated {
-    pub old_days: u64,
-    pub new_days: u64,
-    pub admin: Address,
-    pub timestamp: u64,
+pub struct TtlExtended {
+    pub kind: String,
+    pub count: u32,
+}
+
+pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
+    TtlExtended {
+        kind: kind.clone(),
+        count,
+    }
+    .publish(env);
+}
+
+// ... (after TtlExtended)
+
+pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
+    TtlExtended {
+        kind: kind.clone(),
+        count,
+    }
+    .publish(env);
 }
 
 #[contractevent]
