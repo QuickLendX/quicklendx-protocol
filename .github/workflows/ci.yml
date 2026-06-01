@@ -110,3 +110,38 @@ jobs:
           cargo llvm-cov clean --workspace
           cargo llvm-cov --lib --lcov --output-path coverage/lcov.info
           bash scripts/check-admin-coverage.sh coverage/lcov.info
+
+      - name: Generate Coverage Drift Report
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source $HOME/.cargo/env
+          PR_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          
+          # 1. Generate PR coverage JSON
+          cd quicklendx-contracts
+          cargo llvm-cov --lib --json > ../pr_coverage.json
+          
+          # 2. Generate Baseline (Main) coverage JSON
+          # We stash local changes to ensure a clean checkout of main files
+          git stash push -m "coverage-drift-stash"
+          git fetch origin main
+          
+          # Only checkout necessary files for coverage calculation
+          git checkout origin/main -- Cargo.toml Cargo.lock src/ tests/ 2>/dev/null || true
+          cargo llvm-cov clean --workspace
+          # If main coverage fails, we produce an empty JSON so the script can still run
+          cargo llvm-cov --lib --json > ../main_coverage.json || echo '{"data":[{"files":[]}]}' > ../main_coverage.json
+          
+          # 3. Restore PR state
+          git checkout $PR_BRANCH -- Cargo.toml Cargo.lock src/ tests/ 2>/dev/null || true
+          git stash pop || true
+          
+          # 4. Run drift script and post comment
+          cd ..
+          PR_COMMENT_FILE=drift_report.md bash scripts/coverage-drift.sh main_coverage.json pr_coverage.json
+          
+          # Post or update comment to PR
+          # We use a unique header to allow identifying the comment for future updates if needed
+          gh pr comment ${{ github.event.pull_request.number }} --body-file drift_report.md
