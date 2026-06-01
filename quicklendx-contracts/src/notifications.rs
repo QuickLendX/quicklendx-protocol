@@ -329,7 +329,7 @@ impl NotificationSystem {
             .get(&set_key)
             .unwrap_or_else(|| Vec::new(env));
 
-        if key_set.len() < MAX_IDEMPOTENCY_KEYS {
+        if (key_set.len() as u32) < (MAX_IDEMPOTENCY_KEYS as u32) {
             key_set.push_back(key.clone());
             env.storage().instance().set(&set_key, &key_set);
         }

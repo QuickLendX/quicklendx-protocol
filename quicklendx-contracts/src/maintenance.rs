@@ -12,8 +12,8 @@ use crate::currency::CurrencyWhitelist;
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
 use crate::payments::EscrowStorage;
-use crate::storage::{extend_persistent_ttl, DataKey, InvoiceStorage};
-use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol};
+use crate::currency::CurrencyWhitelist;
+use soroban_sdk::{symbol_short, Address, Env, String, Symbol, contracttype};
 
 /// Storage key for the maintenance mode boolean flag.
 const MAINTENANCE_KEY: Symbol = symbol_short!("maint");
@@ -143,11 +143,5 @@ impl MaintenanceControl {
         Self::emit_ttl_extended(env, "currency", report.currencies_refreshed);
 
         Ok(report)
-    }
-
-    fn emit_ttl_extended(env: &Env, kind: &str, count: u32) {
-        if count > 0 {
-            crate::events::emit_ttl_extended(env, &String::from_str(env, kind), count);
-        }
     }
 }

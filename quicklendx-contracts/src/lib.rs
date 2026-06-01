@@ -282,6 +282,7 @@ fn u64_to_ascii_20(mut value: u64, buf: &mut [u8; 20]) -> usize {
     len
 }
 
+
 #[contractimpl]
 impl QuickLendXContract {
     // ============================================================================
