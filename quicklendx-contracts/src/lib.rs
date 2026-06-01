@@ -29,6 +29,7 @@ pub mod backup;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
+pub mod diagnostics;
 pub mod dispute;
 pub mod emergency;
 pub mod errors;
@@ -1084,6 +1085,7 @@ impl QuickLendXContract {
         }
         bid.status = BidStatus::Withdrawn;
         BidStorage::update_bid(&env, &bid);
+        crate::qlx_log!(&env, "bid", "Bid withdrawn");
         emit_bid_withdrawn(&env, &bid);
         Ok(())
     }
@@ -1171,6 +1173,14 @@ impl QuickLendXContract {
         BidStorage::store_bid(&env, &bid);
         // Track bid for this invoice
         BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
+
+        crate::qlx_log!(
+            &env,
+            "bid",
+            "Bid placed: amount={} expected_return={}",
+            bid_amount,
+            expected_return
+        );
 
         // Emit bid placed event
         emit_bid_placed(&env, &bid);
