@@ -1,0 +1,10 @@
+[package]
+name = "credence_delegation"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+proptest = "1.4"
+
+[lints.rust]
+warnings = "deny"

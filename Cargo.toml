@@ -1,3 +1,6 @@
+[workspace]
+members = ["contracts/credence_delegation"]
+
 [package]
 name = "quicklendx-contracts"
 version = "0.1.0"
