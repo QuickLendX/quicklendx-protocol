@@ -32,11 +32,18 @@ pub(crate) struct AcceptBidContext {
 }
 
 /// Validate the invoice, bid, and escrow state before any funds move.
-///
+/// 
 /// # Security
 /// - Authorization is checked against the exact invoice being funded
 /// - The bid must belong to that invoice
 /// - The invoice must not already have escrow, funding metadata, or an investment
+/// 
+/// ## One-Escrow-Per-Invoice Invariant (Two-Layer Guard)
+/// This function implements the outer guard of the one-escrow-per-invoice invariant:
+/// it checks for existing escrow or investment records before any state changes.
+/// The inner guard is in `payments::create_escrow`, which re-checks
+/// `EscrowStorage::get_escrow_by_invoice` before the token transfer.
+/// If either guard fails, the function returns an error and no state is mutated.
 pub(crate) fn load_accept_bid_context(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -62,6 +69,10 @@ pub(crate) fn load_accept_bid_context(
         return Err(QuickLendXError::InvalidStatus);
     }
 
+    // Outer guard: check for existing escrow or investment record before any state changes.
+    // This is the first layer of the one-escrow-per-invoice invariant.
+    // The second layer is in payments::create_escrow which re-checks get_escrow_by_invoice
+    // before the token transfer, ensuring the invariant holds even if this check is bypassed.
     if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some()
         || InvestmentStorage::get_investment_by_invoice(env, invoice_id).is_some()
     {
