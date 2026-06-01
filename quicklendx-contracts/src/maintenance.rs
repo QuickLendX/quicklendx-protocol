@@ -253,7 +253,7 @@ impl MaintenanceControl {
     }
 }
 
-    }
+    
 
     /// Admin-only: extends the TTL for all major persistent storage indexes.
     ///
