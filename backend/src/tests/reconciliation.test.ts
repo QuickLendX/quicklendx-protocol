@@ -1,11 +1,25 @@
 import { ReconciliationWorker } from "../services/reconciliationWorker";
 import { MockDataProviders } from "../services/mockDataProviders";
+import { rpcClient } from "../services/rpcClient";
+import { derivedTableStore } from "../services/replayService";
+
+jest.mock("../services/rpcClient", () => ({
+  rpcClient: { call: jest.fn() },
+}));
+
+jest.mock("../services/replayService", () => ({
+  derivedTableStore: { listInvoices: jest.fn() },
+}));
 
 describe("ReconciliationWorker", () => {
   beforeEach(() => {
     // Reset internal state if needed (static members are shared)
     (ReconciliationWorker as any).reports = [];
     (ReconciliationWorker as any).isRunning = false;
+
+    // Wire mock data sources
+    (rpcClient.call as jest.Mock).mockResolvedValue(MockDataProviders.getOnChainInvoices());
+    (derivedTableStore.listInvoices as jest.Mock).mockResolvedValue(MockDataProviders.getIndexedInvoices());
   });
 
   test("should detect drift accurately", async () => {

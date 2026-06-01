@@ -9,10 +9,10 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { version = "25.1.1", features = ["alloc"] }
+proptest = { version = "1.4", optional = true }
 
 [dev-dependencies]
 soroban-sdk = { version = "25.1.1", features = ["testutils"] }
-proptest = "1.4"
 
 # Optimized for minimal WASM size and network deployment limits (see README size budget).
 [profile.release]
@@ -32,6 +32,6 @@ debug-assertions = true
 
 [features]
 # Enable fuzz tests (disabled by default to avoid blocking CI)
-fuzz-tests = []
+fuzz-tests = ["dep:proptest"]
 # Allow selectively compiling legacy test modules (kept off in CI)
 legacy-tests = []

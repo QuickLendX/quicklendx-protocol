@@ -24,6 +24,7 @@ The following public functions run inside the guard:
 | `refund_escrow_funds`     | Transfer out: contract → investor                                    |
 | `process_partial_payment` | Record payment progress and trigger final settlement when fully paid |
 | `settle_invoice`          | Transfer out: business → investor (and fee routing)                  |
+| `execute_emergency_withdraw` | Transfer out: contract → external target (admin emergency recovery) |
 
 ### Nested Execution Assumptions
 
@@ -44,7 +45,7 @@ The guard is applied internally via `reentrancy::with_payment_guard(env, || { ..
 The regression suite in `quicklendx-contracts/src/test_reentrancy.rs` validates:
 
 - direct nested guard acquisition fails and the lock is released afterward
-- callback-style nested calls into `accept_bid`, `accept_bid_and_fund`, `release_escrow_funds`, `refund_escrow_funds`, `process_partial_payment`, and `settle_invoice` all fail with `OperationNotAllowed`
+- callback-style nested calls into `accept_bid`, `accept_bid_and_fund`, `release_escrow_funds`, `refund_escrow_funds`, `process_partial_payment`, `settle_invoice`, and `execute_emergency_withdraw` all fail with `OperationNotAllowed`
 - rejected nested calls leave invoice status, escrow status, balances, and payment history unchanged
 
 ### Soroban Token and Auth

@@ -4,6 +4,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_bid_expired, emit_bid_ttl_updated};
+use crate::storage::bump_persistent;
 pub use crate::types::{Bid, BidStatus};
 
 /// Storage keys for the per-invoice bid index.
@@ -135,10 +136,15 @@ impl BidStorage {
     }
 
     pub fn get_all_bids(env: &Env) -> Vec<BytesN<32>> {
-        env.storage()
-            .instance()
+        let result: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
             .get(&Self::all_bids_key())
-            .unwrap_or_else(|| Vec::new(env))
+            .unwrap_or_else(|| Vec::new(env));
+        if !result.is_empty() {
+            bump_persistent(env, &Self::all_bids_key());
+        }
+        result
     }
 
     fn add_to_all_bids(env: &Env, bid_id: &BytesN<32>) {
@@ -152,7 +158,8 @@ impl BidStorage {
         }
         if !exists {
             bids.push_back(bid_id.clone());
-            env.storage().instance().set(&Self::all_bids_key(), &bids);
+            env.storage().persistent().set(&Self::all_bids_key(), &bids);
+            bump_persistent(env, &Self::all_bids_key());
         }
     }
     fn invoice_bid_count_key(invoice_id: &BytesN<32>) -> BidIndexKey {
@@ -169,10 +176,15 @@ impl BidStorage {
 
     pub fn get_bids_by_investor_all(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
         let key = Self::investor_bids_key(investor);
-        env.storage()
-            .instance()
+        let result: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
             .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+            .unwrap_or_else(|| Vec::new(env));
+        if !result.is_empty() {
+            bump_persistent(env, &key);
+        }
+        result
     }
 
     fn add_to_investor_bids(env: &Env, investor: &Address, bid_id: &BytesN<32>) {
@@ -187,37 +199,46 @@ impl BidStorage {
         }
         if !exists {
             bids.push_back(bid_id.clone());
-            env.storage().instance().set(&key, &bids);
+            env.storage().persistent().set(&key, &bids);
+            bump_persistent(env, &key);
         }
     }
 
     pub fn store_bid(env: &Env, bid: &Bid) {
-        env.storage().instance().set(&bid.bid_id, bid);
+        env.storage().persistent().set(&bid.bid_id, bid);
+        bump_persistent(env, &bid.bid_id);
         // Add to investor index
         Self::add_to_investor_bids(env, &bid.investor, &bid.bid_id);
         // Add to global index
         Self::add_to_all_bids(env, &bid.bid_id);
     }
     pub fn get_bid(env: &Env, bid_id: &BytesN<32>) -> Option<Bid> {
-        env.storage().instance().get(bid_id)
+        let result = env.storage().persistent().get(bid_id);
+        if result.is_some() {
+            bump_persistent(env, &bid_id);
+        }
+        result
     }
     pub fn update_bid(env: &Env, bid: &Bid) {
-        env.storage().instance().set(&bid.bid_id, bid);
+        env.storage().persistent().set(&bid.bid_id, bid);
+        bump_persistent(env, &bid.bid_id);
     }
     pub fn get_bids_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
+        let count_key = Self::invoice_bid_count_key(invoice_id);
         let count: u32 = env
             .storage()
-            .instance()
-            .get(&Self::invoice_bid_count_key(invoice_id))
+            .persistent()
+            .get(&count_key)
             .unwrap_or(0);
+        if count > 0 {
+            bump_persistent(env, &count_key);
+        }
         let mut bids = Vec::new(env);
         let mut idx: u32 = 0;
         while idx < count {
-            if let Some(bid_id) = env
-                .storage()
-                .instance()
-                .get(&Self::invoice_bid_entry_key(invoice_id, idx))
-            {
+            let entry_key = Self::invoice_bid_entry_key(invoice_id, idx);
+            if let Some(bid_id) = env.storage().persistent().get(&entry_key) {
+                bump_persistent(env, &entry_key);
                 bids.push_back(bid_id);
             }
             idx += 1;
@@ -510,10 +531,12 @@ impl BidStorage {
     }
     pub fn add_bid_to_invoice(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
         let count_key = Self::invoice_bid_count_key(invoice_id);
-        let count: u32 = env.storage().instance().get(&count_key).unwrap_or(0);
+        let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
         let entry_key = Self::invoice_bid_entry_key(invoice_id, count);
-        env.storage().instance().set(&entry_key, bid_id);
-        env.storage().instance().set(&count_key, &(count + 1));
+        env.storage().persistent().set(&entry_key, bid_id);
+        bump_persistent(env, &entry_key);
+        env.storage().persistent().set(&count_key, &(count + 1));
+        bump_persistent(env, &count_key);
     }
     /// @notice Scans and prunes expired bids from an invoice's bid list.
     /// @dev Maintains O(N) where N is current bids on invoice. Pruning keeps N small.
@@ -536,7 +559,10 @@ impl BidStorage {
     pub fn refresh_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let current_timestamp = env.ledger().timestamp();
         let count_key = Self::invoice_bid_count_key(invoice_id);
-        let old_count: u32 = env.storage().instance().get(&count_key).unwrap_or(0);
+        let old_count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        if old_count > 0 {
+            bump_persistent(env, &count_key);
+        }
         let mut cleaned_count = 0u32;
         let mut write_idx: u32 = 0;
         let mut read_idx: u32 = 0;
@@ -545,9 +571,10 @@ impl BidStorage {
             let entry_key = Self::invoice_bid_entry_key(invoice_id, read_idx);
             let should_keep = env
                 .storage()
-                .instance()
+                .persistent()
                 .get::<_, BytesN<32>>(&entry_key)
                 .map_or(false, |bid_id| {
+                    bump_persistent(env, &entry_key);
                     if let Some(mut bid) = Self::get_bid(env, &bid_id) {
                         let is_terminal = bid.status == BidStatus::Accepted
                             || bid.status == BidStatus::Withdrawn
@@ -579,8 +606,10 @@ impl BidStorage {
                 if write_idx != read_idx {
                     let src = Self::invoice_bid_entry_key(invoice_id, read_idx);
                     let dst = Self::invoice_bid_entry_key(invoice_id, write_idx);
-                    if let Some(bid_id) = env.storage().instance().get::<_, BytesN<32>>(&src) {
-                        env.storage().instance().set(&dst, &bid_id);
+                    if let Some(bid_id) = env.storage().persistent().get::<_, BytesN<32>>(&src) {
+                        bump_persistent(env, &src);
+                        env.storage().persistent().set(&dst, &bid_id);
+                        bump_persistent(env, &dst);
                     }
                 }
                 write_idx += 1;
@@ -591,14 +620,15 @@ impl BidStorage {
         // Remove stale entries beyond the new write_idx
         while write_idx < old_count {
             env.storage()
-                .instance()
+                .persistent()
                 .remove(&Self::invoice_bid_entry_key(invoice_id, write_idx));
             write_idx += 1;
         }
 
         if cleaned_count > 0 {
             let new_count = old_count.saturating_sub(cleaned_count);
-            env.storage().instance().set(&count_key, &new_count);
+            env.storage().persistent().set(&count_key, &new_count);
+            bump_persistent(env, &count_key);
         }
         cleaned_count
     }
@@ -639,6 +669,144 @@ impl BidStorage {
     /// ```
     pub fn cleanup_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         Self::refresh_expired_bids(env, invoice_id)
+    }
+
+    /// @notice Paginated cleanup of expired bids for a specific invoice.
+    ///
+    /// # Purpose
+    /// Removes expired bids from an invoice's bid list with pagination support.
+    /// Allows operators to process large bid lists in multiple transactions to avoid
+    /// instruction budget exhaustion at maximum capacity (MAX_BIDS_PER_INVOICE = 50).
+    ///
+    /// # Pagination Parameters
+    /// - `offset`: Starting position in the bid list (0-indexed)
+    /// - `limit`: Maximum number of bids to process in this call (capped at MAX_BIDS_PER_INVOICE)
+    ///
+    /// # Instruction Budget Safety
+    /// By using pagination, operators can split cleanup of 50 bids across multiple transactions:
+    /// - Single call with limit=50: ~500-1000 instructions (worst-case)
+    /// - Two calls with limit=25: ~250-500 instructions each (safe margin)
+    /// - Five calls with limit=10: ~100-200 instructions each (very safe)
+    ///
+    /// # Idempotency Guarantee
+    /// This operation is fully idempotent: calling it multiple times on the same invoice
+    /// and ledger timestamp will always:
+    /// - Return 0 on subsequent calls (nothing new to clean)
+    /// - Leave the index state unchanged
+    /// - Never corrupt terminal bid records
+    ///
+    /// # Terminal Bid Preservation
+    /// Accepted, Withdrawn, and Cancelled bids are NEVER touched by cleanup,
+    /// even if they have passed their expiration timestamp. Only Placed bids
+    /// can transition to Expired and be pruned.
+    ///
+    /// # Returns
+    /// A tuple (cleaned_count, total_count) where:
+    /// - `cleaned_count`: Number of bids cleaned in this call
+    /// - `total_count`: Total number of bids on invoice after cleanup
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Process 50 bids in two transactions
+    /// let (cleaned1, total1) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 25);
+    /// // First call: returns (3, 47) - cleaned 3 bids, 47 remain
+    /// let (cleaned2, total2) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 25, 25);
+    /// // Second call: returns (0, 47) - no more to clean, 47 remain
+    /// ```
+    pub fn cleanup_expired_bids_paged(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> (u32, u32) {
+        // Validate and cap pagination parameters
+        let capped_limit = limit.min(MAX_BIDS_PER_INVOICE);
+        
+        // Prevent overflow: offset + limit must not exceed u32::MAX
+        if offset > u32::MAX - capped_limit {
+            return (0, 0);
+        }
+
+        let current_timestamp = env.ledger().timestamp();
+        let count_key = Self::invoice_bid_count_key(invoice_id);
+        let old_count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        
+        if old_count > 0 {
+            bump_persistent(env, &count_key);
+        }
+
+        // If offset is beyond the current count, return early
+        if offset >= old_count {
+            return (0, old_count);
+        }
+
+        let end_idx = (offset + capped_limit).min(old_count);
+        let mut cleaned_count = 0u32;
+        let mut write_idx: u32 = offset;
+        let mut read_idx: u32 = offset;
+
+        // Process only the requested range [offset, end_idx)
+        while read_idx < end_idx {
+            let entry_key = Self::invoice_bid_entry_key(invoice_id, read_idx);
+            let should_keep = env
+                .storage()
+                .persistent()
+                .get::<_, BytesN<32>>(&entry_key)
+                .map_or(false, |bid_id| {
+                    bump_persistent(env, &entry_key);
+                    if let Some(mut bid) = Self::get_bid(env, &bid_id) {
+                        let is_terminal = bid.status == BidStatus::Accepted
+                            || bid.status == BidStatus::Withdrawn
+                            || bid.status == BidStatus::Cancelled;
+
+                        if is_terminal {
+                            true
+                        } else if bid.status == BidStatus::Placed
+                            && bid.is_expired(current_timestamp)
+                        {
+                            bid.status = BidStatus::Expired;
+                            Self::update_bid(env, &bid);
+                            emit_bid_expired(env, &bid);
+                            cleaned_count = cleaned_count.saturating_add(1);
+                            false
+                        } else if bid.status == BidStatus::Expired {
+                            cleaned_count = cleaned_count.saturating_add(1);
+                            false
+                        } else {
+                            true
+                        }
+                    } else {
+                        cleaned_count = cleaned_count.saturating_add(1);
+                        false
+                    }
+                });
+
+            if should_keep {
+                if write_idx != read_idx {
+                    let src = Self::invoice_bid_entry_key(invoice_id, read_idx);
+                    let dst = Self::invoice_bid_entry_key(invoice_id, write_idx);
+                    if let Some(bid_id) = env.storage().persistent().get::<_, BytesN<32>>(&src) {
+                        bump_persistent(env, &src);
+                        env.storage().persistent().set(&dst, &bid_id);
+                        bump_persistent(env, &dst);
+                    }
+                }
+                write_idx += 1;
+            }
+            read_idx += 1;
+        }
+
+        // Only update count if we processed the entire list (offset=0 and end_idx=old_count)
+        // Otherwise, the full cleanup will handle the final count update
+        if offset == 0 && end_idx == old_count && cleaned_count > 0 {
+            let new_count = old_count.saturating_sub(cleaned_count);
+            env.storage().persistent().set(&count_key, &new_count);
+            bump_persistent(env, &count_key);
+            (cleaned_count, new_count)
+        } else {
+            // For partial cleanup, return the cleaned count and current total
+            (cleaned_count, old_count.saturating_sub(cleaned_count))
+        }
     }
 
     pub fn get_bid_records_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<Bid> {

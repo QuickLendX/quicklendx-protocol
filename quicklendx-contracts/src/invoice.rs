@@ -7,7 +7,7 @@ use soroban_sdk::{Address, BytesN, Env, String, Vec};
 use crate::storage::InvoiceStorage;
 pub use crate::types::{
     Dispute, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceRating,
-    InvoiceStatus, LineItemRecord, PaymentRecord,
+    InvoiceStatus,
 };
 
 /// Maximum normalized tags allowed per invoice.
@@ -260,6 +260,11 @@ impl Invoice {
         self.category = category;
     }
 
+    /// Append a normalized tag to this invoice.
+    ///
+    /// Duplicate tags (after normalization) are silently ignored.
+    /// Returns `TagLimitExceeded` when the tag vector is already at capacity
+    /// (`MAX_INVOICE_TAGS`), ensuring the vector never exceeds its declared bound.
     pub fn add_tag(&mut self, env: &Env, tag: String) -> Result<(), QuickLendXError> {
         let normalized = normalize_tag(env, &tag)?;
         if !self.has_tag(normalized.clone()) {
@@ -284,6 +289,12 @@ impl Invoice {
         Ok(())
     }
 
+    /// Append an investor rating to this invoice.
+    ///
+    /// Returns `OperationNotAllowed` when the ratings vector has reached
+    /// `MAX_RATINGS_PER_INVOICE`, preventing unbounded on-chain growth.
+    /// Also rejects duplicate raters (`AlreadyRated`) and invalid scores or
+    /// invoice states.
     pub fn add_rating(
         &mut self,
         rating: u32,

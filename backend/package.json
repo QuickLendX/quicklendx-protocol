@@ -11,7 +11,13 @@
     "start": "ts-node src/index.ts",
     "security:scan": "node scripts/dependency-scan.js audit-report.json high",
     "sbom:generate": "node scripts/generate-sbom.js sbom/backend-sbom.cdx.json",
-    "sbom:check": "node scripts/validate-sbom.js sbom/backend-sbom.cdx.json"
+    "sbom:check": "node scripts/validate-sbom.js sbom/backend-sbom.cdx.json",
+    "migrate": "ts-node src/lib/migrations/cli.ts",
+    "migrate:check": "npm run migrate -- --check",
+    "migrate:dry-run": "npm run migrate -- --dry-run",
+    "migrate:validate": "npm run migrate -- --validate-only",
+    "migrate:up": "npm run migrate",
+    "migrate:down": "ts-node src/lib/migrations/cli.ts down"
   },
   "keywords": [],
   "author": "",
@@ -32,6 +38,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@jest/expect": "^30.4.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/helmet": "^0.0.48",
@@ -40,11 +47,11 @@
     "@types/node": "^25.6.0",
     "@types/pg": "^8.10.9",
     "@types/supertest": "^7.2.0",
-    "jest": "^30.3.0",
+    "jest": "^30.4.2",
     "js-yaml": "^4.1.1",
     "node-mocks-http": "^1.17.2",
     "supertest": "^7.2.2",
-    "ts-jest": "^29.4.9",
+    "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^6.0.3",

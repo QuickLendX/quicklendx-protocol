@@ -326,5 +326,4 @@ impl EmergencyWithdraw {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 }

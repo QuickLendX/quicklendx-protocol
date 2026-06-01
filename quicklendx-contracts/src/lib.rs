@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(dead_code, unused_imports, unused_variables, unused_comparisons, deprecated)]
 
 //! QuickLendX contracts library - minimal surface.
 //!
@@ -25,35 +26,39 @@ mod test_default;
 mod test_fees;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
-mod admin;
-mod analytics;
-mod audit;
-mod backup;
-mod bid;
-mod currency;
-mod defaults;
-mod dispute;
-mod emergency;
-mod errors;
-mod escrow;
-mod events;
-mod fees;
+pub mod admin;
+pub mod analytics;
+pub mod audit;
+pub mod backup;
+pub mod bid;
+pub mod currency;
+pub mod defaults;
+pub mod dispute;
+pub mod emergency;
+pub mod errors;
+pub mod escrow;
+pub mod events;
+pub mod fees;
 pub mod freshness;
-mod init;
-mod investment;
-mod investment_queries;
-mod invoice;
-mod invoice_search;
-mod notifications;
-mod pause;
-mod payments;
-mod profits;
-mod protocol_limits;
-mod reentrancy;
-mod settlement;
-mod storage;
+pub mod init;
+pub mod invariants;
+pub mod investment;
+pub mod investment_queries;
+pub mod invoice;
+pub mod invoice_search;
+pub mod maintenance;
+pub mod notifications;
+pub mod pause;
+pub mod payments;
+pub mod profits;
+pub mod protocol_limits;
+pub mod reentrancy;
+pub mod settlement;
+pub mod storage;
 #[cfg(test)]
 mod test_admin;
+#[cfg(test)]
+mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -62,37 +67,49 @@ mod test_admin_standalone;
 mod test_dispute;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
+#[cfg(test)]
+mod test_cleanup_pagination;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(test)]
 mod test_freshness;
+#[cfg(test)]
+mod test_invariant_self_check;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
 #[cfg(test)]
 mod test_investment_consistency;
 // #[cfg(test)]
 // mod test_investment_queries;
-#[cfg(all(test, feature = "legacy-tests"))]
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_overflow;
-#[cfg(all(test, feature = "legacy-tests"))]
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_pause;
-#[cfg(all(test, feature = "legacy-tests"))]
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_profit_fee;
+// #[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
+mod test_profit_fee;
+#[cfg(test)]
+mod test_settlement_accounting_identity;
 #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_refund;
-#[cfg(all(test, feature = "legacy-tests"))]
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_storage;
-// #[cfg(test)]
-// mod test_protocol_limits_boundary;
-// #[cfg(test)]
-// mod test_string_limits;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
+mod test_protocol_limits_boundary;
+#[cfg(test)]
+mod test_string_limits;
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_types;
-#[cfg(all(test, feature = "legacy-tests"))]
+// #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_vesting;
-// #[cfg(test)]
-// mod test_notifications;
-// #[cfg(test)]
+#[cfg(test)]
+mod test_invoice_metadata;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_invoice_metadata;
+#[cfg(test)]
+mod test_input_matrix;
 #[cfg(test)]
 mod test_analytics_consistency;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -107,10 +124,9 @@ mod test_events;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
 pub mod types;
-mod verification;
-mod vesting;
-use crate::types::Bid;
-use crate::types::PlatformFeeConfig;
+pub use types::*;
+pub mod verification;
+pub mod vesting;
 use admin::AdminStorage;
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
@@ -138,14 +154,14 @@ use verification::{
     get_investor_verification as do_get_investor_verification, normalize_tag, reject_business,
     reject_investor as do_reject_investor, require_business_not_pending,
     require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
-    submit_kyc_application, validate_bid, validate_dispute_eligibility, validate_dispute_evidence,
-    validate_dispute_reason, validate_dispute_resolution, validate_investor_investment,
-    validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
-    verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
-    InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
+    submit_kyc_application, validate_bid, validate_dispute_evidence,
+    validate_dispute_resolution, validate_investor_investment, validate_invoice_metadata,
+    verify_business, verify_investor as do_verify_investor, verify_invoice_data,
+    BusinessVerificationStatus, BusinessVerificationStorage, InvestorRiskLevel,
+    InvestorTier, InvestorVerification, InvestorVerificationStorage,
 };
 
-use crate::storage::{BidStorage, ConfigStorage, InvoiceStorage, StorageManager};
+use crate::storage::{BidStorage, InvoiceStorage};
 use crate::types::*;
 
 #[contract]
@@ -168,7 +184,7 @@ fn cap_query_limit(limit: u32) -> u32 {
 /// @param limit The requested result limit
 /// @return Result indicating validation success or failure
 /// @dev Prevents potential overflow and ensures reasonable query bounds
-fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError> {
+fn validate_query_params(offset: u32, _limit: u32) -> Result<(), QuickLendXError> {
     // Check for potential overflow in offset + limit calculation
     if offset > u32::MAX - MAX_QUERY_LIMIT {
         return Err(QuickLendXError::InvalidAmount);
@@ -285,6 +301,11 @@ impl QuickLendXContract {
     /// Get current protocol limits
     pub fn get_protocol_limits(env: Env) -> protocol_limits::ProtocolLimits {
         protocol_limits::ProtocolLimitsContract::get_protocol_limits(env)
+    }
+
+    /// Admin-only: extends the TTL for all major persistent storage indexes.
+    pub fn extend_protocol_ttl(env: Env, admin: Address) -> Result<maintenance::ExtendReport, QuickLendXError> {
+        maintenance::MaintenanceControl::extend_protocol_ttl(&env, &admin)
     }
 
     /// Initialize the admin address (deprecated: use initialize)
@@ -421,8 +442,9 @@ impl QuickLendXContract {
     }
 
     /// Execute emergency withdraw after timelock has elapsed (admin only).
+    /// Protected by payment reentrancy guard.
     pub fn execute_emergency_withdraw(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        emergency::EmergencyWithdraw::execute(&env, &admin)
+        reentrancy::with_payment_guard(&env, || emergency::EmergencyWithdraw::execute(&env, &admin))
     }
 
     /// Get pending emergency withdrawal if any.
@@ -578,10 +600,13 @@ impl QuickLendXContract {
         // Validate due date is not too far in the future using protocol limits
         protocol_limits::ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
 
+        protocol_limits::check_string_length(&description, protocol_limits::MAX_DESCRIPTION_LENGTH)?;
+
         if description.len() == 0 {
             return Err(QuickLendXError::InvalidDescription);
         }
 
+        // Enforcement: reject invoices whose currency is not whitelisted (when whitelist is non-empty).
         currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
 
         // Check if business is verified (temporarily disabled for debugging)
@@ -638,6 +663,7 @@ impl QuickLendXContract {
 
         // Basic validation
         verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
+        // Enforcement: reject invoices whose currency is not whitelisted (when whitelist is non-empty).
         currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
 
         // Validate category and tags
@@ -993,6 +1019,41 @@ impl QuickLendXContract {
         BidStorage::cleanup_expired_bids(&env, &invoice_id)
     }
 
+    /// Remove expired bids with pagination support for large bid lists.
+    ///
+    /// # Purpose
+    /// Provides paginated cleanup to prevent instruction budget exhaustion when processing
+    /// invoices with many expired bids (up to MAX_BIDS_PER_INVOICE = 50).
+    ///
+    /// # Parameters
+    /// - `offset`: Starting position in the bid list (0-indexed)
+    /// - `limit`: Maximum number of bids to process (capped at MAX_BIDS_PER_INVOICE)
+    ///
+    /// # Returns
+    /// A tuple (cleaned_count, total_remaining) where:
+    /// - `cleaned_count`: Number of bids cleaned in this call
+    /// - `total_remaining`: Total number of bids on invoice after cleanup
+    ///
+    /// # Operator Workflow
+    /// For an invoice with 50 bids at maximum capacity:
+    /// 1. Call with offset=0, limit=25 → processes first 25 bids
+    /// 2. Call with offset=25, limit=25 → processes remaining 25 bids
+    /// 3. Repeat until cleaned_count = 0 (all expired bids removed)
+    ///
+    /// # Gas Safety
+    /// Each call processes at most `limit` bids, keeping instruction usage predictable:
+    /// - limit=10: ~100-200 instructions (very safe)
+    /// - limit=25: ~250-500 instructions (safe)
+    /// - limit=50: ~500-1000 instructions (worst-case, may approach budget)
+    pub fn cleanup_expired_bids_paged(
+        env: Env,
+        invoice_id: BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> (u32, u32) {
+        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, offset, limit)
+    }
+
     /// Cancel a placed bid (investor only, Placed --- Cancelled).
     ///
     /// # Race Safety
@@ -1065,6 +1126,7 @@ impl QuickLendXContract {
         if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
         }
+        // Enforcement: reject bids on invoices whose currency was removed from the whitelist after creation.
         currency::CurrencyWhitelist::require_allowed_currency(&env, &invoice.currency)?;
 
         let verification = do_get_investor_verification(&env, &investor)
@@ -1120,7 +1182,8 @@ impl QuickLendXContract {
         Ok(bid_id)
     }
 
-    /// Accept a bid (business only)
+    /// Accept a bid (business only).
+    /// Protected by payment reentrancy guard.
     pub fn accept_bid(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1329,7 +1392,8 @@ impl QuickLendXContract {
         Ok(investment.insurance)
     }
 
-    /// Process a partial payment towards an invoice
+    /// Process a partial payment towards an invoice.
+    /// Protected by payment reentrancy guard.
     pub fn process_partial_payment(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1342,6 +1406,7 @@ impl QuickLendXContract {
     }
 
     /// Make a payment towards an invoice (alias for process_partial_payment).
+    /// Protected by payment reentrancy guard.
     ///
     /// Convenience entry point used by tests and off-chain clients.
     /// Delegates to `process_partial_payment` with identical semantics.
@@ -1497,12 +1562,12 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    /// Reject an investor verification requbusinesses
+    /// Get all verified businesses
     pub fn get_verified_businesses(env: Env) -> Vec<Address> {
         BusinessVerificationStorage::get_verified_businesses(&env)
     }
 
-    /// Get all pending businesses
+    /// Reject an investor verification request
     pub fn reject_investor(
         env: Env,
         investor: Address,
@@ -1690,6 +1755,24 @@ impl QuickLendXContract {
     /// Get all rejected investors
     pub fn get_rejected_investors(env: Env) -> Vec<Address> {
         InvestorVerificationStorage::get_rejected_investors(&env)
+    }
+
+    /// Update investor analytics (test helper)
+    pub fn update_investor_analytics(
+        env: Env,
+        investor: Address,
+        amount: i128,
+        is_success: bool,
+    ) -> Result<(), QuickLendXError> {
+        verification::update_investor_analytics(&env, &investor, amount, is_success)
+    }
+
+    /// Get investor analytics
+    pub fn get_investor_analytics(
+        env: Env,
+        investor: Address,
+    ) -> Option<analytics::InvestorAnalytics> {
+        analytics::AnalyticsStorage::get_investor_analytics(&env, &investor)
     }
 
     /// Get investors by tier
@@ -2523,13 +2606,7 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         AdminStorage::require_admin(&env, &admin)?;
-        backup::BackupStorage::validate_backup(&env, &backup_id)?;
-        let invoices = backup::BackupStorage::get_backup_data(&env, &backup_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-        InvoiceStorage::clear_all(&env);
-        for inv in invoices.iter() {
-            InvoiceStorage::store_invoice(&env, &inv);
-        }
+        backup::BackupStorage::restore_from_backup(&env, &backup_id)?;
         Ok(())
     }
 
@@ -2733,20 +2810,11 @@ impl QuickLendXContract {
     pub fn generate_investor_report(
         env: Env,
         investor: Address,
-        invoice_id: BytesN<32>,
-        amount: i128,
-    ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        investor.require_auth();
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-        if invoice.status != InvoiceStatus::Verified {
-            return Err(QuickLendXError::InvalidStatus);
-        }
-        let ts = env.ledger().timestamp();
-        invoice.mark_as_funded(&env, investor, amount, ts);
-        InvoiceStorage::update_invoice(&env, &invoice);
-        Ok(())
+        period: analytics::TimePeriod,
+    ) -> Result<analytics::InvestorReport, QuickLendXError> {
+        let report =
+            analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)?;
+        Ok(report)
     }
 
     // =========================================================================

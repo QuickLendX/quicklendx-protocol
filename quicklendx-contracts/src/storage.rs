@@ -5,10 +5,22 @@
 
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
+use crate::protocol_limits;
 use crate::types::{
-    Bid, BidStatus, Investment, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
+    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
     PlatformFeeConfig,
 };
+
+/// Default TTL threshold for persistent storage (adjust the value as needed)
+pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800; // ~30 days at 5s/ledger
+
+pub fn extend_persistent_ttl<T>(env: &Env, key: &T) 
+where
+    T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
+{
+    let ttl_u32: u32 = PERSISTENT_TTL_THRESHOLD.try_into().unwrap_or(0);
+    env.storage().persistent().extend_ttl(key, ttl_u32, ttl_u32);
+}
 
 /// Storage keys for the contract
 pub struct StorageKeys;
@@ -139,9 +151,11 @@ pub struct InvoiceStorage;
 impl InvoiceStorage {
     /// Store an invoice and update all its secondary indexes.
     pub fn store(env: &Env, invoice: &Invoice) {
+        let key = DataKey::Invoice(invoice.id.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::Invoice(invoice.id.clone()), invoice);
+            .set(&key, invoice);
+        bump_persistent(env, &key);
         Self::add_to_business_index(env, &invoice.business, &invoice.id);
         Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
         if let Some(ref name) = invoice.metadata_customer_name {
@@ -195,9 +209,12 @@ impl InvoiceStorage {
     }
 
     pub fn get(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Invoice(invoice_id.clone()))
+        let key = DataKey::Invoice(invoice_id.clone());
+        let result = env.storage().persistent().get(&key);
+        if result.is_some() {
+            bump_persistent(env, &key);
+        }
+        result
     }
 
     pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
@@ -227,9 +244,11 @@ impl InvoiceStorage {
                 }
             }
         }
+        let key = DataKey::Invoice(invoice.id.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::Invoice(invoice.id.clone()), invoice);
+            .set(&key, invoice);
+        bump_persistent(env, &key);
     }
 
     pub fn update_invoice(env: &Env, invoice: &Invoice) {
@@ -340,9 +359,11 @@ impl InvoiceStorage {
         let mut invoices = Self::get_by_business(env, business);
         if !invoices.contains(invoice_id) {
             invoices.push_back(invoice_id.clone());
+            let key = Indexes::invoices_by_business(business);
             env.storage()
                 .persistent()
-                .set(&Indexes::invoices_by_business(business), &invoices);
+                .set(&key, &invoices);
+            bump_persistent(env, &key);
         }
     }
 
@@ -350,9 +371,11 @@ impl InvoiceStorage {
         let mut invoices = Self::get_by_business(env, business);
         if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
             invoices.remove(pos as u32);
+            let key = Indexes::invoices_by_business(business);
             env.storage()
                 .persistent()
-                .set(&Indexes::invoices_by_business(business), &invoices);
+                .set(&key, &invoices);
+            bump_persistent(env, &key);
         }
     }
 
@@ -360,9 +383,11 @@ impl InvoiceStorage {
         let mut invoices = Self::get_by_status(env, status.clone());
         if !invoices.contains(invoice_id) {
             invoices.push_back(invoice_id.clone());
+            let key = Indexes::invoices_by_status(status);
             env.storage()
                 .persistent()
-                .set(&Indexes::invoices_by_status(status), &invoices);
+                .set(&key, &invoices);
+            bump_persistent(env, &key);
         }
     }
 
@@ -370,9 +395,11 @@ impl InvoiceStorage {
         let mut invoices = Self::get_by_status(env, status.clone());
         if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
             invoices.remove(pos as u32);
+            let key = Indexes::invoices_by_status(status);
             env.storage()
                 .persistent()
-                .set(&Indexes::invoices_by_status(status), &invoices);
+                .set(&key, &invoices);
+            bump_persistent(env, &key);
         }
     }
 
@@ -386,6 +413,7 @@ impl InvoiceStorage {
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
+            bump_persistent(env, &key);
         }
     }
 
@@ -403,6 +431,7 @@ impl InvoiceStorage {
             }
         }
         env.storage().persistent().set(&key, &filtered);
+        bump_persistent(env, &key);
     }
 
     pub fn add_to_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
@@ -415,6 +444,7 @@ impl InvoiceStorage {
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
+            bump_persistent(env, &key);
         }
     }
 
@@ -432,6 +462,7 @@ impl InvoiceStorage {
             }
         }
         env.storage().persistent().set(&key, &filtered);
+        bump_persistent(env, &key);
     }
     pub fn add_tag_index(env: &Env, tag: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_tag(tag);
@@ -443,6 +474,7 @@ impl InvoiceStorage {
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
+            bump_persistent(env, &key);
         }
     }
 
@@ -460,6 +492,7 @@ impl InvoiceStorage {
             }
         }
         env.storage().persistent().set(&key, &filtered);
+        bump_persistent(env, &key);
     }
 
     pub fn add_category_index(env: &Env, category: &InvoiceCategory, invoice_id: &BytesN<32>) {
@@ -472,6 +505,7 @@ impl InvoiceStorage {
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
+            bump_persistent(env, &key);
         }
     }
 
@@ -489,6 +523,7 @@ impl InvoiceStorage {
             }
         }
         env.storage().persistent().set(&key, &filtered);
+        bump_persistent(env, &key);
     }
 
     pub fn get_invoices_by_customer(env: &Env, customer_name: &String) -> Vec<BytesN<32>> {

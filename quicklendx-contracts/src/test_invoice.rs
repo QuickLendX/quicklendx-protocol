@@ -48,14 +48,14 @@ fn test_unauthorized_category_update_fails() {
             address: &malicious_user,
             invoke: &MockAuthInvoke {
                 contract: &contract_id,
-                fn_name: "update_category",
+                fn_name: "update_invoice_category",
                 args: (invoice_id.clone(), InvoiceCategory::Healthcare).into_val(&env),
                 sub_invokes: &[],
             },
         },
     ]);
 
-    let result = client.try_update_category(&invoice_id, &InvoiceCategory::Healthcare);
+    let result = client.try_update_invoice_category(&invoice_id, &InvoiceCategory::Healthcare);
     assert!(result.is_err());
 }
 
@@ -75,14 +75,14 @@ fn test_authorized_mutation_succeeds() {
             address: &business,
             invoke: &MockAuthInvoke {
                 contract: &contract_id,
-                fn_name: "add_tag",
+                fn_name: "add_invoice_tag",
                 args: (invoice_id.clone(), new_tag.clone()).into_val(&env),
                 sub_invokes: &[],
             },
         },
     ]);
 
-    let result = client.try_add_tag(&invoice_id, &new_tag);
+    let result = client.try_add_invoice_tag(&invoice_id, &new_tag);
     assert!(result.is_ok());
     
     let invoice = client.get_invoice(&invoice_id);

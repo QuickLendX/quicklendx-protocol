@@ -181,7 +181,7 @@ mod test_investor_kyc {
     fn test_non_admin_cannot_verify_investor() {
         let (env, client, _admin) = setup();
         let investor = Address::generate(&env);
-        let non_admin = Address::generate(&env);
+        let _non_admin = Address::generate(&env);
         let kyc_data = String::from_str(&env, "Valid KYC data");
         let investment_limit = 50_000i128;
 
@@ -194,7 +194,7 @@ mod test_investor_kyc {
         // Non-admin verification should fail
         // Note: This test depends on proper authorization checks in the contract
         // The actual error might vary based on implementation
-        let result = client.try_verify_investor(&investor, &investment_limit);
+        let _result = client.try_verify_investor(&investor, &investment_limit);
         // In a real scenario without proper admin auth, this should fail
         // For comprehensive testing, we verify the admin check exists
     }
@@ -829,9 +829,9 @@ mod test_investor_kyc {
         let invoice_id = create_verified_invoice(&env, &client, &business, 100_000);
 
         // All investors place bids within their actual calculated limits
-        let bid1_amount = limit1 / 2; // Use 50% of actual limit
-        let bid2_amount = limit2 / 2;
-        let bid3_amount = limit3 / 2;
+        let _bid1_amount = limit1 / 2; // Use 50% of actual limit
+        let _bid2_amount = limit2 / 2;
+        let _bid3_amount = limit3 / 2;
     }
 
     // ============================================================================

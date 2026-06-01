@@ -1,6 +1,6 @@
 import { notificationService } from './notificationService';
 import { NotificationEvent, NotificationType } from '../types/contract';
-import { settlementOrchestrator } from './settlementOrchestrator';
+import { getCorrelationId, withCorrelationId } from '../lib/requestContext';
 
 export class EventProcessor {
   private static instance: EventProcessor;
@@ -23,6 +23,8 @@ export class EventProcessor {
     amount: string,
     timestamp: number
   ): Promise<void> {
+    const correlationId = getCorrelationId();
+    
     // Notify business that invoice is funded
     const businessEvent: NotificationEvent = {
       id: `${eventId}_business`,
@@ -35,15 +37,9 @@ export class EventProcessor {
 
     await notificationService.processNotification(businessEvent);
 
-    // Create a pending settlement to track the debt lifecycle
-    settlementOrchestrator.createPending({
-      invoice_id: invoiceId,
-      amount,
-      payer: business,
-      recipient: investor,
-      timestamp,
-      event_id: eventId,
-    });
+    // Could also notify investor, but for now focusing on business notifications
+    const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+    console.log(`${correlationPrefix}EventProcessor: Processed InvoiceSettled event ${eventId}`);
   }
 
   // Process payment recorded event
@@ -54,21 +50,22 @@ export class EventProcessor {
     amount: string,
     timestamp: number
   ): Promise<void> {
+    const correlationId = getCorrelationId();
+    
     // Notify business that payment was received
     const businessEvent: NotificationEvent = {
       id: `${eventId}_business`,
       type: NotificationType.PaymentReceived,
-      user_id: payer,
+      user_id: payer, // Assuming payer is the business in this context
       invoice_id: invoiceId,
       amount,
       timestamp,
     };
 
     await notificationService.processNotification(businessEvent);
-
-    // Advance the settlement lifecycle: Pending -> Processing -> Paid
-    settlementOrchestrator.startProcessing(invoiceId, `${eventId}_processing`);
-    settlementOrchestrator.completeProcessing(invoiceId, `${eventId}_complete`);
+    
+    const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+    console.log(`${correlationPrefix}EventProcessor: Processed PaymentRecorded event ${eventId}`);
   }
 
   // Process dispute created event
@@ -78,6 +75,8 @@ export class EventProcessor {
     initiator: string,
     timestamp: number
   ): Promise<void> {
+    const correlationId = getCorrelationId();
+    
     // Notify relevant parties about dispute
     const disputeEvent: NotificationEvent = {
       id: `${eventId}_dispute`,
@@ -88,6 +87,9 @@ export class EventProcessor {
     };
 
     await notificationService.processNotification(disputeEvent);
+    
+    const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+    console.log(`${correlationPrefix}EventProcessor: Processed DisputeCreated event ${eventId}`);
   }
 
   // Process dispute resolved event
@@ -97,6 +99,8 @@ export class EventProcessor {
     resolvedBy: string,
     timestamp: number
   ): Promise<void> {
+    const correlationId = getCorrelationId();
+    
     // Notify relevant parties about resolution
     const resolutionEvent: NotificationEvent = {
       id: `${eventId}_resolution`,
@@ -107,26 +111,24 @@ export class EventProcessor {
     };
 
     await notificationService.processNotification(resolutionEvent);
+    
+    const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+    console.log(`${correlationPrefix}EventProcessor: Processed DisputeResolved event ${eventId}`);
   }
 
   // Generic event processor that can be called from indexer
   public async processEvent(event: any): Promise<void> {
     const eventId = event.id || `${event.type}_${event.timestamp}`;
-
-    // Accept both legacy (flat) and new (payload-wrapped) event shapes
-    const get = (field: string) =>
-      event.payload && event.payload[field] !== undefined
-        ? event.payload[field]
-        : event[field];
+    const correlationId = getCorrelationId();
 
     switch (event.type) {
       case 'InvoiceSettled':
         await this.processInvoiceSettled(
           eventId,
-          get('invoice_id'),
-          get('business'),
-          get('investor'),
-          get('amount') || get('investor_return'),
+          event.invoice_id,
+          event.business,
+          event.investor,
+          event.amount || event.investor_return,
           event.timestamp
         );
         break;
@@ -134,9 +136,9 @@ export class EventProcessor {
       case 'PaymentRecorded':
         await this.processPaymentRecorded(
           eventId,
-          get('invoice_id'),
-          get('payer'),
-          get('amount'),
+          event.invoice_id,
+          event.payer,
+          event.amount,
           event.timestamp
         );
         break;
@@ -144,8 +146,8 @@ export class EventProcessor {
       case 'DisputeCreated':
         await this.processDisputeCreated(
           eventId,
-          get('invoice_id'),
-          get('initiator'),
+          event.invoice_id,
+          event.initiator,
           event.timestamp
         );
         break;
@@ -153,16 +155,15 @@ export class EventProcessor {
       case 'DisputeResolved':
         await this.processDisputeResolved(
           eventId,
-          get('invoice_id'),
-          get('resolved_by') || get('admin'),
+          event.invoice_id,
+          event.resolved_by || event.admin,
           event.timestamp
         );
         break;
 
       default:
-        const err = new Error(`Unknown event type: ${event.type}`) as Error & { status: number };
-        err.status = 400;
-        throw err;
+        const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+        console.log(`${correlationPrefix}Unhandled event type: ${event.type}`);
     }
   }
 }

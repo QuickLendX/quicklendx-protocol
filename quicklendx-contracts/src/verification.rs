@@ -7,7 +7,7 @@ use crate::protocol_limits::{
     MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
 };
 use crate::types::BidStatus;
-use crate::types::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
+use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 /// Maximum normalized tags allowed on an invoice.

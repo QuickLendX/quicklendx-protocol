@@ -5,9 +5,17 @@ import {
   getSettlementsQuerySchema,
   settlementIdParamSchema,
   invoiceIdParamForDisputesSchema,
+  invoiceRouteIdParamSchema,
+  invoiceRouteIdParamForDisputesSchema,
 } from "./shared";
 
-export { getInvoicesQuerySchema, invoiceIdParamSchema, invoiceIdParamForDisputesSchema };
+export {
+  getInvoicesQuerySchema,
+  invoiceIdParamSchema,
+  invoiceIdParamForDisputesSchema,
+  invoiceRouteIdParamSchema,
+  invoiceRouteIdParamForDisputesSchema,
+};
 
 export const createInvoiceBodySchema = z.object({
   business: z.string().min(1),

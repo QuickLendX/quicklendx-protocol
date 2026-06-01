@@ -1,5 +1,38 @@
 #![allow(dead_code)]
 
+//! # Audit Trail Module
+//!
+//! Provides an **append-only audit log** for all state-changing contract operations.
+//! Each operation produces exactly one immutable audit entry that records:
+//! - **Who** performed the operation (actor: Address)
+//! - **What** operation was executed (AuditOperation enum)
+//! - **When** it occurred (timestamp: u64)
+//! - **Which** invoice/asset was involved
+//! - **Data** before/after and amounts
+//!
+//! ## Append-Only Guarantee
+//!
+//! The audit trail **never overwrites or reorders entries**. This is critical for
+//! post-incident forensics: a compromised audit log is worse than useless.
+//!
+//! ### Implementation Details
+//! - **Monotonic IDs**: Each entry gets a unique audit_id with embedded timestamp,
+//!   sequence number, and counter to prevent tampering.
+//! - **Index structure**: Separate indices by invoice, operation, actor, and timestamp
+//!   for efficient querying without reordering.
+//! - **Storage guarantees**: Each entry is stored separately; appending never modifies
+//!   existing entries.
+//! - **Query safety**: All query operations use read-only indices and never delete/modify.
+//!
+//! ### Verification
+//! Tests verify:
+//! - No entry overwrites (every append increases trail length)
+//! - Timestamps non-decreasing within each trail
+//! - One entry per state-changing call (exact counts per operation)
+//! - Stats reconciliation (AUDIT_STATS matches actual entries)
+//!
+//! See `src/test_audit.rs` for comprehensive integrity tests.
+
 use crate::errors::QuickLendXError;
 use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
@@ -27,6 +60,9 @@ pub enum AuditOperation {
 }
 
 /// Audit log entry structure
+///
+/// **IMMUTABLE**: Once created, this entry is never modified or overwritten.
+/// Each state-changing operation produces exactly one AuditLogEntry.
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct AuditLogEntry {
@@ -165,10 +201,27 @@ impl AuditLogEntry {
 }
 
 /// Audit storage and management
+///
+/// Handles all audit trail operations with strict append-only semantics.
+/// Each storage function appends data without modifying existing entries.
 pub struct AuditStorage;
 
 impl AuditStorage {
-    /// Store an audit log entry
+    /// Store an audit log entry (**APPEND-ONLY**)
+    ///
+    /// This function **never overwrites** existing entries. It appends the new
+    /// entry to multiple indices (by invoice, operation, actor, timestamp) to
+    /// enable efficient queries without reordering.
+    ///
+    /// # Append-Only Guarantee
+    /// - Entry is stored with unique audit_id
+    /// - Entry is added to invoice trail (appended, never replaced)
+    /// - Entry is indexed by operation, actor, and timestamp (appended)
+    /// - Global entries list grows monotonically
+    ///
+    /// # Returns
+    /// The entry remains in storage unchanged and is only removed by explicit
+    /// cleanup (never by this function or any query).
     pub fn store_audit_entry(env: &Env, entry: &AuditLogEntry) {
         // Store individual entry
         env.storage().instance().set(&entry.audit_id, entry);
@@ -225,6 +278,9 @@ impl AuditStorage {
     }
 
     /// Query audit logs with filters
+    ///
+    /// **READ-ONLY**: This function never modifies any audit entries or indices.
+    /// It safely reads from existing data structures without side effects.
     pub fn query_audit_logs(
         env: &Env,
         filter: &AuditQueryFilter,
@@ -268,6 +324,15 @@ impl AuditStorage {
     }
 
     /// Get audit statistics
+    ///
+    /// **READ-ONLY & RECONCILIATION**: Returns aggregated stats over all entries.
+    /// - **total_entries**: Count of all audit log entries (reconciles with query results)
+    /// - **operations_count**: Count per operation type
+    /// - **unique_actors**: Number of distinct addresses that performed operations
+    /// - **date_range**: (min_timestamp, max_timestamp) of all entries
+    ///
+    /// These stats are computed on-the-fly from the append-only log and should
+    /// **exactly match** the results of a full audit query (with capped limit).
     pub fn get_audit_stats(env: &Env) -> AuditStats {
         let all_entries = Self::get_all_audit_entries(env);
         let total_entries = all_entries.len() as u32;

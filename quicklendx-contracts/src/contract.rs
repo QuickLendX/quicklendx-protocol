@@ -56,6 +56,20 @@ impl QuickLendXContract {
         AdminStorage::get_admin(&env).expect("Admin not initialized")
     }
 
+    /// Admin-gated, read-only protocol invariant self-check ("heartbeat").
+    ///
+    /// Aggregates the cross-module integrity checks (orphan investments, audit
+    /// chain integrity, solvency, and storage-index coherence) into a single
+    /// [`InvariantReport`] of `(check_name, passed, evidence)` rows for incident
+    /// response. Authenticates `admin` before running; the checks never mutate
+    /// state, so an unauthorized or failing call leaves the ledger unchanged.
+    pub fn invariant_self_check(
+        env: Env,
+        admin: Address,
+    ) -> Result<crate::invariants::InvariantReport, QuickLendXError> {
+        crate::invariants::invariant_self_check(&env, &admin)
+    }
+
     /// Initialize protocol limits.
     pub fn initialize_protocol_limits(
         env: Env,

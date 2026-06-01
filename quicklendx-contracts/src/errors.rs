@@ -73,6 +73,8 @@ pub enum QuickLendXError {
     InvalidFeeConfiguration = 1850,
     TreasuryNotConfigured = 1851,
     InvalidFeeBasisPoints = 1852,
+    /// Arithmetic overflow detected during checked arithmetic operations
+    ArithmeticOverflow = 1856,
     RotationAlreadyPending = 1853,
     RotationNotFound = 1854,
     RotationExpired = 1855,
@@ -86,9 +88,10 @@ pub enum QuickLendXError {
     InvalidDisputeReason = 1905,
     InvalidDisputeEvidence = 1906,
 
-    // Notification (2000-2001)
+    // Notification (2000-2002)
     NotificationNotFound = 2000,
     NotificationBlocked = 2001,
+    NotificationDuplicate = 2002,
 
     // Emergency withdraw (2100-2106)
     ContractPaused = 2100,
@@ -180,6 +183,7 @@ impl From<QuickLendXError> for Symbol {
             // Notification
             QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
+            QuickLendXError::NotificationDuplicate => symbol_short!("NOT_DUP"),
             QuickLendXError::MaxBidsPerInvoiceExceeded => symbol_short!("MAX_BIDS"),
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
@@ -192,6 +196,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::EmergencyWithdrawInsufficientBalance => symbol_short!("EMG_BAL"),
             QuickLendXError::TokenTransferFailed => symbol_short!("TKN_FAIL"),
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
+            QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
         }
     }

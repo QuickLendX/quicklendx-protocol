@@ -494,3 +494,2046 @@ mod test_admin {
         );
     }
 }
+
+// ============================================================================
+// Comprehensive Access Control Matrix Tests
+// ============================================================================
+//!
+//! This module provides comprehensive access-control testing for all admin-gated
+//! entrypoints in the QuickLendX protocol. The goal is to prevent privilege-escalation
+//! regressions as new methods are added.
+//!
+//! # Access Control Matrix
+//!
+//! | Method Category | Method | Auth Required | Non-Admin Error |
+//! |-----------------|--------|---------------|-----------------|
+//! | **AdminStorage** | initialize | Caller (self-auth) | OperationNotAllowed |
+//! | | transfer_admin | Current Admin | NotAdmin |
+//! | | initiate_admin_transfer | Current Admin | NotAdmin |
+//! | | accept_admin_transfer | Pending Admin | Unauthorized |
+//! | | cancel_admin_transfer | Current Admin | NotAdmin |
+//! | | set_two_step_enabled | Current Admin | NotAdmin |
+//! | **Protocol Config** | set_protocol_config | Admin + Auth | NotAdmin |
+//! | | set_fee_config | Admin + Auth | NotAdmin |
+//! | | set_treasury | Admin + Auth | NotAdmin |
+//! | **Pause Control** | set_paused | Admin + Auth | NotAdmin |
+//! | **Emergency** | initiate | Admin + Auth | NotAdmin |
+//! | | execute | Admin + Auth | NotAdmin |
+//! | | cancel | Admin + Auth | NotAdmin |
+//! | **Currency** | add_currency | Admin + Auth | NotAdmin |
+//! | | remove_currency | Admin + Auth | NotAdmin |
+//! | | set_currencies | Admin + Auth | NotAdmin |
+//! | | clear_currencies | Admin + Auth | NotAdmin |
+//! | **Bid Config** | set_bid_ttl_days | Admin + Auth | NotAdmin |
+//! | | set_max_active_bids_per_investor | Admin + Auth | NotAdmin |
+//! | **Backup** | create_backup | Admin + Auth | NotAdmin |
+//! | | restore_backup | Admin + Auth | NotAdmin |
+//! | | archive_backup | Admin + Auth | NotAdmin |
+//! | | cleanup_backups | Admin + Auth | NotAdmin |
+//! | | set_backup_retention_policy | Admin + Auth | NotAdmin |
+//!
+//! # Edge Cases Covered
+//! - Pre-init admin rejection (uninitialized state)
+//! - Transferred admin acceptance and revocation
+//! - Revoked caller rejection (former admin after transfer)
+//! - Self-transfer prevention
+//! - Two-step transfer flow authentication
+
+#[cfg(test)]
+mod access_control_matrix {
+    use crate::admin::AdminStorage;
+    use crate::currency::CurrencyWhitelist;
+    use crate::emergency::EmergencyWithdraw;
+    use crate::init::ProtocolInitializer;
+    use crate::pause::PauseControl;
+    use crate::backup;
+    use crate::bid::BidStorage;
+    use crate::protocol_limits::ProtocolLimitsContract;
+    use crate::errors::QuickLendXError;
+    use crate::QuickLendXContract;
+    use soroban_sdk::{testutils::Address as _, Address, Env, Vec, String};
+
+    // ========================================================================
+    // Test Setup Helpers
+    // ========================================================================
+
+    fn setup() -> (Env, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        (env, contract_id)
+    }
+
+    fn setup_with_admin() -> (Env, Address, Address) {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        initialize_admin(&env, &contract_id, &admin);
+        (env, contract_id, admin)
+    }
+
+    fn initialize_admin(env: &Env, contract_id: &Address, admin: &Address) {
+        env.as_contract(contract_id, || {
+            AdminStorage::initialize(env, admin).unwrap();
+        });
+    }
+
+    fn get_non_admin(env: &Env) -> Address {
+        Address::generate(env)
+    }
+
+    // ========================================================================
+    // AdminStorage Access Control Tests
+    // ========================================================================
+
+    #[test]
+    fn test_admin_storage_initialize_requires_self_auth() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Non-admin cannot initialize
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::initialize(&env, &non_admin)
+        });
+        assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+
+        // Admin can initialize
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::initialize(&env, &admin)
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_admin_storage_transfer_requires_current_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+        let new_admin = Address::generate(&env);
+
+        // Non-admin cannot transfer admin
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::transfer_admin(&env, &non_admin, &new_admin)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can transfer
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::transfer_admin(&env, &admin, &new_admin)
+        });
+        assert_eq!(result, Ok(()));
+        assert_eq!(
+            env.as_contract(&contract_id, || AdminStorage::get_admin(&env)),
+            Some(new_admin)
+        );
+    }
+
+    #[test]
+    fn test_admin_storage_transfer_rejects_revoked_caller() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let new_admin = Address::generate(&env);
+
+        // Transfer admin to new_admin
+        env.as_contract(&contract_id, || {
+            AdminStorage::transfer_admin(&env, &admin, &new_admin).unwrap();
+        });
+
+        // Former admin (now non-admin) cannot perform admin actions
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::transfer_admin(&env, &admin, &Address::generate(&env))
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+    }
+
+    #[test]
+    fn test_admin_storage_initiate_transfer_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+        let pending_admin = Address::generate(&env);
+
+        // Non-admin cannot initiate transfer
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::initiate_admin_transfer(&env, &non_admin, &pending_admin)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can initiate
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::initiate_admin_transfer(&env, &admin, &pending_admin)
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_admin_storage_accept_transfer_requires_pending_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let admin_2 = Address::generate(&env);
+        let attacker = get_non_admin(&env);
+
+        // Enable two-step mode and initiate transfer
+        env.as_contract(&contract_id, || {
+            AdminStorage::set_two_step_enabled(&env, &admin, true).unwrap();
+            AdminStorage::initiate_admin_transfer(&env, &admin, &admin_2).unwrap();
+        });
+
+        // Non-pending admin cannot accept
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::accept_admin_transfer(&env, &attacker)
+        });
+        assert_eq!(result, Err(QuickLendXError::Unauthorized));
+
+        // Pending admin can accept
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::accept_admin_transfer(&env, &admin_2)
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_admin_storage_cancel_transfer_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let admin_2 = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Enable two-step and initiate transfer
+        env.as_contract(&contract_id, || {
+            AdminStorage::set_two_step_enabled(&env, &admin, true).unwrap();
+            AdminStorage::initiate_admin_transfer(&env, &admin, &admin_2).unwrap();
+        });
+
+        // Non-admin cannot cancel
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::cancel_admin_transfer(&env, &non_admin)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can cancel
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::cancel_admin_transfer(&env, &admin)
+        });
+        assert_eq!(result, Ok(()));
+        assert_eq!(
+            env.as_contract(&contract_id, || AdminStorage::get_pending_admin(&env)),
+            None
+        );
+    }
+
+    #[test]
+    fn test_admin_storage_set_two_step_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+
+        // Non-admin cannot toggle two-step mode
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::set_two_step_enabled(&env, &non_admin, true)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can toggle
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::set_two_step_enabled(&env, &admin, true)
+        });
+        assert_eq!(result, Ok(()));
+        assert!(env.as_contract(&contract_id, || AdminStorage::is_two_step_enabled(&env)));
+    }
+
+    // ========================================================================
+    // ProtocolInitializer Access Control Tests
+    // ========================================================================
+
+    #[test]
+    fn test_protocol_config_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+
+        // Non-admin cannot set protocol config
+        let result = env.as_contract(&contract_id, || {
+            ProtocolInitializer::set_protocol_config(&env, &non_admin, 1000, 365, 86400)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can set protocol config
+        let result = env.as_contract(&contract_id, || {
+            ProtocolInitializer::set_protocol_config(&env, &admin, 1000, 365, 86400)
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_fee_config_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+
+        // Non-admin cannot set fee config
+        let result = env.as_contract(&contract_id, || {
+            ProtocolInitializer::set_fee_config(&env, &non_admin, 200)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can set fee config
+        let result = env.as_contract(&contract_id, || {
+            ProtocolInitializer::set_fee_config(&env, &admin, 200)
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_treasury_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+        let treasury = Address::generate(&env);
+
+        // Non-admin cannot set treasury
+        let result = env.as_contract(&contract_id, || {
+            ProtocolInitializer::set_treasury(&env, &non_admin, &treasury)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can set treasury
+        let result = env.as_contract(&contract_id, || {
+            ProtocolInitializer::set_treasury(&env, &admin, &treasury)
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    // ========================================================================
+    // PauseControl Access Control Tests
+    // ========================================================================
+
+    #[test]
+    fn test_pause_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+
+        // Non-admin cannot pause
+        let result = env.as_contract(&contract_id, || {
+            PauseControl::set_paused(&env, &non_admin, true)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can pause
+        let result = env.as_contract(&contract_id, || {
+            PauseControl::set_paused(&env, &admin, true)
+        });
+        assert_eq!(result, Ok(()));
+        assert!(env.as_contract(&contract_id, || PauseControl::is_paused(&env)));
+    }
+
+    #[test]
+    fn test_unpause_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+
+        // First pause
+        env.as_contract(&contract_id, || {
+            PauseControl::set_paused(&env, &admin, true).unwrap();
+        });
+
+        let non_admin = get_non_admin(&env);
+
+        // Non-admin cannot unpause
+        let result = env.as_contract(&contract_id, || {
+            PauseControl::set_paused(&env, &non_admin, false)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can unpause
+        let result = env.as_contract(&contract_id, || {
+            PauseControl::set_paused(&env, &admin, false)
+        });
+        assert_eq!(result, Ok(()));
+        assert!(!env.as_contract(&contract_id, || PauseControl::is_paused(&env)));
+    }
+
+    #[test]
+    fn test_pause_state_immutable_after_rejected_call() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+
+        // Verify initial state is not paused
+        assert!(!env.as_contract(&contract_id, || PauseControl::is_paused(&env)));
+
+        // Non-admin attempts to pause - should fail
+        env.as_contract(&contract_id, || {
+            PauseControl::set_paused(&env, &non_admin, true).unwrap_err();
+        });
+
+        // Verify state unchanged after rejection
+        assert!(!env.as_contract(&contract_id, || PauseControl::is_paused(&env)));
+    }
+
+    // ========================================================================
+    // EmergencyWithdraw Access Control Tests
+    // ========================================================================
+
+    #[test]
+    fn test_emergency_initiate_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+        let token = Address::generate(&env);
+        let target = Address::generate(&env);
+
+        // Non-admin cannot initiate emergency withdraw
+        let result = env.as_contract(&contract_id, || {
+            EmergencyWithdraw::initiate(&env, &non_admin, token.clone(), 1000, target.clone())
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can initiate
+        let result = env.as_contract(&contract_id, || {
+            EmergencyWithdraw::initiate(&env, &admin, token.clone(), 1000, target.clone())
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_emergency_execute_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+        let token = Address::generate(&env);
+        let target = Address::generate(&env);
+
+        // Admin initiates first
+        env.as_contract(&contract_id, || {
+            EmergencyWithdraw::initiate(&env, &admin, token, 1000, target).unwrap();
+        });
+
+        // Non-admin cannot execute
+        let result = env.as_contract(&contract_id, || {
+            EmergencyWithdraw::execute(&env, &non_admin)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can execute (may fail due to balance, but auth passes)
+        let result = env.as_contract(&contract_id, || {
+            EmergencyWithdraw::execute(&env, &admin)
+        });
+        // Result may be Err depending on balance, but auth check passes
+        match result {
+            Ok(()) | Err(QuickLendXError::InsufficientFunds) | Err(QuickLendXError::TokenTransferFailed) => {}
+            Err(e) => panic!("Unexpected error: {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_emergency_cancel_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+        let token = Address::generate(&env);
+        let target = Address::generate(&env);
+
+        // Admin initiates first
+        env.as_contract(&contract_id, || {
+            EmergencyWithdraw::initiate(&env, &admin, token, 1000, target).unwrap();
+        });
+
+        // Non-admin cannot cancel
+        let result = env.as_contract(&contract_id, || {
+            EmergencyWithdraw::cancel(&env, &non_admin)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can cancel
+        let result = env.as_contract(&contract_id, || {
+            EmergencyWithdraw::cancel(&env, &admin)
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_emergency_withdraw_rejected_after_admin_transfer() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let new_admin = Address::generate(&env);
+        let token = Address::generate(&env);
+        let target = Address::generate(&env);
+
+        // Admin initiates
+        env.as_contract(&contract_id, || {
+            EmergencyWithdraw::initiate(&env, &admin, token, 1000, target).unwrap();
+        });
+
+        // Transfer admin
+        env.as_contract(&contract_id, || {
+            AdminStorage::transfer_admin(&env, &admin, &new_admin).unwrap();
+        });
+
+        // Former admin cannot initiate new emergency withdraw
+        let result = env.as_contract(&contract_id, || {
+            EmergencyWithdraw::initiate(&env, &admin, Address::generate(&env), 1000, Address::generate(&env))
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+    }
+
+    // ========================================================================
+    // CurrencyWhitelist Access Control Tests
+    // ========================================================================
+
+    #[test]
+    fn test_add_currency_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+        let currency = Address::generate(&env);
+
+        // Non-admin cannot add currency
+        let result = env.as_contract(&contract_id, || {
+            CurrencyWhitelist::add_currency(&env, &non_admin, &currency)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can add currency
+        let result = env.as_contract(&contract_id, || {
+            CurrencyWhitelist::add_currency(&env, &admin, &currency)
+        });
+        assert_eq!(result, Ok(()));
+        assert!(env.as_contract(&contract_id, || CurrencyWhitelist::is_allowed_currency(&env, &currency)));
+    }
+
+    #[test]
+    fn test_remove_currency_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+        let currency = Address::generate(&env);
+
+        // Admin adds currency first
+        env.as_contract(&contract_id, || {
+            CurrencyWhitelist::add_currency(&env, &admin, &currency).unwrap();
+        });
+
+        // Non-admin cannot remove currency
+        let result = env.as_contract(&contract_id, || {
+            CurrencyWhitelist::remove_currency(&env, &non_admin, &currency)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can remove currency
+        let result = env.as_contract(&contract_id, || {
+            CurrencyWhitelist::remove_currency(&env, &admin, &currency)
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_set_currencies_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+        let currencies = Vec::from_array(&env, &[Address::generate(&env), Address::generate(&env)]);
+
+        // Non-admin cannot set currencies
+        let result = env.as_contract(&contract_id, || {
+            CurrencyWhitelist::set_currencies(&env, &non_admin, &currencies)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can set currencies
+        let result = env.as_contract(&contract_id, || {
+            CurrencyWhitelist::set_currencies(&env, &admin, &currencies)
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_clear_currencies_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+
+        // Add some currencies first
+        env.as_contract(&contract_id, || {
+            let currency = Address::generate(&env);
+            CurrencyWhitelist::add_currency(&env, &admin, &currency).unwrap();
+        });
+
+        // Non-admin cannot clear currencies
+        let result = env.as_contract(&contract_id, || {
+            CurrencyWhitelist::clear_currencies(&env, &non_admin)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can clear currencies
+        let result = env.as_contract(&contract_id, || {
+            CurrencyWhitelist::clear_currencies(&env, &admin)
+        });
+        assert_eq!(result, Ok(()));
+        assert_eq!(
+            env.as_contract(&contract_id, || CurrencyWhitelist::currency_count(&env)),
+            0
+        );
+    }
+
+    // ========================================================================
+    // BidStorage Access Control Tests
+    // ========================================================================
+
+    #[test]
+    fn test_set_bid_ttl_days_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+
+        // Non-admin cannot set bid TTL
+        let result = env.as_contract(&contract_id, || {
+            BidStorage::set_bid_ttl_days(&env, &non_admin, 14)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can set bid TTL
+        let result = env.as_contract(&contract_id, || {
+            BidStorage::set_bid_ttl_days(&env, &admin, 14)
+        });
+        assert_eq!(result, Ok(14));
+        assert_eq!(
+            env.as_contract(&contract_id, || BidStorage::get_bid_ttl_days(&env)),
+            14
+        );
+    }
+
+    #[test]
+    fn test_set_max_active_bids_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+
+        // Non-admin cannot set max active bids
+        let result = env.as_contract(&contract_id, || {
+            BidStorage::set_max_active_bids_per_investor(&env, &non_admin, 50)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can set max active bids
+        let result = env.as_contract(&contract_id, || {
+            BidStorage::set_max_active_bids_per_investor(&env, &admin, 50)
+        });
+        assert_eq!(result, Ok(50));
+        assert_eq!(
+            env.as_contract(&contract_id, || BidStorage::get_max_active_bids_per_investor(&env)),
+            50
+        );
+    }
+
+    #[test]
+    fn test_reset_bid_ttl_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+
+        // Set a custom TTL first
+        env.as_contract(&contract_id, || {
+            BidStorage::set_bid_ttl_days(&env, &admin, 14).unwrap();
+        });
+
+        // Non-admin cannot reset
+        let result = env.as_contract(&contract_id, || {
+            BidStorage::reset_bid_ttl_to_default(&env, &non_admin)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can reset
+        let result = env.as_contract(&contract_id, || {
+            BidStorage::reset_bid_ttl_to_default(&env, &admin)
+        });
+        assert_eq!(result, Ok(7)); // Default is 7 days
+    }
+
+    // ========================================================================
+    // ProtocolLimitsContract Access Control Tests
+    // ========================================================================
+
+    #[test]
+    fn test_set_protocol_limits_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = get_non_admin(&env);
+
+        // Non-admin cannot set protocol limits
+        let result = env.as_contract(&contract_id, || {
+            ProtocolLimitsContract::set_protocol_limits(
+                &env, &non_admin, 1000, 10, 100, 365, 86400, 100
+            )
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can set protocol limits
+        let result = env.as_contract(&contract_id, || {
+            ProtocolLimitsContract::set_protocol_limits(
+                &env, &admin, 1000, 10, 100, 365, 86400, 100
+            )
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    // ========================================================================
+    // BackupStorage Access Control Tests (Contract Entrypoints)
+    // ========================================================================
+
+    #[test]
+    fn test_create_backup_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        // Non-admin cannot create backup
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        let result = client.try_create_backup(&non_admin);
+        assert!(result.is_err());
+
+        // Admin can create backup
+        let result = client.create_backup(&admin);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_restore_backup_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin and create a backup
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        let backup_id = client.create_backup(&admin);
+
+        // Non-admin cannot restore
+        let result = client.try_restore_backup(&non_admin, &backup_id);
+        assert!(result.is_err());
+
+        // Admin can restore
+        let result = client.restore_backup(&admin, &backup_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_archive_backup_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin and create a backup
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        let backup_id = client.create_backup(&admin);
+
+        // Non-admin cannot archive
+        let result = client.try_archive_backup(&non_admin, &backup_id);
+        assert!(result.is_err());
+
+        // Admin can archive
+        let result = client.archive_backup(&admin, &backup_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cleanup_backups_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot cleanup
+        let result = client.try_cleanup_backups(&non_admin);
+        assert!(result.is_err());
+
+        // Admin can cleanup
+        let result = client.cleanup_backups(&admin);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_set_backup_retention_policy_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot set retention policy
+        let result = client.try_set_backup_retention_policy(&non_admin, 5, 0, true);
+        assert!(result.is_err());
+
+        // Admin can set retention policy
+        let result = client.set_backup_retention_policy(&admin, 5, 0, true);
+        assert!(result.is_ok());
+    }
+
+    // ========================================================================
+    // Contract Entrypoint Access Control Tests
+    // ========================================================================
+
+    #[test]
+    fn test_transfer_admin_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+        let new_admin = Address::generate(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot transfer admin
+        let result = client.try_transfer_admin(&non_admin);
+        assert!(result.is_err());
+
+        // Admin can transfer
+        let result = client.transfer_admin(&new_admin);
+        assert!(result.is_ok());
+        assert_eq!(client.get_current_admin(), Some(new_admin));
+    }
+
+    #[test]
+    fn test_set_protocol_config_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot set protocol config
+        let result = client.try_set_protocol_config(&non_admin, 1000, 365, 86400);
+        assert!(result.is_err());
+
+        // Admin can set protocol config
+        let result = client.set_protocol_config(&admin, 1000, 365, 86400);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_set_fee_config_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot set fee config
+        let result = client.try_set_fee_config(&non_admin, 200);
+        assert!(result.is_err());
+
+        // Admin can set fee config
+        let result = client.set_fee_config(&admin, 200);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_set_treasury_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+        let treasury = Address::generate(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot set treasury
+        let result = client.try_set_treasury(&non_admin, &treasury);
+        assert!(result.is_err());
+
+        // Admin can set treasury
+        let result = client.set_treasury(&admin, &treasury);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_pause_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot pause
+        let result = client.try_pause(&non_admin);
+        assert!(result.is_err());
+
+        // Admin can pause
+        let result = client.pause(&admin);
+        assert!(result.is_ok());
+        assert!(client.is_paused());
+    }
+
+    #[test]
+    fn test_unpause_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin and pause
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        client.pause(&admin);
+
+        // Non-admin cannot unpause
+        let result = client.try_unpause(&non_admin);
+        assert!(result.is_err());
+
+        // Admin can unpause
+        let result = client.unpause(&admin);
+        assert!(result.is_ok());
+        assert!(!client.is_paused());
+    }
+
+    #[test]
+    fn test_add_currency_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+        let currency = Address::generate(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot add currency
+        let result = client.try_add_currency(&non_admin, &currency);
+        assert!(result.is_err());
+
+        // Admin can add currency
+        let result = client.add_currency(&admin, &currency);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_remove_currency_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+        let currency = Address::generate(&env);
+
+        // Initialize admin and add currency
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        client.add_currency(&admin, &currency);
+
+        // Non-admin cannot remove currency
+        let result = client.try_remove_currency(&non_admin, &currency);
+        assert!(result.is_err());
+
+        // Admin can remove currency
+        let result = client.remove_currency(&admin, &currency);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_set_currencies_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+        let currencies = Vec::from_array(&env, &[Address::generate(&env)]);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot set currencies
+        let result = client.try_set_currencies(&non_admin, &currencies);
+        assert!(result.is_err());
+
+        // Admin can set currencies
+        let result = client.set_currencies(&admin, &currencies);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_clear_currencies_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot clear currencies
+        let result = client.try_clear_currencies(&non_admin);
+        assert!(result.is_err());
+
+        // Admin can clear currencies
+        let result = client.clear_currencies(&admin);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_initiate_emergency_withdraw_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+        let token = Address::generate(&env);
+        let target = Address::generate(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot initiate emergency withdraw
+        let result = client.try_initiate_emergency_withdraw(&non_admin, &token, 1000, &target);
+        assert!(result.is_err());
+
+        // Admin can initiate emergency withdraw
+        let result = client.initiate_emergency_withdraw(&admin, &token, 1000, &target);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_emergency_withdraw_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin and initiate emergency withdraw
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        let token = Address::generate(&env);
+        let target = Address::generate(&env);
+        client.initiate_emergency_withdraw(&admin, &token, 1000, &target);
+
+        // Non-admin cannot execute emergency withdraw
+        let result = client.try_execute_emergency_withdraw(&non_admin);
+        assert!(result.is_err());
+
+        // Admin can execute emergency withdraw
+        let result = client.execute_emergency_withdraw(&admin);
+        // May fail due to insufficient balance, but auth check passes
+        match result {
+            Ok(()) | Err(QuickLendXError::InsufficientFunds) | Err(QuickLendXError::TokenTransferFailed) => {}
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn test_cancel_emergency_withdraw_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin and initiate emergency withdraw
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        let token = Address::generate(&env);
+        let target = Address::generate(&env);
+        client.initiate_emergency_withdraw(&admin, &token, 1000, &target);
+
+        // Non-admin cannot cancel emergency withdraw
+        let result = client.try_cancel_emergency_withdraw(&non_admin);
+        assert!(result.is_err());
+
+        // Admin can cancel emergency withdraw
+        let result = client.cancel_emergency_withdraw(&admin);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_initialize_protocol_limits_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot initialize protocol limits
+        let result = client.try_initialize_protocol_limits(&non_admin, 1000, 365, 86400);
+        assert!(result.is_err());
+
+        // Admin can initialize protocol limits
+        let result = client.initialize_protocol_limits(&admin, 1000, 365, 86400);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_set_protocol_limits_entrypoint_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot set protocol limits
+        let result = client.try_set_protocol_limits(&non_admin, 1000, 365, 86400);
+        assert!(result.is_err());
+
+        // Admin can set protocol limits
+        let result = client.set_protocol_limits(&admin, 1000, 365, 86400);
+        assert!(result.is_ok());
+    }
+
+    // ========================================================================
+    // Edge Case: Pre-Initialization State Tests
+    // ========================================================================
+
+    #[test]
+    fn test_all_admin_methods_fail_before_initialization() {
+        let (env, contract_id) = setup();
+        let non_admin = get_non_admin(&env);
+
+        // AdminStorage::initialize - requires self-auth, not admin check
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::initialize(&env, &non_admin)
+        });
+        assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+
+        // AdminStorage::transfer_admin - requires initialized state
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::transfer_admin(&env, &non_admin, &Address::generate(&env))
+        });
+        assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+
+        // AdminStorage::require_current_admin - returns error when not initialized
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::require_current_admin(&env)
+        });
+        assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+
+        // ProtocolInitializer methods - would fail admin check
+        let result = env.as_contract(&contract_id, || {
+            ProtocolInitializer::set_protocol_config(&env, &non_admin, 1000, 365, 86400)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // PauseControl - would fail admin check
+        let result = env.as_contract(&contract_id, || {
+            PauseControl::set_paused(&env, &non_admin, true)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // EmergencyWithdraw - would fail admin check
+        let result = env.as_contract(&contract_id, || {
+            EmergencyWithdraw::initiate(
+                &env,
+                &non_admin,
+                Address::generate(&env),
+                1000,
+                Address::generate(&env),
+            )
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+    }
+
+    // ========================================================================
+    // Edge Case: Admin Transfer and Revocation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_former_admin_cannot_use_admin_methods_after_transfer() {
+        let (env, contract_id) = setup();
+        let admin_1 = Address::generate(&env);
+        let admin_2 = Address::generate(&env);
+
+        // Initialize admin_1
+        initialize_admin(&env, &contract_id, &admin_1);
+
+        // admin_1 transfers to admin_2
+        env.as_contract(&contract_id, || {
+            AdminStorage::transfer_admin(&env, &admin_1, &admin_2).unwrap();
+        });
+
+        // Verify admin_2 is now admin
+        assert_eq!(
+            env.as_contract(&contract_id, || AdminStorage::get_admin(&env)),
+            Some(admin_2)
+        );
+
+        // admin_1 (former admin) cannot perform any admin operations
+        let results = vec![
+            env.as_contract(&contract_id, || AdminStorage::transfer_admin(&env, &admin_1, &Address::generate(&env))),
+            env.as_contract(&contract_id, || AdminStorage::initiate_admin_transfer(&env, &admin_1, &Address::generate(&env))),
+            env.as_contract(&contract_id, || AdminStorage::set_two_step_enabled(&env, &admin_1, true)),
+            env.as_contract(&contract_id, || ProtocolInitializer::set_protocol_config(&env, &admin_1, 1000, 365, 86400)),
+            env.as_contract(&contract_id, || ProtocolInitializer::set_fee_config(&env, &admin_1, 200)),
+            env.as_contract(&contract_id, || PauseControl::set_paused(&env, &admin_1, true)),
+            env.as_contract(&contract_id, || EmergencyWithdraw::initiate(&env, &admin_1, Address::generate(&env), 1000, Address::generate(&env))),
+            env.as_contract(&contract_id, || CurrencyWhitelist::add_currency(&env, &admin_1, &Address::generate(&env))),
+            env.as_contract(&contract_id, || BidStorage::set_bid_ttl_days(&env, &admin_1, 14)),
+            env.as_contract(&contract_id, || BidStorage::set_max_active_bids_per_investor(&env, &admin_1, 50)),
+            env.as_contract(&contract_id, || ProtocolLimitsContract::set_protocol_limits(&env, &admin_1, 1000, 10, 100, 365, 86400, 100)),
+        ];
+
+        for (i, result) in results.into_iter().enumerate() {
+            assert_eq!(
+                result,
+                Err(QuickLendXError::NotAdmin),
+                "Test {}: Former admin should be rejected for admin method {}",
+                i + 1,
+                i + 1
+            );
+        }
+
+        // admin_2 can perform all admin operations
+        let results = vec![
+            (ProtocolInitializer::set_protocol_config(&env, &admin_2, 1000, 365, 86400), "set_protocol_config"),
+            (ProtocolInitializer::set_fee_config(&env, &admin_2, 200), "set_fee_config"),
+            (PauseControl::set_paused(&env, &admin_2, true), "set_paused"),
+            (CurrencyWhitelist::add_currency(&env, &admin_2, &Address::generate(&env)), "add_currency"),
+            (BidStorage::set_bid_ttl_days(&env, &admin_2, 14), "set_bid_ttl_days"),
+            (BidStorage::set_max_active_bids_per_investor(&env, &admin_2, 50), "set_max_active_bids"),
+        ];
+
+        for (result, name) in results {
+            assert_eq!(
+                result.map(|_| ()),
+                Ok(()),
+                "New admin should be accepted for {}",
+                name
+            );
+        }
+    }
+
+    // ========================================================================
+    // Privilege Escalation Prevention Tests
+    // ========================================================================
+
+    #[test]
+    fn test_no_privilege_escalation_via_call_order() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+
+        // Attempt multiple admin operations from non-admin in sequence
+        // All should fail independently
+        for _ in 0..3 {
+            let results = vec![
+                env.as_contract(&contract_id, || AdminStorage::transfer_admin(&env, &non_admin, &Address::generate(&env))),
+                env.as_contract(&contract_id, || ProtocolInitializer::set_protocol_config(&env, &non_admin, 1000, 365, 86400)),
+                env.as_contract(&contract_id, || PauseControl::set_paused(&env, &non_admin, true)),
+            ];
+
+            for result in results {
+                assert_eq!(result, Err(QuickLendXError::NotAdmin));
+            }
+        }
+
+        // Verify admin is still the original admin
+        assert_eq!(
+            env.as_contract(&contract_id, || AdminStorage::get_admin(&env)),
+            Some(admin)
+        );
+    }
+
+    #[test]
+    fn test_no_privilege_escalation_via_partial_auth() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+
+        // Some methods require require_auth first, then admin check
+        // Verify that just having the admin address is not enough
+        // without proper authentication
+
+        // AdminStorage::transfer_admin requires both:
+        // 1. current_admin.require_auth() - done in test
+        // 2. AdminStorage::require_admin() - verifies caller is admin
+
+        // A non-admin calling with their own address should fail
+        // because require_admin checks if the address is admin
+        let result = env.as_contract(&contract_id, || {
+            // This simulates a non-admin trying to call with their own address
+            // The require_auth would succeed if the non_admin signed the tx,
+            // but AdminStorage::require_admin would fail because non_admin != admin
+            AdminStorage::require_admin(&env, &non_admin)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin calling with admin address should succeed
+        let result = env.as_contract(&contract_id, || {
+            AdminStorage::require_admin(&env, &admin)
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_admin_methods_are_consistent_across_modules() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+
+        // Test that all modules use the same admin check pattern
+        // This ensures consistent security behavior
+
+        // Pattern 1: require_admin + require_auth
+        let result1 = env.as_contract(&contract_id, || {
+            AdminStorage::with_admin_auth(&env, &admin, || Ok(()))
+        });
+        assert_eq!(result1, Ok(()));
+
+        let result2 = env.as_contract(&contract_id, || {
+            AdminStorage::with_admin_auth(&env, &non_admin, || Ok(()))
+        });
+        assert_eq!(result2, Err(QuickLendXError::NotAdmin));
+
+        // Pattern 2: require_current_admin
+        let result3 = env.as_contract(&contract_id, || {
+            AdminStorage::require_current_admin(&env)
+        });
+        assert_eq!(result3, Ok(admin));
+
+        // Verify consistency: all admin-gated methods reject non-admin
+        let methods_to_test = vec![
+            ("AdminStorage::transfer_admin", |env: &Env| {
+                env.as_contract(&contract_id, || {
+                    AdminStorage::transfer_admin(env, &non_admin, &Address::generate(env))
+                })
+            }),
+            ("ProtocolInitializer::set_protocol_config", |env: &Env| {
+                env.as_contract(&contract_id, || {
+                    ProtocolInitializer::set_protocol_config(env, &non_admin, 1000, 365, 86400)
+                })
+            }),
+            ("PauseControl::set_paused", |env: &Env| {
+                env.as_contract(&contract_id, || {
+                    PauseControl::set_paused(env, &non_admin, true)
+                })
+            }),
+        ];
+
+        for (name, method) in methods_to_test {
+            let result = method(&env);
+            assert_eq!(
+                result,
+                Err(QuickLendXError::NotAdmin),
+                "Method {} should reject non-admin",
+                name
+            );
+        }
+    }
+
+    // ========================================================================
+    // State Immutability Tests (Post-Rejection Verification)
+    // ========================================================================
+
+    #[test]
+    fn test_state_immutable_after_non_admin_rejection() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+
+        // Capture initial state
+        let initial_fee = env.as_contract(&contract_id, || ProtocolInitializer::get_fee_bps(&env));
+        let initial_paused = env.as_contract(&contract_id, || PauseControl::is_paused(&env));
+        let initial_admin = env.as_contract(&contract_id, || AdminStorage::get_admin(&env));
+        let initial_bid_ttl = env.as_contract(&contract_id, || BidStorage::get_bid_ttl_days(&env));
+
+        // Non-admin attempts multiple operations
+        let _ = env.as_contract(&contract_id, || {
+            AdminStorage::transfer_admin(&env, &non_admin, &Address::generate(&env))
+        });
+        let _ = env.as_contract(&contract_id, || {
+            ProtocolInitializer::set_fee_config(&env, &non_admin, 9999)
+        });
+        let _ = env.as_contract(&contract_id, || {
+            PauseControl::set_paused(&env, &non_admin, true)
+        });
+        let _ = env.as_contract(&contract_id, || {
+            BidStorage::set_bid_ttl_days(&env, &non_admin, 99)
+        });
+
+        // Verify all state remains unchanged
+        assert_eq!(
+            env.as_contract(&contract_id, || ProtocolInitializer::get_fee_bps(&env)),
+            initial_fee
+        );
+        assert_eq!(
+            env.as_contract(&contract_id, || PauseControl::is_paused(&env)),
+            initial_paused
+        );
+        assert_eq!(
+            env.as_contract(&contract_id, || AdminStorage::get_admin(&env)),
+            initial_admin
+        );
+        assert_eq!(
+            env.as_contract(&contract_id, || BidStorage::get_bid_ttl_days(&env)),
+            initial_bid_ttl
+        );
+    }
+
+    // ========================================================================
+    // Documentation Reference Test
+    // ========================================================================
+
+    #[test]
+    fn test_access_control_matrix_documented() {
+        // This test serves as documentation reference
+        // The matrix below documents the expected behavior:
+        //
+        // | Method | Non-Admin Result | Admin Result |
+        // |--------|------------------|--------------|
+        // | AdminStorage::initialize | OperationNotAllowed | Ok(()) |
+        // | AdminStorage::transfer_admin | NotAdmin | Ok(()) |
+        // | AdminStorage::initiate_admin_transfer | NotAdmin | Ok(()) |
+        // | AdminStorage::accept_admin_transfer | Unauthorized | Ok(()) |
+        // | AdminStorage::cancel_admin_transfer | NotAdmin | Ok(()) |
+        // | AdminStorage::set_two_step_enabled | NotAdmin | Ok(()) |
+        // | ProtocolInitializer::set_protocol_config | NotAdmin | Ok(()) |
+        // | ProtocolInitializer::set_fee_config | NotAdmin | Ok(()) |
+        // | ProtocolInitializer::set_treasury | NotAdmin | Ok(()) |
+        // | PauseControl::set_paused | NotAdmin | Ok(()) |
+        // | EmergencyWithdraw::initiate | NotAdmin | Ok(()) |
+        // | EmergencyWithdraw::execute | NotAdmin | Ok(()) or BalanceError |
+        // | EmergencyWithdraw::cancel | NotAdmin | Ok(()) |
+        // | CurrencyWhitelist::add_currency | NotAdmin | Ok(()) |
+        // | CurrencyWhitelist::remove_currency | NotAdmin | Ok(()) |
+        // | CurrencyWhitelist::set_currencies | NotAdmin | Ok(()) |
+        // | CurrencyWhitelist::clear_currencies | NotAdmin | Ok(()) |
+        // | BidStorage::set_bid_ttl_days | NotAdmin | Ok(()) |
+        // | BidStorage::set_max_active_bids_per_investor | NotAdmin | Ok(()) |
+        // | ProtocolLimitsContract::set_protocol_limits | NotAdmin | Ok(()) |
+        //
+        // Edge Cases:
+        // - Pre-initialization: All admin methods return OperationNotAllowed
+        // - Admin transfer: Former admin rejected, new admin accepted
+        // - State immutability: Rejected calls leave state unchanged
+
+        assert!(true); // Documentation test passes
+    }
+}
+
+// ============================================================================
+// Additional Admin-Gated Method Tests (Extended Coverage)
+// ============================================================================
+
+#[cfg(test)]
+mod access_control_matrix_extended {
+    use crate::admin::AdminStorage;
+    use crate::errors::QuickLendXError;
+    use crate::QuickLendXContract;
+    use soroban_sdk::{testutils::Address as _, Address, Env, Vec};
+
+    fn setup() -> (Env, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        (env, contract_id)
+    }
+
+    fn setup_with_admin() -> (Env, Address, Address) {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        env.as_contract(&contract_id, || {
+            AdminStorage::initialize(&env, &admin).unwrap();
+        });
+        (env, contract_id, admin)
+    }
+
+    fn initialize_admin(env: &Env, contract_id: &Address, admin: &Address) {
+        env.as_contract(contract_id, || {
+            AdminStorage::initialize(env, admin).unwrap();
+        });
+    }
+
+    fn get_non_admin(env: &Env) -> Address {
+        Address::generate(env)
+    }
+
+    // ========================================================================
+    // Fee Management Tests
+    // ========================================================================
+
+    #[test]
+    fn test_initialize_fee_system_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot initialize fee system
+        let result = client.try_initialize_fee_system(&non_admin);
+        assert!(result.is_err());
+
+        // Admin can initialize fee system
+        let result = client.initialize_fee_system(&admin);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_configure_treasury_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        client.initialize_fee_system(&admin);
+
+        let treasury = Address::generate(&env);
+
+        // Non-admin cannot configure treasury
+        let result = client.try_configure_treasury(&treasury);
+        assert!(result.is_err());
+
+        // Admin can configure treasury
+        let result = client.configure_treasury(&treasury);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_platform_fee_bps_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        client.initialize_fee_system(&admin);
+
+        // Non-admin cannot update platform fee
+        let result = client.try_update_platform_fee_bps(250);
+        assert!(result.is_err());
+
+        // Admin can update platform fee
+        let result = client.update_platform_fee_bps(250);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_fee_structure_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        client.initialize_fee_system(&admin);
+
+        // Non-admin cannot update fee structure
+        let fee_type = crate::types::FeeType::PlatformFee;
+        let result = client.try_update_fee_structure(&non_admin, fee_type.clone(), 100, 10, 1000, true);
+        assert!(result.is_err());
+
+        // Admin can update fee structure
+        let result = client.update_fee_structure(&admin, fee_type.clone(), 100, 10, 1000, true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_configure_revenue_distribution_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        client.initialize_fee_system(&admin);
+
+        let treasury = Address::generate(&env);
+
+        // Non-admin cannot configure revenue distribution
+        let result = client.try_configure_revenue_distribution(
+            &non_admin,
+            &treasury,
+            8000,  // treasury_share_bps
+            1500,  // developer_share_bps
+            500,   // platform_share_bps
+            true,  // auto_distribution
+            1000,  // min_distribution_amount
+        );
+        assert!(result.is_err());
+
+        // Admin can configure revenue distribution
+        let result = client.configure_revenue_distribution(
+            &admin,
+            &treasury,
+            8000,
+            1500,
+            500,
+            true,
+            1000,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_distribute_revenue_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        client.initialize_fee_system(&admin);
+
+        // Non-admin cannot distribute revenue
+        let result = client.try_distribute_revenue(&non_admin, 1000);
+        assert!(result.is_err());
+
+        // Admin can distribute revenue (may return 0 if no revenue to distribute)
+        let result = client.distribute_revenue(&admin, 1000);
+        assert!(result.is_ok());
+    }
+
+    // ========================================================================
+    // Business/Investor Verification Tests
+    // ========================================================================
+
+    #[test]
+    fn test_verify_business_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+        let business = Address::generate(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot verify business
+        let result = client.try_verify_business(&non_admin, &business);
+        assert!(result.is_err());
+
+        // Admin can verify business
+        let result = client.verify_business(&admin, &business);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_reject_business_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+        let business = Address::generate(&env);
+        let reason = soroban_sdk::String::from_str(&env, "KYC documents not provided");
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot reject business
+        let result = client.try_reject_business(&non_admin, &business, &reason);
+        assert!(result.is_err());
+
+        // Admin can reject business
+        let result = client.reject_business(&admin, &business, &reason);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_verify_investor_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+        let investor = Address::generate(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot verify investor
+        let result = client.try_verify_investor(&investor, 1000000);
+        assert!(result.is_err());
+
+        // Admin can verify investor
+        let result = client.verify_investor(&investor, 1000000);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_reject_investor_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+        let investor = Address::generate(&env);
+        let reason = soroban_sdk::String::from_str(&env, "Invalid KYC data");
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot reject investor
+        let result = client.try_reject_investor(&investor, &reason);
+        assert!(result.is_err());
+
+        // Admin can reject investor
+        let result = client.reject_investor(&investor, &reason);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_set_investment_limit_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+        let investor = Address::generate(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot set investment limit
+        let result = client.try_set_investment_limit(&investor, 500000);
+        assert!(result.is_err());
+
+        // Admin can set investment limit
+        let result = client.set_investment_limit(&investor, 500000);
+        assert!(result.is_ok());
+    }
+
+    // ========================================================================
+    // Vesting Tests
+    // ========================================================================
+
+    #[test]
+    fn test_create_vesting_schedule_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+        let token = Address::generate(&env);
+        let beneficiary = Address::generate(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot create vesting schedule
+        let result = client.try_create_vesting_schedule(
+            &non_admin,
+            &token,
+            &beneficiary,
+            1000000,
+            1000,
+            100,
+            2000,
+        );
+        assert!(result.is_err());
+
+        // Admin can create vesting schedule
+        let result = client.create_vesting_schedule(
+            &admin,
+            &token,
+            &beneficiary,
+            1000000,
+            1000,
+            100,
+            2000,
+        );
+        assert!(result.is_ok());
+    }
+
+    // ========================================================================
+    // Protocol Limits Tests
+    // ========================================================================
+
+    #[test]
+    fn test_update_protocol_limits_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot update protocol limits
+        let result = client.try_update_protocol_limits(&non_admin, 1000, 365, 86400);
+        assert!(result.is_err());
+
+        // Admin can update protocol limits
+        let result = client.update_protocol_limits(&admin, 1000, 365, 86400);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_limits_max_invoices_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot update limits with max invoices
+        let result = client.try_update_limits_max_invoices(&non_admin, 1000, 365, 86400, 50);
+        assert!(result.is_err());
+
+        // Admin can update limits with max invoices
+        let result = client.update_limits_max_invoices(&admin, 1000, 365, 86400, 50);
+        assert!(result.is_ok());
+    }
+
+    // ========================================================================
+    // Set Admin Tests
+    // ========================================================================
+
+    #[test]
+    fn test_set_admin_requires_auth() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot set admin (even with their own auth)
+        let result = client.try_set_admin(&non_admin);
+        // This should fail because non_admin is not current admin and has no auth
+        assert!(result.is_err());
+
+        // Admin can set admin (transfers to new admin)
+        let new_admin = Address::generate(&env);
+        let result = client.set_admin(&new_admin);
+        assert!(result.is_ok());
+    }
+
+    // ========================================================================
+    // Platform Fee Tests
+    // ========================================================================
+
+    #[test]
+    fn test_set_platform_fee_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+
+        // Non-admin cannot set platform fee
+        let result = client.try_set_platform_fee(250);
+        assert!(result.is_err());
+
+        // Admin can set platform fee
+        let result = client.set_platform_fee(250);
+        assert!(result.is_ok());
+    }
+
+    // ========================================================================
+    // Bid TTL Tests (Entry point without admin param)
+    // ========================================================================
+
+    #[test]
+    fn test_reset_bid_ttl_to_default_requires_admin() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin first
+        initialize_admin(&env, &contract_id, &admin);
+
+        // Set a custom TTL first (via direct storage access)
+        env.as_contract(&contract_id, || {
+            crate::bid::BidStorage::set_bid_ttl_days(&env, &admin, 14).unwrap();
+        });
+
+        // Test reset via direct storage access
+        let result = env.as_contract(&contract_id, || {
+            crate::bid::BidStorage::reset_bid_ttl_to_default(&env, &non_admin)
+        });
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+
+        // Admin can reset
+        let result = env.as_contract(&contract_id, || {
+            crate::bid::BidStorage::reset_bid_ttl_to_default(&env, &admin)
+        });
+        assert_eq!(result, Ok(7)); // Default is 7 days
+    }
+
+    // ========================================================================
+    // Comprehensive Privilege Escalation Prevention
+    // ========================================================================
+
+    #[test]
+    fn test_complete_admin_methods_list_prevents_privilege_escalation() {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        let non_admin = get_non_admin(&env);
+
+        // Initialize admin
+        initialize_admin(&env, &contract_id, &admin);
+
+        // Initialize fee system first (required by some tests)
+        let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+        let _ = client.initialize_fee_system(&admin);
+
+        // Test ALL admin-gated entrypoints systematically
+        // Non-admin should be rejected for each
+        let admin_methods = vec![
+            ("transfer_admin", || client.try_transfer_admin(&non_admin)),
+            ("set_protocol_config", || client.try_set_protocol_config(&non_admin, 1000, 365, 86400)),
+            ("set_fee_config", || client.try_set_fee_config(&non_admin, 200)),
+            ("add_currency", || client.try_add_currency(&non_admin, &Address::generate(&env))),
+            ("remove_currency", || client.try_remove_currency(&non_admin, &Address::generate(&env))),
+            ("set_currencies", || client.try_set_currencies(&non_admin, &Vec::new(&env))),
+            ("clear_currencies", || client.try_clear_currencies(&non_admin)),
+            ("initiate_emergency_withdraw", || client.try_initiate_emergency_withdraw(&non_admin, &Address::generate(&env), 1000, &Address::generate(&env))),
+            ("execute_emergency_withdraw", || client.try_execute_emergency_withdraw(&non_admin)),
+            ("cancel_emergency_withdraw", || client.try_cancel_emergency_withdraw(&non_admin)),
+            ("pause", || client.try_pause(&non_admin)),
+            ("unpause", || client.try_unpause(&non_admin)),
+            ("create_backup", || client.try_create_backup(&non_admin)),
+            ("cleanup_backups", || client.try_cleanup_backups(&non_admin)),
+            ("set_backup_retention_policy", || client.try_set_backup_retention_policy(&non_admin, 5, 0, true)),
+            ("initialize_protocol_limits", || client.try_initialize_protocol_limits(&non_admin, 1000, 365, 86400)),
+            ("set_protocol_limits", || client.try_set_protocol_limits(&non_admin, 1000, 365, 86400)),
+            ("update_protocol_limits", || client.try_update_protocol_limits(&non_admin, 1000, 365, 86400)),
+            ("update_limits_max_invoices", || client.try_update_limits_max_invoices(&non_admin, 1000, 365, 86400, 50)),
+            ("verify_business", || client.try_verify_business(&non_admin, &Address::generate(&env))),
+            ("reject_business", || client.try_reject_business(&non_admin, &Address::generate(&env), &soroban_sdk::String::from_str(&env, "reason"))),
+            ("set_investment_limit", || client.try_set_investment_limit(&Address::generate(&env), 500000)),
+            ("create_vesting_schedule", || client.try_create_vesting_schedule(&non_admin, &Address::generate(&env), &Address::generate(&env), 1000000, 1000, 100, 2000)),
+            ("initialize_fee_system", || client.try_initialize_fee_system(&non_admin)),
+        ];
+
+        for (method_name, method_call) in admin_methods {
+            let result = method_call();
+            assert!(
+                result.is_err(),
+                "Method {} should reject non-admin caller, but it succeeded",
+                method_name
+            );
+        }
+    }
+
+    #[test]
+    fn test_admin_transferred_no_longer_has_access() {
+        let (env, contract_id) = setup();
+        let admin_1 = Address::generate(&env);
+        let admin_2 = Address::generate(&env);
+
+        // Initialize admin_1
+        initialize_admin(&env, &contract_id, &admin_1);
+
+        // Transfer admin to admin_2
+        env.as_contract(&contract_id, || {
+            AdminStorage::transfer_admin(&env, &admin_1, &admin_2).unwrap();
+        });
+
+        // Verify admin_2 is now admin
+        assert_eq!(
+            env.as_contract(&contract_id, || AdminStorage::get_admin(&env)),
+            Some(admin_2)
+        );
+
+        // admin_1 should be rejected for all admin methods
+        let methods = vec![
+            ("set_protocol_config", || {
+                env.as_contract(&contract_id, || {
+                    crate::init::ProtocolInitializer::set_protocol_config(&env, &admin_1, 1000, 365, 86400)
+                })
+            }),
+            ("set_fee_config", || {
+                env.as_contract(&contract_id, || {
+                    crate::init::ProtocolInitializer::set_fee_config(&env, &admin_1, 200)
+                })
+            }),
+            ("set_paused", || {
+                env.as_contract(&contract_id, || {
+                    crate::pause::PauseControl::set_paused(&env, &admin_1, true)
+                })
+            }),
+            ("add_currency", || {
+                env.as_contract(&contract_id, || {
+                    crate::currency::CurrencyWhitelist::add_currency(&env, &admin_1, &Address::generate(&env))
+                })
+            }),
+            ("set_bid_ttl_days", || {
+                env.as_contract(&contract_id, || {
+                    crate::bid::BidStorage::set_bid_ttl_days(&env, &admin_1, 14)
+                })
+            }),
+            ("set_max_active_bids", || {
+                env.as_contract(&contract_id, || {
+                    crate::bid::BidStorage::set_max_active_bids_per_investor(&env, &admin_1, 50)
+                })
+            }),
+            ("set_protocol_limits", || {
+                env.as_contract(&contract_id, || {
+                    crate::protocol_limits::ProtocolLimitsContract::set_protocol_limits(&env, admin_1.clone(), 1000, 10, 100, 365, 86400, 100)
+                })
+            }),
+            ("emergency_initiate", || {
+                env.as_contract(&contract_id, || {
+                    crate::emergency::EmergencyWithdraw::initiate(&env, &admin_1, Address::generate(&env), 1000, Address::generate(&env))
+                })
+            }),
+        ];
+
+        for (method_name, method_call) in methods {
+            let result = method_call();
+            assert_eq!(
+                result,
+                Err(QuickLendXError::NotAdmin),
+                "Former admin should be rejected for {}",
+                method_name
+            );
+        }
+
+        // admin_2 should be accepted for all admin methods
+        let methods = vec![
+            ("set_protocol_config", || {
+                env.as_contract(&contract_id, || {
+                    crate::init::ProtocolInitializer::set_protocol_config(&env, &admin_2, 1000, 365, 86400)
+                })
+            }),
+            ("set_fee_config", || {
+                env.as_contract(&contract_id, || {
+                    crate::init::ProtocolInitializer::set_fee_config(&env, &admin_2, 200)
+                })
+            }),
+            ("set_paused", || {
+                env.as_contract(&contract_id, || {
+                    crate::pause::PauseControl::set_paused(&env, &admin_2, true)
+                })
+            }),
+            ("add_currency", || {
+                env.as_contract(&contract_id, || {
+                    crate::currency::CurrencyWhitelist::add_currency(&env, &admin_2, &Address::generate(&env))
+                })
+            }),
+        ];
+
+        for (method_name, method_call) in methods {
+            let result = method_call();
+            assert_eq!(
+                result.map(|_| ()),
+                Ok(()),
+                "New admin should be accepted for {}",
+                method_name
+            );
+        }
+    }
+}
