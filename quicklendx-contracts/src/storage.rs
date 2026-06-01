@@ -674,11 +674,6 @@ impl StorageManager {
     }
 }
 
-// Backwards-compatible re-export: some modules expect `bump_persistent`.
-// Keep the original function name (`extend_persistent_ttl`) but expose
-// the alias `bump_persistent` for callers that import it directly.
-pub use extend_persistent_ttl as bump_persistent;
-
 /// Comprehensive integrity audit for protocol storage indexes.
 ///
 /// This helper provides deep inspection of secondary indexes to ensure no
