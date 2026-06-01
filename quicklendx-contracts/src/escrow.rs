@@ -124,6 +124,8 @@ pub fn accept_bid_and_fund(
         mut bid,
     } = load_accept_bid_context(env, invoice_id, bid_id)?;
 
+    crate::qlx_log!(env, "escrow", "Accepting bid and funding invoice");
+
     // 5. Lock funds in escrow
     // This calls payments::create_escrow which calls token transfer and emits emit_escrow_created
     let escrow_id = create_escrow(
@@ -169,6 +171,8 @@ pub fn accept_bid_and_fund(
         insurance: Vec::new(env),
     };
     InvestmentStorage::store_investment(env, &investment);
+
+    crate::qlx_log!(env, "escrow", "Invoice funded and bid accepted");
 
     // 7. Events
     emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
@@ -251,6 +255,8 @@ pub fn refund_escrow_funds(
         investment.status = InvestmentStatus::Refunded;
         InvestmentStorage::update_investment(env, &investment);
     }
+
+    crate::qlx_log!(env, "escrow", "Escrow refunded successfully");
 
     // 7. Emit events
     emit_escrow_refunded(

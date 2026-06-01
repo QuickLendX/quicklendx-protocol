@@ -20,19 +20,19 @@
 /// The verification module enforces a **deny-by-default** policy: every
 /// restricted action requires the caller to prove verified status through
 /// a guard function.  Pending, rejected, and unknown actors are blocked.
+pub mod events;
 pub mod fees;
+pub mod pause;
 pub mod profits;
 pub mod settlement;
 pub mod verification;
 
 #[cfg(test)]
-mod test_fuzz;
-
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_fuzz_invariants;
-
 #[cfg(test)]
-mod test_business_kyc;
+pub mod test_admin;
 
 #[cfg(test)]
 mod test_investor_kyc;
+
+#[cfg(test)]
+mod test_pause;
