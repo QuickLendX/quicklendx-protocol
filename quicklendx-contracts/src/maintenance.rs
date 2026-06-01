@@ -50,7 +50,8 @@ const MAINTENANCE_REASON_KEY: Symbol = symbol_short!("maint_rsn");
 pub const MAX_REASON_LEN: u32 = 256;
 
 /// Report summarizing the results of a TTL extension operation.
-#[derive(Clone, contracttype)]
+#[contracttype]
+#[derive(Clone)]
 pub struct ExtendReport {
     pub invoices_refreshed: u32,
     pub bids_refreshed: u32,
