@@ -7,6 +7,7 @@ import {
   BidStatus,
   SettlementStatus,
 } from "../types/contract";
+import { withSpan } from "../lib/tracing";
 
 const MAX_SAMPLE_IDS = 5;
 
@@ -145,24 +146,26 @@ function scanMismatchSettlements(
 export async function checkOrphans(
   provider: InvariantDataProvider,
 ): Promise<InvariantReport> {
-  const [invoices, bids, settlements, disputes] = await Promise.all([
-    provider.getInvoices(),
-    provider.getBids(),
-    provider.getSettlements(),
-    provider.getDisputes(),
-  ]);
+  return withSpan("invariant.checkOrphans", {}, async () => {
+    const [invoices, bids, settlements, disputes] = await Promise.all([
+      provider.getInvoices(),
+      provider.getBids(),
+      provider.getSettlements(),
+      provider.getDisputes(),
+    ]);
 
-  const validInvoiceIds = new Set(invoices.map((i) => i.id));
-  return {
-    orphanBids: scanOrphans(bids as HasInvoiceId[], validInvoiceIds),
-    orphanSettlements: scanOrphans(
-      settlements as HasInvoiceId[],
-      validInvoiceIds,
-    ),
-    orphanDisputes: scanOrphans(disputes as HasInvoiceId[], validInvoiceIds),
-    mismatchSettlements: scanMismatchSettlements(bids, settlements),
-    timestamp: new Date().toISOString(),
-  };
+    const validInvoiceIds = new Set(invoices.map((i) => i.id));
+    return {
+      orphanBids: scanOrphans(bids as HasInvoiceId[], validInvoiceIds),
+      orphanSettlements: scanOrphans(
+        settlements as HasInvoiceId[],
+        validInvoiceIds,
+      ),
+      orphanDisputes: scanOrphans(disputes as HasInvoiceId[], validInvoiceIds),
+      mismatchSettlements: scanMismatchSettlements(bids, settlements),
+      timestamp: new Date().toISOString(),
+    };
+  });
 }
 
 // ── Cursor sequence ───────────────────────────────────────────────────────────
@@ -173,25 +176,31 @@ export async function checkOrphans(
  * indicate a regression (duplicate replay or rollback without re-index).
  */
 export function checkCursorSequence(cursors: number[]): CursorRegressionReport {
-  const regressions: Array<{
-    index: number;
-    previous: number;
-    current: number;
-  }> = [];
-  for (let i = 1; i < cursors.length; i++) {
-    if (cursors[i] <= cursors[i - 1]) {
-      regressions.push({
-        index: i,
-        previous: cursors[i - 1],
-        current: cursors[i],
-      });
-    }
-  }
-  return {
-    hasRegression: regressions.length > 0,
-    regressionCount: regressions.length,
-    regressions,
-  };
+  return withSpan(
+    "invariant.checkCursorSequence",
+    { cursor_count: cursors.length },
+    () => {
+      const regressions: Array<{
+        index: number;
+        previous: number;
+        current: number;
+      }> = [];
+      for (let i = 1; i < cursors.length; i++) {
+        if (cursors[i] <= cursors[i - 1]) {
+          regressions.push({
+            index: i,
+            previous: cursors[i - 1],
+            current: cursors[i],
+          });
+        }
+      }
+      return {
+        hasRegression: regressions.length > 0,
+        regressionCount: regressions.length,
+        regressions,
+      };
+    },
+  );
 }
 
 // ── Accounting totals ─────────────────────────────────────────────────────────
@@ -205,37 +214,39 @@ export function checkCursorSequence(cursors: number[]): CursorRegressionReport {
 export async function checkAccountingTotals(
   provider: InvariantDataProvider,
 ): Promise<AccountingReport> {
-  const [bids, settlements] = await Promise.all([
-    provider.getBids(),
-    provider.getSettlements(),
-  ]);
+  return withSpan("invariant.checkAccountingTotals", {}, async () => {
+    const [bids, settlements] = await Promise.all([
+      provider.getBids(),
+      provider.getSettlements(),
+    ]);
 
-  const acceptedBidByInvoice = new Map<string, Bid>();
-  for (const bid of bids) {
-    if (bid.status === BidStatus.Accepted) {
-      acceptedBidByInvoice.set(bid.invoice_id, bid);
+    const acceptedBidByInvoice = new Map<string, Bid>();
+    for (const bid of bids) {
+      if (bid.status === BidStatus.Accepted) {
+        acceptedBidByInvoice.set(bid.invoice_id, bid);
+      }
     }
-  }
 
-  const mismatchIds: string[] = [];
-  for (const settlement of settlements) {
-    if (settlement.status !== SettlementStatus.Paid) continue;
-    const bid = acceptedBidByInvoice.get(settlement.invoice_id);
-    if (!bid) {
-      mismatchIds.push(settlement.invoice_id);
-      continue;
+    const mismatchIds: string[] = [];
+    for (const settlement of settlements) {
+      if (settlement.status !== SettlementStatus.Paid) continue;
+      const bid = acceptedBidByInvoice.get(settlement.invoice_id);
+      if (!bid) {
+        mismatchIds.push(settlement.invoice_id);
+        continue;
+      }
+      if (BigInt(settlement.amount) !== BigInt(bid.bid_amount)) {
+        mismatchIds.push(settlement.invoice_id);
+      }
     }
-    if (BigInt(settlement.amount) !== BigInt(bid.bid_amount)) {
-      mismatchIds.push(settlement.invoice_id);
-    }
-  }
 
-  return {
-    mismatches: {
-      count: mismatchIds.length,
-      sampleIds: mismatchIds.slice(0, MAX_SAMPLE_IDS),
-    },
-  };
+    return {
+      mismatches: {
+        count: mismatchIds.length,
+        sampleIds: mismatchIds.slice(0, MAX_SAMPLE_IDS),
+      },
+    };
+  });
 }
 
 // ── Full suite ────────────────────────────────────────────────────────────────
@@ -249,27 +260,33 @@ export async function runFullInvariantSuite(
   provider: InvariantDataProvider,
   cursorHistory: number[],
 ): Promise<FullInvariantReport> {
-  const [orphans, accounting] = await Promise.all([
-    checkOrphans(provider),
-    checkAccountingTotals(provider),
-  ]);
-  const cursorSequence = checkCursorSequence(cursorHistory);
+  return withSpan(
+    "invariant.runFullInvariantSuite",
+    { cursor_history_count: cursorHistory.length },
+    async () => {
+      const [orphans, accounting] = await Promise.all([
+        checkOrphans(provider),
+        checkAccountingTotals(provider),
+      ]);
+      const cursorSequence = checkCursorSequence(cursorHistory);
 
-  const pass =
-    orphans.orphanBids.count === 0 &&
-    orphans.orphanSettlements.count === 0 &&
-    orphans.orphanDisputes.count === 0 &&
-    orphans.mismatchSettlements.count === 0 &&
-    !cursorSequence.hasRegression &&
-    accounting.mismatches.count === 0;
+      const pass =
+        orphans.orphanBids.count === 0 &&
+        orphans.orphanSettlements.count === 0 &&
+        orphans.orphanDisputes.count === 0 &&
+        orphans.mismatchSettlements.count === 0 &&
+        !cursorSequence.hasRegression &&
+        accounting.mismatches.count === 0;
 
-  return {
-    orphans,
-    cursorSequence,
-    accounting,
-    timestamp: new Date().toISOString(),
-    pass,
-  };
+      return {
+        orphans,
+        cursorSequence,
+        accounting,
+        timestamp: new Date().toISOString(),
+        pass,
+      };
+    },
+  );
 }
 
 // ── Persistence ───────────────────────────────────────────────────────────────
@@ -375,39 +392,43 @@ function recordMetrics(report: FullInvariantReport): void {
 // ── Alerting ────────────────────────────────────────────────────────────────
 
 export function emitInvariantAlert(report: FullInvariantReport): void {
-  if (report.pass) return;
+  withSpan("invariant.emitInvariantAlert", { pass: report.pass }, () => {
+    if (report.pass) return;
 
-  const violations: string[] = [];
-  if (report.orphans.orphanBids.count > 0)
-    violations.push(`orphan_bids: ${report.orphans.orphanBids.count}`);
-  if (report.orphans.orphanSettlements.count > 0)
-    violations.push(
-      `orphan_settlements: ${report.orphans.orphanSettlements.count}`,
-    );
-  if (report.orphans.orphanDisputes.count > 0)
-    violations.push(`orphan_disputes: ${report.orphans.orphanDisputes.count}`);
-  if (report.orphans.mismatchSettlements.count > 0)
-    violations.push(
-      `mismatch_settlements: ${report.orphans.mismatchSettlements.count}`,
-    );
-  if (report.cursorSequence.hasRegression)
-    violations.push(
-      `cursor_regression: ${report.cursorSequence.regressionCount}`,
-    );
-  if (report.accounting.mismatches.count > 0)
-    violations.push(
-      `accounting_mismatches: ${report.accounting.mismatches.count}`,
-    );
+    const violations: string[] = [];
+    if (report.orphans.orphanBids.count > 0)
+      violations.push(`orphan_bids: ${report.orphans.orphanBids.count}`);
+    if (report.orphans.orphanSettlements.count > 0)
+      violations.push(
+        `orphan_settlements: ${report.orphans.orphanSettlements.count}`,
+      );
+    if (report.orphans.orphanDisputes.count > 0)
+      violations.push(
+        `orphan_disputes: ${report.orphans.orphanDisputes.count}`,
+      );
+    if (report.orphans.mismatchSettlements.count > 0)
+      violations.push(
+        `mismatch_settlements: ${report.orphans.mismatchSettlements.count}`,
+      );
+    if (report.cursorSequence.hasRegression)
+      violations.push(
+        `cursor_regression: ${report.cursorSequence.regressionCount}`,
+      );
+    if (report.accounting.mismatches.count > 0)
+      violations.push(
+        `accounting_mismatches: ${report.accounting.mismatches.count}`,
+      );
 
-  console.error(
-    JSON.stringify({
-      level: "ALERT",
-      type: "INVARIANT_VIOLATION",
-      timestamp: report.timestamp,
-      violations,
-      message: `Invariant violation detected: ${violations.join(", ")}`,
-    }),
-  );
+    console.error(
+      JSON.stringify({
+        level: "ALERT",
+        type: "INVARIANT_VIOLATION",
+        timestamp: report.timestamp,
+        violations,
+        message: `Invariant violation detected: ${violations.join(", ")}`,
+      }),
+    );
+  });
 }
 
 // ── Scheduler ───────────────────────────────────────────────────────────────
@@ -454,30 +475,36 @@ export class InvariantScheduler {
   }
 
   private async runCheck(): Promise<void> {
-    if (!this.provider) return;
+    await withSpan(
+      "invariant.scheduler.runCheck",
+      { cursor_history_count: this.cursorHistory.length },
+      async () => {
+        if (!this.provider) return;
 
-    try {
-      const report = await runFullInvariantSuite(
-        this.provider,
-        this.cursorHistory,
-      );
-      recordMetrics(report);
-      reportStore.add({
-        report,
-        cursorHistory: [...this.cursorHistory],
-        runAt: report.timestamp,
-      });
-      emitInvariantAlert(report);
-    } catch (err) {
-      console.error(
-        JSON.stringify({
-          level: "ERROR",
-          type: "INVARIANT_CHECK_FAILED",
-          timestamp: new Date().toISOString(),
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      );
-    }
+        try {
+          const report = await runFullInvariantSuite(
+            this.provider,
+            this.cursorHistory,
+          );
+          recordMetrics(report);
+          reportStore.add({
+            report,
+            cursorHistory: [...this.cursorHistory],
+            runAt: report.timestamp,
+          });
+          emitInvariantAlert(report);
+        } catch (err) {
+          console.error(
+            JSON.stringify({
+              level: "ERROR",
+              type: "INVARIANT_CHECK_FAILED",
+              timestamp: new Date().toISOString(),
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        }
+      },
+    );
   }
 
   isStarted(): boolean {
