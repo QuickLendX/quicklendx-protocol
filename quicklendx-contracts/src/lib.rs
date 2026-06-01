@@ -26,6 +26,8 @@ extern crate alloc;
 mod scratch_events;
 #[cfg(test)]
 mod test_default;
+#[cfg(test)]
+mod test_default_finality_matrix;
 #[cfg(test)] mod test_escrow_uniqueness;
 #[cfg(test)] mod test_escrow;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -943,6 +945,13 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+
+        if new_status == InvoiceStatus::Defaulted {
+            // Route every default transition through the defaults module so settlement finality,
+            // escrow finality, grace checks, and duplicate-default guards stay centralized.
+            return do_mark_invoice_defaulted(&env, &invoice_id, None);
+        }
+
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -978,13 +987,6 @@ impl QuickLendXContract {
                 let investor = invoice.investor.clone().unwrap_or(admin.clone());
                 events::emit_invoice_settled(&env, &invoice, 0, 0);
                 let _ = investor;
-            }
-            InvoiceStatus::Defaulted => {
-                invoice.mark_as_defaulted();
-                InvoiceStorage::update_invoice(&env, &invoice);
-                InvoiceStorage::add_to_status_invoices(&env, invoice.status, &invoice_id);
-                // Emit canonical InvoiceDefaulted event
-                events::emit_invoice_defaulted(&env, &invoice);
             }
             _ => return Err(QuickLendXError::InvalidStatus),
         }
