@@ -130,6 +130,8 @@ mod test_bid_ranking;
 mod test_events;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_invoice_metadata;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_distribute_revenue;
 #[cfg(test)]
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_invariants;
