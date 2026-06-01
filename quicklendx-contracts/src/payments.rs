@@ -4,7 +4,7 @@
 
 use crate::errors::QuickLendXError;
 use crate::events::emit_escrow_created;
-use crate::storage::bump_persistent;
+use crate::storage::extend_persistent_ttl;
 use soroban_sdk::token;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
 
@@ -36,17 +36,17 @@ pub struct EscrowStorage;
 impl EscrowStorage {
     pub fn store_escrow(env: &Env, escrow: &Escrow) {
         env.storage().persistent().set(&escrow.escrow_id, escrow);
-        bump_persistent(env, &escrow.escrow_id);
+        extend_persistent_ttl(env, &escrow.escrow_id);
         // Also store by invoice_id for easy lookup
         let invoice_key = (symbol_short!("escrow"), &escrow.invoice_id);
         env.storage().persistent().set(&invoice_key, &escrow.escrow_id);
-        bump_persistent(env, &invoice_key);
+        extend_persistent_ttl(env, &invoice_key);
     }
 
     pub fn get_escrow(env: &Env, escrow_id: &BytesN<32>) -> Option<Escrow> {
         let result = env.storage().persistent().get(escrow_id);
         if result.is_some() {
-            bump_persistent(env, &escrow_id);
+            extend_persistent_ttl(env, &escrow_id);
         }
         result
     }
@@ -55,7 +55,7 @@ impl EscrowStorage {
         let invoice_key = (symbol_short!("escrow"), invoice_id);
         let escrow_id: Option<BytesN<32>> = env.storage().persistent().get(&invoice_key);
         if let Some(id) = escrow_id {
-            bump_persistent(env, &invoice_key);
+            extend_persistent_ttl(env, &invoice_key);
             Self::get_escrow(env, &id)
         } else {
             None
@@ -64,10 +64,10 @@ impl EscrowStorage {
 
     pub fn update_escrow(env: &Env, escrow: &Escrow) {
         env.storage().persistent().set(&escrow.escrow_id, escrow);
-        bump_persistent(env, &escrow.escrow_id);
+        extend_persistent_ttl(env, &escrow.escrow_id);
         let invoice_key = (symbol_short!("escrow"), &escrow.invoice_id);
         if env.storage().persistent().get::<_, BytesN<32>>(&invoice_key).is_some() {
-            bump_persistent(env, &invoice_key);
+            extend_persistent_ttl(env, &invoice_key);
         }
     }
 
