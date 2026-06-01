@@ -726,7 +726,6 @@ fn test_audit_stats_incremental_updates() {
     let stats1 = client.get_audit_stats();
     assert_eq!(stats1.total_entries, initial + 1); // 1 entry per invoice
 
-
     let _ = client.store_invoice(
         &business,
         &2000i128,
@@ -771,7 +770,10 @@ fn test_audit_trail_is_append_only() {
 
     let trail_after_create = client.get_invoice_audit_trail(&invoice_id);
     let len_after_create = trail_after_create.len();
-    assert!(len_after_create >= 1, "trail must have at least 1 entry after create");
+    assert!(
+        len_after_create >= 1,
+        "trail must have at least 1 entry after create"
+    );
 
     let _ = client.verify_invoice(&invoice_id);
     let trail_after_verify = client.get_invoice_audit_trail(&invoice_id);
@@ -849,7 +851,10 @@ fn test_audit_query_combined_actor_and_operation_filter() {
         end_timestamp: None,
     };
     let results = client.query_audit_logs(&filter, &100u32);
-    assert!(!results.is_empty(), "should find admin InvoiceVerified entries");
+    assert!(
+        !results.is_empty(),
+        "should find admin InvoiceVerified entries"
+    );
     for e in results.iter() {
         assert_eq!(e.operation, AuditOperation::InvoiceVerified);
         assert_eq!(e.actor, admin);
@@ -883,7 +888,10 @@ fn test_audit_query_time_range_no_match_returns_empty() {
         end_timestamp: Some(far_future + 3600),
     };
     let results = client.query_audit_logs(&filter, &100u32);
-    assert!(results.is_empty(), "future time range should return no entries");
+    assert!(
+        results.is_empty(),
+        "future time range should return no entries"
+    );
 }
 
 /// Integrity check passes for a full invoice lifecycle.
@@ -908,7 +916,10 @@ fn test_audit_integrity_full_lifecycle() {
     let _ = client.accept_bid(&invoice_id, &bid_id);
 
     let valid = client.validate_invoice_audit_integrity(&invoice_id);
-    assert!(valid, "full lifecycle audit trail must pass integrity check");
+    assert!(
+        valid,
+        "full lifecycle audit trail must pass integrity check"
+    );
 }
 
 // ============================================================================
@@ -945,7 +956,10 @@ fn test_audit_append_only_no_overwrites() {
 
     let trail1 = client.get_invoice_audit_trail(&invoice_id);
     let count1 = trail1.len();
-    assert!(count1 >= 1, "first operation should create at least 1 entry");
+    assert!(
+        count1 >= 1,
+        "first operation should create at least 1 entry"
+    );
 
     // Verify the invoice, which adds another entry
     let _ = client.verify_invoice(&invoice_id);
@@ -1080,7 +1094,8 @@ fn test_audit_one_entry_per_invoice_create() {
     let count_after = stats_after.total_entries;
 
     assert_eq!(
-        count_after, count_before + 1,
+        count_after,
+        count_before + 1,
         "store_invoice must produce exactly 1 audit entry"
     );
 }
@@ -1131,7 +1146,8 @@ fn test_audit_one_entry_per_verify() {
     }
 
     assert_eq!(
-        verified_after, verified_before + 1,
+        verified_after,
+        verified_before + 1,
         "verify_invoice must produce exactly 1 InvoiceVerified entry"
     );
     assert!(
@@ -1171,7 +1187,8 @@ fn test_audit_one_entry_per_bid() {
     let count_after = stats_after.total_entries;
 
     assert_eq!(
-        count_after, count_before + 1,
+        count_after,
+        count_before + 1,
         "place_bid must produce exactly 1 audit entry"
     );
 }
@@ -1214,8 +1231,7 @@ fn test_audit_stats_reconciliation_total_count() {
     assert_eq!(
         stats.total_entries, actual_count,
         "AUDIT_STATS.total_entries ({}) must exactly match query result count ({})",
-        stats.total_entries,
-        actual_count
+        stats.total_entries, actual_count
     );
 }
 
@@ -1434,8 +1450,14 @@ fn test_audit_comprehensive_lifecycle_entry_count() {
     let count_after_accept = trail_after_accept.len();
 
     // Each operation should append entries
-    assert!(count_after_verify >= count_after_create + 1, "verify should add entry");
-    assert!(count_after_bid >= count_after_verify + 1, "bid should add entry");
+    assert!(
+        count_after_verify >= count_after_create + 1,
+        "verify should add entry"
+    );
+    assert!(
+        count_after_bid >= count_after_verify + 1,
+        "bid should add entry"
+    );
     assert!(
         count_after_accept >= count_after_bid + 1,
         "accept should add entry"
@@ -1481,7 +1503,8 @@ fn test_audit_rapid_fire_operations() {
     let count_after = stats_after.total_entries;
 
     assert_eq!(
-        count_after, count_before + 10,
+        count_after,
+        count_before + 10,
         "10 rapid invoices must create exactly 10 entries"
     );
 }
@@ -1511,7 +1534,76 @@ fn test_audit_large_amounts_recorded() {
     // Check if the amount was recorded in the audit entry
     let entry = client.get_audit_entry(&trail.get(0).unwrap());
     assert_eq!(
-        entry.amount, Some(large_amount),
+        entry.amount,
+        Some(large_amount),
         "audit entry must record the large amount"
     );
+}
+
+#[test]
+fn test_audit_hash_chain_empty_and_single_entry() {
+    let (env, client, _admin, business) = setup();
+    let empty_invoice = BytesN::from_array(&env, &[7u8; 32]);
+    assert!(client.verify_audit_chain(&empty_invoice));
+    assert_eq!(client.first_audit_chain_divergence(&empty_invoice), None);
+
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "hash chain single"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let trail = client.get_invoice_audit_trail(&invoice_id);
+    assert_eq!(trail.len(), 1);
+    let entry = client.get_audit_entry(&trail.get(0).unwrap());
+    assert_eq!(
+        entry.prev_hash,
+        crate::audit::AuditLogEntry::genesis_prev_hash(&env)
+    );
+    assert!(client.verify_audit_chain(&invoice_id));
+    assert_eq!(client.first_audit_chain_divergence(&invoice_id), None);
+}
+
+#[test]
+fn test_audit_hash_chain_tampered_middle_fails() {
+    let (env, client, _admin, business) = setup();
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "hash chain tamper"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let _ = client.verify_invoice(&invoice_id);
+    crate::audit::log_payment_processed(
+        &env,
+        invoice_id.clone(),
+        business.clone(),
+        25,
+        String::from_str(&env, "manual test payment"),
+    );
+
+    assert!(client.verify_audit_chain(&invoice_id));
+    let trail = client.get_invoice_audit_trail(&invoice_id);
+    assert!(trail.len() >= 3);
+
+    let middle_id = trail.get(1).unwrap();
+    let mut middle = client.get_audit_entry(&middle_id);
+    middle.amount = Some(999_999);
+    env.as_contract(&client.address, || {
+        env.storage().instance().set(&middle_id, &middle);
+    });
+
+    assert!(!client.verify_audit_chain(&invoice_id));
+    assert_eq!(client.first_audit_chain_divergence(&invoice_id), Some(2));
 }
