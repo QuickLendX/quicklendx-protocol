@@ -104,6 +104,8 @@ mod test_string_limits;
 mod test_invoice_metadata;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_invoice_metadata;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_currency_whitelist;
 #[cfg(test)]
 mod test_input_matrix;
 #[cfg(test)]
