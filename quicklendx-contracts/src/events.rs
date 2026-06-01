@@ -574,13 +574,7 @@ pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
 
 // ... (after TtlExtended)
 
-pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
-    TtlExtended {
-        kind: kind.clone(),
-        count,
-    }
-    .publish(env);
-}
+
 
 #[contractevent]
 pub struct EmergencyWithdrawalInitiated {

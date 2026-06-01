@@ -134,10 +134,12 @@ Even if the outer guard is bypassed, `create_escrow` re-checks
 | Post-release re-funding | Layer 2: escrow record persists with `Released` status |
 | Post-refund re-funding | Layer 2: escrow record persists with `Refunded` status |
 | Cross-invoice storage collision | Per-invoice storage key `(symbol_short!("escrow"), invoice_id)` |
+| Concurrent bids race (two valid bids for same invoice) | Both layers check for existing escrow/investment; second acceptance sees escrow/investment and is rejected |
+| Bid accepted with pre-existing investment record | Outer guard in `load_accept_bid_context` rejects via `InvestmentStorage::get_investment_by_invoice` check, returning `InvalidStatus` |
 
 ### Test Coverage
 
-All attack vectors above are covered in `src/test_escrow_uniqueness.rs` (issue #791).
+All attack vectors above are covered in `src/test_escrow_uniqueness.rs` (issue #791), with additional adversarial tests for concurrent bids and pre-existing investment records.
 Run with: `cargo test test_escrow_uniqueness`
 
 ## Key Functions

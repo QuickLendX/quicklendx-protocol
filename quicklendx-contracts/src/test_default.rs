@@ -16,7 +16,7 @@ use soroban_sdk::{
 };
 
 // Helper: Setup contract with admin and core config
-fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
+pub fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
