@@ -88,13 +88,7 @@ fn make_metadata_with_items(env: &Env, item_count: u32) -> (InvoiceMetadata, i12
 // ---------------------------------------------------------------------------
 
 proptest! {
-    #![proptest_config({
-        let mut config = ProptestConfig::from_env();
-        if let Some(seed_array) = crate::test_seed::seed() {
-            config.rng_algorithm = proptest::test_runner::RngAlgorithm::ChaCha;
-        }
-        config
-    })]
+    #![proptest_config(ProptestConfig::from_env())]
 
     #[test]
     fn fuzz_tags_at_or_below_max_accepts(count in 0u32..=MAX_INVOICE_TAGS) {
@@ -192,13 +186,7 @@ proptest! {
 // ---------------------------------------------------------------------------
 
 proptest! {
-    #![proptest_config({
-        let mut config = ProptestConfig::from_env();
-        if let Some(seed_array) = crate::test_seed::seed() {
-            config.rng_algorithm = proptest::test_runner::RngAlgorithm::ChaCha;
-        }
-        config
-    })]
+    #![proptest_config(ProptestConfig::from_env())]
 
     #[test]
     fn fuzz_line_items_at_or_below_max_accepts(count in 1u32..=MAX_METADATA_LINE_ITEMS) {
@@ -241,13 +229,7 @@ proptest! {
 // ---------------------------------------------------------------------------
 
 proptest! {
-    #![proptest_config({
-        let mut config = ProptestConfig::from_env();
-        if let Some(seed_array) = crate::test_seed::seed() {
-            config.rng_algorithm = proptest::test_runner::RngAlgorithm::ChaCha;
-        }
-        config
-    })]
+    #![proptest_config(ProptestConfig::from_env())]
 
     #[test]
     fn fuzz_ratings_at_or_below_max_accepts(count in 0u32..=MAX_RATINGS_PER_INVOICE) {
@@ -312,13 +294,7 @@ proptest! {
 // ---------------------------------------------------------------------------
 
 proptest! {
-    #![proptest_config({
-        let mut config = ProptestConfig::from_env();
-        if let Some(seed_array) = crate::test_seed::seed() {
-            config.rng_algorithm = proptest::test_runner::RngAlgorithm::ChaCha;
-        }
-        config
-    })]
+    #![proptest_config(ProptestConfig::from_env())]
 
     /// Randomly add and remove distinct tags, checking index consistency.
     ///
