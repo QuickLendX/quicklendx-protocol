@@ -43,6 +43,7 @@ pub mod currency;
 pub mod defaults;
 pub mod diagnostics;
 pub mod dispute;
+pub mod dispute_timeline;
 pub mod emergency;
 pub mod errors;
 pub mod escrow;
@@ -80,6 +81,8 @@ mod test_cleanup_pagination;
 mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
+#[cfg(test)]
+mod test_dispute_timeline_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -2892,6 +2895,7 @@ impl QuickLendXContract {
         if reason.len() == 0 {
             return Err(QuickLendXError::InvalidDisputeReason);
         }
+        dispute_timeline::clear_under_review_timestamp(&env, &invoice_id);
         invoice.dispute_status = DisputeStatus::Disputed;
         invoice.dispute = crate::types::Dispute {
             created_by: creator.clone(),
@@ -2974,9 +2978,19 @@ impl QuickLendXContract {
         AdminStorage::require_admin(&env, &admin)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        match invoice.dispute_status {
+            DisputeStatus::None => return Err(QuickLendXError::DisputeNotFound),
+            DisputeStatus::Disputed => {}
+            DisputeStatus::UnderReview | DisputeStatus::Resolved => {
+                return Err(QuickLendXError::InvalidStatus);
+            }
+        }
+
         invoice.dispute_status = DisputeStatus::UnderReview;
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
+        dispute_timeline::set_under_review_timestamp(&env, &invoice_id, env.ledger().timestamp());
         // Emit DisputeUnderReview event immediately after state mutation.
         emit_dispute_under_review(&env, &invoice_id, &admin);
         Ok(())
@@ -2992,6 +3006,11 @@ impl QuickLendXContract {
         validate_dispute_resolution(&resolution)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        if invoice.dispute_status != DisputeStatus::UnderReview {
+            return Err(QuickLendXError::DisputeNotUnderReview);
+        }
+
         invoice.dispute_status = DisputeStatus::Resolved;
         invoice.dispute.resolution = resolution.clone();
         invoice.dispute.resolved_by = admin.clone();
@@ -3020,6 +3039,15 @@ impl QuickLendXContract {
             }
         }
         result
+    }
+
+    pub fn get_dispute_timeline(
+        env: Env,
+        invoice_id: BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> Result<dispute_timeline::DisputeTimeline, QuickLendXError> {
+        dispute_timeline::get_dispute_timeline(&env, &invoice_id, offset, limit)
     }
 
     pub fn get_invoices_by_dispute_status(
