@@ -4,17 +4,18 @@ import { eventProcessor } from "./eventProcessor";
 import { DefaultEventValidator } from "./eventValidator";
 import { InMemoryRawEventStore } from "./rawEventStore";
 import { InMemoryDerivedTableStore } from "./derivedTableStore";
-import { 
-  ReplayRun, 
-  ReplayStartRequest, 
-  ReplayPreview, 
+import {
+  ReplayRun,
+  ReplayStartRequest,
+  ReplayPreview,
   ReplayAuditEntry,
   ReplayStats,
   RawEventStore,
   DerivedTableStore,
   ReplayRunStatus,
-  ReplayAuditEventType
+  ReplayAuditEventType,
 } from "../types/replay";
+import { SnapshotScheduler } from "./snapshotService";
 
 export class ReplayError extends Error {
   public readonly code: string;
@@ -34,6 +35,8 @@ export class ReplayService {
   private readonly runTimers = new Map<string, NodeJS.Timeout>();
   private readonly auditLogPath: string;
   private failureAtLedger: number | null = null;
+  /** Optional snapshot scheduler wired in after construction. */
+  private snapshotScheduler: SnapshotScheduler | null = null;
 
   private constructor(
     private readonly rawEventStore: RawEventStore,
@@ -52,6 +55,14 @@ export class ReplayService {
       ReplayService.instance = new ReplayService(rawEventStore, derivedTableStore);
     }
     return ReplayService.instance;
+  }
+
+  /**
+   * Wire the SnapshotScheduler so that batch boundaries are signalled for
+   * mid-batch snapshot detection.
+   */
+  public setSnapshotScheduler(scheduler: SnapshotScheduler): void {
+    this.snapshotScheduler = scheduler;
   }
 
   public async startReplay(
