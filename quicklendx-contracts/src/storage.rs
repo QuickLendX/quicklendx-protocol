@@ -14,7 +14,7 @@ use crate::types::{
 /// Default TTL threshold for persistent storage (adjust the value as needed)
 pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800; // ~30 days at 5s/ledger
 
-pub fn extend_persistent_ttl<T>(env: &Env, key: &T) 
+pub fn extend_persistent_ttl<T>(env: &Env, key: &T)
 where
     T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
 {
@@ -22,6 +22,12 @@ where
     env.storage().persistent().extend_ttl(key, ttl_u32, ttl_u32);
 }
 
+/// Renew persistent TTL for a key after a successful read/write.
+///
+/// Several storage-heavy modules rely on this helper to keep hot records alive
+/// without duplicating TTL logic. It is intentionally an alias of
+/// `extend_persistent_ttl` so older call sites continue to compile while using
+/// the same renewal policy.
 pub fn bump_persistent<T>(env: &Env, key: &T)
 where
     T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,

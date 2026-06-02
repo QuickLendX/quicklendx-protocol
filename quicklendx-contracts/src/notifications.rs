@@ -3,8 +3,7 @@ use crate::protocol_limits::{
 };
 use crate::types::Bid;
 use crate::types::{Invoice, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, Map, String, Vec};
-use soroban_sdk::xdr::ToXdr;
+use soroban_sdk::{contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, Map, String, Vec};
 
 /// Maximum number of idempotency keys to track in the bloom-resistant set.
 /// This provides protection against replay attacks while maintaining reasonable storage.

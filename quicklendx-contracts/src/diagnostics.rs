@@ -84,12 +84,13 @@
 macro_rules! qlx_log {
     // Plain message — no format args
     ($env:expr, $domain:literal, $msg:literal) => {
-        soroban_sdk::log!($env, $msg)
+        soroban_sdk::log!($env, "[{}] {}", $domain, $msg)
     };
     // Message with format arguments
-    ($env:expr, $domain:literal, $msg:literal, $($arg:tt)*) => {
-        soroban_sdk::log!($env, $msg, $($arg)*)
-    };
+    ($env:expr, $domain:literal, $msg:literal, $($arg:tt)*) => {{
+        let rendered = ::alloc::format!($msg, $($arg)*);
+        soroban_sdk::log!($env, "[{}] {}", $domain, rendered)
+    }};
 }
 
 /// No-op version of `qlx_log!` compiled when both `cfg(test)` and `feature = "diagnostics"`
