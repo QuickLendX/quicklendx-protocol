@@ -4,9 +4,11 @@
  * All key hashes are SHA-256 — raw secrets are never stored.
  * Prefix lookups are O(1) via a UNIQUE index on api_keys.prefix.
  * Audit rows are INSERT-only (append-only, no updates or deletes).
+ * 
+ * Performance: Uses centralized prepared statement cache for optimal throughput.
  */
 
-import { getDatabase } from '../lib/database';
+import { getDatabase, getPreparedStatement } from '../lib/database';
 
 export interface DbApiKey {
   id: string;
@@ -83,7 +85,7 @@ class Database {
   // ---- API Key operations ----
 
   createApiKey(key: DbApiKey): void {
-    this.getDb().prepare(`
+    getPreparedStatement(`
       INSERT INTO api_keys (id, key_hash, prefix, name, scopes, created_at, last_used_at, expires_at, revoked, created_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -93,12 +95,12 @@ class Database {
   }
 
   getApiKeyById(id: string): DbApiKey | undefined {
-    const row = this.getDb().prepare('SELECT * FROM api_keys WHERE id = ?').get(id);
+    const row = getPreparedStatement('SELECT * FROM api_keys WHERE id = ?').get(id);
     return row ? rowToDbApiKey(row) : undefined;
   }
 
   getApiKeyByPrefix(prefix: string): DbApiKey | undefined {
-    const row = this.getDb().prepare('SELECT * FROM api_keys WHERE prefix = ?').get(prefix);
+    const row = getPreparedStatement('SELECT * FROM api_keys WHERE prefix = ?').get(prefix);
     return row ? rowToDbApiKey(row) : undefined;
   }
 
@@ -112,7 +114,7 @@ class Database {
     const setClause = keys.map((k) => `${k} = ?`).join(', ');
     const values = keys.map((k) => updates[k] ?? null);
 
-    this.getDb().prepare(`UPDATE api_keys SET ${setClause} WHERE id = ?`).run(...values, id);
+    getPreparedStatement(`UPDATE api_keys SET ${setClause} WHERE id = ?`).run(...values, id);
     return true;
   }
 
@@ -120,8 +122,8 @@ class Database {
     const existing = this.getApiKeyById(id);
     if (!existing) return false;
 
-    this.getDb().prepare('DELETE FROM api_key_audit_log WHERE key_id = ?').run(id);
-    this.getDb().prepare('DELETE FROM api_keys WHERE id = ?').run(id);
+    getPreparedStatement('DELETE FROM api_key_audit_log WHERE key_id = ?').run(id);
+    getPreparedStatement('DELETE FROM api_keys WHERE id = ?').run(id);
     return true;
   }
 
@@ -146,14 +148,14 @@ class Database {
 
     sql += ' ORDER BY created_at DESC';
 
-    const rows = this.getDb().prepare(sql).all(...params);
+    const rows = getPreparedStatement(sql).all(...params);
     return rows.map(rowToDbApiKey);
   }
 
   // ---- Audit log operations ----
 
   createAuditLog(log: DbAuditLog): void {
-    this.getDb().prepare(`
+    getPreparedStatement(`
       INSERT INTO api_key_audit_log (id, event_type, key_id, actor, timestamp, ip_address, endpoint, metadata)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -183,20 +185,20 @@ class Database {
 
     sql += ' ORDER BY timestamp DESC';
 
-    const rows = this.getDb().prepare(sql).all(...params);
+    const rows = getPreparedStatement(sql).all(...params);
     return rows.map(rowToDbAuditLog);
   }
 
   // ---- Utility ----
 
   clear(): void {
-    this.getDb().prepare('DELETE FROM api_key_audit_log').run();
-    this.getDb().prepare('DELETE FROM api_keys').run();
+    getPreparedStatement('DELETE FROM api_key_audit_log').run();
+    getPreparedStatement('DELETE FROM api_keys').run();
   }
 
   getStats() {
-    const apiKeyCount = (this.getDb().prepare('SELECT COUNT(*) AS count FROM api_keys').get() as any).count;
-    const auditCount = (this.getDb().prepare('SELECT COUNT(*) AS count FROM api_key_audit_log').get() as any).count;
+    const apiKeyCount = (getPreparedStatement('SELECT COUNT(*) AS count FROM api_keys').get() as any).count;
+    const auditCount = (getPreparedStatement('SELECT COUNT(*) AS count FROM api_key_audit_log').get() as any).count;
     return {
       apiKeys: apiKeyCount,
       auditLogs: auditCount,

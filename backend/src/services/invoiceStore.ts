@@ -1,9 +1,8 @@
-import { getDatabase } from '../lib/database';
+import { getDatabase, getPreparedStatement } from '../lib/database';
 import { Invoice, InvoiceStatus } from '../types/contract';
 
 export const invoiceStore = {
   findInvoices(filter: { business?: string; status?: InvoiceStatus } = {}): Invoice[] {
-    const db = getDatabase();
     let query = 'SELECT * FROM invoices';
     const params: any[] = [];
     const conditions: string[] = [];
@@ -21,20 +20,18 @@ export const invoiceStore = {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    const rows = db.prepare(query).all(...params);
+    const rows = getPreparedStatement(query).all(...params);
     return rows.map(mapRowToInvoice);
   },
 
   findInvoiceById(id: string): Invoice | undefined {
-    const db = getDatabase();
-    const row = db.prepare('SELECT * FROM invoices WHERE id = ?').get(id);
+    const row = getPreparedStatement('SELECT * FROM invoices WHERE id = ?').get(id);
     if (!row) return undefined;
     return mapRowToInvoice(row);
   },
 
   insertInvoice(invoice: Invoice): void {
-    const db = getDatabase();
-    db.prepare(`
+    getPreparedStatement(`
       INSERT INTO invoices (
         id, business, amount, currency, due_date, status, description, category, tags, metadata,
         created_at, updated_at, contract_version, event_schema_version, indexed_at
@@ -61,8 +58,7 @@ export const invoiceStore = {
   },
 
   deleteAll(): void {
-    const db = getDatabase();
-    db.prepare('DELETE FROM invoices').run();
+    getPreparedStatement('DELETE FROM invoices').run();
   }
 };
 

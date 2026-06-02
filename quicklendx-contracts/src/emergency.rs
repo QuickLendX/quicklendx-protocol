@@ -280,6 +280,28 @@ impl EmergencyWithdraw {
     /// - The timelock has elapsed (unlock_at <= now)
     /// - It has not expired (expires_at > now)
     ///
+    /// # Timelock Window Math
+    /// The execution window is defined by the following boundaries:
+    /// - **Lower bound (unlock_at)**: INCLUSIVE - `now >= unlock_at`
+    ///   - Execution at exactly `unlock_at` is allowed
+    ///   - Execution at `unlock_at - 1` fails with `EmergencyWithdrawTimelockNotElapsed`
+    /// - **Upper bound (expires_at)**: EXCLUSIVE - `now < expires_at`
+    ///   - Execution at `expires_at - 1` is allowed (last valid second)
+    ///   - Execution at exactly `expires_at` fails with `EmergencyWithdrawExpired`
+    ///
+    /// # Example Timeline
+    /// ```text
+    /// initiate_at = 1000
+    /// unlock_at = 1000 + 86400 = 87400  (24 hours later)
+    /// expires_at = 87400 + 604800 = 692200  (7 days after unlock)
+    ///
+    /// Valid execution window: [87400, 692200)
+    /// - At time 87399: FAILS (timelock not elapsed)
+    /// - At time 87400: SUCCESS (exact unlock boundary)
+    /// - At time 692199: SUCCESS (last valid second)
+    /// - At time 692200: FAILS (expired)
+    /// ```
+    ///
     /// # Returns
     /// * `Some(true)` if the withdrawal can be executed
     /// * `Some(false)` if the withdrawal exists but cannot be executed yet
@@ -292,6 +314,11 @@ impl EmergencyWithdraw {
     }
 
     /// Get time remaining until the withdrawal can be executed.
+    ///
+    /// # Timelock Math
+    /// Returns the number of seconds until the timelock elapses:
+    /// - If `now < unlock_at`: returns `unlock_at - now` (positive value)
+    /// - If `now >= unlock_at`: returns `0` (timelock has elapsed)
     ///
     /// # Returns
     /// * `Some(remaining_secs)` - Seconds until timelock elapses (0 if already elapsed)
@@ -308,6 +335,11 @@ impl EmergencyWithdraw {
     }
 
     /// Get time remaining until the withdrawal expires (becomes invalid).
+    ///
+    /// # Expiration Math
+    /// Returns the number of seconds until the withdrawal becomes invalid:
+    /// - If `now < expires_at`: returns `expires_at - now` (positive value)
+    /// - If `now >= expires_at`: returns `0` (already expired)
     ///
     /// # Returns
     /// * `Some(remaining_secs)` - Seconds until expiration (0 if already expired)
