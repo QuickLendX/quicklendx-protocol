@@ -623,14 +623,6 @@ pub struct BidTtlUpdated {
 }
 
 #[contractevent]
-pub struct BidTtlUpdated {
-    pub old_days: u64,
-    pub new_days: u64,
-    pub admin: Address,
-    pub timestamp: u64,
-}
-
-#[contractevent]
 pub struct RevenueDistributed {
     pub period: u64,
     pub treasury_amount: i128,
