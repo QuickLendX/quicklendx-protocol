@@ -172,6 +172,7 @@ pub enum QuickLendXError {
     MaintenanceModeActive = 2201,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DuplicateDefaultTransition = 2202,
+    BackupVersionUnsupported = 2203,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -258,6 +259,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
+            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
         }
     }
 }

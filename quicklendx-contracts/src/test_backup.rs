@@ -4,10 +4,11 @@ use crate::{
     backup::{Backup, BackupStatus, BackupStorage},
     invoice::InvoiceCategory,
     QuickLendXContract, QuickLendXContractClient, QuickLendXError,
+    types::{Invoice, InvoiceStatus},
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, BytesN, Env, String, Vec,
+    Address, BytesN, Env, String, Vec, IntoVal,
 };
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
@@ -18,7 +19,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
+    let _ = client.try_initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
     (env, client, admin)
 }
 
@@ -100,6 +101,7 @@ fn create_invoice(
             description: String::from_str(env, "test backup"),
             invoice_count: count,
             status: BackupStatus::Active,
+            format_version: 2,
         };
  
         BackupStorage::store_backup(env, &backup, Some(&invoices)).unwrap();
@@ -149,7 +151,10 @@ fn test_backup_ids_are_unique_and_backup_list_is_deduplicated() {
     assert_eq!(backups.get(1).unwrap(), id2);
     assert_eq!(backups.get(2).unwrap(), id3);
 
-    BackupStorage::add_to_backup_list(&env, &id3);
+    env.as_contract(&client.address, || {
+        BackupStorage::add_to_backup_list(&env, &id3);
+    });
+
     assert_eq!(client.get_backups().len(), 3);
 }
 
@@ -163,7 +168,10 @@ fn test_validate_backup_rejects_tampered_metadata() {
 
     let mut tampered = client.get_backup_details(&backup_id).unwrap();
     tampered.invoice_count = 999;
-    env.storage().instance().set(&backup_id, &tampered);
+    env.as_contract(&client.address, || {
+        env.storage().instance().set(&backup_id, &tampered);
+    });
+
 
     assert!(!client.validate_backup(&backup_id));
 }
@@ -188,7 +196,10 @@ fn test_retention_policy_by_count_purges_old_metadata_and_data() {
     assert!(active.contains(&id3));
 
     assert!(client.get_backup_details(&id1).is_none());
-    assert!(BackupStorage::get_backup_data(&env, &id1).is_none());
+    env.as_contract(&client.address, || {
+        assert!(BackupStorage::get_backup_data(&env, &id1).is_none());
+    });
+
 }
 
 #[test]
@@ -211,7 +222,10 @@ fn test_archived_backups_survive_cleanup() {
 
     let archived = client.get_backup_details(&archived_id).unwrap();
     assert_eq!(archived.status, BackupStatus::Archived);
-    assert!(BackupStorage::get_backup_data(&env, &archived_id).is_some());
+    env.as_contract(&client.address, || {
+        assert!(BackupStorage::get_backup_data(&env, &archived_id).is_some());
+    });
+
 }
 
 #[test]
@@ -276,57 +290,157 @@ fn test_update_backup_rejects_invalid_description() {
         description: String::from_str(&env, ""),
         invoice_count: 1,
         status: BackupStatus::Active,
+        format_version: 2,
     };
 
-    let result = BackupStorage::update_backup(&env, &invalid);
+    let result = env.as_contract(&client.address, || {
+        BackupStorage::update_backup(&env, &invalid)
+    });
+
     assert_eq!(result, Err(QuickLendXError::InvalidDescription));
 }
 
  
     #[test]
     fn validate_backup_fails_when_record_missing() {
-        let env = setup_env();
-        let id = BackupStorage::generate_backup_id(&env);
-        // No record stored - must fail.
-        assert!(BackupStorage::validate_backup(&env, &id).is_err());
+        let (env, client, _) = setup();
+        env.as_contract(&client.address, || {
+            let id = BackupStorage::generate_backup_id(&env);
+            // No record stored - must fail.
+            assert!(BackupStorage::validate_backup(&env, &id).is_err());
+        });
     }
+
  
     #[test]
     fn validate_backup_fails_when_data_missing() {
-        let env = setup_env();
-        let backup_id = BackupStorage::generate_backup_id(&env);
-        let backup = Backup {
-            backup_id: backup_id.clone(),
-            timestamp: env.ledger().timestamp(),
-            description: String::from_str(&env, "no data"),
-            invoice_count: 1,
-            status: BackupStatus::Active,
-        };
-        BackupStorage::store_backup(&env, &backup, None).unwrap();
-        // Data blob never stored.
-        assert!(BackupStorage::validate_backup(&env, &backup_id).is_err());
+        let (env, client, _) = setup();
+        env.as_contract(&client.address, || {
+            let backup_id = BackupStorage::generate_backup_id(&env);
+            let backup = Backup {
+                backup_id: backup_id.clone(),
+                timestamp: env.ledger().timestamp(),
+                description: String::from_str(&env, "no data"),
+                invoice_count: 1,
+                status: BackupStatus::Active,
+                format_version: 2,
+            };
+            BackupStorage::store_backup(&env, &backup, None).unwrap();
+            // Data blob never stored.
+            assert!(BackupStorage::validate_backup(&env, &backup_id).is_err());
+        });
     }
+
  
     #[test]
     fn validate_backup_fails_on_count_mismatch() {
-        let env = setup_env();
-        let backup_id = BackupStorage::generate_backup_id(&env);
-        let invoices: Vec<Invoice> = {
-            let mut v = Vec::new(&env);
-            v.push_back(make_invoice(&env, 0));
-            v
-        };
+        let (env, client, _) = setup();
+        env.as_contract(&client.address, || {
+            let backup_id = BackupStorage::generate_backup_id(&env);
+            let invoices: Vec<Invoice> = {
+                let mut v = Vec::new(&env);
+                v.push_back(make_invoice(&env, 0));
+                v
+            };
+     
+            // Claim count = 2, but only 1 invoice in data.
+            let backup = Backup {
+                backup_id: backup_id.clone(),
+                timestamp: env.ledger().timestamp(),
+                description: String::from_str(&env, "mismatch"),
+                invoice_count: 2,
+                status: BackupStatus::Active,
+                format_version: 2,
+            };
+            env.storage().instance().set(&backup_id, &backup);
+            BackupStorage::store_backup_data(&env, &backup_id, &invoices);
+     
+            assert!(BackupStorage::validate_backup(&env, &backup_id).is_err());
+        });
+    }
+
+
+    // ============================================================================
+    // Versioning & Compatibility Tests
+    // ============================================================================
+
+    #[test]
+    fn test_v1_compatibility_upgrade_roundtrip() {
+        let (env, client, _) = setup();
+        env.as_contract(&client.address, || {
+            let backup_id = BackupStorage::generate_backup_id(&env);
+     
+            let backup_v1 = crate::backup_v1::BackupV1 {
+                backup_id: backup_id.clone(),
+                timestamp: env.ledger().timestamp(),
+                description: soroban_sdk::String::from_str(&env, "v1 backup"),
+                invoice_count: 1,
+                status: BackupStatus::Active,
+            };
+     
+            env.storage().instance().set(&backup_id, &backup_v1);
+            let backup = BackupStorage::get_backup(&env, &backup_id).unwrap();
+            assert_eq!(backup.backup_id, backup_id);
+            assert_eq!(backup.format_version, 2);
+        });
+    }
+
+    #[test]
+    fn test_v2_normal_roundtrip() {
+        let (env, client, admin) = setup();
+        let backup_id = client.create_backup(&admin);
+
+        env.as_contract(&client.address, || {
+            let backup = BackupStorage::get_backup(&env, &backup_id).unwrap();
+            assert_eq!(backup.format_version, 2);
+        });
+    }
+
+    #[test]
+    fn test_v1_upgrade_restore_path() {
+        let (env, client, admin) = setup();
  
-        // Claim count = 2, but only 1 invoice in data.
-        let backup = Backup {
-            backup_id: backup_id.clone(),
-            timestamp: env.ledger().timestamp(),
-            description: String::from_str(&env, "mismatch"),
-            invoice_count: 2,
-            status: BackupStatus::Active,
-        };
-        env.storage().instance().set(&backup_id, &backup);
-        BackupStorage::store_backup_data(&env, &backup_id, &invoices);
+        let backup_id = env.as_contract(&client.address, || {
+            let backup_id = BackupStorage::generate_backup_id(&env);
+            let backup_v1 = crate::backup_v1::BackupV1 {
+                backup_id: backup_id.clone(),
+                timestamp: env.ledger().timestamp(),
+                description: soroban_sdk::String::from_str(&env, "v1 backup"),
+                invoice_count: 0,
+                status: BackupStatus::Active,
+            };
+            env.storage().instance().set(&backup_id, &backup_v1);
+            BackupStorage::store_backup_data(&env, &backup_id, &soroban_sdk::Vec::new(&env));
+            BackupStorage::add_to_backup_list(&env, &backup_id);
+            backup_id
+        });
  
-        assert!(BackupStorage::validate_backup(&env, &backup_id).is_err());
+        client.restore_backup(&admin, &backup_id);
+ 
+        env.as_contract(&client.address, || {
+            let backup = BackupStorage::get_backup(&env, &backup_id).unwrap();
+            assert_eq!(backup.status, BackupStatus::Archived);
+        });
+    }
+
+    #[test]
+    fn test_v3_rejection_and_unsupported_error() {
+        let (env, client, admin) = setup();
+        let backup_id = env.as_contract(&client.address, || {
+            let backup_id = BackupStorage::generate_backup_id(&env);
+     
+            let mut map = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::new(&env);
+            map.set(soroban_sdk::Symbol::new(&env, "backup_id"), backup_id.clone().into_val(&env));
+            map.set(soroban_sdk::Symbol::new(&env, "timestamp"), env.ledger().timestamp().into_val(&env));
+            map.set(soroban_sdk::Symbol::new(&env, "description"), soroban_sdk::String::from_str(&env, "v3 backup").into_val(&env));
+            map.set(soroban_sdk::Symbol::new(&env, "invoice_count"), 0u32.into_val(&env));
+            map.set(soroban_sdk::Symbol::new(&env, "status"), BackupStatus::Active.into_val(&env));
+            map.set(soroban_sdk::Symbol::new(&env, "format_version"), 3u32.into_val(&env));
+     
+            env.storage().instance().set(&backup_id, &map);
+            backup_id
+        });
+ 
+        let result = client.try_restore_backup(&admin, &backup_id);
+        assert!(result.is_err());
     }

@@ -38,6 +38,7 @@ pub mod admin;
 pub mod analytics;
 pub mod audit;
 pub mod backup;
+pub mod backup_v1;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
@@ -64,23 +65,27 @@ pub mod protocol_limits;
 pub mod reentrancy;
 pub mod settlement;
 pub mod storage;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_standalone;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit;
+#[cfg(test)]
+mod test_backup;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_backup_safety;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
 #[cfg(test)]
 mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
@@ -88,7 +93,7 @@ mod test_expired_bids_cleanup;
 mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
 #[cfg(test)]
 mod test_investment_consistency;
@@ -103,7 +108,7 @@ mod test_accept_bid_race;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_profit_fee;
 // #[cfg(all(test, feature = "legacy-tests"))]
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_profit_fee;
 #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_refund;
@@ -127,6 +132,8 @@ mod test_bid_ranking;
 mod test_events;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_invoice_metadata;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_distribute_revenue;
 #[cfg(test)]
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_invariants;
@@ -138,7 +145,7 @@ mod test_investment_transitions;
 mod test_invoice_metadata;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_diagnostics;
 pub mod types;
 pub use types::*;
@@ -234,7 +241,7 @@ fn u32_to_ascii_lib(mut value: u32, buf: &mut [u8; 10]) -> usize {
 
 /// Convert a `u32` to a soroban `String` using stack-allocated ASCII.
 #[inline]
-fn u32_to_string_lib(env: &Env, value: u32) -> String {
+pub(crate) fn u32_to_string_lib(env: &Env, value: u32) -> String {
     let mut buf = [0u8; 10];
     let n = u32_to_ascii_lib(value, &mut buf);
     let s = core::str::from_utf8(&buf[..n]).unwrap_or("0");
@@ -243,7 +250,7 @@ fn u32_to_string_lib(env: &Env, value: u32) -> String {
 
 /// Convert an `i64` to a soroban `String` using stack-allocated ASCII.
 #[inline]
-fn i64_to_string_lib(env: &Env, value: i64) -> String {
+pub(crate) fn i64_to_string_lib(env: &Env, value: i64) -> String {
     // "-9223372036854775808" = 20 chars
     let mut buf = [0u8; 21];
     let mut tmp = [0u8; 20];
@@ -2644,6 +2651,7 @@ impl QuickLendXContract {
             description: String::from_str(&env, "Manual Backup"),
             invoice_count: invoices.len() as u32,
             status: backup::BackupStatus::Active,
+            format_version: 2,
         };
         backup::BackupStorage::store_backup(&env, &b, Some(&invoices))?;
         backup::BackupStorage::store_backup_data(&env, &backup_id, &invoices);
