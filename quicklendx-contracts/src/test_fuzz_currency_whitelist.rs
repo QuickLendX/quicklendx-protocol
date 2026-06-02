@@ -242,9 +242,13 @@ mod test_fuzz_currency_whitelist {
     // ─────────────────────────────────────────────────────────────────────────
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(256))]
-
-        /// For any random interleaving of add/remove/set/clear, the live
+        #![proptest_config({
+            let mut config = ProptestConfig::with_cases(256);
+            if let Some(seed_array) = crate::test_seed::seed() {
+                config.rng_algorithm = proptest::test_runner::RngAlgorithm::ChaCha;
+            }
+            config
+        })] of add/remove/set/clear, the live
         /// contract state equals the deterministic replay of the same actions,
         /// and `is_allowed_currency`/`currency_count` answer correctly after
         /// every single step.

@@ -26,6 +26,8 @@ extern crate alloc;
 mod scratch_events;
 #[cfg(test)]
 mod test_default;
+#[cfg(test)]
+mod test_seed;
 #[cfg(test)] mod test_escrow_uniqueness;
 #[cfg(test)] mod test_escrow;
 #[cfg(all(test, feature = "legacy-tests"))]

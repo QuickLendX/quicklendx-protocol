@@ -1,4 +1,5 @@
 use soroban_sdk::{contract, contractimpl, contracttype, Env, Symbol, Address, panic_with_error};
+use crate::errors::QuickLendXError;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -9,10 +10,25 @@ pub enum DataKey {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum FreshnessError {
-    NotAuthorized = 1,
-    StaleDataRejected = 2,
-    InvalidConfigValue = 3,
+pub struct FreshnessMetadata {
+    pub last_indexed_ledger: u32,
+    pub last_indexed_timestamp: u64,
+    pub offset: u32,
+}
+
+impl FreshnessMetadata {
+    pub fn from_env(
+        env: &Env,
+        indexed_ledger_seq: u32,
+        indexed_ledger_timestamp: u64,
+        offset: u32,
+    ) -> Self {
+        Self {
+            last_indexed_ledger: indexed_ledger_seq,
+            last_indexed_timestamp: indexed_ledger_timestamp,
+            offset,
+        }
+    }
 }
 
 #[contract]
@@ -24,11 +40,11 @@ impl FreshnessContract {
     /// Sets the maximum allowable freshness oracle drift in seconds.
     pub fn set_max_freshness_drift_secs(env: Env, drift_secs: u64) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin)
-            .unwrap_or_else(|| panic_with_error!(&env, FreshnessError::NotAuthorized));
+            .unwrap_or_else(|| panic_with_error!(&env, QuickLendXError::NotAdmin));
         admin.require_auth();
         
         if drift_secs == 0 {
-            panic_with_error!(&env, FreshnessError::InvalidConfigValue);
+            panic_with_error!(&env, QuickLendXError::InvalidTimestamp);
         }
         
         env.storage().instance().set(&DataKey::MaxFreshnessDriftSecs, &drift_secs);
@@ -49,7 +65,7 @@ impl FreshnessContract {
         let current_time = env.ledger().timestamp();
         
         if current_time < oracle_timestamp {
-            panic_with_error!(&env, FreshnessError::InvalidConfigValue);
+            panic_with_error!(&env, QuickLendXError::InvalidTimestamp);
         }
         
         let age = current_time - oracle_timestamp;
@@ -60,7 +76,7 @@ impl FreshnessContract {
                 (Symbol::new(&env, "freshness_rejected"),),
                 (oracle_timestamp, current_time, max_drift)
             );
-            panic_with_error!(&env, FreshnessError::StaleDataRejected);
+            panic_with_error!(&env, QuickLendXError::InvalidTimestamp);
         }
         
         age
