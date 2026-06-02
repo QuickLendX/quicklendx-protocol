@@ -9,108 +9,168 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 #[repr(u32)]
 pub enum QuickLendXError {
     // Invoice lifecycle (1000-1006)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceNotFound = 1000,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceNotAvailableForFunding = 1001,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceAlreadyFunded = 1002,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceAmountInvalid = 1003,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceDueDateInvalid = 1004,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceNotFunded = 1005,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceAlreadyDefaulted = 1006,
 
     // Authorization (1100-1103)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     Unauthorized = 1100,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotBusinessOwner = 1101,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotInvestor = 1102,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotAdmin = 1103,
 
     // Input validation (1200-1204)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidAmount = 1200,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidAddress = 1201,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidCurrency = 1202,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidTimestamp = 1203,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidDescription = 1204,
 
     // Storage (1300-1301)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     StorageError = 1300,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     StorageKeyNotFound = 1301,
 
     // Business logic (1400-1405)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InsufficientFunds = 1400,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidStatus = 1401,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     OperationNotAllowed = 1402,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     PaymentTooLow = 1403,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     PlatformAccountNotConfigured = 1404,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidCoveragePercentage = 1405,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     MaxBidsPerInvoiceExceeded = 1406,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     MaxInvoicesPerBusinessExceeded = 1407,
-    /// Bid TTL value is outside the allowed bounds (1..=30 days) or is zero.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidBidTtl = 1408,
 
     // Rating (1500-1503)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidRating = 1500,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotFunded = 1501,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     AlreadyRated = 1502,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotRater = 1503,
 
     // KYC / verification (1600-1604)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     BusinessNotVerified = 1600,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     KYCAlreadyPending = 1601,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     KYCAlreadyVerified = 1602,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     KYCNotFound = 1603,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidKYCStatus = 1604,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvestorNotVerified = 1605,
 
     // Audit (1700-1702)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     AuditLogNotFound = 1700,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     AuditIntegrityError = 1701,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     AuditQueryError = 1702,
 
     // Category / tag (1800-1801)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidTag = 1800,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     TagLimitExceeded = 1801,
 
     // Fee configuration (1850-1855)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidFeeConfiguration = 1850,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     TreasuryNotConfigured = 1851,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidFeeBasisPoints = 1852,
-    /// Arithmetic overflow detected during checked arithmetic operations
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     ArithmeticOverflow = 1856,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     RotationAlreadyPending = 1853,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     RotationNotFound = 1854,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     RotationExpired = 1855,
 
     // Dispute (1900-1906)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeNotFound = 1900,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeAlreadyExists = 1901,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeNotAuthorized = 1902,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeAlreadyResolved = 1903,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeNotUnderReview = 1904,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidDisputeReason = 1905,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidDisputeEvidence = 1906,
 
     // Notification (2000-2002)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotificationNotFound = 2000,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotificationBlocked = 2001,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotificationDuplicate = 2002,
 
     // Emergency withdraw (2100-2106)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     ContractPaused = 2100,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     EmergencyWithdrawNotFound = 2101,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     EmergencyWithdrawTimelockNotElapsed = 2102,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     EmergencyWithdrawExpired = 2103,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     EmergencyWithdrawCancelled = 2104,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     EmergencyWithdrawAlreadyExists = 2105,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     EmergencyWithdrawInsufficientBalance = 2106,
 
-    /// The underlying Stellar token `transfer` or `transfer_from` call failed
-    /// (e.g. the token contract panicked or returned an error).
-    /// Callers should treat this as a hard failure; no funds moved.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     TokenTransferFailed = 2200,
-
-    /// The protocol is in maintenance mode (read-only).
-    /// Write operations are blocked until maintenance ends.
-    /// Query the maintenance reason via `get_maintenance_reason`.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     MaintenanceModeActive = 2201,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     DuplicateDefaultTransition = 2202,
 }
 
