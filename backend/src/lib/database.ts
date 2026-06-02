@@ -78,6 +78,27 @@ export function getStatementCacheStats() {
 }
 
 /**
+ * Probe database connectivity with a trivial round-trip query.
+ *
+ * Used by the readiness endpoint to verify the SQLite connection can both
+ * open and execute. Returns true on success, false on any failure (a locked,
+ * corrupt, or unopenable database). Never throws so callers can branch on the
+ * boolean without their own try/catch.
+ *
+ * The query (`SELECT 1`) is constant and parameter-free, so it carries no
+ * user input and leaks no schema details.
+ */
+export function pingDatabase(): boolean {
+  try {
+    const db = getDatabase();
+    const row = db.prepare("SELECT 1 AS ok").get();
+    return row?.ok === 1;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Close the database connection and clear the statement cache.
  * Ensures clean shutdown and prevents memory leaks.
  */

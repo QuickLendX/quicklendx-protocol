@@ -9,6 +9,7 @@ import { csrfMiddleware } from "./middleware/csrf";
 import { corsOptionsDelegate, webhookCorsOptions } from "./config/cors";
 import v1Routes from "./routes/v1";
 import webhookRoutes from "./routes/webhooks";
+import healthRoutes from "./routes/health";
 import { requestLogger } from "./middleware/request-logger";
 
 const app = express();
@@ -47,14 +48,9 @@ app.use("/api/webhooks", cors(webhookCorsOptions), webhookRoutes);
 app.use(csrfMiddleware);
 app.use("/api/v1", v1Routes);
 
-// Health check (root level as well if needed)
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    version: "1.0.0",
-    timestamp: new Date().toISOString(),
-  });
-});
+// Liveness (/health, /livez) and readiness (/readyz) probes.
+// Mounted at the root and left unauthenticated so orchestrators can probe them.
+app.use(healthRoutes);
 
 // 404 handler
 app.use((req, res) => {
