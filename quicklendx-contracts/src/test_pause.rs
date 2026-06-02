@@ -678,7 +678,7 @@ fn fund_invoice(
     );
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(env, &client, &investor, 15_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_000i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
     (client, admin, invoice_id)
@@ -818,10 +818,33 @@ fn test_unpause_restores_place_bid() {
 
 #[test]
 fn test_unpause_restores_accept_bid_and_fund() {
+    // Token-backed: accept_bid_and_fund pulls the bid into escrow via a real
+    // transfer, so it needs a registered SAC and funded balances.
     let env = Env::default();
-    let (client, admin, business, investor, currency) = setup(&env);
-    let due_date = env.ledger().timestamp() + 86_400;
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
 
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    client.initialize_admin(&admin);
+
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&business, &20_000i128);
+    sac.mint(&investor, &15_000i128);
+    sac.mint(&contract_id, &1i128);
+    let exp = env.ledger().sequence() + 100_000;
+    tok.approve(&business, &contract_id, &20_000i128, &exp);
+    tok.approve(&investor, &contract_id, &15_000i128, &exp);
+    client.add_currency(&admin, &currency);
+
+    let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = client.store_invoice(
         &business,
         &1_000i128,
@@ -832,7 +855,7 @@ fn test_unpause_restores_accept_bid_and_fund() {
         &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
-    verify_investor_for_test(&env, &client, &investor, 10_000);
+    verify_investor_for_test(&env, &client, &investor, 15_000);
     let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
 
     client.pause(&admin);
@@ -850,9 +873,7 @@ fn test_unpause_restores_accept_bid_and_fund() {
 #[test]
 fn test_unpause_restores_process_partial_payment() {
     let env = Env::default();
-    let (client, admin, business, investor, currency) = setup(&env);
-
-    let invoice_id = fund_invoice(&env, &client, &business, &investor, &currency);
+    let (client, admin, invoice_id) = fund_invoice(&env);
 
     client.pause(&admin);
     let blocked = client.try_process_partial_payment(
@@ -870,68 +891,10 @@ fn test_unpause_restores_process_partial_payment() {
     assert_eq!(invoice.total_paid, 400i128);
 }
 
-/// Token-backed fixture for tests that drive payment/settlement to completion.
-///
-/// Settlement releases escrow and disburses returns via real `transfer_funds`
-/// calls, so those paths require a registered Stellar Asset Contract with
-/// funded balances — a `generate()`-only currency is not enough. Modeled on the
-/// e2e fixture in tests/invoice_lifecycle_e2e.rs.
-///
-/// Returns a fully-funded (`Funded` status) invoice ready for payment.
-fn setup_funded_with_token(
-    env: &Env,
-) -> (
-    QuickLendXContractClient<'static>,
-    Address,
-    soroban_sdk::BytesN<32>,
-) {
-    env.mock_all_auths();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(env, &contract_id);
-
-    let admin = Address::generate(env);
-    let business = Address::generate(env);
-    let investor = Address::generate(env);
-    client.initialize_admin(&admin);
-
-    // Real SAC token with funded, pre-approved balances.
-    let token_admin = Address::generate(env);
-    let currency = env
-        .register_stellar_asset_contract_v2(token_admin)
-        .address();
-    let sac = token::StellarAssetClient::new(env, &currency);
-    let tok = token::Client::new(env, &currency);
-    sac.mint(&business, &20_000i128);
-    sac.mint(&investor, &15_000i128);
-    sac.mint(&contract_id, &1i128);
-    let exp = env.ledger().sequence() + 100_000;
-    tok.approve(&business, &contract_id, &20_000i128, &exp);
-    tok.approve(&investor, &contract_id, &15_000i128, &exp);
-    client.add_currency(&admin, &currency);
-
-    let due_date = env.ledger().timestamp() + 86_400;
-    let invoice_id = client.store_invoice(
-        &business,
-        &1_000i128,
-        &currency,
-        &due_date,
-        &String::from_str(env, "Token-funded invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(env),
-    );
-    client.verify_invoice(&invoice_id);
-    verify_investor_for_test(env, &client, &investor, 15_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_000i128);
-    // accept_bid_and_fund moves the bid into escrow so settlement can release it.
-    client.accept_bid_and_fund(&invoice_id, &bid_id);
-
-    (client, admin, invoice_id)
-}
-
 #[test]
 fn test_unpause_restores_settle_invoice() {
     let env = Env::default();
-    let (client, admin, invoice_id) = setup_funded_with_token(&env);
+    let (client, admin, invoice_id) = fund_invoice(&env);
 
     client.pause(&admin);
     let blocked = client.try_settle_invoice(&invoice_id, &1_000i128);
@@ -952,7 +915,7 @@ fn test_unpause_restores_settle_invoice() {
 #[test]
 fn test_pause_mid_lifecycle_freezes_then_resumes_payment() {
     let env = Env::default();
-    let (client, admin, invoice_id) = setup_funded_with_token(&env);
+    let (client, admin, invoice_id) = fund_invoice(&env);
 
     // Take one partial payment while operating normally.
     client.process_partial_payment(&invoice_id, &400i128, &String::from_str(&env, "tx-1"));
