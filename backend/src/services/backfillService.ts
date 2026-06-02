@@ -6,7 +6,7 @@ import {
   BackfillPreview,
   BackfillAuditEntry,
 } from "../types/backfill";
-import { getDatabase } from "../lib/database";
+import { getDatabase, getPreparedStatement } from "../lib/database";
 import { DriftReport, BackfillResult } from "../types/reconciliation";
 
 const DEFAULT_MAX_LEDGER_RANGE = 5000;
@@ -165,15 +165,14 @@ export class BackfillService {
   }
 
   public getDriftProgress() {
-    const db = getDatabase();
-    return db.prepare(`SELECT * FROM backfill_progress ORDER BY updated_at DESC LIMIT 1`).get();
+    return getPreparedStatement(`SELECT * FROM backfill_progress ORDER BY updated_at DESC LIMIT 1`).get();
   }
 
   public async triggerDriftBackfill(report: DriftReport, batchSize: number, failBackfill: boolean = false): Promise<BackfillResult> {
     const db = getDatabase();
     const runId = `drift_${report.timestamp}`;
 
-    let progress = db.prepare(`SELECT * FROM backfill_progress WHERE run_id = ?`).get(runId) as any;
+    let progress = getPreparedStatement(`SELECT * FROM backfill_progress WHERE run_id = ?`).get(runId) as any;
 
     if (!progress) {
       progress = {
