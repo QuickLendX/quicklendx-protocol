@@ -14,6 +14,7 @@ use crate::investment::InvestmentStorage;
 use crate::payments::EscrowStorage;
 use crate::currency::CurrencyWhitelist;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol};
+use soroban_sdk::{symbol_short, Address, Env, String, Symbol, contracttype};
 
 /// Storage key for the maintenance mode boolean flag.
 pub const MAINTENANCE_MODE_KEY: Symbol = symbol_short!("maint");
@@ -25,13 +26,37 @@ pub const MAINTENANCE_REASON_KEY: Symbol = symbol_short!("maint_rsn");
 pub const MAX_REASON_LEN: u32 = 256;
 
 /// Report summarizing the results of a TTL extension operation.
+///
+/// Returned by [`MaintenanceControl::extend_protocol_ttl`]. Each field counts the
+/// number of persistent-storage entries whose TTL was refreshed for that kind.
+/// A zero value means no entries of that kind existed (idempotent no-op).
+///
+/// # Fields
+/// * `invoices_refreshed`  — Number of invoice records extended.
+/// * `bids_refreshed`      — Number of bid records extended.
+/// * `investments_refreshed` — Number of active investment records extended.
+/// * `escrows_refreshed`   — Number of escrow records extended.
+/// * `currencies_refreshed` — Number of whitelisted currency entries extended.
+///
+/// # Idempotency
+/// Calling `extend_protocol_ttl` multiple times within the same ledger is safe:
+/// `extend_ttl` is itself idempotent, and the report always reflects the current
+/// state at call time. If no new entries were added between calls the report
+/// will be identical.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
 #[contracttype]
 #[derive(Clone)]
 pub struct ExtendReport {
+    /// Number of invoice records whose TTL was extended.
     pub invoices_refreshed: u32,
+    /// Number of bid records whose TTL was extended.
     pub bids_refreshed: u32,
+    /// Number of active investment records whose TTL was extended.
     pub investments_refreshed: u32,
+    /// Number of escrow records whose TTL was extended.
     pub escrows_refreshed: u32,
+    /// Number of whitelisted currency entries whose TTL was extended.
     pub currencies_refreshed: u32,
 }
 
@@ -109,6 +134,10 @@ impl MaintenanceControl {
     /// # Errors
     /// * `NotAdmin` - caller is not the admin.
     pub fn extend_protocol_ttl(env: &Env, admin: &Address) -> Result<ExtendReport, QuickLendXError> {
+    pub fn extend_protocol_ttl(
+        env: &Env,
+        admin: &Address,
+    ) -> Result<ExtendReport, QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
 
         let mut report = ExtendReport {
@@ -167,6 +196,15 @@ impl MaintenanceControl {
         if report.currencies_refreshed > 0 {
             crate::events::emit_ttl_extended(env, &String::from_str(env, "currency"), report.currencies_refreshed);
         }
+
+        Ok(report)
+    }
+}
+        Self::emit_ttl_extended(env, "invoice", report.invoices_refreshed);
+        Self::emit_ttl_extended(env, "bid", report.bids_refreshed);
+        Self::emit_ttl_extended(env, "investment", report.investments_refreshed);
+        Self::emit_ttl_extended(env, "escrow", report.escrows_refreshed);
+        Self::emit_ttl_extended(env, "currency", report.currencies_refreshed);
 
 Ok(report)
     }
