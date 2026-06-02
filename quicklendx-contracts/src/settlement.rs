@@ -117,17 +117,38 @@ pub fn process_partial_payment(
 
 /// Record a payment attempt with capping, replay protection, and durable storage.
 ///
-/// - Rejects amount <= 0
-/// - Rejects missing invoices
-/// - Rejects payments to non-payable invoice states
-/// - Caps applied amount so `total_paid` never exceeds `total_due`
-/// - Enforces nonce uniqueness per `(invoice, nonce)` if nonce is non-empty
-/// - Rejects if payment count has reached MAX_PAYMENT_COUNT
+/// This function is the core payment recording primitive. It validates, caps, and
+/// persists payment records while maintaining critical security invariants.
 ///
-/// # Security
+/// # Arguments
+/// - `invoice_id`: Unique identifier for the invoice being paid.
+/// - `payer`: Verified invoice business address (must match invoice.business).
+/// - `amount`: The requested payment amount (may be capped if overpaying).
+/// - `payment_nonce`: Unique transaction identifier; empty string skips replay check.
 ///
-/// - The payer must be the verified invoice business and must authorize the call.
-/// - Stored payment records always reflect the applied amount, never the requested excess.
+/// # Returns
+/// - `Ok(Progress)` containing updated payment state.
+/// - `Err(QuickLendXError)` on validation failure.
+///
+/// # Security Invariants (Fuzz-Tested)
+///
+/// 1. **Capping Invariant**: `total_paid` never exceeds `total_due`. If `amount > remaining_due`,
+///    only `remaining_due` is applied. This prevents overpayment attacks and ensures the
+///    accounting identity `investor_return + platform_fee == total_paid` holds.
+///
+/// 2. **Replay Protection Invariant**: Each `(invoice_id, nonce)` pair is unique. Duplicate
+///    nonces return the current progress without creating a new record or incrementing count.
+///    Empty nonces bypass this check intentionally (caller responsibility for uniqueness).
+///
+/// 3. **Payment Count Bound**: `payment_count <= MAX_PAYMENT_COUNT`. Payment count exhaustion
+///    returns `OperationNotAllowed` and cannot be bypassed.
+///
+/// # Error Conditions
+/// - `InvalidAmount`: `amount <= 0`, `applied_amount <= 0`, or `new_total_paid > total_due`.
+/// - `InvoiceNotFound`: No invoice exists for `invoice_id`.
+/// - `InvalidStatus`: Invoice is not in `Funded` state or `remaining_due == 0`.
+/// - `NotBusinessOwner`: `payer` does not match invoice business.
+/// - `OperationNotAllowed`: Payment count has reached `MAX_PAYMENT_COUNT`.
 pub fn record_payment(
     env: &Env,
     invoice_id: &BytesN<32>,

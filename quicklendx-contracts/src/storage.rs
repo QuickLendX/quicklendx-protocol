@@ -22,12 +22,6 @@ where
     env.storage().persistent().extend_ttl(key, ttl_u32, ttl_u32);
 }
 
-/// Renew persistent TTL for a key after a successful read/write.
-///
-/// Several storage-heavy modules rely on this helper to keep hot records alive
-/// without duplicating TTL logic. It is intentionally an alias of
-/// `extend_persistent_ttl` so older call sites continue to compile while using
-/// the same renewal policy.
 pub fn bump_persistent<T>(env: &Env, key: &T)
 where
     T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,

@@ -12,8 +12,8 @@ use crate::currency::CurrencyWhitelist;
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
 use crate::payments::EscrowStorage;
-use crate::storage::{extend_persistent_ttl, DataKey, InvoiceStorage};
-use soroban_sdk::{symbol_short, Address, Env, String, Symbol, contracttype};
+use crate::currency::CurrencyWhitelist;
+use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol};
 
 /// Storage key for the maintenance mode boolean flag.
 pub const MAINTENANCE_MODE_KEY: Symbol = symbol_short!("maint");
@@ -95,10 +95,20 @@ impl MaintenanceControl {
     }
 
     /// Admin-only: extends the TTL for all major persistent storage indexes.
-    pub fn extend_protocol_ttl(
-        env: &Env,
-        admin: &Address,
-    ) -> Result<ExtendReport, QuickLendXError> {
+    ///
+    /// This iterates through invoices, bids, active investments, escrows (via invoices),
+    /// and the currency whitelist, and extends the TTL for each entry.
+    ///
+    /// # Arguments
+    /// * `env`     - The contract environment.
+    /// * `admin`   - Caller address; must be the current admin.
+    ///
+    /// # Returns
+    /// * `ExtendReport` - A summary of how many entries were refreshed per kind.
+    ///
+    /// # Errors
+    /// * `NotAdmin` - caller is not the admin.
+    pub fn extend_protocol_ttl(env: &Env, admin: &Address) -> Result<ExtendReport, QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
 
         let mut report = ExtendReport {
@@ -109,21 +119,25 @@ impl MaintenanceControl {
             currencies_refreshed: 0,
         };
 
+        // 1. Extend Invoices
         for invoice_id in InvoiceStorage::get_all_invoice_ids(env).iter() {
             extend_persistent_ttl(env, &DataKey::Invoice(invoice_id.clone()));
             report.invoices_refreshed += 1;
         }
 
+        // 2. Extend Bids
         for bid_id in BidStorage::get_all_bids(env).iter() {
             extend_persistent_ttl(env, &bid_id);
             report.bids_refreshed += 1;
         }
 
+        // 3. Extend Active Investments
         for investment_id in InvestmentStorage::get_active_investment_ids(env).iter() {
             extend_persistent_ttl(env, &investment_id);
             report.investments_refreshed += 1;
         }
 
+        // 4. Extend Escrows (find them via invoices)
         for invoice_id in InvoiceStorage::get_all_invoice_ids(env).iter() {
             if let Some(escrow) = EscrowStorage::get_escrow_by_invoice(env, &invoice_id) {
                 extend_persistent_ttl(env, &escrow.escrow_id);
@@ -131,37 +145,29 @@ impl MaintenanceControl {
             }
         }
 
+        // 5. Extend Currencies
         for currency in CurrencyWhitelist::get_whitelisted_currencies(env).iter() {
             extend_persistent_ttl(env, &currency);
             report.currencies_refreshed += 1;
         }
 
-        crate::events::emit_ttl_extended(
-            env,
-            &String::from_str(env, "invoice"),
-            report.invoices_refreshed,
-        );
-        crate::events::emit_ttl_extended(
-            env,
-            &String::from_str(env, "bid"),
-            report.bids_refreshed,
-        );
-        crate::events::emit_ttl_extended(
-            env,
-            &String::from_str(env, "investment"),
-            report.investments_refreshed,
-        );
-        crate::events::emit_ttl_extended(
-            env,
-            &String::from_str(env, "escrow"),
-            report.escrows_refreshed,
-        );
-        crate::events::emit_ttl_extended(
-            env,
-            &String::from_str(env, "currency"),
-            report.currencies_refreshed,
-        );
+        // Emit events for each kind that was refreshed
+        if report.invoices_refreshed > 0 {
+            crate::events::emit_ttl_extended(env, &String::from_str(env, "invoice"), report.invoices_refreshed);
+        }
+        if report.bids_refreshed > 0 {
+            crate::events::emit_ttl_extended(env, &String::from_str(env, "bid"), report.bids_refreshed);
+        }
+        if report.investments_refreshed > 0 {
+            crate::events::emit_ttl_extended(env, &String::from_str(env, "investment"), report.investments_refreshed);
+        }
+        if report.escrows_refreshed > 0 {
+            crate::events::emit_ttl_extended(env, &String::from_str(env, "escrow"), report.escrows_refreshed);
+        }
+        if report.currencies_refreshed > 0 {
+            crate::events::emit_ttl_extended(env, &String::from_str(env, "currency"), report.currencies_refreshed);
+        }
 
-        Ok(report)
+Ok(report)
     }
 }

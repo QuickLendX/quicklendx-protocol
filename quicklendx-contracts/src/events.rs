@@ -580,10 +580,6 @@ pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
     .publish(env);
 }
 
-// ... (after TtlExtended)
-
-
-
 #[contractevent]
 pub struct EmergencyWithdrawalInitiated {
     pub token: Address,
@@ -1258,6 +1254,14 @@ pub fn emit_profit_fee_breakdown(
 }
 
 pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Address) {
+    #[derive(Clone)]
+    #[contractevent]
+    struct BidTtlUpdated {
+        old_days: u64,
+        new_days: u64,
+        admin: Address,
+        timestamp: u64,
+    }
     BidTtlUpdated {
         old_days,
         new_days,
