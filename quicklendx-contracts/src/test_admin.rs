@@ -498,46 +498,46 @@ mod test_admin {
 // ============================================================================
 // Comprehensive Access Control Matrix Tests
 // ============================================================================
-//!
-//! This module provides comprehensive access-control testing for all admin-gated
-//! entrypoints in the QuickLendX protocol. The goal is to prevent privilege-escalation
-//! regressions as new methods are added.
-//!
-//! # Access Control Matrix
-//!
-//! | Method Category | Method | Auth Required | Non-Admin Error |
-//! |-----------------|--------|---------------|-----------------|
-//! | **AdminStorage** | initialize | Caller (self-auth) | OperationNotAllowed |
-//! | | transfer_admin | Current Admin | NotAdmin |
-//! | | initiate_admin_transfer | Current Admin | NotAdmin |
-//! | | accept_admin_transfer | Pending Admin | Unauthorized |
-//! | | cancel_admin_transfer | Current Admin | NotAdmin |
-//! | | set_two_step_enabled | Current Admin | NotAdmin |
-//! | **Protocol Config** | set_protocol_config | Admin + Auth | NotAdmin |
-//! | | set_fee_config | Admin + Auth | NotAdmin |
-//! | | set_treasury | Admin + Auth | NotAdmin |
-//! | **Pause Control** | set_paused | Admin + Auth | NotAdmin |
-//! | **Emergency** | initiate | Admin + Auth | NotAdmin |
-//! | | execute | Admin + Auth | NotAdmin |
-//! | | cancel | Admin + Auth | NotAdmin |
-//! | **Currency** | add_currency | Admin + Auth | NotAdmin |
-//! | | remove_currency | Admin + Auth | NotAdmin |
-//! | | set_currencies | Admin + Auth | NotAdmin |
-//! | | clear_currencies | Admin + Auth | NotAdmin |
-//! | **Bid Config** | set_bid_ttl_days | Admin + Auth | NotAdmin |
-//! | | set_max_active_bids_per_investor | Admin + Auth | NotAdmin |
-//! | **Backup** | create_backup | Admin + Auth | NotAdmin |
-//! | | restore_backup | Admin + Auth | NotAdmin |
-//! | | archive_backup | Admin + Auth | NotAdmin |
-//! | | cleanup_backups | Admin + Auth | NotAdmin |
-//! | | set_backup_retention_policy | Admin + Auth | NotAdmin |
-//!
-//! # Edge Cases Covered
-//! - Pre-init admin rejection (uninitialized state)
-//! - Transferred admin acceptance and revocation
-//! - Revoked caller rejection (former admin after transfer)
-//! - Self-transfer prevention
-//! - Two-step transfer flow authentication
+//
+// This module provides comprehensive access-control testing for all admin-gated
+// entrypoints in the QuickLendX protocol. The goal is to prevent privilege-escalation
+// regressions as new methods are added.
+//
+// Access Control Matrix
+//
+// | Method Category | Method | Auth Required | Non-Admin Error |
+// |-----------------|--------|---------------|-----------------|
+// | **AdminStorage** | initialize | Caller (self-auth) | OperationNotAllowed |
+// | | transfer_admin | Current Admin | NotAdmin |
+// | | initiate_admin_transfer | Current Admin | NotAdmin |
+// | | accept_admin_transfer | Pending Admin | Unauthorized |
+// | | cancel_admin_transfer | Current Admin | NotAdmin |
+// | | set_two_step_enabled | Current Admin | NotAdmin |
+// | **Protocol Config** | set_protocol_config | Admin + Auth | NotAdmin |
+// | | set_fee_config | Admin + Auth | NotAdmin |
+// | | set_treasury | Admin + Auth | NotAdmin |
+// | **Pause Control** | set_paused | Admin + Auth | NotAdmin |
+// | **Emergency** | initiate | Admin + Auth | NotAdmin |
+// | | execute | Admin + Auth | NotAdmin |
+// | | cancel | Admin + Auth | NotAdmin |
+// | **Currency** | add_currency | Admin + Auth | NotAdmin |
+// | | remove_currency | Admin + Auth | NotAdmin |
+// | | set_currencies | Admin + Auth | NotAdmin |
+// | | clear_currencies | Admin + Auth | NotAdmin |
+// | **Bid Config** | set_bid_ttl_days | Admin + Auth | NotAdmin |
+// | | set_max_active_bids_per_investor | Admin + Auth | NotAdmin |
+// | **Backup** | create_backup | Admin + Auth | NotAdmin |
+// | | restore_backup | Admin + Auth | NotAdmin |
+// | | archive_backup | Admin + Auth | NotAdmin |
+// | | cleanup_backups | Admin + Auth | NotAdmin |
+// | | set_backup_retention_policy | Admin + Auth | NotAdmin |
+//
+// Edge Cases Covered
+// - Pre-init admin rejection (uninitialized state)
+// - Transferred admin acceptance and revocation
+// - Revoked caller rejection (former admin after transfer)
+// - Self-transfer prevention
+// - Two-step transfer flow authentication
 
 #[cfg(test)]
 mod access_control_matrix {
@@ -2541,13 +2541,13 @@ mod access_control_matrix_extended {
 // ============================================================================
 // Dry-Run Preview Tests
 // ============================================================================
-//!
-//! Verifies `preview_protocol_config` (issue #1221):
-//! - before/after diff matches the effect of the corresponding apply operations
-//! - no storage writes occur during a preview call
-//! - admin authorization is enforced
-//! - invalid parameters are reflected correctly in `would_succeed` / `validation_error_code`
-//! - no-op and partial-change detection work correctly
+//
+// Verifies `preview_protocol_config` (issue #1221):
+// - before/after diff matches the effect of the corresponding apply operations
+// - no storage writes occur during a preview call
+// - admin authorization is enforced
+// - invalid parameters are reflected correctly in `would_succeed` / `validation_error_code`
+// - no-op and partial-change detection work correctly
 
 #[cfg(test)]
 mod dry_run_preview {

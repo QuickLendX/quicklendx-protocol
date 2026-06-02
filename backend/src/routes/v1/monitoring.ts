@@ -154,7 +154,14 @@ router.post("/webhook", (req: AuthenticatedRequest, res: Response) => {
       id: event.id,
       enqueuedAt: event.enqueuedAt,
     });
-  } catch (err) {
+  } catch (err: any) {
+    if (err.statusCode === 503) {
+      res.status(503).json({
+        error: "Service Unavailable",
+        message: "Outbound webhook queue is full. Please retry later.",
+      });
+      return;
+    }
     const message =
       err instanceof Error ? err.message : "Failed to enqueue webhook";
     res.status(500).json({

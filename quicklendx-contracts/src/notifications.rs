@@ -3,11 +3,11 @@ use crate::protocol_limits::{
 };
 use crate::types::Bid;
 use crate::types::{Invoice, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, Map, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, Map, String, Vec};
 
 /// Maximum number of idempotency keys to track in the bloom-resistant set.
 /// This provides protection against replay attacks while maintaining reasonable storage.
-const MAX_IDEMPOTENCY_KEYS: usize = 10_000;
+const MAX_IDEMPOTENCY_KEYS: u32 = 10_000;
 
 /// Notification types for different events
 #[contracttype]
@@ -329,7 +329,7 @@ impl NotificationSystem {
             .get(&set_key)
             .unwrap_or_else(|| Vec::new(env));
 
-        if (key_set.len() as u32) < (MAX_IDEMPOTENCY_KEYS as u32) {
+        if key_set.len() < MAX_IDEMPOTENCY_KEYS.try_into().unwrap_or(u32::MAX) {
             key_set.push_back(key.clone());
             env.storage().instance().set(&set_key, &key_set);
         }

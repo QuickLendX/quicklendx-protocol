@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { getDatabase } from '../lib/database';
+import { getDatabase, getPreparedStatement } from '../lib/database';
 import { Settlement, SettlementStatus } from '../types/contract';
 
 export class IllegalTransitionError extends Error {

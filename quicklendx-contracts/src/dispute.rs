@@ -1,4 +1,7 @@
 use crate::admin::AdminStorage;
+use crate::dispute_timeline::{
+    clear_under_review_timestamp, set_under_review_timestamp,
+};
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
 use crate::types::{Dispute, DisputeStatus};
@@ -101,6 +104,7 @@ pub fn create_dispute(
     validate_dispute_reason(reason)?;
     validate_dispute_evidence(evidence)?;
     validate_dispute_eligibility(&invoice, creator)?;
+    clear_under_review_timestamp(env, invoice_id);
 
     // Set dispute fields
     invoice.dispute_status = DisputeStatus::Disputed;
@@ -158,21 +162,16 @@ pub fn put_dispute_under_review(
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     match invoice.dispute_status {
-        DisputeStatus::Disputed => {
-            // Valid transition: Disputed → UnderReview
-        }
-        DisputeStatus::None => {
-            // No dispute exists
-            return Err(QuickLendXError::DisputeNotFound);
-        }
+        DisputeStatus::None => return Err(QuickLendXError::DisputeNotFound),
+        DisputeStatus::Disputed => {}
         DisputeStatus::UnderReview | DisputeStatus::Resolved => {
-            // Already past this state — forward-only machine
             return Err(QuickLendXError::InvalidStatus);
         }
     }
 
     invoice.dispute_status = DisputeStatus::UnderReview;
     InvoiceStorage::update_invoice(env, &invoice);
+    set_under_review_timestamp(env, invoice_id, env.ledger().timestamp());
     Ok(())
 }
 

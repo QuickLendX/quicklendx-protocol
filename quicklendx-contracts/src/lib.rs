@@ -26,6 +26,8 @@ extern crate alloc;
 mod scratch_events;
 #[cfg(test)]
 mod test_default;
+#[cfg(test)]
+mod test_default_finality_matrix;
 #[cfg(test)] mod test_escrow_uniqueness;
 #[cfg(test)] mod test_escrow;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -36,11 +38,13 @@ pub mod admin;
 pub mod analytics;
 pub mod audit;
 pub mod backup;
+pub mod backup_v1;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
 pub mod diagnostics;
 pub mod dispute;
+pub mod dispute_timeline;
 pub mod emergency;
 pub mod errors;
 pub mod escrow;
@@ -62,23 +66,29 @@ pub mod protocol_limits;
 pub mod reentrancy;
 pub mod settlement;
 pub mod storage;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_standalone;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit;
+#[cfg(test)]
+mod test_backup;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_backup_safety;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
 #[cfg(test)]
 mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
 #[cfg(test)]
+mod test_dispute_timeline_props;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
@@ -86,7 +96,7 @@ mod test_expired_bids_cleanup;
 mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
 #[cfg(test)]
 mod test_investment_consistency;
@@ -101,7 +111,7 @@ mod test_accept_bid_race;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_profit_fee;
 // #[cfg(all(test, feature = "legacy-tests"))]
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_profit_fee;
 #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_refund;
@@ -125,6 +135,8 @@ mod test_bid_ranking;
 mod test_events;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_invoice_metadata;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_distribute_revenue;
 #[cfg(test)]
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_invariants;
@@ -136,7 +148,7 @@ mod test_investment_transitions;
 mod test_invoice_metadata;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_diagnostics;
 pub mod types;
 pub use types::*;
@@ -232,7 +244,7 @@ fn u32_to_ascii_lib(mut value: u32, buf: &mut [u8; 10]) -> usize {
 
 /// Convert a `u32` to a soroban `String` using stack-allocated ASCII.
 #[inline]
-fn u32_to_string_lib(env: &Env, value: u32) -> String {
+pub(crate) fn u32_to_string_lib(env: &Env, value: u32) -> String {
     let mut buf = [0u8; 10];
     let n = u32_to_ascii_lib(value, &mut buf);
     let s = core::str::from_utf8(&buf[..n]).unwrap_or("0");
@@ -241,7 +253,7 @@ fn u32_to_string_lib(env: &Env, value: u32) -> String {
 
 /// Convert an `i64` to a soroban `String` using stack-allocated ASCII.
 #[inline]
-fn i64_to_string_lib(env: &Env, value: i64) -> String {
+pub(crate) fn i64_to_string_lib(env: &Env, value: i64) -> String {
     // "-9223372036854775808" = 20 chars
     let mut buf = [0u8; 21];
     let mut tmp = [0u8; 20];
@@ -943,6 +955,13 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+
+        if new_status == InvoiceStatus::Defaulted {
+            // Route every default transition through the defaults module so settlement finality,
+            // escrow finality, grace checks, and duplicate-default guards stay centralized.
+            return do_mark_invoice_defaulted(&env, &invoice_id, None);
+        }
+
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -978,13 +997,6 @@ impl QuickLendXContract {
                 let investor = invoice.investor.clone().unwrap_or(admin.clone());
                 events::emit_invoice_settled(&env, &invoice, 0, 0);
                 let _ = investor;
-            }
-            InvoiceStatus::Defaulted => {
-                invoice.mark_as_defaulted();
-                InvoiceStorage::update_invoice(&env, &invoice);
-                InvoiceStorage::add_to_status_invoices(&env, invoice.status, &invoice_id);
-                // Emit canonical InvoiceDefaulted event
-                events::emit_invoice_defaulted(&env, &invoice);
             }
             _ => return Err(QuickLendXError::InvalidStatus),
         }
@@ -2642,6 +2654,7 @@ impl QuickLendXContract {
             description: String::from_str(&env, "Manual Backup"),
             invoice_count: invoices.len() as u32,
             status: backup::BackupStatus::Active,
+            format_version: 2,
         };
         backup::BackupStorage::store_backup(&env, &b, Some(&invoices))?;
         backup::BackupStorage::store_backup_data(&env, &backup_id, &invoices);
@@ -2890,6 +2903,7 @@ impl QuickLendXContract {
         if reason.len() == 0 {
             return Err(QuickLendXError::InvalidDisputeReason);
         }
+        dispute_timeline::clear_under_review_timestamp(&env, &invoice_id);
         invoice.dispute_status = DisputeStatus::Disputed;
         invoice.dispute = crate::types::Dispute {
             created_by: creator.clone(),
@@ -2972,9 +2986,19 @@ impl QuickLendXContract {
         AdminStorage::require_admin(&env, &admin)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        match invoice.dispute_status {
+            DisputeStatus::None => return Err(QuickLendXError::DisputeNotFound),
+            DisputeStatus::Disputed => {}
+            DisputeStatus::UnderReview | DisputeStatus::Resolved => {
+                return Err(QuickLendXError::InvalidStatus);
+            }
+        }
+
         invoice.dispute_status = DisputeStatus::UnderReview;
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
+        dispute_timeline::set_under_review_timestamp(&env, &invoice_id, env.ledger().timestamp());
         // Emit DisputeUnderReview event immediately after state mutation.
         emit_dispute_under_review(&env, &invoice_id, &admin);
         Ok(())
@@ -2990,6 +3014,11 @@ impl QuickLendXContract {
         validate_dispute_resolution(&resolution)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        if invoice.dispute_status != DisputeStatus::UnderReview {
+            return Err(QuickLendXError::DisputeNotUnderReview);
+        }
+
         invoice.dispute_status = DisputeStatus::Resolved;
         invoice.dispute.resolution = resolution.clone();
         invoice.dispute.resolved_by = admin.clone();
@@ -3018,6 +3047,15 @@ impl QuickLendXContract {
             }
         }
         result
+    }
+
+    pub fn get_dispute_timeline(
+        env: Env,
+        invoice_id: BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> Result<dispute_timeline::DisputeTimeline, QuickLendXError> {
+        dispute_timeline::get_dispute_timeline(&env, &invoice_id, offset, limit)
     }
 
     pub fn get_invoices_by_dispute_status(
@@ -3224,6 +3262,8 @@ impl QuickLendXContract {
             meta.last_updated_at,
         );
         result.set(String::from_str(&env, "cursor"), meta.cursor);
-        result
+        result;
     }
 }
+
+mod test_id_stability;

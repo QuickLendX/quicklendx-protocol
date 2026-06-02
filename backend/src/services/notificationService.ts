@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 import { ulid } from 'ulid';
-import { getDatabase } from '../lib/database';
+import { getDatabase, getPreparedStatement } from '../lib/database';
 import {
   NotificationEvent,
   NotificationType,
@@ -48,12 +48,9 @@ export class NotificationService {
    * with status 'sent'. A 'failed' row is retryable.
    */
   private isNotificationSent(eventId: string, userId: string): boolean {
-    const db = getDatabase();
-    const row = db
-      .prepare(
-        "SELECT status FROM notifications WHERE event_id = ? AND user_id = ? LIMIT 1"
-      )
-      .get(eventId, userId) as { status: string } | undefined;
+    const row = getPreparedStatement(
+      "SELECT status FROM notifications WHERE event_id = ? AND user_id = ? LIMIT 1"
+    ).get(eventId, userId) as { status: string } | undefined;
     return row?.status === 'sent';
   }
 
@@ -62,34 +59,31 @@ export class NotificationService {
    * Returns the row id that was inserted or already existed.
    */
   private insertPending(eventId: string, userId: string, type: NotificationType): string {
-    const db = getDatabase();
     const id = ulid();
     const now = new Date().toISOString();
-    db.prepare(`
+    getPreparedStatement(`
       INSERT OR IGNORE INTO notifications
         (id, event_id, user_id, notification_type, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'pending', ?, ?)
     `).run(id, eventId, userId, type, now, now);
 
     // Return the actual id (may differ if row already existed)
-    const row = db
-      .prepare("SELECT id FROM notifications WHERE event_id = ? AND user_id = ?")
-      .get(eventId, userId) as { id: string };
+    const row = getPreparedStatement(
+      "SELECT id FROM notifications WHERE event_id = ? AND user_id = ?"
+    ).get(eventId, userId) as { id: string };
     return row.id;
   }
 
   private markSent(rowId: string): void {
-    const db = getDatabase();
-    db.prepare(
+    getPreparedStatement(
       "UPDATE notifications SET status = 'sent', smtp_error = NULL, updated_at = ? WHERE id = ?"
     ).run(new Date().toISOString(), rowId);
   }
 
   private markFailed(rowId: string, error: string): void {
-    const db = getDatabase();
     // Truncate error to avoid storing full stack traces / PII
     const safeError = error.slice(0, 500);
-    db.prepare(
+    getPreparedStatement(
       "UPDATE notifications SET status = 'failed', smtp_error = ?, updated_at = ? WHERE id = ?"
     ).run(safeError, new Date().toISOString(), rowId);
   }
@@ -99,10 +93,9 @@ export class NotificationService {
   // ---------------------------------------------------------------------------
 
   private getUserPreferences(userId: string): UserNotificationPreferences | null {
-    const db = getDatabase();
-    const row = db
-      .prepare("SELECT * FROM user_notification_preferences WHERE user_id = ?")
-      .get(userId) as Record<string, any> | undefined;
+    const row = getPreparedStatement(
+      "SELECT * FROM user_notification_preferences WHERE user_id = ?"
+    ).get(userId) as Record<string, any> | undefined;
 
     if (!row) return null;
 
@@ -224,12 +217,12 @@ export class NotificationService {
     const db = getDatabase();
     const now = new Date().toISOString();
 
-    const existing = db
-      .prepare("SELECT user_id FROM user_notification_preferences WHERE user_id = ?")
-      .get(userId);
+    const existing = getPreparedStatement(
+      "SELECT user_id FROM user_notification_preferences WHERE user_id = ?"
+    ).get(userId);
 
     if (!existing) {
-      db.prepare(`
+      getPreparedStatement(`
         INSERT INTO user_notification_preferences
           (user_id, email_enabled, email_address,
            notify_invoice_funded, notify_payment_received,

@@ -436,6 +436,22 @@ fn test_disable_when_already_disabled_is_safe() {
 // 10. TTL Extension
 // ============================================================================
 
+/// Returns the number of events with topic `"ttl_extended"` in the given env.
+fn count_ttl_extended_events(env: &Env) -> usize {
+    use soroban_sdk::xdr;
+    let topic_sym = soroban_sdk::Symbol::new(env, "ttl_extended");
+    let topic_xdr =
+        xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to ScVal");
+    env.events()
+        .all()
+        .events()
+        .iter()
+        .filter(|e| match &e.body {
+            xdr::ContractEventBody::V0(body) => body.topics.first() == Some(&topic_xdr),
+        })
+        .count()
+}
+
 #[test]
 fn test_admin_can_extend_protocol_ttl() {
     let env = Env::default();
@@ -444,46 +460,140 @@ fn test_admin_can_extend_protocol_ttl() {
     let currency = Address::generate(&env);
     let investor = Address::generate(&env);
 
-    // 1. Populate some data
-    // Add currency to whitelist
     client.add_currency(&admin, &currency);
-    
-    // Create an invoice
     let invoice_id = make_invoice(&env, &client, &business, &currency);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
 
-    // Create a bid
-    // First we need to verify the business (mock auth handles it)
-    // Actually, the make_invoice uses the provided business address.
-    // We need to make sure the business is verified if we want to place a bid.
-    // But for TTL extension, we just need things to exist in storage.
-
-    // Let's just use the existing client methods.
-    // Note: the business needs to be verified to place a bid or upload an invoice.
-    // In our setup, we used mock_all_auths, but we might need to handle business verification if we use it.
-
-    // Actually, let's just place a bid on the created invoice.
-    // For simplicity, let's assume the business is already verified for this test.
-    // (In real tests we might need to call a verification method).
-
-    let due_date = env.ledger().timestamp() + 86_400;
-    client.store_invoice(
-        &business,
-        &1_000i128,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Test invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
-    );
-
-    let bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
-
-    // 2. Run TTL extension
     let report = client.extend_protocol_ttl(&admin);
-    
-    // 3. Verify report
+
     assert!(report.invoices_refreshed > 0);
     assert!(report.bids_refreshed > 0);
     assert!(report.currencies_refreshed > 0);
-    // Escrow might be 0 if no escrow was created for this invoice yet.
+    assert_eq!(report.investments_refreshed, 0);
+    assert_eq!(report.escrows_refreshed, 0);
+}
+
+#[test]
+fn test_extend_ttl_empty_indexes() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    let report = client.extend_protocol_ttl(&admin);
+
+    assert_eq!(
+        report,
+        ExtendReport {
+            invoices_refreshed: 0,
+            bids_refreshed: 0,
+            investments_refreshed: 0,
+            escrows_refreshed: 0,
+            currencies_refreshed: 0,
+        },
+        "report must be all-zero when no data exists"
+    );
+}
+
+#[test]
+fn test_extend_ttl_non_admin_rejected() {
+    let env = Env::default();
+    let (client, _admin) = setup(&env);
+    let attacker = Address::generate(&env);
+
+    let result = client.try_extend_protocol_ttl(&attacker);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::NotAdmin,
+        "non-admin must receive NotAdmin"
+    );
+}
+
+#[test]
+fn test_extend_ttl_idempotent() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let investor = Address::generate(&env);
+
+    client.add_currency(&admin, &currency);
+    let invoice_id = make_invoice(&env, &client, &business, &currency);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
+
+    let report1 = client.extend_protocol_ttl(&admin);
+    let report2 = client.extend_protocol_ttl(&admin);
+
+    assert_eq!(
+        report1, report2,
+        "extending TTL twice must produce identical report"
+    );
+}
+
+#[test]
+fn test_extend_ttl_all_kinds_populated() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let investor = Address::generate(&env);
+
+    client.add_currency(&admin, &currency);
+
+    let invoice_id = make_invoice(&env, &client, &business, &currency);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
+
+    let _invoice2 = make_invoice(&env, &client, &business, &currency);
+    let currency2 = Address::generate(&env);
+    client.add_currency(&admin, &currency2);
+
+    let report = client.extend_protocol_ttl(&admin);
+
+    assert_eq!(report.invoices_refreshed, 2);
+    assert!(report.bids_refreshed >= 1);
+    assert_eq!(report.currencies_refreshed, 2);
+}
+
+#[test]
+fn test_extend_ttl_emits_events() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let investor = Address::generate(&env);
+
+    client.add_currency(&admin, &currency);
+    let invoice_id = make_invoice(&env, &client, &business, &currency);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
+
+    let before = count_ttl_extended_events(&env);
+
+    let report = client.extend_protocol_ttl(&admin);
+
+    let after = count_ttl_extended_events(&env);
+    let expected_events = (report.invoices_refreshed > 0) as usize
+        + (report.bids_refreshed > 0) as usize
+        + (report.investments_refreshed > 0) as usize
+        + (report.escrows_refreshed > 0) as usize
+        + (report.currencies_refreshed > 0) as usize;
+
+    assert_eq!(
+        after - before,
+        expected_events,
+        "must emit one TtlExtended event per non-zero kind"
+    );
+}
+
+#[test]
+fn test_extend_ttl_no_events_when_empty() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    let before = count_ttl_extended_events(&env);
+    let _report = client.extend_protocol_ttl(&admin);
+    let after = count_ttl_extended_events(&env);
+
+    assert_eq!(
+        after - before,
+        0,
+        "no TtlExtended events when all indexes are empty"
+    );
 }

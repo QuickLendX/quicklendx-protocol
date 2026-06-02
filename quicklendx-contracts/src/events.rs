@@ -564,6 +564,14 @@ pub struct TtlExtended {
     pub count: u32,
 }
 
+#[contractevent]
+pub struct BidTtlUpdated {
+    pub old_days: u64,
+    pub new_days: u64,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
 pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
     TtlExtended {
         kind: kind.clone(),
@@ -572,6 +580,13 @@ pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
     .publish(env);
 }
 
+#[contractevent]
+pub struct BidTtlUpdated {
+    pub old_days: u64,
+    pub new_days: u64,
+    pub admin: Address,
+    pub timestamp: u64,
+}
 // ... (after TtlExtended)
 
 
@@ -611,6 +626,14 @@ pub struct AdminSet {
 pub struct AdminTransferred {
     pub old_admin: Address,
     pub new_admin: Address,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct BidTtlUpdated {
+    pub old_days: u64,
+    pub new_days: u64,
+    pub admin: Address,
     pub timestamp: u64,
 }
 
@@ -1242,6 +1265,14 @@ pub fn emit_profit_fee_breakdown(
 }
 
 pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Address) {
+    #[derive(Clone)]
+    #[contractevent]
+    struct BidTtlUpdated {
+        old_days: u64,
+        new_days: u64,
+        admin: Address,
+        timestamp: u64,
+    }
     BidTtlUpdated {
         old_days,
         new_days,

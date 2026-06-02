@@ -4,7 +4,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_bid_expired, emit_bid_ttl_updated};
-use crate::storage::bump_persistent;
+use crate::storage::extend_persistent_ttl;
 pub use crate::types::{Bid, BidStatus};
 
 /// Storage keys for the per-invoice bid index.
@@ -142,7 +142,7 @@ impl BidStorage {
             .get(&Self::all_bids_key())
             .unwrap_or_else(|| Vec::new(env));
         if !result.is_empty() {
-            bump_persistent(env, &Self::all_bids_key());
+            extend_persistent_ttl(env, &Self::all_bids_key());
         }
         result
     }
@@ -159,7 +159,7 @@ impl BidStorage {
         if !exists {
             bids.push_back(bid_id.clone());
             env.storage().persistent().set(&Self::all_bids_key(), &bids);
-            bump_persistent(env, &Self::all_bids_key());
+            extend_persistent_ttl(env, &Self::all_bids_key());
         }
     }
     fn invoice_bid_count_key(invoice_id: &BytesN<32>) -> BidIndexKey {
@@ -182,7 +182,7 @@ impl BidStorage {
             .get(&key)
             .unwrap_or_else(|| Vec::new(env));
         if !result.is_empty() {
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
         result
     }
@@ -200,7 +200,7 @@ impl BidStorage {
         if !exists {
             bids.push_back(bid_id.clone());
             env.storage().persistent().set(&key, &bids);
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
     }
 
