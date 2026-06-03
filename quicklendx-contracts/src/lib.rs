@@ -627,6 +627,10 @@ impl QuickLendXContract {
     /// * `InvalidAmount` if amount <= 0
     /// * `InvoiceDueDateInvalid` if due_date is not in the future
     /// * `InvalidDescription` if description is empty
+    /// * `ContractPaused` if the protocol is paused (checked first)
+    ///
+    /// Pause-gated: rejects with `ContractPaused` when the emergency circuit
+    /// breaker is engaged, before any invoice state is created.
     pub fn store_invoice(
         env: Env,
         business: Address,
@@ -762,6 +766,10 @@ impl QuickLendXContract {
     /// # Errors
     /// * `InvoiceNotFound`, `StorageKeyNotFound`, `InvalidStatus`, `InvoiceAlreadyFunded`, `InvoiceNotAvailableForFunding`, `Unauthorized`
     /// * `OperationNotAllowed` if reentrancy is detected
+    /// * `ContractPaused` if the protocol is paused (checked first)
+    ///
+    /// Pause-gated: rejects with `ContractPaused` when the emergency circuit
+    /// breaker is engaged, before funds are escrowed.
     pub fn accept_bid_and_fund(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1160,6 +1168,9 @@ impl QuickLendXContract {
     /// - Bid amount is positive
     /// - Investor is authorized and verified
     /// - Creates and stores the bid
+    ///
+    /// Pause-gated: rejects with `ContractPaused` when the emergency circuit
+    /// breaker is engaged, before the bid is validated or stored.
     pub fn place_bid(
         env: Env,
         investor: Address,
@@ -1380,6 +1391,9 @@ impl QuickLendXContract {
     }
 
     /// Settle an invoice (business or automated process)
+    ///
+    /// Pause-gated: rejects with `ContractPaused` when the emergency circuit
+    /// breaker is engaged, before settlement payout is computed.
     pub fn settle_invoice(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1458,12 +1472,16 @@ impl QuickLendXContract {
 
     /// Process a partial payment towards an invoice.
     /// Protected by payment reentrancy guard.
+    ///
+    /// Pause-gated: rejects with `ContractPaused` when the emergency circuit
+    /// breaker is engaged, before any payment state is mutated.
     pub fn process_partial_payment(
         env: Env,
         invoice_id: BytesN<32>,
         payment_amount: i128,
         transaction_id: String,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || {
             do_process_partial_payment(&env, &invoice_id, payment_amount, transaction_id.clone())
         })
@@ -1474,12 +1492,16 @@ impl QuickLendXContract {
     ///
     /// Convenience entry point used by tests and off-chain clients.
     /// Delegates to `process_partial_payment` with identical semantics.
+    ///
+    /// Pause-gated: rejects with `ContractPaused` when the emergency circuit
+    /// breaker is engaged, before any payment state is mutated.
     pub fn make_payment(
         env: Env,
         invoice_id: BytesN<32>,
         payment_amount: i128,
         transaction_id: String,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || {
             do_process_partial_payment(&env, &invoice_id, payment_amount, transaction_id.clone())
         })
