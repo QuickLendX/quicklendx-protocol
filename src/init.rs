@@ -61,7 +61,7 @@ pub fn initialize_protocol(
 // ---------------------------------------------------------------------------
 
 fn validate_protocol_config_init(cfg: &ProtocolConfig) -> Result<(), ContractError> {
-    if cfg.min_invoice_amount == 0 {
+    if cfg.min_invoice_amount <= 0 {
         return Err(ContractError::InvalidAmount);
     }
     if cfg.max_due_date_days == 0 || cfg.max_due_date_days > 730 {

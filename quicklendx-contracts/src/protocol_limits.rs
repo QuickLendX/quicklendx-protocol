@@ -10,11 +10,17 @@ use crate::types::InvoiceStatus;
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
 pub struct ProtocolLimits {
+    /// Minimum invoice amount. **Inclusivity**: Inclusive (amount >= min_invoice_amount).
     pub min_invoice_amount: i128,
+    /// Minimum absolute bid amount. **Inclusivity**: Inclusive (bid >= min_bid_amount).
     pub min_bid_amount: i128,
+    /// Minimum bid in bps. **Inclusivity**: Inclusive (bps >= min_bid_bps).
     pub min_bid_bps: u32,
+    /// Max days until due date. **Inclusivity**: Inclusive (days <= max_due_date_days).
     pub max_due_date_days: u64,
+    /// Grace period. **Inclusivity**: Inclusive (seconds <= 2_592_000).
     pub grace_period_seconds: u64,
+    /// Max invoices per business. **Inclusivity**: Inclusive (active_count < limit), 0 = unlimited.
     pub max_invoices_per_business: u32,
 }
 
@@ -340,9 +346,10 @@ pub fn count_active_invoices(env: &Env, business: &Address) -> Result<u32, Quick
 /// - Count is read directly from on-chain storage
 pub fn check_invoice_limit(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
     let active_count = count_active_invoices(env, business)?;
-    let limit = MAX_ACTIVE_INVOICES_PER_BUSINESS;
+    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    let limit = limits.max_invoices_per_business;
 
-    if active_count >= limit {
+    if limit > 0 && active_count >= limit {
         return Err(QuickLendXError::MaxInvoicesPerBusinessExceeded);
     }
 
