@@ -32,6 +32,12 @@ pub mod verification;
 pub mod test_admin;
 
 #[cfg(test)]
+mod test_protocol_limits_boundary;
+
+#[cfg(test)]
+mod test_max_invoices_per_business;
+
+#[cfg(test)]
 mod test_investor_kyc;
 
 #[cfg(test)]

@@ -30,11 +30,14 @@ pub enum DataKey {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProtocolConfig {
     /// Minimum invoice amount in the protocol's base unit (must be > 0).
+    /// **Inclusivity**: Inclusive (amount >= min_invoice_amount).
     pub min_invoice_amount: i128,
     /// Maximum number of days until an invoice is due (1–730).
+    /// **Inclusivity**: Inclusive (days <= max_due_date_days).
     pub max_due_date_days: u32,
     /// Grace period in seconds after the due date before default is triggered
     /// (0–2_592_000, i.e. up to 30 days).
+    /// **Inclusivity**: Inclusive (seconds <= 2_592_000).
     pub grace_period_seconds: u64,
 }
 
