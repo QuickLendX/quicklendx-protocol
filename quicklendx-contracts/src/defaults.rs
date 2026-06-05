@@ -21,6 +21,10 @@ const DEFAULT_TRANSITION_GUARD_KEY: soroban_sdk::Symbol = symbol_short!("def_gua
 
 /// Transition guard to ensure default transitions are atomic and idempotent.
 /// Tracks whether a default transition has been initiated for a specific invoice.
+///
+/// **Finality**: Once a default transition is guarded and triggered, the invoice reaches
+/// a terminal `Defaulted` state. It cannot be subsequently funded, settled, or have payments
+/// recorded. Insurance claims are processed exactly once during this atomic transition.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TransitionGuard {
