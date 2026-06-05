@@ -28,6 +28,8 @@ mod scratch_events;
 mod test_default;
 #[cfg(test)]
 mod test_default_finality_matrix;
+#[cfg(test)]
+mod test_default_finality;
 #[cfg(test)] mod test_escrow_uniqueness;
 #[cfg(test)] mod test_escrow;
 #[cfg(all(test, feature = "legacy-tests"))]

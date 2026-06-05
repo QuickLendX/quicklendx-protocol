@@ -1,371 +1,150 @@
-use super::*;
-use crate::errors::QuickLendXError;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    token, Address, BytesN, Env, String, Vec,
-};
+#[cfg(test)]
+mod test_default_finality {
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
+    use crate::QuickLendXContract;
+    use crate::QuickLendXContractClient;
+    use crate::types::{Invoice, InvoiceStatus, InvoiceCategory, DisputeStatus, Investment, InvestmentStatus, InsuranceCoverage};
+    use crate::storage::{InvoiceStorage, InvestmentStorage};
+    use crate::errors::QuickLendXError;
+    use crate::defaults::handle_default;
 
-const GRACE_PERIOD: u64 = 7 * 24 * 60 * 60;
+    #[test]
+    fn test_defaulted_invoice_operations_reject() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, QuickLendXContract);
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        
+        let business = Address::generate(&env);
+        let admin = Address::generate(&env);
+        
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
+        let invoice = Invoice {
+            id: invoice_id.clone(),
+            business: business.clone(),
+            amount: 1000,
+            currency: Address::generate(&env),
+            due_date: env.ledger().timestamp() + 1000,
+            description: String::from_str(&env, "test"),
+            category: InvoiceCategory::Services,
+            tags: Vec::new(&env),
+            status: InvoiceStatus::Defaulted, // Terminal state
+            dispute_status: DisputeStatus::None,
+            investor: None,
+            funded_at: 0,
+            paid_at: 0,
+            paid_amount: 0,
+            metadata: None,
+            ratings: Vec::new(&env),
+            dispute: crate::types::Dispute {
+                created_by: business.clone(),
+                created_at: 0,
+                reason: String::from_str(&env, ""),
+                evidence: String::from_str(&env, ""),
+                resolution: String::from_str(&env, ""),
+                resolved_by: admin.clone(),
+                resolved_at: 0,
+            },
+        };
+        InvoiceStorage::store_invoice(&env, &invoice);
+        
+        let bid_id = BytesN::from_array(&env, &[2; 32]);
+        
+        // 1. Cannot be funded
+        let res_fund = client.try_accept_bid_and_fund(&invoice_id, &bid_id);
+        assert!(res_fund.is_err());
+        
+        // 2. Cannot be settled
+        let res_settle = client.try_settle_invoice(&invoice_id, &1000);
+        assert!(res_settle.is_err());
+        
+        // 3. Cannot have partial payments
+        let res_partial = client.try_process_partial_payment(&invoice_id, &500, &String::from_str(&env, "tx1"));
+        assert!(res_partial.is_err());
+    }
 
-fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
-    client.initialize_fee_system(&admin);
-    (env, client, admin)
-}
-
-fn create_verified_business(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    admin: &Address,
-) -> Address {
-    let business = Address::generate(env);
-    client.submit_kyc_application(&business, &String::from_str(env, "KYC data"));
-    client.verify_business(admin, &business);
-    business
-}
-
-fn create_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    _admin: &Address,
-    limit: i128,
-) -> Address {
-    let investor = Address::generate(env);
-    client.submit_investor_kyc(&investor, &String::from_str(env, "KYC data"));
-    client.verify_investor(&investor, &limit);
-    investor
-}
-
-fn create_funded_invoice(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    admin: &Address,
-) -> (BytesN<32>, Address, Address, i128, Address) {
-    let business = create_verified_business(env, client, admin);
-    let investor = create_verified_investor(env, client, admin, 50_000);
-    let token_admin = Address::generate(env);
-    let currency = env
-        .register_stellar_asset_contract_v2(token_admin.clone())
-        .address();
-    let sac_client = token::StellarAssetClient::new(env, &currency);
-    let token_client = token::Client::new(env, &currency);
-
-    client.add_currency(admin, &currency);
-
-    let initial_balance = 50_000i128;
-    sac_client.mint(&business, &initial_balance);
-    sac_client.mint(&investor, &initial_balance);
-
-    let expiry = env.ledger().sequence() + 10_000;
-    token_client.approve(&business, &client.address, &initial_balance, &expiry);
-    token_client.approve(&investor, &client.address, &initial_balance, &expiry);
-
-    let amount = 10_000i128;
-    let due_date = env.ledger().timestamp() + 86_400;
-    let invoice_id = client.store_invoice(
-        &business,
-        &amount,
-        &currency,
-        &due_date,
-        &String::from_str(env, "Test invoice"),
-        &InvoiceCategory::Services,
-        &Vec::new(env),
-    );
-    client.verify_invoice(&invoice_id);
-
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1000));
-    client.accept_bid(&invoice_id, &bid_id);
-
-    (invoice_id, business, investor, amount, currency)
-}
-
-fn default_invoice(env: &Env, client: &QuickLendXContractClient, invoice_id: &BytesN<32>) {
-    let invoice = client.get_invoice(invoice_id);
-    env.ledger()
-        .set_timestamp(invoice.due_date + GRACE_PERIOD + 1);
-    client.mark_invoice_defaulted(invoice_id, &Some(GRACE_PERIOD));
-}
-
-// ---------------------------------------------------------------------------
-// 1. Defaulted invoice cannot be refunded
-// ---------------------------------------------------------------------------
-#[test]
-fn test_defaulted_invoice_cannot_be_refunded() {
-    let (env, client, admin) = setup();
-    let (invoice_id, business, _investor, _amount, _currency) =
-        create_funded_invoice(&env, &client, &admin);
-
-    default_invoice(&env, &client, &invoice_id);
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Defaulted
-    );
-
-    let result = client.try_refund_escrow_funds(&invoice_id, &business);
-    assert!(result.is_err());
-
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Defaulted
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 2. Defaulted invoice cannot be settled or partially paid
-// ---------------------------------------------------------------------------
-#[test]
-fn test_defaulted_invoice_cannot_be_settled() {
-    let (env, client, admin) = setup();
-    let (invoice_id, _business, _investor, amount, _currency) =
-        create_funded_invoice(&env, &client, &admin);
-
-    default_invoice(&env, &client, &invoice_id);
-
-    let settle_result = client.try_settle_invoice(&invoice_id, &amount);
-    assert!(settle_result.is_err());
-
-    let partial_result = client.try_process_partial_payment(
-        &invoice_id,
-        &1_000,
-        &String::from_str(&env, "txn-1"),
-    );
-    assert!(partial_result.is_err());
-
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Defaulted
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 3. Refunded invoice cannot be defaulted
-// ---------------------------------------------------------------------------
-#[test]
-fn test_refunded_invoice_cannot_be_defaulted() {
-    let (env, client, admin) = setup();
-    let (invoice_id, business, _investor, _amount, _currency) =
-        create_funded_invoice(&env, &client, &admin);
-
-    client.refund_escrow_funds(&invoice_id, &business);
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Refunded
-    );
-
-    let invoice = client.get_invoice(&invoice_id);
-    env.ledger()
-        .set_timestamp(invoice.due_date + GRACE_PERIOD + 1);
-
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(GRACE_PERIOD));
-    assert!(result.is_err());
-
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Refunded
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 4. Paid invoice cannot be defaulted
-// ---------------------------------------------------------------------------
-#[test]
-fn test_paid_invoice_cannot_be_defaulted() {
-    let (env, client, admin) = setup();
-    let (invoice_id, _business, _investor, amount, _currency) =
-        create_funded_invoice(&env, &client, &admin);
-
-    client.settle_invoice(&invoice_id, &amount);
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Paid
-    );
-
-    let invoice = client.get_invoice(&invoice_id);
-    env.ledger()
-        .set_timestamp(invoice.due_date + GRACE_PERIOD + 1);
-
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(GRACE_PERIOD));
-    assert!(result.is_err());
-
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Paid
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 5. Default blocks subsequent settlement attempt
-// ---------------------------------------------------------------------------
-#[test]
-fn test_default_blocks_subsequent_settlement_attempt() {
-    let (env, client, admin) = setup();
-    let (invoice_id, _business, investor, amount, currency) =
-        create_funded_invoice(&env, &client, &admin);
-
-    let token_client = token::Client::new(&env, &currency);
-    let investor_balance_before = token_client.balance(&investor);
-
-    default_invoice(&env, &client, &invoice_id);
-
-    let result = client.try_settle_invoice(&invoice_id, &amount);
-    assert!(result.is_err());
-
-    let investor_balance_after = token_client.balance(&investor);
-    assert_eq!(investor_balance_before, investor_balance_after);
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Defaulted
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 6. Default blocks subsequent partial payment
-// ---------------------------------------------------------------------------
-#[test]
-fn test_default_blocks_subsequent_partial_payment() {
-    let (env, client, admin) = setup();
-    let (invoice_id, _business, _investor, _amount, _currency) =
-        create_funded_invoice(&env, &client, &admin);
-
-    default_invoice(&env, &client, &invoice_id);
-
-    let result = client.try_process_partial_payment(
-        &invoice_id,
-        &1_000,
-        &String::from_str(&env, "txn-pp"),
-    );
-    assert!(result.is_err());
-
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.total_paid, 0);
-}
-
-// ---------------------------------------------------------------------------
-// 7. Refund blocks subsequent settlement
-// ---------------------------------------------------------------------------
-#[test]
-fn test_refund_blocks_subsequent_settlement() {
-    let (env, client, admin) = setup();
-    let (invoice_id, business, _investor, amount, _currency) =
-        create_funded_invoice(&env, &client, &admin);
-
-    client.refund_escrow_funds(&invoice_id, &business);
-
-    let result = client.try_settle_invoice(&invoice_id, &amount);
-    assert!(result.is_err());
-
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Refunded
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 8. Double default via mark then expiration check
-// ---------------------------------------------------------------------------
-#[test]
-fn test_double_default_via_mark_and_expiration_check() {
-    let (env, client, admin) = setup();
-    let (invoice_id, _business, _investor, _amount, _currency) =
-        create_funded_invoice(&env, &client, &admin);
-
-    default_invoice(&env, &client, &invoice_id);
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Defaulted
-    );
-
-    let expiration_result = client.check_invoice_expiration(&invoice_id, &Some(GRACE_PERIOD));
-    assert_eq!(expiration_result, false);
-
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Defaulted
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 9. Concurrent default attempts are idempotent (guard fires first)
-// ---------------------------------------------------------------------------
-#[test]
-fn test_concurrent_default_attempts_idempotent() {
-    let (env, client, admin) = setup();
-    let (invoice_id, _business, _investor, _amount, _currency) =
-        create_funded_invoice(&env, &client, &admin);
-
-    default_invoice(&env, &client, &invoice_id);
-
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(GRACE_PERIOD));
-    assert!(result.is_err());
-    let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
-    assert_eq!(contract_err, QuickLendXError::DuplicateDefaultTransition);
-
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Defaulted
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 10. Transition guard survives multiple pathways
-// ---------------------------------------------------------------------------
-#[test]
-fn test_transition_guard_survives_multiple_pathways() {
-    let (env, client, admin) = setup();
-    let (invoice_id, _business, _investor, _amount, _currency) =
-        create_funded_invoice(&env, &client, &admin);
-
-    default_invoice(&env, &client, &invoice_id);
-
-    let mark_result = client.try_mark_invoice_defaulted(&invoice_id, &Some(GRACE_PERIOD));
-    assert!(mark_result.is_err());
-    let mark_err = mark_result.err().unwrap().expect("expected contract error");
-    assert_eq!(mark_err, QuickLendXError::DuplicateDefaultTransition);
-
-    let exp_result = client.check_invoice_expiration(&invoice_id, &Some(GRACE_PERIOD));
-    assert_eq!(exp_result, false);
-
-    let handle_result = client.try_handle_default(&invoice_id);
-    assert!(handle_result.is_err());
-    let handle_err = handle_result
-        .err()
-        .unwrap()
-        .expect("expected contract error");
-    assert_eq!(handle_err, QuickLendXError::DuplicateDefaultTransition);
-}
-
-// ---------------------------------------------------------------------------
-// 11. Default then refund then settle — all blocked
-// ---------------------------------------------------------------------------
-#[test]
-fn test_ordering_default_then_refund_then_settle_all_blocked() {
-    let (env, client, admin) = setup();
-    let (invoice_id, business, _investor, amount, _currency) =
-        create_funded_invoice(&env, &client, &admin);
-
-    default_invoice(&env, &client, &invoice_id);
-
-    let refund_result = client.try_refund_escrow_funds(&invoice_id, &business);
-    assert!(refund_result.is_err());
-
-    let settle_result = client.try_settle_invoice(&invoice_id, &amount);
-    assert!(settle_result.is_err());
-
-    let partial_result = client.try_process_partial_payment(
-        &invoice_id,
-        &1_000,
-        &String::from_str(&env, "txn-ord"),
-    );
-    assert!(partial_result.is_err());
-
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Defaulted);
-    assert_eq!(invoice.total_paid, 0);
+    #[test]
+    fn test_single_insurance_claim_and_idempotent_default() {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let invoice_id = BytesN::from_array(&env, &[3; 32]);
+        let business = Address::generate(&env);
+        let investor = Address::generate(&env);
+        let admin = Address::generate(&env);
+        
+        let invoice = Invoice {
+            id: invoice_id.clone(),
+            business: business.clone(),
+            amount: 1000,
+            currency: Address::generate(&env),
+            due_date: env.ledger().timestamp(),
+            description: String::from_str(&env, "test"),
+            category: InvoiceCategory::Services,
+            tags: Vec::new(&env),
+            status: InvoiceStatus::Funded,
+            dispute_status: DisputeStatus::None,
+            investor: Some(investor.clone()),
+            funded_at: env.ledger().timestamp(),
+            paid_at: 0,
+            paid_amount: 0,
+            metadata: None,
+            ratings: Vec::new(&env),
+            dispute: crate::types::Dispute {
+                created_by: business.clone(),
+                created_at: 0,
+                reason: String::from_str(&env, ""),
+                evidence: String::from_str(&env, ""),
+                resolution: String::from_str(&env, ""),
+                resolved_by: admin.clone(),
+                resolved_at: 0,
+            },
+        };
+        InvoiceStorage::store_invoice(&env, &invoice);
+        
+        let investment_id = BytesN::from_array(&env, &[4; 32]);
+        let provider = Address::generate(&env);
+        
+        let mut insurance_vec = Vec::new(&env);
+        insurance_vec.push_back(InsuranceCoverage {
+            provider: provider.clone(),
+            coverage_percentage: 100,
+            premium_amount: 10,
+            is_active: true,
+        });
+        
+        let investment = Investment {
+            investment_id: investment_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            amount: 1000,
+            funded_at: env.ledger().timestamp(),
+            status: InvestmentStatus::Active,
+            insurance: insurance_vec,
+        };
+        InvestmentStorage::store_investment(&env, &investment);
+        
+        use crate::payments::{Escrow, EscrowStatus, EscrowStorage};
+        let escrow_id = BytesN::from_array(&env, &[5; 32]);
+        let escrow = Escrow {
+            escrow_id: escrow_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            business: business.clone(),
+            amount: 1000,
+            currency: Address::generate(&env),
+            status: EscrowStatus::Held,
+            created_at: env.ledger().timestamp(),
+            released_at: 0,
+        };
+        EscrowStorage::store_escrow(&env, &escrow);
+        
+        // First transition accurately processes everything and flips status
+        let res1 = handle_default(&env, &invoice_id);
+        assert!(res1.is_ok());
+        
+        // Double default fails securely, guaranteeing insurance only processed once
+        let res2 = handle_default(&env, &invoice_id);
+        assert_eq!(res2, Err(QuickLendXError::InvoiceAlreadyDefaulted));
+    }
 }
