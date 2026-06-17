@@ -3331,3 +3331,32 @@ impl QuickLendXContract {
 }
 
 mod test_id_stability;
+
+    /// Rebuild secondary invoice indexes from canonical records (admin-only, paginated, resumable).
+    ///
+    /// Recomputes `invoices_by_customer`, `invoices_by_tax_id`, `invoices_by_tag`, and
+    /// `invoices_by_category` from the canonical `Invoice` records. Each index write uses
+    /// existing dedup-guarded helpers, ensuring idempotency: running the full sequence twice
+    /// yields identical indexes.
+    ///
+    /// # Arguments
+    /// * `admin` — Must be the current protocol admin (authorization required).
+    /// * `offset` — Zero-based start position in the full invoice ID list.
+    /// * `limit` — Max invoices to process per call (internally capped at 100).
+    ///
+    /// # Returns
+    /// * `Ok(RebuildReport)` with `scanned`, `reindexed`, and `next_offset`.
+    ///   When `next_offset` stops advancing, the rebuild is complete.
+    ///
+    /// # Errors
+    /// * `NotAdmin` if caller is not the current admin.
+    pub fn rebuild_invoice_indexes(
+        env: Env,
+        admin: Address,
+        offset: u32,
+        limit: u32,
+    ) -> Result<RebuildReport, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+        Ok(InvoiceStorage::rebuild_indexes_page(&env, offset, limit))
+    }

@@ -651,6 +651,52 @@ impl InvoiceStorage {
         Self::remove_from_customer_index(env, &metadata.customer_name, invoice_id);
         Self::remove_from_tax_id_index(env, &metadata.tax_id, invoice_id);
     }
+
+    /// Rebuild secondary indexes from canonical `Invoice` records (paginated, resumable, idempotent).
+    ///
+    /// For each invoice in the page [`offset`, `offset + capped_limit`), recompute membership
+    /// in customer/tax_id/tag/category indexes from the canonical record. Uses existing
+    /// dedup-guarded helpers, so multiple runs converge to identical state.
+    ///
+    /// # Arguments
+    /// * `offset` - Zero-based starting position in the full invoice ID list.
+    /// * `limit`  - Max invoices to process; internally capped at 100.
+    ///
+    /// # Returns
+    /// `RebuildReport` with `scanned`, `reindexed`, and `next_offset`. When `next_offset`
+    /// stops advancing, the rebuild is complete.
+    pub fn rebuild_indexes_page(env: &Env, offset: u32, limit: u32) -> RebuildReport {
+        const MAX_REBUILD_PAGE: u32 = 100;
+        let capped = if limit > MAX_REBUILD_PAGE { MAX_REBUILD_PAGE } else { limit };
+        
+        let all_ids = Self::get_all_invoice_ids(env);
+        let total = all_ids.len();
+        let start = offset.min(total);
+        let end = (offset.saturating_add(capped)).min(total);
+        
+        let mut reindexed = 0u32;
+        for i in start..end {
+            if let Some(invoice) = Self::get(env, &all_ids.get(i).unwrap()) {
+                if let Some(ref name) = invoice.metadata_customer_name {
+                    Self::add_to_customer_index(env, name, &invoice.id);
+                }
+                if let Some(ref tax_id) = invoice.metadata_tax_id {
+                    Self::add_to_tax_id_index(env, tax_id, &invoice.id);
+                }
+                for tag in invoice.tags.iter() {
+                    Self::add_tag_index(env, &tag, &invoice.id);
+                }
+                Self::add_category_index(env, &invoice.category, &invoice.id);
+                reindexed = reindexed.saturating_add(1);
+            }
+        }
+        
+        RebuildReport {
+            scanned: end.saturating_sub(start),
+            reindexed,
+            next_offset: end,
+        }
+    }
 }
 
 /// Storage operations for bids
