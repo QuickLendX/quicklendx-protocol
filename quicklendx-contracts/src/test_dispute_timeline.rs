@@ -644,6 +644,66 @@ mod test_dispute_timeline {
         assert_eq!(e2.event, String::from_str(&env, "Resolved"));
     }
 
+    #[test]
+    fn test_pagination_maintains_monotonic_sequence_across_pages() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_invoice(&env, &client, &admin, &business);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "Payment dispute"),
+            &String::from_str(&env, "Evidence"),
+        );
+        client.put_dispute_under_review(&invoice_id, &admin);
+        client.resolve_dispute(
+            &invoice_id,
+            &admin,
+            &String::from_str(&env, "Refund approved"),
+        );
+
+        // Paginate through all entries with page size 1
+        let mut all_entries: Vec<soroban_sdk::Val> = Vec::new(&env);
+        let mut offset = 0u32;
+        let page_size = 1u32;
+        let mut has_more = true;
+
+        while has_more {
+            let page = client.get_dispute_timeline(&invoice_id, &offset, &page_size);
+            has_more = page.has_more;
+
+            for i in 0..page.entries.len() {
+                if let Some(entry) = page.entries.get(i) {
+                    all_entries.push_back(entry.clone().into_val(&env));
+                }
+            }
+
+            offset = offset.saturating_add(page_size);
+        }
+
+        // Verify we collected all 3 entries
+        assert_eq!(all_entries.len(), 3);
+
+        // Verify sequence numbers are strictly monotonic (0, 1, 2)
+        let e0: crate::dispute_timeline::DisputeTimelineEntry = all_entries.get(0).unwrap().try_into_val(&env).unwrap();
+        let e1: crate::dispute_timeline::DisputeTimelineEntry = all_entries.get(1).unwrap().try_into_val(&env).unwrap();
+        let e2: crate::dispute_timeline::DisputeTimelineEntry = all_entries.get(2).unwrap().try_into_val(&env).unwrap();
+
+        assert_eq!(e0.sequence, 0);
+        assert_eq!(e1.sequence, 1);
+        assert_eq!(e2.sequence, 2);
+
+        // Verify timestamps are non-decreasing across the paginated sequence
+        assert!(e0.timestamp <= e1.timestamp, "Timestamp must not decrease from entry 0 to 1");
+        assert!(e1.timestamp <= e2.timestamp, "Timestamp must not decrease from entry 1 to 2");
+
+        // Verify event labels are in correct order
+        assert_eq!(e0.event, String::from_str(&env, "Opened"));
+        assert_eq!(e1.event, String::from_str(&env, "UnderReview"));
+        assert_eq!(e2.event, String::from_str(&env, "Resolved"));
+    }
+
     // -----------------------------------------------------------------------
     // current_status field
     // -----------------------------------------------------------------------
