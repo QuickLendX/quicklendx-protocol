@@ -14,7 +14,6 @@ use crate::investment::InvestmentStorage;
 use crate::payments::EscrowStorage;
 use crate::currency::CurrencyWhitelist;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol};
-use soroban_sdk::{symbol_short, Address, Env, String, Symbol, contracttype};
 
 /// Storage key for the maintenance mode boolean flag.
 pub const MAINTENANCE_MODE_KEY: Symbol = symbol_short!("maint");
@@ -45,8 +44,6 @@ pub const MAX_REASON_LEN: u32 = 256;
 /// will be identical.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
-#[contracttype]
-#[derive(Clone)]
 pub struct ExtendReport {
     /// Number of invoice records whose TTL was extended.
     pub invoices_refreshed: u32,
@@ -133,7 +130,6 @@ impl MaintenanceControl {
     ///
     /// # Errors
     /// * `NotAdmin` - caller is not the admin.
-    pub fn extend_protocol_ttl(env: &Env, admin: &Address) -> Result<ExtendReport, QuickLendXError> {
     pub fn extend_protocol_ttl(
         env: &Env,
         admin: &Address,
@@ -198,14 +194,5 @@ impl MaintenanceControl {
         }
 
         Ok(report)
-    }
-}
-        Self::emit_ttl_extended(env, "invoice", report.invoices_refreshed);
-        Self::emit_ttl_extended(env, "bid", report.bids_refreshed);
-        Self::emit_ttl_extended(env, "investment", report.investments_refreshed);
-        Self::emit_ttl_extended(env, "escrow", report.escrows_refreshed);
-        Self::emit_ttl_extended(env, "currency", report.currencies_refreshed);
-
-Ok(report)
     }
 }
