@@ -507,3 +507,59 @@ fn test_expired_rotation_does_not_update_treasury() {
 
     assert_eq!(client.get_treasury_address().unwrap(), old_treasury);
 }
+
+// ============================================================================
+// NEW: Comprehensive confirmation-deadline boundary test
+// ============================================================================
+
+#[test]
+fn test_confirmation_deadline_boundary_conditions() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let old_treasury = Address::generate(&env);
+    let new_treasury = Address::generate(&env);
+
+    client.configure_treasury(&old_treasury);
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    // Test 1: Confirmation 1 second before deadline should succeed
+    let before_deadline = req.confirmation_deadline - 1;
+    env.ledger().set_timestamp(before_deadline);
+    let result = client.try_confirm_treasury_rotation(&new_treasury);
+    assert!(result.is_ok(), "Confirmation should succeed 1 second before deadline");
+    assert_eq!(client.get_treasury_address().unwrap(), new_treasury);
+
+    // Reset for next test
+    client.configure_treasury(&old_treasury);
+    let req2 = client.initiate_treasury_rotation(&new_treasury);
+
+    // Test 2: Confirmation at exact deadline should succeed
+    env.ledger().set_timestamp(req2.confirmation_deadline);
+    let result = client.try_confirm_treasury_rotation(&new_treasury);
+    assert!(result.is_ok(), "Confirmation should succeed at exact deadline");
+    assert_eq!(client.get_treasury_address().unwrap(), new_treasury);
+
+    // Reset for next test
+    client.configure_treasury(&old_treasury);
+    let req3 = client.initiate_treasury_rotation(&new_treasury);
+
+    // Test 3: Confirmation 1 second after deadline should fail
+    let after_deadline = req3.confirmation_deadline + 1;
+    env.ledger().set_timestamp(after_deadline);
+    let result = client.try_confirm_treasury_rotation(&new_treasury);
+    assert!(result.is_err(), "Confirmation should fail 1 second after deadline");
+    assert_eq!(client.get_treasury_address().unwrap(), old_treasury);
+
+    // Test 4: Verify pending rotation is cleared after failed confirmation
+    assert!(client.get_pending_treasury_rotation().is_none());
+
+    // Test 5: Test with larger time delta (100 seconds after deadline)
+    client.configure_treasury(&old_treasury);
+    let req4 = client.initiate_treasury_rotation(&new_treasury);
+    let far_after_deadline = req4.confirmation_deadline + 100;
+    env.ledger().set_timestamp(far_after_deadline);
+    let result = client.try_confirm_treasury_rotation(&new_treasury);
+    assert!(result.is_err(), "Confirmation should fail 100 seconds after deadline");
+    assert_eq!(client.get_treasury_address().unwrap(), old_treasury);
+}
