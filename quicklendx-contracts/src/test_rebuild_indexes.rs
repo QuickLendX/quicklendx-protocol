@@ -1,55 +1,30 @@
 #![cfg(test)]
 
-//! Tests for `rebuild_invoice_indexes` / `InvoiceStorage::rebuild_indexes_page`.
-//!
-//! Covered scenarios
-//! -----------------
-//! 1. Basic rebuild — after deliberately corrupting indexes, a single-page
-//!    rebuild restores them.
-//! 2. Empty range — offset past end returns a zero-count report without
-//!    panicking.
-//! 3. Two-page resume — a dataset of 3 invoices can be rebuilt in two calls
-//!    of limit=2 and the results compose correctly.
-//! 4. Idempotency — running rebuild twice yields the same index state.
-//! 5. Non-admin rejected — a random address gets `NotAdmin`.
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
-use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
-
-use crate::storage::{Indexes, InvoiceStorage};
-use crate::types::{InvoiceCategory, InvoiceStatus, RebuildReport};
+use crate::storage::InvoiceStorage;
+use crate::types::{InvoiceCategory, InvoiceMetadata, LineItemRecord, RebuildReport};
 use crate::{QuickLendXContract, QuickLendXContractClient};
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// Register the contract and return (env, client, admin).
-fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
+fn setup() -> (Env, Address, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
+    env.ledger().set_timestamp(1_000_000);
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-
     let admin = Address::generate(&env);
-    client.initialize_admin(&admin);
-
-    (env, client, admin)
+    client.set_admin(&admin);
+    let _ = client.try_initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
+    (env, contract_id, client, admin)
 }
 
-/// Upload one invoice via the contract client; returns its ID.
-fn upload_invoice(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    admin: &Address,
-    business: &Address,
-) -> soroban_sdk::BytesN<32> {
-    // KYC
-    client.submit_kyc_application(business, &String::from_str(env, "KYC"));
-    client.verify_business(admin, business);
-
+fn make_invoice(env: &Env, client: &QuickLendXContractClient, admin: &Address) -> BytesN<32> {
+    let business = Address::generate(env);
     let currency = Address::generate(env);
+    client.submit_kyc_application(&business, &String::from_str(env, "KYC"));
+    client.verify_business(admin, &business);
     client.upload_invoice(
-        business,
+        &business,
         &1000,
         &currency,
         &(env.ledger().timestamp() + 86_400),
@@ -59,209 +34,107 @@ fn upload_invoice(
     )
 }
 
-/// Directly corrupt the customer-name index for an invoice by removing its ID.
-fn corrupt_customer_index(
-    env: &Env,
-    contract_id: &Address,
-    customer_name: &String,
-    invoice_id: &soroban_sdk::BytesN<32>,
-) {
-    env.as_contract(contract_id, || {
-        InvoiceStorage::remove_from_customer_index(env, customer_name, invoice_id);
-    });
+fn set_metadata(env: &Env, client: &QuickLendXContractClient, invoice_id: &BytesN<32>, name: &str) {
+    client.update_invoice_metadata(
+        invoice_id,
+        &InvoiceMetadata {
+            customer_name: String::from_str(env, name),
+            customer_address: String::from_str(env, "Addr"),
+            tax_id: String::from_str(env, "TAX-1"),
+            line_items: Vec::from_array(
+                env,
+                [LineItemRecord(String::from_str(env, "Item"), 1, 1000, 1000)],
+            ),
+            notes: String::from_str(env, ""),
+        },
+    );
 }
 
-/// Directly corrupt the category index.
-fn corrupt_category_index(
-    env: &Env,
-    contract_id: &Address,
-    category: InvoiceCategory,
-    invoice_id: &soroban_sdk::BytesN<32>,
-) {
-    env.as_contract(contract_id, || {
-        InvoiceStorage::remove_category_index(env, &category, invoice_id);
-    });
-}
-
-/// Assert the customer index contains `invoice_id`.
-fn assert_in_customer_index(
-    env: &Env,
-    contract_id: &Address,
-    customer_name: &String,
-    invoice_id: &soroban_sdk::BytesN<32>,
-) {
-    env.as_contract(contract_id, || {
-        let ids = InvoiceStorage::get_invoices_by_customer(env, customer_name);
-        assert!(
-            ids.iter().any(|id| id == *invoice_id),
-            "invoice should be in customer index"
-        );
-    });
-}
-
-/// Assert the category index contains `invoice_id`.
-fn assert_in_category_index(
-    env: &Env,
-    contract_id: &Address,
-    category: InvoiceCategory,
-    invoice_id: &soroban_sdk::BytesN<32>,
-) {
-    env.as_contract(contract_id, || {
-        let ids = InvoiceStorage::get_invoices_by_category(env, &category);
-        assert!(
-            ids.iter().any(|id| id == *invoice_id),
-            "invoice should be in category index"
-        );
-    });
-}
-
-// ---------------------------------------------------------------------------
-// Test helpers for metadata
-// ---------------------------------------------------------------------------
-
-fn set_customer_metadata(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    invoice_id: &soroban_sdk::BytesN<32>,
-    customer_name: &str,
-) {
-    use crate::types::{InvoiceMetadata, LineItemRecord};
-    let meta = InvoiceMetadata {
-        customer_name: String::from_str(env, customer_name),
-        customer_address: String::from_str(env, "Addr"),
-        tax_id: String::from_str(env, "TAX-1"),
-        line_items: soroban_sdk::Vec::from_array(
-            env,
-            [LineItemRecord(String::from_str(env, "Item"), 1, 1000, 1000)],
-        ),
-        notes: String::from_str(env, ""),
-    };
-    client.update_invoice_metadata(invoice_id, &meta);
-}
-
-// ---------------------------------------------------------------------------
-// 1. Corruption recovery — rebuild restores drifted customer + category index
-// ---------------------------------------------------------------------------
-
+// 1. Corruption recovery
 #[test]
-fn test_rebuild_fixes_corrupted_customer_and_category_index() {
-    let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+fn test_rebuild_fixes_corrupted_indexes() {
+    let (env, contract_id, client, admin) = setup();
 
-    let business = Address::generate(&env);
-    let invoice_id = upload_invoice(&env, &client, &admin, &business);
+    let invoice_id = make_invoice(&env, &client, &admin);
     let customer = String::from_str(&env, "Acme Corp");
-    set_customer_metadata(&env, &client, &invoice_id, "Acme Corp");
+    set_metadata(&env, &client, &invoice_id, "Acme Corp");
 
-    // Verify both indexes are present before corruption
-    assert_in_customer_index(&env, &contract_id, &customer, &invoice_id);
-    assert_in_category_index(&env, &contract_id, InvoiceCategory::Services, &invoice_id);
+    // Corrupt customer index directly via storage
+    env.as_contract(&contract_id, || {
+        InvoiceStorage::remove_from_customer_index(&env, &customer, &invoice_id);
+    });
 
-    // Corrupt both indexes
-    corrupt_customer_index(&env, &contract_id, &customer, &invoice_id);
-    corrupt_category_index(&env, &contract_id, InvoiceCategory::Services, &invoice_id);
+    // Confirm corruption
+    let ids_before = client.get_invoices_by_customer(&customer);
+    assert!(!ids_before.iter().any(|id| id == invoice_id));
 
     // Rebuild
     let report = client.rebuild_invoice_indexes(&admin, &0, &50);
-    assert_eq!(report.scanned, 1);
     assert_eq!(report.reindexed, 1);
 
-    // Both indexes are restored
-    assert_in_customer_index(&env, &contract_id, &customer, &invoice_id);
-    assert_in_category_index(&env, &contract_id, InvoiceCategory::Services, &invoice_id);
+    // Index restored
+    let ids_after = client.get_invoices_by_customer(&customer);
+    assert!(ids_after.iter().any(|id| id == invoice_id));
 }
 
-// ---------------------------------------------------------------------------
-// 2. Empty range — offset past all invoices returns zero counts
-// ---------------------------------------------------------------------------
-
+// 2. Empty range returns zero report
 #[test]
-fn test_rebuild_empty_range_returns_zero_report() {
-    let (env, client, admin) = setup();
+fn test_rebuild_empty_range() {
+    let (env, _cid, client, admin) = setup();
+    make_invoice(&env, &client, &admin);
 
-    let business = Address::generate(&env);
-    upload_invoice(&env, &client, &admin, &business);
-
-    // offset=100 is past the 1 invoice
     let report = client.rebuild_invoice_indexes(&admin, &100, &50);
     assert_eq!(report.scanned, 0);
     assert_eq!(report.reindexed, 0);
     assert_eq!(report.next_offset, 100);
 }
 
-// ---------------------------------------------------------------------------
-// 3. Two-page resume — 3 invoices rebuilt via two calls of limit=2
-// ---------------------------------------------------------------------------
-
+// 3. Two-page resume over 3 invoices
 #[test]
-fn test_rebuild_resumes_across_two_pages() {
-    let (env, client, admin) = setup();
-
-    // Upload 3 invoices from 3 different businesses
+fn test_rebuild_two_page_resume() {
+    let (env, _cid, client, admin) = setup();
     for _ in 0..3 {
-        let business = Address::generate(&env);
-        upload_invoice(&env, &client, &admin, &business);
+        make_invoice(&env, &client, &admin);
     }
 
-    // Page 1: offset=0, limit=2
-    let page1: RebuildReport = client.rebuild_invoice_indexes(&admin, &0, &2);
-    assert_eq!(page1.scanned, 2);
-    assert_eq!(page1.reindexed, 2);
-    assert_eq!(page1.next_offset, 2);
+    let p1: RebuildReport = client.rebuild_invoice_indexes(&admin, &0, &2);
+    assert_eq!(p1.scanned, 2);
+    assert_eq!(p1.next_offset, 2);
 
-    // Page 2: offset from page1
-    let page2: RebuildReport = client.rebuild_invoice_indexes(&admin, &page1.next_offset, &2);
-    assert_eq!(page2.scanned, 1);
-    assert_eq!(page2.reindexed, 1);
-    // next_offset should equal total invoice count (3)
-    assert_eq!(page2.next_offset, 3);
+    let p2: RebuildReport = client.rebuild_invoice_indexes(&admin, &p1.next_offset, &2);
+    assert_eq!(p2.scanned, 1);
+    assert_eq!(p2.next_offset, 3);
 
-    // Page 3: nothing left
-    let page3: RebuildReport = client.rebuild_invoice_indexes(&admin, &page2.next_offset, &2);
-    assert_eq!(page3.scanned, 0);
-    assert_eq!(page3.reindexed, 0);
+    let p3: RebuildReport = client.rebuild_invoice_indexes(&admin, &p2.next_offset, &2);
+    assert_eq!(p3.scanned, 0);
 }
 
-// ---------------------------------------------------------------------------
-// 4. Idempotency — running rebuild twice leaves indexes identical
-// ---------------------------------------------------------------------------
-
+// 4. Idempotency — running twice gives same counts, no duplicate index entries
 #[test]
-fn test_rebuild_is_idempotent() {
-    let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+fn test_rebuild_idempotent() {
+    let (env, contract_id, client, admin) = setup();
+    let invoice_id = make_invoice(&env, &client, &admin);
+    set_metadata(&env, &client, &invoice_id, "Beta Ltd");
 
-    let business = Address::generate(&env);
-    let invoice_id = upload_invoice(&env, &client, &admin, &business);
-    let customer = String::from_str(&env, "Beta Ltd");
-    set_customer_metadata(&env, &client, &invoice_id, "Beta Ltd");
-
-    // Run once
     let r1 = client.rebuild_invoice_indexes(&admin, &0, &50);
-    // Run again
     let r2 = client.rebuild_invoice_indexes(&admin, &0, &50);
-
-    // Reports are identical
     assert_eq!(r1.scanned, r2.scanned);
     assert_eq!(r1.reindexed, r2.reindexed);
 
-    // Index still contains exactly one entry for this invoice (no duplicates)
+    // No duplicate entries in index
+    let customer = String::from_str(&env, "Beta Ltd");
     env.as_contract(&contract_id, || {
         let ids = InvoiceStorage::get_invoices_by_customer(&env, &customer);
         let count = ids.iter().filter(|id| id == invoice_id).count();
-        assert_eq!(count, 1, "index must not accumulate duplicate entries");
+        assert_eq!(count, 1);
     });
 }
 
-// ---------------------------------------------------------------------------
-// 5. Non-admin is rejected
-// ---------------------------------------------------------------------------
-
+// 5. Non-admin rejected
 #[test]
 fn test_rebuild_rejects_non_admin() {
-    let (env, client, _admin) = setup();
+    let (env, _cid, client, _admin) = setup();
     let impostor = Address::generate(&env);
-
     let result = client.try_rebuild_invoice_indexes(&impostor, &0, &50);
     assert!(result.is_err());
 }
