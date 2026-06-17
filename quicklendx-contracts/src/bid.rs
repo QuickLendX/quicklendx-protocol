@@ -4,7 +4,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_bid_expired, emit_bid_ttl_updated};
-use crate::storage::extend_persistent_ttl;
+use crate::storage::{bump_persistent, extend_persistent_ttl};
 pub use crate::types::{Bid, BidStatus};
 
 /// Storage keys for the per-invoice bid index.
