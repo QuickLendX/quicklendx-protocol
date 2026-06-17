@@ -148,10 +148,14 @@ mod test_input_matrix;
 mod test_investment_transitions;
 #[cfg(test)]
 mod test_invoice_metadata;
+#[cfg(test)]
+mod test_rebuild_indexes;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_diagnostics;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_insurance_claim_payout;
 pub mod types;
 pub use types::*;
 pub mod verification;
@@ -3288,6 +3292,43 @@ impl QuickLendXContract {
         result.set(String::from_str(&env, "cursor"), meta.cursor);
         result;
     }
+
+    // ============================================================================
+    // Admin Recovery
+    // ============================================================================
+
+    /// Rebuild secondary invoice indexes from canonical `Invoice` records.
+    ///
+    /// Secondary indexes (`invoices_by_customer`, `invoices_by_tax_id`,
+    /// `invoices_by_tag`, `invoices_by_category`) can drift from primary records
+    /// after a backup restore, a partial migration, or a past bug. This function
+    /// recomputes them for a page of invoices without touching primary records.
+    ///
+    /// # Resumability
+    /// The operation is paginated. On each call pass the `next_offset` from the
+    /// previous `RebuildReport` as `offset` until `report.next_offset` stops
+    /// advancing (last page). A `limit` of 0 returns an empty report immediately.
+    ///
+    /// # Idempotency
+    /// Every index write is a dedup-guarded append. Running the full sequence
+    /// twice leaves indexes in exactly the same state as running it once.
+    ///
+    /// # Arguments
+    /// * `admin`  - Must be the current protocol admin (authorization required).
+    /// * `offset` - Zero-based start position in the full invoice ID list.
+    /// * `limit`  - Max invoices to process per call (capped at 100).
+    pub fn rebuild_invoice_indexes(
+        env: Env,
+        admin: Address,
+        offset: u32,
+        limit: u32,
+    ) -> Result<RebuildReport, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+        let report = InvoiceStorage::rebuild_indexes_page(&env, offset, limit);
+        Ok(report)
+    }
 }
 
+#[cfg(test)]
 mod test_id_stability;

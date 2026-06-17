@@ -465,7 +465,7 @@ impl FeeManager {
         let mut total_active_min_fees: i128 = 0;
         for i in 0..fee_structures.len() {
             let structure = fee_structures.get(i).unwrap();
-            /// Accumulate total active minimum fees, checking for i128 overflow.
+            // Accumulate total active minimum fees, checking for i128 overflow.
             if structure.is_active {
                 total_active_min_fees = total_active_min_fees
                     .checked_add(structure.min_fee)
@@ -950,7 +950,7 @@ impl FeeManager {
             0
         };
         let efficiency_score = if revenue_data.total_collected > 0 {
-            /// Calculate distributed percentage, checking for i128 overflow during multiplication.
+            // Calculate distributed percentage, checking for i128 overflow during multiplication.
             let distributed_pct = revenue_data
                 .total_distributed
                 .checked_mul(100)
