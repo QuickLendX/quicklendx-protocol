@@ -30,12 +30,7 @@ where
     env.storage().persistent().extend_ttl(key, ttl_u32, ttl_u32);
 }
 
-pub fn bump_persistent<T>(env: &Env, key: &T)
-where
-    T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
-{
-    extend_persistent_ttl(env, key);
-}
+
 
 /// Storage keys for the contract
 pub struct StorageKeys;
