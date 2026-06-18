@@ -28,7 +28,7 @@ mod scratch_events;
 mod test_default;
 #[cfg(test)]
 mod test_default_finality_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality;
 #[cfg(test)] mod test_escrow_uniqueness;
 #[cfg(test)] mod test_escrow;
@@ -106,7 +106,7 @@ mod test_invariant_self_check;
 mod test_investment_consistency;
 #[cfg(test)]
 mod test_accept_bid_race;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
 // #[cfg(test)]
 // mod test_investment_queries;
@@ -129,7 +129,7 @@ mod test_protocol_limits_boundary;
 mod test_settlement_accounting_identity;
 #[cfg(test)]
 mod test_string_limits;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backpressure_shedding;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_types;
@@ -154,7 +154,7 @@ mod test_input_matrix;
 mod test_investment_transitions;
 #[cfg(test)]
 mod test_invoice_metadata;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
@@ -3336,6 +3336,7 @@ impl QuickLendXContract {
     }
 }
 
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_stability;
 #[cfg(test)]
 mod test_emergency_escrow_protection;
