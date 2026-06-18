@@ -92,7 +92,7 @@ impl EmergencyWithdraw {
         let contract = env.current_contract_address();
         let token_client = token::Client::new(env, token);
         let balance = token_client.balance(&contract);
-        let held_reserve = EscrowStorage::get_held_reserve(env, token);
+        let held_reserve = EscrowStorage::get_held_reserve(env, token)?;
 
         if balance < held_reserve {
             return Err(QuickLendXError::EmergencyWithdrawInsufficientBalance);

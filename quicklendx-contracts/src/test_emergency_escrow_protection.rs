@@ -10,6 +10,7 @@ use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::payments::EscrowStatus;
 use crate::storage::InvoiceStorage;
 use soroban_sdk::{
+    symbol_short,
     testutils::{Address as _, Ledger},
     token, Address, BytesN, Env, String, Vec,
 };
@@ -215,6 +216,22 @@ fn set_invoice_status_for_test(
     });
 }
 
+fn remove_reserve_sidecar_for_test(
+    env: &Env,
+    contract_id: &Address,
+    currency: &Address,
+    escrow_id: &BytesN<32>,
+) {
+    env.as_contract(contract_id, || {
+        env.storage()
+            .persistent()
+            .remove(&(symbol_short!("esc_res"), currency.clone()));
+        env.storage()
+            .persistent()
+            .remove(&(symbol_short!("esc_acc"), escrow_id.clone()));
+    });
+}
+
 #[test]
 fn same_token_emergency_withdraw_rejects_live_escrow_balance() {
     let fixture = build_fixture(SAME_TOKEN_SURPLUS);
@@ -296,6 +313,64 @@ fn emergency_withdraw_rejects_when_balance_is_below_held_reserve() {
             .status,
         EscrowStatus::Held
     );
+}
+
+#[test]
+fn missing_reserve_sidecar_is_rebuilt_before_emergency_withdraw() {
+    let fixture = build_fixture(SAME_TOKEN_SURPLUS);
+    let token_client = token::Client::new(&fixture.env, &fixture.escrow.currency);
+    let target = Address::generate(&fixture.env);
+    let escrow = fixture
+        .client
+        .get_escrow_details(&fixture.escrow.invoice_id);
+
+    remove_reserve_sidecar_for_test(
+        &fixture.env,
+        &fixture.contract_id,
+        &fixture.escrow.currency,
+        &escrow.escrow_id,
+    );
+
+    fixture.client.initiate_emergency_withdraw(
+        &fixture.admin,
+        &fixture.escrow.currency,
+        &(SAME_TOKEN_SURPLUS + 1),
+        &target,
+    );
+    let pending = fixture.client.get_pending_emergency_withdraw().unwrap();
+    advance_to_unlock(&fixture.env, &pending);
+
+    let result = fixture.client.try_execute_emergency_withdraw(&fixture.admin);
+    assert_contract_error!(result, QuickLendXError::EmergencyWithdrawInsufficientBalance);
+    assert!(!fixture.client.can_exec_emergency());
+    assert_eq!(token_client.balance(&target), 0);
+    assert_eq!(
+        token_client.balance(&fixture.contract_id),
+        ESCROW_AMOUNT + SAME_TOKEN_SURPLUS
+    );
+
+    fixture.client.initiate_emergency_withdraw(
+        &fixture.admin,
+        &fixture.escrow.currency,
+        &SAME_TOKEN_SURPLUS,
+        &target,
+    );
+    let pending = fixture.client.get_pending_emergency_withdraw().unwrap();
+    advance_to_unlock(&fixture.env, &pending);
+    fixture.client.execute_emergency_withdraw(&fixture.admin);
+
+    assert_eq!(token_client.balance(&target), SAME_TOKEN_SURPLUS);
+    assert_eq!(token_client.balance(&fixture.contract_id), ESCROW_AMOUNT);
+
+    let investor_before = token_client.balance(&fixture.escrow.investor);
+    fixture
+        .client
+        .refund_escrow_funds(&fixture.escrow.invoice_id, &fixture.escrow.business);
+    assert_eq!(
+        token_client.balance(&fixture.escrow.investor),
+        investor_before + ESCROW_AMOUNT
+    );
+    assert_eq!(token_client.balance(&fixture.contract_id), 0);
 }
 
 #[test]

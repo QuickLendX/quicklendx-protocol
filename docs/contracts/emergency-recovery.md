@@ -14,9 +14,10 @@ It must **not** be used to bypass normal escrow, settlement, or refund flows.
 
 Emergency withdraw can recover only the same-token surplus that is not committed
 to live escrows. Escrow creation increases a persistent reserve for the escrow
-token, and escrow release or refund decreases that reserve. Execution checks the
-queued token against this reserve, so protection does not depend on invoice
-status indexes or the number of funded invoices.
+token, and escrow release or refund decreases that reserve. Before execution,
+the reserve is synchronized from indexed `Held` escrow records so missing or
+expired reserve sidecars are repaired before the queued token balance is
+considered withdrawable.
 
 The executable amount is:
 
@@ -132,9 +133,9 @@ Each withdrawal request is assigned a unique nonce:
 
 | Event | When | Data |
 |-------|------|------|
-| `emg_init` | On successful initiate | token, amount, target, unlock_at, expires_at, nonce, admin |
-| `emg_exec` | On successful execute | token, amount, target, nonce, admin |
-| `emg_cncl` | On successful cancel | token, amount, target, nonce, admin |
+| `emg_init` | On successful initiate | token, amount, target, unlock_at, admin |
+| `emg_exec` | On successful execute | token, amount, target, admin |
+| `emg_cncl` | On successful cancel | token, amount, target, admin |
 
 ## State Diagram
 

@@ -157,7 +157,7 @@ The emergency withdraw mechanism is a **last-resort** recovery tool for stuck fu
 
 - **Timelock**: 24-hour default delay prevents instant recovery execution even if admin keys are compromised.
 - **Expiration**: 7-day lifetime after unlock prevents stale withdrawals from lingering indefinitely.
-- **Escrow reserve**: Same-token amounts committed to `Held` escrows are excluded from emergency withdrawal.
+- **Escrow reserve**: Same-token amounts committed to `Held` escrows are excluded from emergency withdrawal; missing reserve sidecars are repaired from indexed held escrows before balance checks.
 - **Nonce tracking**: Prevents replay attacks if a cancelled withdrawal is re-initiated.
 - **Cancellation audit trail**: Cancelled records are retained in storage (marked `cancelled`) so operators can observe the full history.
 
