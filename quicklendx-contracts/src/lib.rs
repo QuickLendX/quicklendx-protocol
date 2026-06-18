@@ -24,14 +24,14 @@ extern crate alloc;
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod scratch_events;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_default;
 #[cfg(test)]
 mod test_default_finality_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_default_finality;
 #[cfg(test)] mod test_escrow_uniqueness;
-#[cfg(all(test, feature = "legacy-tests"))] mod test_escrow;
+#[cfg(test)] mod test_escrow;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_fees;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
@@ -68,11 +68,11 @@ pub mod protocol_limits;
 pub mod reentrancy;
 pub mod settlement;
 pub mod storage;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_standalone;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit;
@@ -88,7 +88,7 @@ mod test_cleanup_pagination;
 mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_dispute_timeline_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
@@ -100,9 +100,9 @@ mod test_freshness;
 mod test_init;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_investment_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_accept_bid_race;
 // #[cfg(test)]
 // mod test_investment_queries;
@@ -129,7 +129,7 @@ mod test_string_limits;
 // mod test_types;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_vesting;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_analytics_consistency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
@@ -3286,11 +3286,10 @@ impl QuickLendXContract {
             meta.last_updated_at,
         );
         result.set(String::from_str(&env, "cursor"), meta.cursor);
-        result
+        result;
     }
 }
 
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_stability;
 #[cfg(test)]
 mod test_escrow_settle_refund_race;

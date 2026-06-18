@@ -14,7 +14,15 @@ use crate::types::{
 /// Default TTL threshold for persistent storage (adjust the value as needed)
 pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800; // ~30 days at 5s/ledger
 
-pub fn extend_persistent_ttl<T>(env: &Env, key: &T)
+pub fn bump_persistent<T>(env: &Env, key: &T) 
+where
+    T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
+{
+    let ttl_u32: u32 = PERSISTENT_TTL_THRESHOLD.try_into().unwrap_or(0);
+    env.storage().persistent().extend_ttl(key, ttl_u32, ttl_u32);
+}
+
+pub fn extend_persistent_ttl<T>(env: &Env, key: &T) 
 where
     T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
 {

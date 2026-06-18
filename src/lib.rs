@@ -20,25 +20,18 @@
 /// The verification module enforces a **deny-by-default** policy: every
 /// restricted action requires the caller to prove verified status through
 /// a guard function.  Pending, rejected, and unknown actors are blocked.
-pub mod admin;
-pub mod errors;
 pub mod events;
 pub mod fees;
-pub mod init;
 pub mod pause;
 pub mod profits;
 pub mod settlement;
-pub mod storage_types;
 pub mod verification;
 
-pub use admin::{AdminContract, AdminContractClient};
-pub use errors::ContractError;
-pub use storage_types::{FeeConfig, ProtocolConfig};
-
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
+#[cfg(test)]
 pub mod test_admin;
 
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_protocol_limits_boundary;
 
 #[cfg(test)]
