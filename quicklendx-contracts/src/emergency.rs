@@ -11,8 +11,8 @@
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use crate::payments::transfer_funds;
-use soroban_sdk::{contracttype, symbol_short, Address, Env};
+use crate::payments::{transfer_funds, EscrowStorage};
+use soroban_sdk::{contracttype, symbol_short, token, Address, Env};
 
 /// Default timelock: 24 hours. Withdrawal can only be executed after this delay.
 pub const DEFAULT_EMERGENCY_TIMELOCK_SECS: u64 = 24 * 60 * 60;
@@ -82,6 +82,29 @@ impl EmergencyWithdraw {
     fn mark_nonce_cancelled(env: &Env, nonce: u64) {
         let key = (CANCELLED_NONCE_KEY.clone(), nonce);
         env.storage().instance().set(&key, &true);
+    }
+
+    fn require_withdrawable_surplus(
+        env: &Env,
+        token: &Address,
+        amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        let contract = env.current_contract_address();
+        let token_client = token::Client::new(env, token);
+        let balance = token_client.balance(&contract);
+        let held_reserve = EscrowStorage::get_held_reserve(env, token);
+
+        if balance < held_reserve {
+            return Err(QuickLendXError::EmergencyWithdrawInsufficientBalance);
+        }
+
+        let withdrawable = balance - held_reserve;
+
+        if amount > withdrawable {
+            return Err(QuickLendXError::EmergencyWithdrawInsufficientBalance);
+        }
+
+        Ok(())
     }
 
     /// Initiate an emergency withdrawal. Only admin. Call `execute_emergency_withdraw` after timelock.
@@ -193,6 +216,8 @@ impl EmergencyWithdraw {
             return Err(QuickLendXError::EmergencyWithdrawExpired);
         }
 
+        Self::require_withdrawable_surplus(env, &pending.token, pending.amount)?;
+
         let contract = env.current_contract_address();
         transfer_funds(
             env,
@@ -279,6 +304,7 @@ impl EmergencyWithdraw {
     /// - It has not been cancelled
     /// - The timelock has elapsed (unlock_at <= now)
     /// - It has not expired (expires_at > now)
+    /// - The requested amount is withdrawable after the same-token held escrow reserve
     ///
     /// # Timelock Window Math
     /// The execution window is defined by the following boundaries:
@@ -309,8 +335,14 @@ impl EmergencyWithdraw {
     pub fn can_execute(env: &Env) -> Option<bool> {
         let pending = Self::get_pending(env)?;
         let now = env.ledger().timestamp();
+        let lifecycle_ready =
+            !pending.cancelled && now >= pending.unlock_at && now < pending.expires_at;
 
-        Some(!pending.cancelled && now >= pending.unlock_at && now < pending.expires_at)
+        if !lifecycle_ready {
+            return Some(false);
+        }
+
+        Some(Self::require_withdrawable_surplus(env, &pending.token, pending.amount).is_ok())
     }
 
     /// Get time remaining until the withdrawal can be executed.

@@ -511,7 +511,7 @@ impl QuickLendXContract {
     /// Check if the pending emergency withdrawal can be executed.
     ///
     /// Returns true if the withdrawal exists, is not cancelled, timelock has elapsed,
-    /// and has not expired.
+    /// has not expired, and does not exceed the same-token non-escrow surplus.
     pub fn can_exec_emergency(env: Env) -> bool {
         emergency::EmergencyWithdraw::can_execute(&env).unwrap_or(false)
     }
@@ -3291,5 +3291,7 @@ impl QuickLendXContract {
 }
 
 mod test_id_stability;
+#[cfg(test)]
+mod test_emergency_escrow_protection;
 #[cfg(test)]
 mod test_escrow_settle_refund_race;

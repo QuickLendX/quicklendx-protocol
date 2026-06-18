@@ -10,6 +10,25 @@ Emergency withdraw is an admin-only, timelocked mechanism to recover tokens that
 
 It must **not** be used to bypass normal escrow, settlement, or refund flows.
 
+## Escrow Reserve Protection
+
+Emergency withdraw can recover only the same-token surplus that is not committed
+to live escrows. Escrow creation increases a persistent reserve for the escrow
+token, and escrow release or refund decreases that reserve. Execution checks the
+queued token against this reserve, so protection does not depend on invoice
+status indexes or the number of funded invoices.
+
+The executable amount is:
+
+```text
+withdrawable = contract_token_balance - same_token_held_escrow_reserve
+```
+
+If the queued amount exceeds that withdrawable surplus, execution fails with
+`EmergencyWithdrawInsufficientBalance` and the pending withdrawal remains queued
+for cancellation, expiry, or replacement. This preserves the normal escrow
+release and refund paths for held escrows.
+
 ## Hardened Lifecycle Constraints
 
 ### Timelock Integrity
@@ -59,6 +78,7 @@ Each withdrawal request is assigned a unique nonce:
    - Fails if timelock has not elapsed (`EmergencyWithdrawTimelockNotElapsed`)
    - Fails if expired (`EmergencyWithdrawExpired`)
    - Fails if cancelled (`EmergencyWithdrawCancelled`)
+   - Fails if amount exceeds non-escrow same-token surplus (`EmergencyWithdrawInsufficientBalance`)
    - On success, transfers tokens and clears the pending withdrawal
 
 3. **Cancel** (`cancel_emergency_withdraw`): Admin can abort a pending withdrawal.
@@ -69,9 +89,9 @@ Each withdrawal request is assigned a unique nonce:
 
 4. **Query helpers**:
    - `get_pending_emergency_withdraw()`: Returns current pending withdrawal
-   - `can_execute_emergency_withdraw()`: Returns true if executable
-   - `time_until_unlock_emergency_withdraw()`: Seconds until timelock elapses
-   - `time_until_expiration_emergency_withdraw()`: Seconds until expiration
+   - `can_exec_emergency()`: Returns true if executable
+   - `emg_time_until_unlock()`: Seconds until timelock elapses
+   - `emg_time_until_expire()`: Seconds until expiration
 
 ## Entrypoints
 
@@ -81,9 +101,9 @@ Each withdrawal request is assigned a unique nonce:
 | `execute_emergency_withdraw(admin)` | Admin | Executes pending withdrawal after timelock, before expiration, and if not cancelled |
 | `cancel_emergency_withdraw(admin)` | Admin | Cancels pending withdrawal; prevents future execution |
 | `get_pending_emergency_withdraw()` | Anyone | Returns current pending withdrawal state |
-| `can_execute_emergency_withdraw()` | Anyone | Returns whether withdrawal can be executed now |
-| `time_until_unlock_emergency_withdraw()` | Anyone | Returns seconds until timelock elapses |
-| `time_until_expiration_emergency_withdraw()` | Anyone | Returns seconds until expiration |
+| `can_exec_emergency()` | Anyone | Returns whether withdrawal can be executed now |
+| `emg_time_until_unlock()` | Anyone | Returns seconds until timelock elapses |
+| `emg_time_until_expire()` | Anyone | Returns seconds until expiration |
 
 ## Security
 
@@ -91,6 +111,7 @@ Each withdrawal request is assigned a unique nonce:
 - **Timelock**: 24 hours (`DEFAULT_EMERGENCY_TIMELOCK_SECS`). Execute before unlock time returns `EmergencyWithdrawTimelockNotElapsed`.
 - **Expiration**: 7 days after unlock (`DEFAULT_EMERGENCY_EXPIRATION_SECS`). Execute after expiration returns `EmergencyWithdrawExpired`.
 - **Cancellation**: Permanent invalidation of withdrawal; cannot be undone. Cancelled withdrawals fail with `EmergencyWithdrawCancelled`.
+- **Escrow reserve**: Same-token `Held` escrow amounts are excluded from the withdrawable balance.
 - **Address validation**: Prevents using the contract address as token or target.
 - **No optional second admin/multisig** in the current implementation; governance can require a second signer at the transaction level (e.g. multisig account).
 
@@ -105,7 +126,7 @@ Each withdrawal request is assigned a unique nonce:
 | `EmergencyWithdrawExpired` | 2103 | execute called at or after expires_at |
 | `EmergencyWithdrawCancelled` | 2104 | execute/cancel called after cancellation |
 | `EmergencyWithdrawAlreadyExists` | 2105 | Not currently used (only one pending at a time) |
-| `EmergencyWithdrawInsufficientBalance` | 2106 | Transfer failed due to insufficient balance |
+| `EmergencyWithdrawInsufficientBalance` | 2106 | Requested amount exceeds contract balance after same-token held escrow reserve |
 
 ## Events
 

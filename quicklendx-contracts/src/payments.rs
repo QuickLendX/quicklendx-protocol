@@ -6,7 +6,7 @@ use crate::errors::QuickLendXError;
 use crate::events::emit_escrow_created;
 use crate::storage::extend_persistent_ttl;
 use soroban_sdk::token;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol};
 
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
@@ -33,7 +33,86 @@ pub struct Escrow {
 
 pub struct EscrowStorage;
 
+const HELD_ESCROW_RESERVE_KEY: Symbol = symbol_short!("esc_res");
+const ESCROW_RESERVE_MARKER_KEY: Symbol = symbol_short!("esc_acc");
+
 impl EscrowStorage {
+    fn held_reserve_key(currency: &Address) -> (Symbol, Address) {
+        (HELD_ESCROW_RESERVE_KEY.clone(), currency.clone())
+    }
+
+    fn reserve_marker_key(escrow_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
+        (ESCROW_RESERVE_MARKER_KEY.clone(), escrow_id.clone())
+    }
+
+    pub fn get_held_reserve(env: &Env, currency: &Address) -> i128 {
+        let key = Self::held_reserve_key(currency);
+        let reserve: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+        if reserve > 0 {
+            extend_persistent_ttl(env, &key);
+        }
+        reserve
+    }
+
+    fn set_held_reserve(env: &Env, currency: &Address, amount: i128) {
+        let key = Self::held_reserve_key(currency);
+        if amount > 0 {
+            env.storage().persistent().set(&key, &amount);
+            extend_persistent_ttl(env, &key);
+        } else {
+            env.storage().persistent().remove(&key);
+        }
+    }
+
+    fn held_reserve_after_increase(
+        env: &Env,
+        currency: &Address,
+        amount: i128,
+    ) -> Result<i128, QuickLendXError> {
+        if amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        Self::get_held_reserve(env, currency)
+            .checked_add(amount)
+            .ok_or(QuickLendXError::ArithmeticOverflow)
+    }
+
+    fn held_reserve_after_decrease(
+        env: &Env,
+        currency: &Address,
+        amount: i128,
+    ) -> Result<i128, QuickLendXError> {
+        if amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let current = Self::get_held_reserve(env, currency);
+        current
+            .checked_sub(amount)
+            .ok_or(QuickLendXError::ArithmeticOverflow)
+    }
+
+    fn mark_reserve_accounted(env: &Env, escrow_id: &BytesN<32>) {
+        let key = Self::reserve_marker_key(escrow_id);
+        env.storage().persistent().set(&key, &true);
+        extend_persistent_ttl(env, &key);
+    }
+
+    fn is_reserve_accounted(env: &Env, escrow_id: &BytesN<32>) -> bool {
+        let key = Self::reserve_marker_key(escrow_id);
+        let accounted: bool = env.storage().persistent().get(&key).unwrap_or(false);
+        if accounted {
+            extend_persistent_ttl(env, &key);
+        }
+        accounted
+    }
+
+    fn clear_reserve_accounted(env: &Env, escrow_id: &BytesN<32>) {
+        let key = Self::reserve_marker_key(escrow_id);
+        env.storage().persistent().remove(&key);
+    }
+
     pub fn store_escrow(env: &Env, escrow: &Escrow) {
         env.storage().persistent().set(&escrow.escrow_id, escrow);
         extend_persistent_ttl(env, &escrow.escrow_id);
@@ -137,6 +216,8 @@ pub fn create_escrow(
         return Err(QuickLendXError::InvoiceAlreadyFunded);
     }
 
+    let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
+
     crate::qlx_log!(env, "payment", "Creating escrow: amount={}", amount);
 
     // Move funds from investor into contract-controlled escrow
@@ -156,6 +237,8 @@ pub fn create_escrow(
     };
 
     EscrowStorage::store_escrow(env, &escrow);
+    EscrowStorage::set_held_reserve(env, currency, next_held_reserve);
+    EscrowStorage::mark_reserve_accounted(env, &escrow_id);
     crate::qlx_log!(env, "payment", "Escrow created successfully");
     emit_escrow_created(env, &escrow);
     Ok(escrow_id)
@@ -188,6 +271,16 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
         return Err(QuickLendXError::InvalidStatus);
     }
 
+    let next_held_reserve = if EscrowStorage::is_reserve_accounted(env, &escrow.escrow_id) {
+        Some(EscrowStorage::held_reserve_after_decrease(
+            env,
+            &escrow.currency,
+            escrow.amount,
+        )?)
+    } else {
+        None
+    };
+
     // Transfer funds from escrow (contract) to business
     let contract_address = env.current_contract_address();
     transfer_funds(
@@ -199,6 +292,10 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     )?;
 
     // Update escrow status
+    if let Some(next_held_reserve) = next_held_reserve {
+        EscrowStorage::set_held_reserve(env, &escrow.currency, next_held_reserve);
+        EscrowStorage::clear_reserve_accounted(env, &escrow.escrow_id);
+    }
     escrow.status = EscrowStatus::Released;
     EscrowStorage::update_escrow(env, &escrow);
     crate::qlx_log!(env, "payment", "Escrow released to business: amount={}", escrow.amount);
@@ -222,6 +319,16 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
         return Err(QuickLendXError::InvalidStatus);
     }
 
+    let next_held_reserve = if EscrowStorage::is_reserve_accounted(env, &escrow.escrow_id) {
+        Some(EscrowStorage::held_reserve_after_decrease(
+            env,
+            &escrow.currency,
+            escrow.amount,
+        )?)
+    } else {
+        None
+    };
+
     // Refund funds from escrow (contract) back to investor
     let contract_address = env.current_contract_address();
     transfer_funds(
@@ -233,6 +340,10 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
     )?;
 
     // Update escrow status
+    if let Some(next_held_reserve) = next_held_reserve {
+        EscrowStorage::set_held_reserve(env, &escrow.currency, next_held_reserve);
+        EscrowStorage::clear_reserve_accounted(env, &escrow.escrow_id);
+    }
     escrow.status = EscrowStatus::Refunded;
     EscrowStorage::update_escrow(env, &escrow);
     crate::qlx_log!(env, "payment", "Escrow refunded to investor: amount={}", escrow.amount);
