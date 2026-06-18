@@ -443,6 +443,8 @@ impl QuickLendXContract {
         AdminStorage::require_admin(&env, &admin)?;
         let mut backup = BackupStorage::get_backup(&env, &backup_id).ok_or(QuickLendXError::OperationNotAllowed)?;
         backup.status = BackupStatus::Archived;
-        BackupStorage::update_backup(&env, &backup)
+        BackupStorage::update_backup(&env, &backup)?;
+        BackupStorage::remove_from_backup_list(&env, &backup_id);
+        Ok(())
     }
 }

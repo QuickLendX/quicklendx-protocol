@@ -580,62 +580,8 @@ pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
     .publish(env);
 }
 
-#[contractevent]
-pub struct BidTtlUpdated {
-    pub old_days: u64,
-    pub new_days: u64,
-    pub admin: Address,
-    pub timestamp: u64,
-}
-// ... (after TtlExtended)
 
 
-
-#[contractevent]
-pub struct EmergencyWithdrawalInitiated {
-    pub token: Address,
-    pub amount: i128,
-    pub target: Address,
-    pub unlock_at: u64,
-    pub admin: Address,
-}
-
-#[contractevent]
-pub struct EmergencyWithdrawalExecuted {
-    pub token: Address,
-    pub amount: i128,
-    pub target: Address,
-    pub admin: Address,
-}
-
-#[contractevent]
-pub struct EmergencyWithdrawalCancelled {
-    pub token: Address,
-    pub amount: i128,
-    pub target: Address,
-    pub admin: Address,
-}
-
-#[contractevent]
-pub struct AdminSet {
-    pub admin: Address,
-    pub timestamp: u64,
-}
-
-#[contractevent]
-pub struct AdminTransferred {
-    pub old_admin: Address,
-    pub new_admin: Address,
-    pub timestamp: u64,
-}
-
-#[contractevent]
-pub struct BidTtlUpdated {
-    pub old_days: u64,
-    pub new_days: u64,
-    pub admin: Address,
-    pub timestamp: u64,
-}
 
 #[contractevent]
 pub struct RevenueDistributed {
@@ -1265,14 +1211,6 @@ pub fn emit_profit_fee_breakdown(
 }
 
 pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Address) {
-    #[derive(Clone)]
-    #[contractevent]
-    struct BidTtlUpdated {
-        old_days: u64,
-        new_days: u64,
-        admin: Address,
-        timestamp: u64,
-    }
     BidTtlUpdated {
         old_days,
         new_days,
