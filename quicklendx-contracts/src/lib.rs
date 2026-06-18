@@ -127,6 +127,8 @@ mod test_protocol_limits_boundary;
 mod test_settlement_accounting_identity;
 #[cfg(test)]
 mod test_string_limits;
+#[cfg(test)]
+mod test_backpressure_shedding;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_types;
 // #[cfg(all(test, feature = "legacy-tests"))]
