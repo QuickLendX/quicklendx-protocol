@@ -104,9 +104,9 @@ jobs:
         run: |
           source $HOME/.cargo/env
           cargo install cargo-llvm-cov
-          # TODO: restore the original 95% gates after the legacy test suite is repaired.
+          # TODO: restore the original 95% gate after the legacy test suite is repaired.
           cargo llvm-cov --lib --fail-under-lines 50
           cd quicklendx-contracts
           cargo llvm-cov clean --workspace
           cargo llvm-cov --lib --lcov --output-path coverage/lcov.info
-          ADMIN_COVERAGE_MIN=10 bash scripts/check-admin-coverage.sh coverage/lcov.info
+          bash scripts/check-admin-coverage.sh coverage/lcov.info
