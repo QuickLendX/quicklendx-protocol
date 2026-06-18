@@ -3286,7 +3286,7 @@ impl QuickLendXContract {
             meta.last_updated_at,
         );
         result.set(String::from_str(&env, "cursor"), meta.cursor);
-        result;
+        result
     }
 }
 

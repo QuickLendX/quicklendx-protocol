@@ -581,17 +581,6 @@ pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
 }
 
 #[contractevent]
-pub struct BidTtlUpdated {
-    pub old_days: u64,
-    pub new_days: u64,
-    pub admin: Address,
-    pub timestamp: u64,
-}
-// ... (after TtlExtended)
-
-
-
-#[contractevent]
 pub struct EmergencyWithdrawalInitiated {
     pub token: Address,
     pub amount: i128,
@@ -626,14 +615,6 @@ pub struct AdminSet {
 pub struct AdminTransferred {
     pub old_admin: Address,
     pub new_admin: Address,
-    pub timestamp: u64,
-}
-
-#[contractevent]
-pub struct BidTtlUpdated {
-    pub old_days: u64,
-    pub new_days: u64,
-    pub admin: Address,
     pub timestamp: u64,
 }
 
