@@ -1,7 +1,5 @@
 #![cfg(test)]
-
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
-
 use crate::storage::InvoiceStorage;
 use crate::types::{InvoiceCategory, InvoiceMetadata, LineItemRecord, RebuildReport};
 use crate::{QuickLendXContract, QuickLendXContractClient};
@@ -54,24 +52,19 @@ fn set_metadata(env: &Env, client: &QuickLendXContractClient, invoice_id: &Bytes
 #[test]
 fn test_rebuild_fixes_corrupted_indexes() {
     let (env, contract_id, client, admin) = setup();
-
     let invoice_id = make_invoice(&env, &client, &admin);
     let customer = String::from_str(&env, "Acme Corp");
     set_metadata(&env, &client, &invoice_id, "Acme Corp");
-
     // Corrupt customer index directly via storage
     env.as_contract(&contract_id, || {
         InvoiceStorage::remove_from_customer_index(&env, &customer, &invoice_id);
     });
-
     // Confirm corruption
     let ids_before = client.get_invoices_by_customer(&customer);
     assert!(!ids_before.iter().any(|id| id == invoice_id));
-
     // Rebuild
     let report = client.rebuild_invoice_indexes(&admin, &0, &50);
     assert_eq!(report.reindexed, 1);
-
     // Index restored
     let ids_after = client.get_invoices_by_customer(&customer);
     assert!(ids_after.iter().any(|id| id == invoice_id));
@@ -82,7 +75,6 @@ fn test_rebuild_fixes_corrupted_indexes() {
 fn test_rebuild_empty_range() {
     let (env, _cid, client, admin) = setup();
     make_invoice(&env, &client, &admin);
-
     let report = client.rebuild_invoice_indexes(&admin, &100, &50);
     assert_eq!(report.scanned, 0);
     assert_eq!(report.reindexed, 0);
@@ -96,15 +88,12 @@ fn test_rebuild_two_page_resume() {
     for _ in 0..3 {
         make_invoice(&env, &client, &admin);
     }
-
     let p1: RebuildReport = client.rebuild_invoice_indexes(&admin, &0, &2);
     assert_eq!(p1.scanned, 2);
     assert_eq!(p1.next_offset, 2);
-
     let p2: RebuildReport = client.rebuild_invoice_indexes(&admin, &p1.next_offset, &2);
     assert_eq!(p2.scanned, 1);
     assert_eq!(p2.next_offset, 3);
-
     let p3: RebuildReport = client.rebuild_invoice_indexes(&admin, &p2.next_offset, &2);
     assert_eq!(p3.scanned, 0);
 }
@@ -115,12 +104,10 @@ fn test_rebuild_idempotent() {
     let (env, contract_id, client, admin) = setup();
     let invoice_id = make_invoice(&env, &client, &admin);
     set_metadata(&env, &client, &invoice_id, "Beta Ltd");
-
     let r1 = client.rebuild_invoice_indexes(&admin, &0, &50);
     let r2 = client.rebuild_invoice_indexes(&admin, &0, &50);
     assert_eq!(r1.scanned, r2.scanned);
     assert_eq!(r1.reindexed, r2.reindexed);
-
     // No duplicate entries in index
     let customer = String::from_str(&env, "Beta Ltd");
     env.as_contract(&contract_id, || {
