@@ -550,6 +550,63 @@ fn test_cleanup_does_not_remove_archived_backups() {
     assert_eq!(archived.status, BackupStatus::Archived);
 }
 
+/// cleanup_old_backups enforces both age and count limits together.
+#[test]
+fn test_cleanup_enforces_both_age_and_count_limits() {
+    let env = setup_env();
+    BackupStorage::set_retention_policy(
+        &env,
+        &BackupRetentionPolicy {
+            max_backups: 3,
+            max_age_seconds: 200,
+            auto_cleanup_enabled: true,
+        },
+    );
+
+    let mut invoices = Vec::new(&env);
+    invoices.push_back(make_invoice(&env, 0, 1_000));
+
+    // Create 5 backups with varying ages
+    let id1 = create_valid_backup(&env, invoices.clone()); // t=0
+    env.ledger().set_timestamp(env.ledger().timestamp() + 50);
+    let id2 = create_valid_backup(&env, invoices.clone()); // t=50
+    env.ledger().set_timestamp(env.ledger().timestamp() + 50);
+    let id3 = create_valid_backup(&env, invoices.clone()); // t=100
+    env.ledger().set_timestamp(env.ledger().timestamp() + 100);
+    let id4 = create_valid_backup(&env, invoices.clone()); // t=200
+    env.ledger().set_timestamp(env.ledger().timestamp() + 50);
+    let id5 = create_valid_backup(&env, invoices); // t=250
+
+    // Current time = 250
+    // id1 age = 250 (exceeds 200) -> removed by age
+    // id2 age = 200 (at limit) -> kept
+    // id3 age = 150 (within limit) -> kept
+    // id4 age = 50 (within limit) -> kept
+    // id5 age = 0 (within limit) -> kept
+    // After age cleanup: 4 backups remain (id2, id3, id4, id5)
+    // Count limit = 3, so oldest (id2) removed
+    // Final: id3, id4, id5 remain
+
+    let removed = BackupStorage::cleanup_old_backups(&env).unwrap();
+    assert_eq!(removed, 2); // id1 (age) + id2 (count)
+
+    let remaining = BackupStorage::get_all_backups(&env);
+    assert_eq!(remaining.len(), 3);
+    assert!(!remaining.contains(&id1)); // Removed by age
+    assert!(!remaining.contains(&id2)); // Removed by count
+    assert!(remaining.contains(&id3));
+    assert!(remaining.contains(&id4));
+    assert!(remaining.contains(&id5));
+
+    // Verify remaining backups are within age limit
+    let current_time = env.ledger().timestamp();
+    for backup_id in remaining.iter() {
+        let backup = BackupStorage::get_backup(&env, backup_id).unwrap();
+        let age = current_time.saturating_sub(backup.timestamp);
+        assert!(age <= 200, "Backup age {} exceeds max_age_seconds 200", age);
+    }
+}
+
 // ============================================================================
 // add_to_backup_list / remove_from_backup_list Tests
 // ============================================================================
