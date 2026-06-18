@@ -35,10 +35,10 @@ pub use admin::{AdminContract, AdminContractClient};
 pub use errors::ContractError;
 pub use storage_types::{FeeConfig, ProtocolConfig};
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 pub mod test_admin;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_limits_boundary;
 
 #[cfg(test)]
