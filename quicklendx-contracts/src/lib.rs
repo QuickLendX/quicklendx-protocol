@@ -124,6 +124,8 @@ mod test_protocol_limits_boundary;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
 #[cfg(test)]
+mod test_settlement_auto_release;
+#[cfg(test)]
 mod test_string_limits;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_types;
