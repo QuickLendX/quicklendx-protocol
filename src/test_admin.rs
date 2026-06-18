@@ -23,7 +23,7 @@ mod test_admin {
         let contract_id = env.register_contract(None, AdminContract);
         let client = AdminContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
-        client.initialize(&admin).unwrap();
+        client.initialize(&admin);
         (env, client, admin)
     }
 
@@ -52,7 +52,7 @@ mod test_admin {
     fn test_initialize_sets_admin() {
         let (_, client, admin) = setup();
         // Re-initialization must fail.
-        let result = client.initialize(&admin);
+        let result = client.try_initialize(&admin);
         assert_eq!(result, Err(Ok(ContractError::AlreadyInitialized)));
     }
 
@@ -60,13 +60,13 @@ mod test_admin {
     fn test_transfer_admin_success() {
         let (env, client, admin) = setup();
         let new_admin = Address::generate(&env);
-        client.transfer_admin(&admin, &new_admin).unwrap();
+        client.transfer_admin(&admin, &new_admin);
     }
 
     #[test]
     fn test_transfer_admin_self_blocked() {
         let (_, client, admin) = setup();
-        let result = client.transfer_admin(&admin, &admin);
+        let result = client.try_transfer_admin(&admin, &admin);
         assert_eq!(result, Err(Ok(ContractError::OperationNotAllowed)));
     }
 
@@ -75,7 +75,7 @@ mod test_admin {
         let (env, client, _admin) = setup();
         let impostor = Address::generate(&env);
         let new_admin = Address::generate(&env);
-        let result = client.transfer_admin(&impostor, &new_admin);
+        let result = client.try_transfer_admin(&impostor, &new_admin);
         assert_eq!(result, Err(Ok(ContractError::NotAdmin)));
     }
 
@@ -84,9 +84,7 @@ mod test_admin {
     // -----------------------------------------------------------------------
 
     fn seed_protocol_config(client: &AdminContractClient, admin: &Address) {
-        client
-            .set_protocol_config(admin, &default_protocol_cfg())
-            .unwrap();
+        client.set_protocol_config(admin, &default_protocol_cfg());
     }
 
     #[test]
@@ -102,7 +100,7 @@ mod test_admin {
             min_invoice_amount: 0,
             ..default_protocol_cfg()
         };
-        let result = client.set_protocol_config(&admin, &bad);
+        let result = client.try_set_protocol_config(&admin, &bad);
         assert_eq!(result, Err(Ok(ContractError::InvalidAmount)));
     }
 
@@ -113,7 +111,7 @@ mod test_admin {
             max_due_date_days: 0,
             ..default_protocol_cfg()
         };
-        let result = client.set_protocol_config(&admin, &bad);
+        let result = client.try_set_protocol_config(&admin, &bad);
         assert_eq!(result, Err(Ok(ContractError::InvalidParameter)));
     }
 
@@ -124,7 +122,7 @@ mod test_admin {
             max_due_date_days: 731,
             ..default_protocol_cfg()
         };
-        let result = client.set_protocol_config(&admin, &bad);
+        let result = client.try_set_protocol_config(&admin, &bad);
         assert_eq!(result, Err(Ok(ContractError::InvalidParameter)));
     }
 
@@ -135,7 +133,7 @@ mod test_admin {
             grace_period_seconds: 2_592_001,
             ..default_protocol_cfg()
         };
-        let result = client.set_protocol_config(&admin, &bad);
+        let result = client.try_set_protocol_config(&admin, &bad);
         assert_eq!(result, Err(Ok(ContractError::InvalidParameter)));
     }
 
@@ -143,7 +141,7 @@ mod test_admin {
     fn test_set_protocol_config_non_admin_blocked() {
         let (env, client, _admin) = setup();
         let impostor = Address::generate(&env);
-        let result = client.set_protocol_config(&impostor, &default_protocol_cfg());
+        let result = client.try_set_protocol_config(&impostor, &default_protocol_cfg());
         assert_eq!(result, Err(Ok(ContractError::NotAdmin)));
     }
 
@@ -152,9 +150,7 @@ mod test_admin {
     // -----------------------------------------------------------------------
 
     fn seed_fee_config(client: &AdminContractClient, admin: &Address, treasury: &Address) {
-        client
-            .set_fee_config(admin, &default_fee_cfg(treasury))
-            .unwrap();
+        client.set_fee_config(admin, &default_fee_cfg(treasury));
     }
 
     #[test]
@@ -172,7 +168,7 @@ mod test_admin {
             fee_bps: 1001,
             treasury,
         };
-        let result = client.set_fee_config(&admin, &bad);
+        let result = client.try_set_fee_config(&admin, &bad);
         assert_eq!(result, Err(Ok(ContractError::InvalidFee)));
     }
 
@@ -185,7 +181,7 @@ mod test_admin {
             fee_bps: 1000,
             treasury,
         };
-        client.set_fee_config(&admin, &cfg).unwrap();
+        client.set_fee_config(&admin, &cfg);
     }
 
     #[test]
@@ -196,7 +192,7 @@ mod test_admin {
             fee_bps: 0,
             treasury,
         };
-        client.set_fee_config(&admin, &cfg).unwrap();
+        client.set_fee_config(&admin, &cfg);
     }
 
     #[test]
@@ -204,7 +200,7 @@ mod test_admin {
         let (env, client, _admin) = setup();
         let impostor = Address::generate(&env);
         let treasury = Address::generate(&env);
-        let result = client.set_fee_config(&impostor, &default_fee_cfg(&treasury));
+        let result = client.try_set_fee_config(&impostor, &default_fee_cfg(&treasury));
         assert_eq!(result, Err(Ok(ContractError::NotAdmin)));
     }
 
@@ -225,9 +221,7 @@ mod test_admin {
             grace_period_seconds: 172_800,
         };
 
-        let diff = client
-            .preview_protocol_config(&admin, &new_cfg)
-            .unwrap();
+        let diff = client.preview_protocol_config(&admin, &new_cfg);
 
         // Current must match what was seeded.
         assert_eq!(diff.current, original);
@@ -237,8 +231,7 @@ mod test_admin {
         assert!(!diff.is_noop);
 
         // CRITICAL: storage must NOT have changed.
-        let after_apply = client.set_protocol_config(&admin, &original);
-        assert!(after_apply.is_ok(), "storage was mutated by preview");
+        client.set_protocol_config(&admin, &original);
     }
 
     #[test]
@@ -247,9 +240,7 @@ mod test_admin {
         let cfg = default_protocol_cfg();
         seed_protocol_config(&client, &admin);
 
-        let diff = client
-            .preview_protocol_config(&admin, &cfg)
-            .unwrap();
+        let diff = client.preview_protocol_config(&admin, &cfg);
 
         assert_eq!(diff.current, cfg);
         assert_eq!(diff.projected, cfg);
@@ -268,18 +259,14 @@ mod test_admin {
         };
 
         // Get the diff first.
-        let diff = client
-            .preview_protocol_config(&admin, &new_cfg)
-            .unwrap();
+        let diff = client.preview_protocol_config(&admin, &new_cfg);
 
         // Now actually apply.
-        client.set_protocol_config(&admin, &new_cfg).unwrap();
+        client.set_protocol_config(&admin, &new_cfg);
 
         // Preview's `projected` must equal what apply would write.
         // (We verify by running preview again; current should now equal projected.)
-        let diff2 = client
-            .preview_protocol_config(&admin, &diff.current)
-            .unwrap();
+        let diff2 = client.preview_protocol_config(&admin, &diff.current);
 
         // After apply, on-chain state == new_cfg == diff.projected.
         assert_eq!(diff2.current, diff.projected);
@@ -294,7 +281,7 @@ mod test_admin {
             min_invoice_amount: 0, // invalid
             ..default_protocol_cfg()
         };
-        let result = client.preview_protocol_config(&admin, &bad);
+        let result = client.try_preview_protocol_config(&admin, &bad);
         assert_eq!(result, Err(Ok(ContractError::InvalidAmount)));
     }
 
@@ -307,7 +294,7 @@ mod test_admin {
             max_due_date_days: 0, // zero is invalid
             ..default_protocol_cfg()
         };
-        let result = client.preview_protocol_config(&admin, &bad);
+        let result = client.try_preview_protocol_config(&admin, &bad);
         assert_eq!(result, Err(Ok(ContractError::InvalidParameter)));
     }
 
@@ -320,7 +307,7 @@ mod test_admin {
             max_due_date_days: 800, // > 730
             ..default_protocol_cfg()
         };
-        let result = client.preview_protocol_config(&admin, &bad);
+        let result = client.try_preview_protocol_config(&admin, &bad);
         assert_eq!(result, Err(Ok(ContractError::InvalidParameter)));
     }
 
@@ -333,7 +320,7 @@ mod test_admin {
             grace_period_seconds: 9_999_999,
             ..default_protocol_cfg()
         };
-        let result = client.preview_protocol_config(&admin, &bad);
+        let result = client.try_preview_protocol_config(&admin, &bad);
         assert_eq!(result, Err(Ok(ContractError::InvalidParameter)));
     }
 
@@ -343,7 +330,7 @@ mod test_admin {
         seed_protocol_config(&client, &_admin);
 
         let impostor = Address::generate(&env);
-        let result = client.preview_protocol_config(&impostor, &default_protocol_cfg());
+        let result = client.try_preview_protocol_config(&impostor, &default_protocol_cfg());
         assert_eq!(result, Err(Ok(ContractError::NotAdmin)));
     }
 
@@ -355,10 +342,10 @@ mod test_admin {
         let contract_id = env.register_contract(None, AdminContract);
         let client = AdminContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
-        client.initialize(&admin).unwrap();
+        client.initialize(&admin);
 
         // No set_protocol_config called, so storage has no config yet.
-        let result = client.preview_protocol_config(&admin, &default_protocol_cfg());
+        let result = client.try_preview_protocol_config(&admin, &default_protocol_cfg());
         assert_eq!(result, Err(Ok(ContractError::NotInitialized)));
     }
 
@@ -379,7 +366,7 @@ mod test_admin {
             treasury: new_treasury,
         };
 
-        let diff = client.preview_fee_config(&admin, &new_cfg).unwrap();
+        let diff = client.preview_fee_config(&admin, &new_cfg);
 
         assert_eq!(diff.current, original);
         assert_eq!(diff.projected, new_cfg);
@@ -393,7 +380,7 @@ mod test_admin {
         let cfg = default_fee_cfg(&treasury);
         seed_fee_config(&client, &admin, &treasury);
 
-        let diff = client.preview_fee_config(&admin, &cfg).unwrap();
+        let diff = client.preview_fee_config(&admin, &cfg);
         assert!(diff.is_noop);
     }
 
@@ -408,14 +395,12 @@ mod test_admin {
             treasury: treasury.clone(),
         };
 
-        let diff = client.preview_fee_config(&admin, &new_cfg).unwrap();
+        let diff = client.preview_fee_config(&admin, &new_cfg);
 
         // Apply and confirm on-chain state equals diff.projected.
-        client.set_fee_config(&admin, &new_cfg).unwrap();
+        client.set_fee_config(&admin, &new_cfg);
 
-        let diff2 = client
-            .preview_fee_config(&admin, &diff.current)
-            .unwrap();
+        let diff2 = client.preview_fee_config(&admin, &diff.current);
         assert_eq!(diff2.current, diff.projected);
     }
 
@@ -429,7 +414,7 @@ mod test_admin {
             fee_bps: 1001,
             treasury: treasury.clone(),
         };
-        let result = client.preview_fee_config(&admin, &bad);
+        let result = client.try_preview_fee_config(&admin, &bad);
         assert_eq!(result, Err(Ok(ContractError::InvalidFee)));
     }
 
@@ -440,7 +425,7 @@ mod test_admin {
         seed_fee_config(&client, &_admin, &treasury);
 
         let impostor = Address::generate(&env);
-        let result = client.preview_fee_config(&impostor, &default_fee_cfg(&treasury));
+        let result = client.try_preview_fee_config(&impostor, &default_fee_cfg(&treasury));
         assert_eq!(result, Err(Ok(ContractError::NotAdmin)));
     }
 
@@ -451,10 +436,10 @@ mod test_admin {
         let contract_id = env.register_contract(None, AdminContract);
         let client = AdminContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
-        client.initialize(&admin).unwrap();
+        client.initialize(&admin);
 
         let treasury = Address::generate(&env);
-        let result = client.preview_fee_config(&admin, &default_fee_cfg(&treasury));
+        let result = client.try_preview_fee_config(&admin, &default_fee_cfg(&treasury));
         assert_eq!(result, Err(Ok(ContractError::NotInitialized)));
     }
 
@@ -472,7 +457,7 @@ mod test_admin {
             max_due_date_days: 1,
             grace_period_seconds: 0,
         };
-        let diff = client.preview_protocol_config(&admin, &cfg).unwrap();
+        let diff = client.preview_protocol_config(&admin, &cfg);
         assert_eq!(diff.projected, cfg);
     }
 
@@ -485,7 +470,7 @@ mod test_admin {
             max_due_date_days: 730,
             ..default_protocol_cfg()
         };
-        let diff = client.preview_protocol_config(&admin, &cfg).unwrap();
+        let diff = client.preview_protocol_config(&admin, &cfg);
         assert_eq!(diff.projected.max_due_date_days, 730);
     }
 
@@ -498,7 +483,7 @@ mod test_admin {
             grace_period_seconds: 2_592_000,
             ..default_protocol_cfg()
         };
-        let diff = client.preview_protocol_config(&admin, &cfg).unwrap();
+        let diff = client.preview_protocol_config(&admin, &cfg);
         assert_eq!(diff.projected.grace_period_seconds, 2_592_000);
     }
 
@@ -512,7 +497,7 @@ mod test_admin {
             fee_bps: 1000,
             treasury: treasury.clone(),
         };
-        let diff = client.preview_fee_config(&admin, &cfg).unwrap();
+        let diff = client.preview_fee_config(&admin, &cfg);
         assert_eq!(diff.projected.fee_bps, 1000);
     }
 
@@ -526,7 +511,7 @@ mod test_admin {
             fee_bps: 0,
             treasury: treasury.clone(),
         };
-        let diff = client.preview_fee_config(&admin, &cfg).unwrap();
+        let diff = client.preview_fee_config(&admin, &cfg);
         assert_eq!(diff.projected.fee_bps, 0);
     }
 
@@ -547,13 +532,11 @@ mod test_admin {
             grace_period_seconds: 1_000,
         };
 
-        client.preview_protocol_config(&admin, &different).unwrap();
+        client.preview_protocol_config(&admin, &different);
 
         // After preview, storage should still hold `original`.
         // We detect this by running another preview and checking `current`.
-        let diff = client
-            .preview_protocol_config(&admin, &original)
-            .unwrap();
+        let diff = client.preview_protocol_config(&admin, &original);
         assert_eq!(
             diff.current, original,
             "preview_protocol_config must not mutate storage"
@@ -573,9 +556,9 @@ mod test_admin {
             treasury: Address::generate(&env),
         };
 
-        client.preview_fee_config(&admin, &different).unwrap();
+        client.preview_fee_config(&admin, &different);
 
-        let diff = client.preview_fee_config(&admin, &original).unwrap();
+        let diff = client.preview_fee_config(&admin, &original);
         assert_eq!(
             diff.current, original,
             "preview_fee_config must not mutate storage"
