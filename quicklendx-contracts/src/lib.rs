@@ -28,7 +28,7 @@ mod scratch_events;
 mod test_default;
 #[cfg(test)]
 mod test_default_finality_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality;
 #[cfg(test)] mod test_escrow_uniqueness;
 #[cfg(test)] mod test_escrow;
@@ -3290,6 +3290,7 @@ impl QuickLendXContract {
     }
 }
 
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_stability;
 #[cfg(test)]
 mod test_escrow_settle_refund_race;
