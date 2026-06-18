@@ -104,6 +104,8 @@ mod test_invariant_self_check;
 mod test_investment_consistency;
 #[cfg(test)]
 mod test_accept_bid_race;
+#[cfg(test)]
+mod test_accept_bid_instruction_budget;
 // #[cfg(test)]
 // mod test_investment_queries;
 // #[cfg(all(test, feature = "legacy-tests"))]
