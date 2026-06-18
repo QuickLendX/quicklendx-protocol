@@ -8,21 +8,13 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 use crate::protocol_limits;
 use crate::types::{
     BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
-    PlatformFeeConfig,
+    PlatformFeeConfig, RebuildReport,
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
 pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800; // ~30 days at 5s/ledger
 
-pub fn bump_persistent<T>(env: &Env, key: &T) 
-where
-    T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
-{
-    let ttl_u32: u32 = PERSISTENT_TTL_THRESHOLD.try_into().unwrap_or(0);
-    env.storage().persistent().extend_ttl(key, ttl_u32, ttl_u32);
-}
-
-pub fn extend_persistent_ttl<T>(env: &Env, key: &T) 
+pub fn extend_persistent_ttl<T>(env: &Env, key: &T)
 where
     T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
 {
@@ -674,6 +666,7 @@ impl InvoiceStorage {
         Self::remove_from_customer_index(env, &metadata.customer_name, invoice_id);
         Self::remove_from_tax_id_index(env, &metadata.tax_id, invoice_id);
     }
+
 }
 
 /// Storage operations for bids
@@ -936,6 +929,78 @@ impl StorageIntegrityAudit {
             Ok(())
         } else {
             Err(all_errors)
+        }
+    }
+}
+
+// ============================================================================
+// Index Rebuild
+// ============================================================================
+
+impl InvoiceStorage {
+    /// Recompute secondary indexes for a page of invoices from their canonical records.
+    ///
+    /// # Why this exists
+    /// Secondary indexes (`invoices_by_customer`, `invoices_by_tax_id`,
+    /// `invoices_by_tag`, `invoices_by_category`) are denormalized state that can
+    /// drift after a backup restore, a partial migration, or a past bug. This
+    /// function rebuilds them from the source-of-truth `Invoice` records.
+    ///
+    /// # Idempotency
+    /// Every index write is a deduplication-guarded append (`add_to_*_index`
+    /// checks for duplicates before inserting). Calling this function twice over
+    /// the same range leaves the indexes in the same state as calling it once.
+    ///
+    /// # Resumability
+    /// `offset` and `limit` work against the list returned by
+    /// `get_all_invoice_ids`, which is stable within a ledger. Pass
+    /// `report.next_offset` as `offset` on the next call. Stop when
+    /// `report.next_offset == report.scanned` (last page reached).
+    ///
+    /// # Arguments
+    /// * `env`    - Contract environment.
+    /// * `offset` - Zero-based starting position in the full invoice ID list.
+    /// * `limit`  - Max invoices to process; capped at `MAX_REBUILD_PAGE`.
+    pub fn rebuild_indexes_page(env: &Env, offset: u32, limit: u32) -> RebuildReport {
+        const MAX_REBUILD_PAGE: u32 = 100;
+        let capped = if limit > MAX_REBUILD_PAGE { MAX_REBUILD_PAGE } else { limit };
+
+        let all_ids = Self::get_all_invoice_ids(env);
+        let total = all_ids.len() as u32;
+
+        let start = offset.min(total);
+        let end = start.saturating_add(capped).min(total);
+
+        let mut reindexed: u32 = 0;
+        let mut i = start;
+        while i < end {
+            if let Some(id) = all_ids.get(i) {
+                if let Some(invoice) = Self::get(env, &id) {
+                    // customer name
+                    if let Some(ref name) = invoice.metadata_customer_name {
+                        Self::add_to_customer_index(env, name, &invoice.id);
+                    }
+                    // tax id
+                    if let Some(ref tax_id) = invoice.metadata_tax_id {
+                        Self::add_to_tax_id_index(env, tax_id, &invoice.id);
+                    }
+                    // tags
+                    for tag in invoice.tags.iter() {
+                        Self::add_tag_index(env, &tag, &invoice.id);
+                    }
+                    // category
+                    Self::add_category_index(env, &invoice.category, &invoice.id);
+
+                    reindexed = reindexed.saturating_add(1);
+                }
+            }
+            i = i.saturating_add(1);
+        }
+
+        RebuildReport {
+            scanned: end.saturating_sub(start),
+            reindexed,
+            next_offset: end,
         }
     }
 }
