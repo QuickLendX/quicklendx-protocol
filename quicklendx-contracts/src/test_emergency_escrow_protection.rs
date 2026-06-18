@@ -203,13 +203,16 @@ fn advance_to_unlock(env: &Env, pending: &crate::emergency::PendingEmergencyWith
 
 fn set_invoice_status_for_test(
     env: &Env,
+    contract_id: &Address,
     client: &QuickLendXContractClient<'_>,
     invoice_id: &BytesN<32>,
     status: InvoiceStatus,
 ) {
     let mut invoice = client.get_invoice(invoice_id);
     invoice.status = status;
-    InvoiceStorage::update_invoice(env, &invoice);
+    env.as_contract(contract_id, || {
+        InvoiceStorage::update_invoice(env, &invoice);
+    });
 }
 
 #[test]
@@ -486,6 +489,7 @@ fn held_escrow_remains_reserved_after_invoice_leaves_funded_status() {
 
     set_invoice_status_for_test(
         &fixture.env,
+        &fixture.contract_id,
         &fixture.client,
         &fixture.escrow.invoice_id,
         InvoiceStatus::Defaulted,

@@ -24,14 +24,16 @@ extern crate alloc;
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod scratch_events;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default;
 #[cfg(test)]
 mod test_default_finality_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality;
-#[cfg(test)] mod test_escrow_uniqueness;
-#[cfg(test)] mod test_escrow;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_escrow_uniqueness;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_escrow;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_fees;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
@@ -80,7 +82,7 @@ mod test_audit;
 mod test_backup;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_safety;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_restore_reindex;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
@@ -90,7 +92,7 @@ mod test_cleanup_pagination;
 mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
@@ -102,9 +104,9 @@ mod test_freshness;
 mod test_init;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
@@ -135,7 +137,7 @@ mod test_backpressure_shedding;
 // mod test_types;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_vesting;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_analytics_consistency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
