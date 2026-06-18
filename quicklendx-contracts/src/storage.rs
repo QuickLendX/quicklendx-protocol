@@ -179,6 +179,10 @@ impl InvoiceStorage {
         if let Some(ref tax_id) = invoice.metadata_tax_id {
             Self::add_to_tax_id_index(env, tax_id, &invoice.id);
         }
+        Self::add_category_index(env, &invoice.category, &invoice.id);
+        for tag in invoice.tags.iter() {
+            Self::add_tag_index(env, &tag, &invoice.id);
+        }
     }
 
     pub fn store_invoice(env: &Env, invoice: &Invoice) {
@@ -258,6 +262,18 @@ impl InvoiceStorage {
                     Self::add_to_tax_id_index(env, tax_id, &invoice.id);
                 }
             }
+            if old.category != invoice.category {
+                Self::remove_category_index(env, &old.category, &invoice.id);
+                Self::add_category_index(env, &invoice.category, &invoice.id);
+            }
+            if old.tags != invoice.tags {
+                for tag in old.tags.iter() {
+                    Self::remove_tag_index(env, &tag, &invoice.id);
+                }
+                for tag in invoice.tags.iter() {
+                    Self::add_tag_index(env, &tag, &invoice.id);
+                }
+            }
         }
         let key = DataKey::Invoice(invoice.id.clone());
         env.storage()
@@ -299,6 +315,10 @@ impl InvoiceStorage {
             }
             if let Some(ref tax_id) = invoice.metadata_tax_id {
                 Self::remove_from_tax_id_index(env, tax_id, invoice_id);
+            }
+            Self::remove_category_index(env, &invoice.category, invoice_id);
+            for tag in invoice.tags.iter() {
+                Self::remove_tag_index(env, &tag, invoice_id);
             }
         }
         env.storage()

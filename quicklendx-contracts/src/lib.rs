@@ -80,6 +80,8 @@ mod test_audit;
 mod test_backup;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_safety;
+#[cfg(test)]
+mod test_backup_restore_reindex;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(all(test, feature = "legacy-tests"))]
