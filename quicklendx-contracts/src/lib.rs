@@ -141,6 +141,8 @@ mod test_analytics_consistency;
 mod test_bid_ranking;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
+#[cfg(test)]
+mod test_pause_reads_available;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_invoice_metadata;
 #[cfg(all(test, feature = "fuzz-tests"))]
