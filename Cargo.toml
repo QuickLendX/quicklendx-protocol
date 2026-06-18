@@ -26,3 +26,7 @@ lto = true
 inherits = "release"
 debug-assertions = true
 
+[patch.crates-io]
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr.git", tag = "v20.0.0" }
+
+
