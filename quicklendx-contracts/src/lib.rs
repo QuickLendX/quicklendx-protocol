@@ -70,7 +70,7 @@ pub mod protocol_limits;
 pub mod reentrancy;
 pub mod settlement;
 pub mod storage;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
