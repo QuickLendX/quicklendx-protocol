@@ -3291,3 +3291,5 @@ impl QuickLendXContract {
 }
 
 mod test_id_stability;
+#[cfg(test)]
+mod test_escrow_settle_refund_race;
