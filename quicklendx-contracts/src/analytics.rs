@@ -4,6 +4,17 @@ use crate::errors::QuickLendXError;
 use crate::types::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, String, Vec};
 
+/// Category breakdown for invoices
+/// 
+/// A lightweight summary of invoice count per category, suitable for dashboard views.
+/// Omits categories with zero invoices to minimize response size. The breakdown is
+/// bounded by the number of distinct categories (9 as of the current InvoiceCategory enum).
+///
+/// Each entry is `(category, invoice_count)`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CategoryBreakdown(pub Vec<(InvoiceCategory, u32)>);
+
 /// Time period for analytics reports
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]

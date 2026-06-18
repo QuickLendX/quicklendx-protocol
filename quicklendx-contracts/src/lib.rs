@@ -158,6 +158,8 @@ mod test_invoice_metadata;
 mod test_rebuild_indexes;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
+#[cfg(test)]
+mod test_category_breakdown;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -1047,6 +1049,50 @@ impl QuickLendXContract {
             .saturating_add(defaulted)
             .saturating_add(cancelled)
             .saturating_add(refunded)
+    }
+
+    /// Get a lightweight breakdown of invoice counts by category.
+    ///
+    /// Returns a `CategoryBreakdown` containing per-category invoice counts, suitable for
+    /// dashboard pie charts and analytics. This is more efficient than computing full
+    /// `FinancialMetrics` when only category distribution is needed.
+    ///
+    /// # Behavior
+    /// - Iterates through all 9 invoice categories (Services, Goods, Consulting, Logistics,
+    ///   Products, Manufacturing, Technology, Healthcare, Other)
+    /// - For each category, counts invoices using the pre-built category index
+    /// - Categories with zero invoices are **omitted** from the result to minimize response size
+    /// - The result is bounded by the category enum size (9 entries maximum)
+    ///
+    /// # Returns
+    /// A `CategoryBreakdown` struct containing `Vec<(InvoiceCategory, u32)>` with counts
+    /// per category, sorted by iteration order of the category enum.
+    ///
+    /// # Performance
+    /// - Read-only operation with no authorization required
+    /// - Uses the persistent category index directly (no full-map rescan)
+    /// - Bounded execution: O(number of categories) = O(9)
+    ///
+    /// # Example
+    /// If platform has 10 Services invoices and 5 Products invoices:
+    /// ```
+    /// CategoryBreakdown(vec![
+    ///     (Services, 10),
+    ///     (Products, 5),
+    /// ])
+    /// ```
+    pub fn get_category_breakdown(env: Env) -> analytics::CategoryBreakdown {
+        let mut breakdown = Vec::new(&env);
+        let categories = InvoiceStorage::get_all_categories(&env);
+
+        for category in categories.iter() {
+            let count = InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
+            if count > 0 {
+                breakdown.push_back((category, count));
+            }
+        }
+
+        analytics::CategoryBreakdown(breakdown)
     }
 
     /// Clear all invoices from storage (admin only, used for restore operations)
