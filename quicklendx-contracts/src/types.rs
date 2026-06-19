@@ -35,14 +35,20 @@ pub enum BidStatus {
     Cancelled,
 }
 
-/// Investment status enumeration
+/// Investment status enumeration tracking the lifecycle of investor positions.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvestmentStatus {
+    /// The investment is active, funded, and tracked in the active investment index.
+    /// This is the only non-terminal state.
     Active,
+    /// Investment funds were withdrawn by the investor (terminal status).
     Withdrawn,
+    /// Investment completed successfully, and the investor has received their payouts (terminal status).
     Completed,
+    /// The associated invoice defaulted due to non-payment, triggering default/insurance logic (terminal status).
     Defaulted,
+    /// Investment was refunded due to invoice cancellation (terminal status).
     Refunded,
 }
 

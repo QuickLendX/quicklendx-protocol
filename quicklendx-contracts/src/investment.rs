@@ -39,19 +39,30 @@ impl InvestmentStatus {
     /// Terminal states are immutable. Once an investment reaches Completed,
     /// Defaulted, Refunded, or Withdrawn, no further transition is permitted.
     ///
+    /// Detailed state machine design and couplings are documented in
+    /// [investment-lifecycle.md](file:///Users/backenddevopsdeveloper/Downloads/DRIPS/vida-quicklendx-protocol/quicklendx-contracts/docs/investment-lifecycle.md).
+    ///
     /// ### Allowed transitions
-    /// | From      | To                              |
-    /// |-----------|----------------------------------|
-    /// | Active    | Completed, Defaulted, Refunded, Withdrawn |
-    /// | Withdrawn | (terminal - no further moves)   |
-    /// | Completed | (terminal)                      |
-    /// | Defaulted | (terminal)                      |
-    /// | Refunded  | (terminal)                      |
+    /// | From      | To                              | Driving Entrypoint |
+    /// |-----------|----------------------------------|--------------------|
+    /// | Active    | Completed, Defaulted, Refunded, Withdrawn | accept_bid_and_fund -> Active;<br>settlement -> Completed;<br>refund_escrow_funds -> Refunded;<br>default handling -> Defaulted;<br>withdrawal -> Withdrawn |
+    /// | Withdrawn | (terminal - no further moves)   | - |
+    /// | Completed | (terminal)                      | - |
+    /// | Defaulted | (terminal)                      | - |
+    /// | Refunded  | (terminal)                      | - |
     ///
     /// ### Security
     /// Calling code **must** invoke this before persisting a status change so
     /// that no path (settlement, default, refund, or future code) can produce
     /// an orphan `Active` investment or an impossible backward transition.
+    ///
+    /// # Arguments
+    /// * `from` - The current status of the investment.
+    /// * `to` - The target status for the transition.
+    ///
+    /// # Returns
+    /// * `Ok(())` if the transition is legal.
+    /// * `Err(QuickLendXError::InvalidStatus)` if the transition is invalid.
     pub fn validate_transition(
         from: &InvestmentStatus,
         to: &InvestmentStatus,
