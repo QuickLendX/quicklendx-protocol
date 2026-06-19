@@ -601,6 +601,25 @@ impl InvoiceStorage {
         Self::get_invoices_by_category(env, category).len()
     }
 
+    /// Efficiently retrieves invoice IDs for a category directly from the category index.
+    /// Unlike `get_invoices_by_category`, this reads the index without scanning all invoices.
+    pub fn get_invoices_by_category_from_index(
+        env: &Env,
+        category: &InvoiceCategory,
+    ) -> Vec<BytesN<32>> {
+        let key = Indexes::invoices_by_category(category.clone());
+        env.storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(env))
+    }
+
+    /// Efficiently counts invoices for a category directly from the category index.
+    /// This is the preferred method for counting and is bounded by the index size.
+    pub fn get_invoice_count_by_category_from_index(env: &Env, category: &InvoiceCategory) -> u32 {
+        Self::get_invoices_by_category_from_index(env, category).len() as u32
+    }
+
     pub fn count_active_business_invoices(env: &Env, business: &Address) -> u32 {
         let mut count = 0u32;
         for invoice_id in Self::get_by_business(env, business).iter() {
