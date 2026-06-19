@@ -31,6 +31,10 @@ and then continuing with each returned `next_offset` while `next_offset != 0`.
 A returned `next_offset` of 0 means the reserve is complete.
 Starting again at `offset = 0` recomputes the reserve from scratch and is the
 recommended recovery if repair was interrupted or sidecar drift is suspected.
+The first call snapshots the current status-derived invoice ID list so later
+pages cannot skip invoices if status-index order changes during repair. That
+snapshot is capped at 1,000 allocated invoices; larger ledgers need a separate
+indexed migration path before this repair can run.
 During a multi-page repair, same-token escrow creation, release, and refund
 reject with `InvalidStatus` until the final page completes.
 
@@ -117,10 +121,12 @@ Each withdrawal request is assigned a unique nonce:
    - `emg_time_until_expire()`: Seconds until expiration
 
 5. **Reserve repair** (`repair_held_escrow_reserve`): Admin can recompute one
-   token's held escrow reserve from indexed invoices in bounded pages. Pages
-   must be run in returned-offset order. The token remains closed to emergency
-   execution until the final page completes. Same-token escrow creation,
-   release, and refund are also blocked while a multi-page repair is active.
+   token's held escrow reserve from a capped invoice-ID snapshot. The initial
+   `offset = 0` call materializes the snapshot; subsequent calls scan bounded
+   pages from it and must be run in returned-offset order. The token remains
+   closed to emergency execution until the final page completes. Same-token
+   escrow creation, release, and refund are also blocked while a multi-page
+   repair is active.
 
 ## Entrypoints
 
@@ -133,7 +139,7 @@ Each withdrawal request is assigned a unique nonce:
 | `can_exec_emergency()` | Anyone | Returns whether withdrawal can be executed now |
 | `emg_time_until_unlock()` | Anyone | Returns seconds until timelock elapses |
 | `emg_time_until_expire()` | Anyone | Returns seconds until expiration |
-| `repair_held_escrow_reserve(admin, currency, offset, limit)` | Admin | Recomputes one token's held escrow reserve from a paginated invoice-ID snapshot; continue while `next_offset != 0` |
+| `repair_held_escrow_reserve(admin, currency, offset, limit)` | Admin | Recomputes one token's held escrow reserve from a capped invoice-ID snapshot; continue while `next_offset != 0` |
 
 ## Security
 

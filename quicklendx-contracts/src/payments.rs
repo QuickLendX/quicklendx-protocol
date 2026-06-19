@@ -46,6 +46,10 @@ pub struct EscrowStorage;
 const HELD_ESCROW_RESERVE_KEY: Symbol = symbol_short!("esc_res");
 const ESCROW_RESERVE_MARKER_KEY: Symbol = symbol_short!("esc_acc");
 const HELD_RESERVE_REPAIR_IDS_KEY: Symbol = symbol_short!("esc_rids");
+#[cfg(not(test))]
+const MAX_REPAIR_SNAPSHOT_IDS: u64 = 1_000;
+#[cfg(test)]
+const MAX_REPAIR_SNAPSHOT_IDS: u64 = 3;
 
 impl EscrowStorage {
     fn held_reserve_key(currency: &Address) -> (Symbol, Address) {
@@ -221,7 +225,13 @@ impl EscrowStorage {
 
         let capped = limit.min(MAX_REBUILD_PAGE);
         let ids = if offset == 0 {
+            if InvoiceStorage::get_total_count(env) > MAX_REPAIR_SNAPSHOT_IDS {
+                return Err(QuickLendXError::OperationNotAllowed);
+            }
             let ids = InvoiceStorage::get_all_invoice_ids(env);
+            if ids.len() as u64 > MAX_REPAIR_SNAPSHOT_IDS {
+                return Err(QuickLendXError::OperationNotAllowed);
+            }
             Self::set_repair_snapshot(env, currency, &ids);
             ids
         } else {

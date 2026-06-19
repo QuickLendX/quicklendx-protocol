@@ -3339,10 +3339,11 @@ impl QuickLendXContract {
 
     /// Repair missing held escrow reserve entries for one token from indexed invoice records.
     ///
-    /// This recovery path is paginated so normal escrow operations and emergency
-    /// execution never need to scan all invoices. Emergency execution for the
-    /// token remains closed until a full sequence completes. Start with
-    /// `offset = 0`. Continue with each returned `next_offset` while
+    /// The first call (`offset = 0`) snapshots the current status-derived
+    /// invoice ID list, subject to an invoice-count cap, so later pages are not
+    /// shifted by status-index mutations. Scanning/summing then proceeds in
+    /// bounded pages. Emergency execution for the token remains closed until a
+    /// full sequence completes. Continue with each returned `next_offset` while
     /// `next_offset != 0`. A returned `next_offset` of 0 means the reserve is
     /// complete and emergency withdrawal for that token may pass the
     /// reserve-completeness gate. Starting again at `offset = 0` recomputes the

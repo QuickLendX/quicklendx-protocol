@@ -858,6 +858,27 @@ fn repair_limit_zero_is_rejected() {
 }
 
 #[test]
+fn repair_rejects_invoice_snapshot_above_cap() {
+    let (env, client, contract_id, admin) = setup();
+    let business = verified_business(&env, &client, &admin);
+    let currency = setup_token(&env, &[&business], &contract_id, 0);
+
+    for i in 0..4 {
+        upload_verified_invoice(
+            &env,
+            &client,
+            &business,
+            &currency,
+            10_000 + i,
+            "Repair snapshot cap invoice",
+        );
+    }
+
+    let result = client.try_repair_held_escrow_reserve(&admin, &currency, &0u32, &1u32);
+    assert_contract_error!(result, QuickLendXError::OperationNotAllowed);
+}
+
+#[test]
 fn repair_uses_snapshot_when_invoice_status_order_changes_between_pages() {
     let (env, client, contract_id, admin) = setup();
     let business = verified_business(&env, &client, &admin);

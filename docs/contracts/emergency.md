@@ -158,7 +158,7 @@ The emergency withdraw mechanism is a **last-resort** recovery tool for stuck fu
 
 - **Timelock**: 24-hour default delay prevents instant recovery execution even if admin keys are compromised.
 - **Expiration**: 7-day lifetime after unlock prevents stale withdrawals from lingering indefinitely.
-- **Escrow reserve**: Same-token amounts committed to `Held` escrows are excluded from emergency withdrawal using the persisted reserve. A token is not emergency-withdrawable until its reserve record has completed admin-only paginated `repair_held_escrow_reserve` initialization or repair. While a multi-page repair is active, escrow creation, release, and refund for that token reject with `InvalidStatus`.
+- **Escrow reserve**: Same-token amounts committed to `Held` escrows are excluded from emergency withdrawal using the persisted reserve. A token is not emergency-withdrawable until its reserve record has completed admin-only `repair_held_escrow_reserve` initialization or repair. The initial repair call snapshots the status-derived invoice ID list under a 1,000-invoice cap, and later calls scan bounded pages from that snapshot. While a multi-page repair is active, escrow creation, release, and refund for that token reject with `InvalidStatus`.
 - **Nonce tracking**: Prevents replay attacks if a cancelled withdrawal is re-initiated.
 - **Cancellation audit trail**: Cancelled records are retained in storage (marked `cancelled`) so operators can observe the full history.
 
