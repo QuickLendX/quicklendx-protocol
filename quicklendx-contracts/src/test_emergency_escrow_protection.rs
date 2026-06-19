@@ -804,7 +804,7 @@ fn incomplete_paginated_repair_keeps_emergency_withdraw_closed() {
     let blocked_refund = client.try_refund_escrow_funds(&escrow_b.invoice_id, &admin);
     assert_contract_error!(blocked_refund, QuickLendXError::InvalidStatus);
 
-    let blocked_amount = 1i128;
+    let blocked_amount = 10_000i128;
     let blocked_invoice = upload_verified_invoice(
         &env,
         &client,
