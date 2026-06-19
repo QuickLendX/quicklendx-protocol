@@ -98,6 +98,8 @@ mod test_currency;
 mod test_currency_match_funding;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
+#[cfg(test)]
+mod test_dispute_refund_flow;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(all(test, feature = "legacy-tests"))]
