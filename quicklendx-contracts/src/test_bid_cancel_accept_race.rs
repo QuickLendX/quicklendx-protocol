@@ -29,7 +29,7 @@ struct CancelAcceptFixture {
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    env.ledger().set_timestamp(1_000);
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -127,11 +127,11 @@ fn assert_no_funding_state(client: &QuickLendXContractClient, invoice_id: &Bytes
     assert!(invoice.funded_at.is_none());
     assert!(invoice.investor.is_none());
     assert!(
-        client.get_escrow_details(invoice_id).is_err(),
+        client.try_get_escrow_details(invoice_id).is_err(),
         "cancelled bid must not create escrow"
     );
     assert!(
-        client.get_invoice_investment(invoice_id).is_err(),
+        client.try_get_invoice_investment(invoice_id).is_err(),
         "cancelled bid must not create investment"
     );
 }
