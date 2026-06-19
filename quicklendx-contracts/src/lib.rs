@@ -113,6 +113,8 @@ mod test_investment_consistency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_cancel_accept_race;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
 // #[cfg(test)]
 // mod test_investment_queries;
