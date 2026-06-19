@@ -4,7 +4,10 @@
 mod test_invoice_search_ranking {
     use crate::invoice_search::InvoiceSearch;
     use crate::storage::InvoiceStorage;
-    use crate::types::{Invoice, InvoiceCategory, InvoiceStatus, SearchRank, SearchResult, Dispute};
+    use crate::types::{
+        Dispute, Invoice, InvoiceCategory, InvoiceStatus, SearchRank, SearchResult,
+    };
+    use crate::QuickLendXContract;
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
@@ -12,6 +15,11 @@ mod test_invoice_search_ranking {
         let env = Env::default();
         env.mock_all_auths();
         env
+    }
+
+    fn with_contract<T>(env: &Env, f: impl FnOnce() -> T) -> T {
+        let contract_id = env.register(QuickLendXContract, ());
+        env.as_contract(&contract_id, f)
     }
 
     fn create_test_invoice(
@@ -93,6 +101,8 @@ mod test_invoice_search_ranking {
         exact_id_bytes[1] = 0x62;
         exact_id_bytes[2] = 0x63;
         let exact_id = BytesN::from_array(&env, &exact_id_bytes);
+        let exact_id_query =
+            "6162630000000000000000000000000000000000000000000000000000000000";
 
         let dispute = Dispute {
             created_by: business.clone(),
@@ -138,29 +148,24 @@ mod test_invoice_search_ranking {
         let invoice_partial = create_test_invoice(
             &env,
             &business,
-            "this has abc in description",
+            "this has 6162630000000000000000000000000000000000000000000000000000000000 in description",
             None,
             None,
             1000,
         );
 
         // Invoice 3: No match
-        let invoice_other = create_test_invoice(
-            &env,
-            &business,
-            "unrelated search target",
-            None,
-            None,
-            1000,
-        );
-
-        InvoiceStorage::store_invoice(&env, &invoice_exact);
-        InvoiceStorage::store_invoice(&env, &invoice_partial);
-        InvoiceStorage::store_invoice(&env, &invoice_other);
+        let invoice_other =
+            create_test_invoice(&env, &business, "unrelated search target", None, None, 1000);
 
         // Query "abc" (corresponds to exact_id hex string)
-        let query = String::from_str(&env, "6162630000000000000000000000000000000000000000000000000000000000");
-        let results = InvoiceSearch::search_invoices(&env, query).unwrap();
+        let query = String::from_str(&env, exact_id_query);
+        let results = with_contract(&env, || {
+            InvoiceStorage::store_invoice(&env, &invoice_exact);
+            InvoiceStorage::store_invoice(&env, &invoice_partial);
+            InvoiceStorage::store_invoice(&env, &invoice_other);
+            InvoiceSearch::search_invoices(&env, query).unwrap()
+        });
 
         // Should return 2 results: exact match first, then partial match. Other should be filtered out.
         assert_eq!(results.len(), 2);
@@ -185,12 +190,13 @@ mod test_invoice_search_ranking {
         let invoice_mid = create_test_invoice(&env, &business, "abc mid", None, None, 2000);
         let invoice_new = create_test_invoice(&env, &business, "abc new", None, None, 3000);
 
-        InvoiceStorage::store_invoice(&env, &invoice_old);
-        InvoiceStorage::store_invoice(&env, &invoice_mid);
-        InvoiceStorage::store_invoice(&env, &invoice_new);
-
         let query = String::from_str(&env, "abc");
-        let results = InvoiceSearch::search_invoices(&env, query).unwrap();
+        let results = with_contract(&env, || {
+            InvoiceStorage::store_invoice(&env, &invoice_old);
+            InvoiceStorage::store_invoice(&env, &invoice_mid);
+            InvoiceStorage::store_invoice(&env, &invoice_new);
+            InvoiceSearch::search_invoices(&env, query).unwrap()
+        });
 
         assert_eq!(results.len(), 3);
 
@@ -216,6 +222,8 @@ mod test_invoice_search_ranking {
         exact_id_bytes[1] = 0x79;
         exact_id_bytes[2] = 0x7a;
         let exact_id = BytesN::from_array(&env, &exact_id_bytes);
+        let exact_id_query =
+            "78797a0000000000000000000000000000000000000000000000000000000000";
 
         let dispute = Dispute {
             created_by: business.clone(),
@@ -261,18 +269,19 @@ mod test_invoice_search_ranking {
         let invoice_partial = create_test_invoice(
             &env,
             &business,
-            "this has 78797a in description",
+            "this has 78797a0000000000000000000000000000000000000000000000000000000000 in description",
             None,
             None,
             5000,
         );
 
-        InvoiceStorage::store_invoice(&env, &invoice_exact);
-        InvoiceStorage::store_invoice(&env, &invoice_partial);
-
         // Query by the hex string of exact_id
-        let query = String::from_str(&env, "78797a0000000000000000000000000000000000000000000000000000000000");
-        let results = InvoiceSearch::search_invoices(&env, query).unwrap();
+        let query = String::from_str(&env, exact_id_query);
+        let results = with_contract(&env, || {
+            InvoiceStorage::store_invoice(&env, &invoice_exact);
+            InvoiceStorage::store_invoice(&env, &invoice_partial);
+            InvoiceSearch::search_invoices(&env, query).unwrap()
+        });
 
         assert_eq!(results.len(), 2);
         // Exact ID must be first, despite having a lower created_at timestamp

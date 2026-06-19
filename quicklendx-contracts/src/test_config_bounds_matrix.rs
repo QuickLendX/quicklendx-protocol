@@ -5,9 +5,9 @@
 //! validation checks leave the readable on-chain config unchanged.
 
 use super::*;
+use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use crate::init::InitializationParams;
-use soroban_sdk::{testutils::Address as _, Address, Env, Vec};
+use soroban_sdk::{testutils::Address as _, Address, Env};
 
 const VALID_MIN_INVOICE_AMOUNT: i128 = 1_000_000;
 const VALID_MAX_DUE_DATE_DAYS: u64 = 365;
@@ -22,17 +22,17 @@ fn setup_initialized() -> (Env, QuickLendXContractClient<'static>, Address) {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
-    let treasury = Address::generate(&env);
 
-    client.initialize(&InitializationParams {
-        admin: admin.clone(),
-        treasury,
-        fee_bps: 200,
-        min_invoice_amount: VALID_MIN_INVOICE_AMOUNT,
-        max_due_date_days: VALID_MAX_DUE_DATE_DAYS,
-        grace_period_seconds: VALID_GRACE_PERIOD_SECONDS,
-        initial_currencies: Vec::new(&env),
+    env.as_contract(&contract_id, || {
+        AdminStorage::initialize(&env, &admin).unwrap();
     });
+    client.set_fee_config(&admin, &200);
+    client.set_protocol_config(
+        &admin,
+        &VALID_MIN_INVOICE_AMOUNT,
+        &VALID_MAX_DUE_DATE_DAYS,
+        &VALID_GRACE_PERIOD_SECONDS,
+    );
 
     (env, client, admin)
 }
