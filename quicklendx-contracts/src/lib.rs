@@ -110,6 +110,8 @@ mod test_expired_bids_cleanup;
 mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
+#[cfg(test)]
+mod test_config_bounds_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
 #[cfg(all(test, feature = "legacy-tests"))]
