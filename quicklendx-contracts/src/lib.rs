@@ -96,6 +96,8 @@ mod test_cleanup_pagination;
 mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
+#[cfg(test)]
+mod test_dispute_refund_flow;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(all(test, feature = "legacy-tests"))]
