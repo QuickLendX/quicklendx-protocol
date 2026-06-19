@@ -780,13 +780,28 @@ fn incomplete_paginated_repair_keeps_emergency_withdraw_closed() {
     );
     let target = Address::generate(&env);
     let token_client = token::Client::new(&env, &currency);
+    let blocked_amount = 10_000i128;
+    let blocked_invoice = upload_verified_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        blocked_amount,
+        "Existing invoice blocked during active paginated repair",
+    );
+    let blocked_bid = client.place_bid(
+        &investor_b,
+        &blocked_invoice,
+        &blocked_amount,
+        &(blocked_amount + 100),
+    );
 
     let out_of_order = client.try_repair_held_escrow_reserve(&admin, &currency, &1u32, &1u32);
     assert_contract_error!(out_of_order, QuickLendXError::InvalidStatus);
 
     let first_page = client.repair_held_escrow_reserve(&admin, &currency, &0u32, &1u32);
     assert_eq!(first_page.scanned, 1);
-    assert_eq!(first_page.reindexed, 1);
+    assert_eq!(first_page.reindexed, 0);
     assert_eq!(first_page.next_offset, 1);
 
     client.initiate_emergency_withdraw(&admin, &currency, &SAME_TOKEN_SURPLUS, &target);
@@ -804,21 +819,18 @@ fn incomplete_paginated_repair_keeps_emergency_withdraw_closed() {
     let blocked_refund = client.try_refund_escrow_funds(&escrow_b.invoice_id, &admin);
     assert_contract_error!(blocked_refund, QuickLendXError::InvalidStatus);
 
-    let blocked_amount = 10_000i128;
-    let blocked_invoice = upload_verified_invoice(
-        &env,
-        &client,
+    let blocked_upload_due_date = env.ledger().timestamp() + 86_400;
+    let blocked_upload = client.try_upload_invoice(
         &business,
-        &currency,
-        blocked_amount,
-        "Blocked during active paginated repair",
-    );
-    let blocked_bid = client.place_bid(
-        &investor_b,
-        &blocked_invoice,
         &blocked_amount,
-        &(blocked_amount + 100),
+        &currency,
+        &blocked_upload_due_date,
+        &String::from_str(&env, "Upload blocked during active paginated repair"),
+        &InvoiceCategory::Technology,
+        &Vec::new(&env),
     );
+    assert_contract_error!(blocked_upload, QuickLendXError::InvalidStatus);
+
     let blocked_create = client.try_accept_bid_and_fund(&blocked_invoice, &blocked_bid);
     assert_contract_error!(blocked_create, QuickLendXError::InvalidStatus);
     assert_eq!(
@@ -839,7 +851,7 @@ fn incomplete_paginated_repair_keeps_emergency_withdraw_closed() {
 
     let final_page = client.repair_held_escrow_reserve(&admin, &currency, &2u32, &1u32);
     assert_eq!(final_page.scanned, 1);
-    assert_eq!(final_page.reindexed, 0);
+    assert_eq!(final_page.reindexed, 1);
     assert_eq!(final_page.next_offset, 3);
     assert!(client.can_exec_emergency());
 }

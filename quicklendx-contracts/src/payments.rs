@@ -99,7 +99,7 @@ impl EscrowStorage {
             .unwrap_or(false)
     }
 
-    fn require_no_active_reserve_repair(
+    pub(crate) fn require_no_active_reserve_repair(
         env: &Env,
         currency: &Address,
     ) -> Result<(), QuickLendXError> {

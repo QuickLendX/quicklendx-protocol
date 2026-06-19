@@ -27,8 +27,8 @@ The admin initializes or repairs the record by running
 and then continuing with each returned `next_offset` until the final page.
 Starting again at `offset = 0` recomputes the reserve from scratch and is the
 recommended recovery if repair was interrupted or sidecar drift is suspected.
-During a multi-page repair, escrow creation, release, and refund for that
-currency reject with `InvalidStatus` until the final page completes.
+During a multi-page repair, same-token invoice creation and escrow creation,
+release, and refund reject with `InvalidStatus` until the final page completes.
 
 The executable amount is:
 
@@ -109,8 +109,8 @@ Each withdrawal request is assigned a unique nonce:
 5. **Reserve repair** (`repair_held_escrow_reserve`): Admin can recompute one
    token's held escrow reserve from indexed invoices in bounded pages. Pages
    must be run in returned-offset order. The token remains closed to emergency
-   execution, escrow creation, release, and refund until the final page
-   completes.
+   execution, invoice creation, escrow creation, release, and refund until the
+   final page completes.
 
 ## Entrypoints
 
