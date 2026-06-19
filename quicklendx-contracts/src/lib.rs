@@ -82,6 +82,8 @@ mod test_backup;
 mod test_backup_safety;
 #[cfg(test)]
 mod test_backup_restore_reindex;
+#[cfg(test)]
+mod test_escrow_event_completeness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(all(test, feature = "legacy-tests"))]
