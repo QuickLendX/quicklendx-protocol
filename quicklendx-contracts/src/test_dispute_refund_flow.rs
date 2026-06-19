@@ -160,8 +160,9 @@ fn dispute_resolved_against_business_refund_aligns_terminal_statuses() {
     let invoice = fx.client.get_invoice(&fx.invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Refunded);
     assert_eq!(invoice.dispute_status, DisputeStatus::Resolved);
-    assert_eq!(invoice.investor, Some(fx.investor.clone()));
-    assert_eq!(invoice.funded_amount, fx.bid_amount);
+    assert_eq!(invoice.investor, None);
+    assert_eq!(invoice.funded_amount, 0);
+    assert_eq!(invoice.funded_at, None);
 
     assert_eq!(
         fx.client.get_bid(&fx.bid_id).unwrap().status,

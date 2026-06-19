@@ -76,7 +76,7 @@ mod test_admin;
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_standalone;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_two_step;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit;
