@@ -52,6 +52,7 @@ pub mod dispute_timeline;
 pub mod emergency;
 pub mod errors;
 pub mod escrow;
+pub mod health;
 pub mod events;
 pub mod fees;
 pub mod freshness;
@@ -139,6 +140,8 @@ mod test_profit_fee;
 // mod test_storage;
 #[cfg(test)]
 mod test_protocol_limits_boundary;
+#[cfg(test)]
+mod test_protocol_health;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
 #[cfg(test)]
@@ -637,6 +640,55 @@ impl QuickLendXContract {
     /// Return whether the contract is currently paused.
     pub fn is_paused(env: Env) -> bool {
         pause::PauseControl::is_paused(&env)
+    }
+
+    /// Get a snapshot of the protocol's current health status.
+    ///
+    /// This is a read-only canonical endpoint returning a single struct aggregating
+    /// all critical protocol state for off-chain dashboards, monitoring systems,
+    /// and governance tooling.
+    ///
+    /// # Returns
+    /// * `health::ProtocolHealth` - A snapshot containing:
+    ///   - `version`: Protocol version from initialization
+    ///   - `initialized`: Whether protocol setup is complete
+    ///   - `paused`: Current pause state
+    ///   - `emergency_withdraw_pending`: Optional pending emergency withdrawal
+    ///   - `treasury`: Configured treasury address (may be None)
+    ///   - `fee_bps`: Current fee basis points (0-1000)
+    ///   - `total_invoice_count`: Sum of all invoices across all statuses
+    ///   - `currency_count`: Number of whitelisted currencies
+    ///
+    /// # Security
+    /// - No authentication required
+    /// - Read-only (no state mutations)
+    /// - Contains only aggregate counts and system configuration (no PII)
+    /// - Remains available even when protocol is paused
+    ///
+    /// # Usage
+    /// Designed as the heartbeat endpoint for real-time protocol dashboards:
+    ///
+    /// ```ignore
+    /// let health = get_protocol_health(&env);
+    /// if !health.initialized {
+    ///     log!("Protocol not initialized");
+    ///     return;
+    /// }
+    /// if health.paused {
+    ///     log!("Protocol paused - incident mode active");
+    /// }
+    /// if health.emergency_withdraw_pending.is_some() {
+    ///     log!("Emergency withdrawal in timelock");
+    /// }
+    /// log!("Invoices: {}, Currencies: {}", health.total_invoice_count, health.currency_count);
+    /// ```
+    ///
+    /// # Note
+    /// This endpoint is purely advisory. The returned snapshot reflects the state
+    /// at the moment of execution; subsequent transactions may change protocol state
+    /// before callers can react to this data.
+    pub fn get_protocol_health(env: Env) -> health::ProtocolHealth {
+        health::ProtocolHealth::new(&env)
     }
 
     // ============================================================================
