@@ -7,7 +7,7 @@ use crate::events::emit_escrow_created;
 use crate::storage::{extend_persistent_ttl, InvoiceStorage};
 use crate::types::RebuildReport;
 use soroban_sdk::token;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, TryFromVal, Val};
 
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
@@ -32,6 +32,15 @@ pub struct Escrow {
     pub status: EscrowStatus,
 }
 
+#[contracttype]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+struct HeldEscrowReserve {
+    amount: i128,
+    complete: bool,
+    repair_next_offset: u32,
+}
+
 pub struct EscrowStorage;
 
 const HELD_ESCROW_RESERVE_KEY: Symbol = symbol_short!("esc_res");
@@ -46,52 +55,107 @@ impl EscrowStorage {
         (ESCROW_RESERVE_MARKER_KEY.clone(), escrow_id.clone())
     }
 
-    pub fn get_held_reserve(env: &Env, currency: &Address) -> i128 {
-        let key = Self::held_reserve_key(currency);
-        let reserve: i128 = env.storage().persistent().get(&key).unwrap_or(0);
-        if reserve > 0 {
-            extend_persistent_ttl(env, &key);
+    fn empty_reserve() -> HeldEscrowReserve {
+        HeldEscrowReserve {
+            amount: 0,
+            complete: false,
+            repair_next_offset: 0,
         }
-        reserve
     }
 
-    fn set_held_reserve(env: &Env, currency: &Address, amount: i128) {
+    fn get_held_reserve_record(env: &Env, currency: &Address) -> Option<HeldEscrowReserve> {
         let key = Self::held_reserve_key(currency);
-        if amount > 0 {
-            env.storage().persistent().set(&key, &amount);
-            extend_persistent_ttl(env, &key);
-        } else {
-            env.storage().persistent().remove(&key);
+        let raw: Option<Val> = env.storage().persistent().get(&key);
+        let raw = raw?;
+        extend_persistent_ttl(env, &key);
+
+        if let Ok(mut reserve) = HeldEscrowReserve::try_from_val(env, &raw) {
+            if reserve.amount < 0 {
+                reserve.amount = 0;
+                reserve.complete = false;
+                reserve.repair_next_offset = 0;
+            }
+            return Some(reserve);
         }
+
+        i128::try_from_val(env, &raw)
+            .ok()
+            .map(|amount| HeldEscrowReserve {
+                amount: amount.max(0),
+                complete: false,
+                repair_next_offset: 0,
+            })
+    }
+
+    pub fn get_held_reserve(env: &Env, currency: &Address) -> i128 {
+        Self::get_held_reserve_record(env, currency)
+            .map(|reserve| reserve.amount)
+            .unwrap_or(0)
+    }
+
+    pub fn is_held_reserve_complete(env: &Env, currency: &Address) -> bool {
+        Self::get_held_reserve_record(env, currency)
+            .map(|reserve| reserve.complete)
+            .unwrap_or(false)
+    }
+
+    fn require_no_active_reserve_repair(
+        env: &Env,
+        currency: &Address,
+    ) -> Result<(), QuickLendXError> {
+        let repair_in_progress = Self::get_held_reserve_record(env, currency)
+            .map(|reserve| !reserve.complete && reserve.repair_next_offset != 0)
+            .unwrap_or(false);
+        if repair_in_progress {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+        Ok(())
+    }
+
+    fn set_held_reserve_record(env: &Env, currency: &Address, reserve: &HeldEscrowReserve) {
+        let key = Self::held_reserve_key(currency);
+        env.storage().persistent().set(&key, reserve);
+        extend_persistent_ttl(env, &key);
     }
 
     fn held_reserve_after_increase(
         env: &Env,
         currency: &Address,
         amount: i128,
-    ) -> Result<i128, QuickLendXError> {
+    ) -> Result<HeldEscrowReserve, QuickLendXError> {
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        Self::get_held_reserve(env, currency)
+        let mut reserve =
+            Self::get_held_reserve_record(env, currency).unwrap_or_else(Self::empty_reserve);
+        reserve.amount = reserve
+            .amount
             .checked_add(amount)
-            .ok_or(QuickLendXError::ArithmeticOverflow)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
+        Ok(reserve)
     }
 
     fn held_reserve_after_decrease(
         env: &Env,
         currency: &Address,
         amount: i128,
-    ) -> Result<i128, QuickLendXError> {
+    ) -> Result<HeldEscrowReserve, QuickLendXError> {
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        let current = Self::get_held_reserve(env, currency);
-        current
-            .checked_sub(amount)
-            .ok_or(QuickLendXError::ArithmeticOverflow)
+        let mut reserve =
+            Self::get_held_reserve_record(env, currency).unwrap_or_else(Self::empty_reserve);
+        if reserve.amount < amount {
+            reserve.amount = 0;
+            reserve.complete = false;
+            reserve.repair_next_offset = 0;
+            return Ok(reserve);
+        }
+
+        reserve.amount -= amount;
+        Ok(reserve)
     }
 
     fn mark_reserve_accounted(env: &Env, escrow_id: &BytesN<32>) {
@@ -121,12 +185,16 @@ impl EscrowStorage {
         limit: u32,
     ) -> Result<RebuildReport, QuickLendXError> {
         const MAX_REBUILD_PAGE: u32 = 100;
-        let capped = if limit > MAX_REBUILD_PAGE { MAX_REBUILD_PAGE } else { limit };
+        let capped = if limit > MAX_REBUILD_PAGE {
+            MAX_REBUILD_PAGE
+        } else {
+            limit
+        };
 
         let all_ids = InvoiceStorage::get_all_invoice_ids(env);
         let total = all_ids.len() as u32;
 
-        if capped == 0 || offset > total {
+        if capped == 0 {
             return Ok(RebuildReport {
                 scanned: 0,
                 reindexed: 0,
@@ -134,37 +202,55 @@ impl EscrowStorage {
             });
         }
 
+        if offset > total {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+
+        let mut reserve = if offset == 0 {
+            HeldEscrowReserve {
+                amount: 0,
+                complete: false,
+                repair_next_offset: 0,
+            }
+        } else {
+            let reserve = Self::get_held_reserve_record(env, currency)
+                .ok_or(QuickLendXError::InvalidStatus)?;
+            if reserve.complete || reserve.repair_next_offset != offset {
+                return Err(QuickLendXError::InvalidStatus);
+            }
+            reserve
+        };
+
         let start = offset;
         let end = start.saturating_add(capped).min(total);
-        let mut reserve = Self::get_held_reserve(env, currency);
         let mut reindexed = 0u32;
         let mut i = start;
 
         while i < end {
             if let Some(invoice_id) = all_ids.get(i) {
                 if let Some(escrow) = Self::get_escrow_by_invoice(env, &invoice_id) {
-                    if escrow.status == EscrowStatus::Held
-                        && &escrow.currency == currency
-                        && !Self::is_reserve_accounted(env, &escrow.escrow_id)
-                    {
+                    if escrow.status == EscrowStatus::Held && &escrow.currency == currency {
                         if escrow.amount <= 0 {
                             return Err(QuickLendXError::InvalidAmount);
                         }
 
-                        reserve = reserve
+                        reserve.amount = reserve
+                            .amount
                             .checked_add(escrow.amount)
                             .ok_or(QuickLendXError::ArithmeticOverflow)?;
                         Self::mark_reserve_accounted(env, &escrow.escrow_id);
                         reindexed = reindexed.saturating_add(1);
+                    } else if &escrow.currency == currency {
+                        Self::clear_reserve_accounted(env, &escrow.escrow_id);
                     }
                 }
             }
             i = i.saturating_add(1);
         }
 
-        if reindexed > 0 {
-            Self::set_held_reserve(env, currency, reserve);
-        }
+        reserve.repair_next_offset = if end >= total { 0 } else { end };
+        reserve.complete = end >= total;
+        Self::set_held_reserve_record(env, currency, &reserve);
 
         Ok(RebuildReport {
             scanned: end.saturating_sub(start),
@@ -178,7 +264,9 @@ impl EscrowStorage {
         extend_persistent_ttl(env, &escrow.escrow_id);
         // Also store by invoice_id for easy lookup
         let invoice_key = (symbol_short!("escrow"), &escrow.invoice_id);
-        env.storage().persistent().set(&invoice_key, &escrow.escrow_id);
+        env.storage()
+            .persistent()
+            .set(&invoice_key, &escrow.escrow_id);
         extend_persistent_ttl(env, &invoice_key);
     }
 
@@ -205,7 +293,12 @@ impl EscrowStorage {
         env.storage().persistent().set(&escrow.escrow_id, escrow);
         extend_persistent_ttl(env, &escrow.escrow_id);
         let invoice_key = (symbol_short!("escrow"), &escrow.invoice_id);
-        if env.storage().persistent().get::<_, BytesN<32>>(&invoice_key).is_some() {
+        if env
+            .storage()
+            .persistent()
+            .get::<_, BytesN<32>>(&invoice_key)
+            .is_some()
+        {
             extend_persistent_ttl(env, &invoice_key);
         }
     }
@@ -251,6 +344,7 @@ impl EscrowStorage {
 ///
 /// # Errors
 /// * [`QuickLendXError::InvalidAmount`] - `amount` is zero or negative.
+/// * [`QuickLendXError::InvalidStatus`] - reserve repair is active for this token.
 /// * [`QuickLendXError::InvoiceAlreadyFunded`] - an escrow record already exists for this invoice.
 /// * [`QuickLendXError::InsufficientFunds`] - investor balance is below `amount`.
 /// * [`QuickLendXError::OperationNotAllowed`] - investor has not approved the contract for `amount`.
@@ -276,6 +370,7 @@ pub fn create_escrow(
         return Err(QuickLendXError::InvoiceAlreadyFunded);
     }
 
+    EscrowStorage::require_no_active_reserve_repair(env, currency)?;
     let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
 
     crate::qlx_log!(env, "payment", "Creating escrow: amount={}", amount);
@@ -297,7 +392,7 @@ pub fn create_escrow(
     };
 
     EscrowStorage::store_escrow(env, &escrow);
-    EscrowStorage::set_held_reserve(env, currency, next_held_reserve);
+    EscrowStorage::set_held_reserve_record(env, currency, &next_held_reserve);
     EscrowStorage::mark_reserve_accounted(env, &escrow_id);
     crate::qlx_log!(env, "payment", "Escrow created successfully");
     emit_escrow_created(env, &escrow);
@@ -318,6 +413,7 @@ pub fn create_escrow(
 /// # Errors
 /// * [`QuickLendXError::StorageKeyNotFound`] - no escrow record exists for this invoice.
 /// * [`QuickLendXError::InvalidStatus`] - escrow is not in `Held` status (already released/refunded).
+///   Also returned while reserve repair is active for this token.
 /// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount
 ///   (should never happen in normal operation; indicates a critical invariant violation).
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
@@ -331,6 +427,7 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
         return Err(QuickLendXError::InvalidStatus);
     }
 
+    EscrowStorage::require_no_active_reserve_repair(env, &escrow.currency)?;
     let next_held_reserve = if EscrowStorage::is_reserve_accounted(env, &escrow.escrow_id) {
         Some(EscrowStorage::held_reserve_after_decrease(
             env,
@@ -353,12 +450,17 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     // Update escrow status
     if let Some(next_held_reserve) = next_held_reserve {
-        EscrowStorage::set_held_reserve(env, &escrow.currency, next_held_reserve);
+        EscrowStorage::set_held_reserve_record(env, &escrow.currency, &next_held_reserve);
         EscrowStorage::clear_reserve_accounted(env, &escrow.escrow_id);
     }
     escrow.status = EscrowStatus::Released;
     EscrowStorage::update_escrow(env, &escrow);
-    crate::qlx_log!(env, "payment", "Escrow released to business: amount={}", escrow.amount);
+    crate::qlx_log!(
+        env,
+        "payment",
+        "Escrow released to business: amount={}",
+        escrow.amount
+    );
 
     Ok(())
 }
@@ -368,6 +470,7 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 /// # Errors
 /// * [`QuickLendXError::StorageKeyNotFound`] - no escrow record exists for this invoice.
 /// * [`QuickLendXError::InvalidStatus`] - escrow is not in `Held` status.
+///   Also returned while reserve repair is active for this token.
 /// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount.
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the refund can be safely retried.
@@ -379,6 +482,7 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
         return Err(QuickLendXError::InvalidStatus);
     }
 
+    EscrowStorage::require_no_active_reserve_repair(env, &escrow.currency)?;
     let next_held_reserve = if EscrowStorage::is_reserve_accounted(env, &escrow.escrow_id) {
         Some(EscrowStorage::held_reserve_after_decrease(
             env,
@@ -401,12 +505,17 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
 
     // Update escrow status
     if let Some(next_held_reserve) = next_held_reserve {
-        EscrowStorage::set_held_reserve(env, &escrow.currency, next_held_reserve);
+        EscrowStorage::set_held_reserve_record(env, &escrow.currency, &next_held_reserve);
         EscrowStorage::clear_reserve_accounted(env, &escrow.escrow_id);
     }
     escrow.status = EscrowStatus::Refunded;
     EscrowStorage::update_escrow(env, &escrow);
-    crate::qlx_log!(env, "payment", "Escrow refunded to investor: amount={}", escrow.amount);
+    crate::qlx_log!(
+        env,
+        "payment",
+        "Escrow refunded to investor: amount={}",
+        escrow.amount
+    );
 
     Ok(())
 }

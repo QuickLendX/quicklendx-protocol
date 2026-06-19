@@ -91,6 +91,10 @@ impl EmergencyWithdraw {
     ) -> Result<(), QuickLendXError> {
         let contract = env.current_contract_address();
         let token_client = token::Client::new(env, token);
+        if !EscrowStorage::is_held_reserve_complete(env, token) {
+            return Err(QuickLendXError::EmergencyWithdrawInsufficientBalance);
+        }
+
         let balance = token_client.balance(&contract);
         let held_reserve = EscrowStorage::get_held_reserve(env, token);
 
@@ -184,6 +188,8 @@ impl EmergencyWithdraw {
     /// - Verifies timelock has elapsed (unlock_at <= now)
     /// - Verifies withdrawal has not expired (expires_at > now)
     /// - Verifies withdrawal has not been cancelled
+    /// - Verifies the token's held escrow reserve is fully initialized and
+    ///   the requested amount does not exceed same-token non-escrow surplus
     ///
     /// # Errors
     /// * `NotAdmin` if caller is not admin
@@ -191,6 +197,8 @@ impl EmergencyWithdraw {
     /// * `EmergencyWithdrawTimelockNotElapsed` if unlock_at has not passed
     /// * `EmergencyWithdrawExpired` if expires_at has passed
     /// * `EmergencyWithdrawCancelled` if withdrawal was cancelled
+    /// * `EmergencyWithdrawInsufficientBalance` if reserve repair is incomplete
+    ///   or requested amount exceeds non-escrow surplus
     /// * Transfer errors (e.g. `InsufficientFunds`) if contract balance is insufficient
     pub fn execute(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         admin.require_auth();
@@ -304,6 +312,7 @@ impl EmergencyWithdraw {
     /// - It has not been cancelled
     /// - The timelock has elapsed (unlock_at <= now)
     /// - It has not expired (expires_at > now)
+    /// - The token's held escrow reserve repair is complete
     /// - The requested amount is withdrawable after the same-token held escrow reserve
     ///
     /// # Timelock Window Math
@@ -389,5 +398,4 @@ impl EmergencyWithdraw {
 }
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}

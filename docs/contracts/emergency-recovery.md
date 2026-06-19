@@ -18,10 +18,17 @@ token, and escrow release or refund decreases that reserve. Execution reads this
 persisted reserve directly, so normal escrow and emergency paths do not scan all
 invoices.
 
-If missing reserve-accounting entries need repair after a migration, restore, or
-older deployment, the admin can run
-`repair_held_escrow_reserve(admin, currency, offset, limit)`
-page by page before executing an emergency withdrawal.
+The reserve record is trusted only after a full token-specific repair completes.
+If the record is missing, incomplete, or was reset by migration/restore recovery,
+emergency execution fails closed with `EmergencyWithdrawInsufficientBalance`.
+Older bare-amount reserve records are also treated as incomplete until repaired.
+The admin initializes or repairs the record by running
+`repair_held_escrow_reserve(admin, currency, offset, limit)` from `offset = 0`
+and then continuing with each returned `next_offset` until the final page.
+Starting again at `offset = 0` recomputes the reserve from scratch and is the
+recommended recovery if repair was interrupted or sidecar drift is suspected.
+During a multi-page repair, escrow creation, release, and refund for that
+currency reject with `InvalidStatus` until the final page completes.
 
 The executable amount is:
 
@@ -29,10 +36,11 @@ The executable amount is:
 withdrawable = contract_token_balance - same_token_held_escrow_reserve
 ```
 
-If the queued amount exceeds that withdrawable surplus, execution fails with
-`EmergencyWithdrawInsufficientBalance` and the pending withdrawal remains queued
-for cancellation, expiry, or replacement. This preserves the normal escrow
-release and refund paths for held escrows.
+If the queued amount exceeds that withdrawable surplus, or the reserve record is
+not yet complete, execution fails with `EmergencyWithdrawInsufficientBalance`
+and the pending withdrawal remains queued for repair, cancellation, expiry, or
+replacement. This preserves the normal escrow release and refund paths for held
+escrows.
 
 ## Hardened Lifecycle Constraints
 
@@ -83,7 +91,7 @@ Each withdrawal request is assigned a unique nonce:
    - Fails if timelock has not elapsed (`EmergencyWithdrawTimelockNotElapsed`)
    - Fails if expired (`EmergencyWithdrawExpired`)
    - Fails if cancelled (`EmergencyWithdrawCancelled`)
-   - Fails if amount exceeds non-escrow same-token surplus (`EmergencyWithdrawInsufficientBalance`)
+   - Fails if the token reserve repair is incomplete or amount exceeds non-escrow same-token surplus (`EmergencyWithdrawInsufficientBalance`)
    - On success, transfers tokens and clears the pending withdrawal
 
 3. **Cancel** (`cancel_emergency_withdraw`): Admin can abort a pending withdrawal.
@@ -98,8 +106,11 @@ Each withdrawal request is assigned a unique nonce:
    - `emg_time_until_unlock()`: Seconds until timelock elapses
    - `emg_time_until_expire()`: Seconds until expiration
 
-5. **Reserve repair** (`repair_held_escrow_reserve`): Admin can repair one
-   token's missing held escrow reserve entries from indexed invoices in bounded pages.
+5. **Reserve repair** (`repair_held_escrow_reserve`): Admin can recompute one
+   token's held escrow reserve from indexed invoices in bounded pages. Pages
+   must be run in returned-offset order. The token remains closed to emergency
+   execution, escrow creation, release, and refund until the final page
+   completes.
 
 ## Entrypoints
 
@@ -112,7 +123,7 @@ Each withdrawal request is assigned a unique nonce:
 | `can_exec_emergency()` | Anyone | Returns whether withdrawal can be executed now |
 | `emg_time_until_unlock()` | Anyone | Returns seconds until timelock elapses |
 | `emg_time_until_expire()` | Anyone | Returns seconds until expiration |
-| `repair_held_escrow_reserve(admin, currency, offset, limit)` | Admin | Repairs one token's missing held escrow reserve entries from indexed invoices in pages capped at 100 |
+| `repair_held_escrow_reserve(admin, currency, offset, limit)` | Admin | Recomputes one token's held escrow reserve from indexed invoices in sequential pages capped at 100 |
 
 ## Security
 
@@ -120,7 +131,7 @@ Each withdrawal request is assigned a unique nonce:
 - **Timelock**: 24 hours (`DEFAULT_EMERGENCY_TIMELOCK_SECS`). Execute before unlock time returns `EmergencyWithdrawTimelockNotElapsed`.
 - **Expiration**: 7 days after unlock (`DEFAULT_EMERGENCY_EXPIRATION_SECS`). Execute after expiration returns `EmergencyWithdrawExpired`.
 - **Cancellation**: Permanent invalidation of withdrawal; cannot be undone. Cancelled withdrawals fail with `EmergencyWithdrawCancelled`.
-- **Escrow reserve**: Same-token `Held` escrow amounts are excluded from the withdrawable balance.
+- **Escrow reserve**: Same-token `Held` escrow amounts are excluded from the withdrawable balance after the token reserve has been fully initialized by repair. Incomplete reserve state blocks emergency execution.
 - **Address validation**: Prevents using the contract address as token or target.
 - **No optional second admin/multisig** in the current implementation; governance can require a second signer at the transaction level (e.g. multisig account).
 
@@ -135,7 +146,7 @@ Each withdrawal request is assigned a unique nonce:
 | `EmergencyWithdrawExpired` | 2103 | execute called at or after expires_at |
 | `EmergencyWithdrawCancelled` | 2104 | execute/cancel called after cancellation |
 | `EmergencyWithdrawAlreadyExists` | 2105 | Not currently used (only one pending at a time) |
-| `EmergencyWithdrawInsufficientBalance` | 2106 | Requested amount exceeds contract balance after same-token held escrow reserve |
+| `EmergencyWithdrawInsufficientBalance` | 2106 | Requested amount exceeds contract balance after same-token held escrow reserve, or reserve repair is incomplete |
 
 ## Events
 

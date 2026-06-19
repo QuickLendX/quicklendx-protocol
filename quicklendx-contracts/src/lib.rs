@@ -3340,9 +3340,13 @@ impl QuickLendXContract {
     /// Repair missing held escrow reserve entries for one token from indexed invoice records.
     ///
     /// This recovery path is paginated so normal escrow operations and emergency
-    /// execution never need to scan all invoices. Start with `offset = 0`, then
-    /// pass each returned `next_offset` until the final page returns fewer than
-    /// `limit` scanned records or repeats the last offset.
+    /// execution never need to scan all invoices. Emergency execution for the
+    /// token remains closed until a full sequence completes. Start with
+    /// `offset = 0`, then pass each returned `next_offset` until the final page
+    /// returns fewer than `limit` scanned records or repeats the last offset.
+    /// Starting again at `offset = 0` recomputes the reserve from scratch.
+    /// During a multi-page repair, escrow create/release/refund for this
+    /// currency rejects with `InvalidStatus` until the final page completes.
     pub fn repair_held_escrow_reserve(
         env: Env,
         admin: Address,

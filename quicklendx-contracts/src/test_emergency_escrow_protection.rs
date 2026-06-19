@@ -64,11 +64,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     (env, client, contract_id, admin)
 }
 
-fn verified_business(
-    env: &Env,
-    client: &QuickLendXContractClient<'_>,
-    admin: &Address,
-) -> Address {
+fn verified_business(env: &Env, client: &QuickLendXContractClient<'_>, admin: &Address) -> Address {
     let business = Address::generate(env);
     client.submit_kyc_application(&business, &String::from_str(env, "Business KYC"));
     client.verify_business(admin, &business);
@@ -148,8 +144,7 @@ fn fund_invoice(
     amount: i128,
     description: &str,
 ) -> FundedEscrow {
-    let invoice_id =
-        upload_verified_invoice(env, client, business, currency, amount, description);
+    let invoice_id = upload_verified_invoice(env, client, business, currency, amount, description);
     let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount + 100));
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
@@ -167,6 +162,19 @@ fn fund_invoice(
         investor: investor.clone(),
         currency: currency.clone(),
     }
+}
+
+fn repair_reserve(
+    client: &QuickLendXContractClient<'_>,
+    admin: &Address,
+    currency: &Address,
+    expected_scanned: u32,
+    expected_reindexed: u32,
+) {
+    let report = client.repair_held_escrow_reserve(admin, currency, &0u32, &100u32);
+    assert_eq!(report.scanned, expected_scanned);
+    assert_eq!(report.reindexed, expected_reindexed);
+    assert_eq!(report.next_offset, expected_scanned);
 }
 
 fn build_fixture(same_token_surplus: i128) -> Fixture {
@@ -188,6 +196,7 @@ fn build_fixture(same_token_surplus: i128) -> Fixture {
         ESCROW_AMOUNT,
         "Emergency escrow protection invoice",
     );
+    repair_reserve(&client, &admin, &currency, 1, 1);
 
     Fixture {
         env,
@@ -216,20 +225,43 @@ fn set_invoice_status_for_test(
     });
 }
 
+fn remove_reserve_total_for_test(env: &Env, contract_id: &Address, currency: &Address) {
+    env.as_contract(contract_id, || {
+        env.storage()
+            .persistent()
+            .remove(&(symbol_short!("esc_res"), currency.clone()));
+    });
+}
+
+fn write_legacy_reserve_amount_for_test(
+    env: &Env,
+    contract_id: &Address,
+    currency: &Address,
+    amount: i128,
+) {
+    env.as_contract(contract_id, || {
+        env.storage()
+            .persistent()
+            .set(&(symbol_short!("esc_res"), currency.clone()), &amount);
+    });
+}
+
+fn remove_reserve_marker_for_test(env: &Env, contract_id: &Address, escrow_id: &BytesN<32>) {
+    env.as_contract(contract_id, || {
+        env.storage()
+            .persistent()
+            .remove(&(symbol_short!("esc_acc"), escrow_id.clone()));
+    });
+}
+
 fn remove_reserve_sidecar_for_test(
     env: &Env,
     contract_id: &Address,
     currency: &Address,
     escrow_id: &BytesN<32>,
 ) {
-    env.as_contract(contract_id, || {
-        env.storage()
-            .persistent()
-            .remove(&(symbol_short!("esc_res"), currency.clone()));
-        env.storage()
-            .persistent()
-            .remove(&(symbol_short!("esc_acc"), escrow_id.clone()));
-    });
+    remove_reserve_total_for_test(env, contract_id, currency);
+    remove_reserve_marker_for_test(env, contract_id, escrow_id);
 }
 
 #[test]
@@ -248,8 +280,13 @@ fn same_token_emergency_withdraw_rejects_live_escrow_balance() {
     let pending = fixture.client.get_pending_emergency_withdraw().unwrap();
     advance_to_unlock(&fixture.env, &pending);
 
-    let result = fixture.client.try_execute_emergency_withdraw(&fixture.admin);
-    assert_contract_error!(result, QuickLendXError::EmergencyWithdrawInsufficientBalance);
+    let result = fixture
+        .client
+        .try_execute_emergency_withdraw(&fixture.admin);
+    assert_contract_error!(
+        result,
+        QuickLendXError::EmergencyWithdrawInsufficientBalance
+    );
 
     assert_eq!(token_client.balance(&target), 0);
     assert_eq!(
@@ -298,8 +335,13 @@ fn emergency_withdraw_rejects_when_balance_is_below_held_reserve() {
     let pending = fixture.client.get_pending_emergency_withdraw().unwrap();
     advance_to_unlock(&fixture.env, &pending);
 
-    let result = fixture.client.try_execute_emergency_withdraw(&fixture.admin);
-    assert_contract_error!(result, QuickLendXError::EmergencyWithdrawInsufficientBalance);
+    let result = fixture
+        .client
+        .try_execute_emergency_withdraw(&fixture.admin);
+    assert_contract_error!(
+        result,
+        QuickLendXError::EmergencyWithdrawInsufficientBalance
+    );
 
     assert_eq!(token_client.balance(&target), 0);
     assert_eq!(
@@ -331,32 +373,85 @@ fn missing_reserve_sidecar_is_repaired_by_paginated_admin_repair() {
         &escrow.escrow_id,
     );
 
-    let report = fixture.client.repair_held_escrow_reserve(
-        &fixture.admin,
-        &fixture.escrow.currency,
-        &0u32,
-        &100u32,
-    );
-    assert_eq!(report.scanned, 1);
-    assert_eq!(report.reindexed, 1);
-    assert_eq!(report.next_offset, 1);
-
     fixture.client.initiate_emergency_withdraw(
         &fixture.admin,
         &fixture.escrow.currency,
-        &(SAME_TOKEN_SURPLUS + 1),
+        &SAME_TOKEN_SURPLUS,
         &target,
     );
     let pending = fixture.client.get_pending_emergency_withdraw().unwrap();
     advance_to_unlock(&fixture.env, &pending);
 
-    let result = fixture.client.try_execute_emergency_withdraw(&fixture.admin);
-    assert_contract_error!(result, QuickLendXError::EmergencyWithdrawInsufficientBalance);
+    let before_repair = fixture
+        .client
+        .try_execute_emergency_withdraw(&fixture.admin);
+    assert_contract_error!(
+        before_repair,
+        QuickLendXError::EmergencyWithdrawInsufficientBalance
+    );
     assert!(!fixture.client.can_exec_emergency());
     assert_eq!(token_client.balance(&target), 0);
     assert_eq!(
         token_client.balance(&fixture.contract_id),
         ESCROW_AMOUNT + SAME_TOKEN_SURPLUS
+    );
+
+    repair_reserve(
+        &fixture.client,
+        &fixture.admin,
+        &fixture.escrow.currency,
+        1,
+        1,
+    );
+
+    assert!(fixture.client.can_exec_emergency());
+    fixture.client.execute_emergency_withdraw(&fixture.admin);
+    assert_eq!(token_client.balance(&target), SAME_TOKEN_SURPLUS);
+    assert_eq!(token_client.balance(&fixture.contract_id), ESCROW_AMOUNT);
+
+    fixture.client.initiate_emergency_withdraw(
+        &fixture.admin,
+        &fixture.escrow.currency,
+        &1,
+        &target,
+    );
+    let pending = fixture.client.get_pending_emergency_withdraw().unwrap();
+    advance_to_unlock(&fixture.env, &pending);
+    let no_surplus_left = fixture
+        .client
+        .try_execute_emergency_withdraw(&fixture.admin);
+    assert_contract_error!(
+        no_surplus_left,
+        QuickLendXError::EmergencyWithdrawInsufficientBalance
+    );
+
+    let investor_before = token_client.balance(&fixture.escrow.investor);
+    fixture
+        .client
+        .refund_escrow_funds(&fixture.escrow.invoice_id, &fixture.escrow.business);
+    assert_eq!(
+        token_client.balance(&fixture.escrow.investor),
+        investor_before + ESCROW_AMOUNT
+    );
+    assert_eq!(token_client.balance(&fixture.contract_id), 0);
+}
+
+#[test]
+fn reserve_repair_recomputes_exact_total_when_marker_is_missing() {
+    let fixture = build_fixture(SAME_TOKEN_SURPLUS);
+    let token_client = token::Client::new(&fixture.env, &fixture.escrow.currency);
+    let target = Address::generate(&fixture.env);
+    let escrow = fixture
+        .client
+        .get_escrow_details(&fixture.escrow.invoice_id);
+
+    remove_reserve_marker_for_test(&fixture.env, &fixture.contract_id, &escrow.escrow_id);
+    repair_reserve(
+        &fixture.client,
+        &fixture.admin,
+        &fixture.escrow.currency,
+        1,
+        1,
     );
 
     fixture.client.initiate_emergency_withdraw(
@@ -371,16 +466,104 @@ fn missing_reserve_sidecar_is_repaired_by_paginated_admin_repair() {
 
     assert_eq!(token_client.balance(&target), SAME_TOKEN_SURPLUS);
     assert_eq!(token_client.balance(&fixture.contract_id), ESCROW_AMOUNT);
+}
 
-    let investor_before = token_client.balance(&fixture.escrow.investor);
-    fixture
-        .client
-        .refund_escrow_funds(&fixture.escrow.invoice_id, &fixture.escrow.business);
-    assert_eq!(
-        token_client.balance(&fixture.escrow.investor),
-        investor_before + ESCROW_AMOUNT
+#[test]
+fn reserve_repair_handles_missing_total_with_existing_marker() {
+    let fixture = build_fixture(SAME_TOKEN_SURPLUS);
+    let token_client = token::Client::new(&fixture.env, &fixture.escrow.currency);
+    let target = Address::generate(&fixture.env);
+
+    remove_reserve_total_for_test(&fixture.env, &fixture.contract_id, &fixture.escrow.currency);
+
+    fixture.client.initiate_emergency_withdraw(
+        &fixture.admin,
+        &fixture.escrow.currency,
+        &(SAME_TOKEN_SURPLUS + 1),
+        &target,
     );
-    assert_eq!(token_client.balance(&fixture.contract_id), 0);
+    let pending = fixture.client.get_pending_emergency_withdraw().unwrap();
+    advance_to_unlock(&fixture.env, &pending);
+
+    let before_repair = fixture
+        .client
+        .try_execute_emergency_withdraw(&fixture.admin);
+    assert_contract_error!(
+        before_repair,
+        QuickLendXError::EmergencyWithdrawInsufficientBalance
+    );
+
+    repair_reserve(
+        &fixture.client,
+        &fixture.admin,
+        &fixture.escrow.currency,
+        1,
+        1,
+    );
+
+    let after_repair = fixture
+        .client
+        .try_execute_emergency_withdraw(&fixture.admin);
+    assert_contract_error!(
+        after_repair,
+        QuickLendXError::EmergencyWithdrawInsufficientBalance
+    );
+
+    fixture.client.initiate_emergency_withdraw(
+        &fixture.admin,
+        &fixture.escrow.currency,
+        &SAME_TOKEN_SURPLUS,
+        &target,
+    );
+    let pending = fixture.client.get_pending_emergency_withdraw().unwrap();
+    advance_to_unlock(&fixture.env, &pending);
+    fixture.client.execute_emergency_withdraw(&fixture.admin);
+
+    assert_eq!(token_client.balance(&target), SAME_TOKEN_SURPLUS);
+    assert_eq!(token_client.balance(&fixture.contract_id), ESCROW_AMOUNT);
+}
+
+#[test]
+fn legacy_amount_only_reserve_is_incomplete_until_repaired() {
+    let fixture = build_fixture(SAME_TOKEN_SURPLUS);
+    let token_client = token::Client::new(&fixture.env, &fixture.escrow.currency);
+    let target = Address::generate(&fixture.env);
+
+    write_legacy_reserve_amount_for_test(
+        &fixture.env,
+        &fixture.contract_id,
+        &fixture.escrow.currency,
+        ESCROW_AMOUNT,
+    );
+
+    fixture.client.initiate_emergency_withdraw(
+        &fixture.admin,
+        &fixture.escrow.currency,
+        &SAME_TOKEN_SURPLUS,
+        &target,
+    );
+    let pending = fixture.client.get_pending_emergency_withdraw().unwrap();
+    advance_to_unlock(&fixture.env, &pending);
+
+    let before_repair = fixture
+        .client
+        .try_execute_emergency_withdraw(&fixture.admin);
+    assert_contract_error!(
+        before_repair,
+        QuickLendXError::EmergencyWithdrawInsufficientBalance
+    );
+
+    repair_reserve(
+        &fixture.client,
+        &fixture.admin,
+        &fixture.escrow.currency,
+        1,
+        1,
+    );
+
+    fixture.client.execute_emergency_withdraw(&fixture.admin);
+    assert_eq!(token_client.balance(&target), SAME_TOKEN_SURPLUS);
+    assert_eq!(token_client.balance(&fixture.contract_id), ESCROW_AMOUNT);
 }
 
 #[test]
@@ -453,15 +636,12 @@ fn same_token_emergency_withdraw_allows_only_non_escrow_surplus() {
 #[test]
 fn emergency_withdraw_of_different_token_ignores_held_escrow_currency() {
     let fixture = build_fixture(0);
-    let other_token = setup_token(
-        &fixture.env,
-        &[],
-        &fixture.contract_id,
-        OTHER_TOKEN_SURPLUS,
-    );
+    let other_token = setup_token(&fixture.env, &[], &fixture.contract_id, OTHER_TOKEN_SURPLUS);
     let escrow_token_client = token::Client::new(&fixture.env, &fixture.escrow.currency);
     let other_token_client = token::Client::new(&fixture.env, &other_token);
     let target = Address::generate(&fixture.env);
+
+    repair_reserve(&fixture.client, &fixture.admin, &other_token, 1, 0);
 
     fixture.client.initiate_emergency_withdraw(
         &fixture.admin,
@@ -476,7 +656,10 @@ fn emergency_withdraw_of_different_token_ignores_held_escrow_currency() {
 
     assert_eq!(other_token_client.balance(&target), OTHER_TOKEN_SURPLUS);
     assert_eq!(other_token_client.balance(&fixture.contract_id), 0);
-    assert_eq!(escrow_token_client.balance(&fixture.contract_id), ESCROW_AMOUNT);
+    assert_eq!(
+        escrow_token_client.balance(&fixture.contract_id),
+        ESCROW_AMOUNT
+    );
     assert_eq!(
         fixture
             .client
@@ -516,20 +699,19 @@ fn multiple_same_token_held_escrows_are_reserved_together() {
         SECOND_ESCROW_AMOUNT,
         "Second live escrow",
     );
+    repair_reserve(&client, &admin, &currency, 2, 2);
     let token_client = token::Client::new(&env, &currency);
     let target = Address::generate(&env);
 
-    client.initiate_emergency_withdraw(
-        &admin,
-        &currency,
-        &(SAME_TOKEN_SURPLUS + 1),
-        &target,
-    );
+    client.initiate_emergency_withdraw(&admin, &currency, &(SAME_TOKEN_SURPLUS + 1), &target);
     let pending = client.get_pending_emergency_withdraw().unwrap();
     advance_to_unlock(&env, &pending);
 
     let result = client.try_execute_emergency_withdraw(&admin);
-    assert_contract_error!(result, QuickLendXError::EmergencyWithdrawInsufficientBalance);
+    assert_contract_error!(
+        result,
+        QuickLendXError::EmergencyWithdrawInsufficientBalance
+    );
 
     assert_eq!(token_client.balance(&target), 0);
     assert_eq!(
@@ -567,6 +749,102 @@ fn multiple_same_token_held_escrows_are_reserved_together() {
 }
 
 #[test]
+fn incomplete_paginated_repair_keeps_emergency_withdraw_closed() {
+    let (env, client, contract_id, admin) = setup();
+    let business = verified_business(&env, &client, &admin);
+    let investor_a = verified_investor(&env, &client, INITIAL_BALANCE);
+    let investor_b = verified_investor(&env, &client, INITIAL_BALANCE);
+    let currency = setup_token(
+        &env,
+        &[&business, &investor_a, &investor_b],
+        &contract_id,
+        SAME_TOKEN_SURPLUS,
+    );
+    let escrow_a = fund_invoice(
+        &env,
+        &client,
+        &business,
+        &investor_a,
+        &currency,
+        ESCROW_AMOUNT,
+        "First paginated repair escrow",
+    );
+    let escrow_b = fund_invoice(
+        &env,
+        &client,
+        &business,
+        &investor_b,
+        &currency,
+        SECOND_ESCROW_AMOUNT,
+        "Second paginated repair escrow",
+    );
+    let target = Address::generate(&env);
+    let token_client = token::Client::new(&env, &currency);
+
+    let out_of_order = client.try_repair_held_escrow_reserve(&admin, &currency, &1u32, &1u32);
+    assert_contract_error!(out_of_order, QuickLendXError::InvalidStatus);
+
+    let first_page = client.repair_held_escrow_reserve(&admin, &currency, &0u32, &1u32);
+    assert_eq!(first_page.scanned, 1);
+    assert_eq!(first_page.reindexed, 1);
+    assert_eq!(first_page.next_offset, 1);
+
+    client.initiate_emergency_withdraw(&admin, &currency, &SAME_TOKEN_SURPLUS, &target);
+    let pending = client.get_pending_emergency_withdraw().unwrap();
+    advance_to_unlock(&env, &pending);
+    let incomplete = client.try_execute_emergency_withdraw(&admin);
+    assert_contract_error!(
+        incomplete,
+        QuickLendXError::EmergencyWithdrawInsufficientBalance
+    );
+
+    let blocked_release = client.try_release_escrow_funds(&escrow_a.invoice_id);
+    assert_contract_error!(blocked_release, QuickLendXError::InvalidStatus);
+
+    let blocked_refund = client.try_refund_escrow_funds(&escrow_b.invoice_id, &admin);
+    assert_contract_error!(blocked_refund, QuickLendXError::InvalidStatus);
+
+    let blocked_amount = 1i128;
+    let blocked_invoice = upload_verified_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        blocked_amount,
+        "Blocked during active paginated repair",
+    );
+    let blocked_bid = client.place_bid(
+        &investor_b,
+        &blocked_invoice,
+        &blocked_amount,
+        &(blocked_amount + 100),
+    );
+    let blocked_create = client.try_accept_bid_and_fund(&blocked_invoice, &blocked_bid);
+    assert_contract_error!(blocked_create, QuickLendXError::InvalidStatus);
+    assert_eq!(
+        token_client.balance(&contract_id),
+        ESCROW_AMOUNT + SECOND_ESCROW_AMOUNT + SAME_TOKEN_SURPLUS
+    );
+
+    let second_page = client.repair_held_escrow_reserve(&admin, &currency, &1u32, &1u32);
+    assert_eq!(second_page.scanned, 1);
+    assert_eq!(second_page.reindexed, 1);
+    assert_eq!(second_page.next_offset, 2);
+
+    let still_incomplete = client.try_execute_emergency_withdraw(&admin);
+    assert_contract_error!(
+        still_incomplete,
+        QuickLendXError::EmergencyWithdrawInsufficientBalance
+    );
+
+    let final_page = client.repair_held_escrow_reserve(&admin, &currency, &2u32, &1u32);
+    assert_eq!(final_page.scanned, 1);
+    assert_eq!(final_page.reindexed, 0);
+    assert_eq!(final_page.next_offset, 3);
+    assert!(client.can_exec_emergency());
+}
+
+#[test]
 fn held_escrow_remains_reserved_after_invoice_leaves_funded_status() {
     let fixture = build_fixture(0);
     let token_client = token::Client::new(&fixture.env, &fixture.escrow.currency);
@@ -580,7 +858,10 @@ fn held_escrow_remains_reserved_after_invoice_leaves_funded_status() {
         InvoiceStatus::Defaulted,
     );
     assert_eq!(
-        fixture.client.get_invoice(&fixture.escrow.invoice_id).status,
+        fixture
+            .client
+            .get_invoice(&fixture.escrow.invoice_id)
+            .status,
         InvoiceStatus::Defaulted
     );
 
@@ -593,8 +874,13 @@ fn held_escrow_remains_reserved_after_invoice_leaves_funded_status() {
     let pending = fixture.client.get_pending_emergency_withdraw().unwrap();
     advance_to_unlock(&fixture.env, &pending);
 
-    let result = fixture.client.try_execute_emergency_withdraw(&fixture.admin);
-    assert_contract_error!(result, QuickLendXError::EmergencyWithdrawInsufficientBalance);
+    let result = fixture
+        .client
+        .try_execute_emergency_withdraw(&fixture.admin);
+    assert_contract_error!(
+        result,
+        QuickLendXError::EmergencyWithdrawInsufficientBalance
+    );
 
     assert_eq!(token_client.balance(&target), 0);
     assert_eq!(token_client.balance(&fixture.contract_id), ESCROW_AMOUNT);
@@ -621,14 +907,18 @@ fn timelock_and_expiration_still_gate_surplus_with_live_escrow() {
     let pending = fixture.client.get_pending_emergency_withdraw().unwrap();
 
     fixture.env.ledger().set_timestamp(pending.unlock_at - 1);
-    let before_unlock = fixture.client.try_execute_emergency_withdraw(&fixture.admin);
+    let before_unlock = fixture
+        .client
+        .try_execute_emergency_withdraw(&fixture.admin);
     assert_contract_error!(
         before_unlock,
         QuickLendXError::EmergencyWithdrawTimelockNotElapsed
     );
 
     fixture.env.ledger().set_timestamp(pending.expires_at);
-    let at_expiration = fixture.client.try_execute_emergency_withdraw(&fixture.admin);
+    let at_expiration = fixture
+        .client
+        .try_execute_emergency_withdraw(&fixture.admin);
     assert_contract_error!(at_expiration, QuickLendXError::EmergencyWithdrawExpired);
 
     assert!(fixture.client.get_pending_emergency_withdraw().is_some());
