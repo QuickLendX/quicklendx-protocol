@@ -681,7 +681,6 @@ impl QuickLendXContract {
 
         // Enforcement: reject invoices whose currency is not whitelisted (when whitelist is non-empty).
         currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
-        EscrowStorage::require_no_active_reserve_repair(&env, &currency)?;
 
         // Check if business is verified (temporarily disabled for debugging)
         // if !verification::BusinessVerificationStorage::is_business_verified(&env, &business) {
@@ -739,7 +738,6 @@ impl QuickLendXContract {
         verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
         // Enforcement: reject invoices whose currency is not whitelisted (when whitelist is non-empty).
         currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
-        EscrowStorage::require_no_active_reserve_repair(&env, &currency)?;
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
@@ -3344,10 +3342,11 @@ impl QuickLendXContract {
     /// This recovery path is paginated so normal escrow operations and emergency
     /// execution never need to scan all invoices. Emergency execution for the
     /// token remains closed until a full sequence completes. Start with
-    /// `offset = 0`, then pass each returned `next_offset` until the final page
-    /// returns fewer than `limit` scanned records or repeats the last offset.
-    /// Starting again at `offset = 0` recomputes the reserve from scratch.
-    /// During a multi-page repair, same-token invoice creation and escrow
+    /// `offset = 0`. Continue with each returned `next_offset` while
+    /// `next_offset != 0`. A returned `next_offset` of 0 means the reserve is
+    /// complete and emergency withdrawal for that token may pass the
+    /// reserve-completeness gate. Starting again at `offset = 0` recomputes the
+    /// reserve from scratch. During a multi-page repair, same-token escrow
     /// create/release/refund reject with `InvalidStatus` until the final page
     /// completes.
     pub fn repair_held_escrow_reserve(

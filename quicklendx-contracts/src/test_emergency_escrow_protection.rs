@@ -174,7 +174,7 @@ fn repair_reserve(
     let report = client.repair_held_escrow_reserve(admin, currency, &0u32, &100u32);
     assert_eq!(report.scanned, expected_scanned);
     assert_eq!(report.reindexed, expected_reindexed);
-    assert_eq!(report.next_offset, expected_scanned);
+    assert_eq!(report.next_offset, 0);
 }
 
 fn build_fixture(same_token_surplus: i128) -> Fixture {
@@ -819,18 +819,6 @@ fn incomplete_paginated_repair_keeps_emergency_withdraw_closed() {
     let blocked_refund = client.try_refund_escrow_funds(&escrow_b.invoice_id, &admin);
     assert_contract_error!(blocked_refund, QuickLendXError::InvalidStatus);
 
-    let blocked_upload_due_date = env.ledger().timestamp() + 86_400;
-    let blocked_upload = client.try_upload_invoice(
-        &business,
-        &blocked_amount,
-        &currency,
-        &blocked_upload_due_date,
-        &String::from_str(&env, "Upload blocked during active paginated repair"),
-        &InvoiceCategory::Technology,
-        &Vec::new(&env),
-    );
-    assert_contract_error!(blocked_upload, QuickLendXError::InvalidStatus);
-
     let blocked_create = client.try_accept_bid_and_fund(&blocked_invoice, &blocked_bid);
     assert_contract_error!(blocked_create, QuickLendXError::InvalidStatus);
     assert_eq!(
@@ -852,8 +840,154 @@ fn incomplete_paginated_repair_keeps_emergency_withdraw_closed() {
     let final_page = client.repair_held_escrow_reserve(&admin, &currency, &2u32, &1u32);
     assert_eq!(final_page.scanned, 1);
     assert_eq!(final_page.reindexed, 1);
-    assert_eq!(final_page.next_offset, 3);
+    assert_eq!(final_page.next_offset, 0);
     assert!(client.can_exec_emergency());
+}
+
+#[test]
+fn repair_limit_zero_is_rejected() {
+    let fixture = build_fixture(0);
+    let result = fixture.client.try_repair_held_escrow_reserve(
+        &fixture.admin,
+        &fixture.escrow.currency,
+        &0u32,
+        &0u32,
+    );
+
+    assert_contract_error!(result, QuickLendXError::InvalidAmount);
+}
+
+#[test]
+fn repair_uses_snapshot_when_invoice_status_order_changes_between_pages() {
+    let (env, client, contract_id, admin) = setup();
+    let business = verified_business(&env, &client, &admin);
+    let investor_a = verified_investor(&env, &client, INITIAL_BALANCE);
+    let investor_b = verified_investor(&env, &client, INITIAL_BALANCE);
+    let currency = setup_token(
+        &env,
+        &[&business, &investor_a, &investor_b],
+        &contract_id,
+        SAME_TOKEN_SURPLUS,
+    );
+    let unfunded_invoice = upload_verified_invoice(
+        &env,
+        &client,
+        &business,
+        &currency,
+        ESCROW_AMOUNT,
+        "Verified invoice ahead of funded escrows",
+    );
+    let escrow_a = fund_invoice(
+        &env,
+        &client,
+        &business,
+        &investor_a,
+        &currency,
+        ESCROW_AMOUNT,
+        "Snapshot repair first held escrow",
+    );
+    let escrow_b = fund_invoice(
+        &env,
+        &client,
+        &business,
+        &investor_b,
+        &currency,
+        SECOND_ESCROW_AMOUNT,
+        "Snapshot repair second held escrow",
+    );
+    let escrow_a_record = client.get_escrow_details(&escrow_a.invoice_id);
+    let escrow_b_record = client.get_escrow_details(&escrow_b.invoice_id);
+    remove_reserve_sidecar_for_test(&env, &contract_id, &currency, &escrow_a_record.escrow_id);
+    remove_reserve_sidecar_for_test(&env, &contract_id, &currency, &escrow_b_record.escrow_id);
+
+    let first_page = client.repair_held_escrow_reserve(&admin, &currency, &0u32, &1u32);
+    assert_eq!(first_page.scanned, 1);
+    assert_eq!(first_page.reindexed, 0);
+    assert_eq!(first_page.next_offset, 1);
+
+    client.cancel_invoice(&unfunded_invoice);
+    assert_eq!(
+        client.get_invoice(&unfunded_invoice).status,
+        InvoiceStatus::Cancelled
+    );
+
+    let second_page = client.repair_held_escrow_reserve(&admin, &currency, &1u32, &1u32);
+    assert_eq!(second_page.scanned, 1);
+    assert_eq!(second_page.reindexed, 1);
+    assert_eq!(second_page.next_offset, 2);
+
+    let final_page = client.repair_held_escrow_reserve(&admin, &currency, &2u32, &1u32);
+    assert_eq!(final_page.scanned, 1);
+    assert_eq!(final_page.reindexed, 1);
+    assert_eq!(final_page.next_offset, 0);
+
+    let token_client = token::Client::new(&env, &currency);
+    let target = Address::generate(&env);
+    client.initiate_emergency_withdraw(&admin, &currency, &(SAME_TOKEN_SURPLUS + 1), &target);
+    let pending = client.get_pending_emergency_withdraw().unwrap();
+    advance_to_unlock(&env, &pending);
+
+    let result = client.try_execute_emergency_withdraw(&admin);
+    assert_contract_error!(
+        result,
+        QuickLendXError::EmergencyWithdrawInsufficientBalance
+    );
+    assert_eq!(token_client.balance(&target), 0);
+    assert_eq!(
+        token_client.balance(&contract_id),
+        ESCROW_AMOUNT + SECOND_ESCROW_AMOUNT + SAME_TOKEN_SURPLUS
+    );
+}
+
+#[test]
+fn repair_next_offset_zero_means_complete() {
+    let fixture = build_fixture(0);
+    let report = fixture.client.repair_held_escrow_reserve(
+        &fixture.admin,
+        &fixture.escrow.currency,
+        &0u32,
+        &1u32,
+    );
+
+    assert_eq!(report.scanned, 1);
+    assert_eq!(report.reindexed, 1);
+    assert_eq!(report.next_offset, 0);
+}
+
+#[test]
+fn release_still_works_after_same_token_surplus_withdrawal() {
+    let fixture = build_fixture(SAME_TOKEN_SURPLUS);
+    let token_client = token::Client::new(&fixture.env, &fixture.escrow.currency);
+    let target = Address::generate(&fixture.env);
+
+    fixture.client.initiate_emergency_withdraw(
+        &fixture.admin,
+        &fixture.escrow.currency,
+        &SAME_TOKEN_SURPLUS,
+        &target,
+    );
+    let pending = fixture.client.get_pending_emergency_withdraw().unwrap();
+    advance_to_unlock(&fixture.env, &pending);
+    fixture.client.execute_emergency_withdraw(&fixture.admin);
+
+    let business_before = token_client.balance(&fixture.escrow.business);
+    fixture
+        .client
+        .release_escrow_funds(&fixture.escrow.invoice_id);
+
+    assert_eq!(token_client.balance(&target), SAME_TOKEN_SURPLUS);
+    assert_eq!(
+        token_client.balance(&fixture.escrow.business),
+        business_before + ESCROW_AMOUNT
+    );
+    assert_eq!(token_client.balance(&fixture.contract_id), 0);
+    assert_eq!(
+        fixture
+            .client
+            .get_escrow_details(&fixture.escrow.invoice_id)
+            .status,
+        EscrowStatus::Released
+    );
 }
 
 #[test]

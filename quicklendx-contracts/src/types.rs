@@ -232,10 +232,8 @@ pub struct SearchResult {
 
 /// Report returned by paginated admin rebuild helpers.
 ///
-/// The rebuild is paginated and resumable: pass `next_offset` as the `offset`
-/// argument of the next call until a page scans fewer records than requested or
-/// `next_offset` no longer advances. Each helper documents what it counts as
-/// `reindexed`.
+/// The rebuild is paginated and resumable. Each helper documents its completion
+/// signal and what it counts as `reindexed`.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RebuildReport {

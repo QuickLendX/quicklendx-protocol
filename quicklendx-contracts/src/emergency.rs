@@ -89,6 +89,9 @@ impl EmergencyWithdraw {
         token: &Address,
         amount: i128,
     ) -> Result<(), QuickLendXError> {
+        // Emergency withdrawal protects live Held escrows. For token T, execution
+        // may withdraw only current contract balance minus the completed Held
+        // escrow reserve for T; missing or incomplete reserve state fails closed.
         let contract = env.current_contract_address();
         let token_client = token::Client::new(env, token);
         if !EscrowStorage::is_held_reserve_complete(env, token) {

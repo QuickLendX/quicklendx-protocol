@@ -7,7 +7,7 @@ use crate::events::emit_escrow_created;
 use crate::storage::{extend_persistent_ttl, InvoiceStorage};
 use crate::types::RebuildReport;
 use soroban_sdk::token;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, TryFromVal, Val};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, TryFromVal, Val, Vec};
 
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
@@ -45,6 +45,7 @@ pub struct EscrowStorage;
 
 const HELD_ESCROW_RESERVE_KEY: Symbol = symbol_short!("esc_res");
 const ESCROW_RESERVE_MARKER_KEY: Symbol = symbol_short!("esc_acc");
+const HELD_RESERVE_REPAIR_IDS_KEY: Symbol = symbol_short!("esc_rids");
 
 impl EscrowStorage {
     fn held_reserve_key(currency: &Address) -> (Symbol, Address) {
@@ -53,6 +54,10 @@ impl EscrowStorage {
 
     fn reserve_marker_key(escrow_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
         (ESCROW_RESERVE_MARKER_KEY.clone(), escrow_id.clone())
+    }
+
+    fn held_reserve_repair_ids_key(currency: &Address) -> (Symbol, Address) {
+        (HELD_RESERVE_REPAIR_IDS_KEY.clone(), currency.clone())
     }
 
     fn empty_reserve() -> HeldEscrowReserve {
@@ -118,6 +123,26 @@ impl EscrowStorage {
         extend_persistent_ttl(env, &key);
     }
 
+    fn set_repair_snapshot(env: &Env, currency: &Address, ids: &Vec<BytesN<32>>) {
+        let key = Self::held_reserve_repair_ids_key(currency);
+        env.storage().persistent().set(&key, ids);
+        extend_persistent_ttl(env, &key);
+    }
+
+    fn get_repair_snapshot(env: &Env, currency: &Address) -> Option<Vec<BytesN<32>>> {
+        let key = Self::held_reserve_repair_ids_key(currency);
+        let ids: Option<Vec<BytesN<32>>> = env.storage().persistent().get(&key);
+        if ids.is_some() {
+            extend_persistent_ttl(env, &key);
+        }
+        ids
+    }
+
+    fn clear_repair_snapshot(env: &Env, currency: &Address) {
+        let key = Self::held_reserve_repair_ids_key(currency);
+        env.storage().persistent().remove(&key);
+    }
+
     fn held_reserve_after_increase(
         env: &Env,
         currency: &Address,
@@ -129,6 +154,8 @@ impl EscrowStorage {
 
         let mut reserve =
             Self::get_held_reserve_record(env, currency).unwrap_or_else(Self::empty_reserve);
+        // Preserve `complete` as-is. Missing/legacy reserve state remains incomplete
+        // and therefore emergency withdrawal stays fail-closed until repair completes.
         reserve.amount = reserve
             .amount
             .checked_add(amount)
@@ -148,6 +175,8 @@ impl EscrowStorage {
         let mut reserve =
             Self::get_held_reserve_record(env, currency).unwrap_or_else(Self::empty_reserve);
         if reserve.amount < amount {
+            // If the reserve undercounts the escrow amount, dirty the reserve instead of
+            // blocking user release/refund. Emergency withdrawal remains fail-closed.
             reserve.amount = 0;
             reserve.complete = false;
             reserve.repair_next_offset = 0;
@@ -185,22 +214,20 @@ impl EscrowStorage {
         limit: u32,
     ) -> Result<RebuildReport, QuickLendXError> {
         const MAX_REBUILD_PAGE: u32 = 100;
-        let capped = if limit > MAX_REBUILD_PAGE {
-            MAX_REBUILD_PAGE
-        } else {
-            limit
-        };
 
-        let all_ids = InvoiceStorage::get_all_invoice_ids(env);
-        let total = all_ids.len() as u32;
-
-        if capped == 0 {
-            return Ok(RebuildReport {
-                scanned: 0,
-                reindexed: 0,
-                next_offset: offset.min(total),
-            });
+        if limit == 0 {
+            return Err(QuickLendXError::InvalidAmount);
         }
+
+        let capped = limit.min(MAX_REBUILD_PAGE);
+        let ids = if offset == 0 {
+            let ids = InvoiceStorage::get_all_invoice_ids(env);
+            Self::set_repair_snapshot(env, currency, &ids);
+            ids
+        } else {
+            Self::get_repair_snapshot(env, currency).ok_or(QuickLendXError::InvalidStatus)?
+        };
+        let total = ids.len() as u32;
 
         if offset > total {
             return Err(QuickLendXError::InvalidStatus);
@@ -227,21 +254,23 @@ impl EscrowStorage {
         let mut i = start;
 
         while i < end {
-            if let Some(invoice_id) = all_ids.get(i) {
+            if let Some(invoice_id) = ids.get(i) {
                 if let Some(escrow) = Self::get_escrow_by_invoice(env, &invoice_id) {
-                    if escrow.status == EscrowStatus::Held && &escrow.currency == currency {
-                        if escrow.amount <= 0 {
-                            return Err(QuickLendXError::InvalidAmount);
-                        }
+                    if &escrow.currency == currency {
+                        if escrow.status == EscrowStatus::Held {
+                            if escrow.amount <= 0 {
+                                return Err(QuickLendXError::InvalidAmount);
+                            }
 
-                        reserve.amount = reserve
-                            .amount
-                            .checked_add(escrow.amount)
-                            .ok_or(QuickLendXError::ArithmeticOverflow)?;
-                        Self::mark_reserve_accounted(env, &escrow.escrow_id);
-                        reindexed = reindexed.saturating_add(1);
-                    } else if &escrow.currency == currency {
-                        Self::clear_reserve_accounted(env, &escrow.escrow_id);
+                            reserve.amount = reserve
+                                .amount
+                                .checked_add(escrow.amount)
+                                .ok_or(QuickLendXError::ArithmeticOverflow)?;
+                            Self::mark_reserve_accounted(env, &escrow.escrow_id);
+                            reindexed = reindexed.saturating_add(1);
+                        } else {
+                            Self::clear_reserve_accounted(env, &escrow.escrow_id);
+                        }
                     }
                 }
             }
@@ -251,11 +280,14 @@ impl EscrowStorage {
         reserve.repair_next_offset = if end >= total { 0 } else { end };
         reserve.complete = end >= total;
         Self::set_held_reserve_record(env, currency, &reserve);
+        if reserve.complete {
+            Self::clear_repair_snapshot(env, currency);
+        }
 
         Ok(RebuildReport {
             scanned: end.saturating_sub(start),
             reindexed,
-            next_offset: end,
+            next_offset: reserve.repair_next_offset,
         })
     }
 

@@ -12,11 +12,14 @@ It must **not** be used to bypass normal escrow, settlement, or refund flows.
 
 ## Escrow Reserve Protection
 
-Emergency withdraw can recover only the same-token surplus that is not committed
-to live escrows. Escrow creation increases a persistent reserve for the escrow
-token, and escrow release or refund decreases that reserve. Execution reads this
-persisted reserve directly, so normal escrow and emergency paths do not scan all
-invoices.
+Emergency withdrawal protects live Held escrows.
+
+For the withdrawal token T, execution may withdraw only the current contract
+token balance minus the completed Held escrow reserve for T.
+
+The reserve is maintained during escrow create/release/refund. For legacy or
+missing reserve state, emergency withdrawal is fail-closed until admin repair
+completes.
 
 The reserve record is trusted only after a full token-specific repair completes.
 If the record is missing, incomplete, or was reset by migration/restore recovery,
@@ -24,11 +27,12 @@ emergency execution fails closed with `EmergencyWithdrawInsufficientBalance`.
 Older bare-amount reserve records are also treated as incomplete until repaired.
 The admin initializes or repairs the record by running
 `repair_held_escrow_reserve(admin, currency, offset, limit)` from `offset = 0`
-and then continuing with each returned `next_offset` until the final page.
+and then continuing with each returned `next_offset` while `next_offset != 0`.
+A returned `next_offset` of 0 means the reserve is complete.
 Starting again at `offset = 0` recomputes the reserve from scratch and is the
 recommended recovery if repair was interrupted or sidecar drift is suspected.
-During a multi-page repair, same-token invoice creation and escrow creation,
-release, and refund reject with `InvalidStatus` until the final page completes.
+During a multi-page repair, same-token escrow creation, release, and refund
+reject with `InvalidStatus` until the final page completes.
 
 The executable amount is:
 
@@ -41,6 +45,12 @@ not yet complete, execution fails with `EmergencyWithdrawInsufficientBalance`
 and the pending withdrawal remains queued for repair, cancellation, expiry, or
 replacement. This preserves the normal escrow release and refund paths for held
 escrows.
+
+## Operational Migration
+
+Emergency withdrawal for a token is fail-closed until that token's Held escrow
+reserve is complete. Existing escrow release/refund remains available unless
+a same-token reserve repair is actively in progress.
 
 ## Hardened Lifecycle Constraints
 
@@ -109,8 +119,8 @@ Each withdrawal request is assigned a unique nonce:
 5. **Reserve repair** (`repair_held_escrow_reserve`): Admin can recompute one
    token's held escrow reserve from indexed invoices in bounded pages. Pages
    must be run in returned-offset order. The token remains closed to emergency
-   execution, invoice creation, escrow creation, release, and refund until the
-   final page completes.
+   execution until the final page completes. Same-token escrow creation,
+   release, and refund are also blocked while a multi-page repair is active.
 
 ## Entrypoints
 
@@ -123,7 +133,7 @@ Each withdrawal request is assigned a unique nonce:
 | `can_exec_emergency()` | Anyone | Returns whether withdrawal can be executed now |
 | `emg_time_until_unlock()` | Anyone | Returns seconds until timelock elapses |
 | `emg_time_until_expire()` | Anyone | Returns seconds until expiration |
-| `repair_held_escrow_reserve(admin, currency, offset, limit)` | Admin | Recomputes one token's held escrow reserve from indexed invoices in sequential pages capped at 100 |
+| `repair_held_escrow_reserve(admin, currency, offset, limit)` | Admin | Recomputes one token's held escrow reserve from a paginated invoice-ID snapshot; continue while `next_offset != 0` |
 
 ## Security
 
