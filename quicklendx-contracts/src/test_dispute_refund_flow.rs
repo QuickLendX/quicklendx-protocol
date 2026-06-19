@@ -28,7 +28,7 @@ struct FundedDisputeFixture {
 fn setup_funded_invoice_for_dispute() -> FundedDisputeFixture {
     let env = Env::default();
     env.mock_all_auths();
-    env.ledger().set_timestamp(1_000_000);
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000_000);
 
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
