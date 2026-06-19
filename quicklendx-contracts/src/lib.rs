@@ -94,6 +94,8 @@ mod test_bid_ttl;
 mod test_cleanup_pagination;
 #[cfg(test)]
 mod test_currency;
+#[cfg(test)]
+mod test_currency_match_funding;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
 #[cfg(all(test, feature = "legacy-tests"))]
