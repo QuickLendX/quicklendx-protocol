@@ -230,20 +230,19 @@ pub struct SearchResult {
     pub created_at: u64,
 }
 
-/// Report returned by `rebuild_invoice_indexes`.
+/// Report returned by paginated admin rebuild helpers.
 ///
 /// The rebuild is paginated and resumable: pass `next_offset` as the `offset`
-/// argument of the next call until `next_offset` equals `scanned` (no more
-/// pages). Running the full sequence twice yields identical indexes —
-/// idempotency is guaranteed because every index write is a deduplicated set.
+/// argument of the next call until a page scans fewer records than requested or
+/// `next_offset` no longer advances. Each helper documents what it counts as
+/// `reindexed`.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RebuildReport {
     /// Number of invoice IDs examined in this page.
     pub scanned: u32,
-    /// Number of invoices whose index entries were written (always == scanned
-    /// for existing invoices; 0 only for an empty page).
+    /// Number of records repaired or rewritten by the rebuild helper.
     pub reindexed: u32,
-    /// Offset to pass on the next call; equals `scanned` when no more pages.
+    /// Offset to pass on the next call.
     pub next_offset: u32,
 }

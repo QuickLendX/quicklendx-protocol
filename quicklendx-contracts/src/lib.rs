@@ -3336,6 +3336,24 @@ impl QuickLendXContract {
         let report = InvoiceStorage::rebuild_indexes_page(&env, offset, limit);
         Ok(report)
     }
+
+    /// Repair missing held escrow reserve entries for one token from indexed invoice records.
+    ///
+    /// This recovery path is paginated so normal escrow operations and emergency
+    /// execution never need to scan all invoices. Start with `offset = 0`, then
+    /// pass each returned `next_offset` until the final page returns fewer than
+    /// `limit` scanned records or repeats the last offset.
+    pub fn repair_held_escrow_reserve(
+        env: Env,
+        admin: Address,
+        currency: Address,
+        offset: u32,
+        limit: u32,
+    ) -> Result<RebuildReport, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+        EscrowStorage::repair_held_reserve_page(&env, &currency, offset, limit)
+    }
 }
 
 #[cfg(all(test, feature = "legacy-tests"))]

@@ -316,7 +316,7 @@ fn emergency_withdraw_rejects_when_balance_is_below_held_reserve() {
 }
 
 #[test]
-fn missing_reserve_sidecar_is_rebuilt_before_emergency_withdraw() {
+fn missing_reserve_sidecar_is_repaired_by_paginated_admin_repair() {
     let fixture = build_fixture(SAME_TOKEN_SURPLUS);
     let token_client = token::Client::new(&fixture.env, &fixture.escrow.currency);
     let target = Address::generate(&fixture.env);
@@ -330,6 +330,16 @@ fn missing_reserve_sidecar_is_rebuilt_before_emergency_withdraw() {
         &fixture.escrow.currency,
         &escrow.escrow_id,
     );
+
+    let report = fixture.client.repair_held_escrow_reserve(
+        &fixture.admin,
+        &fixture.escrow.currency,
+        &0u32,
+        &100u32,
+    );
+    assert_eq!(report.scanned, 1);
+    assert_eq!(report.reindexed, 1);
+    assert_eq!(report.next_offset, 1);
 
     fixture.client.initiate_emergency_withdraw(
         &fixture.admin,

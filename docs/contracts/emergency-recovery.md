@@ -14,10 +14,14 @@ It must **not** be used to bypass normal escrow, settlement, or refund flows.
 
 Emergency withdraw can recover only the same-token surplus that is not committed
 to live escrows. Escrow creation increases a persistent reserve for the escrow
-token, and escrow release or refund decreases that reserve. Before execution,
-the reserve is synchronized from indexed `Held` escrow records so missing or
-expired reserve sidecars are repaired before the queued token balance is
-considered withdrawable.
+token, and escrow release or refund decreases that reserve. Execution reads this
+persisted reserve directly, so normal escrow and emergency paths do not scan all
+invoices.
+
+If missing reserve-accounting entries need repair after a migration, restore, or
+older deployment, the admin can run
+`repair_held_escrow_reserve(admin, currency, offset, limit)`
+page by page before executing an emergency withdrawal.
 
 The executable amount is:
 
@@ -94,6 +98,9 @@ Each withdrawal request is assigned a unique nonce:
    - `emg_time_until_unlock()`: Seconds until timelock elapses
    - `emg_time_until_expire()`: Seconds until expiration
 
+5. **Reserve repair** (`repair_held_escrow_reserve`): Admin can repair one
+   token's missing held escrow reserve entries from indexed invoices in bounded pages.
+
 ## Entrypoints
 
 | Function | Who | Description |
@@ -105,6 +112,7 @@ Each withdrawal request is assigned a unique nonce:
 | `can_exec_emergency()` | Anyone | Returns whether withdrawal can be executed now |
 | `emg_time_until_unlock()` | Anyone | Returns seconds until timelock elapses |
 | `emg_time_until_expire()` | Anyone | Returns seconds until expiration |
+| `repair_held_escrow_reserve(admin, currency, offset, limit)` | Admin | Repairs one token's missing held escrow reserve entries from indexed invoices in pages capped at 100 |
 
 ## Security
 

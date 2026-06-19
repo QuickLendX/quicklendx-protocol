@@ -144,7 +144,7 @@ The emergency withdraw mechanism is a **last-resort** recovery tool for stuck fu
      - Not cancelled
      - Timelock elapsed (`env.ledger().timestamp() >= unlock_at`)
      - Not expired (`env.ledger().timestamp() < expires_at`)
-     - Requested amount does not exceed the same-token balance after held escrow reserve
+     - Requested amount does not exceed the same-token balance after the persisted held escrow reserve
    - On success, pending record is removed and the execution event is emitted.
 
 4. **Cancel** (`cancel_emergency_withdraw`)
@@ -157,7 +157,7 @@ The emergency withdraw mechanism is a **last-resort** recovery tool for stuck fu
 
 - **Timelock**: 24-hour default delay prevents instant recovery execution even if admin keys are compromised.
 - **Expiration**: 7-day lifetime after unlock prevents stale withdrawals from lingering indefinitely.
-- **Escrow reserve**: Same-token amounts committed to `Held` escrows are excluded from emergency withdrawal; missing reserve sidecars are repaired from indexed held escrows before balance checks.
+- **Escrow reserve**: Same-token amounts committed to `Held` escrows are excluded from emergency withdrawal using the persisted reserve. Missing reserve-accounting entries are repaired through the admin-only paginated `repair_held_escrow_reserve` recovery helper.
 - **Nonce tracking**: Prevents replay attacks if a cancelled withdrawal is re-initiated.
 - **Cancellation audit trail**: Cancelled records are retained in storage (marked `cancelled`) so operators can observe the full history.
 
