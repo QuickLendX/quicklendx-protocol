@@ -3422,6 +3422,8 @@ impl QuickLendXContract {
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_stability;
 #[cfg(test)]
+mod test_id_collision_cross_domain;
+#[cfg(test)]
 mod test_emergency_escrow_protection;
 #[cfg(test)]
 mod test_escrow_settle_refund_race;
