@@ -1,29 +1,47 @@
-use soroban_sdk::{Address, Env, String};
+use soroban_sdk::{Env, Address, String};
 
-use crate::storage::InvoiceStorage;
-use crate::storage::CurrencyStorage;
-use crate::storage::TreasuryStorage;
-use crate::storage::FeeStorage;
-use crate::storage::ProtocolStateStorage;
+use crate::storage_types::{
+    ProtocolHealth,
+    DataKey, // assuming you use an enum for storage keys
+};
 
-use crate::types::ProtocolHealth;
+fn get_bool(env: &Env, key: DataKey) -> bool {
+    env.storage()
+        .instance()
+        .get(&key)
+        .unwrap_or(false)
+}
 
-pub fn get_protocol_health(env: Env) -> ProtocolHealth {
-    let state = ProtocolStateStorage::load(&env);
-    let config = TreasuryStorage::load(&env);
-    let fee = FeeStorage::get_fee_bps(&env);
+fn get_u32(env: &Env, key: DataKey) -> u32 {
+    env.storage()
+        .instance()
+        .get(&key)
+        .unwrap_or(0)
+}
 
+fn get_option_address(env: &Env, key: DataKey) -> Option<Address> {
+    env.storage()
+        .instance()
+        .get(&key)
+}
+
+fn get_string(env: &Env, key: DataKey) -> String {
+    env.storage()
+        .instance()
+        .get(&key)
+        .unwrap_or_else(|| String::from_str(env, "v0.0.0"))
+}
+
+/// Canonical protocol health view
+pub fn get_protocol_health(env: &Env) -> ProtocolHealth {
     ProtocolHealth {
-        version: String::from_str(&env, "v1.0.0"),
-
-        initialized: state.initialized,
-        paused: state.paused,
-        emergency_withdraw_pending: state.emergency_withdraw_pending,
-
-        treasury: config.treasury,
-        fee_bps: fee,
-
-        total_invoice_count: InvoiceStorage::get_total_count(&env),
-        currency_count: CurrencyStorage::get_total_count(&env),
+        version: get_string(env, DataKey::Version),
+        initialized: get_bool(env, DataKey::Initialized),
+        paused: get_bool(env, DataKey::Paused),
+        emergency_withdraw_pending: get_bool(env, DataKey::EmergencyWithdrawPending),
+        treasury: get_option_address(env, DataKey::Treasury),
+        fee_bps: get_u32(env, DataKey::FeeBps),
+        total_invoice_count: get_u32(env, DataKey::TotalInvoiceCount),
+        currency_count: get_u32(env, DataKey::CurrencyCount),
     }
 }
