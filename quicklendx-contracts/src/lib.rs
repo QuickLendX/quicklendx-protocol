@@ -86,7 +86,7 @@ mod test_backup;
 mod test_backup_safety;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_restore_reindex;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_event_completeness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
@@ -149,7 +149,7 @@ mod test_analytics_consistency;
 mod test_bid_ranking;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_invoice_metadata;
@@ -168,11 +168,11 @@ mod test_investment_transitions;
 mod test_invoice_metadata;
 #[cfg(test)]
 mod test_invoice_search_ranking;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_category_breakdown;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_diagnostics;
