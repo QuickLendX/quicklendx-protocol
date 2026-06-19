@@ -464,8 +464,9 @@ pub fn calculate_treasury_split_checked(
 
     let treasury_amount = platform_fee
         .checked_mul(treasury_share_bps)
-        .and_then(|v| v.checked_div(BPS_DENOMINATOR))
-        .unwrap_or(0);
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_div(BPS_DENOMINATOR)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
 
     let remaining = platform_fee
         .checked_sub(treasury_amount)
