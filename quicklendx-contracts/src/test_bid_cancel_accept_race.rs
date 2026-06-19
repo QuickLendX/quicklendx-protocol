@@ -239,9 +239,10 @@ fn test_cancel_then_accept_same_bid_rejects_accept_and_leaves_no_partial_state()
 }
 
 /// Race ordering: the business acceptance is ordered before the investor
-/// cancellation. Once the bid is Accepted, cancellation must be a false no-op
-/// and the funded invoice, escrow, and investment must remain mutually
-/// consistent.
+/// cancellation. `cancel_bid` currently exposes non-`Placed` rejection as a
+/// deterministic `false` return rather than a `QuickLendXError`; this documents
+/// that API gap while still asserting the second transition cannot mutate
+/// funded invoice, escrow, or investment state.
 #[test]
 fn test_accept_then_cancel_same_bid_rejects_cancel_and_preserves_funded_state() {
     let fixture = build_cancel_accept_fixture();
