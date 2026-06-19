@@ -151,16 +151,12 @@ fn assert_funded_state(
     let bid = client.get_bid(bid_id).expect("bid must exist");
     assert_eq!(bid.status, BidStatus::Accepted);
 
-    let escrow = client
-        .get_escrow_details(invoice_id)
-        .expect("escrow must exist after accepted bid");
+    let escrow = client.get_escrow_details(invoice_id);
     assert_eq!(escrow.status, EscrowStatus::Held);
     assert_eq!(escrow.amount, 9_000);
     assert_eq!(escrow.investor, *investor);
 
-    let investment = client
-        .get_invoice_investment(invoice_id)
-        .expect("investment must exist after accepted bid");
+    let investment = client.get_invoice_investment(invoice_id);
     assert_eq!(investment.status, InvestmentStatus::Active);
     assert_eq!(investment.invoice_id, *invoice_id);
     assert_eq!(investment.investor, *investor);
