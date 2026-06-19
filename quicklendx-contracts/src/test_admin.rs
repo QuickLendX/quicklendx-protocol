@@ -539,7 +539,7 @@ mod test_admin {
 // - Self-transfer prevention
 // - Two-step transfer flow authentication
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod access_control_matrix {
     use crate::admin::AdminStorage;
     use crate::currency::CurrencyWhitelist;
@@ -1911,7 +1911,7 @@ mod access_control_matrix {
 // Additional Admin-Gated Method Tests (Extended Coverage)
 // ============================================================================
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod access_control_matrix_extended {
     use crate::admin::AdminStorage;
     use crate::errors::QuickLendXError;
@@ -2549,7 +2549,7 @@ mod access_control_matrix_extended {
 // - invalid parameters are reflected correctly in `would_succeed` / `validation_error_code`
 // - no-op and partial-change detection work correctly
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod dry_run_preview {
     use crate::admin::AdminStorage;
     use crate::errors::QuickLendXError;

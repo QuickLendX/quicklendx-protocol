@@ -22,20 +22,20 @@ mod test_protocol_limits_boundary {
         let contract_id = env.register_contract(None, AdminContract);
         let client = AdminContractClient::new(&env, &contract_id);
         
-        client.initialize(&admin).unwrap();
+        client.initialize(&admin);
 
         let original_config = default_protocol_cfg();
-        client.set_protocol_config(&admin, &original_config).unwrap();
+        client.set_protocol_config(&admin, &original_config);
         
         // Attempt to apply an invalid config (e.g. min_invoice_amount = 0)
         let mut invalid_config = original_config.clone();
         invalid_config.min_invoice_amount = 0;
         
-        let result = client.set_protocol_config(&admin, &invalid_config);
+        let result = client.try_set_protocol_config(&admin, &invalid_config);
         assert_eq!(result, Err(Ok(ContractError::InvalidAmount)));
         
         // Assert that the config was NOT partially applied (atomic application)
-        let diff = client.preview_protocol_config(&admin, &original_config).unwrap();
+        let diff = client.preview_protocol_config(&admin, &original_config);
         assert_eq!(diff.current, original_config, "Configuration should remain unchanged after a failed update");
     }
 

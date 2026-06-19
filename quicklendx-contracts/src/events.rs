@@ -1220,6 +1220,37 @@ pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Add
     .publish(env);
 }
 
+#[contractevent]
+pub struct EmergencyWithdrawalInitiated {
+    pub token: Address,
+    pub amount: i128,
+    pub target: Address,
+    pub unlock_at: u64,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct EmergencyWithdrawalExecuted {
+    pub token: Address,
+    pub amount: i128,
+    pub target: Address,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct EmergencyWithdrawalCancelled {
+    pub token: Address,
+    pub amount: i128,
+    pub target: Address,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct AdminSet {
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
 pub fn emit_emergency_withdrawal_initiated(
     env: &Env,
     token: Address,

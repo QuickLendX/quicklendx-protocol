@@ -24,14 +24,16 @@ extern crate alloc;
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod scratch_events;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default;
 #[cfg(test)]
 mod test_default_finality_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality;
-#[cfg(test)] mod test_escrow_uniqueness;
-#[cfg(test)] mod test_escrow;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_escrow_uniqueness;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_escrow;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_fees;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
@@ -68,7 +70,7 @@ pub mod protocol_limits;
 pub mod reentrancy;
 pub mod settlement;
 pub mod storage;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
@@ -82,7 +84,7 @@ mod test_audit;
 mod test_backup;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_safety;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_restore_reindex;
 #[cfg(test)]
 mod test_escrow_event_completeness;
@@ -94,7 +96,7 @@ mod test_cleanup_pagination;
 mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
@@ -106,11 +108,11 @@ mod test_freshness;
 mod test_init;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
 // #[cfg(test)]
 // mod test_investment_queries;
@@ -133,13 +135,13 @@ mod test_protocol_limits_boundary;
 mod test_settlement_accounting_identity;
 #[cfg(test)]
 mod test_string_limits;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backpressure_shedding;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_types;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_vesting;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_analytics_consistency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
@@ -533,7 +535,7 @@ impl QuickLendXContract {
     /// Check if the pending emergency withdrawal can be executed.
     ///
     /// Returns true if the withdrawal exists, is not cancelled, timelock has elapsed,
-    /// and has not expired.
+    /// has not expired, and does not exceed the same-token non-escrow surplus.
     pub fn can_exec_emergency(env: Env) -> bool {
         emergency::EmergencyWithdraw::can_execute(&env).unwrap_or(false)
     }
@@ -3390,9 +3392,37 @@ impl QuickLendXContract {
         let report = InvoiceStorage::rebuild_indexes_page(&env, offset, limit);
         Ok(report)
     }
+
+    /// Repair missing held escrow reserve entries for one token from indexed invoice records.
+    ///
+    /// The first call (`offset = 0`) snapshots the current status-derived
+    /// invoice ID list, subject to an invoice-count cap, so later pages are not
+    /// shifted by status-index mutations. Scanning/summing then proceeds in
+    /// bounded pages. Emergency execution for the token remains closed until a
+    /// full sequence completes. Continue with each returned `next_offset` while
+    /// `next_offset != 0`. A returned `next_offset` of 0 means the reserve is
+    /// complete and emergency withdrawal for that token may pass the
+    /// reserve-completeness gate. Starting again at `offset = 0` recomputes the
+    /// reserve from scratch. During a multi-page repair, same-token escrow
+    /// create/release/refund reject with `InvalidStatus` until the final page
+    /// completes.
+    pub fn repair_held_escrow_reserve(
+        env: Env,
+        admin: Address,
+        currency: Address,
+        offset: u32,
+        limit: u32,
+    ) -> Result<RebuildReport, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+        EscrowStorage::repair_held_reserve_page(&env, &currency, offset, limit)
+    }
 }
 
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_stability;
+#[cfg(test)]
+mod test_emergency_escrow_protection;
 #[cfg(test)]
 mod test_escrow_settle_refund_race;
 

@@ -126,15 +126,15 @@ The emergency withdraw mechanism is a **last-resort** recovery tool for stuck fu
 1. **Initiate** (`initiate_emergency_withdraw`)
    - Admin provides: token address, amount, target address.
    - A `PendingEmergencyWithdrawal` record is created with:
-     - `created_at`: current ledger timestamp
-     - `execute_after`: `created_at + DEFAULT_EMERGENCY_TIMELOCK_SECS` (48 hours)
-     - `expires_at`: `created_at + DEFAULT_EMERGENCY_EXPIRATION_SECS` (7 days)
+     - `initiated_at`: current ledger timestamp
+     - `unlock_at`: `initiated_at + DEFAULT_EMERGENCY_TIMELOCK_SECS` (24 hours)
+     - `expires_at`: `unlock_at + DEFAULT_EMERGENCY_EXPIRATION_SECS` (7 days)
      - `nonce`: monotonically increasing to prevent replay
      - `cancelled`: false
-   - Emits `EmergencyWithdrawInitiated` event.
+   - Emits the emergency-withdraw initiation event.
 
 2. **Wait** (timelock)
-   - `execute_emergency_withdraw` will fail until `execute_after` has passed.
+   - `execute_emergency_withdraw` will fail until `unlock_at` has passed.
    - `can_exec_emergency` returns false during this period.
 
 3. **Execute** (`execute_emergency_withdraw`)
@@ -142,20 +142,23 @@ The emergency withdraw mechanism is a **last-resort** recovery tool for stuck fu
    - Validates:
      - Pending withdrawal exists
      - Not cancelled
-     - Timelock elapsed (`env.ledger().timestamp() >= execute_after`)
-     - Not expired (`env.ledger().timestamp() <= expires_at`)
-   - On success, pending record is removed and `EmergencyWithdrawExecuted` is emitted.
+     - Timelock elapsed (`env.ledger().timestamp() >= unlock_at`)
+     - Not expired (`env.ledger().timestamp() < expires_at`)
+     - The token's held escrow reserve has completed paginated repair
+     - Requested amount does not exceed the same-token balance after the persisted held escrow reserve
+   - On success, pending record is removed and the execution event is emitted.
 
 4. **Cancel** (`cancel_emergency_withdraw`)
    - Admin can cancel at any time before execution.
    - Sets `cancelled = true` and records `cancelled_at`.
-   - Emits `EmergencyWithdrawCancelled` event.
+   - Emits the emergency-withdraw cancellation event.
    - Cancelled record remains queryable via `get_pending_emergency_withdraw` for audit purposes.
 
 ### Security Properties
 
-- **Timelock**: 48-hour minimum delay prevents instant rug-pulls even if admin keys are compromised.
-- **Expiration**: 7-day maximum lifetime prevents stale withdrawals from lingering indefinitely.
+- **Timelock**: 24-hour default delay prevents instant recovery execution even if admin keys are compromised.
+- **Expiration**: 7-day lifetime after unlock prevents stale withdrawals from lingering indefinitely.
+- **Escrow reserve**: Same-token amounts committed to `Held` escrows are excluded from emergency withdrawal using the persisted reserve. A token is not emergency-withdrawable until its reserve record has completed admin-only `repair_held_escrow_reserve` initialization or repair. The initial repair call snapshots the status-derived invoice ID list under a 1,000-invoice cap, and later calls scan bounded pages from that snapshot. While a multi-page repair is active, escrow creation, release, and refund for that token reject with `InvalidStatus`.
 - **Nonce tracking**: Prevents replay attacks if a cancelled withdrawal is re-initiated.
 - **Cancellation audit trail**: Cancelled records are retained in storage (marked `cancelled`) so operators can observe the full history.
 
@@ -190,9 +193,9 @@ The following behaviors are covered by automated tests in `test_pause.rs` and `t
 - [x] Admin config (`set_bid_ttl_days`, `add_currency`, `update_protocol_limits`) allowed during pause
 - [x] KYC review (`verify_business`, `verify_investor`) allowed during pause
 - [x] Emergency withdraw lifecycle works during pause
+- [x] Emergency withdraw cannot drain same-token `Held` escrow reserve
 - [x] Admin rotation and unpause by new admin works during pause
 - [x] All query functions work during pause
 - [x] Pause/unpause cycles are deterministic and idempotent
 - [x] Pause and maintenance mode are independent flags
 - [x] No bypass via internal or indirect function calls
-
