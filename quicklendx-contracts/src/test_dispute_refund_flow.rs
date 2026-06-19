@@ -107,6 +107,7 @@ fn dispute_resolved_against_business_refund_aligns_terminal_statuses() {
     let fx = setup_funded_invoice_for_dispute();
     let tok = token::Client::new(&fx.env, &fx.currency);
     let investor_balance_before_refund = tok.balance(&fx.investor);
+    let business_balance_before_refund = tok.balance(&fx.business);
 
     assert_eq!(
         fx.client.get_invoice(&fx.invoice_id).status,
@@ -174,9 +175,14 @@ fn dispute_resolved_against_business_refund_aligns_terminal_statuses() {
     );
 
     let investor_balance_after_refund = tok.balance(&fx.investor);
+    let business_balance_after_refund = tok.balance(&fx.business);
     assert_eq!(
         investor_balance_after_refund - investor_balance_before_refund,
         fx.bid_amount
+    );
+    assert_eq!(
+        business_balance_after_refund, business_balance_before_refund,
+        "refund must return escrow to the investor without crediting the business"
     );
     assert!(
         !fx.client
