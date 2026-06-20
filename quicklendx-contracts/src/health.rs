@@ -126,7 +126,7 @@ impl ProtocolHealth {
             emergency_withdraw_pending: EmergencyWithdraw::get_pending(env),
             treasury: ProtocolInitializer::get_treasury(env),
             fee_bps: ProtocolInitializer::get_fee_bps(env),
-            total_invoice_count: crate::invoice::InvoiceStorage::get_total_invoice_count(env),
+            total_invoice_count: crate::storage::InvoiceStorage::get_total_invoice_count(env),
             currency_count: CurrencyWhitelist::currency_count(env),
         }
     }
@@ -137,7 +137,6 @@ mod tests {
     use super::*;
     use crate::admin::AdminStorage;
     use crate::currency::CurrencyWhitelist;
-    use crate::errors::QuickLendXError;
     use crate::init::ProtocolInitializer;
     use crate::pause::PauseControl;
     use soroban_sdk::{Address, Env};
