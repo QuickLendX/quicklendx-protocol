@@ -11,12 +11,10 @@
 //! - Edge cases and state consistency
 //! - Read-only guarantee (no mutations)
 
-use crate::errors::QuickLendXError;
 use crate::health::ProtocolHealth;
 use crate::init::InitializationParams;
-use crate::invoice::InvoiceCategory;
 use crate::{admin::AdminStorage, currency::CurrencyWhitelist, init::ProtocolInitializer, pause::PauseControl, QuickLendXContract};
-use soroban_sdk::{testutils::Address as _, Address, Env, String as SorobanString};
+use soroban_sdk::{testutils::Address as _, Address, Env};
 
 fn setup() -> (Env, Address) {
     let env = Env::default();

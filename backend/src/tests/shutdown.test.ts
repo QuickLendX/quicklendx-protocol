@@ -418,8 +418,8 @@ describe('WebhookQueueService.flush (real implementation)', () => {
   >('../services/webhookQueueService');
 
   function freshQueue(maxSize = 10) {
-    WebhookQueueService.resetInstance(maxSize);
-    return WebhookQueueService.getInstance(maxSize);
+    WebhookQueueService.resetInstance();
+    return WebhookQueueService.getInstance();
   }
 
   it('returns an empty array when the queue is empty', () => {

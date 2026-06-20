@@ -5,7 +5,7 @@ import { auditService } from "./auditService";
 import { ReconciliationWorker } from "./reconciliationWorker";
 import { replayService } from "./replayService";
 import {
-  FileSystemRawEventStore,
+  FileRawEventStore,
   InMemoryRawEventStore,
 } from "./rawEventStore";
 import type { SnapshotRetentionRecord } from "./snapshotService";
@@ -97,7 +97,7 @@ interface CategorizedRetentionState<T> {
 }
 
 function buildDefaultDependencies(): RetentionDependencies {
-  const defaultRawEventStore = new FileSystemRawEventStore(new DefaultEventValidator());
+  const defaultRawEventStore = new FileRawEventStore(new DefaultEventValidator());
 
   return {
     rawEventStore: defaultRawEventStore,

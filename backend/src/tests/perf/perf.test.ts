@@ -117,7 +117,7 @@ describe('Database Performance Tests', () => {
       description: 'Test invoice',
       category: 'services' as any,
       tags: ['test'],
-      metadata: { reference: 'TEST-001' },
+      metadata: { customer_name: 'Test', customer_address: 'Test Addr', tax_id: '123', line_items: [], notes: '' },
       created_at: Date.now(),
       updated_at: Date.now(),
       contract_version: 1,
@@ -338,6 +338,8 @@ describe('Database Performance Tests', () => {
           created_at: new Date().toISOString(),
           last_used_at: null,
           expires_at: null,
+          prev_secret_expires_at: null,
+          prev_signing_secret_hash: null,
           revoked: 0,
           created_by: 'admin',
         });

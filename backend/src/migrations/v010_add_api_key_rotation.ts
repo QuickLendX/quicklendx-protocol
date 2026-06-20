@@ -38,12 +38,10 @@ export default {
   validate: async (ctx: MigrationContext): Promise<string[]> => {
     const warnings: string[] = [];
 
-    const columns = await ctx.db.all<{ name: string }>(
-      "PRAGMA table_info(api_keys)"
-    );
+    const columns = await ctx.db.exec("PRAGMA table_info(api_keys)") as { name: string }[];
 
-    const hasPrevHash = columns.some(c => c.name === "prev_signing_secret_hash");
-    const hasPrevExpires = columns.some(c => c.name === "prev_secret_expires_at");
+    const hasPrevHash = columns.some((c: { name: string }) => c.name === "prev_signing_secret_hash");
+    const hasPrevExpires = columns.some((c: { name: string }) => c.name === "prev_secret_expires_at");
 
     if (hasPrevHash && hasPrevExpires) {
       warnings.push("Columns already exist — migration is idempotent.");
