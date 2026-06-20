@@ -102,6 +102,8 @@ function makeKey(overrides: Partial<DbApiKey> = {}): DbApiKey {
     created_at: new Date().toISOString(),
     last_used_at: null,
     expires_at: null,
+    prev_signing_secret_hash: null,
+    prev_secret_expires_at: null,
     revoked: 0,
     created_by: 'test-user',
     ...overrides,

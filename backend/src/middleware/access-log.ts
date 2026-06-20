@@ -211,7 +211,7 @@ export function getRedactedAccessLogs(filters?: {
 }): any[] {
   const logs = getAccessLogs(filters);
   
-  return logs.map(log => redactPii(log));
+  return logs.map(log => redactPii(log as unknown as Record<string, unknown>));
 }
 
 /**

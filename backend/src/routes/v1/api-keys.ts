@@ -28,7 +28,7 @@ router.get('/:id', getApiKey);
 router.post('/:id/rotate', rotateApiKey);
 router.post(
   '/:id/rotate-signing-secret',
-  requireAdminRoles(['super_admin', 'security_admin'], 'rotate_api_key_secret'),
+  requireAdminRoles(['super_admin'], 'rotate_api_key_secret'),
   rotateApiKeySigningSecret
 );
 router.post('/:id/revoke', revokeApiKey);

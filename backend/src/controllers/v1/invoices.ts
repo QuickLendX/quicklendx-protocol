@@ -3,7 +3,8 @@ import { InvoiceStatus, InvoiceCategory, Invoice } from "../../types/contract";
 import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
 import { freshnessService } from "../../services/freshnessService";
 import { invoiceStore } from "../../services/invoiceStore";
-export const MOCK_INVOICES = [
+import { parsePaginationParams, applyPagination, PaginationError } from "../../utils/pagination";
+export const MOCK_INVOICES: any[] = [
   {
     id: "mock-invoice-1",
   },

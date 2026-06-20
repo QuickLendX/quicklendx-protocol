@@ -4,22 +4,9 @@ import { applyCacheHeaders, CC_LONG } from "../../middleware/cache-headers";
 import { labelRecord } from "../../services/versioningService";
 import { freshnessService } from "../../services/freshnessService";
 import { parsePaginationParams, PaginationError } from "../../utils/pagination";
+import { settlementOrchestrator } from "../../services/settlementOrchestrator";
 
-export const MOCK_SETTLEMENTS: Settlement[] = [
-  labelRecord<Omit<Settlement, "contract_version" | "event_schema_version" | "indexed_at">>({
-    id: "0xsettle123",
-    invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-    amount: "1000000000",
-    payer: "GPAYER000000000000000000000000000000000000000000000000",
-    recipient: "GRECIP000000000000000000000000000000000000000000000000",
-    timestamp: Math.floor(Date.now() / 1000) - 3600,
-    status: SettlementStatus.Pending,
-  }),
-];
-
-export const MOCK_SETTLEMENTS: any[] = [];
-
-export const MOCK_SETTLEMENTS = [
+export const MOCK_SETTLEMENTS: any[] = [
   {
     id: "0xsettle123",
     invoice_id: "inv_mock_1",
@@ -31,14 +18,6 @@ export const MOCK_SETTLEMENTS = [
     contract_version: 1,
     event_schema_version: 1,
     indexed_at: new Date().toISOString(),
-  },
-];
-
-export const MOCK_SETTLEMENTS = [
-  {
-    id: "mock-settlement-1",
-    payer: "user-1",
-    recipient: "user-2",
   },
 ];
 
