@@ -3,12 +3,14 @@ import crypto from 'crypto';
 export interface ApiKey {
   id: string;
   key_hash: string;
+  prev_signing_secret_hash: string | null;
   prefix: string;
   name: string;
   scopes: string[];
   created_at: string;
   last_used_at: string | null;
   expires_at: string | null;
+  prev_secret_expires_at: string | null;
   revoked: boolean;
   created_by: string;
 }

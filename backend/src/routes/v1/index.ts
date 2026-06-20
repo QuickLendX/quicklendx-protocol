@@ -20,10 +20,10 @@ import {
   EventValidationResult,
   SorobanEvent,
 } from "../../services/eventValidator";
-import { FileSystemRawEventStore } from "../../services/rawEventStore";
+import { FileRawEventStore } from "../../services/rawEventStore";
 
 const router = Router();
-const eventIdStore = new FileSystemRawEventStore(new DefaultEventValidator());
+const eventIdStore = new FileRawEventStore(new DefaultEventValidator());
 
 router.use("/invoices", invoiceRoutes);
 router.use("/bids", bidRoutes);

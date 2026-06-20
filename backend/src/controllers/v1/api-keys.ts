@@ -20,6 +20,11 @@ const revokeApiKeySchema = z.object({
   actor: z.string().min(1),
 });
 
+const rotateSigningSecretSchema = z.object({
+  actor: z.string().min(1),
+  grace_window_hours: z.number().min(1).max(720).optional().default(24),
+});
+
 /**
  * Create a new API key
  * POST /api/v1/keys
@@ -217,6 +222,56 @@ export async function rotateApiKey(req: Request, res: Response): Promise<void> {
       error: {
         message: error.message || 'Failed to rotate API key',
         code: 'ROTATE_KEY_ERROR',
+      },
+    });
+  }
+}
+
+/**
+ * Rotate an API key's signing secret
+ * POST /api/v1/keys/:id/rotate-signing-secret
+ */
+export async function rotateApiKeySigningSecret(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+
+    // Validate request body
+    const validation = rotateSigningSecretSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        error: {
+          message: 'Invalid request body',
+          code: 'VALIDATION_ERROR',
+          details: validation.error.errors,
+        },
+      });
+      return;
+    }
+
+    const { actor, grace_window_hours } = validation.data;
+    const ipAddress = (req.ip || req.socket.remoteAddress) as string | undefined;
+
+    const key = await apiKeyService.rotateSigningSecret(id, actor, ipAddress, grace_window_hours);
+
+    res.json({
+      data: {
+        id: key.id,
+        name: key.name,
+        prefix: key.prefix,
+        scopes: key.scopes,
+        created_at: key.created_at,
+        expires_at: key.expires_at,
+        prev_secret_expires_at: key.prev_secret_expires_at,
+        key: key.plaintext_key, // Only returned once!
+        warning: 'Store this new secret securely. The old secret will expire after the grace window.',
+      },
+    });
+  } catch (error: any) {
+    console.error('[RotateApiKeySigningSecret] Error:', error);
+    res.status(400).json({
+      error: {
+        message: error.message || 'Failed to rotate API key signing secret',
+        code: 'ROTATE_SECRET_ERROR',
       },
     });
   }

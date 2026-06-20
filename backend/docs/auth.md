@@ -182,6 +182,44 @@ curl -X POST https://api.quicklendx.com/api/v1/keys/key_abc123/rotate \
 4. Rotation event is logged in audit trail
 5. Update your services with the new key
 
+### Signing Secret Rotation (Grace Window)
+
+If you cannot update all services simultaneously and need to avoid downtime, you can rotate the signing secret while keeping the same key ID. This allows the old secret to remain valid for a configurable grace window (default 24 hours).
+
+#### Rotation Endpoint
+
+```
+POST /api/v1/keys/:id/rotate-signing-secret
+```
+
+#### Request Body
+
+```json
+{
+  "actor": "admin-user-id",
+  "grace_window_hours": 24
+}
+```
+
+#### Response
+
+```json
+{
+  "data": {
+    "id": "key_abc123",
+    "key": "qlx_live_zzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+    "name": "Production Service Key",
+    "prefix": "qlx_live_xxxxx",
+    "scopes": ["read:users", "write:jobs"],
+    "created_at": "2026-04-29T10:00:00Z",
+    "prev_secret_expires_at": "2026-04-30T10:00:00Z",
+    "warning": "Store this new secret securely. The old secret will expire after the grace window."
+  }
+}
+```
+
+**Note**: Rotating the signing secret a second time before the grace window expires will immediately invalidate the first old secret.
+
 ## Key Management Operations
 
 ### List All Keys
