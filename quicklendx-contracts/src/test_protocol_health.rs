@@ -11,12 +11,10 @@
 //! - Edge cases and state consistency
 //! - Read-only guarantee (no mutations)
 
-use quicklendx_protocol::errors::QuickLendXError;
-use quicklendx_protocol::health::ProtocolHealth;
-use quicklendx_protocol::init::InitializationParams;
-use quicklendx_protocol::invoice::InvoiceCategory;
-use quicklendx_protocol::{admin::AdminStorage, currency::CurrencyWhitelist, init::ProtocolInitializer, pause::PauseControl, QuickLendXContract};
-use soroban_sdk::{testutils::Address as _, Address, Env, String as SorobanString};
+use crate::health::ProtocolHealth;
+use crate::init::InitializationParams;
+use crate::{admin::AdminStorage, currency::CurrencyWhitelist, init::ProtocolInitializer, pause::PauseControl, QuickLendXContract};
+use soroban_sdk::{testutils::Address as _, Address, Env};
 
 fn setup() -> (Env, Address) {
     let env = Env::default();

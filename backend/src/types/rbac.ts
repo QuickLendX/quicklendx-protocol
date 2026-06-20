@@ -1,6 +1,7 @@
 export const ADMIN_ROLES = [
   "support",
   "operations_admin",
+  "security_admin",
   "super_admin",
 ] as const;
 

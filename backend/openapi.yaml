@@ -624,6 +624,73 @@ paths:
         '500':
           description: Internal server error
 
+  /keys/{id}/rotate-signing-secret:
+    post:
+      summary: Rotate an API key's signing secret
+      description: |
+        Generates a new signing secret for the specified API key ID, retaining the old secret for a configurable grace window (default 24h). Requires admin RBAC privileges.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The ID of the API key to rotate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - actor
+              properties:
+                actor:
+                  type: string
+                  description: Identifier of the admin performing the rotation
+                grace_window_hours:
+                  type: integer
+                  default: 24
+                  description: Hours to retain the old secret
+      responses:
+        "200":
+          description: Successfully rotated the signing secret
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      key:
+                        type: string
+                        description: The new plaintext key. Only returned once.
+                      prefix:
+                        type: string
+                      scopes:
+                        type: array
+                        items:
+                          type: string
+                      created_at:
+                        type: string
+                        format: date-time
+                      prev_secret_expires_at:
+                        type: string
+                        format: date-time
+                      warning:
+                        type: string
+        "400":
+          description: Validation error or failure to rotate
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          description: Insufficient admin role permissions
+
 components:
   securitySchemes:
     BearerAuth:
