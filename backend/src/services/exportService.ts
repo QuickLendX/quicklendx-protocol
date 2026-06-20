@@ -4,7 +4,6 @@ import { MOCK_SETTLEMENTS } from "../controllers/v1/settlements";
 import { invoiceStore } from "./invoiceStore";
 import { config } from "../config";
 import crypto from "crypto";
-import { invoiceStore } from "./invoiceStore";
 
 export enum ExportFormat {
   JSON = "json",
@@ -25,28 +24,60 @@ class ExportService {
   private readonly secret = config.EXPORT_SECRET || "fallback-secret-for-signing-links";
 
   /**
-   * Fetches all data related to a user.
+   * Fetches all data related to a user, strictly filtered by tenant context.
+   * 
+   * SECURITY: This method enforces tenant isolation by only returning data
+   * where the userId matches the owner field (business for invoices, investor
+   * for bids, payer/recipient for settlements). The userId parameter MUST be
+   * derived from the authenticated req.apiKey.created_by field and cannot be
+   * supplied by the client.
+   * 
+   * @param userId - The authenticated user/tenant identifier from req.apiKey
+   * @param verifiedContext - Optional security context for double-verification
+   * @returns Data belonging exclusively to the specified tenant
    */
-  public async getUserData(userId: string): Promise<ExportData["data"]> {
-    // Filter mock data for the user. Prefer the real store, but fall back to
-    // controller-provided mock arrays in test environments where the DB
-    // schema/tables may not be created.
+  public async getUserData(
+    userId: string,
+    verifiedContext?: { authenticatedUserId: string }
+  ): Promise<ExportData["data"]> {
+    // SECURITY CHECK: Prevent context injection attacks
+    // If verifiedContext is provided, userId MUST match the authenticated user
+    if (verifiedContext && userId !== verifiedContext.authenticatedUserId) {
+      throw new Error(
+        "Security violation: userId does not match authenticated context"
+      );
+    }
+
+    // Validate userId format (basic sanity check)
+    if (!userId || typeof userId !== "string" || userId.trim().length === 0) {
+      throw new Error("Invalid userId: must be a non-empty string");
+    }
+
+    // Filter invoices strictly by business ownership
     let invoices: any[];
     try {
+      // SECURITY: invoiceStore.findInvoices filters by business === userId
       invoices = invoiceStore.findInvoices({ business: userId });
     } catch (err: any) {
       const msg = err && err.message ? String(err.message) : "";
       if (process.env.NODE_ENV === "test" && /no such table/i.test(msg)) {
-        // Defer require to avoid circular import problems at module-eval time
-        // when services/controllers reference each other.
+        // Test environment fallback with strict filtering
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { MOCK_INVOICES } = require("../controllers/v1/invoices");
-        invoices = MOCK_INVOICES.filter((inv: any) => inv.business === userId);
+        invoices = MOCK_INVOICES.filter(
+          (inv: any) => inv.business === userId
+        );
       } else {
         throw err;
       }
     }
+
+    // SECURITY: Filter bids strictly by investor ownership
+    // Only return bids where the authenticated user is the investor
     const bids = MOCK_BIDS.filter((b) => b.investor === userId);
+
+    // SECURITY: Filter settlements strictly by participation
+    // Only return settlements where the authenticated user is payer OR recipient
     const settlements = MOCK_SETTLEMENTS.filter(
       (s: any) => s.payer === userId || s.recipient === userId
     );
