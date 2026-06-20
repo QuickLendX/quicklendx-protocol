@@ -48,6 +48,7 @@ below apply to the admin plane and any future authenticated endpoints.
 | 2.5 | Path parameters validated before use | ⚠️ | `src/controllers/v1/invoices.ts` | IDs are compared by equality only; add format validation (hex prefix, length) for production |
 | 2.6 | No `eval`, `Function()`, or dynamic code execution on user input | ✅ | All controllers | Verified by code review |
 | 2.7 | No direct string interpolation of user input into queries or shell commands | ✅ | All controllers | Mock data layer; enforce with parameterised queries when a real DB is added |
+| 2.8 | Zod schema property-based fuzz testing | ✅ | `src/tests/validators.fuzz.test.ts` | All exported validators must be fuzzed against malformed payloads (NaN, deep nesting, prototype pollution) using fast-check |
 
 ---
 
