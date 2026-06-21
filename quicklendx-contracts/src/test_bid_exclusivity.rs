@@ -61,7 +61,7 @@ fn make_token(
     currency
 }
 
-// ── Exclusivity: only one accepted bid per invoice ───────────────────────────
+// -- Exclusivity: only one accepted bid per invoice ---------------------------
 
 #[test]
 fn second_accept_on_funded_invoice_is_rejected() {
@@ -96,14 +96,14 @@ fn second_accept_on_funded_invoice_is_rejected() {
     let bid_a = client.place_bid(&investor_a, &invoice_id, &amount, &(amount + 100));
     let bid_b = client.place_bid(&investor_b, &invoice_id, &amount, &(amount + 150));
 
-    // Accept first bid — should succeed
+    // Accept first bid - should succeed
     client.accept_bid(&invoice_id, &bid_a);
 
     // Invoice should now be Funded
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Funded);
 
-    // Accept second bid — should fail (invoice already funded)
+    // Accept second bid - should fail (invoice already funded)
     let result = client.try_accept_bid(&invoice_id, &bid_b);
     assert!(result.is_err());
 }
@@ -138,7 +138,7 @@ fn double_accept_same_bid_is_rejected() {
     assert!(result.is_err());
 }
 
-// ── Bid status isolation ─────────────────────────────────────────────────────
+// -- Bid status isolation -----------------------------------------------------
 
 #[test]
 fn accepting_one_bid_does_not_modify_other_bids_status() {
@@ -193,7 +193,7 @@ fn accepting_one_bid_does_not_modify_other_bids_status() {
     assert!(found_b, "Competing bid B not found");
 }
 
-// ── Invalid bid state transitions ────────────────────────────────────────────
+// -- Invalid bid state transitions --------------------------------------------
 
 #[test]
 fn accept_bid_on_pending_invoice_is_rejected() {
@@ -212,7 +212,7 @@ fn accept_bid_on_pending_invoice_is_rejected() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    // Invoice is Pending (not verified) — place_bid should fail
+    // Invoice is Pending (not verified) - place_bid should fail
     let result = client.try_place_bid(&investor, &invoice_id, &1000i128, &1100i128);
     assert!(result.is_err());
 }
@@ -240,7 +240,7 @@ fn accept_bid_requires_verified_invoice_status() {
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
 
-    // Accept — this funds the invoice
+    // Accept - this funds the invoice
     client.accept_bid(&invoice_id, &bid_id);
 
     // Verify status is now Funded

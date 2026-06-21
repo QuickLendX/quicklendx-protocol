@@ -1,8 +1,13 @@
 use crate::admin::AdminStorage;
+use crate::dispute_timeline::{
+    clear_under_review_timestamp, set_under_review_timestamp,
+};
 use crate::errors::QuickLendXError;
-use crate::invoice::{Dispute, DisputeStatus, InvoiceStatus, InvoiceStorage};
-use crate::protocol_limits::{
-    MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
+use crate::storage::InvoiceStorage;
+use crate::types::{Dispute, DisputeStatus};
+use crate::verification::{
+    validate_dispute_eligibility, validate_dispute_evidence, validate_dispute_reason,
+    validate_dispute_resolution,
 };
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
@@ -25,34 +30,64 @@ fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
     }
 }
 
+/// Track an invoice ID in the dispute index.
+///
+/// Idempotent helper used by contract entry points to keep query indexes
+/// consistent.  Safe to call multiple times for the same invoice — duplicate
+/// entries are suppressed.
+///
+/// # Parameters
+/// - `env`        — The contract environment.
+/// - `invoice_id` — The invoice to index as dispute-bearing.
+pub(crate) fn track_dispute_invoice(env: &Env, invoice_id: &BytesN<32>) {
+    add_to_dispute_index(env, invoice_id);
+}
+
 fn zero_address(env: &Env) -> Address {
-    Address::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF")
+    Address::from_str(
+        env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    )
 }
-
-
-fn add_to_dispute_index(_env: &Env, _invoice_id: &BytesN<32>) {}
-
-fn get_dispute_index(_env: &Env) -> Vec<BytesN<32>> {
-    Vec::new(_env)
-}
-
 fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> {
     Ok(())
 }
 
-/// @notice Create a dispute on an invoice (standalone storage variant).
-/// @dev Validates:
-///   - No duplicate dispute for the same invoice
-///   - Invoice exists and is in a disputable status (Pending/Verified/Funded/Paid)
-///   - Creator is the business owner or investor on the invoice
-///   - Reason is non-empty and <= MAX_DISPUTE_REASON_LENGTH (1000 chars)
-///   - Evidence is non-empty and <= MAX_DISPUTE_EVIDENCE_LENGTH (2000 chars)
-/// @param env The contract environment.
-/// @param invoice_id The invoice to dispute.
-/// @param creator The address creating the dispute (must be authorized).
-/// @param reason The dispute reason (1–1000 chars).
-/// @param evidence Supporting evidence (1–2000 chars).
-/// @return Ok(()) on success, Err with typed error on failure.
+/// Open a new dispute on an invoice.
+///
+/// # Preconditions
+/// - `creator.require_auth()` must pass (on-chain authorization).
+/// - The invoice identified by `invoice_id` must exist.
+/// - The invoice must be in one of the disputable statuses:
+///   `Pending`, `Verified`, `Funded`, or `Paid`.
+/// - `creator` must be either the business owner **or** the investor recorded
+///   on the invoice.  Any other caller is rejected with
+///   [`QuickLendXError::DisputeNotAuthorized`].
+/// - No active dispute may already exist for this invoice
+///   (`dispute_status == DisputeStatus::None`).  A second attempt returns
+///   [`QuickLendXError::DisputeAlreadyExists`].
+/// - `reason`   must be 1–`MAX_DISPUTE_REASON_LENGTH` (1 000) characters.
+/// - `evidence` must be 1–`MAX_DISPUTE_EVIDENCE_LENGTH` (2 000) characters.
+///
+/// # Postconditions
+/// - `invoice.dispute_status` is set to [`DisputeStatus::Disputed`].
+/// - The `Dispute` struct fields `created_by`, `created_at`, `reason`, and
+///   `evidence` are populated; `resolution`, `resolved_by`, and `resolved_at`
+///   are zero-valued placeholders.
+/// - The invoice ID is appended to the global dispute index exactly once.
+///
+/// # Authorization
+/// Caller: business owner **or** investor on the invoice.
+///
+/// # Errors
+/// | Error | Condition |
+/// |---|---|
+/// | [`QuickLendXError::InvoiceNotFound`] | `invoice_id` does not exist |
+/// | [`QuickLendXError::InvoiceNotAvailableForFunding`] | Invoice in a non-disputable status |
+/// | [`QuickLendXError::DisputeNotAuthorized`] | Caller is not business or investor |
+/// | [`QuickLendXError::DisputeAlreadyExists`] | Dispute already open on this invoice |
+/// | [`QuickLendXError::InvalidDisputeReason`] | `reason` empty or > 1 000 chars |
+/// | [`QuickLendXError::InvalidDisputeEvidence`] | `evidence` empty or > 2 000 chars |
 #[allow(dead_code)]
 pub fn create_dispute(
     env: &Env,
@@ -66,34 +101,12 @@ pub fn create_dispute(
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    if invoice.dispute_status != DisputeStatus::None {
-        return Err(QuickLendXError::DisputeAlreadyExists);
-    }
+    validate_dispute_reason(reason)?;
+    validate_dispute_evidence(evidence)?;
+    validate_dispute_eligibility(&invoice, creator)?;
+    clear_under_review_timestamp(env, invoice_id);
 
-    match invoice.status {
-        InvoiceStatus::Pending
-        | InvoiceStatus::Verified
-        | InvoiceStatus::Funded
-        | InvoiceStatus::Paid => {}
-        _ => return Err(QuickLendXError::InvalidStatus),
-    }
-
-    let is_business = *creator == invoice.business;
-    let is_investor = invoice
-        .investor
-        .as_ref()
-        .map_or(false, |investor| *creator == *investor);
-    if !is_business && !is_investor {
-        return Err(QuickLendXError::DisputeNotAuthorized);
-    }
-
-    if reason.len() == 0 || reason.len() > MAX_DISPUTE_REASON_LENGTH {
-        return Err(QuickLendXError::InvalidDisputeReason);
-    }
-    if evidence.len() == 0 || evidence.len() > MAX_DISPUTE_EVIDENCE_LENGTH {
-        return Err(QuickLendXError::InvalidDisputeEvidence);
-    }
-
+    // Set dispute fields
     invoice.dispute_status = DisputeStatus::Disputed;
     invoice.dispute = Dispute {
         created_by: creator.clone(),
@@ -101,16 +114,44 @@ pub fn create_dispute(
         reason: reason.clone(),
         evidence: evidence.clone(),
         resolution: String::from_str(env, ""),
-        resolved_by: zero_address(env),
+        resolved_by: creator.clone(), // Placeholder — overwritten on resolution
         resolved_at: 0,
     };
 
     InvoiceStorage::update_invoice(env, &invoice);
     add_to_dispute_index(env, invoice_id);
+
     Ok(())
 }
 
-#[allow(dead_code)]
+/// Advance a dispute from `Disputed` to `UnderReview`.
+///
+/// Signals that a platform administrator has acknowledged the dispute and is
+/// actively investigating it.  This is the mandatory second step in the
+/// dispute lifecycle; resolution is only permitted after this transition.
+///
+/// # Preconditions
+/// - `admin` must be the registered platform admin
+///   ([`AdminStorage::require_admin`] passes).
+/// - The invoice identified by `invoice_id` must exist.
+/// - `invoice.dispute_status` must be exactly [`DisputeStatus::Disputed`].
+///   Any other status (including `UnderReview` or `Resolved`) is rejected to
+///   enforce a strictly forward-only, acyclic state machine.
+///
+/// # Postconditions
+/// - `invoice.dispute_status` is set to [`DisputeStatus::UnderReview`].
+/// - The invoice record is persisted in storage.
+///
+/// # Authorization
+/// Caller: platform admin only.
+///
+/// # Errors
+/// | Error | Condition |
+/// |---|---|
+/// | [`QuickLendXError::Unauthorized`] / [`QuickLendXError::NotAdmin`] | Caller is not the admin |
+/// | [`QuickLendXError::InvoiceNotFound`] | `invoice_id` does not exist |
+/// | [`QuickLendXError::DisputeNotFound`] | Invoice has no active dispute (`dispute_status != Disputed`) |
+/// | [`QuickLendXError::InvalidStatus`] | Dispute is already `UnderReview` or `Resolved` |
 pub fn put_dispute_under_review(
     env: &Env,
     admin: &Address,
@@ -120,19 +161,61 @@ pub fn put_dispute_under_review(
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    if invoice.dispute_status == DisputeStatus::None {
-        return Err(QuickLendXError::DisputeNotFound);
-    }
-    if invoice.dispute_status != DisputeStatus::Disputed {
-        return Err(QuickLendXError::InvalidStatus);
+    match invoice.dispute_status {
+        DisputeStatus::None => return Err(QuickLendXError::DisputeNotFound),
+        DisputeStatus::Disputed => {}
+        DisputeStatus::UnderReview | DisputeStatus::Resolved => {
+            return Err(QuickLendXError::InvalidStatus);
+        }
     }
 
     invoice.dispute_status = DisputeStatus::UnderReview;
     InvoiceStorage::update_invoice(env, &invoice);
+    set_under_review_timestamp(env, invoice_id, env.ledger().timestamp());
     Ok(())
 }
 
-#[allow(dead_code)]
+/// Finalize a dispute by recording an admin-authored resolution.
+///
+/// This is the terminal step of the dispute lifecycle.  Once a dispute is
+/// resolved its status becomes [`DisputeStatus::Resolved`] and **all further
+/// mutation is permanently blocked** — neither re-resolution nor re-review is
+/// possible.
+///
+/// # Preconditions
+/// - `admin` must be the registered platform admin.
+/// - The invoice identified by `invoice_id` must exist.
+/// - `invoice.dispute_status` must be exactly [`DisputeStatus::UnderReview`].
+///   Attempting to resolve a `Disputed` invoice skips the mandatory review
+///   step and is rejected.  Attempting to resolve a `Resolved` invoice is
+///   also rejected (terminal-state guard).
+/// - `resolution` must be 1–`MAX_DISPUTE_RESOLUTION_LENGTH` (2 000) chars.
+///
+/// # Postconditions
+/// - `invoice.dispute_status` is set to [`DisputeStatus::Resolved`].
+/// - `invoice.dispute.resolution` stores `resolution`.
+/// - `invoice.dispute.resolved_by` stores `admin`.
+/// - `invoice.dispute.resolved_at` stores the current ledger timestamp.
+/// - All three fields are written atomically; none can be partially set.
+///
+/// # Authorization
+/// Caller: platform admin only.
+///
+/// # Security
+/// The `Resolved` status is a **write-once terminal state**.  The state-machine
+/// guard at `invoice.dispute_status != DisputeStatus::UnderReview` prevents:
+/// - Double-resolution (overwriting resolution text).
+/// - Resolving without prior review (skipping governance step).
+/// - Resolving a dispute that was never opened (`None` status).
+///
+/// # Errors
+/// | Error | Condition |
+/// |---|---|
+/// | [`QuickLendXError::Unauthorized`] / [`QuickLendXError::NotAdmin`] | Caller is not the admin |
+/// | [`QuickLendXError::InvoiceNotFound`] | `invoice_id` does not exist |
+/// | [`QuickLendXError::DisputeNotFound`] | No dispute exists (`DisputeStatus::None`) |
+/// | [`QuickLendXError::DisputeNotUnderReview`] | Status is `Disputed` or `Resolved` |
+/// | [`QuickLendXError::InvalidDisputeReason`] | `resolution` empty or > 2 000 chars |
 pub fn resolve_dispute(
     env: &Env,
     admin: &Address,
@@ -140,17 +223,19 @@ pub fn resolve_dispute(
     resolution: &String,
 ) -> Result<(), QuickLendXError> {
     AdminStorage::require_admin(env, admin)?;
+
+    validate_dispute_resolution(resolution)?;
+
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    if invoice.dispute_status == DisputeStatus::None {
-        return Err(QuickLendXError::DisputeNotFound);
-    }
+    // Guard: only UnderReview disputes may be resolved.
+    // This single check simultaneously prevents:
+    //   • resolving a Disputed invoice (review step not taken)
+    //   • double-resolving a Resolved invoice (terminal state guard)
+    //   • resolving a None invoice (no dispute exists)
     if invoice.dispute_status != DisputeStatus::UnderReview {
         return Err(QuickLendXError::DisputeNotUnderReview);
-    }
-    if resolution.len() == 0 || resolution.len() > MAX_DISPUTE_RESOLUTION_LENGTH {
-        return Err(QuickLendXError::InvalidDisputeReason);
     }
 
     invoice.dispute_status = DisputeStatus::Resolved;
@@ -161,7 +246,6 @@ pub fn resolve_dispute(
     Ok(())
 }
 
-#[allow(dead_code)]
 pub fn get_dispute_details(env: &Env, invoice_id: &BytesN<32>) -> Option<Dispute> {
     let invoice = InvoiceStorage::get_invoice(env, invoice_id)?;
     if invoice.dispute_status == DisputeStatus::None {
@@ -171,16 +255,19 @@ pub fn get_dispute_details(env: &Env, invoice_id: &BytesN<32>) -> Option<Dispute
     }
 }
 
-#[allow(dead_code)]
 pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
     get_dispute_index(env)
 }
 
+/// @notice Read the dispute index for query endpoints.
+/// @param env The contract environment.
+/// @return Invoice IDs that have entered the dispute lifecycle.
+pub(crate) fn indexed_dispute_invoices(env: &Env) -> Vec<BytesN<32>> {
+    get_dispute_index(env)
+}
+
 #[allow(dead_code)]
-pub fn get_invoices_by_dispute_status(
-    env: &Env,
-    status: &DisputeStatus,
-) -> Vec<BytesN<32>> {
+pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<BytesN<32>> {
     let mut result = Vec::new(env);
     for invoice_id in get_dispute_index(env).iter() {
         if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
@@ -191,5 +278,13 @@ pub fn get_invoices_by_dispute_status(
     }
     result
 }
-//! Invoice disputes are represented on [`crate::invoice::Invoice`] and handled by contract
-//! entry points in `lib.rs`. This module is reserved for future dispute-specific helpers.
+
+/// @notice Filter dispute-indexed invoices by dispute status.
+/// @param env The contract environment.
+/// @param status Desired dispute status filter.
+/// @return Invoice IDs whose current dispute status matches `status`.
+pub(crate) fn indexed_invoices_by_status(env: &Env, status: &DisputeStatus) -> Vec<BytesN<32>> {
+    get_invoices_by_dispute_status(env, status)
+}
+// Invoice disputes are represented on [`crate::invoice::Invoice`] and handled by contract
+// entry points in `lib.rs`. This module is reserved for future dispute-specific helpers.

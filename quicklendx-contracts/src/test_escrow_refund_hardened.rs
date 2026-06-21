@@ -3,7 +3,7 @@
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::payments::EscrowStatus;
-use soroban_sdk::{testutils::Address as _, vec, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{testutils::Address as _, token, vec, Address, BytesN, Env, String, Vec};
 
 use crate::QuickLendXContract;
 
@@ -48,7 +48,7 @@ fn test_refund_only_by_admin_or_owner() {
         &InvoiceCategory::Technology,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.verify_invoice(&invoice_id);
     let bid_id: BytesN<32> = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
     
     client.accept_bid_and_fund(&invoice_id, &bid_id);
@@ -92,7 +92,7 @@ fn test_refund_fails_on_already_paid_invoice() {
         &InvoiceCategory::Technology,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.verify_invoice(&invoice_id);
     let bid_id: BytesN<32> = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
@@ -128,7 +128,7 @@ fn test_refund_status_bucket_integrity() {
         &InvoiceCategory::Technology,
         &Vec::new(&env),
     );
-    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    client.verify_invoice(&invoice_id);
     let bid_id: BytesN<32> = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
@@ -145,4 +145,54 @@ fn test_refund_status_bucket_integrity() {
     
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Refunded);
+}
+
+#[test]
+fn test_hardened_refund_exact_amount_recipient_and_idempotency() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, business, investor, _currency) = setup(&env);
+
+    let token_admin = Address::generate(&env);
+    let currency = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    let contract_id = client.address.clone();
+    let initial_balance = 10_000i128;
+    sac_client.mint(&business, &initial_balance);
+    sac_client.mint(&investor, &initial_balance);
+    let expiration = env.ledger().sequence() + 10_000;
+    token_client.approve(&business, &contract_id, &initial_balance, &expiration);
+    token_client.approve(&investor, &contract_id, &initial_balance, &expiration);
+
+    let amount = 2_500i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id: BytesN<32> = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Hardened refund amount invoice"),
+        &InvoiceCategory::Technology,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+    let bid_id: BytesN<32> = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    client.accept_bid_and_fund(&invoice_id, &bid_id);
+
+    let investor_balance_after_lock = token_client.balance(&investor);
+    let contract_balance_after_lock = token_client.balance(&contract_id);
+    assert_eq!(investor_balance_after_lock, initial_balance - amount);
+    assert_eq!(contract_balance_after_lock, amount);
+
+    client.refund_escrow_funds(&invoice_id, &admin);
+
+    assert_eq!(token_client.balance(&investor), initial_balance);
+    assert_eq!(token_client.balance(&contract_id), 0i128);
+    assert_eq!(client.get_escrow_status(&invoice_id), EscrowStatus::Refunded);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Refunded);
+
+    let retry = client.try_refund_escrow_funds(&invoice_id, &admin);
+    assert!(matches!(retry, Err(Ok(QuickLendXError::InvalidStatus))));
 }

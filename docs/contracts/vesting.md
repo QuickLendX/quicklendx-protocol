@@ -171,16 +171,37 @@ Transfers releasable tokens to beneficiary. Updates `released_amount`.
 - Returns `Ok(0)` if called after full release (idempotent).
 - Returns `Unauthorized` if caller is not the schedule beneficiary.
 
+## Over-Release Safety
+
+The contract guarantees that the cumulative amount released to a beneficiary
+can **never exceed `total_amount`**, regardless of how many times `release` is
+called or how far past `end_time` the ledger advances.
+
+The protection is layered:
+
+1. **`releasable_amount` is bounded** — it returns `vested_amount - released_amount`.
+   Because `vested_amount` is capped at `total_amount` (the `now >= end_time`
+   branch), the releasable value is always ≤ `total_amount - released_amount`.
+2. **`released_amount` is updated with `checked_add`** — overflow returns
+   `InvalidAmount` rather than wrapping.
+3. **`validate_schedule_state` re-runs after every release** — it asserts
+   `released_amount <= total_amount`; any state corruption is caught before the
+   updated schedule is persisted.
+4. **Idempotent post-full-vest behaviour** — once `released_amount == total_amount`
+   the releasable value is 0 and `release()` returns `Ok(0)` without mutating
+   state, so repeated calls are safe.
+
 ## Testing
 
 Run vesting tests:
 
 ```bash
-cargo test vesting --lib
+cargo test test_vesting --lib
 ```
 
 ### Test Coverage
 
+#### Cliff boundary
 - Before cliff: 0 releasable; `release()` returns `InvalidTimestamp`
 - At cliff: positive releasable
 - After cliff, before end: partial release
@@ -188,13 +209,39 @@ cargo test vesting --lib
 - After end time: full amount
 - Zero cliff edge case
 - Off-by-one timestamp boundaries
-- Multiple partial releases
-- Integer division rounding
-- Admin boundary: non-admin rejected
-- Admin boundary: zero amount rejected
-- Admin boundary: backdated start rejected
-- Admin boundary: `end_time <= start_time` rejected
-- Admin boundary: `cliff_time >= end_time` rejected
-- Admin boundary: old admin loses power after role transfer
+
+#### Monotonicity
+- `vested_amount` is non-decreasing across a sequence of timestamps spanning
+  pre-cliff, cliff, mid-vest, end, and post-end (`test_vested_amount_is_monotonic_across_schedule`)
+- `releasable_amount` (before any release) is non-decreasing over time
+  (`test_releasable_amount_is_monotonic_before_any_release`)
+
+#### Over-release protection
+- Releasing at every checkpoint: cumulative sum never exceeds `total_amount`
+  (`test_sum_of_releases_never_exceeds_total`)
+- Double release after full vest returns 0; `released_amount` stays at `total`
+  (`test_double_release_after_full_vest_is_zero`)
+- Release at `start_time` (before cliff) yields 0 releasable
+  (`test_release_at_start_time_yields_zero_releasable`)
+
+#### Timestamp overflow safety
+- Schedule with timestamps near 10¹² seconds computes correct vested amount
+  without overflow (`test_timestamp_near_max_does_not_overflow`)
+- Large `total_amount` (near token mint cap) does not overflow `checked_mul`
+  (`test_large_amount_vesting_arithmetic_does_not_overflow`)
+
+#### Other edge cases
+- Multiple partial releases tracking
+- Integer division rounding (truncation)
+- Release idempotency
+- `vested_amount` and `releasable_amount` always non-negative
+
+#### Admin boundary
+- Non-admin rejected
+- Zero amount rejected
+- Backdated start rejected
+- `end_time <= start_time` rejected
+- `cliff_time >= end_time` rejected
+- Old admin loses power after role transfer
 - Non-beneficiary release rejected
 - Querying non-existent schedule returns `None`

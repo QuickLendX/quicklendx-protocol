@@ -4,17 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-# rlib only: avoids Windows GNU "export ordinal too large" when building cdylib.
-# For WASM contract build use: cargo build --release --target wasm32-unknown-unknown
-# (add crate-type = ["cdylib"] temporarily or build in WSL/Linux if you need the .so artifact).
+# rlib for tests/integration; cdylib for WASM contract builds.
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { version = "25.1.1", features = ["alloc"] }
+proptest = { version = "1.4", optional = true }
 
 [dev-dependencies]
-soroban-sdk = { version = "25.1.1", features = ["testutils"] }
 proptest = "1.4"
+soroban-sdk = { version = "25.1.1", features = ["testutils"] }
 
 # Optimized for minimal WASM size and network deployment limits (see README size budget).
 [profile.release]
@@ -34,6 +33,8 @@ debug-assertions = true
 
 [features]
 # Enable fuzz tests (disabled by default to avoid blocking CI)
-fuzz-tests = []
+fuzz-tests = ["dep:proptest"]
 # Allow selectively compiling legacy test modules (kept off in CI)
 legacy-tests = []
+# Feature-gated logging and structured diagnostics
+diagnostics = []

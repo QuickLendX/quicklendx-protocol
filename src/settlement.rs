@@ -299,6 +299,48 @@ mod tests {
         }
     }
 
+    // ── verify_conservation overflow branch ──────────────────────────────────
+
+    #[test]
+    fn test_verify_conservation_overflow_returns_false() {
+        // Construct a SettlementResult where investor_payout + protocol_fee
+        // overflows u128, triggering the None => false branch.
+        let result = SettlementResult {
+            investor_payout: u128::MAX,
+            protocol_fee: 1,
+            late_penalty: 0,
+            total_collected: 0, // irrelevant; overflow happens first
+        };
+        assert!(!verify_conservation(&result));
+    }
+
+    #[test]
+    fn test_verify_conservation_sum_mismatch_returns_false() {
+        // Sum doesn't overflow but doesn't equal total_collected.
+        let result = SettlementResult {
+            investor_payout: 500_000,
+            protocol_fee: 10_000,
+            late_penalty: 0,
+            total_collected: 999_999, // wrong total
+        };
+        assert!(!verify_conservation(&result));
+    }
+
+    #[test]
+    fn test_conservation_scenario_with_guaranteed_some() {
+        // Ensure the assert! inside test_conservation_all_scenarios is hit
+        // by using parameters that always produce Some.
+        let cases = [
+            (1_000_000u128, 500_000u128, 100u128, 100u128),
+            (2_000_000, 1_000_000, 200, 200),
+        ];
+        for (face, funded, fee, penalty) in cases {
+            let r = compute_settlement(face, funded, fee, penalty)
+                .expect("should produce valid settlement");
+            assert!(verify_conservation(&r));
+        }
+    }
+
     // ── investor_profit helper ────────────────────────────────────────────────
 
     #[test]

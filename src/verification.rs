@@ -35,11 +35,9 @@
 /// | `guard_settlement_initiation`| Business      | Verified        | —                   |
 /// | `guard_escrow_release`       | Business      | Verified        | —                   |
 /// | `guard_investment_action`    | Investor      | Verified        | amount ≤ limit      |
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
-
 /// Basis-point denominator (10_000 = 100%).
 pub const BPS_DENOMINATOR: u128 = 10_000;
 
@@ -123,10 +121,7 @@ pub enum GuardError {
         effective_limit: u128,
     },
     /// Bid / investment amount exceeds the per-investment risk cap.
-    PerInvestmentCapExceeded {
-        requested: u128,
-        cap: u128,
-    },
+    PerInvestmentCapExceeded { requested: u128, cap: u128 },
     /// Zero investment amount is not permitted.
     ZeroAmount,
     /// An arithmetic overflow occurred during limit computation.
@@ -595,17 +590,23 @@ mod tests {
 
     #[test]
     fn test_transition_pending_to_verified() {
-        assert!(validate_transition(VerificationStatus::Pending, VerificationStatus::Verified).is_ok());
+        assert!(
+            validate_transition(VerificationStatus::Pending, VerificationStatus::Verified).is_ok()
+        );
     }
 
     #[test]
     fn test_transition_pending_to_rejected() {
-        assert!(validate_transition(VerificationStatus::Pending, VerificationStatus::Rejected).is_ok());
+        assert!(
+            validate_transition(VerificationStatus::Pending, VerificationStatus::Rejected).is_ok()
+        );
     }
 
     #[test]
     fn test_transition_rejected_to_pending() {
-        assert!(validate_transition(VerificationStatus::Rejected, VerificationStatus::Pending).is_ok());
+        assert!(
+            validate_transition(VerificationStatus::Rejected, VerificationStatus::Pending).is_ok()
+        );
     }
 
     #[test]

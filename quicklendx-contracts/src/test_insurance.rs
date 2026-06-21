@@ -1,19 +1,19 @@
 /// Comprehensive test suite for investment insurance parameter validation.
 ///
 /// # Coverage areas
-/// 1.  Bounds constants – verify the public constants match their documented values.
-/// 2.  `calculate_premium` – pure math, boundary values, overflow safety, invariants.
-/// 3.  Authorization – only the investment owner can call `add_investment_insurance`.
-/// 4.  State validation – insurance is only allowed on Active investments.
-/// 5.  Coverage-percentage validation – below min, above max, exact boundaries.
-/// 6.  Investment-amount validation – zero, negative, tiny (premium rounds to 0).
-/// 7.  Cumulative active-coverage cap – multiple active policies may coexist,
+/// 1.  Bounds constants - verify the public constants match their documented values.
+/// 2.  `calculate_premium` - pure math, boundary values, overflow safety, invariants.
+/// 3.  Authorization - only the investment owner can call `add_investment_insurance`.
+/// 4.  State validation - insurance is only allowed on Active investments.
+/// 5.  Coverage-percentage validation - below min, above max, exact boundaries.
+/// 6.  Investment-amount validation - zero, negative, tiny (premium rounds to 0).
+/// 7.  Cumulative active-coverage cap - multiple active policies may coexist,
 ///     but their total percentage can never exceed the configured cap.
-/// 8.  Premium-vs-coverage invariant – premium must not exceed coverage amount.
-/// 9.  Over-coverage exploit prevention – coverage_amount never exceeds principal.
-/// 10. Query correctness – `query_investment_insurance` returns all historical entries.
-/// 11. Claim handling – single-claim compatibility and multi-policy deactivation.
-/// 12. Cross-investment isolation – operations on one investment do not affect another.
+/// 8.  Premium-vs-coverage invariant - premium must not exceed coverage amount.
+/// 9.  Over-coverage exploit prevention - coverage_amount never exceeds principal.
+/// 10. Query correctness - `query_investment_insurance` returns all historical entries.
+/// 11. Claim handling - single-claim compatibility and multi-policy deactivation.
+/// 12. Cross-investment isolation - operations on one investment do not affect another.
 extern crate alloc;
 use super::*;
 use crate::errors::QuickLendXError;
@@ -98,18 +98,18 @@ fn test_constants_have_expected_values() {
 }
 
 // ============================================================================
-// 2. calculate_premium – pure unit tests (no contract required)
+// 2. calculate_premium - pure unit tests (no contract required)
 // ============================================================================
 
 #[test]
 fn test_calculate_premium_typical_cases() {
-    // 10 000 × 80 % = 8 000 coverage; 8 000 × 2 % = 160 premium
+    // 10 000 - 80 % = 8 000 coverage; 8 000 - 2 % = 160 premium
     assert_eq!(Investment::calculate_premium(10_000, 80), 160);
-    // 10 000 × 50 % = 5 000 coverage; 5 000 × 2 % = 100 premium
+    // 10 000 - 50 % = 5 000 coverage; 5 000 - 2 % = 100 premium
     assert_eq!(Investment::calculate_premium(10_000, 50), 100);
-    // 10 000 × 100 % = 10 000 coverage; 10 000 × 2 % = 200 premium
+    // 10 000 - 100 % = 10 000 coverage; 10 000 - 2 % = 200 premium
     assert_eq!(Investment::calculate_premium(10_000, 100), 200);
-    // 10 000 × 1 % = 100 coverage; 100 × 2 % = 2 premium
+    // 10 000 - 1 % = 100 coverage; 100 - 2 % = 2 premium
     assert_eq!(Investment::calculate_premium(10_000, 1), 2);
 }
 
@@ -129,11 +129,11 @@ fn test_calculate_premium_returns_zero_for_invalid_inputs() {
 
 #[test]
 fn test_calculate_premium_minimum_floor() {
-    // amount = 500, coverage = 1 % → coverage_amount = 5; 5 × 2 % = 0 (integer)
-    // Floor kicks in → premium = 1
+    // amount = 500, coverage = 1 % -> coverage_amount = 5; 5 - 2 % = 0 (integer)
+    // Floor kicks in -> premium = 1
     assert_eq!(Investment::calculate_premium(500, 1), 1);
 
-    // amount = 100, coverage = 1 % → coverage_amount = 1; 1 × 2 % = 0 → floor → 1
+    // amount = 100, coverage = 1 % -> coverage_amount = 1; 1 - 2 % = 0 -> floor -> 1
     assert_eq!(Investment::calculate_premium(100, 1), 1);
 }
 
@@ -147,23 +147,32 @@ fn test_calculate_premium_boundary_coverage_percentages() {
     let p = Investment::calculate_premium(10_000, MAX_COVERAGE_PERCENTAGE);
     assert!(p >= MIN_PREMIUM_AMOUNT);
 
-    // One below min → 0
-    assert_eq!(Investment::calculate_premium(10_000, MIN_COVERAGE_PERCENTAGE - 1), 0);
+    // One below min -> 0
+    assert_eq!(
+        Investment::calculate_premium(10_000, MIN_COVERAGE_PERCENTAGE - 1),
+        0
+    );
 
-    // One above max → 0  (over-coverage guard)
-    assert_eq!(Investment::calculate_premium(10_000, MAX_COVERAGE_PERCENTAGE + 1), 0);
+    // One above max -> 0  (over-coverage guard)
+    assert_eq!(
+        Investment::calculate_premium(10_000, MAX_COVERAGE_PERCENTAGE + 1),
+        0
+    );
 }
 
 #[test]
 fn test_calculate_premium_coverage_never_exceeds_amount() {
-    // For all valid percentages, coverage_amount ≤ amount.
+    // For all valid percentages, coverage_amount - amount.
     let amount: i128 = 9_999;
     for pct in MIN_COVERAGE_PERCENTAGE..=MAX_COVERAGE_PERCENTAGE {
         let premium = Investment::calculate_premium(amount, pct);
         // premium > 0 means inputs were valid; verify invariant holds
         if premium > 0 {
             let coverage_amount = amount * pct as i128 / 100;
-            assert!(coverage_amount <= amount, "coverage_amount must not exceed principal");
+            assert!(
+                coverage_amount <= amount,
+                "coverage_amount must not exceed principal"
+            );
         }
     }
 }
@@ -172,28 +181,31 @@ fn test_calculate_premium_coverage_never_exceeds_amount() {
 fn test_calculate_premium_overflow_safety() {
     // i128::MAX amount with maximum coverage_percentage must not panic.
     let result = Investment::calculate_premium(i128::MAX, MAX_COVERAGE_PERCENTAGE);
-    // saturating_mul on i128::MAX × 100 saturates; checked_div then gives
-    // Some(i128::MAX) → premium > 0.  The exact value is less important than
+    // saturating_mul on i128::MAX - 100 saturates; checked_div then gives
+    // Some(i128::MAX) -> premium > 0.  The exact value is less important than
     // the absence of a panic.
     assert!(result >= 0);
 
     // Large but representable amount
     let large: i128 = 1_000_000_000_000_000_000; // 1 quintillion
     let p = Investment::calculate_premium(large, 80);
-    // 1e18 × 80 / 100 = 8e17; 8e17 × 200 / 10_000 = 1.6e16
+    // 1e18 - 80 / 100 = 8e17; 8e17 - 200 / 10_000 = 1.6e16
     assert_eq!(p, 16_000_000_000_000_000);
 }
 
 #[test]
 fn test_calculate_premium_premium_does_not_exceed_coverage() {
-    // With DEFAULT_INSURANCE_PREMIUM_BPS = 200 (2 %), premium ≤ coverage_amount
+    // With DEFAULT_INSURANCE_PREMIUM_BPS = 200 (2 %), premium - coverage_amount
     // for all valid inputs.
     for pct in MIN_COVERAGE_PERCENTAGE..=MAX_COVERAGE_PERCENTAGE {
         let amount: i128 = 1_000_000;
         let premium = Investment::calculate_premium(amount, pct);
         if premium > 0 {
             let coverage_amount = amount * pct as i128 / 100;
-            assert!(premium <= coverage_amount, "premium must not exceed coverage amount");
+            assert!(
+                premium <= coverage_amount,
+                "premium must not exceed coverage amount"
+            );
         }
     }
 }
@@ -204,7 +216,7 @@ fn test_calculate_premium_premium_does_not_exceed_coverage() {
 
 #[test]
 fn test_add_insurance_requires_exactly_investor_auth() {
-    // Soroban auth violations result in a host panic — we verify the correct
+    // Soroban auth violations result in a host panic - we verify the correct
     // authorization call is made by supplying only the investor's MockAuth and
     // confirming the invocation succeeds. If the contract called require_auth()
     // on any other address (or not at all), the mock would not match and the
@@ -213,8 +225,14 @@ fn test_add_insurance_requires_exactly_investor_auth() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let investment_id =
-        store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 1);
+    let investment_id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        1,
+    );
 
     env.mock_auths(&[MockAuth {
         address: &investor,
@@ -234,7 +252,7 @@ fn test_add_insurance_requires_exactly_investor_auth() {
 }
 
 // ============================================================================
-// 4. State validation – investment status
+// 4. State validation - investment status
 // ============================================================================
 
 #[test]
@@ -260,7 +278,14 @@ fn test_add_insurance_fails_on_withdrawn_investment() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Withdrawn, 2);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Withdrawn,
+        2,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &50u32)
@@ -277,7 +302,14 @@ fn test_add_insurance_fails_on_completed_investment() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Completed, 3);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Completed,
+        3,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &50u32)
@@ -294,7 +326,14 @@ fn test_add_insurance_fails_on_defaulted_investment() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Defaulted, 4);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Defaulted,
+        4,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &50u32)
@@ -311,7 +350,14 @@ fn test_add_insurance_fails_on_refunded_investment() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Refunded, 5);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Refunded,
+        5,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &50u32)
@@ -332,9 +378,16 @@ fn test_add_insurance_rejects_zero_coverage_percentage() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 10);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        10,
+    );
 
-    // coverage_percentage = 0 is below MIN_COVERAGE_PERCENTAGE → specific error
+    // coverage_percentage = 0 is below MIN_COVERAGE_PERCENTAGE -> specific error
     let err = client
         .try_add_investment_insurance(&id, &provider, &0u32)
         .err()
@@ -350,7 +403,14 @@ fn test_add_insurance_rejects_over_100_coverage_percentage() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 11);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        11,
+    );
 
     for &pct in &[101u32, 150, 200, u32::MAX] {
         let err = client
@@ -358,10 +418,7 @@ fn test_add_insurance_rejects_over_100_coverage_percentage() {
             .err()
             .unwrap()
             .unwrap();
-        assert_eq!(
-            err,
-            QuickLendXError::InvalidCoveragePercentage
-        );
+        assert_eq!(err, QuickLendXError::InvalidCoveragePercentage);
     }
 }
 
@@ -373,13 +430,23 @@ fn test_add_insurance_accepts_min_coverage_percentage() {
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
     // Use a large enough amount so 1 % gives a non-zero coverage_amount and premium.
-    let id = store_investment(&env, &contract_id, &investor, 100_000, InvestmentStatus::Active, 12);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        100_000,
+        InvestmentStatus::Active,
+        12,
+    );
 
     client.add_investment_insurance(&id, &provider, &MIN_COVERAGE_PERCENTAGE);
 
     let records = client.query_investment_insurance(&id);
     assert_eq!(records.len(), 1);
-    assert_eq!(records.get(0).unwrap().coverage_percentage, MIN_COVERAGE_PERCENTAGE);
+    assert_eq!(
+        records.get(0).unwrap().coverage_percentage,
+        MIN_COVERAGE_PERCENTAGE
+    );
 }
 
 #[test]
@@ -389,13 +456,23 @@ fn test_add_insurance_accepts_max_coverage_percentage() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 13);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        13,
+    );
 
     client.add_investment_insurance(&id, &provider, &MAX_COVERAGE_PERCENTAGE);
 
     let records = client.query_investment_insurance(&id);
     assert_eq!(records.len(), 1);
-    assert_eq!(records.get(0).unwrap().coverage_percentage, MAX_COVERAGE_PERCENTAGE);
+    assert_eq!(
+        records.get(0).unwrap().coverage_percentage,
+        MAX_COVERAGE_PERCENTAGE
+    );
     // 100 % coverage means coverage_amount == investment amount
     assert_eq!(records.get(0).unwrap().coverage_amount, 10_000);
 }
@@ -411,7 +488,14 @@ fn test_add_insurance_rejects_negative_investment_amount() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, -1, InvestmentStatus::Active, 20);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        -1,
+        InvestmentStatus::Active,
+        20,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &50u32)
@@ -428,7 +512,14 @@ fn test_add_insurance_rejects_zero_investment_amount() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 0, InvestmentStatus::Active, 21);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        0,
+        InvestmentStatus::Active,
+        21,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &50u32)
@@ -440,13 +531,20 @@ fn test_add_insurance_rejects_zero_investment_amount() {
 
 #[test]
 fn test_add_insurance_rejects_tiny_amount_where_premium_rounds_to_zero() {
-    // amount=50, coverage=1 % → coverage_amount = 0 (integer division) → premium = 0
+    // amount=50, coverage=1 % -> coverage_amount = 0 (integer division) -> premium = 0
     let (env, client, contract_id) = setup();
     env.mock_all_auths();
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 50, InvestmentStatus::Active, 22);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        50,
+        InvestmentStatus::Active,
+        22,
+    );
 
     let err = client
         .try_add_investment_insurance(&id, &provider, &1u32)
@@ -468,7 +566,14 @@ fn test_add_insurance_allows_multiple_active_coverages_within_cumulative_cap() {
     let investor = Address::generate(&env);
     let provider_a = Address::generate(&env);
     let provider_b = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 30);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        30,
+    );
 
     client.add_investment_insurance(&id, &provider_a, &60u32);
     client.add_investment_insurance(&id, &provider_b, &40u32);
@@ -489,7 +594,14 @@ fn test_add_insurance_rejects_when_cumulative_coverage_exceeds_cap() {
     let investor = Address::generate(&env);
     let provider_a = Address::generate(&env);
     let provider_b = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 31);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        31,
+    );
 
     client.add_investment_insurance(&id, &provider_a, &60u32);
 
@@ -514,7 +626,14 @@ fn test_add_insurance_accepts_exact_cumulative_cap_across_multiple_policies() {
     let provider_a = Address::generate(&env);
     let provider_b = Address::generate(&env);
     let provider_c = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 32);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        32,
+    );
 
     client.add_investment_insurance(&id, &provider_a, &30u32);
     client.add_investment_insurance(&id, &provider_b, &30u32);
@@ -535,7 +654,14 @@ fn test_add_insurance_allowed_after_previous_is_deactivated() {
     let investor = Address::generate(&env);
     let provider_a = Address::generate(&env);
     let provider_b = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 33);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        33,
+    );
 
     client.add_investment_insurance(&id, &provider_a, &60u32);
     set_insurance_inactive(&env, &contract_id, &id, 0);
@@ -546,7 +672,7 @@ fn test_add_insurance_allowed_after_previous_is_deactivated() {
     let records = client.query_investment_insurance(&id);
     assert_eq!(records.len(), 2);
     assert!(!records.get(0).unwrap().active); // first is now inactive
-    assert!(records.get(1).unwrap().active);  // second is active
+    assert!(records.get(1).unwrap().active); // second is active
 }
 
 // ============================================================================
@@ -560,8 +686,15 @@ fn test_premium_stored_in_coverage_record() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    // 10 000 × 80 % = 8 000; 8 000 × 2 % = 160
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 40);
+    // 10 000 - 80 % = 8 000; 8 000 - 2 % = 160
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        40,
+    );
 
     client.add_investment_insurance(&id, &provider, &80u32);
 
@@ -573,19 +706,26 @@ fn test_premium_stored_in_coverage_record() {
 
 #[test]
 fn test_premium_minimum_floor_applied() {
-    // 100 × 1 % = 1 coverage; 1 × 2 % = 0 (integer) → floor → premium = 1
+    // 100 - 1 % = 1 coverage; 1 - 2 % = 0 (integer) -> floor -> premium = 1
     let (env, client, contract_id) = setup();
     env.mock_all_auths();
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 100, InvestmentStatus::Active, 41);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        100,
+        InvestmentStatus::Active,
+        41,
+    );
 
     client.add_investment_insurance(&id, &provider, &1u32);
 
     let cov = client.query_investment_insurance(&id).get(0).unwrap();
     assert_eq!(cov.coverage_amount, 1);
-    assert_eq!(cov.premium_amount, 1);  // floor applied
+    assert_eq!(cov.premium_amount, 1); // floor applied
 }
 
 // ============================================================================
@@ -600,26 +740,43 @@ fn test_coverage_amount_never_exceeds_investment_amount() {
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
     let amount: i128 = 7_777;
-    let id = store_investment(&env, &contract_id, &investor, amount, InvestmentStatus::Active, 50);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        amount,
+        InvestmentStatus::Active,
+        50,
+    );
 
     client.add_investment_insurance(&id, &provider, &MAX_COVERAGE_PERCENTAGE);
 
     let cov = client.query_investment_insurance(&id).get(0).unwrap();
-    assert!(cov.coverage_amount <= amount, "coverage_amount must not exceed investment amount");
-    assert_eq!(cov.coverage_amount, amount); // 100 % → exact match
+    assert!(
+        cov.coverage_amount <= amount,
+        "coverage_amount must not exceed investment amount"
+    );
+    assert_eq!(cov.coverage_amount, amount); // 100 % -> exact match
 }
 
 #[test]
 fn test_over_100_percent_rejected_with_specific_error() {
     // This is the core over-coverage exploit test: an attacker supplying
-    // coverage_percentage = 200 would compute coverage_amount = 2 × principal.
+    // coverage_percentage = 200 would compute coverage_amount = 2 - principal.
     // The explicit range check in lib.rs must catch this before arithmetic.
     let (env, client, contract_id) = setup();
     env.mock_all_auths();
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 51);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        51,
+    );
 
     for &pct in &[101u32, 150, 200, 1_000, u32::MAX] {
         let err = client
@@ -627,10 +784,7 @@ fn test_over_100_percent_rejected_with_specific_error() {
             .err()
             .unwrap()
             .unwrap();
-        assert_eq!(
-            err,
-            QuickLendXError::InvalidCoveragePercentage
-        );
+        assert_eq!(err, QuickLendXError::InvalidCoveragePercentage);
     }
 }
 
@@ -644,7 +798,14 @@ fn test_query_returns_empty_for_new_investment() {
     env.mock_all_auths();
 
     let investor = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 60);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        60,
+    );
 
     let records = client.query_investment_insurance(&id);
     assert_eq!(records.len(), 0);
@@ -658,7 +819,14 @@ fn test_query_returns_all_historical_entries() {
     let investor = Address::generate(&env);
     let provider_a = Address::generate(&env);
     let provider_b = Address::generate(&env);
-    let id = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 61);
+    let id = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        61,
+    );
 
     client.add_investment_insurance(&id, &provider_a, &40u32);
     set_insurance_inactive(&env, &contract_id, &id, 0);
@@ -755,7 +923,9 @@ fn test_second_claim_returns_none_after_first() {
     };
 
     let premium = Investment::calculate_premium(1_000, 100);
-    investment.add_insurance(provider.clone(), 100, premium).unwrap();
+    investment
+        .add_insurance(provider.clone(), 100, premium)
+        .unwrap();
     investment.process_insurance_claim().unwrap();
 
     // Second call must return None because coverage is now inactive.
@@ -781,8 +951,12 @@ fn test_process_all_insurance_claims_deactivates_all_active_coverages() {
 
     let premium_a = Investment::calculate_premium(10_000, 40);
     let premium_b = Investment::calculate_premium(10_000, 60);
-    investment.add_insurance(provider_a.clone(), 40, premium_a).unwrap();
-    investment.add_insurance(provider_b.clone(), 60, premium_b).unwrap();
+    investment
+        .add_insurance(provider_a.clone(), 40, premium_a)
+        .unwrap();
+    investment
+        .add_insurance(provider_b.clone(), 60, premium_b)
+        .unwrap();
 
     let claims = investment.process_all_insurance_claims(&env);
     assert_eq!(claims.len(), 2);
@@ -806,8 +980,22 @@ fn test_insurance_on_one_investment_does_not_affect_another() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    let id_a = store_investment(&env, &contract_id, &investor, 10_000, InvestmentStatus::Active, 70);
-    let id_b = store_investment(&env, &contract_id, &investor, 20_000, InvestmentStatus::Active, 71);
+    let id_a = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        10_000,
+        InvestmentStatus::Active,
+        70,
+    );
+    let id_b = store_investment(
+        &env,
+        &contract_id,
+        &investor,
+        20_000,
+        InvestmentStatus::Active,
+        71,
+    );
 
     client.add_investment_insurance(&id_a, &provider, &50u32);
 
@@ -841,21 +1029,23 @@ fn test_add_insurance_unit_coverage_percentage_bounds() {
         insurance: Vec::new(&env),
     };
 
-    // coverage_percentage = 0 → InvalidCoveragePercentage
+    // coverage_percentage = 0 -> InvalidCoveragePercentage
     assert_eq!(
         inv.add_insurance(provider.clone(), 0, 10),
         Err(QuickLendXError::InvalidCoveragePercentage)
     );
 
-    // coverage_percentage = 101 → InvalidCoveragePercentage
+    // coverage_percentage = 101 -> InvalidCoveragePercentage
     assert_eq!(
         inv.add_insurance(provider.clone(), 101, 10),
         Err(QuickLendXError::InvalidCoveragePercentage)
     );
 
-    // coverage_percentage = MAX_COVERAGE_PERCENTAGE with valid premium → Ok
+    // coverage_percentage = MAX_COVERAGE_PERCENTAGE with valid premium -> Ok
     let premium = Investment::calculate_premium(1_000, MAX_COVERAGE_PERCENTAGE);
-    assert!(inv.add_insurance(provider.clone(), MAX_COVERAGE_PERCENTAGE, premium).is_ok());
+    assert!(inv
+        .add_insurance(provider.clone(), MAX_COVERAGE_PERCENTAGE, premium)
+        .is_ok());
 }
 
 #[test]
@@ -897,13 +1087,13 @@ fn test_add_insurance_unit_rejects_below_minimum_premium() {
         insurance: Vec::new(&env),
     };
 
-    // premium = 0 → below MIN_PREMIUM_AMOUNT
+    // premium = 0 -> below MIN_PREMIUM_AMOUNT
     assert_eq!(
         inv.add_insurance(provider.clone(), 50, 0),
         Err(QuickLendXError::InvalidAmount)
     );
 
-    // premium = -1 → below MIN_PREMIUM_AMOUNT
+    // premium = -1 -> below MIN_PREMIUM_AMOUNT
     assert_eq!(
         inv.add_insurance(provider.clone(), 50, -1),
         Err(QuickLendXError::InvalidAmount)
@@ -926,14 +1116,14 @@ fn test_add_insurance_unit_rejects_premium_exceeding_coverage_amount() {
         insurance: Vec::new(&env),
     };
 
-    // coverage_percentage = 10 → coverage_amount = 100
-    // premium = 101 > coverage_amount → should be rejected
+    // coverage_percentage = 10 -> coverage_amount = 100
+    // premium = 101 > coverage_amount -> should be rejected
     assert_eq!(
         inv.add_insurance(provider.clone(), 10, 101),
         Err(QuickLendXError::InvalidAmount)
     );
 
-    // premium = coverage_amount exactly → should be accepted (edge of valid range)
+    // premium = coverage_amount exactly -> should be accepted (edge of valid range)
     assert!(inv.add_insurance(provider.clone(), 10, 100).is_ok());
 }
 
@@ -958,8 +1148,10 @@ fn test_add_insurance_unit_enforces_cumulative_cap() {
     let premium_a = Investment::calculate_premium(10_000, 50);
     let premium_b = Investment::calculate_premium(10_000, 30);
     let premium_c = Investment::calculate_premium(10_000, 21);
-    inv.add_insurance(provider_a.clone(), 50, premium_a).unwrap();
-    inv.add_insurance(provider_b.clone(), 30, premium_b).unwrap();
+    inv.add_insurance(provider_a.clone(), 50, premium_a)
+        .unwrap();
+    inv.add_insurance(provider_b.clone(), 30, premium_b)
+        .unwrap();
 
     assert_eq!(inv.total_active_coverage_percentage(), 80);
 
@@ -967,4 +1159,260 @@ fn test_add_insurance_unit_enforces_cumulative_cap() {
         inv.add_insurance(provider_c.clone(), 21, premium_c),
         Err(QuickLendXError::OperationNotAllowed)
     );
+}
+
+// ============================================================================
+// 14. Payout math correctness - claim amounts match coverage_amount formula
+// ============================================================================
+
+/// Total payouts from process_all_insurance_claims never exceed investment principal.
+#[test]
+fn test_total_claim_payouts_never_exceed_investment_principal() {
+    let env = Env::default();
+    let investor = Address::generate(&env);
+    let provider_a = Address::generate(&env);
+    let provider_b = Address::generate(&env);
+    let amount: i128 = 10_000;
+
+    let mut inv = Investment {
+        investment_id: BytesN::from_array(&env, &[20u8; 32]),
+        invoice_id: BytesN::from_array(&env, &[21u8; 32]),
+        investor: investor.clone(),
+        amount,
+        funded_at: 0,
+        status: InvestmentStatus::Active,
+        insurance: Vec::new(&env),
+    };
+
+    let p_a = Investment::calculate_premium(amount, 60);
+    let p_b = Investment::calculate_premium(amount, 40);
+    inv.add_insurance(provider_a.clone(), 60, p_a).unwrap();
+    inv.add_insurance(provider_b.clone(), 40, p_b).unwrap();
+
+    let claims = inv.process_all_insurance_claims(&env);
+    let total_payout: i128 = claims.iter().map(|(_, a)| a).sum();
+    assert!(total_payout <= amount, "total payouts must not exceed principal");
+    assert_eq!(total_payout, amount); // 60 % + 40 % = 100 %
+}
+
+/// Each claim payout equals investment_amount - coverage_percentage / 100.
+#[test]
+fn test_claim_payout_matches_coverage_formula() {
+    let env = Env::default();
+    let investor = Address::generate(&env);
+    let provider = Address::generate(&env);
+    let amount: i128 = 7_777;
+
+    let mut inv = Investment {
+        investment_id: BytesN::from_array(&env, &[22u8; 32]),
+        invoice_id: BytesN::from_array(&env, &[23u8; 32]),
+        investor: investor.clone(),
+        amount,
+        funded_at: 0,
+        status: InvestmentStatus::Active,
+        insurance: Vec::new(&env),
+    };
+
+    let pct = 73u32;
+    let expected_coverage = amount * pct as i128 / 100; // integer floor
+    let premium = Investment::calculate_premium(amount, pct);
+    inv.add_insurance(provider.clone(), pct, premium).unwrap();
+
+    let (_, claim_amount) = inv.process_insurance_claim().unwrap();
+    assert_eq!(claim_amount, expected_coverage);
+}
+
+// ============================================================================
+// 15. Double-claim prevention
+// ============================================================================
+
+/// process_all_insurance_claims called a second time returns an empty list.
+#[test]
+fn test_process_all_claims_twice_second_call_returns_empty() {
+    let env = Env::default();
+    let investor = Address::generate(&env);
+    let provider_a = Address::generate(&env);
+    let provider_b = Address::generate(&env);
+
+    let mut inv = Investment {
+        investment_id: BytesN::from_array(&env, &[24u8; 32]),
+        invoice_id: BytesN::from_array(&env, &[25u8; 32]),
+        investor: investor.clone(),
+        amount: 10_000,
+        funded_at: 0,
+        status: InvestmentStatus::Active,
+        insurance: Vec::new(&env),
+    };
+
+    let p_a = Investment::calculate_premium(10_000, 50);
+    let p_b = Investment::calculate_premium(10_000, 50);
+    inv.add_insurance(provider_a.clone(), 50, p_a).unwrap();
+    inv.add_insurance(provider_b.clone(), 50, p_b).unwrap();
+
+    let first = inv.process_all_insurance_claims(&env);
+    assert_eq!(first.len(), 2);
+
+    // Second call must yield nothing - no double-claim possible.
+    let second = inv.process_all_insurance_claims(&env);
+    assert_eq!(second.len(), 0);
+}
+
+/// process_insurance_claim (single) cannot be called again after all policies claimed.
+#[test]
+fn test_process_single_claim_then_all_returns_empty() {
+    let env = Env::default();
+    let investor = Address::generate(&env);
+    let provider_a = Address::generate(&env);
+    let provider_b = Address::generate(&env);
+
+    let mut inv = Investment {
+        investment_id: BytesN::from_array(&env, &[26u8; 32]),
+        invoice_id: BytesN::from_array(&env, &[27u8; 32]),
+        investor: investor.clone(),
+        amount: 10_000,
+        funded_at: 0,
+        status: InvestmentStatus::Active,
+        insurance: Vec::new(&env),
+    };
+
+    let p_a = Investment::calculate_premium(10_000, 40);
+    let p_b = Investment::calculate_premium(10_000, 60);
+    inv.add_insurance(provider_a.clone(), 40, p_a).unwrap();
+    inv.add_insurance(provider_b.clone(), 60, p_b).unwrap();
+
+    // Claim first policy via single-claim path.
+    let first = inv.process_insurance_claim().unwrap();
+    assert_eq!(first.1, 4_000);
+
+    // Drain remaining via process_all.
+    let rest = inv.process_all_insurance_claims(&env);
+    assert_eq!(rest.len(), 1);
+    assert_eq!(rest.get(0).unwrap().1, 6_000);
+
+    // Nothing left.
+    assert!(inv.process_insurance_claim().is_none());
+    assert_eq!(inv.process_all_insurance_claims(&env).len(), 0);
+}
+
+// ============================================================================
+// 16. total_active_coverage_percentage with mixed active/inactive policies
+// ============================================================================
+
+/// Inactive policies are excluded from the active coverage total.
+#[test]
+fn test_total_active_coverage_excludes_inactive_policies() {
+    let env = Env::default();
+    let investor = Address::generate(&env);
+    let provider_a = Address::generate(&env);
+    let provider_b = Address::generate(&env);
+
+    let mut inv = Investment {
+        investment_id: BytesN::from_array(&env, &[28u8; 32]),
+        invoice_id: BytesN::from_array(&env, &[29u8; 32]),
+        investor: investor.clone(),
+        amount: 10_000,
+        funded_at: 0,
+        status: InvestmentStatus::Active,
+        insurance: Vec::new(&env),
+    };
+
+    let p_a = Investment::calculate_premium(10_000, 60);
+    let p_b = Investment::calculate_premium(10_000, 40);
+    inv.add_insurance(provider_a.clone(), 60, p_a).unwrap();
+    inv.add_insurance(provider_b.clone(), 40, p_b).unwrap();
+
+    assert_eq!(inv.total_active_coverage_percentage(), 100);
+
+    // Deactivate first policy (simulate a claim).
+    let mut cov = inv.insurance.get(0).unwrap();
+    cov.active = false;
+    inv.insurance.set(0, cov);
+
+    // Only the second policy (40 %) should count now.
+    assert_eq!(inv.total_active_coverage_percentage(), 40);
+}
+
+/// After all policies are claimed, total_active_coverage_percentage returns 0.
+#[test]
+fn test_total_active_coverage_zero_after_all_claims() {
+    let env = Env::default();
+    let investor = Address::generate(&env);
+    let provider = Address::generate(&env);
+
+    let mut inv = Investment {
+        investment_id: BytesN::from_array(&env, &[30u8; 32]),
+        invoice_id: BytesN::from_array(&env, &[31u8; 32]),
+        investor: investor.clone(),
+        amount: 5_000,
+        funded_at: 0,
+        status: InvestmentStatus::Active,
+        insurance: Vec::new(&env),
+    };
+
+    let premium = Investment::calculate_premium(5_000, 100);
+    inv.add_insurance(provider.clone(), 100, premium).unwrap();
+    assert_eq!(inv.total_active_coverage_percentage(), 100);
+
+    inv.process_all_insurance_claims(&env);
+    assert_eq!(inv.total_active_coverage_percentage(), 0);
+    assert!(!inv.has_active_insurance());
+}
+
+// ============================================================================
+// 17. Stacked-policy aggregate coverage cap - boundary arithmetic
+// ============================================================================
+
+/// Exactly 100 % cumulative coverage across three policies is accepted.
+#[test]
+fn test_stacked_policies_exactly_100pct_accepted() {
+    let env = Env::default();
+    let investor = Address::generate(&env);
+    let pa = Address::generate(&env);
+    let pb = Address::generate(&env);
+    let pc = Address::generate(&env);
+
+    let mut inv = Investment {
+        investment_id: BytesN::from_array(&env, &[32u8; 32]),
+        invoice_id: BytesN::from_array(&env, &[33u8; 32]),
+        investor: investor.clone(),
+        amount: 10_000,
+        funded_at: 0,
+        status: InvestmentStatus::Active,
+        insurance: Vec::new(&env),
+    };
+
+    inv.add_insurance(pa, 33, Investment::calculate_premium(10_000, 33)).unwrap();
+    inv.add_insurance(pb, 33, Investment::calculate_premium(10_000, 33)).unwrap();
+    inv.add_insurance(pc, 34, Investment::calculate_premium(10_000, 34)).unwrap();
+
+    assert_eq!(inv.total_active_coverage_percentage(), 100);
+    assert_eq!(inv.insurance.len(), 3);
+}
+
+/// 101 % cumulative coverage is rejected even when split across two policies.
+#[test]
+fn test_stacked_policies_101pct_rejected() {
+    let env = Env::default();
+    let investor = Address::generate(&env);
+    let pa = Address::generate(&env);
+    let pb = Address::generate(&env);
+
+    let mut inv = Investment {
+        investment_id: BytesN::from_array(&env, &[34u8; 32]),
+        invoice_id: BytesN::from_array(&env, &[35u8; 32]),
+        investor: investor.clone(),
+        amount: 10_000,
+        funded_at: 0,
+        status: InvestmentStatus::Active,
+        insurance: Vec::new(&env),
+    };
+
+    inv.add_insurance(pa, 51, Investment::calculate_premium(10_000, 51)).unwrap();
+
+    // 51 + 50 = 101 -> must be rejected
+    assert_eq!(
+        inv.add_insurance(pb, 50, Investment::calculate_premium(10_000, 50)),
+        Err(QuickLendXError::OperationNotAllowed)
+    );
+    assert_eq!(inv.total_active_coverage_percentage(), 51);
 }

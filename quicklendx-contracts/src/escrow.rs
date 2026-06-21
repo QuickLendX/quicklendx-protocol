@@ -7,9 +7,9 @@
 //! Each invoice may have **at most one** escrow record across its entire lifetime.
 //! This is enforced at two independent layers:
 //!
-//! 1. **`load_accept_bid_context`** – checks `EscrowStorage::get_escrow_by_invoice`
+//! 1. **`load_accept_bid_context`** - checks `EscrowStorage::get_escrow_by_invoice`
 //!    and `InvestmentStorage::get_investment_by_invoice` before any state changes.
-//! 2. **`payments::create_escrow`** – re-checks `get_escrow_by_invoice` before the
+//! 2. **`payments::create_escrow`** - re-checks `get_escrow_by_invoice` before the
 //!    token transfer, so the guard holds even if the higher-level check is bypassed.
 //!
 //! Any duplicate attempt returns [`QuickLendXError::InvoiceAlreadyFunded`] or
@@ -17,27 +17,33 @@
 //! See `test_escrow_uniqueness.rs` for the full attack-vector test suite.
 
 use crate::admin::AdminStorage;
-use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
 use crate::events::{emit_escrow_refunded, emit_invoice_funded};
-use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
-use crate::invoice::{InvoiceStatus, InvoiceStorage};
 use crate::payments::{create_escrow, refund_escrow, EscrowStorage};
+use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
+use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
 use crate::verification::require_business_not_pending;
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
 /// Loaded and validated state required to accept a bid.
 pub(crate) struct AcceptBidContext {
-    pub invoice: crate::invoice::Invoice,
-    pub bid: crate::bid::Bid,
+    pub invoice: crate::types::Invoice,
+    pub bid: crate::types::Bid,
 }
 
 /// Validate the invoice, bid, and escrow state before any funds move.
-///
+/// 
 /// # Security
 /// - Authorization is checked against the exact invoice being funded
 /// - The bid must belong to that invoice
 /// - The invoice must not already have escrow, funding metadata, or an investment
+/// 
+/// ## One-Escrow-Per-Invoice Invariant (Two-Layer Guard)
+/// This function implements the outer guard of the one-escrow-per-invoice invariant:
+/// it checks for existing escrow or investment records before any state changes.
+/// The inner guard is in `payments::create_escrow`, which re-checks
+/// `EscrowStorage::get_escrow_by_invoice` before the token transfer.
+/// If either guard fails, the function returns an error and no state is mutated.
 pub(crate) fn load_accept_bid_context(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -63,6 +69,10 @@ pub(crate) fn load_accept_bid_context(
         return Err(QuickLendXError::InvalidStatus);
     }
 
+    // Outer guard: check for existing escrow or investment record before any state changes.
+    // This is the first layer of the one-escrow-per-invoice invariant.
+    // The second layer is in payments::create_escrow which re-checks get_escrow_by_invoice
+    // before the token transfer, ensuring the invariant holds even if this check is bypassed.
     if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some()
         || InvestmentStorage::get_investment_by_invoice(env, invoice_id).is_some()
     {
@@ -114,6 +124,8 @@ pub fn accept_bid_and_fund(
         mut bid,
     } = load_accept_bid_context(env, invoice_id, bid_id)?;
 
+    crate::qlx_log!(env, "escrow", "Accepting bid and funding invoice");
+
     // 5. Lock funds in escrow
     // This calls payments::create_escrow which calls token transfer and emits emit_escrow_created
     let escrow_id = create_escrow(
@@ -133,7 +145,7 @@ pub fn accept_bid_and_fund(
 
     // Update Invoice
     // Remove from old status list before changing status
-    InvoiceStorage::remove_from_status_invoices(env, &InvoiceStatus::Verified, invoice_id);
+    InvoiceStorage::remove_from_status_invoices(env, InvoiceStatus::Verified, invoice_id);
 
     // mark_as_funded updates status, funded_amount, investor, and logs audit
     invoice.mark_as_funded(
@@ -145,7 +157,7 @@ pub fn accept_bid_and_fund(
     InvoiceStorage::update_invoice(env, &invoice);
 
     // Add to new status list after status change
-    InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Funded, invoice_id);
+    InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Funded, invoice_id);
 
     // Create Investment
     let investment_id = InvestmentStorage::generate_unique_investment_id(env);
@@ -160,6 +172,8 @@ pub fn accept_bid_and_fund(
     };
     InvestmentStorage::store_investment(env, &investment);
 
+    crate::qlx_log!(env, "escrow", "Invoice funded and bid accepted");
+
     // 7. Events
     emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
 
@@ -170,6 +184,12 @@ pub fn accept_bid_and_fund(
 ///
 /// Can be triggered by the Admin or the Business owner of the invoice.
 /// Invoice must be in Funded status.
+///
+/// # Correctness
+/// - Refunds the exact `escrow.amount` stored for the invoice.
+/// - Sends funds to the stored `escrow.investor`, never to a caller-controlled recipient.
+/// - Uses `payments::refund_escrow` which rejects any escrow not in `Held` status,
+///   making repeated refund attempts fail and preventing double refunds.
 ///
 /// # Errors
 /// * `InvoiceNotFound`, `StorageKeyNotFound`, `InvalidStatus`, `Unauthorized`, `NotAdmin`
@@ -216,8 +236,8 @@ pub fn refund_escrow_funds(
     InvoiceStorage::update_invoice(env, &invoice);
 
     // Update status indices
-    InvoiceStorage::remove_from_status_invoices(env, &previous_status, invoice_id);
-    InvoiceStorage::add_to_status_invoices(env, &InvoiceStatus::Refunded, invoice_id);
+    InvoiceStorage::remove_from_status_invoices(env, previous_status.clone(), invoice_id);
+    InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Refunded, invoice_id);
 
     // Update Bid status to Cancelled (find the accepted bid first)
     // In our protocol, a Funded invoice has exactly one Accepted bid
@@ -235,6 +255,8 @@ pub fn refund_escrow_funds(
         investment.status = InvestmentStatus::Refunded;
         InvestmentStorage::update_investment(env, &investment);
     }
+
+    crate::qlx_log!(env, "escrow", "Escrow refunded successfully");
 
     // 7. Emit events
     emit_escrow_refunded(

@@ -304,7 +304,7 @@ fn test_check_invoice_expiration_grace_boundary_exact() {
     let grace = 5 * 24 * 60 * 60; // 5 days
     let deadline = due_date + grace;
 
-    // Exactly at the grace deadline — should NOT default (current <= deadline)
+    // Exactly at the grace deadline - should NOT default (current <= deadline)
     env.ledger().set_timestamp(deadline);
     let result = client.check_invoice_expiration(&invoice_id, &Some(grace));
     assert!(!result);
@@ -313,7 +313,7 @@ fn test_check_invoice_expiration_grace_boundary_exact() {
         InvoiceStatus::Funded
     );
 
-    // One second past the deadline — should default
+    // One second past the deadline - should default
     env.ledger().set_timestamp(deadline + 1);
     let result = client.check_invoice_expiration(&invoice_id, &Some(grace));
     assert!(result);
@@ -344,7 +344,7 @@ fn test_check_invoice_expiration_returns_false_for_non_funded() {
     env.ledger()
         .set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
 
-    // Verified but not funded — check_and_handle_expiration returns false
+    // Verified but not funded - check_and_handle_expiration returns false
     let result = client.check_invoice_expiration(&invoice_id, &None);
     assert!(!result);
 }
@@ -520,6 +520,119 @@ fn test_scan_overdue_invoices_cursor_wraps_after_repeated_calls() {
 }
 
 #[test]
+fn test_scan_overdue_invoices_returns_zero_for_empty_funded_set() {
+    let (_env, client, _admin) = setup();
+    let result = client.scan_overdue_invoices(&Some(DEFAULT_GRACE_PERIOD), &Some(10));
+
+    assert_eq!(result.scanned_count, 0);
+    assert_eq!(result.overdue_count, 0);
+    assert_eq!(result.total_funded, 0);
+    assert_eq!(result.next_cursor, 0);
+    assert_eq!(client.get_overdue_scan_cursor(), 0);
+}
+
+#[test]
+fn test_scan_overdue_invoices_limits_work_when_dataset_smaller_than_limit() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100000);
+    let base = env.ledger().timestamp();
+    let grace = 30 * 24 * 60 * 60;
+
+    for _ in 0..5u64 {
+        create_and_fund_invoice(
+            &env,
+            &client,
+            &admin,
+            &business,
+            &investor,
+            1000,
+            base + 1,
+        );
+    }
+
+    env.ledger().set_timestamp(base + 2);
+    let result = client.scan_overdue_invoices(&Some(grace), &Some(10));
+
+    assert_eq!(result.scanned_count, 5);
+    assert_eq!(result.total_funded, 5);
+    assert_eq!(result.next_cursor, 0);
+    assert_eq!(client.get_overdue_scan_cursor(), 0);
+}
+
+#[test]
+fn test_scan_overdue_invoices_wraps_cursor_across_dataset_boundary() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100000);
+    let base = env.ledger().timestamp();
+    let grace = 30 * 24 * 60 * 60;
+
+    for _ in 0..10u64 {
+        create_and_fund_invoice(
+            &env,
+            &client,
+            &admin,
+            &business,
+            &investor,
+            2000,
+            base + 1,
+        );
+    }
+
+    env.ledger().set_timestamp(base + 2);
+
+    for _ in 0..4 {
+        let scanned = client.scan_overdue_invoices(&Some(grace), &Some(2));
+        assert_eq!(scanned.scanned_count, 2);
+    }
+
+    assert_eq!(client.get_overdue_scan_cursor(), 8);
+
+    let wrap_result = client.scan_overdue_invoices(&Some(grace), &Some(3));
+    assert_eq!(wrap_result.scanned_count, 3);
+    assert_eq!(wrap_result.total_funded, 10);
+    assert_eq!(wrap_result.next_cursor, 2);
+    assert_eq!(client.get_overdue_scan_cursor(), 2);
+}
+
+#[test]
+fn test_scan_overdue_invoices_enforces_hard_batch_cap_on_large_dataset() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 1000000);
+    let base = env.ledger().timestamp();
+    let grace = 30 * 24 * 60 * 60;
+    let total_invoices = 200u32;
+
+    for _ in 0..total_invoices {
+        create_and_fund_invoice(
+            &env,
+            &client,
+            &admin,
+            &business,
+            &investor,
+            1000,
+            base + 1,
+        );
+    }
+
+    env.ledger().set_timestamp(base + 2);
+    let first = client.scan_overdue_invoices(&Some(grace), &Some(500));
+
+    assert_eq!(first.scanned_count, client.get_overdue_scan_batch_limit_max());
+    assert_eq!(first.total_funded, total_invoices);
+    assert_eq!(first.next_cursor, client.get_overdue_scan_batch_limit_max());
+    assert_eq!(client.get_overdue_scan_cursor(), client.get_overdue_scan_batch_limit_max());
+
+    let second = client.scan_overdue_invoices(&Some(grace), &Some(150));
+    assert_eq!(second.scanned_count, client.get_overdue_scan_batch_limit_max());
+    assert_eq!(second.total_funded, total_invoices);
+    assert_eq!(second.next_cursor, 0);
+    assert_eq!(client.get_overdue_scan_cursor(), 0);
+}
+
+#[test]
 fn test_check_overdue_invoices_reports_default_batch_limit_configuration() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
@@ -603,7 +716,7 @@ fn test_cleanup_expired_bids_integration() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 100_000);
-    
+
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400 * 30; // 30 days away
 
@@ -620,25 +733,78 @@ fn test_cleanup_expired_bids_integration() {
 
     // Place 3 bids at different times
     let _bid1 = client.place_bid(&investor, &invoice_id, &1000, &1100);
-    
+
     env.ledger().set_timestamp(env.ledger().timestamp() + 86400); // +1 day
     let _bid2 = client.place_bid(&investor, &invoice_id, &2000, &2200);
 
-    env.ledger().set_timestamp(env.ledger().timestamp() + 86400 * 5); // +5 days (total 6 days)
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 86400 * 5); // +5 days (total 6 days)
     let _bid3 = client.place_bid(&investor, &invoice_id, &3000, &3300);
 
     // After 2 more days, bid 1 and 2 should be expired (7 days TTL)
-    env.ledger().set_timestamp(env.ledger().timestamp() + 86400 * 2); // +2 days (total 8 days)
-    
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 86400 * 2); // +2 days (total 8 days)
+
     // Cleanup - should return 2 (bid 1 and 2 expired)
     let cleaned = client.cleanup_expired_bids(&invoice_id);
     assert_eq!(cleaned, 2, "Should clean 2 expired bids");
 
     // After 6 more days, bid 3 should be expired
-    env.ledger().set_timestamp(env.ledger().timestamp() + 86400 * 6);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 86400 * 6);
     let cleaned2 = client.cleanup_expired_bids(&invoice_id);
     assert_eq!(cleaned2, 1, "Should clean last expired bid");
 
     // Final check
-    assert_eq!(client.cleanup_expired_bids(&invoice_id), 0, "No more bids to clean");
+    assert_eq!(
+        client.cleanup_expired_bids(&invoice_id),
+        0,
+        "No more bids to clean"
+    );
+}
+
+#[test]
+fn test_cleanup_expired_bids_exact_boundary_and_off_by_one() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 50_000);
+
+    client.set_bid_ttl_days(&1u64);
+
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400 * 20;
+    let invoice_id = client.store_invoice(
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "TTL boundary invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let bid_id = client.place_bid(&investor, &invoice_id, &4000, &4300);
+    let bid = client.get_bid(&bid_id).unwrap();
+
+    env.ledger().set_timestamp(bid.expiration_timestamp);
+    let cleaned_at_exact = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(
+        cleaned_at_exact, 0,
+        "cleanup must not expire bids at exact expiration timestamp"
+    );
+
+    env.ledger()
+        .set_timestamp(bid.expiration_timestamp.saturating_add(1));
+    let cleaned_after = client.cleanup_expired_bids(&invoice_id);
+    assert_eq!(
+        cleaned_after, 1,
+        "cleanup must expire bid one second after expiration timestamp"
+    );
+
+    assert_eq!(
+        client.cleanup_expired_bids(&invoice_id),
+        0,
+        "cleanup remains idempotent after removing expired bid"
+    );
 }

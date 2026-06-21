@@ -260,4 +260,97 @@ cargo test test_cross_module
 
 # Run all lifecycle-related tests
 cargo test test_lifecycle test_cross_module test_investment_lifecycle
+
+# Run end-to-end integration tests
+cargo test --test invoice_lifecycle_e2e
 ```
+
+## 7. End-to-End Integration Tests (Issue #1103)
+
+The `tests/invoice_lifecycle_e2e.rs` test suite provides comprehensive integration
+coverage exercising the full on-chain protocol workflow from invoice upload through
+settlement or default. Tests use a real Stellar Asset Contract (SAC) token so that
+token balance assertions are exact.
+
+### Test Scenarios
+
+| Test | Stages | Purpose |
+|------|--------|---------|
+| `test_invoice_lifecycle_happy_path` | Upload → Verify → Bid → Fund → Partial → Settle | Full happy-path with balance reconciliation |
+| `test_invoice_lifecycle_default_branch` | Upload → Verify → Bid → Fund → Expire → Refund | Expired invoice refund flow |
+| `test_partial_then_full_settle` | Upload → Verify → Bid → Fund → 3× Partial → Final Settle | Multiple partial payments then full settlement |
+
+### Setup Fixture
+
+Each test uses a shared `Fixture` struct created by `setup_contract`:
+
+```
+Token balances minted:
+  business  = 20 000
+  investor  = 15 000
+  contract  =      1   (initialises SAC instance)
+
+Both business and investor pre-approve the contract for their full balance.
+Business and investor are KYC-verified before any invoice operations.
+```
+
+### Happy Path Balance Flow
+
+```
+After accept_bid_and_fund (bid_amount = 9 000):
+  investor  = 15 000 - 9 000 = 6 000   (locked in escrow)
+  contract  =      1 + 9 000 = 9 001
+
+After settle_invoice (invoice_amount = 10 000):
+  business  = 20 000 - (10 000 - 9 000) = 19 000
+  investor  = 6 000 + investor_return
+  contract  = 9 001 - 9 000 + platform_fee
+```
+
+### Default Branch Balance Flow
+
+```
+After accept_bid_and_fund (bid_amount = 9 000):
+  investor  = 15 000 - 9 000 = 6 000
+  contract  =      1 + 9 000 = 9 001
+
+After expire_invoice + refund_escrow:
+  investor  = 6 000 + 9 000 = 15 000   (fully restored)
+  contract  = 9 001 - 9 000 =      1   (fully restored)
+  business  = 20 000                   (unchanged)
+```
+
+### Partial-then-Full-Settle Balance Flow
+
+```
+After accept_bid_and_fund (bid_amount = 8 000):
+  investor  = 15 000 - 8 000 = 7 000
+  contract  =      1 + 8 000 = 8 001
+
+After 3 × process_partial_payment (2 000 each = 6 000 total):
+  business  = 20 000 - 6 000 = 14 000
+
+After settle_invoice (remaining 4 000):
+  business  = 14 000 - 4 000 + 8 000 = 18 000
+  investor  = 7 000 + investor_return
+  Net business outflow = 10 000 - 8 000 = 2 000
+```
+
+### Running the E2E Tests
+
+```bash
+cd quicklendx-contracts
+cargo test --test invoice_lifecycle_e2e
+```
+
+### Key Assertions Per Stage
+
+Each test asserts state at every stage:
+
+1. **Upload** — `invoice.status == Pending`, `amount` and `business` match, `investor == None`, analytics count increments
+2. **Verify** — `invoice.status == Verified`, invoice appears in `get_invoices_by_status(Verified)`
+3. **Bid** — `bid.status == Placed`, `bid.bid_amount` matches, `get_bids_for_invoice` returns 1 bid
+4. **Fund** — `invoice.status == Funded`, `funded_amount == bid_amount`, `investor == Some(investor)`, investment `status == Active`, token balances shift by `bid_amount`
+5. **Partial payment** — `total_paid` increments, `status` stays `Funded`, `payment_history.len()` increments
+6. **Settle** — `invoice.status == Paid`, `total_paid == invoice_amount`, investment `status == Completed`, business net cost == `invoice_amount - bid_amount`, investor balance increases
+7. **Expire + Refund** — `invoice.status == Refunded`, investor fully restored, contract balance restored, business unchanged

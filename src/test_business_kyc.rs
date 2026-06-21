@@ -12,7 +12,6 @@
 /// - Rejection reason validation (empty, max-length, over-limit)
 /// - KYC data payload validation
 /// - All three guarded business actions: invoice upload, settlement, escrow
-
 use crate::verification::*;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,10 +41,7 @@ fn test_business_guard_rejected_denied() {
 
 #[test]
 fn test_business_guard_not_submitted_denied() {
-    assert_eq!(
-        guard_business_action(None),
-        Err(GuardError::NotSubmitted)
-    );
+    assert_eq!(guard_business_action(None), Err(GuardError::NotSubmitted));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,10 +71,7 @@ fn test_invoice_upload_rejected_denied() {
 
 #[test]
 fn test_invoice_upload_not_submitted_denied() {
-    assert_eq!(
-        guard_invoice_upload(None),
-        Err(GuardError::NotSubmitted)
-    );
+    assert_eq!(guard_invoice_upload(None), Err(GuardError::NotSubmitted));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -141,10 +134,7 @@ fn test_escrow_release_rejected_denied() {
 
 #[test]
 fn test_escrow_release_not_submitted_denied() {
-    assert_eq!(
-        guard_escrow_release(None),
-        Err(GuardError::NotSubmitted)
-    );
+    assert_eq!(guard_escrow_release(None), Err(GuardError::NotSubmitted));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,26 +143,17 @@ fn test_escrow_release_not_submitted_denied() {
 
 #[test]
 fn test_transition_pending_to_verified_valid() {
-    assert!(validate_transition(
-        VerificationStatus::Pending,
-        VerificationStatus::Verified
-    ).is_ok());
+    assert!(validate_transition(VerificationStatus::Pending, VerificationStatus::Verified).is_ok());
 }
 
 #[test]
 fn test_transition_pending_to_rejected_valid() {
-    assert!(validate_transition(
-        VerificationStatus::Pending,
-        VerificationStatus::Rejected
-    ).is_ok());
+    assert!(validate_transition(VerificationStatus::Pending, VerificationStatus::Rejected).is_ok());
 }
 
 #[test]
 fn test_transition_rejected_to_pending_resubmit_valid() {
-    assert!(validate_transition(
-        VerificationStatus::Rejected,
-        VerificationStatus::Pending
-    ).is_ok());
+    assert!(validate_transition(VerificationStatus::Rejected, VerificationStatus::Pending).is_ok());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -460,7 +441,9 @@ fn test_rejection_requires_valid_reason_and_valid_transition() {
     assert!(validate_rejection_reason("").is_err());
 
     // Invalid transition + valid reason: transition check catches it
-    assert!(validate_transition(VerificationStatus::Verified, VerificationStatus::Rejected).is_err());
+    assert!(
+        validate_transition(VerificationStatus::Verified, VerificationStatus::Rejected).is_err()
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

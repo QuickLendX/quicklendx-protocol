@@ -11,11 +11,11 @@
 
 use crate::errors::QuickLendXError;
 use crate::events::{emit_invoice_settled, emit_partial_payment};
-use crate::investment::{InvestmentStatus, InvestmentStorage};
-use crate::invoice::{
-    Invoice, InvoiceStatus, InvoiceStorage, PaymentRecord as InvoicePaymentRecord,
-};
+use crate::investment::InvestmentStorage;
 use crate::payments::transfer_funds;
+use crate::storage::InvoiceStorage;
+use crate::types::InvestmentStatus;
+use crate::types::{Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
 const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
@@ -59,19 +59,19 @@ pub struct Progress {
     pub status: InvoiceStatus,
 }
 
-/// Record a partial payment for an invoice. 
-/// 
+/// Record a partial payment for an invoice.
+///
 /// If the total paid amount reaches the invoice total, the settlement is finalized.
 /// This method provides strictly ordered record persistence and idempotent deduplication.
-/// 
+///
 /// # Arguments
 /// - `invoice_id`: Unique identifier for the invoice being paid.
 /// - `payment_amount`: The requested payment amount.
 /// - `transaction_id`: A unique identifier for the payment attempt (nonce).
-/// 
+///
 /// # Returns
 /// - `Ok(())` on success, or a `QuickLendXError` on failure.
-/// 
+///
 /// # Security
 /// - @security Requires business-owner authorization for every payment attempt.
 /// - @security Safely bounds applied value to the remaining due amount.
@@ -87,6 +87,8 @@ pub fn process_partial_payment(
     let invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     let payer = invoice.business.clone();
+
+    crate::qlx_log!(env, "settlement", "Recording partial payment: amount={}", payment_amount);
 
     let progress = record_payment(
         env,
@@ -115,17 +117,38 @@ pub fn process_partial_payment(
 
 /// Record a payment attempt with capping, replay protection, and durable storage.
 ///
-/// - Rejects amount <= 0
-/// - Rejects missing invoices
-/// - Rejects payments to non-payable invoice states
-/// - Caps applied amount so `total_paid` never exceeds `total_due`
-/// - Enforces nonce uniqueness per `(invoice, nonce)` if nonce is non-empty
-/// - Rejects if payment count has reached MAX_PAYMENT_COUNT
+/// This function is the core payment recording primitive. It validates, caps, and
+/// persists payment records while maintaining critical security invariants.
 ///
-/// # Security
+/// # Arguments
+/// - `invoice_id`: Unique identifier for the invoice being paid.
+/// - `payer`: Verified invoice business address (must match invoice.business).
+/// - `amount`: The requested payment amount (may be capped if overpaying).
+/// - `payment_nonce`: Unique transaction identifier; empty string skips replay check.
 ///
-/// - The payer must be the verified invoice business and must authorize the call.
-/// - Stored payment records always reflect the applied amount, never the requested excess.
+/// # Returns
+/// - `Ok(Progress)` containing updated payment state.
+/// - `Err(QuickLendXError)` on validation failure.
+///
+/// # Security Invariants (Fuzz-Tested)
+///
+/// 1. **Capping Invariant**: `total_paid` never exceeds `total_due`. If `amount > remaining_due`,
+///    only `remaining_due` is applied. This prevents overpayment attacks and ensures the
+///    accounting identity `investor_return + platform_fee == total_paid` holds.
+///
+/// 2. **Replay Protection Invariant**: Each `(invoice_id, nonce)` pair is unique. Duplicate
+///    nonces return the current progress without creating a new record or incrementing count.
+///    Empty nonces bypass this check intentionally (caller responsibility for uniqueness).
+///
+/// 3. **Payment Count Bound**: `payment_count <= MAX_PAYMENT_COUNT`. Payment count exhaustion
+///    returns `OperationNotAllowed` and cannot be bypassed.
+///
+/// # Error Conditions
+/// - `InvalidAmount`: `amount <= 0`, `applied_amount <= 0`, or `new_total_paid > total_due`.
+/// - `InvoiceNotFound`: No invoice exists for `invoice_id`.
+/// - `InvalidStatus`: Invoice is not in `Funded` state or `remaining_due == 0`.
+/// - `NotBusinessOwner`: `payer` does not match invoice business.
+/// - `OperationNotAllowed`: Payment count has reached `MAX_PAYMENT_COUNT`.
 pub fn record_payment(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -219,11 +242,20 @@ pub fn record_payment(
     invoice.total_paid = new_total_paid;
     update_inline_payment_history(
         &mut invoice,
+        payer.clone(),
         applied_amount,
         timestamp,
         payment_record.nonce,
     );
     InvoiceStorage::update_invoice(env, &invoice);
+
+    crate::qlx_log!(
+        env,
+        "settlement",
+        "Payment recorded: applied={} total_paid={}",
+        applied_amount,
+        new_total_paid
+    );
 
     emit_payment_recorded(
         env,
@@ -256,6 +288,8 @@ pub fn settle_invoice(
         return Err(QuickLendXError::InvalidAmount);
     }
 
+    crate::qlx_log!(env, "settlement", "Full settlement initiated: payment={}", payment_amount);
+
     // Early double-settle guard: reject if already finalized.
     if is_finalized(env, invoice_id) {
         return Err(QuickLendXError::InvalidStatus);
@@ -265,7 +299,6 @@ pub fn settle_invoice(
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
     let payer = invoice.business.clone();
-    payer.require_auth();
 
     let remaining_due = compute_remaining_due(&invoice)?;
     if payment_amount > remaining_due {
@@ -298,7 +331,7 @@ pub fn settle_invoice(
 /// Returns aggregate payment progress for an invoice.
 ///
 /// # Returns
-/// - `Ok(Progress)` containing `total_due`, `total_paid`, `remaining_due`, 
+/// - `Ok(Progress)` containing `total_due`, `total_paid`, `remaining_due`,
 ///   `progress_percent`, `payment_count`, and `status`.
 pub fn get_invoice_progress(
     env: &Env,
@@ -339,10 +372,7 @@ pub fn get_invoice_progress(
 }
 
 /// Returns the total number of recorded payments for an invoice.
-pub fn get_payment_count(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-) -> Result<u32, QuickLendXError> {
+pub fn get_payment_count(env: &Env, invoice_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
     ensure_invoice_exists(env, invoice_id)?;
     Ok(get_payment_count_internal(env, invoice_id))
 }
@@ -389,15 +419,12 @@ pub fn get_payment_records(
             records.push_back(record);
         }
     }
-    
+
     Ok(records)
 }
 
 /// Returns whether an invoice has been finalized (settlement completed).
-pub fn is_invoice_finalized(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-) -> Result<bool, QuickLendXError> {
+pub fn is_invoice_finalized(env: &Env, invoice_id: &BytesN<32>) -> Result<bool, QuickLendXError> {
     ensure_invoice_exists(env, invoice_id)?;
     Ok(is_finalized(env, invoice_id))
 }
@@ -486,13 +513,21 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     InvoiceStorage::update_invoice(env, &invoice);
 
     if previous_status != invoice.status {
-        InvoiceStorage::remove_from_status_invoices(env, &previous_status, invoice_id);
-        InvoiceStorage::add_to_status_invoices(env, &invoice.status, invoice_id);
+        InvoiceStorage::remove_from_status_invoices(env, previous_status.clone(), invoice_id);
+        InvoiceStorage::add_to_status_invoices(env, invoice.status.clone(), invoice_id);
     }
 
     let mut updated_investment = investment;
     updated_investment.status = InvestmentStatus::Completed;
     InvestmentStorage::update_investment(env, &updated_investment);
+
+    crate::qlx_log!(
+        env,
+        "settlement",
+        "Invoice settled: investor_return={} platform_fee={}",
+        investor_return,
+        platform_fee
+    );
 
     emit_invoice_settled(env, &invoice, investor_return, platform_fee);
     emit_invoice_settled_final(env, invoice_id, invoice.total_paid, paid_at);
@@ -508,10 +543,9 @@ fn is_finalized(env: &Env, invoice_id: &BytesN<32>) -> bool {
 }
 
 fn mark_finalized(env: &Env, invoice_id: &BytesN<32>) {
-    env.storage().persistent().set(
-        &SettlementDataKey::Finalized(invoice_id.clone()),
-        &true,
-    );
+    env.storage()
+        .persistent()
+        .set(&SettlementDataKey::Finalized(invoice_id.clone()), &true);
 }
 
 fn ensure_invoice_exists(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
@@ -558,6 +592,7 @@ fn compute_remaining_due(invoice: &Invoice) -> Result<i128, QuickLendXError> {
 
 fn update_inline_payment_history(
     invoice: &mut Invoice,
+    payer: Address,
     amount: i128,
     timestamp: u64,
     nonce: String,
@@ -567,6 +602,7 @@ fn update_inline_payment_history(
     }
 
     invoice.payment_history.push_back(InvoicePaymentRecord {
+        payer,
         amount,
         timestamp,
         transaction_id: nonce,

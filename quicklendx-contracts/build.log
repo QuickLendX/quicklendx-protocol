@@ -1,0 +1,269 @@
+       Fresh unicode-ident v1.0.24
+       Fresh proc-macro2 v1.0.106
+       Fresh version_check v0.9.5
+       Fresh quote v1.0.45
+       Fresh syn v2.0.117
+       Fresh typenum v1.19.0
+       Fresh cfg-if v1.0.4
+       Fresh serde_derive v1.0.228
+       Fresh zmij v1.0.21
+       Fresh zeroize_derive v1.4.3
+       Fresh itoa v1.0.18
+       Fresh memchr v2.8.0
+       Fresh zeroize v1.8.2
+       Fresh subtle v2.6.1
+       Fresh crate-git-revision v0.0.6
+       Fresh autocfg v1.5.0
+       Fresh const-oid v0.9.6
+       Fresh libc v0.2.183
+       Fresh getrandom v0.2.17
+       Fresh rand_core v0.6.4
+       Fresh ident_case v1.0.1
+       Fresh strsim v0.11.1
+       Fresh cpufeatures v0.2.17
+       Fresh zerocopy v0.8.48
+       Fresh semver v1.0.27
+       Fresh num-traits v0.2.19
+       Fresh generic-array v0.14.9
+       Fresh darling_core v0.23.0
+       Fresh syn v1.0.109
+       Fresh darling_macro v0.23.0
+       Fresh data-encoding v2.10.0
+       Fresh darling v0.23.0
+       Fresh crypto-common v0.1.6
+       Fresh block-buffer v0.10.4
+       Fresh ppv-lite86 v0.2.21
+       Fresh dyn-clone v1.0.20
+       Fresh rand_chacha v0.3.1
+       Fresh schemars v0.8.22
+       Fresh digest v0.10.7
+       Fresh serde_with_macros v3.18.0
+       Fresh stellar-strkey v0.0.13
+       Fresh paste v1.0.15
+       Fresh cfg_eval v0.1.2
+       Fresh ethnum v1.5.2
+       Fresh escape-bytes v0.1.1
+       Fresh serde_with v3.18.0
+       Fresh rand v0.8.5
+       Fresh num-integer v0.1.46
+       Fresh ark-std v0.4.0
+       Fresh num-bigint v0.4.6
+       Fresh ark-serialize-derive v0.4.2
+       Fresh rustc_version v0.4.1
+       Fresh ff v0.13.1
+       Fresh der v0.7.10
+       Fresh base16ct v0.2.0
+       Fresh once_cell v1.21.4
+       Fresh either v1.15.0
+       Fresh hashbrown v0.16.1
+       Fresh equivalent v1.0.2
+       Fresh indexmap v2.13.0
+       Fresh itertools v0.10.5
+       Fresh ahash v0.8.12
+       Fresh sec1 v0.7.3
+       Fresh group v0.13.0
+       Fresh ark-serialize v0.4.2
+       Fresh ark-ff-macros v0.4.2
+       Fresh ark-ff-asm v0.4.2
+       Fresh derivative v2.2.0
+       Fresh sha2 v0.10.9
+       Fresh crypto-bigint v0.5.5
+       Fresh signature v2.2.0
+       Fresh base64 v0.22.1
+       Fresh elliptic-curve v0.13.8
+       Fresh ark-ff v0.4.2
+       Fresh hashbrown v0.13.2
+       Fresh wasmparser v0.116.1
+       Fresh hmac v0.12.1
+       Fresh rfc6979 v0.4.0
+       Fresh ark-poly v0.4.2
+       Fresh libm v0.2.16
+       Fresh soroban-env-macros v25.0.1
+       Fresh num-derive v0.4.2
+       Fresh thiserror-impl v1.0.69
+       Fresh static_assertions v1.1.0
+       Fresh fnv v1.0.7
+       Fresh downcast-rs v1.2.1
+       Fresh indexmap-nostd v0.4.0
+       Fresh wasmi_core v0.13.0
+       Fresh wasmparser-nostd v0.100.2
+       Fresh darling_core v0.20.11
+       Fresh thiserror v1.0.69
+       Fresh ark-ec v0.4.2
+       Fresh ecdsa v0.16.9
+       Fresh curve25519-dalek-derive v0.1.1
+       Fresh byteorder v1.5.0
+       Fresh spin v0.9.8
+       Fresh wasmi_arena v0.4.1
+       Fresh smallvec v1.15.1
+       Fresh hex v0.4.3
+       Fresh soroban-wasmi v0.31.1-soroban.20.0.1
+       Fresh stellar-xdr v25.0.0
+       Fresh hash32 v0.3.1
+       Fresh curve25519-dalek v4.1.3
+       Fresh soroban-spec v25.3.0
+       Fresh serde_core v1.0.228
+       Fresh darling_macro v0.20.11
+       Fresh prettyplease v0.2.37
+       Fresh primeorder v0.13.6
+       Fresh ed25519 v2.2.3
+       Fresh stable_deref_trait v1.2.1
+       Fresh keccak v0.1.6
+       Fresh sha3 v0.10.8
+       Fresh heapless v0.8.0
+       Fresh ed25519-dalek v2.2.0
+       Fresh p256 v0.13.2
+       Fresh soroban-spec-rust v25.3.0
+       Fresh darling v0.20.11
+       Fresh soroban-env-common v25.0.1
+       Fresh k256 v0.13.4
+       Fresh ark-bn254 v0.4.0
+       Fresh ark-bls12-381 v0.4.0
+       Fresh soroban-builtin-sdk-macros v25.0.1
+       Fresh macro-string v0.1.4
+       Fresh hex-literal v0.4.1
+       Fresh heck v0.5.0
+       Fresh soroban-env-host v25.0.1
+       Fresh soroban-sdk-macros v25.3.0
+       Fresh stellar-strkey v0.0.16
+       Fresh serde_json v1.0.149
+       Fresh serde v1.0.228
+       Fresh bytes-lit v0.0.5
+       Fresh visibility v0.1.1
+       Fresh soroban-sdk v25.3.0
+   Compiling quicklendx-contracts v0.1.0 (/home/quicklendx-protocol/quicklendx-contracts)
+     Running `/home/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name quicklendx_contracts --edition=2021 src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type cdylib --crate-type rlib --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("fuzz-tests", "legacy-tests"))' -C metadata=b53c884c8717d0c3 --out-dir /home/quicklendx-protocol/quicklendx-contracts/target/debug/deps -C incremental=/home/quicklendx-protocol/quicklendx-contracts/target/debug/incremental -L dependency=/home/quicklendx-protocol/quicklendx-contracts/target/debug/deps --extern soroban_sdk=/home/quicklendx-protocol/quicklendx-contracts/target/debug/deps/libsoroban_sdk-71fd6d55946278f2.rlib`
+warning: unused imports: `Symbol` and `symbol_short`
+ --> src/events.rs:9:34
+  |
+9 | use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+  |                                  ^^^^^^^^^^^^                                ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `LineItemRecord`
+ --> src/invoice.rs:9:20
+  |
+9 |     InvoiceStatus, LineItemRecord, PaymentRecord,
+  |                    ^^^^^^^^^^^^^^
+
+warning: unused import: `Dispute`
+ --> src/verification.rs:3:22
+  |
+3 | use crate::invoice::{Dispute, DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
+  |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/init.rs:630:18
+    |
+630 |     env.events().publish(
+    |                  ^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/init.rs:644:18
+    |
+644 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/init.rs:652:18
+    |
+652 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/notifications.rs:264:22
+    |
+264 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/notifications.rs:311:22
+    |
+311 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/notifications.rs:348:14
+    |
+348 |             .publish((symbol_short!("pref_up"),), (user.clone(),));
+    |              ^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/protocol_limits.rs:294:65
+    |
+294 |         if let Some(invoice) = InvoiceStorage::get_invoice(env, invoice_id) {
+    |                                ---------------------------      ^^^^^^^^^^ expected `&BytesN<32>`, found `BytesN<32>`
+    |                                |
+    |                                arguments to this function are incorrect
+    |
+    = note: expected reference `&soroban_sdk::BytesN<_>`
+                  found struct `soroban_sdk::BytesN<_>`
+note: associated function defined here
+   --> src/storage.rs:327:12
+    |
+327 |     pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
+    |            ^^^^^^^^^^^            -----------------------
+help: consider borrowing here
+    |
+294 |         if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
+    |                                                                 +
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/settlement.rs:608:18
+    |
+608 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/settlement.rs:626:18
+    |
+626 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/vesting.rs:176:22
+    |
+176 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/vesting.rs:275:22
+    |
+275 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/lib.rs:359:22
+    |
+359 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src/lib.rs:631:22
+    |
+631 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+    --> src/lib.rs:2709:14
+     |
+2709 |             .publish((symbol_short!("ana_exp"),), (export_type, filters));
+     |              ^^^^^^^
+
+warning: unused variable: `normalized_slice`
+   --> src/verification.rs:633:9
+    |
+633 |     let normalized_slice = &normalized_bytes[..raw_slice.len()];
+    |         ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_normalized_slice`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+For more information about this error, try `rustc --explain E0308`.
+warning: `quicklendx-contracts` (lib) generated 17 warnings
+error: could not compile `quicklendx-contracts` (lib) due to 1 previous error; 17 warnings emitted
+
+Caused by:
+  process didn't exit successfully: `/home/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name quicklendx_contracts --edition=2021 src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type cdylib --crate-type rlib --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("fuzz-tests", "legacy-tests"))' -C metadata=b53c884c8717d0c3 --out-dir /home/quicklendx-protocol/quicklendx-contracts/target/debug/deps -C incremental=/home/quicklendx-protocol/quicklendx-contracts/target/debug/incremental -L dependency=/home/quicklendx-protocol/quicklendx-contracts/target/debug/deps --extern soroban_sdk=/home/quicklendx-protocol/quicklendx-contracts/target/debug/deps/libsoroban_sdk-71fd6d55946278f2.rlib` (exit status: 1)

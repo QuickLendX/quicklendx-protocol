@@ -1,266 +1,87 @@
-# Hardened Admin Access Control
+# Admin Transfer Safety Model
 
-This document describes the hardened admin model used by the QuickLendX Soroban contract, providing robust initialization and role transfer protections for protocol governance.
+This document describes the admin-role safety behavior implemented in `quicklendx-contracts/src/admin.rs`.
 
-## Design Goals
+## Goals
 
-- **Single canonical admin**: Enforce one admin address with atomic state management
-- **One-time initialization**: Admin can only be initialized once with comprehensive validation
-- **Authenticated transfers**: Require explicit authorization for all admin operations
-- **Atomic operations**: All admin state changes are atomic (no partial states)
-- **Audit trail**: Complete event logging for all admin operations
-- **Security hardening**: Protection against concurrent operations and edge cases
+- Enforce **single-admin ownership**.
+- Prevent unauthorized admin replacement.
+- Support **safe rotation** via optional two-step flow.
+- Prevent stuck/overlapping transfers using a transfer lock.
+- Emit auditable events for every admin-state transition.
 
-## Security Model
+## Storage Keys
 
-### Core Invariants
+- `ADMIN_KEY` (`"admin"`): active admin address.
+- `ADMIN_INITIALIZED_KEY` (`"adm_init"`): one-time initialization flag.
+- `ADMIN_TRANSFER_LOCK_KEY` (`"adm_lock"`): transfer-in-progress lock.
+- `ADMIN_PENDING_KEY` (`"adm_pnd"`): pending admin in two-step mode.
+- `ADMIN_TWO_STEP_KEY` (`"adm_2st"`): optional two-step mode toggle.
 
-1. **Admin can only be initialized once** (atomic check-and-set)
-2. **Only current admin can transfer role** (authenticated transfers)
-3. **All admin operations are atomic** (no intermediate states)
-4. **Explicit authorization required** for all privileged operations
-5. **State consistency maintained** across all storage keys
+## Initialization
 
-### Storage Model
+`AdminStorage::initialize(env, admin)`:
 
-Admin state is stored in `src/admin.rs` using instance storage with isolated keys:
+- Requires `admin.require_auth()`.
+- Fails if already initialized (`OperationNotAllowed`).
+- Writes admin + initialized flag atomically.
+- Emits `adm_init`.
 
-- `ADMIN_KEY` (`"admin"`): Current admin address (single source of truth)
-- `ADMIN_INITIALIZED_KEY` (`"adm_init"`): Initialization flag (prevents re-initialization)
-- `ADMIN_TRANSFER_LOCK_KEY` (`"adm_lock"`): Transfer lock (prevents concurrent transfers)
+## Transfer Modes
 
-## Initialization And Rotation
+### One-step transfer (default)
 
-### `AdminStorage::initialize(env, admin)`
+`AdminStorage::transfer_admin(env, current_admin, new_admin)`:
 
-Hardened initialization with comprehensive security:
+- Requires current admin auth and role check.
+- Rejects self-transfer.
+- Rejects transfer if lock/pending state exists.
+- Performs atomic swap `current -> new`.
+- Emits `adm_trf`.
 
-- **Authorization**: `admin.require_auth()` must succeed (prevents third-party admin setting)
-- **Atomicity**: Initialization flag checked atomically before any state changes
-- **One-time only**: Re-initialization returns `OperationNotAllowed`
-- **State consistency**: Admin address and initialization flag set together
-- **Audit trail**: Emits `adm_init` event with timestamp
+### Two-step transfer (optional)
 
-### Security Protections
+Enable: `AdminStorage::set_two_step_enabled(env, admin, true)`.
 
-- **Third-party protection**: Admin must authorize their own appointment
-- **Race condition protection**: Atomic check-and-set prevents concurrent initialization
-- **State integrity**: No partial initialization states possible
+Flow:
 
-`transfer_admin(new_admin)`:
+1. Current admin initiates transfer via `transfer_admin` (or `initiate_admin_transfer`).
+2. Contract stores `ADMIN_PENDING_KEY`, sets transfer lock, emits `adm_req`.
+3. Pending admin must call `accept_admin_transfer`.
+4. On accept, active admin is updated, pending+lock are cleared, emits `adm_trf`.
 
-### `AdminStorage::transfer_admin(env, current_admin, new_admin)`
+Cancel path:
 
-Secure admin role transfer with comprehensive validation:
+- Current admin may call `cancel_admin_transfer` before acceptance.
+- Pending state + lock are cleared.
+- Emits `adm_cnl`.
 
-- **Current admin auth**: `current_admin.require_auth()` must succeed
-- **Admin verification**: Caller must be verified as current admin
-- **Transfer lock**: Prevents concurrent transfer operations
-- **Validation**: New admin must be different from current admin
-- **Atomicity**: Transfer is atomic with lock protection
-- **Audit trail**: Emits `adm_trf` event with old and new admin addresses
+Disable behavior:
 
-### Security Protections
+- `set_two_step_enabled(..., false)` clears pending+lock to avoid stuck transfer state.
+- Emits `adm_2st`.
 
-- **Authorization verification**: Only current admin can initiate transfer
-- **Concurrency protection**: Transfer lock prevents race conditions
-- **Self-transfer prevention**: Cannot transfer admin to same address
-- **State consistency**: Atomic transfer ensures no intermediate states
+## Event Topics
 
-## Authorization Framework
+- `adm_init`: admin initialized.
+- `adm_trf`: admin transfer completed.
+- `adm_req`: two-step transfer initiated.
+- `adm_cnl`: pending transfer cancelled.
+- `adm_2st`: two-step mode updated.
 
-### Core Authorization Functions
+## Security Assumptions Verified by Tests
 
-#### `require_admin(env, address)`
-Comprehensive admin verification:
-- Checks if admin system is initialized
-- Verifies address matches current admin
-- Returns specific error codes for different failure modes
+- Admin initialization is one-time.
+- Unauthorized callers cannot replace admin.
+- Transfer lock blocks overlapping/reentrant transfer attempts.
+- Pending transfer can be accepted only by the nominated address.
+- Pending/lock state can be safely cancelled or cleared (no stuck transfer).
+- Admin transition events are emitted on each state change.
 
-#### `require_current_admin(env)`
-Convenience function for current admin operations:
-- Automatically determines current admin
-- Requires authorization from current admin
-- Returns verified admin address for further use
+## Coverage Gate
 
-### Utility Functions
+To keep admin transfer safety regressions visible while legacy modules are still being migrated, CI enforces a dedicated coverage threshold for `src/admin.rs`:
 
-#### `with_admin_auth(env, admin, operation)`
-Execute operation with admin authorization:
-- Performs admin authorization check
-- Executes operation if authorized
-- Provides consistent error handling
-
-#### `with_current_admin(env, operation)`
-Execute operation with current admin context:
-- Automatically determines and authorizes current admin
-- Passes admin address to operation
-- Handles all authorization errors
-
-## Pause Policy
-
-All privileged operations use the hardened authorization framework:
-
-### Protected Operations
-- Invoice verification and status mutation
-- Platform fee updates and configuration
-- Dispute review and resolution
-- Investor verification and limit management
-- Analytics export and update operations
-- Revenue distribution controls
-- Backup and recovery management
-- Emergency operations and pausing
-
-### Authorization Patterns
-
-```rust
-// Pattern 1: Specific admin authorization
-AdminStorage::with_admin_auth(env, admin, || {
-    // Protected operation
-    Ok(())
-})?;
-
-// Pattern 2: Current admin authorization
-AdminStorage::with_current_admin(env, |admin| {
-    // Protected operation with admin context
-    Ok(())
-})?;
-
-// Pattern 3: Direct authorization check
-AdminStorage::require_admin(env, admin)?;
-// Protected operation
-```
-
-## Event System
-
-### Admin Events
-
-#### `adm_init` - Admin Initialized
-Emitted when admin is first initialized:
-```rust
-(admin: Address, timestamp: u64)
-```
-
-#### `adm_trf` - Admin Transferred
-Emitted when admin role is transferred:
-```rust
-(old_admin: Address, new_admin: Address, timestamp: u64)
-```
-
-### Event Properties
-- **Immutable audit trail**: All admin operations logged
-- **Timestamp precision**: Ledger timestamp for accurate ordering
-- **Complete context**: All relevant addresses and data included
-
-- Invoice creation and upload
-- Bid placement, acceptance, and withdrawal
-- Invoice verification and other business-state mutations guarded by `PauseControl::require_not_paused`
-
-### Legacy Support
-
-#### `set_admin(env, admin)`
-Provides backward compatibility with intelligent routing:
-- **Uninitialized state**: Routes to `initialize(env, admin)`
-- **Initialized state**: Routes to `transfer_admin(env, current_admin, admin)`
-- **Security preservation**: Maintains all security invariants
-- **Error consistency**: Returns appropriate errors for each case
-
-### Migration Path
-- Existing code using `set_admin` continues to work
-- New code should use explicit `initialize` and `transfer_admin`
-- All security protections apply regardless of entry point
-
-## Security Considerations
-
-### Threat Model
-
-| Threat | Mitigation |
-|--------|------------|
-| **Unauthorized admin setting** | Explicit authorization requirement |
-| **Concurrent initialization** | Atomic check-and-set with initialization lock |
-| **Race conditions in transfer** | Transfer lock prevents concurrent operations |
-| **Partial state corruption** | All operations are atomic |
-| **Admin impersonation** | Comprehensive authorization verification |
-| **Replay attacks** | Soroban's built-in replay protection |
-
-### Security Best Practices
-
-1. **Multi-signature recommended**: Use multi-sig wallet for admin address
-2. **Hardware security**: Store admin keys in hardware wallets
-3. **Regular rotation**: Plan for admin key rotation procedures
-4. **Monitoring**: Monitor all admin events for unauthorized activity
-5. **Emergency procedures**: Have emergency response plans for compromised admin
-
-### Audit Checklist
-
-- [ ] Admin can only be initialized once
-- [ ] All admin operations require explicit authorization
-- [ ] Transfer operations are atomic and protected
-- [ ] Events are emitted for all admin state changes
-- [ ] Concurrent operations are properly handled
-- [ ] Error conditions return appropriate error codes
-- [ ] Legacy compatibility maintains security invariants
-
-## Testing Coverage
-
-The admin module includes comprehensive test coverage:
-
-### Test Categories
-1. **Initialization Tests** (8 tests)
-   - Successful initialization
-   - Authorization requirements
-   - Double initialization protection
-   - Event emission
-
-2. **Transfer Tests** (6 tests)
-   - Successful transfers
-   - Authorization verification
-   - Self-transfer prevention
-   - Transfer chains
-
-3. **Query Function Tests** (4 tests)
-   - State queries before/after initialization
-   - Admin verification functions
-
-4. **Authorization Tests** (5 tests)
-   - Admin requirement functions
-   - Current admin authorization
-   - Error conditions
-
-5. **Security Tests** (3 tests)
-   - Atomic operations
-   - State consistency
-   - Concurrent operation protection
-
-6. **Utility Tests** (4 tests)
-   - Authorization wrapper functions
-   - Error handling
-
-7. **Legacy Compatibility Tests** (2 tests)
-   - Routing to appropriate functions
-   - Security preservation
-
-8. **Integration Tests** (2 tests)
-   - Full admin lifecycle
-   - Event emission consistency
-
-### Coverage Target
-- **95%+ code coverage** for admin.rs
-- **All error paths tested**
-- **Edge cases and boundary conditions covered**
-- **Integration with other modules verified**
-
-## Future Enhancements
-
-1. **Multi-signature admin**: Support for multi-signature admin operations
-2. **Role-based access**: Granular permissions for different admin functions
-3. **Time-locked operations**: Delayed execution for critical admin changes
-4. **Admin rotation**: Automated admin key rotation procedures
-5. **Emergency recovery**: Multi-party emergency admin recovery mechanisms
-
-## References
-
-- [Soroban Authorization](https://soroban.stellar.org/docs/fundamentals/authorization)
-- [Contract Storage](https://soroban.stellar.org/docs/fundamentals/persisting-data)
-- [Events and Audit Trails](https://soroban.stellar.org/docs/fundamentals/events)
-- [Security Best Practices](https://soroban.stellar.org/docs/security)
+- Report generation: `cargo llvm-cov --lib --lcov --output-path coverage/lcov.info`
+- Admin gate: `scripts/check-admin-coverage.sh coverage/lcov.info`
+- Minimum required: `95%` line coverage (`ADMIN_COVERAGE_MIN`, default `95`)

@@ -1,19 +1,104 @@
 #![allow(deprecated)]
 
-use crate::bid::Bid;
 use crate::fees::FeeType;
-use crate::invoice::{Invoice, InvoiceMetadata};
 use crate::payments::Escrow;
-use crate::profits::PlatformFeeConfig;
+use crate::types::Bid;
+use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::InvestorVerification;
-use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String};
+
+// ============================================================================
+// Topic Constants
+//
+// These compile-time constants pin the exact Symbol used as the first topic
+// for every event. Off-chain indexers import these to avoid hard-coding
+// string literals. Any rename here is a breaking schema change.
+// ============================================================================
+
+/// Topic for `InvoiceUploaded` / `InvoiceCreated` events.
+/// The `#[contractevent]` macro uses the snake_case struct name as the topic.
+pub const TOPIC_INVOICE_UPLOADED: &str = "invoice_uploaded";
+/// Topic for `InvoiceVerified` events.
+pub const TOPIC_INVOICE_VERIFIED: &str = "invoice_verified";
+/// Topic for `InvoiceCancelled` events.
+pub const TOPIC_INVOICE_CANCELLED: &str = "invoice_cancelled";
+/// Topic for `InvoiceSettled` / `LoanSettled` events.
+pub const TOPIC_INVOICE_SETTLED: &str = "invoice_settled";
+/// Topic for `InvoiceDefaulted` events.
+pub const TOPIC_INVOICE_DEFAULTED: &str = "invoice_defaulted";
+/// Topic for `InvoiceExpired` events.
+pub const TOPIC_INVOICE_EXPIRED: &str = "invoice_expired";
+/// Topic for `PartialPayment` events.
+pub const TOPIC_PARTIAL_PAYMENT: &str = "partial_payment";
+/// Topic for `PaymentRecorded` events.
+pub const TOPIC_PAYMENT_RECORDED: &str = "payment_recorded";
+/// Topic for `InvoiceSettledFinal` events.
+pub const TOPIC_INVOICE_SETTLED_FINAL: &str = "invoice_settled_final";
+/// Topic for `InvoiceFunded` events.
+pub const TOPIC_INVOICE_FUNDED: &str = "invoice_funded";
+/// Topic for `BidPlaced` events.
+pub const TOPIC_BID_PLACED: &str = "bid_placed";
+/// Topic for `BidAccepted` events.
+pub const TOPIC_BID_ACCEPTED: &str = "bid_accepted";
+/// Topic for `BidWithdrawn` events.
+pub const TOPIC_BID_WITHDRAWN: &str = "bid_withdrawn";
+/// Topic for `BidExpired` events.
+pub const TOPIC_BID_EXPIRED: &str = "bid_expired";
+/// Topic for `EscrowCreated` / `FundsLocked` events.
+pub const TOPIC_ESCROW_CREATED: &str = "escrow_created";
+/// Topic for `EscrowReleased` events.
+pub const TOPIC_ESCROW_RELEASED: &str = "escrow_released";
+/// Topic for `EscrowRefunded` events.
+pub const TOPIC_ESCROW_REFUNDED: &str = "escrow_refunded";
+/// Topic for `DisputeCreated` / `DisputeOpened` events.
+pub const TOPIC_DISPUTE_CREATED: &str = "dispute_created";
+/// Topic for `DisputeUnderReview` events.
+pub const TOPIC_DISPUTE_UNDER_REVIEW: &str = "dispute_under_review";
+/// Topic for `DisputeResolved` events.
+pub const TOPIC_DISPUTE_RESOLVED: &str = "dispute_resolved";
+
+// ============================================================================
+// Protocol-level semantic aliases
+//
+// The task specification uses domain-level names. These type aliases map them
+// to the canonical event types so both names compile and refer to the same
+// schema. Off-chain indexers should subscribe to the TOPIC_* constants above.
+// ============================================================================
+
+/// Semantic alias: `InvoiceCreated` == `InvoiceUploaded`.
+/// Both refer to the same event schema; use `TOPIC_INVOICE_UPLOADED` as the topic.
+pub type InvoiceCreated = InvoiceUploaded;
+
+/// Semantic alias: `FundsLocked` == `EscrowCreated`.
+/// Emitted when investor funds are locked in escrow upon bid acceptance.
+/// Use `TOPIC_ESCROW_CREATED` as the topic.
+pub type FundsLocked = EscrowCreated;
+
+/// Semantic alias: `LoanSettled` == `InvoiceSettled`.
+/// Emitted when a loan (invoice) is fully settled.
+/// Use `TOPIC_INVOICE_SETTLED` as the topic.
+pub type LoanSettled = InvoiceSettled;
+
+/// Semantic alias: `DisputeOpened` == `DisputeCreated`.
+/// Use `TOPIC_DISPUTE_CREATED` as the topic.
+pub type DisputeOpened = DisputeCreated;
 
 // ============================================================================
 // Structured Event Types
 // ============================================================================
 
+/// Emitted when a new invoice is uploaded / created by a business.
+///
+/// Topic: [`TOPIC_INVOICE_UPLOADED`] (`"inv_up"`)
+///
+/// # Fields
+/// - `invoice_id` – Unique 32-byte invoice identifier.
+/// - `business` – Address of the business that owns the invoice.
+/// - `amount` – Invoice face value in the smallest currency unit.
+/// - `currency` – Token contract address for the invoice currency.
+/// - `due_date` – Unix timestamp when the invoice is due.
+/// - `timestamp` – Ledger timestamp at emission time.
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceUploaded {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -23,24 +108,37 @@ pub struct InvoiceUploaded {
     pub timestamp: u64,
 }
 
+/// Emitted when an invoice is verified by an admin.
+///
+/// Topic: [`TOPIC_INVOICE_VERIFIED`] (`"inv_ver"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceVerified {
     pub invoice_id: BytesN<32>,
     pub business: Address,
     pub timestamp: u64,
 }
 
+/// Emitted when an invoice is cancelled by the business owner.
+///
+/// Topic: [`TOPIC_INVOICE_CANCELLED`] (`"inv_canc"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceCancelled {
     pub invoice_id: BytesN<32>,
     pub business: Address,
     pub timestamp: u64,
 }
 
+/// Emitted when an invoice is fully settled (loan repaid).
+///
+/// Topic: [`TOPIC_INVOICE_SETTLED`] (`"inv_set"`)
+///
+/// # Security
+/// No PII is included. `investor_return` and `platform_fee` are derived
+/// from validated contract state only.
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceSettled {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -50,8 +148,11 @@ pub struct InvoiceSettled {
     pub timestamp: u64,
 }
 
+/// Emitted when an invoice is marked as defaulted.
+///
+/// Topic: [`TOPIC_INVOICE_DEFAULTED`] (`"inv_def"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceDefaulted {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -59,16 +160,22 @@ pub struct InvoiceDefaulted {
     pub timestamp: u64,
 }
 
+/// Emitted when an invoice expires past its due date without payment.
+///
+/// Topic: [`TOPIC_INVOICE_EXPIRED`] (`"inv_exp"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceExpired {
     pub invoice_id: BytesN<32>,
     pub business: Address,
     pub due_date: u64,
 }
 
+/// Emitted on each partial payment towards an invoice.
+///
+/// Topic: [`TOPIC_PARTIAL_PAYMENT`] (`"inv_pp"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PartialPayment {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -78,8 +185,11 @@ pub struct PartialPayment {
     pub transaction_id: String,
 }
 
+/// Emitted when a payment record is durably stored.
+///
+/// Topic: [`TOPIC_PAYMENT_RECORDED`] (`"pay_rec"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaymentRecorded {
     pub invoice_id: BytesN<32>,
     pub payer: Address,
@@ -88,8 +198,11 @@ pub struct PaymentRecorded {
     pub timestamp: u64,
 }
 
+/// Emitted when an invoice reaches final settlement (all funds disbursed).
+///
+/// Topic: [`TOPIC_INVOICE_SETTLED_FINAL`] (`"inv_stlf"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceSettledFinal {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -98,8 +211,20 @@ pub struct InvoiceSettledFinal {
     pub timestamp: u64,
 }
 
+/// Emitted when a bid is placed on an invoice.
+///
+/// Topic: [`TOPIC_BID_PLACED`] (`"bid_plc"`)
+///
+/// # Fields
+/// - `bid_id` – Unique bid identifier.
+/// - `invoice_id` – The invoice being bid on (auction_id in protocol terms).
+/// - `investor` – Address of the bidder.
+/// - `bid_amount` – Amount offered by the investor.
+/// - `expected_return` – Total expected repayment amount.
+/// - `timestamp` – Ledger timestamp when bid was placed.
+/// - `expiration_timestamp` – Timestamp after which the bid expires.
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidPlaced {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -110,8 +235,11 @@ pub struct BidPlaced {
     pub expiration_timestamp: u64,
 }
 
+/// Emitted when a bid is accepted by the business owner.
+///
+/// Topic: [`TOPIC_BID_ACCEPTED`] (`"bid_acc"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidAccepted {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -122,8 +250,11 @@ pub struct BidAccepted {
     pub timestamp: u64,
 }
 
+/// Emitted when an investor withdraws their bid.
+///
+/// Topic: [`TOPIC_BID_WITHDRAWN`] (`"bid_wdr"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidWithdrawn {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -132,8 +263,11 @@ pub struct BidWithdrawn {
     pub timestamp: u64,
 }
 
+/// Emitted when a bid expires past its TTL.
+///
+/// Topic: [`TOPIC_BID_EXPIRED`] (`"bid_exp"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidExpired {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -142,8 +276,21 @@ pub struct BidExpired {
     pub expiration_timestamp: u64,
 }
 
+/// Emitted when investor funds are locked in escrow (bid accepted).
+///
+/// Topic: [`TOPIC_ESCROW_CREATED`] (`"esc_cr"`)
+///
+/// # Fields
+/// - `escrow_id` – Unique escrow identifier.
+/// - `invoice_id` – The invoice being funded.
+/// - `investor` – Address of the investor whose funds are locked.
+/// - `business` – Address of the business receiving the funds.
+/// - `amount` – Amount locked in escrow.
+///
+/// # Security
+/// Funds are locked atomically with bid acceptance. No PII included.
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EscrowCreated {
     pub escrow_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -152,8 +299,11 @@ pub struct EscrowCreated {
     pub amount: i128,
 }
 
+/// Emitted when escrow funds are released to the business.
+///
+/// Topic: [`TOPIC_ESCROW_RELEASED`] (`"esc_rel"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EscrowReleased {
     pub escrow_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -161,8 +311,11 @@ pub struct EscrowReleased {
     pub amount: i128,
 }
 
+/// Emitted when escrow funds are refunded to the investor.
+///
+/// Topic: [`TOPIC_ESCROW_REFUNDED`] (`"esc_ref"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EscrowRefunded {
     pub escrow_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -170,33 +323,36 @@ pub struct EscrowRefunded {
     pub amount: i128,
 }
 
+/// Emitted when invoice metadata is updated.
+///
+/// Topic: `"invoice_metadata_updated"`
+///
+/// # Security
+/// **NO PII**: This event does NOT include customer_name or tax_id to prevent
+/// PII leakage. Only aggregate statistics (line_item_count, total_value) are included.
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceMetadataUpdated {
     pub invoice_id: BytesN<32>,
-    pub customer_name: String,
-    pub tax_id: String,
     pub line_item_count: u32,
     pub total_value: i128,
+    pub timestamp: u64,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceMetadataCleared {
     pub invoice_id: BytesN<32>,
     pub business: Address,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvestorVerified {
     pub investor: Address,
     pub investment_limit: i128,
     pub verified_at: u64,
 }
 
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceFunded {
     pub invoice_id: BytesN<32>,
     pub investor: Address,
@@ -205,7 +361,6 @@ pub struct InvoiceFunded {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InsuranceAdded {
     pub investment_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -217,7 +372,6 @@ pub struct InsuranceAdded {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InsurancePremiumCollected {
     pub investment_id: BytesN<32>,
     pub provider: Address,
@@ -225,7 +379,6 @@ pub struct InsurancePremiumCollected {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InsuranceClaimed {
     pub investment_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
@@ -234,7 +387,6 @@ pub struct InsuranceClaimed {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeUpdated {
     pub fee_bps: u32,
     pub updated_at: u64,
@@ -242,7 +394,6 @@ pub struct PlatformFeeUpdated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeeStructureUpdated {
     pub fee_type: FeeType,
     pub old_fee_bps: u32,
@@ -252,7 +403,6 @@ pub struct FeeStructureUpdated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeRouted {
     pub invoice_id: BytesN<32>,
     pub recipient: Address,
@@ -261,7 +411,6 @@ pub struct PlatformFeeRouted {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeConfigUpdated {
     pub old_fee_bps: u32,
     pub new_fee_bps: u32,
@@ -270,7 +419,6 @@ pub struct PlatformFeeConfigUpdated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TreasuryConfigured {
     pub treasury_address: Address,
     pub configured_by: Address,
@@ -278,7 +426,6 @@ pub struct TreasuryConfigured {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupCreated {
     pub backup_id: BytesN<32>,
     pub invoice_count: u32,
@@ -286,7 +433,6 @@ pub struct BackupCreated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupRestored {
     pub backup_id: BytesN<32>,
     pub invoice_count: u32,
@@ -294,7 +440,6 @@ pub struct BackupRestored {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupValidated {
     pub backup_id: BytesN<32>,
     pub success: bool,
@@ -302,14 +447,12 @@ pub struct BackupValidated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupArchived {
     pub backup_id: BytesN<32>,
     pub timestamp: u64,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RetentionPolicyUpdated {
     pub max_backups: u32,
     pub max_age_seconds: u64,
@@ -318,14 +461,12 @@ pub struct RetentionPolicyUpdated {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupsCleaned {
     pub removed_count: u32,
     pub timestamp: u64,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuditValidation {
     pub invoice_id: BytesN<32>,
     pub is_valid: bool,
@@ -333,23 +474,20 @@ pub struct AuditValidation {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuditQuery {
     pub query_type: String,
     pub result_count: u32,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceCategoryUpdated {
     pub invoice_id: BytesN<32>,
     pub business: Address,
-    pub old_category: crate::invoice::InvoiceCategory,
-    pub new_category: crate::invoice::InvoiceCategory,
+    pub old_category: crate::types::InvoiceCategory,
+    pub new_category: crate::types::InvoiceCategory,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceTagAdded {
     pub invoice_id: BytesN<32>,
     pub business: Address,
@@ -357,15 +495,27 @@ pub struct InvoiceTagAdded {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceTagRemoved {
     pub invoice_id: BytesN<32>,
     pub business: Address,
     pub tag: String,
 }
 
+/// Emitted when a dispute is opened on an invoice.
+///
+/// Topic: [`TOPIC_DISPUTE_CREATED`] (`"dsp_cr"`)
+///
+/// # Fields
+/// - `invoice_id` – The disputed invoice.
+/// - `created_by` – Address of the dispute initiator (business or investor).
+/// - `reason` – Human-readable reason string (no PII, max 1000 chars).
+/// - `timestamp` – Ledger timestamp at emission time.
+///
+/// # Security
+/// Only the business owner or investor on the invoice may open a dispute.
+/// The `reason` field must not contain PII; it is a reason code or short description.
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisputeCreated {
     pub invoice_id: BytesN<32>,
     pub created_by: Address,
@@ -373,16 +523,22 @@ pub struct DisputeCreated {
     pub timestamp: u64,
 }
 
+/// Emitted when a dispute is moved to admin review.
+///
+/// Topic: [`TOPIC_DISPUTE_UNDER_REVIEW`] (`"dsp_ur"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisputeUnderReview {
     pub invoice_id: BytesN<32>,
     pub reviewed_by: Address,
     pub timestamp: u64,
 }
 
+/// Emitted when a dispute is resolved by an admin.
+///
+/// Topic: [`TOPIC_DISPUTE_RESOLVED`] (`"dsp_rs"`)
+#[derive(Debug, PartialEq)]
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisputeResolved {
     pub invoice_id: BytesN<32>,
     pub resolved_by: Address,
@@ -391,7 +547,6 @@ pub struct DisputeResolved {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProfitFeeBreakdown {
     pub invoice_id: BytesN<32>,
     pub investment_amount: i128,
@@ -404,7 +559,12 @@ pub struct ProfitFeeBreakdown {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TtlExtended {
+    pub kind: String,
+    pub count: u32,
+}
+
+#[contractevent]
 pub struct BidTtlUpdated {
     pub old_days: u64,
     pub new_days: u64,
@@ -412,51 +572,18 @@ pub struct BidTtlUpdated {
     pub timestamp: u64,
 }
 
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EmergencyWithdrawalInitiated {
-    pub token: Address,
-    pub amount: i128,
-    pub target: Address,
-    pub unlock_at: u64,
-    pub admin: Address,
+pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
+    TtlExtended {
+        kind: kind.clone(),
+        count,
+    }
+    .publish(env);
 }
 
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EmergencyWithdrawalExecuted {
-    pub token: Address,
-    pub amount: i128,
-    pub target: Address,
-    pub admin: Address,
-}
+
+
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EmergencyWithdrawalCancelled {
-    pub token: Address,
-    pub amount: i128,
-    pub target: Address,
-    pub admin: Address,
-}
-
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AdminSet {
-    pub admin: Address,
-    pub timestamp: u64,
-}
-
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AdminTransferred {
-    pub old_admin: Address,
-    pub new_admin: Address,
-    pub timestamp: u64,
-}
-
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RevenueDistributed {
     pub period: u64,
     pub treasury_amount: i128,
@@ -465,14 +592,17 @@ pub struct RevenueDistributed {
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceStatusUpdated {
     pub invoice_id: BytesN<32>,
-    pub status: crate::invoice::InvoiceStatus,
+    pub status: crate::types::InvoiceStatus,
 }
 
 #[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminInitialized {
+    pub admin: Address,
+}
+
+#[contractevent]
 pub struct ProtocolInitialized {
     pub admin: Address,
     pub treasury: Address,
@@ -525,10 +655,9 @@ pub fn emit_invoice_metadata_updated(env: &Env, invoice: &Invoice, metadata: &In
 
     InvoiceMetadataUpdated {
         invoice_id: invoice.id.clone(),
-        customer_name: metadata.customer_name.clone(),
-        tax_id: metadata.tax_id.clone(),
         line_item_count: metadata.line_items.len() as u32,
         total_value: total,
+        timestamp: env.ledger().timestamp(),
     }
     .publish(env);
 }
@@ -552,7 +681,7 @@ pub fn emit_investor_verified(env: &Env, verification: &InvestorVerification) {
 
 pub fn emit_invoice_settled(
     env: &Env,
-    invoice: &crate::invoice::Invoice,
+    invoice: &crate::types::Invoice,
     investor_return: i128,
     platform_fee: i128,
 ) {
@@ -623,7 +752,7 @@ pub fn emit_invoice_settled_final(
     .publish(env);
 }
 
-pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
+pub fn emit_invoice_expired(env: &Env, invoice: &crate::types::Invoice) {
     InvoiceExpired {
         invoice_id: invoice.id.clone(),
         business: invoice.business.clone(),
@@ -632,7 +761,7 @@ pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
     .publish(env);
 }
 
-pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::invoice::Invoice) {
+pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::types::Invoice) {
     InvoiceDefaulted {
         invoice_id: invoice.id.clone(),
         business: invoice.business.clone(),
@@ -970,8 +1099,8 @@ pub fn emit_invoice_category_updated(
     env: &Env,
     invoice_id: &BytesN<32>,
     business: &Address,
-    old_category: &crate::invoice::InvoiceCategory,
-    new_category: &crate::invoice::InvoiceCategory,
+    old_category: &crate::types::InvoiceCategory,
+    new_category: &crate::types::InvoiceCategory,
 ) {
     InvoiceCategoryUpdated {
         invoice_id: invoice_id.clone(),
@@ -1091,6 +1220,37 @@ pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Add
     .publish(env);
 }
 
+#[contractevent]
+pub struct EmergencyWithdrawalInitiated {
+    pub token: Address,
+    pub amount: i128,
+    pub target: Address,
+    pub unlock_at: u64,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct EmergencyWithdrawalExecuted {
+    pub token: Address,
+    pub amount: i128,
+    pub target: Address,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct EmergencyWithdrawalCancelled {
+    pub token: Address,
+    pub amount: i128,
+    pub target: Address,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct AdminSet {
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
 pub fn emit_emergency_withdrawal_initiated(
     env: &Env,
     token: Address,
@@ -1150,12 +1310,43 @@ pub fn emit_admin_set(env: &Env, admin: &Address) {
 }
 
 pub fn emit_admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
-    AdminTransferred {
-        old_admin: old_admin.clone(),
-        new_admin: new_admin.clone(),
-        timestamp: env.ledger().timestamp(),
-    }
-    .publish(env);
+    env.events().publish(
+        (symbol_short!("adm_trf"),),
+        (
+            old_admin.clone(),
+            new_admin.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+pub fn emit_admin_transfer_initiated(env: &Env, current_admin: &Address, pending_admin: &Address) {
+    env.events().publish(
+        (symbol_short!("adm_req"),),
+        (
+            current_admin.clone(),
+            pending_admin.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+pub fn emit_admin_transfer_cancelled(env: &Env, current_admin: &Address, pending_admin: &Address) {
+    env.events().publish(
+        (symbol_short!("adm_cnl"),),
+        (
+            current_admin.clone(),
+            pending_admin.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+pub fn emit_admin_two_step_updated(env: &Env, admin: &Address, enabled: bool) {
+    env.events().publish(
+        (symbol_short!("adm_2st"),),
+        (admin.clone(), enabled, env.ledger().timestamp()),
+    );
 }
 
 pub fn emit_revenue_distributed(
@@ -1177,7 +1368,7 @@ pub fn emit_revenue_distributed(
 pub fn emit_invoice_status_updated(
     env: &Env,
     invoice_id: BytesN<32>,
-    status: crate::invoice::InvoiceStatus,
+    status: crate::types::InvoiceStatus,
 ) {
     InvoiceStatusUpdated { invoice_id, status }.publish(env);
 }
@@ -1201,4 +1392,9 @@ pub fn emit_protocol_initialized(
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
+}
+
+pub fn emit_admin_initialized(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("adm_init"),), (admin.clone(),));
 }

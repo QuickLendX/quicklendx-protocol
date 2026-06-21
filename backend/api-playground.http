@@ -1,0 +1,48 @@
+### QuickLendX Protocol API Playground
+@baseUrl = http://localhost:3000
+@token = your_auth_token_here
+
+### 1. Health Check
+GET {{baseUrl}}/health
+Content-Type: application/json
+
+### 2. Get All Invoices (Paginated)
+# Returns verified invoices available for funding
+GET {{baseUrl}}/invoices?limit=10&offset=0
+Authorization: Bearer {{token}}
+
+### 3. Create a New Invoice
+POST {{baseUrl}}/invoices
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "amount": 250000,
+    "currency": "USDC",
+    "description": "Inventory Purchase - March 2024",
+    "dueDate": "2024-12-31T23:59:59Z",
+    "category": "GOODS"
+}
+
+### 4. Get Invoice Details
+@invoiceId = some_invoice_id_from_seed
+GET {{baseUrl}}/invoices/{{invoiceId}}
+Authorization: Bearer {{token}}
+
+### 5. Place a Bid
+POST {{baseUrl}}/invoices/{{invoiceId}}/bids
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "bidAmount": 240000,
+    "expectedReturn": 260000
+}
+
+### 6. Get Business Profile
+GET {{baseUrl}}/profile
+Authorization: Bearer {{token}}
+
+### 7. Get Platform Analytics (Admin only)
+GET {{baseUrl}}/admin/analytics
+Authorization: Bearer {{token}}

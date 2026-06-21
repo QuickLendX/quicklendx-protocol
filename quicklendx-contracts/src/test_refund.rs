@@ -290,7 +290,10 @@ fn test_refund_updates_internal_states_correctly() {
     // 3. Bid status should update to Cancelled
     let bids = client.get_bids_for_invoice(&invoice_id);
     assert_eq!(bids.len(), 1);
-    assert_eq!(bids.get(0).unwrap().status, crate::bid::BidStatus::Cancelled);
+    assert_eq!(
+        bids.get(0).unwrap().status,
+        crate::bid::BidStatus::Cancelled
+    );
 
     // 4. Investment status should update to Refunded
     env.as_contract(&client.address, || {
@@ -302,7 +305,7 @@ fn test_refund_updates_internal_states_correctly() {
 }
 
 // ============================================================================
-// Token Transfer Failure Tests – Refund Path
+// Token Transfer Failure Tests - Refund Path
 //
 // These tests document and verify the contract's behavior when the underlying
 // Stellar token transfer fails during a refund. In every failure case:
@@ -411,7 +414,10 @@ fn test_refund_succeeds_after_balance_restored() {
 
     // Second refund attempt succeeds.
     let result = client.try_refund_escrow_funds(&invoice_id, &business);
-    assert!(result.is_ok(), "refund should succeed after balance restored");
+    assert!(
+        result.is_ok(),
+        "refund should succeed after balance restored"
+    );
 
     // Investor received funds.
     assert_eq!(
@@ -426,4 +432,112 @@ fn test_refund_succeeds_after_balance_restored() {
     // Invoice is now Refunded.
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Refunded);
+}
+
+// ============================================================================
+// Regression Tests: Idempotency, Indexing, and Ordering
+// ============================================================================
+
+#[test]
+fn test_refund_idempotency_side_effects() {
+    let (env, client, admin) = setup();
+    let (invoice_id, business, investor, amount, currency) =
+        create_funded_invoice(&env, &client, &admin);
+    let token_client = token::Client::new(&env, &currency);
+
+    // Initial refund
+    client.refund_escrow_funds(&invoice_id, &business);
+    let investor_balance_after_first = token_client.balance(&investor);
+
+    // Capture state after first refund
+    let invoice_after_first = client.get_invoice(&invoice_id);
+    let escrow_after_first = client.get_escrow_details(&invoice_id);
+
+    // Second refund attempt
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
+    assert!(result.is_err(), "Second refund attempt must fail");
+
+    // Verify NO side effects from the failed second call
+    assert_eq!(
+        token_client.balance(&investor),
+        investor_balance_after_first,
+        "Investor balance must not change on second refund attempt"
+    );
+    assert_eq!(
+        client.get_invoice(&invoice_id),
+        invoice_after_first,
+        "Invoice state must not change on second refund attempt"
+    );
+    assert_eq!(
+        client.get_escrow_details(&invoice_id),
+        escrow_after_first,
+        "Escrow details must not change on second refund attempt"
+    );
+}
+
+#[test]
+fn test_refund_index_consistency() {
+    let (env, client, admin) = setup();
+    let (invoice_id, business, _, _, _) = create_funded_invoice(&env, &client, &admin);
+
+    // Verify it's in the Funded index
+    let funded_invoices = client.get_invoices_by_status(&InvoiceStatus::Funded);
+    assert!(funded_invoices.contains(&invoice_id));
+
+    // Refund
+    client.refund_escrow_funds(&invoice_id, &business);
+
+    // Verify it's removed from Funded index
+    let funded_invoices_post = client.get_invoices_by_status(&InvoiceStatus::Funded);
+    assert!(!funded_invoices_post.contains(&invoice_id));
+
+    // Verify it's added to Refunded index
+    let refunded_invoices = client.get_invoices_by_status(&InvoiceStatus::Refunded);
+    assert!(refunded_invoices.contains(&invoice_id));
+}
+
+#[test]
+fn test_cannot_refund_after_release() {
+    let (env, client, admin) = setup();
+    let (invoice_id, business, _, _, _) = create_funded_invoice(&env, &client, &admin);
+
+    // Release funds to business
+    client.release_escrow_funds(&invoice_id);
+
+    // Attempt refund
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
+    assert!(
+        result.is_err(),
+        "Refund must be blocked after funds are released"
+    );
+
+    // Verify escrow status is Released, not Refunded
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.status, EscrowStatus::Released);
+}
+
+#[test]
+fn test_cannot_refund_after_settlement() {
+    let (env, client, admin) = setup();
+    let (invoice_id, business, _, amount, _) = create_funded_invoice(&env, &client, &admin);
+
+    // Settle invoice (Business pays back investor)
+    // Note: Settle usually happens after release, but in some paths it can be direct.
+    // Here we ensure it's fully Paid.
+    client.settle_invoice(&invoice_id, &amount);
+
+    // Verify invoice status is Paid
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Paid);
+
+    // Attempt refund
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
+    assert!(
+        result.is_err(),
+        "Refund must be blocked after invoice is settled (Paid)"
+    );
+
+    // Verify invoice is still Paid
+    let invoice_post = client.get_invoice(&invoice_id);
+    assert_eq!(invoice_post.status, InvoiceStatus::Paid);
 }

@@ -10,14 +10,14 @@
 //! - **Refunded**: Investment refunded due to invoice cancellation
 //!
 //! ## Coverage Matrix
-//! | Test | From → To | Invoice Impact | Events | Storage Invariants |
+//! | Test | From -> To | Invoice Impact | Events | Storage Invariants |
 //! |------|-----------|----------------|--------|-------------------|
-//! | test_investment_completion_flow | Active → Completed | Paid | Settlement events | Active index cleaned |
-//! | test_investment_withdrawal_flow | Active → Withdrawn | Funded → Cancelled | Withdrawal events | Active index cleaned |
-//! | test_investment_default_flow | Active → Defaulted | Defaulted | Default events | Active index cleaned |
-//! | test_investment_refund_flow | Active → Refunded | Refunded | Refund events | Active index cleaned |
-//! | test_invalid_terminal_transitions | Terminal → Active | Rejected | - | Error validation |
-//! | test_terminal_state_immutability | Completed → * | Rejected | - | State preservation |
+//! | test_investment_completion_flow | Active -> Completed | Paid | Settlement events | Active index cleaned |
+//! | test_investment_withdrawal_flow | Active -> Withdrawn | Funded -> Cancelled | Withdrawal events | Active index cleaned |
+//! | test_investment_default_flow | Active -> Defaulted | Defaulted | Default events | Active index cleaned |
+//! | test_investment_refund_flow | Active -> Refunded | Refunded | Refund events | Active index cleaned |
+//! | test_invalid_terminal_transitions | Terminal -> Active | Rejected | - | Error validation |
+//! | test_terminal_state_immutability | Completed -> * | Rejected | - | State preservation |
 //!
 //! Run: `cargo test test_investment_terminal_states`
 
@@ -87,7 +87,7 @@ fn investment_is_in_active_index(env: &Env, investment_id: &BytesN<32>) -> bool 
     active_ids.iter().any(|id| id == investment_id)
 }
 
-/// Test investment completion flow (Active → Completed)
+/// Test investment completion flow (Active -> Completed)
 #[test]
 fn test_investment_completion_flow() {
     let env = Env::default();
@@ -138,7 +138,7 @@ fn test_investment_completion_flow() {
     assert!(has_event_with_topic(&env, symbol_short!("inv_setlf"))); // Invoice settled final
 }
 
-/// Test investment withdrawal flow (Active → Withdrawn)  
+/// Test investment withdrawal flow (Active -> Withdrawn)  
 #[test]
 fn test_investment_withdrawal_flow() {
     let env = Env::default();
@@ -194,7 +194,7 @@ fn test_investment_withdrawal_flow() {
     assert_eq!(invoice.status, InvoiceStatus::Cancelled);
 }
 
-/// Test investment default flow (Active → Defaulted)
+/// Test investment default flow (Active -> Defaulted)
 #[test]
 fn test_investment_default_flow() {
     let env = Env::default();
@@ -249,7 +249,7 @@ fn test_investment_default_flow() {
     assert_eq!(invoice.status, InvoiceStatus::Defaulted);
 }
 
-/// Test investment refund flow (Active → Refunded)
+/// Test investment refund flow (Active -> Refunded)
 #[test]
 fn test_investment_refund_flow() {
     let env = Env::default();
@@ -295,9 +295,45 @@ fn test_investment_refund_flow() {
     // Verify invoice state
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Refunded);
-    
+
     // Verify refund events
     assert!(has_event_with_topic(&env, symbol_short!("esc_ref"))); // Escrow refunded
+}
+
+/// Test: Active-index query never returns terminal investments
+#[test]
+fn test_active_index_excludes_terminal_investments() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000_000);
+
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+
+    let invoice_amount = 1000i128;
+    let investment_amount = 1000i128;
+
+    let (invoice_id, _bid_id) = setup_funded_investment_for_terminal_tests(
+        &env,
+        &client,
+        &business,
+        &investor,
+        &currency,
+        invoice_amount,
+        investment_amount,
+    );
+
+    client.refund_escrow_funds(&invoice_id);
+    let active_ids = InvestmentStorage::get_active_investment_ids(&env);
+    for active_id in active_ids.iter() {
+        let investment = InvestmentStorage::get_investment(&env, &active_id).unwrap();
+        assert_eq!(investment.status, InvestmentStatus::Active);
+    }
+    assert_eq!(active_ids.len(), 0, "terminal investments must not appear in get_active_investment_ids");
 }
 
 /// Test invalid terminal state transitions (should fail)

@@ -94,6 +94,8 @@ The funded overdue scan is intentionally bounded so one contract call cannot wal
 
 - Default batch size: `25`
 - Maximum explicit batch size: `100`
+- A single call can never process more than the resolved scan window, which is clamped to
+  `min(max_overdue_scan_batch_limit, total_funded)`.
 - Traversal order: funded index insertion order
 - Progress tracking: persistent rotating cursor in instance storage
 - Cursor normalization: if the funded set shrinks and the cursor is out of range, scanning restarts at `0`
@@ -164,6 +166,64 @@ console.log({
   nextCursor: scan.next_cursor,
 });
 ```
+
+## Default Finality Matrix
+
+The exhaustive default decision table lives in `docs/default-finality-matrix.md`.
+This copy is kept byte-aligned with that canonical document and is validated by
+the contract test suite so documentation drift becomes a test failure.
+
+Security note: this matrix covers status, settlement finality, and escrow
+status. Duplicate default prevention is stronger and is enforced separately by
+the transition guard, which must reject a second default attempt with
+`DuplicateDefaultTransition`.
+
+<!-- DEFAULT_FINALITY_MATRIX:START -->
+| Invoice status | Settlement finalized | Escrow status | Expected default outcome | Reason |
+| --- | --- | --- | --- | --- |
+| Pending | false | Held | Deny: InvoiceNotAvailableForFunding | Only funded invoices are eligible for default review. |
+| Pending | false | Released | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before escrow finality is considered. |
+| Pending | false | Refunded | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before escrow finality is considered. |
+| Pending | true | Held | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before settlement finality is considered. |
+| Pending | true | Released | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before other finality checks. |
+| Pending | true | Refunded | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before other finality checks. |
+| Verified | false | Held | Deny: InvoiceNotAvailableForFunding | Verified invoices are not yet funded, so they cannot default. |
+| Verified | false | Released | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before escrow finality is considered. |
+| Verified | false | Refunded | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before escrow finality is considered. |
+| Verified | true | Held | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before settlement finality is considered. |
+| Verified | true | Released | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before other finality checks. |
+| Verified | true | Refunded | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before other finality checks. |
+| Funded | false | Held | Allow | This is the only open finality combination for defaulting after grace expiry. |
+| Funded | false | Released | Deny: InvalidStatus | Released escrow means funds already left escrow, so default must be refused. |
+| Funded | false | Refunded | Deny: InvalidStatus | Refunded escrow means capital already returned, so default must be refused. |
+| Funded | true | Held | Deny: InvalidStatus | Settlement finality must block default even if the invoice status still says Funded. |
+| Funded | true | Released | Deny: InvalidStatus | Both settlement and escrow indicate a terminal path, so default must be refused. |
+| Funded | true | Refunded | Deny: InvalidStatus | Both settlement and escrow indicate a terminal path, so default must be refused. |
+| Paid | false | Held | Deny: InvoiceNotAvailableForFunding | Paid invoices are terminal and cannot default. |
+| Paid | false | Released | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before escrow finality is considered. |
+| Paid | false | Refunded | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before escrow finality is considered. |
+| Paid | true | Held | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before settlement finality is considered. |
+| Paid | true | Released | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before other finality checks. |
+| Paid | true | Refunded | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before other finality checks. |
+| Defaulted | false | Held | Deny: InvoiceAlreadyDefaulted | A pre-existing defaulted status must be rejected immediately. |
+| Defaulted | false | Released | Deny: InvoiceAlreadyDefaulted | Status gate wins before escrow finality on synthetic pre-defaulted rows. |
+| Defaulted | false | Refunded | Deny: InvoiceAlreadyDefaulted | Status gate wins before escrow finality on synthetic pre-defaulted rows. |
+| Defaulted | true | Held | Deny: InvoiceAlreadyDefaulted | Status gate wins before settlement finality on synthetic pre-defaulted rows. |
+| Defaulted | true | Released | Deny: InvoiceAlreadyDefaulted | Status gate wins before other finality checks on synthetic pre-defaulted rows. |
+| Defaulted | true | Refunded | Deny: InvoiceAlreadyDefaulted | Status gate wins before other finality checks on synthetic pre-defaulted rows. |
+| Cancelled | false | Held | Deny: InvoiceNotAvailableForFunding | Cancelled invoices are terminal and cannot default. |
+| Cancelled | false | Released | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before escrow finality is considered. |
+| Cancelled | false | Refunded | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before escrow finality is considered. |
+| Cancelled | true | Held | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before settlement finality is considered. |
+| Cancelled | true | Released | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before other finality checks. |
+| Cancelled | true | Refunded | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before other finality checks. |
+| Refunded | false | Held | Deny: InvoiceNotAvailableForFunding | Refunded invoices are terminal and cannot default. |
+| Refunded | false | Released | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before escrow finality is considered. |
+| Refunded | false | Refunded | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before escrow finality is considered. |
+| Refunded | true | Held | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before settlement finality is considered. |
+| Refunded | true | Released | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before other finality checks. |
+| Refunded | true | Refunded | Deny: InvoiceNotAvailableForFunding | Status gate blocks default before other finality checks. |
+<!-- DEFAULT_FINALITY_MATRIX:END -->
 
 ## Best Practices
 

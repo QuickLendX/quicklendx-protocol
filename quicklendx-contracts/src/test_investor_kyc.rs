@@ -181,7 +181,7 @@ mod test_investor_kyc {
     fn test_non_admin_cannot_verify_investor() {
         let (env, client, _admin) = setup();
         let investor = Address::generate(&env);
-        let non_admin = Address::generate(&env);
+        let _non_admin = Address::generate(&env);
         let kyc_data = String::from_str(&env, "Valid KYC data");
         let investment_limit = 50_000i128;
 
@@ -194,7 +194,7 @@ mod test_investor_kyc {
         // Non-admin verification should fail
         // Note: This test depends on proper authorization checks in the contract
         // The actual error might vary based on implementation
-        let result = client.try_verify_investor(&investor, &investment_limit);
+        let _result = client.try_verify_investor(&investor, &investment_limit);
         // In a real scenario without proper admin auth, this should fail
         // For comprehensive testing, we verify the admin check exists
     }
@@ -829,9 +829,9 @@ mod test_investor_kyc {
         let invoice_id = create_verified_invoice(&env, &client, &business, 100_000);
 
         // All investors place bids within their actual calculated limits
-        let bid1_amount = limit1 / 2; // Use 50% of actual limit
-        let bid2_amount = limit2 / 2;
-        let bid3_amount = limit3 / 2;
+        let _bid1_amount = limit1 / 2; // Use 50% of actual limit
+        let _bid2_amount = limit2 / 2;
+        let _bid3_amount = limit3 / 2;
     }
 
     // ============================================================================
@@ -847,7 +847,7 @@ mod test_investor_kyc {
         let business = Address::generate(&env);
         let kyc_data = String::from_str(&env, "Valid KYC data");
 
-        // Submit KYC but do NOT verify — investor is pending
+        // Submit KYC but do NOT verify - investor is pending
         let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
 
         let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
@@ -887,11 +887,9 @@ mod test_investor_kyc {
             .unwrap()
             .unwrap();
 
-        // 2. Admin rejects → investor resubmits (now pending again)
-        let _ = client.try_reject_investor(
-            &investor,
-            &String::from_str(&env, "Needs updated docs"),
-        );
+        // 2. Admin rejects -> investor resubmits (now pending again)
+        let _ =
+            client.try_reject_investor(&investor, &String::from_str(&env, "Needs updated docs"));
         let new_kyc = String::from_str(&env, "Updated KYC data with more information provided");
         let _ = client.try_submit_investor_kyc(&investor, &new_kyc);
 
@@ -916,12 +914,10 @@ mod test_investor_kyc {
         let business = Address::generate(&env);
         let kyc_data = String::from_str(&env, "Valid KYC data");
 
-        // Reject → resubmit → verify cycle
+        // Reject -> resubmit -> verify cycle
         let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
-        let _ = client.try_reject_investor(
-            &investor,
-            &String::from_str(&env, "Needs updated docs"),
-        );
+        let _ =
+            client.try_reject_investor(&investor, &String::from_str(&env, "Needs updated docs"));
         let new_kyc = String::from_str(&env, "Updated KYC data with more information provided");
         let _ = client.try_submit_investor_kyc(&investor, &new_kyc);
         let _ = client.try_verify_investor(&investor, &100_000i128);
@@ -951,10 +947,8 @@ mod test_investor_kyc {
         let kyc_data = String::from_str(&env, "Insufficient KYC data");
 
         let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
-        let _ = client.try_reject_investor(
-            &investor,
-            &String::from_str(&env, "Fraudulent documents"),
-        );
+        let _ =
+            client.try_reject_investor(&investor, &String::from_str(&env, "Fraudulent documents"));
 
         let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
 
@@ -991,8 +985,8 @@ mod test_investor_kyc {
     }
 
     /// Verify that the three KYC states produce distinct, correct errors on
-    /// place_bid: None → BusinessNotVerified, Pending → KYCAlreadyPending,
-    /// Rejected → BusinessNotVerified.
+    /// place_bid: None -> BusinessNotVerified, Pending -> KYCAlreadyPending,
+    /// Rejected -> BusinessNotVerified.
     #[test]
     fn test_place_bid_error_matrix_for_all_non_verified_states() {
         let (env, client, _admin) = setup();
@@ -1032,4 +1026,3 @@ mod test_investor_kyc {
         assert_eq!(err, QuickLendXError::BusinessNotVerified);
     }
 }
-

@@ -1,19 +1,19 @@
-//! Core data types for the QuickLendX invoice factoring protocol.
+//! Core data types for the QuickLendX protocol.
 //!
-//! This module defines all the fundamental types used throughout the contract,
-//! including invoices, bids, investments, and their associated enums and structs.
+//! This module defines the persistent data structures stored in the blockchain.
+//! All types are designed for Soroban compatibility using `#[contracttype]`.
 //!
-//! # Security Notes
-//!
-//! - All types use `#[contracttype]` to ensure proper serialization for on-chain storage
-//! - Types are designed to be immutable where possible to prevent unauthorized modifications
+//! Key design principles:
+//! - Direct storage optimization: minimal nesting for frequently accessed fields
+//! - Future-proofing: use of optional fields and versioned enums
+//! - Type safety: strong typing for status and categories
 //! - Addresses are used for identity to leverage Soroban's built-in access control
 
 use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 
 /// Invoice status enumeration representing the lifecycle of an invoice
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvoiceStatus {
     Pending,
     Verified,
@@ -21,6 +21,7 @@ pub enum InvoiceStatus {
     Paid,
     Defaulted,
     Cancelled,
+    Refunded,
 }
 
 /// Bid status enumeration
@@ -28,26 +29,32 @@ pub enum InvoiceStatus {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BidStatus {
     Placed,
-    Withdrawn,
     Accepted,
+    Withdrawn,
     Expired,
     Cancelled,
 }
 
-/// Investment status enumeration
+/// Investment status enumeration tracking the lifecycle of investor positions.
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvestmentStatus {
+    /// The investment is active, funded, and tracked in the active investment index.
+    /// This is the only non-terminal state.
     Active,
+    /// Investment funds were withdrawn by the investor (terminal status).
     Withdrawn,
+    /// Investment completed successfully, and the investor has received their payouts (terminal status).
     Completed,
+    /// The associated invoice defaulted due to non-payment, triggering default/insurance logic (terminal status).
     Defaulted,
+    /// Investment was refunded due to invoice cancellation (terminal status).
     Refunded,
 }
 
 /// Dispute status enumeration
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DisputeStatus {
     None,
     Disputed,
@@ -55,45 +62,37 @@ pub enum DisputeStatus {
     Resolved,
 }
 
-/// Invoice category enumeration for classification
+/// Invoice category for classification
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvoiceCategory {
     Services,
-    Products,
+    Goods,
     Consulting,
+    Logistics,
+    Products,
     Manufacturing,
     Technology,
     Healthcare,
     Other,
 }
 
-/// Compact representation of a line item stored on-chain
+/// Line item record for invoice metadata
 #[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LineItemRecord(pub String, pub i128, pub i128, pub i128);
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LineItemRecord(pub String, pub u32, pub i128, pub i128);
 
-/// Metadata associated with an invoice
-#[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct InvoiceMetadata {
-    pub customer_name: String,
-    pub customer_address: String,
-    pub tax_id: String,
-    pub line_items: Vec<LineItemRecord>,
-    pub notes: String,
-}
-
-/// Individual payment record for an invoice
+/// Payment record for invoice history
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaymentRecord {
     pub amount: i128,
+    pub payer: Address,
     pub timestamp: u64,
     pub transaction_id: String,
 }
 
-/// Dispute structure
+/// Dispute data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Dispute {
@@ -110,13 +109,13 @@ pub struct Dispute {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoiceRating {
-    pub rating: u32,
-    pub feedback: String,
-    pub rated_by: Address,
-    pub rated_at: u64,
+    pub rater: Address,
+    pub score: u32, // 1-5
+    pub comment: String,
+    pub timestamp: u64,
 }
 
-/// Core invoice data structure
+/// Core Invoice data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Invoice {
@@ -126,16 +125,50 @@ pub struct Invoice {
     pub currency: Address,
     pub due_date: u64,
     pub status: InvoiceStatus,
+    pub created_at: u64,
     pub description: String,
+    /// Optional customer display name. Max length enforced: `MAX_NAME_LENGTH`.
+    pub metadata_customer_name: Option<String>,
+    /// Optional customer address. Max length enforced: `MAX_ADDRESS_LENGTH`.
+    pub metadata_customer_address: Option<String>,
+    /// Optional tax identifier. Max length enforced: `MAX_TAX_ID_LENGTH`.
+    pub metadata_tax_id: Option<String>,
+    /// Optional free-text notes. Max length enforced: `MAX_NOTES_LENGTH`.
+    pub metadata_notes: Option<String>,
+    pub metadata_line_items: Vec<LineItemRecord>,
     pub category: InvoiceCategory,
     pub tags: Vec<String>,
-    pub metadata: InvoiceMetadata,
-    pub dispute: Dispute,
-    pub payments: Vec<PaymentRecord>,
+    pub funded_amount: i128,
+    pub funded_at: Option<u64>,
+    pub investor: Option<Address>,
+    pub settled_at: Option<u64>,
+    pub average_rating: Option<u32>,
+    pub total_ratings: u32,
     pub ratings: Vec<InvoiceRating>,
-    pub created_at: u64,
-    pub updated_at: u64,
+    pub dispute_status: DisputeStatus,
+    pub dispute: Dispute,
+    pub total_paid: i128,
+    pub payment_history: Vec<PaymentRecord>,
 }
+
+/// Helper struct for metadata updates
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvoiceMetadata {
+    /// Customer display name. Trimmed and validated to be non-empty. Max: `MAX_NAME_LENGTH`.
+    pub customer_name: String,
+    /// Customer address. Max: `MAX_ADDRESS_LENGTH`.
+    pub customer_address: String,
+    /// Tax identifier (free-form). Max: `MAX_TAX_ID_LENGTH`.
+    pub tax_id: String,
+    /// Line items vector. Each item's description validated against `MAX_DESCRIPTION_LENGTH`.
+    /// The vector length is bounded by `MAX_METADATA_LINE_ITEMS` in verification.
+    pub line_items: Vec<LineItemRecord>,
+    /// Free-form notes. Max: `MAX_NOTES_LENGTH`.
+    pub notes: String,
+}
+
+// Invoice logic is implemented in crate::invoice module.
 
 /// Bid data structure
 #[contracttype]
@@ -151,17 +184,6 @@ pub struct Bid {
     pub expiration_timestamp: u64,
 }
 
-/// Insurance coverage structure
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InsuranceCoverage {
-    pub provider: Address,
-    pub coverage_amount: i128,
-    pub premium_amount: i128,
-    pub coverage_percentage: u32,
-    pub active: bool,
-}
-
 /// Investment data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -175,22 +197,56 @@ pub struct Investment {
     pub insurance: Vec<InsuranceCoverage>,
 }
 
-/// Platform fee configuration
-
+/// Insurance coverage record
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PlatformFee {
-    pub fee_bps: u32,
-    pub recipient: Address,
-    pub description: String,
+pub struct InsuranceCoverage {
+    pub provider: Address,
+    pub coverage_percentage: u32,
+    pub coverage_amount: i128,
+    pub premium_amount: i128,
+    pub active: bool,
 }
 
+/// Platform fee configuration
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeConfig {
-    pub verification_fee: PlatformFee,
-    pub settlement_fee: PlatformFee,
-    pub bid_fee: PlatformFee,
-    pub investment_fee: PlatformFee,
+    pub fee_bps: u32,
+    pub treasury_address: Option<Address>,
+    pub updated_at: u64,
+    pub updated_by: Address,
 }
 
+/// Search relevance rank for invoice search results
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum SearchRank {
+    Other,
+    PartialMatch,
+    ExactId,
+}
+
+/// A single search result entry
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SearchResult {
+    pub invoice_id: BytesN<32>,
+    pub rank: SearchRank,
+    pub created_at: u64,
+}
+
+/// Report returned by paginated admin rebuild helpers.
+///
+/// The rebuild is paginated and resumable. Each helper documents its completion
+/// signal and what it counts as `reindexed`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RebuildReport {
+    /// Number of invoice IDs examined in this page.
+    pub scanned: u32,
+    /// Number of records repaired or rewritten by the rebuild helper.
+    pub reindexed: u32,
+    /// Offset to pass on the next call.
+    pub next_offset: u32,
+}

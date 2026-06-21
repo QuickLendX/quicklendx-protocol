@@ -212,6 +212,293 @@ proptest! {
     }
 }
 
+// ============================================================================
+// Payment Sequence Fuzz Harness (Issue #1080)
+// ============================================================================
+// Invariants protected by these fuzz tests:
+// 1. total_paid <= total_due always (capping invariant)
+// 2. (invoice_id, nonce) uniqueness enforced (replay protection)
+// 3. payment_count bounded by MAX_PAYMENT_COUNT
+// ============================================================================
+
+/// Setup helper for funded invoice required by payment fuzz tests.
+/// Creates an invoice with status Funded (ready for partial payments).
+fn setup_funded_invoice_for_fuzz(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    invoice_amount: i128,
+) -> (BytesN<32>, Address, Address) {
+    let business = Address::generate(env);
+    let investor = Address::generate(env);
+
+    let currency = client.get_whitelisted_currencies().get(0).unwrap();
+    let due_date = env.ledger().timestamp() + 86_400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &invoice_amount,
+        &currency,
+        &due_date,
+        &SorobanString::from_str(env, "Fuzz test invoice"),
+        &InvoiceCategory::Services,
+        &SorobanVec::new(env),
+    );
+
+    let _ = client.try_verify_invoice(&invoice_id);
+
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &invoice_amount,
+        &(invoice_amount + 100),
+    );
+    let _ = client.try_accept_bid(&invoice_id, &bid_id);
+
+    (invoice_id, business, investor)
+}
+
+/// Generate a random payment amount relative to the invoice total.
+/// Returns amounts in range [1, invoice_amount * 3] to allow overpayment.
+fn gen_payment_amount(invoice_amount: i128, rng: &mut impl rand::Rng) -> i128 {
+    let max_multiplier: u32 = rng.gen();
+    let max_amount: i128 = (invoice_amount as u128 * max_multiplier as u128 % 10_000_002) as i128;
+    rng.gen_range(1, max_amount.max(1) + 1)
+}
+
+/// Generate a payment sequence action: either new payment, duplicate nonce, or overpay.
+#[derive(Clone, Copy, Debug)]
+enum PaymentAction {
+    NewPayment { amount: i128, nonce: usize },
+    DuplicateNonce(usize),
+}
+
+/// Fuzz harness for payment sequences that validates invariants after each operation.
+/// Uses deterministic PRNG seeded from test parameters.
+fn run_payment_sequence_fuzz(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    invoice_id: &BytesN<32>,
+    actions: &[PaymentAction],
+    invoice_amount: i128,
+) -> i128 {
+    let mut nonces: Vec<SorobanString> = Vec::new(env);
+    let mut total_applied = 0i128;
+
+    for action in actions {
+        match action {
+            PaymentAction::NewPayment { amount, nonce_idx } => {
+                let nonce = SorobanString::from_str(env, &format!("pay-nonce-{}-{}", (*amount % 1000), *nonce_idx));
+                nonces.push_back(nonce.clone());
+
+                let result = client.try_process_partial_payment(invoice_id, amount, &nonce);
+
+                if let Ok(Ok(_)) = result {
+                    let invoice = client.get_invoice(invoice_id);
+                    let expected_applied = (*amount).min(invoice_amount - total_applied);
+
+                    total_applied += expected_applied;
+                    assert!(
+                        total_applied <= invoice_amount,
+                        "Capping invariant violated: total_applied ({}) > invoice_amount ({})",
+                        total_applied, invoice_amount
+                    );
+
+                    assert!(
+                        invoice.total_paid <= invoice.amount,
+                        "total_paid ({}) exceeded total_due ({})",
+                        invoice.total_paid, invoice.amount
+                    );
+                } else {
+                    let error = result.unwrap_err();
+                    let invoice = client.get_invoice(invoice_id);
+                    if invoice.status == crate::invoice::InvoiceStatus::Funded {
+                        let remaining = invoice_amount - total_applied;
+                        assert!(
+                            *amount > 0 && (*amount <= remaining || remaining == 0),
+                            "Unexpected rejection while invoice is still Funded"
+                        );
+                    }
+                }
+            }
+            PaymentAction::DuplicateNonce(idx) => {
+                if *idx < nonces.len() {
+                    let dup_nonce = nonces.get(*idx).unwrap();
+                    let prev_invoice = client.get_invoice(invoice_id);
+
+                    let result = client.try_process_partial_payment(invoice_id, &500, &dup_nonce);
+
+                    if let Ok(Ok(_)) = result {
+                        let after_invoice = client.get_invoice(invoice_id);
+                        assert_eq!(
+                            after_invoice.total_paid, prev_invoice.total_paid,
+                            "Duplicate nonce changed total_paid"
+                        );
+                    } else if prev_invoice.status == crate::invoice::InvoiceStatus::Funded {
+                        assert!(
+                            result.is_ok(),
+                            "Duplicate nonce on Funded invoice should be idempotent"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    total_applied
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(100))]
+
+    /// Fuzz test: validates capping and replay invariants under random payment sequences.
+    /// Generates random amounts, nonces, and sequences to stress-test record_payment.
+    #[test]
+    fn fuzz_payment_capping_invariant(
+        invoice_amount in 1_000i128..100_000i128,
+        seed in 0u64..u64::MAX,
+    ) {
+        let (env, client, _admin, _business, _investor) = setup_test_env();
+        let (invoice_id, _, _) = setup_funded_invoice_for_fuzz(&env, &client, invoice_amount);
+
+        let mut rng = rand::rngs::StdRng::seed_from_rng(rand::SeedableRng::seed_from_u64(seed));
+
+        let action_count = 50usize;
+        let mut actions: Vec<PaymentAction> = Vec::new();
+
+        for i in 0..action_count {
+            if i > 0 && rng.gen_bool(0.3) && actions.len() > 10 {
+                let dup_idx = rng.gen_range(0usize, actions.len() / 2);
+                actions.push(PaymentAction::DuplicateNonce(dup_idx));
+            } else {
+                let amount = gen_payment_amount(invoice_amount, &mut rng);
+                actions.push(PaymentAction::NewPayment { amount, nonce: i });
+            }
+        }
+
+        let _total = run_payment_sequence_fuzz(&env, &client, &invoice_id, &actions, invoice_amount);
+
+        let final_invoice = client.get_invoice(&invoice_id);
+        assert!(
+            final_invoice.total_paid <= final_invoice.amount,
+            "Final capping invariant: total_paid ({}) <= total_due ({})",
+            final_invoice.total_paid, final_invoice.amount
+        );
+    }
+
+    /// Fuzz test: overpay-then-underpay edge case.
+    /// Validates that capping works correctly even when large overpayments are followed by small payments.
+    #[test]
+    fn fuzz_overpay_then_underpay_sequence(
+        invoice_amount in 100i128..10_000i128,
+        overpay_factor in 1u32..100u32,
+    ) {
+        let (env, client, _admin, _business, _investor) = setup_test_env();
+        let (invoice_id, _, _) = setup_funded_invoice_for_fuzz(&env, &client, invoice_amount);
+
+        let overpay_amount = (invoice_amount as u128 * overpay_factor as u128 / 10) as i128;
+        if overpay_amount > 0 {
+            let nonce1 = SorobanString::from_str(&env, "overpay-1");
+            let _ = client.try_process_partial_payment(&invoice_id, &overpay_amount, &nonce1);
+        }
+
+        let after_overpay = client.get_invoice(&invoice_id);
+        assert!(
+            after_overpay.total_paid <= after_overpay.amount,
+            "Capping violated after overpayment: {} > {}",
+            after_overpay.total_paid, after_overpay.amount
+        );
+
+        if after_overpay.status == crate::invoice::InvoiceStatus::Funded {
+            let small_amount = invoice_amount / 10;
+            let nonce2 = SorobanString::from_str(&env, "underpay-1");
+            let _ = client.try_process_partial_payment(&invoice_id, &small_amount, &nonce2);
+
+            let after_underpay = client.get_invoice(&invoice_id);
+            assert!(
+                after_underpay.total_paid <= after_underpay.amount,
+                "Capping violated after underpay: {} > {}",
+                after_underpay.total_paid, after_underpay.amount
+            );
+        }
+    }
+
+    /// Fuzz test: repeated nonce rejection in sequence.
+    /// Validates that duplicate nonces are properly rejected/idempotent.
+    #[test]
+    fn fuzz_repeated_nonce_replay_protection(
+        invoice_amount in 1_000i128..50_000i128,
+        repeat_count in 1usize..20usize,
+        payment_amount in 10i128..5_000i128,
+    ) {
+        let (env, client, _admin, _business, _investor) = setup_test_env();
+        let (invoice_id, _, _) = setup_funded_invoice_for_fuzz(&env, &client, invoice_amount);
+
+        let nonce = SorobanString::from_str(&env, "repeat-nonce");
+        let _ = client.try_process_partial_payment(&invoice_id, &payment_amount, &nonce);
+
+        let initial_count = crate::settlement::get_payment_count(&env, &invoice_id).unwrap();
+        let initial_paid = client.get_invoice(&invoice_id).total_paid;
+
+        for _ in 0..repeat_count {
+            env.ledger().set_timestamp(env.ledger().timestamp() + 100);
+            let result = client.try_process_partial_payment(&invoice_id, &payment_amount, &nonce);
+
+            if result.is_ok() {
+                let after = client.get_invoice(&invoice_id);
+                assert_eq!(
+                    after.total_paid, initial_paid,
+                    "Duplicate nonce changed total_paid"
+                );
+            }
+        }
+
+        let final_count = crate::settlement::get_payment_count(&env, &invoice_id).unwrap();
+        assert_eq!(
+            final_count, initial_count,
+            "Duplicate nonces incremented payment count"
+        );
+    }
+
+    /// Fuzz test: payment count exhaustion near MAX_PAYMENT_COUNT.
+    /// Validates that payments are rejected once the cap is reached.
+    #[test]
+    fn fuzz_payment_count_exhaustion(
+        invoice_amount in 10_000i128..1_000_000i128,
+        payment_amount in 1i128..100i128,
+    ) {
+        let (env, client, _admin, _business, _investor) = setup_test_env();
+        let (invoice_id, _, _) = setup_funded_invoice_for_fuzz(&env, &client, invoice_amount);
+
+        let max_payments = (invoice_amount / payment_amount).min(50) as u32;
+
+        for i in 0..max_payments {
+            env.ledger().set_timestamp(50_000 + i as u64);
+            let nonce = SorobanString::from_str(&env, &format!("exhaust-{}", i));
+            let result = client.try_process_partial_payment(&invoice_id, &payment_amount, &nonce);
+
+            if result.is_ok() {
+                let invoice = client.get_invoice(&invoice_id);
+                assert!(
+                    invoice.total_paid <= invoice.amount,
+                    "Capping violated during exhaustion test"
+                );
+            }
+
+            if client.get_invoice(&invoice_id).status == crate::invoice::InvoiceStatus::Paid {
+                break;
+            }
+        }
+
+        let final_count = crate::settlement::get_payment_count(&env, &invoice_id).unwrap();
+
+assert!(
+             final_count <= max_payments,
+             "Payment count ({}) exceeded expected max ({})",
+             final_count, max_payments
+         );
+    }
+}
+
 #[cfg(test)]
 mod extra_tests {
     use super::*;

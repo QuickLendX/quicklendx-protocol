@@ -2,18 +2,25 @@ use soroban_sdk::{contracttype, Address, Env, String};
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use crate::invoice::{InvoiceStatus, InvoiceStorage};
+use crate::storage::InvoiceStorage;
+use crate::types::InvoiceStatus;
 
 #[allow(dead_code)]
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
 pub struct ProtocolLimits {
+    /// Minimum invoice amount. **Inclusivity**: Inclusive (amount >= min_invoice_amount).
     pub min_invoice_amount: i128,
+    /// Minimum absolute bid amount. **Inclusivity**: Inclusive (bid >= min_bid_amount).
     pub min_bid_amount: i128,
+    /// Minimum bid in bps. **Inclusivity**: Inclusive (bps >= min_bid_bps).
     pub min_bid_bps: u32,
+    /// Max days until due date. **Inclusivity**: Inclusive (days <= max_due_date_days).
     pub max_due_date_days: u64,
+    /// Grace period. **Inclusivity**: Inclusive (seconds <= 2_592_000).
     pub grace_period_seconds: u64,
+    /// Max invoices per business. **Inclusivity**: Inclusive (active_count < limit), 0 = unlimited.
     pub max_invoices_per_business: u32,
 }
 
@@ -38,20 +45,35 @@ const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days
 pub const DEFAULT_MAX_INVOICES_PER_BUSINESS: u32 = 100; // 0 = unlimited
 
 // String length limits
+/// Maximum length for invoice description (1024 bytes)
 pub const MAX_DESCRIPTION_LENGTH: u32 = 1024;
+/// Maximum length for customer name (150 bytes)
 pub const MAX_NAME_LENGTH: u32 = 150;
+/// Maximum length for customer address (300 bytes)
 pub const MAX_ADDRESS_LENGTH: u32 = 300;
+/// Maximum length for tax ID (50 bytes)
 pub const MAX_TAX_ID_LENGTH: u32 = 50;
+/// Maximum length for notes (2000 bytes)
 pub const MAX_NOTES_LENGTH: u32 = 2000;
+/// Maximum length for a single tag (50 bytes)
 pub const MAX_TAG_LENGTH: u32 = 50;
+/// Maximum length for transaction IDs (124 bytes)
 pub const MAX_TRANSACTION_ID_LENGTH: u32 = 124;
+/// Maximum length for dispute reasons (1000 bytes)
 pub const MAX_DISPUTE_REASON_LENGTH: u32 = 1000;
+/// Maximum length for dispute evidence (2000 bytes)
 pub const MAX_DISPUTE_EVIDENCE_LENGTH: u32 = 2000;
+/// Maximum length for dispute resolutions (2000 bytes)
 pub const MAX_DISPUTE_RESOLUTION_LENGTH: u32 = 2000;
+/// Maximum length for notification titles (150 bytes)
 pub const MAX_NOTIFICATION_TITLE_LENGTH: u32 = 150;
+/// Maximum length for notification messages (1000 bytes)
 pub const MAX_NOTIFICATION_MESSAGE_LENGTH: u32 = 1000;
+/// Maximum length for KYC data (5000 bytes)
 pub const MAX_KYC_DATA_LENGTH: u32 = 5000;
+/// Maximum length for rejection reasons (500 bytes)
 pub const MAX_REJECTION_REASON_LENGTH: u32 = 500;
+/// Maximum length for invoice feedback (1000 bytes)
 pub const MAX_FEEDBACK_LENGTH: u32 = 1000;
 
 pub fn check_string_length(s: &String, max_len: u32) -> Result<(), QuickLendXError> {
@@ -287,17 +309,17 @@ pub fn is_active_status(status: &InvoiceStatus) -> bool {
 /// Always reads from on-chain storage at check time. No cached or pre-computed
 /// counts are used to prevent manipulation by callers.
 pub fn count_active_invoices(env: &Env, business: &Address) -> Result<u32, QuickLendXError> {
-    let invoices = InvoiceStorage::get_business_invoices(env, business)?;
+    let invoices = InvoiceStorage::get_business_invoices(env, business);
     let mut active_count = 0u32;
-    
+
     for invoice_id in invoices.iter() {
-        if let Some(invoice) = InvoiceStorage::get_invoice(env, invoice_id) {
+        if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
             if is_active_status(&invoice.status) {
                 active_count = active_count.saturating_add(1);
             }
         }
     }
-    
+
     Ok(active_count)
 }
 
@@ -324,11 +346,12 @@ pub fn count_active_invoices(env: &Env, business: &Address) -> Result<u32, Quick
 /// - Count is read directly from on-chain storage
 pub fn check_invoice_limit(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
     let active_count = count_active_invoices(env, business)?;
-    let limit = MAX_ACTIVE_INVOICES_PER_BUSINESS;
-    
-    if active_count >= limit {
+    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    let limit = limits.max_invoices_per_business;
+
+    if limit > 0 && active_count >= limit {
         return Err(QuickLendXError::MaxInvoicesPerBusinessExceeded);
     }
-    
+
     Ok(())
 }

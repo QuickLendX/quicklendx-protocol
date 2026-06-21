@@ -37,7 +37,7 @@ fn setup() -> (
 
     let token_admin = Address::generate(&env);
     let token_id = env
-        .register_stellar_asset_contract_v2(token_admin.clone())
+        .register_stellar_asset_contract_v2(token_admin.clone()) // Use _v2
         .address();
     let sac = token::StellarAssetClient::new(&env, &token_id);
     let token_client = token::Client::new(&env, &token_id);
@@ -956,6 +956,47 @@ fn test_release_idempotency() {
 }
 
 #[test]
+fn test_vested_and_releasable_are_always_non_negative() {
+    let (env, client, admin, beneficiary, token_id, _token_client) = setup();
+
+    let total = 1000i128;
+    let start = 1000u64;
+    let cliff_seconds = 500u64;
+    let end = start + 2000u64;
+
+    client.create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &total,
+        &start,
+        &cliff_seconds,
+        &end,
+    );
+
+    // Before start time
+    env.ledger().set_timestamp(start - 1);
+    let vested_before_start = client.get_vesting_vested(&1).unwrap();
+    let releasable_before_start = client.get_vesting_releasable(&1).unwrap();
+    assert_eq!(vested_before_start, 0);
+    assert_eq!(releasable_before_start, 0);
+
+    // At start time
+    env.ledger().set_timestamp(start);
+    let vested_at_start = client.get_vesting_vested(&1).unwrap();
+    let releasable_at_start = client.get_vesting_releasable(&1).unwrap();
+    assert_eq!(vested_at_start, 0);
+    assert_eq!(releasable_at_start, 0);
+
+    // After full release, check again
+    env.ledger().set_timestamp(end + 100);
+    client.release_vested_tokens(&beneficiary, &1);
+    let vested_after_full_release = client.get_vesting_vested(&1).unwrap();
+    let releasable_after_full_release = client.get_vesting_releasable(&1).unwrap();
+    assert_eq!(vested_after_full_release, total);
+    assert_eq!(releasable_after_full_release, 0); // Should be 0 as all released
+}
+#[test]
 fn test_multi_step_progression() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
 
@@ -1042,8 +1083,13 @@ fn test_only_admin_can_create_schedule() {
 fn test_admin_rejects_zero_amount() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
     let result = client.try_create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &0i128, &1500u64, &0u64, &2000u64,
+        &admin,
+        &token_id,
+        &beneficiary,
+        &0i128,
+        &1500u64,
+        &0u64,
+        &2000u64,
     );
     assert!(result.is_err(), "Zero-amount schedule must be rejected");
 }
@@ -1054,8 +1100,13 @@ fn test_admin_rejects_backdated_start() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
     // Ledger is at 1000; start_time = 999 is in the past.
     let result = client.try_create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &1000i128, &999u64, &0u64, &2000u64,
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000i128,
+        &999u64,
+        &0u64,
+        &2000u64,
     );
     assert!(result.is_err(), "Backdated start_time must be rejected");
 }
@@ -1065,8 +1116,13 @@ fn test_admin_rejects_backdated_start() {
 fn test_admin_rejects_end_before_start() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
     let result = client.try_create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &1000i128, &1500u64, &0u64, &1500u64, // end == start
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000i128,
+        &1500u64,
+        &0u64,
+        &1500u64, // end == start
     );
     assert!(result.is_err(), "end_time == start_time must be rejected");
 }
@@ -1075,10 +1131,15 @@ fn test_admin_rejects_end_before_start() {
 #[test]
 fn test_admin_rejects_cliff_at_or_after_end() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
-    // cliff_seconds = 1000, start = 1000 → cliff_time = 2000 = end_time
+    // cliff_seconds = 1000, start = 1000 -> cliff_time = 2000 = end_time
     let result = client.try_create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &1000i128, &1000u64, &1000u64, &2000u64,
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000i128,
+        &1000u64,
+        &1000u64,
+        &2000u64,
     );
     assert!(result.is_err(), "cliff_time == end_time must be rejected");
 }
@@ -1090,17 +1151,30 @@ fn test_old_admin_loses_vesting_power_after_transfer() {
     let new_admin = Address::generate(&env);
 
     // Fund new_admin so it can back a schedule
-    token_client.approve(&new_admin, &client.address, &ADMIN_BALANCE, &(env.ledger().sequence() + 10_000));
+    token_client.approve(
+        &new_admin,
+        &client.address,
+        &ADMIN_BALANCE,
+        &(env.ledger().sequence() + 10_000),
+    );
 
     // Transfer admin role
     client.transfer_admin(&new_admin);
 
     // Old admin can no longer create a vesting schedule
     let result = client.try_create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &1000i128, &1500u64, &0u64, &2000u64,
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000i128,
+        &1500u64,
+        &0u64,
+        &2000u64,
     );
-    assert!(result.is_err(), "Old admin must not create schedules after role transfer");
+    assert!(
+        result.is_err(),
+        "Old admin must not create schedules after role transfer"
+    );
 }
 
 /// Non-beneficiary cannot release tokens from someone else's schedule.
@@ -1110,8 +1184,13 @@ fn test_non_beneficiary_cannot_release() {
     let attacker = Address::generate(&env);
 
     let id = client.create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &1000i128, &1000u64, &0u64, &2000u64,
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000i128,
+        &1000u64,
+        &0u64,
+        &2000u64,
     );
 
     env.ledger().set_timestamp(1500);
@@ -1125,8 +1204,13 @@ fn test_release_before_cliff_is_error_not_noop() {
     let (env, client, admin, beneficiary, token_id, _) = setup();
 
     let id = client.create_vesting_schedule(
-        &admin, &token_id, &beneficiary,
-        &1000i128, &1000u64, &500u64, &3000u64,
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1000i128,
+        &1000u64,
+        &500u64,
+        &3000u64,
     );
 
     // cliff_time = 1500; set ledger to 1499
@@ -1142,4 +1226,198 @@ fn test_get_nonexistent_schedule_returns_none() {
     assert!(client.get_vesting_schedule(&9999).is_none());
     assert!(client.get_vesting_releasable(&9999).is_none());
     assert!(client.get_vesting_vested(&9999).is_none());
+}
+
+// ============================================================================
+// MONOTONICITY TESTS
+// vested_amount(t1) <= vested_amount(t2) for all t1 <= t2
+// ============================================================================
+
+/// The vesting curve must be non-decreasing: querying vested_amount at a later
+/// timestamp must never return a smaller value than at an earlier timestamp.
+#[test]
+fn test_vested_amount_is_monotonic_across_schedule() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+
+    let id =
+        client.create_vesting_schedule(&admin, &token_id, &beneficiary, &1000, &1000, &500, &3000);
+
+    let checkpoints: &[u64] = &[999, 1000, 1499, 1500, 1750, 2000, 2500, 3000, 3001, 5000];
+    let mut prev = 0i128;
+    for &t in checkpoints {
+        env.ledger().set_timestamp(t);
+        let vested = client.get_vesting_vested(&id).unwrap();
+        assert!(
+            vested >= prev,
+            "vested_amount not monotonic: at t={t} got {vested}, prev was {prev}"
+        );
+        prev = vested;
+    }
+}
+
+/// releasable_amount (before any release) must also be non-decreasing over time.
+#[test]
+fn test_releasable_amount_is_monotonic_before_any_release() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+
+    let id =
+        client.create_vesting_schedule(&admin, &token_id, &beneficiary, &1000, &1000, &0, &3000);
+
+    let checkpoints: &[u64] = &[1000, 1500, 2000, 2500, 3000, 4000];
+    let mut prev = 0i128;
+    for &t in checkpoints {
+        env.ledger().set_timestamp(t);
+        let releasable = client.get_vesting_releasable(&id).unwrap();
+        assert!(
+            releasable >= prev,
+            "releasable not monotonic: at t={t} got {releasable}, prev was {prev}"
+        );
+        prev = releasable;
+    }
+}
+
+// ============================================================================
+// OVER-RELEASE PROTECTION TESTS
+// Sum of all releases must never exceed total_amount.
+// ============================================================================
+
+/// Releasing at every checkpoint must never push released_amount above total.
+#[test]
+fn test_sum_of_releases_never_exceeds_total() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+
+    let total = 1000i128;
+    let id =
+        client.create_vesting_schedule(&admin, &token_id, &beneficiary, &total, &1000, &0, &3000);
+
+    let mut cumulative = 0i128;
+    for t in [1200u64, 1500, 1800, 2100, 2400, 2700, 3000, 3500] {
+        env.ledger().set_timestamp(t);
+        let released = client.release_vested_tokens(&beneficiary, &id);
+        cumulative += released;
+        assert!(
+            cumulative <= total,
+            "cumulative releases {cumulative} exceeded total {total} at t={t}"
+        );
+    }
+
+    let schedule = client.get_vesting_schedule(&id).unwrap();
+    assert_eq!(schedule.released_amount, total);
+    assert_eq!(cumulative, total);
+}
+
+/// After full vest, repeated release calls must return 0 and never push
+/// released_amount past total.
+#[test]
+fn test_double_release_after_full_vest_is_zero() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+
+    let total = 500i128;
+    let id =
+        client.create_vesting_schedule(&admin, &token_id, &beneficiary, &total, &1000, &0, &2000);
+
+    // Fully vest
+    env.ledger().set_timestamp(2000);
+    let first = client.release_vested_tokens(&beneficiary, &id);
+    assert_eq!(first, total);
+
+    // Repeated calls must return 0
+    for _ in 0..3 {
+        let extra = client.release_vested_tokens(&beneficiary, &id);
+        assert_eq!(extra, 0, "extra release after full vest must be 0");
+    }
+
+    let schedule = client.get_vesting_schedule(&id).unwrap();
+    assert_eq!(schedule.released_amount, total);
+}
+
+/// Release at t=0 (before start_time) must yield 0 releasable.
+/// (The schedule start_time is 1000; ledger is set to 1000 in setup, so we
+/// query at start_time itself which is before the cliff.)
+#[test]
+fn test_release_at_start_time_yields_zero_releasable() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+
+    // cliff_seconds = 500, so cliff_time = 1500; at t=1000 nothing is releasable
+    let id =
+        client.create_vesting_schedule(&admin, &token_id, &beneficiary, &1000, &1000, &500, &3000);
+
+    env.ledger().set_timestamp(1000);
+    let releasable = client.get_vesting_releasable(&id).unwrap();
+    assert_eq!(releasable, 0, "nothing releasable at start_time (before cliff)");
+}
+
+// ============================================================================
+// TIMESTAMP OVERFLOW SAFETY
+// Arithmetic on u64 timestamps must not panic or wrap.
+// ============================================================================
+
+/// A schedule with timestamps near u64::MAX / 2 must compute vested_amount
+/// without overflow.  We use saturating arithmetic so the result must be
+/// clamped to total_amount, not wrap around.
+#[test]
+fn test_timestamp_near_max_does_not_overflow() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+
+    // Use large but representable timestamps.  u64::MAX is ~1.8e19; we stay
+    // well within that to avoid the "start_time < now" rejection while still
+    // exercising large-value arithmetic paths.
+    let start: u64 = 1_000_000_000_000u64; // ~year 33658
+    let cliff_seconds: u64 = 1_000u64;
+    let end: u64 = start + 1_000_000u64;
+
+    // Advance ledger to start so the schedule is accepted (start_time >= now).
+    env.ledger().set_timestamp(start);
+
+    let id = client.create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &1_000_000i128,
+        &start,
+        &cliff_seconds,
+        &end,
+    );
+
+    // Query at end_time — must return total without overflow.
+    env.ledger().set_timestamp(end);
+    let vested = client.get_vesting_vested(&id).unwrap();
+    assert_eq!(vested, 1_000_000i128, "vested at end must equal total");
+
+    // Query well past end — saturating_sub keeps elapsed == duration, result == total.
+    env.ledger().set_timestamp(end + 999_999_999u64);
+    let vested_past = client.get_vesting_vested(&id).unwrap();
+    assert_eq!(vested_past, 1_000_000i128, "vested past end must equal total");
+}
+
+/// checked_mul in vested_amount must not overflow for large total_amount values.
+#[test]
+fn test_large_amount_vesting_arithmetic_does_not_overflow() {
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+
+    // i128::MAX / 2 is safe for checked_mul with elapsed < duration.
+    // Use a round number that fits in the token mint (ADMIN_BALANCE = 10_000_000).
+    let total = 9_000_000i128;
+    let start = 1000u64;
+    let end = start + 10_000u64;
+
+    let id = client.create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &total,
+        &start,
+        &0u64,
+        &end,
+    );
+
+    // At halfway point
+    env.ledger().set_timestamp(start + 5_000);
+    let vested = client.get_vesting_vested(&id).unwrap();
+    assert_eq!(vested, total / 2, "halfway vested must be total/2");
+
+    // At end
+    env.ledger().set_timestamp(end);
+    let vested_end = client.get_vesting_vested(&id).unwrap();
+    assert_eq!(vested_end, total);
 }

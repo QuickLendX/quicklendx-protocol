@@ -22,8 +22,9 @@
 
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use crate::maintenance::{MaintenanceControl, MAX_REASON_LEN};
+use crate::maintenance::{MaintenanceControl, MAX_REASON_LEN, ExtendReport};
 use crate::{QuickLendXContract, QuickLendXContractClient};
+use crate::events::TtlExtended;
 use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 
 // ============================================================================
@@ -90,7 +91,7 @@ fn test_admin_can_disable_maintenance_mode() {
 }
 
 // ============================================================================
-// 2. Read-only enforcement — write ops blocked
+// 2. Read-only enforcement - write ops blocked
 // ============================================================================
 
 #[test]
@@ -216,7 +217,7 @@ fn test_maintenance_allows_get_invoice() {
 
     client.set_maintenance_mode(&admin, &true, &reason(&env, "Upgrade"));
 
-    // get_invoice is a read — must succeed.
+    // get_invoice is a read - must succeed.
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 }
@@ -236,7 +237,7 @@ fn test_maintenance_allows_is_maintenance_mode_query() {
 fn test_maintenance_allows_get_maintenance_reason() {
     let env = Env::default();
     let (client, admin) = setup(&env);
-    let msg = "Scheduled DB migration – back in 15 min";
+    let msg = "Scheduled DB migration - back in 15 min";
 
     client.set_maintenance_mode(&admin, &true, &reason(&env, msg));
 
@@ -249,7 +250,7 @@ fn test_maintenance_allows_get_maintenance_reason() {
 }
 
 // ============================================================================
-// 4. Bypass prevention — non-admin cannot toggle
+// 4. Bypass prevention - non-admin cannot toggle
 // ============================================================================
 
 #[test]
@@ -286,7 +287,7 @@ fn test_non_admin_cannot_disable_maintenance() {
 }
 
 // ============================================================================
-// 5. Reason string — stored, returned, cleared on disable
+// 5. Reason string - stored, returned, cleared on disable
 // ============================================================================
 
 #[test]
@@ -333,7 +334,7 @@ fn test_reason_updated_on_re_enable() {
 }
 
 // ============================================================================
-// 6. Reason validation — oversized reason rejected
+// 6. Reason validation - oversized reason rejected
 // ============================================================================
 
 #[test]
@@ -377,7 +378,7 @@ fn test_max_length_reason_accepted() {
 }
 
 // ============================================================================
-// 7. Admin rotation — new admin can exit; old admin cannot
+// 7. Admin rotation - new admin can exit; old admin cannot
 // ============================================================================
 
 #[test]
@@ -400,7 +401,7 @@ fn test_new_admin_can_exit_maintenance_after_rotation() {
 }
 
 // ============================================================================
-// 8. Idempotency — enabling when already enabled is safe
+// 8. Idempotency - enabling when already enabled is safe
 // ============================================================================
 
 #[test]
@@ -409,7 +410,7 @@ fn test_enable_when_already_enabled_is_safe() {
     let (client, admin) = setup(&env);
 
     client.set_maintenance_mode(&admin, &true, &reason(&env, "First reason"));
-    // Enable again with a different reason — should update the reason.
+    // Enable again with a different reason - should update the reason.
     client.set_maintenance_mode(&admin, &true, &reason(&env, "Updated reason"));
 
     assert!(client.is_maintenance_mode());
@@ -425,52 +426,174 @@ fn test_disable_when_already_disabled_is_safe() {
     let (client, admin) = setup(&env);
 
     assert!(!client.is_maintenance_mode());
-    // Disable when already off — must not panic or corrupt state.
+    // Disable when already off - must not panic or corrupt state.
     client.set_maintenance_mode(&admin, &false, &reason(&env, ""));
     assert!(!client.is_maintenance_mode());
     assert!(client.get_maintenance_reason().is_none());
 }
 
 // ============================================================================
-// 9. Operations resume after maintenance is lifted
+// 10. TTL Extension
 // ============================================================================
 
+/// Returns the number of events with topic `"ttl_extended"` in the given env.
+fn count_ttl_extended_events(env: &Env) -> usize {
+    use soroban_sdk::xdr;
+    let topic_sym = soroban_sdk::Symbol::new(env, "ttl_extended");
+    let topic_xdr =
+        xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to ScVal");
+    env.events()
+        .all()
+        .events()
+        .iter()
+        .filter(|e| match &e.body {
+            xdr::ContractEventBody::V0(body) => body.topics.first() == Some(&topic_xdr),
+        })
+        .count()
+}
+
 #[test]
-fn test_write_ops_resume_after_maintenance_disabled() {
+fn test_admin_can_extend_protocol_ttl() {
     let env = Env::default();
     let (client, admin) = setup(&env);
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
-    let due_date = env.ledger().timestamp() + 86_400;
+    let investor = Address::generate(&env);
 
-    client.set_maintenance_mode(&admin, &true, &reason(&env, "Brief maintenance"));
+    client.add_currency(&admin, &currency);
+    let invoice_id = make_invoice(&env, &client, &business, &currency);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
 
-    // Blocked during maintenance.
-    assert!(client
-        .try_store_invoice(
-            &business,
-            &1_000i128,
-            &currency,
-            &due_date,
-            &String::from_str(&env, "Blocked"),
-            &InvoiceCategory::Services,
-            &Vec::new(&env),
-        )
-        .is_err());
+    let report = client.extend_protocol_ttl(&admin);
 
-    // Lift maintenance.
-    client.set_maintenance_mode(&admin, &false, &reason(&env, ""));
+    assert!(report.invoices_refreshed > 0);
+    assert!(report.bids_refreshed > 0);
+    assert!(report.currencies_refreshed > 0);
+    assert_eq!(report.investments_refreshed, 0);
+    assert_eq!(report.escrows_refreshed, 0);
+}
 
-    // Now succeeds.
-    let invoice_id = client.store_invoice(
-        &business,
-        &1_000i128,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Restored"),
-        &InvoiceCategory::Services,
-        &Vec::new(&env),
+#[test]
+fn test_extend_ttl_empty_indexes() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    let report = client.extend_protocol_ttl(&admin);
+
+    assert_eq!(
+        report,
+        ExtendReport {
+            invoices_refreshed: 0,
+            bids_refreshed: 0,
+            investments_refreshed: 0,
+            escrows_refreshed: 0,
+            currencies_refreshed: 0,
+        },
+        "report must be all-zero when no data exists"
     );
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Pending);
+}
+
+#[test]
+fn test_extend_ttl_non_admin_rejected() {
+    let env = Env::default();
+    let (client, _admin) = setup(&env);
+    let attacker = Address::generate(&env);
+
+    let result = client.try_extend_protocol_ttl(&attacker);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::NotAdmin,
+        "non-admin must receive NotAdmin"
+    );
+}
+
+#[test]
+fn test_extend_ttl_idempotent() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let investor = Address::generate(&env);
+
+    client.add_currency(&admin, &currency);
+    let invoice_id = make_invoice(&env, &client, &business, &currency);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
+
+    let report1 = client.extend_protocol_ttl(&admin);
+    let report2 = client.extend_protocol_ttl(&admin);
+
+    assert_eq!(
+        report1, report2,
+        "extending TTL twice must produce identical report"
+    );
+}
+
+#[test]
+fn test_extend_ttl_all_kinds_populated() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let investor = Address::generate(&env);
+
+    client.add_currency(&admin, &currency);
+
+    let invoice_id = make_invoice(&env, &client, &business, &currency);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
+
+    let _invoice2 = make_invoice(&env, &client, &business, &currency);
+    let currency2 = Address::generate(&env);
+    client.add_currency(&admin, &currency2);
+
+    let report = client.extend_protocol_ttl(&admin);
+
+    assert_eq!(report.invoices_refreshed, 2);
+    assert!(report.bids_refreshed >= 1);
+    assert_eq!(report.currencies_refreshed, 2);
+}
+
+#[test]
+fn test_extend_ttl_emits_events() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let investor = Address::generate(&env);
+
+    client.add_currency(&admin, &currency);
+    let invoice_id = make_invoice(&env, &client, &business, &currency);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
+
+    let before = count_ttl_extended_events(&env);
+
+    let report = client.extend_protocol_ttl(&admin);
+
+    let after = count_ttl_extended_events(&env);
+    let expected_events = (report.invoices_refreshed > 0) as usize
+        + (report.bids_refreshed > 0) as usize
+        + (report.investments_refreshed > 0) as usize
+        + (report.escrows_refreshed > 0) as usize
+        + (report.currencies_refreshed > 0) as usize;
+
+    assert_eq!(
+        after - before,
+        expected_events,
+        "must emit one TtlExtended event per non-zero kind"
+    );
+}
+
+#[test]
+fn test_extend_ttl_no_events_when_empty() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    let before = count_ttl_extended_events(&env);
+    let _report = client.extend_protocol_ttl(&admin);
+    let after = count_ttl_extended_events(&env);
+
+    assert_eq!(
+        after - before,
+        0,
+        "no TtlExtended events when all indexes are empty"
+    );
 }

@@ -363,6 +363,10 @@ The test suite is organised into 13 sections with ≥ 95 % branch coverage:
 | 11 | Claim logic | Deactivates coverage; returns provider + amount; second claim → None |
 | 12 | Cross-investment isolation | Adding insurance to A does not affect B |
 | 13 | Direct `add_insurance` unit tests | All validation paths without contract dispatch |
+| 14 | Payout math correctness | Total payouts ≤ principal; each payout = `amount × pct / 100` (floor) |
+| 15 | Double-claim prevention | `process_all` twice → second call empty; single + all combo exhausts all policies |
+| 16 | `total_active_coverage_percentage` | Inactive policies excluded from total; returns 0 after all claims |
+| 17 | Stacked-policy boundary arithmetic | Exactly 100 % cumulative accepted; 101 % across two policies rejected |
 
 ### Running the tests
 
