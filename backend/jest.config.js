@@ -10,5 +10,10 @@ module.exports = {
       statements: 95,
     },
   },
-  collectCoverageFrom: ["src/**/*.ts", "!src/index.ts"],
+  collectCoverageFrom: [
+    "src/**/*.ts",
+    "!src/index.ts",
+    // Include the loader helper so its coverage is tracked
+    "src/tests/helpers/**/*.ts",
+  ],
 };

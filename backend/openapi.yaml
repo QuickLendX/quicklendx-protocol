@@ -16,28 +16,24 @@ paths:
     get:
       summary: Health check
       description: Returns the status of the API service and connectivity.
+      operationId: getHealth
       responses:
         '200':
           description: Service is healthy
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  version:
-                    type: string
-                    example: 1.0.0
-                  timestamp:
-                    type: string
-                    format: date-time
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+                version: 1.0.0
+                timestamp: '2026-01-01T00:00:00.000Z'
 
   /invoices:
     get:
       summary: List invoices
       description: Retrieve a list of invoices with optional filtering.
+      operationId: listInvoices
       parameters:
         - name: business
           in: query
@@ -57,16 +53,42 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Invoice'
+              example:
+                - id: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+                  business: 'GDVLRH4G4...7Y'
+                  amount: '1000000000'
+                  currency: 'CBGHS...ABC'
+                  due_date: 1751414400
+                  status: Verified
+                  description: 'Cloud Services - March 2026'
+                  category: Technology
+                  tags:
+                    - cloud
+                    - saas
+                  metadata:
+                    customer_name: 'TechCorp Inc'
+                    customer_address: '123 Silicon Valley'
+                    tax_id: 'TX-12345'
+                    line_items:
+                      - description: 'AWS Instance usage'
+                        quantity: '1'
+                        unit_price: '1000000000'
+                        total: '1000000000'
+                    notes: 'Monthly recurring billing'
+                  created_at: 1748736000
+                  updated_at: 1748736000
 
   /invoices/{id}:
     get:
       summary: Get invoice by ID
+      operationId: getInvoiceById
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
+          example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
       responses:
         '200':
           description: Invoice details
@@ -74,12 +96,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Invoice'
+              example:
+                id: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+                business: 'GDVLRH4G4...7Y'
+                amount: '1000000000'
+                currency: 'CBGHS...ABC'
+                due_date: 1751414400
+                status: Verified
+                description: 'Cloud Services - March 2026'
+                category: Technology
+                tags:
+                  - cloud
+                  - saas
+                metadata:
+                  customer_name: 'TechCorp Inc'
+                  customer_address: '123 Silicon Valley'
+                  tax_id: 'TX-12345'
+                  line_items:
+                    - description: 'AWS Instance usage'
+                      quantity: '1'
+                      unit_price: '1000000000'
+                      total: '1000000000'
+                  notes: 'Monthly recurring billing'
+                created_at: 1748736000
+                updated_at: 1748736000
         '404':
           description: Invoice not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  message: 'Invoice not found'
+                  code: INVOICE_NOT_FOUND
 
   /bids:
     get:
       summary: List bids
+      operationId: listBids
       parameters:
         - name: invoice_id
           in: query
@@ -98,10 +153,20 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Bid'
+              example:
+                - bid_id: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
+                  invoice_id: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+                  investor: 'GA...ABC'
+                  bid_amount: '950000000'
+                  expected_return: '50000000'
+                  timestamp: 1748732400
+                  status: Placed
+                  expiration_timestamp: 1748822400
 
   /settlements:
     get:
       summary: List settlements
+      operationId: listSettlements
       parameters:
         - name: invoice_id
           in: query
@@ -116,16 +181,26 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Settlement'
+              example:
+                - id: '0xsettle123'
+                  invoice_id: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+                  amount: '1000000000'
+                  payer: 'GA...PAYER'
+                  recipient: 'GB...RECIP'
+                  timestamp: 1748692800
+                  status: Paid
 
   /settlements/{id}:
     get:
       summary: Get settlement by ID
+      operationId: getSettlementById
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
+          example: '0xsettle123'
       responses:
         '200':
           description: Settlement details
@@ -133,18 +208,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Settlement'
+              example:
+                id: '0xsettle123'
+                invoice_id: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+                amount: '1000000000'
+                payer: 'GA...PAYER'
+                recipient: 'GB...RECIP'
+                timestamp: 1748692800
+                status: Paid
         '404':
           description: Settlement not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  message: 'Settlement not found'
+                  code: SETTLEMENT_NOT_FOUND
 
   /invoices/{id}/disputes:
     get:
       summary: List disputes for an invoice
+      operationId: listDisputesByInvoice
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
+          example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
       responses:
         '200':
           description: List of disputes
@@ -154,9 +247,52 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Dispute'
+              example:
+                - id: '0xdispute1'
+                  invoice_id: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+                  initiator: 'GA...BUYER'
+                  reason: 'Goods not delivered as per description'
+                  status: UnderReview
+                  created_at: 1748649600
 
 components:
   schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - version
+        - timestamp
+      properties:
+        status:
+          type: string
+          example: ok
+        version:
+          type: string
+          example: 1.0.0
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorDetail:
+      type: object
+      required:
+        - message
+        - code
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+
     InvoiceStatus:
       type: string
       enum: [Pending, Verified, Funded, Paid, Defaulted, Cancelled]
@@ -167,41 +303,89 @@ components:
 
     LineItem:
       type: object
+      required:
+        - description
+        - quantity
+        - unit_price
+        - total
       properties:
-        description: { type: string }
-        quantity: { type: integer, format: int128 }
-        unit_price: { type: integer, format: int128 }
-        total: { type: integer, format: int128 }
+        description:
+          type: string
+        quantity:
+          type: string
+          description: i128 value encoded as decimal string
+        unit_price:
+          type: string
+          description: i128 value encoded as decimal string
+        total:
+          type: string
+          description: i128 value encoded as decimal string
 
     InvoiceMetadata:
       type: object
+      required:
+        - customer_name
+        - customer_address
+        - tax_id
+        - line_items
+        - notes
       properties:
-        customer_name: { type: string }
-        customer_address: { type: string }
-        tax_id: { type: string }
+        customer_name:
+          type: string
+        customer_address:
+          type: string
+        tax_id:
+          type: string
         line_items:
           type: array
           items:
             $ref: '#/components/schemas/LineItem'
-        notes: { type: string }
+        notes:
+          type: string
 
     Invoice:
       type: object
+      required:
+        - id
+        - business
+        - amount
+        - currency
+        - due_date
+        - status
+        - description
+        - category
+        - tags
+        - metadata
+        - created_at
+        - updated_at
       properties:
-        id: { type: string }
-        business: { type: string }
-        amount: { type: integer, format: int128 }
-        currency: { type: string }
-        due_date: { type: integer, format: int64 }
-        status: { $ref: '#/components/schemas/InvoiceStatus' }
-        description: { type: string }
-        category: { $ref: '#/components/schemas/InvoiceCategory' }
+        id:
+          type: string
+        business:
+          type: string
+        amount:
+          type: string
+          description: i128 value encoded as decimal string
+        currency:
+          type: string
+        due_date:
+          type: integer
+        status:
+          $ref: '#/components/schemas/InvoiceStatus'
+        description:
+          type: string
+        category:
+          $ref: '#/components/schemas/InvoiceCategory'
         tags:
           type: array
-          items: { type: string }
-        metadata: { $ref: '#/components/schemas/InvoiceMetadata' }
-        created_at: { type: integer, format: int64 }
-        updated_at: { type: integer, format: int64 }
+          items:
+            type: string
+        metadata:
+          $ref: '#/components/schemas/InvoiceMetadata'
+        created_at:
+          type: integer
+        updated_at:
+          type: integer
 
     BidStatus:
       type: string
@@ -209,15 +393,34 @@ components:
 
     Bid:
       type: object
+      required:
+        - bid_id
+        - invoice_id
+        - investor
+        - bid_amount
+        - expected_return
+        - timestamp
+        - status
+        - expiration_timestamp
       properties:
-        bid_id: { type: string }
-        invoice_id: { type: string }
-        investor: { type: string }
-        bid_amount: { type: integer, format: int128 }
-        expected_return: { type: integer, format: int128 }
-        timestamp: { type: integer, format: int64 }
-        status: { $ref: '#/components/schemas/BidStatus' }
-        expiration_timestamp: { type: integer, format: int64 }
+        bid_id:
+          type: string
+        invoice_id:
+          type: string
+        investor:
+          type: string
+        bid_amount:
+          type: string
+          description: i128 value encoded as decimal string
+        expected_return:
+          type: string
+          description: i128 value encoded as decimal string
+        timestamp:
+          type: integer
+        status:
+          $ref: '#/components/schemas/BidStatus'
+        expiration_timestamp:
+          type: integer
 
     SettlementStatus:
       type: string
@@ -225,14 +428,30 @@ components:
 
     Settlement:
       type: object
+      required:
+        - id
+        - invoice_id
+        - amount
+        - payer
+        - recipient
+        - timestamp
+        - status
       properties:
-        id: { type: string }
-        invoice_id: { type: string }
-        amount: { type: integer, format: int128 }
-        payer: { type: string }
-        recipient: { type: string }
-        timestamp: { type: integer, format: int64 }
-        status: { $ref: '#/components/schemas/SettlementStatus' }
+        id:
+          type: string
+        invoice_id:
+          type: string
+        amount:
+          type: string
+          description: i128 value encoded as decimal string
+        payer:
+          type: string
+        recipient:
+          type: string
+        timestamp:
+          type: integer
+        status:
+          $ref: '#/components/schemas/SettlementStatus'
 
     DisputeStatus:
       type: string
@@ -240,14 +459,28 @@ components:
 
     Dispute:
       type: object
+      required:
+        - id
+        - invoice_id
+        - initiator
+        - reason
+        - status
+        - created_at
       properties:
-        id: { type: string }
-        invoice_id: { type: string }
-        initiator: { type: string }
-        reason: { type: string }
-        status: { $ref: '#/components/schemas/DisputeStatus' }
-        created_at: { type: integer, format: int64 }
-        resolved_at: { type: integer, format: int64 }
+        id:
+          type: string
+        invoice_id:
+          type: string
+        initiator:
+          type: string
+        reason:
+          type: string
+        status:
+          $ref: '#/components/schemas/DisputeStatus'
+        created_at:
+          type: integer
+        resolved_at:
+          type: integer
 
   securitySchemes:
     bearerAuth:
