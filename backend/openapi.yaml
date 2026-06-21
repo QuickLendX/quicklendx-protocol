@@ -112,6 +112,7 @@ paths:
 
   /admin/maintenance:
     post:
+      operationId: toggleMaintenanceMode
       summary: Toggle maintenance mode
       description: Restricted to operations admin and super-admin.
       security:
@@ -126,12 +127,22 @@ paths:
               properties:
                 enabled:
                   type: boolean
+            examples:
+              enable:
+                description: Enable maintenance mode
+                value:
+                  enabled: true
+              disable:
+                description: Disable maintenance mode
+                value:
+                  enabled: false
       responses:
         "200":
           description: Maintenance mode updated
 
   /admin/backfill:
     post:
+      operationId: queueBackfillJob
       summary: Queue a backfill job
       description: Restricted to operations admin and super-admin.
       security:
@@ -145,12 +156,18 @@ paths:
                 scope:
                   type: string
                   example: ledger:100000-100500
+            examples:
+              basic:
+                description: Queue backfill for a ledger range
+                value:
+                  scope: "ledger:100000-100500"
       responses:
         "202":
           description: Backfill job queued
 
   /admin/config/dangerous:
     post:
+      operationId: updateDangerousAdminConfig
       summary: Update dangerous admin configuration
       description: Restricted to super-admin only.
       security:
@@ -169,6 +186,12 @@ paths:
                   type: integer
                   minimum: 1
                   maximum: 1440
+            examples:
+              enable:
+                description: Enable emergency config changes with 60 minute window
+                value:
+                  allowEmergencyConfigChanges: true
+                  maintenanceWindowMinutes: 60
       responses:
         "200":
           description: Dangerous config updated
@@ -281,6 +304,7 @@ paths:
         "400":
           $ref: '#/components/responses/PaginationError'
     post:
+      operationId: createBid
       summary: Place a new bid on a Verified invoice
       description: |
         Creates a new bid for an investor on a Verified invoice.
@@ -326,6 +350,14 @@ paths:
                   type: integer
                   example: 1745599232
                   description: Unix timestamp when this bid expires
+            examples:
+              standard:
+                description: Standard bid with expected return 1.5x bid amount
+                value:
+                  invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+                  bid_amount: "1000000"
+                  expected_return: "1500000"
+                  expiration_timestamp: 1745599232
       responses:
         "201":
           description: Bid created successfully
@@ -513,6 +545,7 @@ paths:
         '404':
           description: User preferences not found
     put:
+      operationId: updateNotificationPreferences
       summary: Update user notification preferences
       parameters:
         - name: userId
@@ -527,6 +560,17 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateNotificationPreferences'
+            examples:
+              enableAll:
+                description: Enable all notification types
+                value:
+                  email_enabled: true
+                  email_address: "user@example.com"
+                  notifications:
+                    invoice_funded: true
+                    payment_received: true
+                    dispute_opened: true
+                    dispute_resolved: true
       responses:
         '200':
           description: Preferences updated successfully
@@ -606,6 +650,7 @@ paths:
 
   /events:
     post:
+      operationId: processBlockchainEvents
       summary: Process blockchain events for notifications
       description: Internal endpoint for indexer to post events that trigger notifications
       requestBody:
@@ -618,6 +663,25 @@ paths:
                 - type: array
                   items:
                     $ref: '#/components/schemas/Event'
+            examples:
+              singleEvent:
+                description: Single blockchain event
+                value:
+                  type: "InvoiceCreated"
+                  data:
+                    invoice_id: "0x123abc"
+                    amount: "1000000"
+              multipleEvents:
+                description: Array of blockchain events
+                value:
+                  - type: "InvoiceCreated"
+                    data:
+                      invoice_id: "0x123abc"
+                      amount: "1000000"
+                  - type: "BidPlaced"
+                    data:
+                      bid_id: "0xbid123"
+                      invoice_id: "0x123abc"
       responses:
         '200':
           description: Events processed successfully
