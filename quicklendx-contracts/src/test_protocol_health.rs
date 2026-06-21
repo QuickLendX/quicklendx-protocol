@@ -75,7 +75,7 @@ fn test_health_uninitialized_all_fields() {
         "currency_count should be 0 when uninitialized"
     );
     assert!(
-        health.emergency_withdraw_pending.is_none(),
+        !health.emergency_withdraw_pending,
         "emergency_withdraw_pending should be None"
     );
 }
@@ -116,7 +116,7 @@ fn test_health_initialized_all_fields() {
     assert_eq!(health.total_invoice_count, 0, "no invoices yet");
     assert_eq!(health.currency_count, 1, "one currency in initial whitelist");
     assert!(
-        health.emergency_withdraw_pending.is_none(),
+        !health.emergency_withdraw_pending,
         "no pending emergency withdraw"
     );
 }
@@ -314,6 +314,8 @@ fn test_health_all_fields_present_and_accessible() {
     let _initialized = health.initialized;
     let _paused = health.paused;
     let _emergency = health.emergency_withdraw_pending;
+    let _emergency_unlock_at = health.emergency_withdraw_unlock_at;
+    let _emergency_expires_at = health.emergency_withdraw_expires_at;
     let _treasury = health.treasury;
     let _fee_bps = health.fee_bps;
     let _invoice_count = health.total_invoice_count;

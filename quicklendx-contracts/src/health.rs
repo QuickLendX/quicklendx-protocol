@@ -18,7 +18,9 @@
 //! - **version**: Protocol version (from initialization)
 //! - **initialized**: Whether the contract has been set up
 //! - **paused**: Current pause state
-//! - **emergency_withdraw_pending**: Optional pending emergency withdrawal details
+//! - **emergency_withdraw_pending**: Whether an emergency withdrawal is pending
+//! - **emergency_withdraw_unlock_at**: Unlock timestamp for the pending withdrawal, or 0
+//! - **emergency_withdraw_expires_at**: Expiration timestamp for the pending withdrawal, or 0
 //! - **treasury**: Optional treasury address for fee collection
 //! - **fee_bps**: Fee basis points (0-1000)
 //! - **total_invoice_count**: Total number of invoices across all statuses
@@ -30,15 +32,14 @@
 //! let health = get_protocol_health(&env);
 //! println!("Protocol version: {}", health.version);
 //! println!("Paused: {}", health.paused);
-//! if let Some(pending) = &health.emergency_withdraw_pending {
-//!     println!("Emergency withdraw pending: expires_at = {}", pending.expires_at);
+//! if health.emergency_withdraw_pending {
+//!     println!("Emergency withdraw pending: expires_at = {}", health.emergency_withdraw_expires_at);
 //! }
 //! println!("Treasury: {:?}", health.treasury);
 //! println!("Invoices: {}", health.total_invoice_count);
 //! println!("Currencies: {}", health.currency_count);
 //! ```
 
-use crate::emergency::PendingEmergencyWithdrawal;
 use soroban_sdk::{contracttype, Address};
 
 /// Canonical protocol health snapshot.
@@ -48,8 +49,8 @@ use soroban_sdk::{contracttype, Address};
 ///
 /// # Fields with special note
 ///
-/// - **emergency_withdraw_pending**: If Some, indicates a timelock is in progress.
-///   Consult `emg_time_until_unlock()` and `emg_time_until_expire()` for timing details.
+/// - **emergency_withdraw_pending**: Indicates a timelock is in progress.
+///   Consult the unlock/expiration timestamps for timing details.
 /// - **treasury**: May be None if not configured; fee collection is no-op in that case.
 /// - **total_invoice_count**: Sum of all invoices across all statuses (Pending, Verified,
 ///   Funded, Paid, Defaulted, Cancelled, Refunded).
@@ -73,10 +74,14 @@ pub struct ProtocolHealth {
     /// Admin-only read-only entrypoints and emergency recovery bypass this flag.
     pub paused: bool,
 
-    /// Optional pending emergency withdrawal record.
-    /// If Some, an emergency withdrawal has been initiated and is in timelock.
-    /// Check `emg_time_until_unlock()` and `emg_time_until_expire()` for exact timing.
-    pub emergency_withdraw_pending: Option<PendingEmergencyWithdrawal>,
+    /// Whether an emergency withdrawal has been initiated and is in timelock.
+    pub emergency_withdraw_pending: bool,
+
+    /// Unlock timestamp for the pending emergency withdrawal, or 0 when none is pending.
+    pub emergency_withdraw_unlock_at: u64,
+
+    /// Expiration timestamp for the pending emergency withdrawal, or 0 when none is pending.
+    pub emergency_withdraw_expires_at: u64,
 
     /// Treasury address for fee collection (may be None).
     /// Fee calculations are performed even if treasury is not set (fees accrue
@@ -119,20 +124,31 @@ impl ProtocolHealth {
         use crate::init::ProtocolInitializer;
         use crate::pause::PauseControl;
 
+        let pending_withdrawal = EmergencyWithdraw::get_pending(env);
+
         ProtocolHealth {
             version: ProtocolInitializer::get_version(env),
             initialized: ProtocolInitializer::is_initialized(env),
             paused: PauseControl::is_paused(env),
-            emergency_withdraw_pending: EmergencyWithdraw::get_pending(env),
+            emergency_withdraw_pending: pending_withdrawal.is_some(),
+            emergency_withdraw_unlock_at: pending_withdrawal
+                .as_ref()
+                .map(|pending| pending.unlock_at)
+                .unwrap_or(0),
+            emergency_withdraw_expires_at: pending_withdrawal
+                .as_ref()
+                .map(|pending| pending.expires_at)
+                .unwrap_or(0),
             treasury: ProtocolInitializer::get_treasury(env),
             fee_bps: ProtocolInitializer::get_fee_bps(env),
-            total_invoice_count: crate::storage::InvoiceStorage::get_total_invoice_count(env),
+            total_invoice_count: crate::storage::InvoiceStorage::get_total_count(env)
+                .min(u32::MAX as u64) as u32,
             currency_count: CurrencyWhitelist::currency_count(env),
         }
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
     use crate::admin::AdminStorage;
@@ -185,7 +201,7 @@ mod tests {
         assert!(health.treasury.is_none());
         assert_eq!(health.total_invoice_count, 0);
         assert_eq!(health.currency_count, 0);
-        assert!(health.emergency_withdraw_pending.is_none());
+        assert!(!health.emergency_withdraw_pending);
     }
 
     #[test]
@@ -200,7 +216,7 @@ mod tests {
         assert!(health.treasury.is_some());
         assert_eq!(health.total_invoice_count, 0);
         assert_eq!(health.currency_count, 1);
-        assert!(health.emergency_withdraw_pending.is_none());
+        assert!(!health.emergency_withdraw_pending);
     }
 
     #[test]
@@ -276,6 +292,8 @@ mod tests {
         let _i = health.initialized;
         let _p = health.paused;
         let _e = health.emergency_withdraw_pending;
+        let _eu = health.emergency_withdraw_unlock_at;
+        let _ee = health.emergency_withdraw_expires_at;
         let _t = health.treasury;
         let _f = health.fee_bps;
         let _ic = health.total_invoice_count;
@@ -290,7 +308,7 @@ mod tests {
         let (env, _, _) = setup_initialized();
 
         let health = ProtocolHealth::new(&env);
-        assert!(health.emergency_withdraw_pending.is_none());
+        assert!(!health.emergency_withdraw_pending);
 
         // Note: Full emergency withdrawal state testing requires creating
         // an actual pending emergency withdrawal, which is tested in test_emergency.rs

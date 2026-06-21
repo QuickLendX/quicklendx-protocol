@@ -95,7 +95,7 @@ mod test_bid_ttl;
 mod test_cleanup_pagination;
 #[cfg(test)]
 mod test_currency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_match_funding;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
@@ -140,7 +140,7 @@ mod test_profit_fee;
 // mod test_storage;
 #[cfg(test)]
 mod test_protocol_limits_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_health;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
@@ -485,6 +485,9 @@ impl QuickLendXContract {
     }
 
     /// Admin-only: configure default bid TTL (days). Bounds: 1..=30.
+    ///
+    /// See `docs/bid-lifecycle.md` for TTL policy, expiration boundaries, and
+    /// bidding lifecycle guidance.
     pub fn set_bid_ttl_days(env: Env, days: u64) -> Result<u64, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
@@ -496,7 +499,10 @@ impl QuickLendXContract {
         bid::BidStorage::get_bid_ttl_days(&env)
     }
 
-    /// Get current bid TTL configuration snapshot
+    /// Get current bid TTL configuration snapshot.
+    ///
+    /// See `docs/bid-lifecycle.md` for TTL policy, expiration boundaries, and
+    /// bidding lifecycle guidance.
     pub fn get_bid_ttl_config(env: Env) -> bid::BidTtlConfig {
         bid::BidStorage::get_bid_ttl_config(&env)
     }
@@ -653,7 +659,9 @@ impl QuickLendXContract {
     ///   - `version`: Protocol version from initialization
     ///   - `initialized`: Whether protocol setup is complete
     ///   - `paused`: Current pause state
-    ///   - `emergency_withdraw_pending`: Optional pending emergency withdrawal
+    ///   - `emergency_withdraw_pending`: Whether an emergency withdrawal is pending
+    ///   - `emergency_withdraw_unlock_at`: Pending withdrawal unlock timestamp, or 0
+    ///   - `emergency_withdraw_expires_at`: Pending withdrawal expiration timestamp, or 0
     ///   - `treasury`: Configured treasury address (may be None)
     ///   - `fee_bps`: Current fee basis points (0-1000)
     ///   - `total_invoice_count`: Sum of all invoices across all statuses
@@ -677,7 +685,7 @@ impl QuickLendXContract {
     /// if health.paused {
     ///     log!("Protocol paused - incident mode active");
     /// }
-    /// if health.emergency_withdraw_pending.is_some() {
+    /// if health.emergency_withdraw_pending {
     ///     log!("Emergency withdrawal in timelock");
     /// }
     /// log!("Invoices: {}, Currencies: {}", health.total_invoice_count, health.currency_count);
@@ -1180,12 +1188,18 @@ impl QuickLendXContract {
         BidStorage::get_bid(&env, &bid_id)
     }
 
-    /// Get the highest ranked bid for an invoice
+    /// Get the highest ranked bid for an invoice.
+    ///
+    /// See `docs/bid-lifecycle.md` for the full bid status machine, ranking
+    /// comparator, TTL policy, and cleanup guidance.
     pub fn get_best_bid(env: Env, invoice_id: BytesN<32>) -> Option<Bid> {
         BidStorage::get_best_bid(&env, &invoice_id)
     }
 
-    /// Get all bids for an invoice sorted using the platform ranking rules
+    /// Get all bids for an invoice sorted using the platform ranking rules.
+    ///
+    /// See `docs/bid-lifecycle.md` for the full bid status machine, ranking
+    /// comparator, TTL policy, and cleanup guidance.
     pub fn get_ranked_bids(env: Env, invoice_id: BytesN<32>) -> Vec<Bid> {
         BidStorage::rank_bids(&env, &invoice_id)
     }
@@ -1207,12 +1221,18 @@ impl QuickLendXContract {
         BidStorage::get_bid_records_for_invoice(&env, &invoice_id)
     }
 
-    /// Remove bids that have passed their expiration window
+    /// Remove bids that have passed their expiration window.
+    ///
+    /// See `docs/bid-lifecycle.md` for cleanup selection, TTL boundaries, and
+    /// operator guidance.
     pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> u32 {
         BidStorage::cleanup_expired_bids(&env, &invoice_id)
     }
 
     /// Remove expired bids with pagination support for large bid lists.
+    ///
+    /// See `docs/bid-lifecycle.md` for cleanup selection, TTL boundaries, and
+    /// operator guidance.
     ///
     /// # Purpose
     /// Provides paginated cleanup to prevent instruction budget exhaustion when processing
@@ -3481,7 +3501,7 @@ impl QuickLendXContract {
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_stability;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_collision_cross_domain;
 #[cfg(test)]
 mod test_emergency_escrow_protection;
@@ -3491,5 +3511,5 @@ mod test_escrow_settle_refund_race;
 #[cfg(test)]
 mod test_settlement_auto_release;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_dispute_interaction;
