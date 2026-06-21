@@ -14,9 +14,10 @@
  *   npm test -- drift-severity
  */
 
-import { DriftReport, Severity, BackfillRunStatus, AlertStatus } from "../types/reconciliation";
-import { classifyDrift, buildAlertKey, ReconciliationWorker } from "../services/reconciliationWorker";
-import { BackfillService } from "../services/backfillService";
+import { Severity, AlertStatus } from "../types/reconciliation";
+import { DriftReport, BackfillRunStatus } from "../types/driftSeverity";
+import { classifyDrift, buildAlertKey, ReconciliationWorker } from "../services/driftSeverityWorker";
+import { BackfillService } from "../services/driftBackfillService";
 import { AlertRouter, NotificationChannel, NoOpChannel, Alert } from "../services/alertRouter";
 
 // ---------------------------------------------------------------------------

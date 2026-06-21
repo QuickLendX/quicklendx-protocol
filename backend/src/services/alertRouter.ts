@@ -17,6 +17,10 @@
 
 import { Alert, AlertStatus, Severity } from "../types/reconciliation";
 
+// Re-export Alert so consumers can import the alert shape directly from the
+// router module alongside the channel types defined here.
+export type { Alert } from "../types/reconciliation";
+
 // ---------------------------------------------------------------------------
 // Notification channel interface (pluggable adapter pattern)
 // ---------------------------------------------------------------------------
