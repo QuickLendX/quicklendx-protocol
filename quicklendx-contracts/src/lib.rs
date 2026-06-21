@@ -165,6 +165,8 @@ mod test_investment_transitions;
 #[cfg(test)]
 mod test_invoice_metadata;
 #[cfg(test)]
+mod test_line_item_consistency;
+#[cfg(test)]
 mod test_invoice_search_ranking;
 #[cfg(test)]
 mod test_rebuild_indexes;

@@ -1484,12 +1484,18 @@ pub fn validate_invoice_metadata(
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        let expected_total = (record.1 as i128).saturating_mul(record.2);
+        // Enforce checked multiplication to prevent overflow
+        let expected_total = (record.1 as i128)
+            .checked_mul(record.2)
+            .ok_or(QuickLendXError::InvalidAmount)?;
         if expected_total != record.3 {
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        computed_total = computed_total.saturating_add(record.3);
+        // Enforce checked addition to prevent overflow
+        computed_total = computed_total
+            .checked_add(record.3)
+            .ok_or(QuickLendXError::InvalidAmount)?;
     }
 
     if computed_total != invoice_amount {
