@@ -201,3 +201,161 @@ backfillService.markAlertAcknowledged(runId: string, alertKey: string): void
 backfillService.resumeRun(runId: string): Promise<void>
 backfillService.getRun(runId: string): BackfillRun | undefined
 ```
+
+---
+
+## RB-004: Verifying Export File Signatures
+
+### Overview
+
+Every file served by `GET /api/v1/exports/:token/download` carries two custom
+response headers:
+
+| Header | Value |
+|---|---|
+| `X-Body-Signature` | Hex-encoded HMAC-SHA256 of the exact bytes in the response body |
+| `X-Body-Signature-Algorithm` | The hash algorithm used (currently always `sha256`) |
+
+These headers allow downstream consumers, reverse proxies, CDN edge workers, and
+audit pipelines to detect man-in-the-middle body-swap attacks that could occur
+at an early HTTPS-termination point.
+
+---
+
+### How the signature is produced
+
+1. When a client calls `POST /api/v1/exports`, the `ExportService` generates the
+   file bytes, feeds them through `crypto.createHmac(algorithm, secret)` in a
+   streaming fashion (chunk by chunk), and stores the finalised hex digest
+   alongside the file record.
+2. The `EXPORT_HMAC_SECRET` environment variable provides the signing key.  Both
+   the server and any trusted verifier must share this secret.
+3. Before serving a download, the server **re-verifies** the stored bytes against
+   the stored signature using `crypto.timingSafeEqual` (constant-time comparison
+   to prevent timing side-channel attacks).  If the check fails, the server
+   returns `500 INTEGRITY_CHECK_FAILED` rather than silently serving a
+   potentially corrupted file.
+
+---
+
+### Downstream verification recipe
+
+#### Node.js snippet (copy-pasteable)
+
+```typescript
+import * as crypto from "crypto";
+import * as https from "https";
+
+const EXPORT_HMAC_SECRET = process.env.EXPORT_HMAC_SECRET!;
+const DOWNLOAD_URL = "https://api.quicklendx.io/api/v1/exports/<token>/download";
+
+async function verifyExportDownload(url: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      const headerSig   = res.headers["x-body-signature"] as string;
+      const headerAlgo  = (res.headers["x-body-signature-algorithm"] as string) ?? "sha256";
+
+      if (!headerSig) {
+        reject(new Error("Missing X-Body-Signature header"));
+        return;
+      }
+
+      const hmac   = crypto.createHmac(headerAlgo, EXPORT_HMAC_SECRET);
+      const chunks: Buffer[] = [];
+
+      res.on("data", (chunk: Buffer) => {
+        hmac.update(chunk);   // feed each chunk into HMAC as it arrives
+        chunks.push(chunk);
+      });
+
+      res.on("end", () => {
+        const computed = hmac.digest("hex");
+
+        // Constant-time comparison to prevent timing attacks
+        const storedBuf   = Buffer.from(headerSig, "hex");
+        const computedBuf = Buffer.from(computed, "hex");
+
+        if (storedBuf.length !== computedBuf.length) {
+          resolve(false);
+          return;
+        }
+
+        const valid = crypto.timingSafeEqual(storedBuf, computedBuf);
+        if (!valid) {
+          console.error("⚠️  Signature mismatch — body may have been tampered with!");
+        } else {
+          console.log("✅  Signature verified — file integrity confirmed.");
+        }
+        resolve(valid);
+      });
+
+      res.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
+verifyExportDownload(DOWNLOAD_URL).then(console.log).catch(console.error);
+```
+
+#### curl + openssl one-liner
+
+```bash
+# 1. Download the file and capture the signature header
+TOKEN="<your-token>"
+SECRET="<your-EXPORT_HMAC_SECRET>"
+
+curl -s -D /tmp/headers.txt \
+  "https://api.quicklendx.io/api/v1/exports/${TOKEN}/download" \
+  -o /tmp/export_file.json
+
+# 2. Extract the signature from the headers
+EXPECTED_SIG=$(grep -i "x-body-signature:" /tmp/headers.txt \
+  | awk '{print $2}' | tr -d '\r\n')
+
+# 3. Recompute HMAC-SHA256 over the downloaded file bytes
+ACTUAL_SIG=$(openssl dgst -sha256 -hmac "${SECRET}" -hex /tmp/export_file.json \
+  | awk '{print $2}')
+
+# 4. Compare (using shell string equality — for production use constant-time)
+if [ "${EXPECTED_SIG}" = "${ACTUAL_SIG}" ]; then
+  echo "✅  Signature verified"
+else
+  echo "❌  SIGNATURE MISMATCH — possible tampering!"
+  exit 1
+fi
+```
+
+> **Note:** The `openssl` comparison above is a diagnostic aid.  For any
+> programmatic flow, always use a constant-time comparison function such as
+> `crypto.timingSafeEqual` (Node.js) or `hmac.compare_digest` (Python) to
+> prevent timing side-channel attacks.
+
+---
+
+### What to do when a signature mismatch is detected
+
+1. **Do not retry automatically.** A mismatch may indicate active tampering;
+   auto-retry could mask the attack.
+2. **Log the incident** — record the `token`, timestamp, expected signature
+   (from the header), and the actual recomputed signature.
+3. **Invalidate the token** — revoke the download token so the tampered file
+   cannot be fetched again.
+4. **Investigate the pipeline** — check load-balancer, CDN edge, reverse-proxy,
+   and storage layer for unexpected byte-level modifications (e.g. gzip
+   re-compression, character encoding transforms, or content injection).
+5. **Rotate the HMAC secret** if compromise is suspected.
+6. **Alert the security team** and open an incident ticket.
+
+---
+
+### Key rotation procedure
+
+1. Generate a new secret:
+   ```bash
+   openssl rand -hex 32
+   ```
+2. Update the `EXPORT_HMAC_SECRET` environment variable in all deployment
+   environments simultaneously (or with a brief overlap window).
+3. Existing export tokens signed with the old secret will fail integrity checks.
+   Invalidate all outstanding tokens and instruct clients to re-request exports.
+4. Verify the first download after rotation passes the signature check.
