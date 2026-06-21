@@ -3490,3 +3490,6 @@ mod test_escrow_settle_refund_race;
 
 #[cfg(test)]
 mod test_settlement_auto_release;
+
+#[cfg(test)]
+mod test_settlement_dispute_interaction;
