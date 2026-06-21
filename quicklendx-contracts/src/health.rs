@@ -126,7 +126,7 @@ impl ProtocolHealth {
             emergency_withdraw_pending: EmergencyWithdraw::get_pending(env),
             treasury: ProtocolInitializer::get_treasury(env),
             fee_bps: ProtocolInitializer::get_fee_bps(env),
-            total_invoice_count: crate::storage::InvoiceStorage::get_total_invoice_count(env),
+            total_invoice_count: crate::storage::InvoiceStorage::get_total_count(env).min(u32::MAX as u64) as u32,
             currency_count: CurrencyWhitelist::currency_count(env),
         }
     }
