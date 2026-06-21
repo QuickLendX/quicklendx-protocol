@@ -17,12 +17,18 @@ pub enum FreshnessError {
     InvalidConfigValue = 3,
 }
 
+/// Default maximum accepted lag between the current ledger timestamp and the
+/// indexed ledger timestamp before clients should treat API data as stale.
+pub const DEFAULT_MAX_FRESHNESS_DRIFT_SECS: u64 = 300;
+
 /// Transport-friendly freshness metadata returned by `lib.rs::get_freshness`.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FreshnessMetadata {
     pub last_indexed_ledger: u32,
     pub index_lag_seconds: i64,
+    pub max_freshness_drift_seconds: u64,
+    pub is_stale: bool,
     pub last_updated_at: String,
     pub cursor: String,
 }
@@ -42,10 +48,13 @@ impl FreshnessMetadata {
         } else {
             -((indexed_ledger_timestamp - current_timestamp).min(i64::MAX as u64) as i64)
         };
+        let is_stale = lag > DEFAULT_MAX_FRESHNESS_DRIFT_SECS.min(i64::MAX as u64) as i64;
 
         Self {
             last_indexed_ledger: indexed_ledger_seq,
             index_lag_seconds: lag,
+            max_freshness_drift_seconds: DEFAULT_MAX_FRESHNESS_DRIFT_SECS,
+            is_stale,
             last_updated_at: iso8601_from_unix_timestamp(env, indexed_ledger_timestamp),
             cursor: String::from_str(env, &format!("{indexed_ledger_seq}_{offset}")),
         }

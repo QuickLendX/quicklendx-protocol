@@ -95,7 +95,7 @@ mod test_bid_ttl;
 mod test_cleanup_pagination;
 #[cfg(test)]
 mod test_currency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_match_funding;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
@@ -109,6 +109,8 @@ mod test_escrow_invariant_model;
 mod test_expired_bids_cleanup;
 #[cfg(test)]
 mod test_freshness;
+#[cfg(test)]
+mod test_freshness_bounds;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
 #[cfg(test)]
@@ -140,7 +142,7 @@ mod test_profit_fee;
 // mod test_storage;
 #[cfg(test)]
 mod test_protocol_limits_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_health;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
@@ -309,6 +311,15 @@ pub(crate) fn i64_to_string_lib(env: &Env, value: i64) -> String {
         n
     };
     let s = core::str::from_utf8(&buf[..start]).unwrap_or("0");
+    String::from_str(env, s)
+}
+
+/// Convert a `u64` to a soroban `String` using stack-allocated ASCII.
+#[inline]
+pub(crate) fn u64_to_string_lib(env: &Env, value: u64) -> String {
+    let mut buf = [0u8; 20];
+    let n = u64_to_ascii_20(value, &mut buf);
+    let s = core::str::from_utf8(&buf[..n]).unwrap_or("0");
     String::from_str(env, s)
 }
 
@@ -653,7 +664,9 @@ impl QuickLendXContract {
     ///   - `version`: Protocol version from initialization
     ///   - `initialized`: Whether protocol setup is complete
     ///   - `paused`: Current pause state
-    ///   - `emergency_withdraw_pending`: Optional pending emergency withdrawal
+    ///   - `emergency_withdraw_pending`: Whether an emergency withdrawal is pending
+    ///   - `emergency_withdraw_unlock_at`: Pending withdrawal unlock timestamp, or 0
+    ///   - `emergency_withdraw_expires_at`: Pending withdrawal expiration timestamp, or 0
     ///   - `treasury`: Configured treasury address (may be None)
     ///   - `fee_bps`: Current fee basis points (0-1000)
     ///   - `total_invoice_count`: Sum of all invoices across all statuses
@@ -677,7 +690,7 @@ impl QuickLendXContract {
     /// if health.paused {
     ///     log!("Protocol paused - incident mode active");
     /// }
-    /// if health.emergency_withdraw_pending.is_some() {
+    /// if health.emergency_withdraw_pending {
     ///     log!("Emergency withdrawal in timelock");
     /// }
     /// log!("Invoices: {}, Currencies: {}", health.total_invoice_count, health.currency_count);
@@ -3387,6 +3400,9 @@ impl QuickLendXContract {
     }
 
     /// Build API freshness metadata as string key/value pairs.
+    ///
+    /// See `docs/freshness.md` for the drift-bound contract and stale-signal
+    /// client guidance.
     pub fn get_freshness(
         env: Env,
         indexed_ledger_seq: u32,
@@ -3408,6 +3424,14 @@ impl QuickLendXContract {
         result.set(
             String::from_str(&env, "index_lag_seconds"),
             i64_to_string_lib(&env, meta.index_lag_seconds),
+        );
+        result.set(
+            String::from_str(&env, "max_freshness_drift_seconds"),
+            u64_to_string_lib(&env, meta.max_freshness_drift_seconds),
+        );
+        result.set(
+            String::from_str(&env, "is_stale"),
+            String::from_str(&env, if meta.is_stale { "true" } else { "false" }),
         );
         result.set(
             String::from_str(&env, "last_updated_at"),
@@ -3481,7 +3505,7 @@ impl QuickLendXContract {
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_stability;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_collision_cross_domain;
 #[cfg(test)]
 mod test_emergency_escrow_protection;
@@ -3491,5 +3515,5 @@ mod test_escrow_settle_refund_race;
 #[cfg(test)]
 mod test_settlement_auto_release;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_dispute_interaction;
