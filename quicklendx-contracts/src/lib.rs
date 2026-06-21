@@ -106,7 +106,7 @@ mod test_expired_bids_cleanup;
 mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_invariant_self_check;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_consistency;
@@ -363,6 +363,15 @@ impl QuickLendXContract {
         admin: Address,
     ) -> Result<maintenance::ExtendReport, QuickLendXError> {
         maintenance::MaintenanceControl::extend_protocol_ttl(&env, &admin)
+    }
+
+    /// Admin-gated protocol heartbeat. Authenticates `admin` as the stored protocol
+    /// admin, then runs every composed invariant check read-only.
+    pub fn invariant_self_check(
+        env: Env,
+        admin: Address,
+    ) -> Result<invariants::InvariantReport, QuickLendXError> {
+        invariants::invariant_self_check(&env, &admin)
     }
 
     /// Initialize the admin address (deprecated: use initialize)

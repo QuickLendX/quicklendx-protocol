@@ -20,12 +20,13 @@
 //!   mode. The report is a diagnostic, not a remediation - it never repairs the
 //!   inconsistency it detects.
 
-use soroban_sdk::{contracttype, Address, Env, String, Vec};
+use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
 
 use crate::admin::AdminStorage;
 use crate::audit::AuditStorage;
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
+use crate::payments::{EscrowStorage, EscrowStatus};
 use crate::storage::InvoiceStorage;
 use crate::types::InvoiceStatus;
 
@@ -179,6 +180,132 @@ fn check_storage_index_coherence(env: &Env) -> InvariantCheck {
     row(env, "storage_index_coherence", passed, evidence)
 }
 
+/// Sum of all active investments must be less than or equal to the sum of all invoice amounts.
+///
+/// **Cost:** O(N_active + N_all) persistent reads to iterate active investments and invoices.
+fn check_sum_investments_le_sum_invoices(env: &Env) -> InvariantCheck {
+    let mut sum_investments: i128 = 0;
+    let mut sum_invoices: i128 = 0;
+    let mut passed = true;
+
+    for id in InvestmentStorage::get_active_investment_ids(env).iter() {
+        if let Some(inv) = InvestmentStorage::get_investment(env, &id) {
+            sum_investments = match sum_investments.checked_add(inv.amount) {
+                Some(val) => val,
+                None => {
+                    passed = false;
+                    break;
+                }
+            };
+        }
+    }
+
+    if passed {
+        for id in InvoiceStorage::get_all_invoice_ids(env).iter() {
+            if let Some(invoice) = InvoiceStorage::get_invoice(env, &id) {
+                sum_invoices = match sum_invoices.checked_add(invoice.amount) {
+                    Some(val) => val,
+                    None => {
+                        passed = false;
+                        break;
+                    }
+                };
+            }
+        }
+    }
+
+    if passed && sum_investments > sum_invoices {
+        passed = false;
+    }
+
+    let evidence = if passed {
+        "Sum of active investments is less than or equal to sum of invoice amounts."
+    } else {
+        "Accounting discrepancy: sum of active investments exceeds sum of invoice amounts."
+    };
+    row(env, "sum_investments_le_sum_invoices", passed, evidence)
+}
+
+/// Escrow mapping uniqueness check: verifies that each invoice has at most one escrow mapping
+/// and that any present escrow correctly points back to that invoice ID.
+///
+/// **Cost:** O(N_all) persistent reads to scan all invoice escrow mappings.
+fn check_escrow_uniqueness(env: &Env) -> InvariantCheck {
+    let mut passed = true;
+    for id in InvoiceStorage::get_all_invoice_ids(env).iter() {
+        let invoice_key = (soroban_sdk::symbol_short!("escrow"), &id);
+        if let Some(escrow_id) = env.storage().persistent().get::<_, BytesN<32>>(&invoice_key) {
+            if let Some(escrow) = EscrowStorage::get_escrow(env, &escrow_id) {
+                if escrow.invoice_id != id {
+                    passed = false;
+                    break;
+                }
+            } else {
+                passed = false;
+                break;
+            }
+        }
+    }
+
+    let evidence = if passed {
+        "Every present escrow mapping is unique and correctly references its invoice ID."
+    } else {
+        "Escrow uniqueness violation: mismatch or orphan escrow pointer detected."
+    };
+    row(env, "escrow_uniqueness", passed, evidence)
+}
+
+/// Settlement accounting identity: recalculate fees and returns for settled/Paid invoices
+/// and verify that `investor_return + platform_fee == total_paid`.
+///
+/// **Cost:** O(N_paid) persistent reads to inspect all Paid invoices and their corresponding investments.
+fn check_settlement_accounting_identity(env: &Env) -> InvariantCheck {
+    let mut passed = true;
+    for id in InvoiceStorage::get_by_status(env, InvoiceStatus::Paid).iter() {
+        if let Some(invoice) = InvoiceStorage::get_invoice(env, &id) {
+            if let Some(investment) = InvestmentStorage::get_investment_by_invoice(env, &id) {
+                let (investor_return, platform_fee) = match crate::fees::FeeManager::calculate_platform_fee(
+                    env,
+                    investment.amount,
+                    invoice.total_paid,
+                ) {
+                    Ok(result) => result,
+                    Err(crate::errors::QuickLendXError::StorageKeyNotFound) => {
+                        crate::profits::calculate_profit(env, investment.amount, invoice.total_paid)
+                    }
+                    Err(_) => {
+                        passed = false;
+                        break;
+                    }
+                };
+
+                let disbursement_total = match investor_return.checked_add(platform_fee) {
+                    Some(val) => val,
+                    None => {
+                        passed = false;
+                        break;
+                    }
+                };
+
+                if disbursement_total != invoice.total_paid {
+                    passed = false;
+                    break;
+                }
+            } else {
+                passed = false;
+                break;
+            }
+        }
+    }
+
+    let evidence = if passed {
+        "All Paid invoices satisfy investor_return + platform_fee == total_paid."
+    } else {
+        "Accounting identity violation: investor_return + platform_fee != total_paid on a settled invoice."
+    };
+    row(env, "settlement_accounting_identity", passed, evidence)
+}
+
 /// Run every composed invariant check and assemble the report.
 ///
 /// Read-only and independent of admin gating, so tests can exercise it directly
@@ -190,6 +317,9 @@ pub fn run_invariant_checks(env: &Env) -> InvariantReport {
     checks.push_back(check_audit_chain_integrity(env));
     checks.push_back(check_solvency(env));
     checks.push_back(check_storage_index_coherence(env));
+    checks.push_back(check_sum_investments_le_sum_invoices(env));
+    checks.push_back(check_escrow_uniqueness(env));
+    checks.push_back(check_settlement_accounting_identity(env));
 
     let mut all_passed = true;
     for c in checks.iter() {
