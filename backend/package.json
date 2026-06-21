@@ -26,6 +26,8 @@
   "dependencies": {
     "@types/helmet": "^0.0.48",
     "@types/nodemailer": "^8.0.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "better-sqlite3": "^12.9.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
