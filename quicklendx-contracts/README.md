@@ -102,6 +102,15 @@ cargo test
 cargo test --profile release-with-logs
 ```
 
+### Diagnostics
+
+Structured contract diagnostics are documented in
+[`docs/diagnostics.md`](docs/diagnostics.md). The `qlx_log!` macro emits
+domain-tagged logs during tests and when the `diagnostics` feature is enabled;
+without that feature, non-test builds compile diagnostics out. Use the
+`release-with-logs` profile when you need debug assertions/log visibility while
+investigating a release-like build.
+
 ### Basic Usage Example
 
 ```rust

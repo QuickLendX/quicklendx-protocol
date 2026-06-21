@@ -52,6 +52,26 @@
 //! no host function call. The Rust compiler and LLVM/WASM optimizer will eliminate
 //! the call sites entirely, maintaining strict WASM size and gas budgets.
 
+/// Canonical diagnostics domains and their contributor-facing meaning.
+///
+/// Keep this list in sync with `docs/diagnostics.md` and the assertions in
+/// `test_diagnostics.rs` whenever a new structured diagnostic tag is added.
+pub const DIAGNOSTIC_DOMAINS: [(&str, &str); 4] = [
+    (
+        "escrow",
+        "Escrow creation, acceptance, refund, and release transitions",
+    ),
+    ("bid", "Bid placement, withdrawal, cancellation, and expiry"),
+    (
+        "settlement",
+        "Partial payments, full settlement, and finalization",
+    ),
+    (
+        "payment",
+        "Low-level token transfers and escrow fund movements",
+    ),
+];
+
 /// Feature-gated structured diagnostics macro for QuickLendX contracts.
 ///
 /// Emits a domain-tagged diagnostic log via [`soroban_sdk::log!`] only when compiled

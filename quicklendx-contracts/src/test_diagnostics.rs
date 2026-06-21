@@ -44,7 +44,8 @@ fn test_qlx_log_plain_message_is_captured() {
     crate::qlx_log!(&env, "test", "hello from diagnostics");
     let logs = env.logs().all();
     assert!(
-        logs.iter().any(|l| l.contains("[test] hello from diagnostics")),
+        logs.iter()
+            .any(|l| l.contains("[test] hello from diagnostics")),
         "Expected '[test] hello from diagnostics' in logs, got: {:?}",
         logs
     );
@@ -57,7 +58,8 @@ fn test_qlx_log_with_format_args_is_captured() {
     crate::qlx_log!(&env, "payment", "amount={}", amount);
     let logs = env.logs().all();
     assert!(
-        logs.iter().any(|l| l.contains("[payment]") && l.contains("amount=")),
+        logs.iter()
+            .any(|l| l.contains("[payment]") && l.contains("amount=")),
         "Expected '[payment] amount=...' in logs, got: {:?}",
         logs
     );
@@ -66,18 +68,74 @@ fn test_qlx_log_with_format_args_is_captured() {
 #[test]
 fn test_qlx_log_multiple_domains_are_tagged_correctly() {
     let env = Env::default();
-    crate::qlx_log!(&env, "escrow", "Escrow created");
-    crate::qlx_log!(&env, "bid", "Bid placed");
-    crate::qlx_log!(&env, "settlement", "Payment recorded");
-    crate::qlx_log!(&env, "payment", "Funds transferred");
+    for (domain, _) in crate::diagnostics::DIAGNOSTIC_DOMAINS {
+        match domain {
+            "escrow" => crate::qlx_log!(&env, "escrow", "Escrow created"),
+            "bid" => crate::qlx_log!(&env, "bid", "Bid placed"),
+            "settlement" => crate::qlx_log!(&env, "settlement", "Payment recorded"),
+            "payment" => crate::qlx_log!(&env, "payment", "Funds transferred"),
+            _ => panic!("untested diagnostic domain: {}", domain),
+        }
+    }
 
     let logs = env.logs().all();
     let log_str: alloc::string::String = logs.join(" | ");
 
-    assert!(log_str.contains("[escrow] Escrow created"), "Missing escrow log");
+    assert!(
+        log_str.contains("[escrow] Escrow created"),
+        "Missing escrow log"
+    );
     assert!(log_str.contains("[bid] Bid placed"), "Missing bid log");
-    assert!(log_str.contains("[settlement] Payment recorded"), "Missing settlement log");
-    assert!(log_str.contains("[payment] Funds transferred"), "Missing payment log");
+    assert!(
+        log_str.contains("[settlement] Payment recorded"),
+        "Missing settlement log"
+    );
+    assert!(
+        log_str.contains("[payment] Funds transferred"),
+        "Missing payment log"
+    );
+}
+
+#[test]
+fn test_diagnostic_domain_catalog_matches_expected_tags() {
+    let domains = crate::diagnostics::DIAGNOSTIC_DOMAINS;
+
+    assert_eq!(domains.len(), 4, "unexpected diagnostics domain count");
+    assert_eq!(domains[0].0, "escrow");
+    assert_eq!(domains[1].0, "bid");
+    assert_eq!(domains[2].0, "settlement");
+    assert_eq!(domains[3].0, "payment");
+
+    for (domain, meaning) in domains {
+        assert!(
+            !domain.is_empty(),
+            "diagnostic domain tag must not be empty"
+        );
+        assert!(
+            !meaning.is_empty(),
+            "diagnostic domain {} must document its meaning",
+            domain
+        );
+    }
+}
+
+#[test]
+fn test_diagnostics_feature_contract_is_explicit() {
+    // Unit tests always compile the logging branch through cfg(test). Outside
+    // tests, contributors must enable the diagnostics feature to emit logs.
+    assert!(cfg!(test), "diagnostic tests must run under cfg(test)");
+
+    if cfg!(feature = "diagnostics") {
+        assert!(
+            cfg!(any(test, feature = "diagnostics")),
+            "diagnostics feature should compile the emitting macro branch"
+        );
+    } else {
+        assert!(
+            !cfg!(feature = "diagnostics"),
+            "default test run documents the feature-disabled configuration"
+        );
+    }
 }
 
 #[test]
@@ -102,7 +160,8 @@ fn test_qlx_log_multiple_format_args() {
     );
     let logs = env.logs().all();
     assert!(
-        logs.iter().any(|l| l.contains("[settlement]") && l.contains("investor_return=")),
+        logs.iter()
+            .any(|l| l.contains("[settlement]") && l.contains("investor_return=")),
         "Expected settlement log with multiple args, got: {:?}",
         logs
     );
@@ -134,7 +193,8 @@ fn test_bid_placed_emits_diagnostic_log() {
 
     let logs = env.logs().all();
     assert!(
-        logs.iter().any(|l| l.contains("[bid]") && l.contains("Bid placed")),
+        logs.iter()
+            .any(|l| l.contains("[bid]") && l.contains("Bid placed")),
         "Expected '[bid] Bid placed...' in logs after place_bid, got: {:?}",
         logs
     );
@@ -163,7 +223,8 @@ fn test_bid_withdrawn_emits_diagnostic_log() {
 
     let logs = env.logs().all();
     assert!(
-        logs.iter().any(|l| l.contains("[bid]") && l.contains("withdrawn")),
+        logs.iter()
+            .any(|l| l.contains("[bid]") && l.contains("withdrawn")),
         "Expected '[bid] Bid withdrawn' in logs after withdraw_bid, got: {:?}",
         logs
     );
@@ -236,20 +297,18 @@ fn test_partial_payment_emits_diagnostic_log() {
     let bid_id = client.place_bid(&investor, &invoice_id, &10_000, &10_500);
     client.accept_bid(&invoice_id, &bid_id);
 
-    client.process_partial_payment(
-        &invoice_id,
-        &3_000i128,
-        &String::from_str(&env, "txn-001"),
-    );
+    client.process_partial_payment(&invoice_id, &3_000i128, &String::from_str(&env, "txn-001"));
 
     let logs = env.logs().all();
     assert!(
-        logs.iter().any(|l| l.contains("[settlement]") && l.contains("partial payment")),
+        logs.iter()
+            .any(|l| l.contains("[settlement]") && l.contains("partial payment")),
         "Expected '[settlement] Recording partial payment...' in logs, got: {:?}",
         logs
     );
     assert!(
-        logs.iter().any(|l| l.contains("[settlement]") && l.contains("Payment recorded")),
+        logs.iter()
+            .any(|l| l.contains("[settlement]") && l.contains("Payment recorded")),
         "Expected '[settlement] Payment recorded...' in logs, got: {:?}",
         logs
     );
