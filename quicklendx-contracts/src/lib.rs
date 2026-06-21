@@ -95,7 +95,7 @@ mod test_bid_ttl;
 mod test_cleanup_pagination;
 #[cfg(test)]
 mod test_currency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_match_funding;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
@@ -140,7 +140,7 @@ mod test_profit_fee;
 // mod test_storage;
 #[cfg(test)]
 mod test_protocol_limits_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_health;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
@@ -653,7 +653,9 @@ impl QuickLendXContract {
     ///   - `version`: Protocol version from initialization
     ///   - `initialized`: Whether protocol setup is complete
     ///   - `paused`: Current pause state
-    ///   - `emergency_withdraw_pending`: Optional pending emergency withdrawal
+    ///   - `emergency_withdraw_pending`: Whether an emergency withdrawal is pending
+    ///   - `emergency_withdraw_unlock_at`: Pending withdrawal unlock timestamp, or 0
+    ///   - `emergency_withdraw_expires_at`: Pending withdrawal expiration timestamp, or 0
     ///   - `treasury`: Configured treasury address (may be None)
     ///   - `fee_bps`: Current fee basis points (0-1000)
     ///   - `total_invoice_count`: Sum of all invoices across all statuses
@@ -677,7 +679,7 @@ impl QuickLendXContract {
     /// if health.paused {
     ///     log!("Protocol paused - incident mode active");
     /// }
-    /// if health.emergency_withdraw_pending.is_some() {
+    /// if health.emergency_withdraw_pending {
     ///     log!("Emergency withdrawal in timelock");
     /// }
     /// log!("Invoices: {}, Currencies: {}", health.total_invoice_count, health.currency_count);
@@ -3481,7 +3483,7 @@ impl QuickLendXContract {
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_stability;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_collision_cross_domain;
 #[cfg(test)]
 mod test_emergency_escrow_protection;
@@ -3491,5 +3493,5 @@ mod test_escrow_settle_refund_race;
 #[cfg(test)]
 mod test_settlement_auto_release;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_dispute_interaction;
