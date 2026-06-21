@@ -61,23 +61,18 @@ paths:
     get:
       summary: Health check
       description: Returns the status of the API service and connectivity.
+      operationId: getHealth
       responses:
         "200":
           description: Service is healthy
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  version:
-                    type: string
-                    example: 1.0.0
-                  timestamp:
-                    type: string
-                    format: date-time
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+                version: 1.0.0
+                timestamp: '2026-01-01T00:00:00.000Z'
 
   /admin/status:
     get:
@@ -211,12 +206,14 @@ paths:
   /invoices/{id}:
     get:
       summary: Get invoice by ID
+      operationId: getInvoiceById
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
+          example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
       responses:
         "200":
           description: Invoice details
@@ -226,6 +223,14 @@ paths:
                 $ref: "#/components/schemas/Invoice"
         "404":
           description: Invoice not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  message: 'Invoice not found'
+                  code: INVOICE_NOT_FOUND
 
   /bids:
     get:
@@ -433,12 +438,14 @@ paths:
   /settlements/{id}:
     get:
       summary: Get settlement by ID
+      operationId: getSettlementById
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
+          example: '0xsettle123'
       responses:
         "200":
           description: Settlement details
@@ -448,6 +455,14 @@ paths:
                 $ref: "#/components/schemas/Settlement"
         "404":
           description: Settlement not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  message: 'Settlement not found'
+                  code: SETTLEMENT_NOT_FOUND
 
   /portfolio:
     get:
@@ -479,12 +494,14 @@ paths:
   /invoices/{id}/disputes:
     get:
       summary: List disputes for an invoice
+      operationId: listDisputesByInvoice
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
+          example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
       responses:
         "200":
           description: Paginated list of disputes for an invoice
@@ -764,6 +781,11 @@ components:
 
     LineItem:
       type: object
+      required:
+        - description
+        - quantity
+        - unit_price
+        - total
       properties:
         description: { type: string }
         quantity: { type: string, description: "i128 as string" }
@@ -772,10 +794,19 @@ components:
 
     InvoiceMetadata:
       type: object
+      required:
+        - customer_name
+        - customer_address
+        - tax_id
+        - line_items
+        - notes
       properties:
-        customer_name: { type: string }
-        customer_address: { type: string }
-        tax_id: { type: string }
+        customer_name:
+          type: string
+        customer_address:
+          type: string
+        tax_id:
+          type: string
         line_items:
           type: array
           items:
@@ -784,6 +815,19 @@ components:
 
     Invoice:
       type: object
+      required:
+        - id
+        - business
+        - amount
+        - currency
+        - due_date
+        - status
+        - description
+        - category
+        - tags
+        - metadata
+        - created_at
+        - updated_at
       properties:
         id: { type: string }
         business: { type: string }
@@ -806,6 +850,15 @@ components:
 
     Bid:
       type: object
+      required:
+        - bid_id
+        - invoice_id
+        - investor
+        - bid_amount
+        - expected_return
+        - timestamp
+        - status
+        - expiration_timestamp
       properties:
         bid_id: { type: string }
         invoice_id: { type: string }
@@ -822,6 +875,14 @@ components:
 
     Settlement:
       type: object
+      required:
+        - id
+        - invoice_id
+        - amount
+        - payer
+        - recipient
+        - timestamp
+        - status
       properties:
         id: { type: string }
         invoice_id: { type: string }
@@ -852,6 +913,13 @@ components:
 
     Dispute:
       type: object
+      required:
+        - id
+        - invoice_id
+        - initiator
+        - reason
+        - status
+        - created_at
       properties:
         id: { type: string }
         invoice_id: { type: string }
