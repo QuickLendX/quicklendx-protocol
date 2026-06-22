@@ -114,6 +114,11 @@ paths:
                     blockSeconds: 60
                     key: api-key-or-client-ip
                     headers: [X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset]
+                _system:
+                  status: operational
+                  degraded: false
+                  lag: 0
+                  level: none
 
   /admin/status:
     get:
@@ -930,6 +935,7 @@ components:
         - isCritical
         - checkedAt
         - rateLimits
+        - _system
       properties:
         lag:
           type: integer
@@ -949,6 +955,28 @@ components:
           format: date-time
         rateLimits:
           $ref: '#/components/schemas/RateLimitPolicies'
+        _system:
+          $ref: '#/components/schemas/SystemStatusMetadata'
+
+    SystemStatusMetadata:
+      type: object
+      description: Additive system-health metadata injected into JSON responses.
+      required:
+        - status
+        - degraded
+        - lag
+        - level
+      properties:
+        status:
+          type: string
+          enum: [operational, degraded, maintenance]
+        degraded:
+          type: boolean
+        lag:
+          type: integer
+        level:
+          type: string
+          enum: [none, warn, critical]
 
     FreshnessMetadata:
       type: object
