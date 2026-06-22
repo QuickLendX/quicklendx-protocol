@@ -75,8 +75,8 @@ fn test_health_uninitialized_all_fields() {
         "currency_count should be 0 when uninitialized"
     );
     assert!(
-        health.emergency_withdraw_pending.is_none(),
-        "emergency_withdraw_pending should be None"
+        !health.emergency_withdraw_pending,
+        "emergency_withdraw_pending should be false"
     );
 }
 
@@ -116,7 +116,7 @@ fn test_health_initialized_all_fields() {
     assert_eq!(health.total_invoice_count, 0, "no invoices yet");
     assert_eq!(health.currency_count, 1, "one currency in initial whitelist");
     assert!(
-        health.emergency_withdraw_pending.is_none(),
+        !health.emergency_withdraw_pending,
         "no pending emergency withdraw"
     );
 }

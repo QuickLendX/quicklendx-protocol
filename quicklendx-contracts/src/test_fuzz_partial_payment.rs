@@ -7,6 +7,10 @@
 //!
 //! Run:
 //! ```bash
+//! # Fast local smoke (10 cases, ~1–2 min)
+//! cargo test --features fuzz-tests test_fuzz_partial_payment_smoke
+//!
+//! # Full acceptance / CI (50,000 cases)
 //! PROPTEST_CASES=50000 cargo test --features fuzz-tests test_fuzz_partial_payment
 //! ```
 //!
@@ -22,6 +26,7 @@ use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, BytesN, Env, String, Vec as SorobanVec,
 };
+use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
 use alloc::string::String as RustString;
@@ -30,11 +35,34 @@ use alloc::vec::Vec;
 const MIN_INVOICE_AMOUNT: i128 = 100;
 const MAX_INVOICE_AMOUNT: i128 = 100_000;
 const MAX_ACTIONS: usize = 40;
+/// Mirrors `settlement::MAX_PAYMENT_COUNT`.
+const MAX_PAYMENT_COUNT: u32 = 1_000;
+/// Fixed case count for `test_fuzz_partial_payment_smoke` (local dev / quick CI).
+const SMOKE_CASES: u32 = 10;
 
 fn partial_payment_proptest_config() -> ProptestConfig {
     ProptestConfig::with_failure_persistence(FileFailurePersistence::WithSource(
         "partial_payment",
     ))
+}
+
+fn partial_payment_proptest_config_smoke() -> ProptestConfig {
+    ProptestConfig {
+        cases: SMOKE_CASES,
+        failure_persistence: Some(Box::new(FileFailurePersistence::WithSource(
+            "partial_payment",
+        ))),
+        ..ProptestConfig::default()
+    }
+}
+
+fn partial_payment_strategy() -> impl Strategy<Value = (i128, Vec<PaymentAction>)> {
+    (MIN_INVOICE_AMOUNT..=MAX_INVOICE_AMOUNT).prop_flat_map(|invoice_amount| {
+        (
+            Just(invoice_amount),
+            prop::collection::vec(action_strategy(invoice_amount), 1..MAX_ACTIONS),
+        )
+    })
 }
 
 fn tx_id_for_index(env: &Env, tx_index: u32) -> String {
@@ -146,19 +174,25 @@ impl PartialPaymentOracle {
         (self.invoice_amount - self.total_paid).max(0)
     }
 
-    /// Simulate `process_partial_payment` / `record_payment` semantics.
+    /// Simulate `record_payment` / `process_partial_payment` semantics.
+    ///
+    /// Order mirrors production: amount validation → payable status → nonce replay
+    /// idempotency → payment-count cap → remaining-due check → apply with cap.
     fn apply(&mut self, amount: i128, tx_index: u32) -> Result<(), QuickLendXError> {
-        if self.finalized {
-            return Err(QuickLendXError::InvalidStatus);
-        }
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
+        }
+        if self.finalized {
+            return Err(QuickLendXError::InvalidStatus);
         }
 
         let nonce = Self::nonce_key(tx_index);
         if self.seen_nonces.contains(&nonce) {
-            // Idempotent replay — no state change.
             return Ok(());
+        }
+
+        if self.payment_count >= MAX_PAYMENT_COUNT {
+            return Err(QuickLendXError::OperationNotAllowed);
         }
 
         let remaining = self.remaining();
@@ -223,8 +257,11 @@ fn execute_action(
     env.ledger().set_timestamp(env.ledger().timestamp() + 1);
     match client.try_process_partial_payment(invoice_id, &amount, &tx_id) {
         Ok(Ok(())) => Ok(()),
-        Ok(Err(_)) => Err(QuickLendXError::InvalidAmount),
-        Err(e) => Err(e.unwrap()),
+        Ok(Err(conversion_err)) => panic!(
+            "unexpected conversion error for action {:?}: {:?}",
+            action, conversion_err
+        ),
+        Err(invoke_err) => Err(invoke_err.unwrap()),
     }
 }
 
@@ -540,6 +577,63 @@ fn reorder_replays_after_first_seen(actions: &[PaymentAction]) -> Vec<PaymentAct
     core
 }
 
+fn fuzz_partial_payment_case(
+    invoice_amount: i128,
+    actions: Vec<PaymentAction>,
+) -> Result<(), TestCaseError> {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let (invoice_id, _business) =
+        setup_funded_invoice(&env, &client, &contract_id, invoice_amount);
+
+    let oracle_forward = run_sequence_proptest(
+        &env, &client, &contract_id, &invoice_id, invoice_amount, &actions,
+    )?;
+
+    // Reordering: replays after first-seen payments must not change totals.
+    let reordered = reorder_replays_after_first_seen(&actions);
+    let env2 = Env::default();
+    env2.mock_all_auths();
+    let contract_id2 = env2.register(QuickLendXContract, ());
+    let client2 = QuickLendXContractClient::new(&env2, &contract_id2);
+    let (invoice_id2, _) =
+        setup_funded_invoice(&env2, &client2, &contract_id2, invoice_amount);
+
+    let oracle_reordered = run_sequence_proptest(
+        &env2, &client2, &contract_id2, &invoice_id2, invoice_amount, &reordered,
+    )?;
+
+    prop_assert_eq!(
+        oracle_forward.total_paid,
+        oracle_reordered.total_paid,
+        "reordering replays changed cumulative total_paid"
+    );
+    prop_assert_eq!(
+        oracle_forward.payment_count,
+        oracle_reordered.payment_count,
+        "reordering replays changed payment_count"
+    );
+    prop_assert!(
+        oracle_forward.total_paid <= invoice_amount,
+        "security: overpayment past invoice amount"
+    );
+    Ok(())
+}
+
+proptest! {
+    #![proptest_config(partial_payment_proptest_config_smoke())]
+
+    /// Fast smoke run (10 cases) for local dev and quick CI feedback.
+    #[test]
+    fn test_fuzz_partial_payment_smoke(
+        (invoice_amount, actions) in partial_payment_strategy(),
+    ) {
+        fuzz_partial_payment_case(invoice_amount, actions)?;
+    }
+}
+
 proptest! {
     #![proptest_config(partial_payment_proptest_config())]
 
@@ -547,47 +641,9 @@ proptest! {
     /// monotonic payment count, and transaction_id deduplication under reordering.
     #[test]
     fn test_fuzz_partial_payment(
-        invoice_amount in MIN_INVOICE_AMOUNT..=MAX_INVOICE_AMOUNT,
-        actions in prop::collection::vec(action_strategy(MAX_INVOICE_AMOUNT), 1..MAX_ACTIONS),
+        (invoice_amount, actions) in partial_payment_strategy(),
     ) {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register(QuickLendXContract, ());
-        let client = QuickLendXContractClient::new(&env, &contract_id);
-        let (invoice_id, _business) =
-            setup_funded_invoice(&env, &client, &contract_id, invoice_amount);
-
-        let oracle_forward = run_sequence_proptest(
-            &env, &client, &contract_id, &invoice_id, invoice_amount, &actions,
-        )?;
-
-        // Reordering: replays after first-seen payments must not change totals.
-        let reordered = reorder_replays_after_first_seen(&actions);
-        let env2 = Env::default();
-        env2.mock_all_auths();
-        let contract_id2 = env2.register(QuickLendXContract, ());
-        let client2 = QuickLendXContractClient::new(&env2, &contract_id2);
-        let (invoice_id2, _) =
-            setup_funded_invoice(&env2, &client2, &contract_id2, invoice_amount);
-
-        let oracle_reordered = run_sequence_proptest(
-            &env2, &client2, &contract_id2, &invoice_id2, invoice_amount, &reordered,
-        )?;
-
-        prop_assert_eq!(
-            oracle_forward.total_paid,
-            oracle_reordered.total_paid,
-            "reordering replays changed cumulative total_paid"
-        );
-        prop_assert_eq!(
-            oracle_forward.payment_count,
-            oracle_reordered.payment_count,
-            "reordering replays changed payment_count"
-        );
-        prop_assert!(
-            oracle_forward.total_paid <= invoice_amount,
-            "security: overpayment past invoice amount"
-        );
+        fuzz_partial_payment_case(invoice_amount, actions)?;
     }
 }
 

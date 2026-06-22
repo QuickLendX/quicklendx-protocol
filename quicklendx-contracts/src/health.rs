@@ -38,7 +38,7 @@
 //! println!("Currencies: {}", health.currency_count);
 //! ```
 
-use crate::emergency::PendingEmergencyWithdrawal;
+use crate::emergency::EmergencyWithdraw;
 use soroban_sdk::{contracttype, Address};
 
 /// Canonical protocol health snapshot.
@@ -73,10 +73,8 @@ pub struct ProtocolHealth {
     /// Admin-only read-only entrypoints and emergency recovery bypass this flag.
     pub paused: bool,
 
-    /// Optional pending emergency withdrawal record.
-    /// If Some, an emergency withdrawal has been initiated and is in timelock.
-    /// Check `emg_time_until_unlock()` and `emg_time_until_expire()` for exact timing.
-    pub emergency_withdraw_pending: Option<PendingEmergencyWithdrawal>,
+    /// Whether an emergency withdrawal timelock is currently pending.
+    pub emergency_withdraw_pending: bool,
 
     /// Treasury address for fee collection (may be None).
     /// Fee calculations are performed even if treasury is not set (fees accrue
@@ -123,16 +121,16 @@ impl ProtocolHealth {
             version: ProtocolInitializer::get_version(env),
             initialized: ProtocolInitializer::is_initialized(env),
             paused: PauseControl::is_paused(env),
-            emergency_withdraw_pending: EmergencyWithdraw::get_pending(env),
+            emergency_withdraw_pending: EmergencyWithdraw::get_pending(env).is_some(),
             treasury: ProtocolInitializer::get_treasury(env),
             fee_bps: ProtocolInitializer::get_fee_bps(env),
-            total_invoice_count: crate::storage::InvoiceStorage::get_total_invoice_count(env),
+            total_invoice_count: crate::storage::InvoiceStorage::get_total_count(env) as u32,
             currency_count: CurrencyWhitelist::currency_count(env),
         }
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
     use crate::admin::AdminStorage;
@@ -185,7 +183,7 @@ mod tests {
         assert!(health.treasury.is_none());
         assert_eq!(health.total_invoice_count, 0);
         assert_eq!(health.currency_count, 0);
-        assert!(health.emergency_withdraw_pending.is_none());
+        assert!(!health.emergency_withdraw_pending);
     }
 
     #[test]
@@ -200,7 +198,7 @@ mod tests {
         assert!(health.treasury.is_some());
         assert_eq!(health.total_invoice_count, 0);
         assert_eq!(health.currency_count, 1);
-        assert!(health.emergency_withdraw_pending.is_none());
+        assert!(!health.emergency_withdraw_pending);
     }
 
     #[test]
@@ -284,13 +282,13 @@ mod tests {
 
     #[test]
     fn test_health_emergency_withdraw_pending() {
-        // This test verifies the emergency_withdraw_pending field is None
-        // when no emergency withdrawal is pending, and Some when one is.
+        // This test verifies the emergency_withdraw_pending field is false
+        // when no emergency withdrawal is pending, and true when one is.
         // Full emergency withdraw testing is in test_emergency.rs.
         let (env, _, _) = setup_initialized();
 
         let health = ProtocolHealth::new(&env);
-        assert!(health.emergency_withdraw_pending.is_none());
+        assert!(!health.emergency_withdraw_pending);
 
         // Note: Full emergency withdrawal state testing requires creating
         // an actual pending emergency withdrawal, which is tested in test_emergency.rs

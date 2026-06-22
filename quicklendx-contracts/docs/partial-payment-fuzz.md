@@ -15,13 +15,13 @@ and is compiled only with `--features fuzz-tests`.
 ## Run Command
 
 ```bash
-# Standard (50,000 cases — acceptance / CI target)
+# Fast smoke (10 cases — local dev / quick CI)
+cargo test --features fuzz-tests test_fuzz_partial_payment_smoke
+
+# Full acceptance (50,000 cases — CI target)
 PROPTEST_CASES=50000 cargo test --features fuzz-tests test_fuzz_partial_payment
 
-# Quick smoke run (default env cases — fast local check)
-cargo test --features fuzz-tests test_fuzz_partial_payment
-
-# Deterministic edge-case tests only
+# Deterministic edge-case tests only (~seconds)
 cargo test --features fuzz-tests partial_payment_zero partial_payment_exact partial_payment_after partial_payment_replay partial_payment_reordered
 ```
 

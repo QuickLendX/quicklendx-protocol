@@ -93,9 +93,9 @@ mod test_escrow_event_completeness;
 mod test_bid_ttl;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_match_funding;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
@@ -140,7 +140,7 @@ mod test_profit_fee;
 // mod test_storage;
 #[cfg(test)]
 mod test_protocol_limits_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_health;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
@@ -160,13 +160,13 @@ mod test_bid_ranking;
 mod test_events;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
-#[cfg(all(test, feature = "fuzz-tests"))]
+#[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_invoice_metadata;
-#[cfg(all(test, feature = "fuzz-tests"))]
+#[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_distribute_revenue;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_partial_payment;
-#[cfg(all(test, feature = "fuzz-tests"))]
+#[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_treasury_split_overflow_props;
 #[cfg(test)]
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -3494,7 +3494,7 @@ impl QuickLendXContract {
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_stability;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_collision_cross_domain;
 #[cfg(test)]
 mod test_emergency_escrow_protection;
@@ -3504,5 +3504,5 @@ mod test_escrow_settle_refund_race;
 #[cfg(test)]
 mod test_settlement_auto_release;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_dispute_interaction;

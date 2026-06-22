@@ -11,60 +11,60 @@ use crate::verification::{
 };
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
-//! # Settlement-Dispute Interaction Safety
-//!
-//! ## Invariant: Settlement Mutual Exclusion
-//! **Settlement finalization MUST be blocked while `dispute_status != DisputeStatus::None`.**
-//!
-//! ### Implementation Strategy
-//! The dispute module manages `dispute_status` transitions:
-//! - `None → Disputed` (via `create_dispute`)
-//! - `Disputed → UnderReview` (via `put_dispute_under_review`)
-//! - `UnderReview → Resolved` (via `resolve_dispute`)
-//!
-//! The settlement module (`settlement.rs`) enforces blocking through invoice status checks.
-//! When a dispute is active, the invoice:
-//! 1. **Option A**: Remains `Funded` but has `dispute_status != None`
-//!    - Requires explicit check: `if dispute_status != None { reject settlement }`
-//! 2. **Option B**: Transitions to dispute-specific status (e.g., `Disputed` enum variant)
-//!    - Automatically blocks settlement via `ensure_payable_status()`
-//!
-//! **Current implementation uses Option A**: Invoice stays `Funded`, so settlement logic
-//! must explicitly check `dispute_status` before finalizing.
-//!
-//! ### Resolution Outcomes & Settlement
-//!
-//! #### Resolution in Favor of Investor
-//! - Admin should transition invoice to `Cancelled` or `Refunded` status
-//! - This unlocks `refund_escrow()` and permanently blocks settlement
-//! - **Guarantee**: Investor can recover funds; business cannot trigger settlement
-//!
-//! #### Resolution in Favor of Business
-//! - Invoice returns to `Funded` status (or stays `Funded` with `dispute_status = Resolved`)
-//! - Business completes remaining payments
-//! - Settlement logic checks `dispute_status == Resolved` → allows finalization
-//! - **Guarantee**: Normal settlement flow resumes after resolution
-//!
-//! #### Neutral Resolution
-//! - Platform policy determines outcome (settlement, partial refund, mediation)
-//! - **Guarantee**: No permanent fund freeze; deterministic path provided
-//!
-//! ### Escrow Interaction
-//! Disputes do NOT directly modify escrow state. Instead:
-//! - Disputes influence invoice status transitions
-//! - Invoice status gates escrow operations:
-//!   - `release_escrow`: Requires `invoice.status == Paid`
-//!   - `refund_escrow`: Requires `invoice.status == Cancelled/Refunded`
-//! - Dispute resolution determines which status the invoice transitions to,
-//!   thereby enabling the appropriate escrow operation
-//!
-//! ### Testing
-//! See `src/test_settlement_dispute_interaction.rs` for comprehensive integration
-//! tests covering all dispute resolution scenarios and settlement blocking behavior.
-//!
-//! ### Documentation
-//! See `docs/settlement-dispute-interaction.md` for complete state machine diagrams
-//! and resolution outcome specifications.
+/// # Settlement-Dispute Interaction Safety
+///
+/// ## Invariant: Settlement Mutual Exclusion
+/// **Settlement finalization MUST be blocked while `dispute_status != DisputeStatus::None`.**
+///
+/// ### Implementation Strategy
+/// The dispute module manages `dispute_status` transitions:
+/// - `None → Disputed` (via `create_dispute`)
+/// - `Disputed → UnderReview` (via `put_dispute_under_review`)
+/// - `UnderReview → Resolved` (via `resolve_dispute`)
+///
+/// The settlement module (`settlement.rs`) enforces blocking through invoice status checks.
+/// When a dispute is active, the invoice:
+/// 1. **Option A**: Remains `Funded` but has `dispute_status != None`
+///    - Requires explicit check: `if dispute_status != None { reject settlement }`
+/// 2. **Option B**: Transitions to dispute-specific status (e.g., `Disputed` enum variant)
+///    - Automatically blocks settlement via `ensure_payable_status()`
+///
+/// **Current implementation uses Option A**: Invoice stays `Funded`, so settlement logic
+/// must explicitly check `dispute_status` before finalizing.
+///
+/// ### Resolution Outcomes & Settlement
+///
+/// #### Resolution in Favor of Investor
+/// - Admin should transition invoice to `Cancelled` or `Refunded` status
+/// - This unlocks `refund_escrow()` and permanently blocks settlement
+/// - **Guarantee**: Investor can recover funds; business cannot trigger settlement
+///
+/// #### Resolution in Favor of Business
+/// - Invoice returns to `Funded` status (or stays `Funded` with `dispute_status = Resolved`)
+/// - Business completes remaining payments
+/// - Settlement logic checks `dispute_status == Resolved` → allows finalization
+/// - **Guarantee**: Normal settlement flow resumes after resolution
+///
+/// #### Neutral Resolution
+/// - Platform policy determines outcome (settlement, partial refund, mediation)
+/// - **Guarantee**: No permanent fund freeze; deterministic path provided
+///
+/// ### Escrow Interaction
+/// Disputes do NOT directly modify escrow state. Instead:
+/// - Disputes influence invoice status transitions
+/// - Invoice status gates escrow operations:
+///   - `release_escrow`: Requires `invoice.status == Paid`
+///   - `refund_escrow`: Requires `invoice.status == Cancelled/Refunded`
+/// - Dispute resolution determines which status the invoice transitions to,
+///   thereby enabling the appropriate escrow operation
+///
+/// ### Testing
+/// See `src/test_settlement_dispute_interaction.rs` for comprehensive integration
+/// tests covering all dispute resolution scenarios and settlement blocking behavior.
+///
+/// ### Documentation
+/// See `docs/settlement-dispute-interaction.md` for complete state machine diagrams
+/// and resolution outcome specifications.
 
 fn dispute_index_key() -> soroban_sdk::Symbol {
     symbol_short!("dispute")
