@@ -210,6 +210,7 @@ impl Invoice {
     ) -> Result<(), QuickLendXError> {
         match metadata {
             Some(metadata) => {
+                crate::verification::validate_invoice_metadata(&metadata, self.amount)?;
                 self.metadata_customer_name = Some(metadata.customer_name);
                 self.metadata_customer_address = Some(metadata.customer_address);
                 self.metadata_tax_id = Some(metadata.tax_id);
