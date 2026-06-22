@@ -378,6 +378,15 @@ impl QuickLendXContract {
         maintenance::MaintenanceControl::extend_protocol_ttl(&env, &admin)
     }
 
+    /// Admin-gated protocol heartbeat. Authenticates `admin` as the stored protocol
+    /// admin, then runs every composed invariant check read-only.
+    pub fn invariant_self_check(
+        env: Env,
+        admin: Address,
+    ) -> Result<invariants::InvariantReport, QuickLendXError> {
+        invariants::invariant_self_check(&env, &admin)
+    }
+
     /// Initialize the admin address (deprecated: use initialize)
     pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         AdminStorage::initialize(&env, &admin)
