@@ -165,6 +165,8 @@ mod test_fuzz_invoice_metadata;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_distribute_revenue;
 #[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_partial_payment;
+#[cfg(all(test, feature = "fuzz-tests"))]
 mod test_treasury_split_overflow_props;
 #[cfg(test)]
 #[cfg(all(test, feature = "legacy-tests"))]

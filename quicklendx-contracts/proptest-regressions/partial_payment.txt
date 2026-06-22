@@ -1,0 +1,12 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+#
+# Format: cc <hex-encoded seed> # shrinks to <description>
+#
+# Seeds are added automatically by proptest when a failure is found.
+# The harness configures proptest to write seeds to this file via
+# FileFailurePersistence::WithSource("partial_payment").
