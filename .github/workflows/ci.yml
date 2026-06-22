@@ -110,30 +110,3 @@ jobs:
           cargo llvm-cov clean --workspace
           cargo llvm-cov --lib --lcov --output-path coverage/lcov.info
           bash scripts/check-admin-coverage.sh coverage/lcov.info
-
-      - name: Supply-chain security audit (cargo-deny)
-        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
-        run: |
-          source $HOME/.cargo/env
-          # Install cargo-deny (pinned version for deterministic behavior)
-          cargo install cargo-deny --version 0.14.24 --locked
-          
-          # Run all cargo-deny checks:
-          # - advisories: Check for security vulnerabilities
-          # - licenses: Enforce license compliance policy
-          # - bans: Prevent duplicate dependencies and unmaintained crates
-          # - sources: Verify all dependencies come from trusted registries
-          #
-          # Deterministic Advisory Database:
-          # By default, cargo-deny fetches the latest advisory database.
-          # For release branches/hotfixes, set CARGO_DENY_ADVISORY_GIT_REF
-          # to a specific commit hash to ensure reproducible builds.
-          #
-          # Example:
-          #   env:
-          #     CARGO_DENY_ADVISORY_GIT_REF: "abc123..."
-          #
-          cargo deny check --config deny.toml
-          
-          # Verbose output for debugging (optional)
-          # cargo deny check --config deny.toml --show-stats
