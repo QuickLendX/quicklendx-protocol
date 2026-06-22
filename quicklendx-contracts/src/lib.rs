@@ -109,6 +109,8 @@ mod test_escrow_invariant_model;
 mod test_expired_bids_cleanup;
 #[cfg(test)]
 mod test_freshness;
+#[cfg(test)]
+mod test_freshness_bounds;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
 #[cfg(test)]
@@ -3400,6 +3402,9 @@ impl QuickLendXContract {
     }
 
     /// Build API freshness metadata as string key/value pairs.
+    ///
+    /// See `quicklendx-contracts/docs/freshness.md` for the documented
+    /// freshness drift bound and client handling guidance.
     pub fn get_freshness(
         env: Env,
         indexed_ledger_seq: u32,
