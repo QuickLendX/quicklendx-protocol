@@ -110,6 +110,8 @@ export const retentionConfig = {
   snapshotsMs: config.RETENTION_SNAPSHOTS_DAYS * 24 * 60 * 60 * 1000,
   batchSize: config.RETENTION_BATCH_SIZE,
   intervalMs: config.RETENTION_INTERVAL_MS,
-  archiveDir: config.RETENTION_ARCHIVE_DIR,
+  archiveDir: config.ARCHIVE_DIR,
   actor: config.RETENTION_AUDIT_ACTOR,
+  archiveEnabled: config.ARCHIVE_ENABLED,
 } as const;
+
