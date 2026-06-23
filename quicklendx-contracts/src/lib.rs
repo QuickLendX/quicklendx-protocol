@@ -183,6 +183,8 @@ mod test_invoice_metadata;
 mod test_line_item_consistency;
 #[cfg(test)]
 mod test_invoice_search_ranking;
+#[cfg(test)]
+mod test_default_grace_boundary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
 #[cfg(all(test, feature = "legacy-tests"))]
