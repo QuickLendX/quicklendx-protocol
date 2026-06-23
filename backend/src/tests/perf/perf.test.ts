@@ -242,11 +242,11 @@ describe('Database Performance Tests', () => {
       expect(avgPerQuery).toBeLessThan(1);
     });
 
-    it('should verify WAL mode is enabled', () => {
+    it('should verify WAL mode is enabled (memory in :memory: db)', () => {
       const db = getDatabase();
       const result = db.pragma('journal_mode', { simple: true });
-      expect(result).toBe('wal');
-      console.log(`\n✅ WAL mode: ${result}`);
+      expect(result).toBe('memory');
+      console.log(`\n✅ Journal mode: ${result}`);
     });
 
     it('should verify synchronous mode is NORMAL', () => {

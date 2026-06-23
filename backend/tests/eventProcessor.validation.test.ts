@@ -141,6 +141,7 @@ describe('POST /events validation and idempotency', () => {
 
   afterEach(async () => {
     process.chdir(originalCwd);
+    delete process.env.DATABASE_PATH;
     jest.resetModules();
     jest.dontMock('../src/services/notificationService');
 
@@ -156,6 +157,7 @@ describe('POST /events validation and idempotency', () => {
     tempDir = await mkdtemp(join(tmpdir(), 'quicklendx-events-'));
     process.chdir(tempDir);
     jest.resetModules();
+    process.env.DATABASE_PATH = ':memory:';
     jest.doMock('../src/services/notificationService', () => ({
       notificationService: {
         processNotification,

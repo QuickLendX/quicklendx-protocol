@@ -60,8 +60,35 @@ export function generateCorrelationId(): string {
  */
 export function sanitizeCorrelationId(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
-  const sanitized = raw.replace(/[^a-zA-Z0-9\-]/g, "");
+  const trimmed = raw.trim();
+  const sanitized = trimmed.replace(/[^a-zA-Z0-9\-_]/g, "");
   if (sanitized.length === 0 || sanitized.length > 128) return null;
-  if (sanitized !== raw) return null;
+  if (sanitized !== trimmed) return null;
   return sanitized;
+}
+
+/**
+ * Get the existing correlation ID from the current context, or generate a new
+ * one if no context is active. Useful when you need a correlation ID but don't
+ * want to force the caller to provide one.
+ */
+export function getOrGenerateCorrelationId(): string {
+  const existing = getCorrelationId();
+  return existing ?? generateCorrelationId();
+}
+
+/**
+ * Express middleware that wraps the request handler in a correlation ID context.
+ * Uses an existing correlation ID from the request (header or generated), falling
+ * back to the request ID if neither is available.
+ */
+export function createRequestContextMiddleware() {
+  return function requestContextMiddleware(
+    req: any,
+    _res: any,
+    next: () => void,
+  ): void {
+    const id = req.correlationId ?? req.requestId ?? generateCorrelationId();
+    runWithContext(id, next);
+  };
 }

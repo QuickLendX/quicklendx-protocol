@@ -50,24 +50,28 @@ class WebhookQueueService {
   }
 
   public static resetInstance(): void {
-    WebhookQueueService.instance = new WebhookQueueService();
+    if (WebhookQueueService.instance) {
+      WebhookQueueService.instance.db = getDatabase();
+    } else {
+      WebhookQueueService.instance = new WebhookQueueService();
+    }
   }
 
   enqueue(type: string, payload?: unknown): WebhookEvent {
+    // Check capacity before starting transaction so overflow counter persists
+    const rowCount = this.db
+      .prepare("SELECT COUNT(*) as count FROM webhook_queue WHERE status IN ('pending', 'processing')")
+      .get().count;
+
+    if (rowCount >= MAX_CAPACITY) {
+      // Increment persistent overflow counter
+      this.db.prepare("UPDATE queue_metadata SET value = value + 1 WHERE key = 'overflow_count'").run();
+      const err = new Error("Webhook queue capacity exceeded");
+      (err as any).statusCode = 503;
+      throw err;
+    }
+
     return this.db.transaction(() => {
-      // Check current size of pending/processing elements
-      const rowCount = this.db
-        .prepare("SELECT COUNT(*) as count FROM webhook_queue WHERE status IN ('pending', 'processing')")
-        .get().count;
-
-      if (rowCount >= MAX_CAPACITY) {
-        // Increment persistent overflow counter
-        this.db.prepare("UPDATE queue_metadata SET value = value + 1 WHERE key = 'overflow_count'").run();
-        const err = new Error("Webhook queue capacity exceeded");
-        (err as any).statusCode = 503;
-        throw err;
-      }
-
       const id = ulid();
       const enqueuedAt = new Date().toISOString();
       const event: WebhookEvent = {

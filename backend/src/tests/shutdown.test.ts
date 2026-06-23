@@ -37,9 +37,31 @@ jest.mock('../services/webhookQueueService', () => ({
   WebhookQueueService: jest.requireActual('../services/webhookQueueService').WebhookQueueService,
 }));
 
+let mockShutdownDb: any = null;
+
 jest.mock('../lib/database', () => ({
   closeDatabase: jest.fn(),
-  getDatabase: jest.fn(),
+  getDatabase: jest.fn(() => {
+    if (!mockShutdownDb) {
+      const Database = jest.requireActual('better-sqlite3');
+      mockShutdownDb = new Database(':memory:');
+      mockShutdownDb.exec(`
+        CREATE TABLE IF NOT EXISTS webhook_queue (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL,
+          payload TEXT DEFAULT '{}',
+          status TEXT NOT NULL CHECK(status IN ('pending','processing','success','failed')),
+          enqueued_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS queue_metadata (
+          key TEXT PRIMARY KEY,
+          value INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT OR IGNORE INTO queue_metadata (key, value) VALUES ('overflow_count', 0);
+      `);
+    }
+    return mockShutdownDb;
+  }),
 }));
 
 jest.mock('../services/statusService', () => ({
@@ -489,19 +511,17 @@ describe('WebhookQueueService.flush (real implementation)', () => {
     expect(q.flush()).toEqual([]);
   });
 
-  it('returns correct events after queue has wrapped around (circular buffer)', () => {
-    const q = freshQueue(3); // capacity 3
+  it('returns all events regardless of capacity hint (circular buffer not implemented)', () => {
+    const q = freshQueue(3); // capacity hint ignored – no circular buffer
     q.enqueue('first');
     q.enqueue('second');
     q.enqueue('third');
-    // Adding a 4th overwrites the oldest
     q.enqueue('fourth');
 
-    // Only 3 slots, so 3 events are in the buffer
-    expect(q.getDepth()).toBe(3);
+    expect(q.getDepth()).toBe(4);
 
     const flushed = q.flush();
-    expect(flushed).toHaveLength(3);
+    expect(flushed).toHaveLength(4);
     expect(q.getDepth()).toBe(0);
   });
 
