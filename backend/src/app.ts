@@ -11,6 +11,24 @@ import v1Routes from "./routes/v1";
 import webhookRoutes from "./routes/webhooks";
 import healthRoutes from "./routes/health";
 import { requestLogger } from "./middleware/request-logger";
+import { lagMonitor } from "./services/lagMonitor";
+import { alertRouter, Severity } from "./services/alertRouter";
+
+// Initialize alert routing: subscribe to lagMonitor alerts
+const unsubscribeLagAlerts = lagMonitor.onAlert((event) => {
+  const severity =
+    event.direction === "escalation"
+      ? event.to === "critical"
+        ? Severity.HIGH
+        : Severity.MEDIUM
+      : Severity.LOW;
+  const message = `Lag ${event.direction}: ${event.from} → ${event.to} (lag: ${event.lag} ledgers)`;
+  const alertKey = `lag-${event.to}`;
+
+  alertRouter
+    .routeAlert(alertKey, severity, message)
+    .catch((err) => console.error("Failed to route lag alert:", err));
+});
 
 const app = express();
 
