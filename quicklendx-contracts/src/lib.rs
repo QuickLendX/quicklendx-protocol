@@ -193,6 +193,8 @@ mod test_category_breakdown;
 mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
+#[cfg(test)]
+mod test_notification_status_matrix;
 pub mod types;
 pub use types::*;
 pub mod verification;
