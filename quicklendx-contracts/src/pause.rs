@@ -45,8 +45,13 @@ impl PauseControl {
         admin.require_auth();
         AdminStorage::require_admin(env, admin)?;
 
-        env.storage().instance().set(&PAUSED_KEY, &paused);
+        Self::apply_paused(env, paused);
         Ok(())
+    }
+
+    /// Write the pause flag without re-checking admin (caller must authorize).
+    pub(crate) fn apply_paused(env: &Env, paused: bool) {
+        env.storage().instance().set(&PAUSED_KEY, &paused);
     }
 
     /// @notice Reject business-state operations while the protocol is paused.

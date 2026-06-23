@@ -81,7 +81,16 @@ impl MaintenanceControl {
         reason: &String,
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
+        Self::apply_maintenance_mode(env, enabled, reason, admin)
+    }
 
+    /// Write maintenance flags without re-checking admin (caller must authorize).
+    pub(crate) fn apply_maintenance_mode(
+        env: &Env,
+        enabled: bool,
+        reason: &String,
+        actor: &Address,
+    ) -> Result<(), QuickLendXError> {
         if enabled && reason.len() > MAX_REASON_LEN {
             return Err(QuickLendXError::InvalidDescription);
         }
@@ -100,7 +109,7 @@ impl MaintenanceControl {
             env.storage().instance().remove(&MAINTENANCE_REASON_KEY);
             env.events().publish(
                 (symbol_short!("MAINT"), symbol_short!("disabled")),
-                admin.clone(),
+                actor.clone(),
             );
         }
 

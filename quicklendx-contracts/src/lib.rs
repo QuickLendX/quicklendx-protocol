@@ -56,6 +56,7 @@ pub mod health;
 pub mod events;
 pub mod fees;
 pub mod freshness;
+pub mod incident;
 pub mod init;
 pub mod invariants;
 pub mod investment;
@@ -185,6 +186,8 @@ mod test_input_matrix;
 mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
+#[cfg(test)]
+mod test_incident;
 #[cfg(test)]
 mod test_invoice_metadata;
 #[cfg(test)]
@@ -692,6 +695,27 @@ impl QuickLendXContract {
     /// Return whether the contract is currently paused.
     pub fn is_paused(env: Env) -> bool {
         pause::PauseControl::is_paused(&env)
+    }
+
+    /// Atomically enter incident mode: hard pause plus maintenance with reason.
+    ///
+    /// Coordinates [`pause::PauseControl`] and [`maintenance::MaintenanceControl`]
+    /// in a single admin-gated invocation and returns an [`incident::IncidentSnapshot`]
+    /// for runbook/audit tooling.
+    pub fn enter_incident_mode(
+        env: Env,
+        admin: Address,
+        reason: String,
+    ) -> Result<incident::IncidentSnapshot, QuickLendXError> {
+        incident::IncidentControl::enter_incident_mode(&env, &admin, &reason)
+    }
+
+    /// Atomically exit incident mode: unpause and disable maintenance.
+    pub fn exit_incident_mode(
+        env: Env,
+        admin: Address,
+    ) -> Result<incident::IncidentSnapshot, QuickLendXError> {
+        incident::IncidentControl::exit_incident_mode(&env, &admin)
     }
 
     /// Get a snapshot of the protocol's current health status.
