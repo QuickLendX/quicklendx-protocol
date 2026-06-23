@@ -8,6 +8,8 @@ import {
   AuditQuery,
   AuditQueryResponse,
   AuditOperation,
+  AUDIT_CHAIN_GENESIS_HASH,
+  computeEntryHash,
 } from "../types/audit";
 
 const MAX_LINE_BYTES = 10 * 1024;
@@ -53,14 +55,37 @@ class AuditService {
     return ulid();
   }
 
-  append(entry: Omit<AuditEntry, "id" | "timestamp">): AuditEntry {
+  private getLastEntry(filePath: string): AuditEntry | null {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    const content = fs.readFileSync(filePath, "utf8").trim();
+    const lines = content.split("\n");
+    if (lines.length === 0 || !lines[lines.length - 1]) {
+      return null;
+    }
+    try {
+      return AuditEntrySchema.parse(JSON.parse(lines[lines.length - 1]));
+    } catch {
+      return null;
+    }
+  }
+
+  append(entry: Omit<AuditEntry, "id" | "timestamp" | "prevHash" | "entryHash">): AuditEntry {
+    const timestamp = new Date().toISOString();
+    const filePath = this.logFilePath(timestamp.slice(0, 10));
+    const lastEntry = this.getLastEntry(filePath);
+    const prevHash = lastEntry ? lastEntry.entryHash : AUDIT_CHAIN_GENESIS_HASH;
+
     const full: AuditEntry = {
       ...entry,
       id: this.generateId(),
-      timestamp: new Date().toISOString(),
+      timestamp,
+      prevHash,
     };
 
-    const validated = AuditEntrySchema.parse(full);
+    const entryHash = computeEntryHash(full);
+    const validated = AuditEntrySchema.parse({ ...full, entryHash });
     const line = JSON.stringify(validated);
 
     if (line.length > MAX_LINE_BYTES) {
@@ -69,7 +94,6 @@ class AuditService {
       );
     }
 
-    const filePath = this.logFilePath(validated.timestamp.slice(0, 10));
     fs.appendFileSync(filePath, line + "\n", "utf8");
 
     return validated;
@@ -146,6 +170,41 @@ class AuditService {
       cur = d.toISOString().slice(0, 10);
     }
     return dates;
+  }
+
+  verifyChain(date: string): { ok: boolean; brokenAt?: number } {
+    const filePath = this.logFilePath(date);
+    if (!fs.existsSync(filePath)) {
+      return { ok: true }; // An empty or non-existent log is valid.
+    }
+
+    const lines = fs.readFileSync(filePath, "utf8").split("\n").filter(line => line.trim());
+    let expectedPrevHash = AUDIT_CHAIN_GENESIS_HASH;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const lineNumber = i + 1;
+      let entry: AuditEntry;
+
+      try {
+        entry = AuditEntrySchema.parse(JSON.parse(line));
+      } catch (e) {
+        return { ok: false, brokenAt: lineNumber }; // Malformed JSON or schema violation
+      }
+
+      if (entry.prevHash !== expectedPrevHash) {
+        return { ok: false, brokenAt: lineNumber }; // Chain is broken
+      }
+
+      const actualEntryHash = computeEntryHash(entry);
+      if (actualEntryHash !== entry.entryHash) {
+        return { ok: false, brokenAt: lineNumber }; // Entry content was tampered with
+      }
+
+      expectedPrevHash = entry.entryHash;
+    }
+
+    return { ok: true };
   }
 
   getEntriesForTest(): AuditEntry[] {
@@ -258,6 +317,8 @@ export const auditService = {
     AuditService.getInstance().append(...args),
   query: (...args: Parameters<AuditService["query"]>) =>
     AuditService.getInstance().query(...args),
+  verifyChain: (...args: Parameters<AuditService["verifyChain"]>) =>
+    AuditService.getInstance().verifyChain(...args),
   getEntriesForTest: () => AuditService.getInstance().getEntriesForTest(),
   clearAll: () => AuditService.getInstance().clearAll(),
   setAuditDir: (...args: Parameters<AuditService["setAuditDir"]>) =>

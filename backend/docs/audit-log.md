@@ -11,6 +11,7 @@ The audit log records an immutable, append-only history of privileged operations
 - **Secrets redacted at write time**: Sensitive fields are replaced with `[REDACTED]` in the stored `redactedParams` field. The raw `params` field is also stored for post-incident reconstruction if needed, but should be treated as potentially redaction-capable in the future.
 - **Daily rotation**: One `.jsonl` file per day (`audit-YYYY-MM-DD.jsonl`). Files are never modified after creation.
 - **Idempotent-enough ULIDs**: Entry IDs use ULID (time-sortable, lexicographic) for approximate ordering without coordination.
+- **Tamper-Evident**: Each entry is cryptographically chained to the previous entry using a SHA-256 hash, making unauthorized modification or deletion detectable.
 
 ## Audit Entry Format
 
@@ -33,39 +34,43 @@ Each line in a `.jsonl` file is a valid JSON object:
   "ip": "10.0.0.42",
   "userAgent": "curl/8.4.0",
   "effect": "Webhook secret rotated for keyId: wh-live-key-001",
-  "success": true
+  "success": true,
+  "prevHash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "entryHash": "a1b2c3d4..."
 }
 ```
 
 ### Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | ULID, globally unique |
-| `timestamp` | ISO 8601 datetime | Server-side write time |
-| `actor` | string | Actor identifier from API key map |
-| `operation` | enum | One of the audited operation types |
-| `params` | object | Raw request body (may contain secrets) |
-| `redactedParams` | object | Same as params, sensitive fields replaced |
-| `ip` | string | Client IP (first IP from X-Forwarded-For) |
-| `userAgent` | string | Client User-Agent header |
-| `effect` | string | Human-readable summary of the resulting change |
-| `success` | boolean | Whether the operation completed successfully |
-| `errorMessage` | string? | Error message if `success` is false |
+| Field            | Type              | Description                                                                                    |
+| ---------------- | ----------------- | ---------------------------------------------------------------------------------------------- |
+| `id`             | string            | ULID, globally unique                                                                          |
+| `timestamp`      | ISO 8601 datetime | Server-side write time                                                                         |
+| `actor`          | string            | Actor identifier from API key map                                                              |
+| `operation`      | enum              | One of the audited operation types                                                             |
+| `params`         | object            | Raw request body (may contain secrets)                                                         |
+| `redactedParams` | object            | Same as params, sensitive fields replaced                                                      |
+| `ip`             | string            | Client IP (first IP from X-Forwarded-For)                                                      |
+| `userAgent`      | string            | Client User-Agent header                                                                       |
+| `effect`         | string            | Human-readable summary of the resulting change                                                 |
+| `success`        | boolean           | Whether the operation completed successfully                                                   |
+| `errorMessage`   | string?           | Error message if `success` is false                                                            |
+| `prevHash`       | string            | SHA-256 hash of the previous entry in the daily log file. The first entry uses a genesis hash. |
+| `entryHash`      | string            | SHA-256 hash of this entry's contents, used as `prevHash` for the next entry.                  |
 
 ## Operations Tracked
 
-| Operation | Triggered By |
-|-----------|-------------|
-| `MAINTENANCE_MODE` | `POST /api/v1/admin/maintenance` |
+| Operation               | Triggered By                        |
+| ----------------------- | ----------------------------------- |
+| `MAINTENANCE_MODE`      | `POST /api/v1/admin/maintenance`    |
 | `WEBHOOK_SECRET_ROTATE` | `POST /api/v1/admin/webhook/rotate` |
-| `CONFIG_CHANGE` | `POST /api/v1/admin/config` |
-| `BACKFILL_START` | `POST /api/v1/admin/backfill` |
-| `BACKFILL_PROGRESS` | Progress events during backfill |
-| `BACKFILL_COMPLETE` | Backfill job completion |
-| `BACKFILL_ABORT` | `POST /api/v1/admin/backfill/abort` |
-| `ADMIN_API_KEY_ADD` | `POST /api/v1/admin/keys` |
-| `ADMIN_API_KEY_REVOKE` | `DELETE /api/v1/admin/keys` |
+| `CONFIG_CHANGE`         | `POST /api/v1/admin/config`         |
+| `BACKFILL_START`        | `POST /api/v1/admin/backfill`       |
+| `BACKFILL_PROGRESS`     | Progress events during backfill     |
+| `BACKFILL_COMPLETE`     | Backfill job completion             |
+| `BACKFILL_ABORT`        | `POST /api/v1/admin/backfill/abort` |
+| `ADMIN_API_KEY_ADD`     | `POST /api/v1/admin/keys`           |
+| `ADMIN_API_KEY_REVOKE`  | `DELETE /api/v1/admin/keys`         |
 
 ## API Endpoints
 
@@ -77,16 +82,17 @@ Query audit entries with filters.
 
 **Query parameters**:
 
-| Param | Type | Default | Description |
-|--------|------|---------|-------------|
-| `actor` | string | — | Filter by actor |
-| `operation` | string | — | Filter by operation enum |
-| `from` | ISO 8601 | — | Start of time range (inclusive) |
-| `to` | ISO 8601 | — | End of time range (inclusive) |
-| `limit` | integer | 100 | Max entries returned (1–10000) |
-| `offset` | integer | 0 | Pagination offset |
+| Param       | Type     | Default | Description                     |
+| ----------- | -------- | ------- | ------------------------------- |
+| `actor`     | string   | —       | Filter by actor                 |
+| `operation` | string   | —       | Filter by operation enum        |
+| `from`      | ISO 8601 | —       | Start of time range (inclusive) |
+| `to`        | ISO 8601 | —       | End of time range (inclusive)   |
+| `limit`     | integer  | 100     | Max entries returned (1–10000)  |
+| `offset`    | integer  | 0       | Pagination offset               |
 
 **Response**:
+
 ```json
 {
   "entries": [...],
@@ -125,12 +131,12 @@ Stream all entries in a date range as NDJSON (newline-delimited JSON).
 
 ## Configuration
 
-| Environment Variable | Default | Description |
-|------------------|---------|-------------|
-| `AUDIT_DIR` | `audit_logs` | Directory for `.jsonl` files |
-| `ADMIN_API_KEYS` | *(unset)* | Comma-separated `key:actor` pairs |
-| `SKIP_API_KEY_AUTH` | *(unset)* | Set `true` to bypass auth (dev/test only) |
-| `TEST_ACTOR` | *(unset)* | Actor name when `SKIP_API_KEY_AUTH=true` |
+| Environment Variable | Default      | Description                               |
+| -------------------- | ------------ | ----------------------------------------- |
+| `AUDIT_DIR`          | `audit_logs` | Directory for `.jsonl` files              |
+| `ADMIN_API_KEYS`     | _(unset)_    | Comma-separated `key:actor` pairs         |
+| `SKIP_API_KEY_AUTH`  | _(unset)_    | Set `true` to bypass auth (dev/test only) |
+| `TEST_ACTOR`         | _(unset)_    | Actor name when `SKIP_API_KEY_AUTH=true`  |
 
 ### Example ADMIN_API_KEYS
 
@@ -144,7 +150,7 @@ ADMIN_API_KEYS="k8s-deploy:deploy-bot,oncall-key:oncall-operator,security-key:se
 
 2. **Secrets in `params`**: The raw `params` field is stored for forensic reconstruction, not for programmatic consumption. Treat it as potentially containing secrets.
 
-3. **Tamper resistance**: The append-only design means any tampering is detectable by comparing entry IDs and timestamps. File-level integrity can be strengthened by pairing with tools like [osquery](https://osquery.io) or audit daemon monitoring.
+3. **Tamper resistance**: The append-only design and hash chaining mean any tampering (modification, deletion, reordering) is detectable. A verification script is provided to validate chain integrity. File-level integrity can be further strengthened by pairing with tools like osquery or audit daemon monitoring.
 
 4. **API key storage**: `ADMIN_API_KEYS` is an env var, not a file. In production, inject it via your orchestration secret store (Kubernetes Secrets, Vault, etc.). Never commit real keys.
 
