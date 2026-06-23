@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { auditService } from "../services/auditService";
-import { AuditEntry, AUDIT_CHAIN_GENESIS_HASH, redactSensitiveFields } from "../types/audit";
+import { AuditEntry, AUDIT_CHAIN_GENESIS_HASH, redactSensitiveFields, computeEntryHash } from "../types/audit";
 
 const TEST_AUDIT_DIR = path.join(__dirname, "test_audit_logs");
 
@@ -68,7 +68,6 @@ describe("Audit Log Hash Chaining", () => {
     const filePath = path.join(TEST_AUDIT_DIR, `audit-${today}.jsonl`);
     const lines = fs.readFileSync(filePath, "utf8").split("\n");
 
-    // Tamper with the second entry
     const tamperedEntry = { ...entry2, effect: "Something malicious" };
     lines[1] = JSON.stringify(tamperedEntry);
     fs.writeFileSync(filePath, lines.join("\n"));
@@ -87,13 +86,12 @@ describe("Audit Log Hash Chaining", () => {
     const filePath = path.join(TEST_AUDIT_DIR, `audit-${today}.jsonl`);
     let lines = fs.readFileSync(filePath, "utf8").split("\n");
 
-    // Delete the second line
     lines.splice(1, 1);
     fs.writeFileSync(filePath, lines.join("\n"));
 
     const result = auditService.verifyChain(today);
     expect(result.ok).toBe(false);
-    expect(result.brokenAt).toBe(2); // The 3rd entry (now 2nd) has wrong prevHash
+    expect(result.brokenAt).toBe(2);
   });
 
   it("should detect reordered lines", () => {
@@ -105,7 +103,6 @@ describe("Audit Log Hash Chaining", () => {
     const filePath = path.join(TEST_AUDIT_DIR, `audit-${today}.jsonl`);
     let lines = fs.readFileSync(filePath, "utf8").split("\n").filter(Boolean);
 
-    // Swap lines 1 and 2
     const temp = lines[0];
     lines[0] = lines[1];
     lines[1] = temp;
@@ -113,7 +110,7 @@ describe("Audit Log Hash Chaining", () => {
 
     const result = auditService.verifyChain(today);
     expect(result.ok).toBe(false);
-    expect(result.brokenAt).toBe(1); // First line's prevHash should be genesis
+    expect(result.brokenAt).toBe(1);
   });
 
   it("should handle chain verification for a non-existent file", () => {
@@ -131,19 +128,20 @@ describe("Audit Log Hash Chaining", () => {
   });
 
   it("should start a new chain on a new day", () => {
-    const dateSpy = jest.spyOn(global, "Date");
+    const dateSpy = jest.spyOn(global, "Date")
+      .mockImplementation(() => new Date("2026-04-25T10:00:00.000Z"));
 
-    // Append first entry on day 1
-    dateSpy.mockImplementation(() => new Date("2026-04-25T10:00:00.000Z"));
     const entry1 = auditService.append(createDummyEntry("MAINTENANCE_MODE"));
     expect(entry1.prevHash).toBe(AUDIT_CHAIN_GENESIS_HASH);
-
-    // Append second entry on day 2
-    dateSpy.mockImplementation(() => new Date("2026-04-26T10:00:00.000Z"));
-    const entry2 = auditService.append(createDummyEntry("CONFIG_CHANGE"));
-    expect(entry2.prevHash).toBe(AUDIT_CHAIN_GENESIS_HASH); // New day, new chain
-
     dateSpy.mockRestore();
+
+    const dateSpy2 = jest.spyOn(global, "Date")
+      .mockImplementation(() => new Date("2026-04-26T10:00:00.000Z"));
+
+    const entry2 = auditService.append(createDummyEntry("CONFIG_CHANGE"));
+    expect(entry2.prevHash).toBe(AUDIT_CHAIN_GENESIS_HASH);
+
+    dateSpy2.mockRestore();
   });
 
   it("should produce a stable hash regardless of property order", () => {
@@ -162,7 +160,6 @@ describe("Audit Log Hash Chaining", () => {
     };
 
     const entry2: Omit<AuditEntry, "entryHash"> = {
-      // Properties are in a different order than entry1, but values are identical.
       actor: "test-actor",
       timestamp: "2026-04-25T10:00:00.000Z",
       id: "01H8XGJWBWBAQ0JDBQWEXXXXXX",
@@ -176,6 +173,6 @@ describe("Audit Log Hash Chaining", () => {
       prevHash: AUDIT_CHAIN_GENESIS_HASH,
     };
 
-    expect(auditService.append(entry1 as any).entryHash).toBe(auditService.append(entry2 as any).entryHash);
+    expect(computeEntryHash(entry1 as AuditEntry)).toBe(computeEntryHash(entry2 as AuditEntry));
   });
 });
