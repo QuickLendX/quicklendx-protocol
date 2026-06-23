@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createHash } from "crypto";
 
 export const AuditOperationSchema = z.enum([
   "MAINTENANCE_MODE",
@@ -14,6 +15,8 @@ export const AuditOperationSchema = z.enum([
 ]);
 
 export type AuditOperation = z.infer<typeof AuditOperationSchema>;
+
+export const AUDIT_CHAIN_GENESIS_HASH = "0".repeat(64);
 
 export const SENSITIVE_FIELDS = new Set([
   "secret",
@@ -50,6 +53,8 @@ export const AuditEntrySchema = z.object({
   effect: z.string(),
   success: z.boolean(),
   errorMessage: z.string().optional(),
+  prevHash: z.string(),
+  entryHash: z.string(),
 });
 
 export type AuditEntry = z.infer<typeof AuditEntrySchema>;
@@ -89,4 +94,30 @@ export function redactSensitiveFields(
     }
   }
   return redacted;
+}
+
+/**
+ * Computes the SHA-256 hash of an audit entry for chain integrity.
+ * The hash is computed over a stable JSON stringification of the entry's
+ * core fields, excluding the entryHash itself.
+ */
+export function computeEntryHash(
+  entry: Omit<AuditEntry, "entryHash">,
+): string {
+  // Fields are explicitly ordered to ensure a stable hash.
+  const payload = JSON.stringify({
+    id: entry.id,
+    timestamp: entry.timestamp,
+    actor: entry.actor,
+    operation: entry.operation, // Keep operation for clarity
+    params: entry.redactedParams, // Hash redacted params, not raw
+    ip: entry.ip,
+    userAgent: entry.userAgent,
+    effect: entry.effect,
+    success: entry.success,
+    errorMessage: entry.errorMessage,
+    prevHash: entry.prevHash,
+  });
+
+  return createHash("sha256").update(payload).digest("hex");
 }
