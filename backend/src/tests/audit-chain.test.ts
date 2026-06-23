@@ -128,20 +128,36 @@ describe("Audit Log Hash Chaining", () => {
   });
 
   it("should start a new chain on a new day", () => {
-    const dateSpy = jest.spyOn(global, "Date")
-      .mockImplementation(() => new Date("2026-04-25T10:00:00.000Z"));
+    const RealDate = global.Date;
+
+    // Day 1 Mocking Setup
+    const mockDate1 = new Date("2026-04-25T10:00:00.000Z");
+    const MockDateClass1 = function (this: any, ...args: any[]) {
+      if (args.length === 0) return mockDate1;
+      return new (RealDate as any)(...args);
+    };
+    MockDateClass1.prototype = RealDate.prototype;
+    global.Date = MockDateClass1 as any;
+    global.Date.now = () => mockDate1.getTime();
 
     const entry1 = auditService.append(createDummyEntry("MAINTENANCE_MODE"));
     expect(entry1.prevHash).toBe(AUDIT_CHAIN_GENESIS_HASH);
-    dateSpy.mockRestore();
 
-    const dateSpy2 = jest.spyOn(global, "Date")
-      .mockImplementation(() => new Date("2026-04-26T10:00:00.000Z"));
+    // Day 2 Mocking Setup
+    const mockDate2 = new Date("2026-04-26T10:00:00.000Z");
+    const MockDateClass2 = function (this: any, ...args: any[]) {
+      if (args.length === 0) return mockDate2;
+      return new (RealDate as any)(...args);
+    };
+    MockDateClass2.prototype = RealDate.prototype;
+    global.Date = MockDateClass2 as any;
+    global.Date.now = () => mockDate2.getTime();
 
     const entry2 = auditService.append(createDummyEntry("CONFIG_CHANGE"));
     expect(entry2.prevHash).toBe(AUDIT_CHAIN_GENESIS_HASH);
 
-    dateSpy2.mockRestore();
+    // Restore Global Environment State
+    global.Date = RealDate;
   });
 
   it("should produce a stable hash regardless of property order", () => {
