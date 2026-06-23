@@ -38,6 +38,9 @@ mod test_escrow;
 mod test_fees;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
+#[cfg(test)]
+mod bench;
+
 pub mod admin;
 pub mod analytics;
 pub mod audit;

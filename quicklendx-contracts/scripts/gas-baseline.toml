@@ -1,0 +1,32 @@
+# Per-entrypoint gas/CPU instruction regression baselines.
+# Format: [[entrypoint]]
+# name = "store_invoice"
+# scenario = "happy-path-small-invoice"
+# instructions = 12345
+# read_bytes = 1024
+# write_bytes = 2048
+
+[metadata]
+recorded = "2026-06-23"
+tool = "quicklendx gas-baseline v1"
+
+[[entrypoint]]
+name = "store_invoice"
+scenario = "happy-path-small-invoice"
+instructions = 0
+read_bytes = 0
+write_bytes = 0
+
+[[entrypoint]]
+name = "place_bid"
+scenario = "single-bid"
+instructions = 0
+read_bytes = 0
+write_bytes = 0
+
+[[entrypoint]]
+name = "accept_bid_and_fund"
+scenario = "simple-accept"
+instructions = 0
+read_bytes = 0
+write_bytes = 0
