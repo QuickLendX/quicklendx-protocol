@@ -45,6 +45,15 @@ const schema = z.object({
   RETENTION_INTERVAL_MS: z.coerce.number().int().min(60000).default(24 * 60 * 60 * 1000),
   RETENTION_ARCHIVE_DIR: z.string().default(".data/retention-archives"),
   RETENTION_AUDIT_ACTOR: z.string().min(1).default("system:retention-worker"),
+
+  // ── Investor exposure cap (issue: per-investor exposure caps) ───────────
+  // Per-investor ceiling on the off-chain USD-equivalent exposure across
+  // active bids and unsettled settlements. Expressed in whole USD units
+  // (e.g. 10000000 = $10M). The exposureService multiplies by 1_000_000
+  // internally so all comparisons stay in BigInt micro-USD. A value of
+  // 0 effectively disables the cap. Tests typically override this with a
+  // smaller value to exercise the cap end-to-end.
+  EXPOSURE_CAP_PER_INVESTOR_USD: z.coerce.bigint().min(0n).default(10_000_000_000n), // $10B
 });
 
 export type Config = z.infer<typeof schema>;
