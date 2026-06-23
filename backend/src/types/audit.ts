@@ -34,6 +34,13 @@ export const SENSITIVE_FIELDS = new Set([
 export const AuditEntrySchema = z.object({
   id: z.string(),
   timestamp: z.string().datetime(),
+  /**
+   * Correlation/request id of the originating API call, propagated from the
+   * inbound `X-Request-Id` header via async-local-storage. Optional because
+   * audit entries written outside a request scope (e.g. background workers)
+   * may have no inbound request to correlate against.
+   */
+  requestId: z.string().optional(),
   actor: z.string(),
   operation: AuditOperationSchema,
   params: z.record(z.string(), z.unknown()),

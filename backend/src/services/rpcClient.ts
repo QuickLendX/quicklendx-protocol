@@ -1,5 +1,6 @@
 import { config } from "../config";
 import { URL } from "url";
+import { getCorrelationId } from "../lib/requestContext";
 
 export enum CircuitState {
   CLOSED = "CLOSED",
@@ -96,10 +97,21 @@ export class ReliableRpcClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs);
 
+    // Forward the originating request id (from async-local-storage) to the
+    // upstream Soroban RPC so the call can be correlated end-to-end. Absent a
+    // request context (e.g. background workers) the header is simply omitted.
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    const requestId = getCorrelationId();
+    if (requestId) {
+      headers["X-Request-Id"] = requestId;
+    }
+
     try {
       const response = await fetch(config.STELLAR_RPC_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: Date.now(),

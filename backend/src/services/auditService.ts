@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { ulid } from "ulid";
+import { getCorrelationId } from "../lib/requestContext";
 import {
   AuditEntry,
   AuditEntrySchema,
@@ -54,8 +55,13 @@ class AuditService {
   }
 
   append(entry: Omit<AuditEntry, "id" | "timestamp">): AuditEntry {
+    // Stamp the originating request id from async-local-storage so the audit
+    // entry can be traced back to the inbound API call. An explicit value on
+    // the entry wins; otherwise we fall back to the active request context.
+    const requestId = entry.requestId ?? getCorrelationId() ?? undefined;
     const full: AuditEntry = {
       ...entry,
+      requestId,
       id: this.generateId(),
       timestamp: new Date().toISOString(),
     };

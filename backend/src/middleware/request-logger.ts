@@ -161,7 +161,10 @@ export function createRequestLogger(
       }
     });
 
-    next();
+    // Establish the async-local-storage context for the remainder of the
+    // request. Every downstream handler, audit write, and outbound RPC call
+    // can now read this id via getCorrelationId() without manual threading.
+    withCorrelationId(correlationId, next);
   };
 }
 
