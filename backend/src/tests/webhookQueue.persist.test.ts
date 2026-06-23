@@ -16,29 +16,32 @@ beforeAll(() => {
 
   const conn = getDatabase();
   conn.exec(`
-    CREATE TABLE IF NOT EXISTS webhook_queue (
+    CREATE TABLE IF NOT EXISTS webhook_deliveries (
       id TEXT PRIMARY KEY,
-      type TEXT NOT NULL,
+      event_type TEXT NOT NULL,
       payload TEXT NOT NULL,
-      status TEXT NOT NULL CHECK(status IN ('pending','processing','success','failed')),
-      enqueued_at TEXT NOT NULL DEFAULT (datetime('now'))
+      subscriber_id TEXT,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending','processing','success','failed','dead_letter')),
+      enqueued_at TEXT NOT NULL DEFAULT (datetime('now')),
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      max_attempts INTEGER NOT NULL DEFAULT 5,
+      next_retry_at TEXT,
+      last_error TEXT,
+      last_attempt_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
 
   conn.exec(`
-    CREATE INDEX IF NOT EXISTS idx_webhook_queue_status_enqueued
-    ON webhook_queue(status, enqueued_at)
+    CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status_next_retry
+    ON webhook_deliveries(status, next_retry_at)
   `);
 
   conn.exec(`
-    CREATE TABLE IF NOT EXISTS queue_metadata (
-      key TEXT PRIMARY KEY,
-      value INTEGER NOT NULL DEFAULT 0
-    )
-  `);
-
-  conn.exec(`
-    INSERT OR IGNORE INTO queue_metadata (key, value) VALUES ('overflow_count', 0)
+    CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created_at
+    ON webhook_deliveries(created_at)
   `);
 });
 
@@ -53,8 +56,7 @@ afterAll(() => {
 
 beforeEach(() => {
   const conn = getDatabase();
-  conn.exec("DELETE FROM webhook_queue");
-  conn.exec("UPDATE queue_metadata SET value = 0 WHERE key = 'overflow_count'");
+  conn.exec("DELETE FROM webhook_deliveries");
   WebhookQueueService.resetInstance();
 });
 
@@ -110,7 +112,9 @@ describe("Durable Webhook Queue Resilience Tests", () => {
 
     const event2 = webhookQueueService.enqueue("order.cancelled", { id: 2 });
     const failResult = webhookQueueService.markFailed(event2.id);
-    expect(failResult).toBe(true);
+    expect(failResult).not.toBeNull();
+    expect(failResult!.status).toBe("failed");
+    expect(failResult!.attemptCount).toBe(1);
 
     const stats2 = webhookQueueService.getStats();
     expect(stats2.failureCount).toBe(1);
