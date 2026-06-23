@@ -7,7 +7,6 @@ import {
   AuditQuerySchema,
   AuditQuery,
   AuditQueryResponse,
-  AuditOperation,
   AUDIT_CHAIN_GENESIS_HASH,
   computeEntryHash,
 } from "../types/audit";
@@ -60,6 +59,8 @@ class AuditService {
       return null;
     }
     const content = fs.readFileSync(filePath, "utf8").trim();
+    if (!content) return null;
+    
     const lines = content.split("\n");
     if (lines.length === 0 || !lines[lines.length - 1]) {
       return null;
@@ -77,14 +78,14 @@ class AuditService {
     const lastEntry = this.getLastEntry(filePath);
     const prevHash = lastEntry ? lastEntry.entryHash : AUDIT_CHAIN_GENESIS_HASH;
 
-    const full: AuditEntry = {
+    const full: Omit<AuditEntry, "entryHash"> = {
       ...entry,
       id: this.generateId(),
       timestamp,
       prevHash,
     };
 
-    const entryHash = computeEntryHash(full);
+    const entryHash = computeEntryHash(full as AuditEntry);
     const validated = AuditEntrySchema.parse({ ...full, entryHash });
     const line = JSON.stringify(validated);
 
@@ -175,10 +176,15 @@ class AuditService {
   verifyChain(date: string): { ok: boolean; brokenAt?: number } {
     const filePath = this.logFilePath(date);
     if (!fs.existsSync(filePath)) {
-      return { ok: true }; // An empty or non-existent log is valid.
+      return { ok: true }; 
     }
 
-    const lines = fs.readFileSync(filePath, "utf8").split("\n").filter(line => line.trim());
+    const fileContent = fs.readFileSync(filePath, "utf8").trim();
+    if (!fileContent) {
+      return { ok: true };
+    }
+
+    const lines = fileContent.split("\n").filter(line => line.trim());
     let expectedPrevHash = AUDIT_CHAIN_GENESIS_HASH;
 
     for (let i = 0; i < lines.length; i++) {
@@ -189,16 +195,16 @@ class AuditService {
       try {
         entry = AuditEntrySchema.parse(JSON.parse(line));
       } catch (e) {
-        return { ok: false, brokenAt: lineNumber }; // Malformed JSON or schema violation
+        return { ok: false, brokenAt: lineNumber }; 
       }
 
       if (entry.prevHash !== expectedPrevHash) {
-        return { ok: false, brokenAt: lineNumber }; // Chain is broken
+        return { ok: false, brokenAt: lineNumber }; 
       }
 
       const actualEntryHash = computeEntryHash(entry);
       if (actualEntryHash !== entry.entryHash) {
-        return { ok: false, brokenAt: lineNumber }; // Entry content was tampered with
+        return { ok: false, brokenAt: lineNumber }; 
       }
 
       expectedPrevHash = entry.entryHash;
