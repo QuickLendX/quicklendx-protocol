@@ -160,3 +160,33 @@ function:
 | Pause | `PauseControl::require_not_paused` | `ContractPaused` (2100) |
 
 Entrypoints that must respect both states should call both guards.
+
+---
+
+## Incident Mode (Coordinated Pause + Maintenance)
+
+For **security incident response**, use the coordinated entrypoints instead of
+calling `pause` and `set_maintenance_mode` separately. A single
+`enter_incident_mode` invocation atomically engages both circuit breakers and
+returns an auditable snapshot.
+
+### API
+
+#### `enter_incident_mode(admin, reason) → IncidentSnapshot`
+
+| Field | Type | Description |
+|---|---|---|
+| `is_paused` | `bool` | Hard pause flag after the call |
+| `is_maintenance` | `bool` | Maintenance flag after the call |
+| `reason` | `String` | Stored maintenance reason (max 256 bytes) |
+| `timestamp` | `u64` | Ledger timestamp when the snapshot was taken |
+
+**Errors:** `NotAdmin`, `InvalidDescription` (reason too long).
+
+#### `exit_incident_mode(admin) → IncidentSnapshot`
+
+Clears both pause and maintenance. Idempotent when already in normal operation.
+
+### Runbook
+
+See [`reliability.md`](../../reliability.md#on-chain-incident-mode-protocol-runbook) for the operator checklist.
