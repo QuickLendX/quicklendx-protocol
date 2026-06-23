@@ -74,6 +74,7 @@ export const FullInvariantReportSchema = z.object({
   orphans: InvariantReportSchema,
   cursorSequence: CursorRegressionSchema,
   accounting: AccountingReportSchema,
+  rawEventDuplicates: InvariantCounterSchema,
   timestamp: z.string().datetime(),
   pass: z.boolean(),
 });
@@ -92,6 +93,11 @@ export interface InvariantDataProvider {
   getBids(): Promise<Bid[]>;
   getSettlements(): Promise<Settlement[]>;
   getDisputes(): Promise<Dispute[]>;
+}
+
+/** Optional provider for persisted raw-event idempotency keys. */
+export interface RawEventIdempotencyProvider {
+  getRawEventKeys(): Promise<Array<{ tx_hash: string; event_index: number }>>;
 }
 
 /** Creates a provider from static in-memory arrays. Useful in tests and local dev. */
@@ -250,6 +256,44 @@ export async function checkAccountingTotals(
   });
 }
 
+// ── Raw event idempotency ─────────────────────────────────────────────────────
+
+/**
+ * Detect accidental duplicate (tx_hash, event_index) rows in the persisted raw
+ * event store. The migration-level UNIQUE index should make this impossible; any
+ * hit indicates a bypass of the insert path or manual data corruption.
+ */
+export async function checkRawEventIdempotency(
+  provider: RawEventIdempotencyProvider,
+): Promise<InvariantCounter> {
+  return withSpan("invariant.checkRawEventIdempotency", {}, async () => {
+    const keys = await provider.getRawEventKeys();
+    const seen = new Map<string, number>();
+    const duplicateSamples: string[] = [];
+
+    for (const key of keys) {
+      const composite = `${key.tx_hash}:${key.event_index}`;
+      const count = (seen.get(composite) ?? 0) + 1;
+      seen.set(composite, count);
+      if (count === 2 && duplicateSamples.length < MAX_SAMPLE_IDS) {
+        duplicateSamples.push(composite);
+      }
+    }
+
+    let duplicateCount = 0;
+    for (const count of seen.values()) {
+      if (count > 1) {
+        duplicateCount += count - 1;
+      }
+    }
+
+    return {
+      count: duplicateCount,
+      sampleIds: duplicateSamples,
+    };
+  });
+}
+
 // ── Full suite ────────────────────────────────────────────────────────────────
 
 /**
@@ -260,6 +304,7 @@ export async function checkAccountingTotals(
 export async function runFullInvariantSuite(
   provider: InvariantDataProvider,
   cursorHistory: number[],
+  rawEventProvider?: RawEventIdempotencyProvider,
 ): Promise<FullInvariantReport> {
   return withSpan(
     "invariant.runFullInvariantSuite",
@@ -270,6 +315,9 @@ export async function runFullInvariantSuite(
         checkAccountingTotals(provider),
       ]);
       const cursorSequence = checkCursorSequence(cursorHistory);
+      const rawEventDuplicates = rawEventProvider
+        ? await checkRawEventIdempotency(rawEventProvider)
+        : { count: 0, sampleIds: [] };
 
       const pass =
         orphans.orphanBids.count === 0 &&
@@ -277,12 +325,14 @@ export async function runFullInvariantSuite(
         orphans.orphanDisputes.count === 0 &&
         orphans.mismatchSettlements.count === 0 &&
         !cursorSequence.hasRegression &&
-        accounting.mismatches.count === 0;
+        accounting.mismatches.count === 0 &&
+        rawEventDuplicates.count === 0;
 
       return {
         orphans,
         cursorSequence,
         accounting,
+        rawEventDuplicates,
         timestamp: new Date().toISOString(),
         pass,
       };
@@ -418,6 +468,10 @@ export function emitInvariantAlert(report: FullInvariantReport): void {
     if (report.accounting.mismatches.count > 0)
       violations.push(
         `accounting_mismatches: ${report.accounting.mismatches.count}`,
+      );
+    if (report.rawEventDuplicates.count > 0)
+      violations.push(
+        `raw_event_duplicates: ${report.rawEventDuplicates.count}`,
       );
 
     const message = `Invariant violation detected: ${violations.join(", ")}`;
