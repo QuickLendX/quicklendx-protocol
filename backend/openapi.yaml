@@ -730,7 +730,11 @@ paths:
       x-rate-limit:
         policies: [global, perKey, export]
       summary: Download exported data
-      description: Serves the export file using a signed token.
+      description: >
+        Serves the export file using a signed one-shot token. The file is
+        streamed from disk and deleted immediately after the first successful
+        download. Subsequent requests with the same token return 401.
+        The token expires after the configured TTL (default 1 hour).
       parameters:
         - name: token
           in: path
@@ -740,7 +744,12 @@ paths:
           description: Signed token representing the export request.
       responses:
         "200":
-          description: Export file content
+          description: Export file content (one-shot; file deleted after response)
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: 'attachment; filename="quicklendx-export-USER-2026-01-01.json"'
           content:
             application/json:
               schema:
@@ -749,7 +758,7 @@ paths:
               schema:
                 type: string
         "401":
-          description: Invalid or expired token
+          description: Invalid, expired, or already-consumed token
 
   /events:
     post:

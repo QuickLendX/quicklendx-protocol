@@ -9,9 +9,18 @@ import { DriftReport } from "../types/reconciliation";
 // ---------------------------------------------------------------------------
 let mockDb: any;
 
+const backfillStatementCache = new Map<string, any>();
+
 jest.mock("../lib/database", () => ({
   getDatabase: () => mockDb,
   closeDatabase: jest.fn(),
+  getPreparedStatement: (sql: string) => {
+    if (!backfillStatementCache.has(sql)) {
+      const stmt = mockDb.prepare(sql);
+      backfillStatementCache.set(sql, stmt);
+    }
+    return backfillStatementCache.get(sql);
+  },
 }));
 
 // Mock config dependency pulled in transitively via services
@@ -85,6 +94,7 @@ afterEach(() => {
     mockDb.close();
     mockDb = null;
   }
+  backfillStatementCache.clear();
 });
 
 // ===========================================================================

@@ -13,6 +13,7 @@ const TEST_DB_PATH = path.join(TEST_DB_DIR, `test-webhook-queue-${crypto.randomU
 beforeAll(() => {
   process.env.DATABASE_PATH = TEST_DB_PATH;
   closeDatabase();
+  require("fs").mkdirSync(TEST_DB_DIR, { recursive: true });
 
   const conn = getDatabase();
   conn.exec(`

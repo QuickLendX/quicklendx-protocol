@@ -70,7 +70,11 @@ class WebhookQueueService {
   }
 
   public static resetInstance(): void {
-    WebhookQueueService.instance = new WebhookQueueService();
+    if (WebhookQueueService.instance) {
+      WebhookQueueService.instance.db = getDatabase();
+    } else {
+      WebhookQueueService.instance = new WebhookQueueService();
+    }
   }
 
   enqueue(type: string, payload?: unknown): WebhookEvent {
