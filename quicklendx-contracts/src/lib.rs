@@ -189,7 +189,7 @@ mod test_rebuild_indexes;
 mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_category_breakdown;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
