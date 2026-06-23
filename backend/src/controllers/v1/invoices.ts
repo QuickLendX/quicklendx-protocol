@@ -8,6 +8,9 @@ import { parsePaginationParams, PaginationError, applyPagination } from "../../u
 export const MOCK_INVOICES: any[] = [
   {
     id: "mock-invoice-1",
+    business: "mock-business",
+    status: "Pending",
+    created_at: "2026-06-01T00:00:00Z",
   },
 ];
 

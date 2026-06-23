@@ -58,7 +58,9 @@ describe('Database Performance Tests', () => {
         last_used_at TEXT,
         expires_at TEXT,
         revoked INTEGER DEFAULT 0,
-        created_by TEXT NOT NULL
+        created_by TEXT NOT NULL,
+        prev_signing_secret_hash TEXT,
+        prev_secret_expires_at TEXT
       );
 
       CREATE TABLE IF NOT EXISTS api_key_audit_log (

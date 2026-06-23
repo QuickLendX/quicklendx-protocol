@@ -10,7 +10,7 @@ describe("Cursor pagination endpoints", () => {
   });
 
   it("accepts limit over MAX_LIMIT for bids (no 400)", async () => {
-    const res = await supertest(app).get("/api/v1/bids?limit=100000");
+    const res = await supertest(app).get("/api/v1/bids?invoice_id=0xdead&limit=100000");
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("data");
     expect(res.body).toHaveProperty("next_cursor");
@@ -24,7 +24,7 @@ describe("Cursor pagination endpoints", () => {
   });
 
   it("returns has_more=false on last page for bids when small dataset", async () => {
-    const res = await supertest(app).get("/api/v1/bids?limit=50");
+    const res = await supertest(app).get("/api/v1/bids?invoice_id=0xdead&limit=50");
     expect(res.status).toBe(200);
     expect(res.body.has_more).toBe(false);
   });
