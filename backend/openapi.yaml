@@ -59,6 +59,8 @@ servers:
 paths:
   /health:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Health check
       description: Returns the status of the API service and connectivity.
       operationId: getHealth
@@ -74,8 +76,54 @@ paths:
                 version: 1.0.0
                 timestamp: '2026-01-01T00:00:00.000Z'
 
+  /status:
+    get:
+      x-rate-limit:
+        policies: [global, perKey]
+      summary: Runtime status and rate limit policy snapshot
+      description: Returns indexer lag status plus the active public rate-limit thresholds.
+      responses:
+        "200":
+          description: Runtime status with live rate-limit policy values
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example:
+                lag: 0
+                warnThreshold: 10
+                criticalThreshold: 50
+                level: none
+                isDegraded: false
+                isCritical: false
+                checkedAt: '2026-01-01T00:00:00.000Z'
+                rateLimits:
+                  global:
+                    id: global
+                    scope: all public API endpoints
+                    limit: 100
+                    windowSeconds: 60
+                    blockSeconds: 60
+                    key: client-ip
+                    headers: [X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset]
+                  perKey:
+                    id: perKey
+                    scope: all API endpoints after authentication context is available
+                    limit: 60
+                    windowSeconds: 60
+                    blockSeconds: 60
+                    key: api-key-or-client-ip
+                    headers: [X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset]
+                _system:
+                  status: operational
+                  degraded: false
+                  lag: 0
+                  level: none
+
   /admin/status:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Read internal admin status
       description: Returns troubleshooting details for authenticated admin roles.
       security:
@@ -90,6 +138,8 @@ paths:
 
   /admin/audit-logs:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Read admin audit logs
       description: Returns recent authorization and admin action audit entries.
       security:
@@ -107,6 +157,8 @@ paths:
 
   /admin/maintenance:
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       operationId: toggleMaintenanceMode
       summary: Toggle maintenance mode
       description: Restricted to operations admin and super-admin.
@@ -137,6 +189,8 @@ paths:
 
   /admin/backfill:
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       operationId: queueBackfillJob
       summary: Queue a backfill job
       description: Restricted to operations admin and super-admin.
@@ -162,6 +216,8 @@ paths:
 
   /admin/config/dangerous:
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       operationId: updateDangerousAdminConfig
       summary: Update dangerous admin configuration
       description: Restricted to super-admin only.
@@ -193,6 +249,8 @@ paths:
 
   /invoices:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: List invoices (paginated)
       description: |
         Returns a cursor-paginated list of invoices sorted by `created_at DESC, id ASC`.
@@ -228,6 +286,8 @@ paths:
 
   /invoices/{id}:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Get invoice by ID
       operationId: getInvoiceById
       parameters:
@@ -257,6 +317,8 @@ paths:
 
   /bids:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: List ranked bids for an invoice (paginated)
       description: |
         Returns a cursor-paginated list of ranked bids for a given invoice, sorted by
@@ -309,6 +371,8 @@ paths:
         "400":
           $ref: '#/components/responses/PaginationError'
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       operationId: createBid
       summary: Place a new bid on a Verified invoice
       description: |
@@ -394,6 +458,8 @@ paths:
 
   /bids/{invoiceId}/best:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Get the best bid for an invoice
       description: |
         Returns the highest-ranked (best) bid for an invoice, or 404 if no Placed bids exist.
@@ -420,6 +486,8 @@ paths:
 
   /bids/{invoiceId}/ranked:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Get all ranked bids for an invoice
       description: |
         Returns all Placed bids for an invoice ranked by contract semantics.
@@ -447,6 +515,8 @@ paths:
 
   /settlements:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: List settlements (paginated)
       description: |
         Returns a cursor-paginated list of settlements sorted by `timestamp DESC, id ASC`.
@@ -469,6 +539,8 @@ paths:
 
   /settlements/{id}:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Get settlement by ID
       operationId: getSettlementById
       parameters:
@@ -498,6 +570,8 @@ paths:
 
   /portfolio:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: List investor portfolio (paginated)
       description: |
         Returns a cursor-paginated list of portfolio entries for a given investor,
@@ -525,6 +599,8 @@ paths:
 
   /invoices/{id}/disputes:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: List disputes for an invoice
       operationId: listDisputesByInvoice
       parameters:
@@ -544,6 +620,8 @@ paths:
 
   /notifications/preferences/{userId}:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Get user notification preferences
       parameters:
         - name: userId
@@ -562,6 +640,8 @@ paths:
         '404':
           description: User preferences not found
     put:
+      x-rate-limit:
+        policies: [global, perKey]
       operationId: updateNotificationPreferences
       summary: Update user notification preferences
       parameters:
@@ -596,6 +676,8 @@ paths:
 
   /notifications/unsubscribe/{userId}:
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Unsubscribe user from email notifications
       parameters:
         - name: userId
@@ -610,6 +692,8 @@ paths:
 
   /exports/generate:
     post:
+      x-rate-limit:
+        policies: [global, perKey, export]
       summary: Generate a signed data export link
       description: Returns a short-lived link to download all user-scoped data (invoices, bids, settlements) in CSV or JSON format.
       security:
@@ -643,6 +727,8 @@ paths:
 
   /exports/download/{token}:
     get:
+      x-rate-limit:
+        policies: [global, perKey, export]
       summary: Download exported data
       description: Serves the export file using a signed token.
       parameters:
@@ -667,6 +753,8 @@ paths:
 
   /events:
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       operationId: processBlockchainEvents
       summary: Process blockchain events for notifications
       description: Internal endpoint for indexer to post events that trigger notifications
@@ -707,6 +795,8 @@ paths:
 
   /keys/{id}/rotate-signing-secret:
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Rotate an API key's signing secret
       description: |
         Generates a new signing secret for the specified API key ID, retaining the old secret for a configurable grace window (default 24h). Requires admin RBAC privileges.
@@ -780,6 +870,114 @@ components:
       bearerFormat: opaque-token
 
   schemas:
+    RateLimitPolicy:
+      type: object
+      description: Public rate-limit policy metadata. Runtime bucket state is intentionally not exposed.
+      required:
+        - id
+        - scope
+        - limit
+        - windowSeconds
+        - blockSeconds
+        - key
+        - headers
+      properties:
+        id:
+          type: string
+          enum: [global, perKey, strict, reconciliation, export]
+        scope:
+          type: string
+        limit:
+          type: integer
+          minimum: 1
+        windowSeconds:
+          type: integer
+          minimum: 1
+        blockSeconds:
+          type: integer
+          minimum: 0
+        key:
+          type: string
+          enum: [client-ip, api-key-or-client-ip]
+        headers:
+          type: array
+          items:
+            type: string
+
+    RateLimitPolicies:
+      type: object
+      required:
+        - global
+        - perKey
+        - strict
+        - reconciliation
+        - export
+      properties:
+        global:
+          $ref: '#/components/schemas/RateLimitPolicy'
+        perKey:
+          $ref: '#/components/schemas/RateLimitPolicy'
+        strict:
+          $ref: '#/components/schemas/RateLimitPolicy'
+        reconciliation:
+          $ref: '#/components/schemas/RateLimitPolicy'
+        export:
+          $ref: '#/components/schemas/RateLimitPolicy'
+
+    StatusResponse:
+      type: object
+      required:
+        - lag
+        - warnThreshold
+        - criticalThreshold
+        - level
+        - isDegraded
+        - isCritical
+        - checkedAt
+        - rateLimits
+        - _system
+      properties:
+        lag:
+          type: integer
+        warnThreshold:
+          type: integer
+        criticalThreshold:
+          type: integer
+        level:
+          type: string
+          enum: [none, warn, critical]
+        isDegraded:
+          type: boolean
+        isCritical:
+          type: boolean
+        checkedAt:
+          type: string
+          format: date-time
+        rateLimits:
+          $ref: '#/components/schemas/RateLimitPolicies'
+        _system:
+          $ref: '#/components/schemas/SystemStatusMetadata'
+
+    SystemStatusMetadata:
+      type: object
+      description: Additive system-health metadata injected into JSON responses.
+      required:
+        - status
+        - degraded
+        - lag
+        - level
+      properties:
+        status:
+          type: string
+          enum: [operational, degraded, maintenance]
+        degraded:
+          type: boolean
+        lag:
+          type: integer
+        level:
+          type: string
+          enum: [none, warn, critical]
+
     FreshnessMetadata:
       type: object
       description: >

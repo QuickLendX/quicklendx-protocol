@@ -21,6 +21,7 @@ import {
   SorobanEvent,
 } from "../../services/eventValidator";
 import { FileRawEventStore } from "../../services/rawEventStore";
+import { getRateLimitPolicies } from "../../middleware/rate-limit";
 
 const router = Router();
 const eventIdStore = new FileRawEventStore(new DefaultEventValidator());
@@ -46,7 +47,10 @@ router.use("/reconciliation", reconciliationRoutes);
 router.get("/status", async (req, res, next) => {
   try {
     const lagStatus = await lagMonitor.getLagStatus();
-    res.json(lagStatus);
+    res.json({
+      ...lagStatus,
+      rateLimits: getRateLimitPolicies(),
+    });
   } catch (err) {
     next(err);
   }

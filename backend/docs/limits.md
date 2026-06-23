@@ -9,6 +9,50 @@ To prevent abuse, memory pressure, and injection vectors, all incoming HTTP requ
 1. **Size limits** on body, query parameters, and headers
 2. **Input validation** via Zod schemas
 3. **Sanitization** to prevent XSS and injection attacks
+4. **Rate limits** that are documented in OpenAPI and surfaced through `/api/v1/status`
+
+## Rate Limits
+
+The backend exposes two always-on request limit layers and route-specific stricter
+policies for high-cost operations. The live thresholds come from
+`src/middleware/rate-limit.ts`, which is also the source used by
+`GET /api/v1/status`.
+
+| Policy | Default limit | Window | Block | Key | Applies to |
+|--------|---------------|--------|-------|-----|------------|
+| `global` | 100 requests | 60s | 60s | client IP | All public API endpoints |
+| `perKey` | 60 requests | 60s | 60s | API key, falling back to client IP | All API endpoints after auth context is available |
+| `strict` | 5 requests | 60s | 300s | client IP | Custom sensitive handlers using `strictRateLimitMiddleware` |
+| `reconciliation` | 10 requests | 60s | 120s | API key, falling back to client IP | Reconciliation and monitoring routes |
+| `export` | 5 requests | 60s | 120s | API key, falling back to client IP | Export generation and download routes |
+
+In `NODE_ENV=test`, the exported policy snapshot intentionally uses larger limits
+so conformance tests can exercise endpoints without tripping the limiter:
+`global` and `perKey` use 1000 requests, while `strict`, `reconciliation`, and
+`export` use 100 requests.
+
+### OpenAPI annotation
+
+Every operation in `openapi.yaml` has an `x-rate-limit` extension:
+
+```yaml
+x-rate-limit:
+  policies: [global, perKey]
+```
+
+Export endpoints include the stricter export layer:
+
+```yaml
+x-rate-limit:
+  policies: [global, perKey, export]
+```
+
+### Status response
+
+`GET /api/v1/status` returns the live policy snapshot under `rateLimits`.
+Only public thresholds, windows, keying mode, and response header names are
+returned. Runtime bucket state such as IP buckets, API key identifiers,
+remaining points, and reset timers is not exposed.
 
 ## Request Size Limits
 
