@@ -95,15 +95,15 @@ export function redactSensitiveFields(
  * core fields, excluding the entryHash itself.
  */
 export function computeEntryHash(
-  entry: Omit<AuditEntry, "entryHash">
+  entry: Omit<AuditEntry, "entryHash">,
 ): string {
   // Fields are explicitly ordered to ensure a stable hash.
   const payload = JSON.stringify({
     id: entry.id,
     timestamp: entry.timestamp,
     actor: entry.actor,
-    operation: entry.operation,
-    params: entry.params,
+    operation: entry.operation, // Keep operation for clarity
+    params: entry.redactedParams, // Hash redacted params, not raw
     ip: entry.ip,
     userAgent: entry.userAgent,
     effect: entry.effect,

@@ -131,21 +131,44 @@ describe("Audit Log Hash Chaining", () => {
   });
 
   it("should start a new chain on a new day", () => {
-    // Mock date to control file naming
-    const today = "2026-04-25";
-    const tomorrow = "2026-04-26";
+    const dateSpy = jest.spyOn(global, "Date");
 
-    const entryToday: AuditEntry = { ...createDummyEntry("MAINTENANCE_MODE"), id: "1", timestamp: `${today}T10:00:00.000Z`, prevHash: "a", entryHash: "b" };
-    const entryTomorrow: AuditEntry = { ...createDummyEntry("CONFIG_CHANGE"), id: "2", timestamp: `${tomorrow}T10:00:00.000Z`, prevHash: "c", entryHash: "d" };
+    // Append first entry on day 1
+    dateSpy.mockImplementation(() => new Date("2026-04-25T10:00:00.000Z"));
+    const entry1 = auditService.append(createDummyEntry("MAINTENANCE_MODE"));
+    expect(entry1.prevHash).toBe(AUDIT_CHAIN_GENESIS_HASH);
 
-    // Manually create files to simulate different days
-    const filePathToday = path.join(TEST_AUDIT_DIR, `audit-${today}.jsonl`);
-    const filePathTomorrow = path.join(TEST_AUDIT_DIR, `audit-${tomorrow}.jsonl`);
+    // Append second entry on day 2
+    dateSpy.mockImplementation(() => new Date("2026-04-26T10:00:00.000Z"));
+    const entry2 = auditService.append(createDummyEntry("CONFIG_CHANGE"));
+    expect(entry2.prevHash).toBe(AUDIT_CHAIN_GENESIS_HASH); // New day, new chain
 
-    fs.writeFileSync(filePathToday, JSON.stringify(entryToday) + "\n");
+    dateSpy.mockRestore();
+  });
 
-    const appendResult = auditService.append({ ...createDummyEntry("WEBHOOK_SECRET_ROTATE"), timestamp: `${tomorrow}T11:00:00.000Z` } as any);
+  it("should produce a stable hash regardless of property order", () => {
+    const entry1: Omit<AuditEntry, "entryHash"> = {
+      id: "01H8XGJWBWBAQ0JDBQWEXXXXXX",
+      timestamp: "2026-04-25T10:00:00.000Z",
+      actor: "test-actor",
+      operation: "CONFIG_CHANGE",
+      params: { key: "value" },
+      redactedParams: { key: "value" },
+      ip: "127.0.0.1",
+      userAgent: "jest",
+      effect: "Changed config",
+      success: true,
+      prevHash: AUDIT_CHAIN_GENESIS_HASH,
+    };
 
-    expect(appendResult.prevHash).toBe(AUDIT_CHAIN_GENESIS_HASH);
+    const entry2: Omit<AuditEntry, "entryHash"> = {
+      actor: "test-actor",
+      timestamp: "2026-04-25T10:00:00.000Z",
+      id: "01H8XGJWBWBAQ0JDBQWEXXXXXX",
+      // Properties are in a different order than entry1
+      ...entry1,
+    };
+
+    expect(auditService.append(entry1 as any).entryHash).toBe(auditService.append(entry2 as any).entryHash);
   });
 });

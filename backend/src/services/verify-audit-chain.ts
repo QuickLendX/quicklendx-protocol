@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { auditService } from "./auditService";
 
 function printUsage() {
