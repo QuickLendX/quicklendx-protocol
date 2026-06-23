@@ -45,6 +45,8 @@ const schema = z.object({
   RETENTION_INTERVAL_MS: z.coerce.number().int().min(60000).default(24 * 60 * 60 * 1000),
   RETENTION_ARCHIVE_DIR: z.string().default(".data/retention-archives"),
   RETENTION_AUDIT_ACTOR: z.string().min(1).default("system:retention-worker"),
+  EXPORT_DIR: z.string().default(".data/exports"),
+  EXPORT_TTL_MS: z.coerce.number().int().min(60_000).default(3_600_000),
 });
 
 export type Config = z.infer<typeof schema>;
