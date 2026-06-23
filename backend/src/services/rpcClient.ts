@@ -2,20 +2,8 @@ import { config } from "../config";
 import { URL } from "url";
 import { getCorrelationId } from "../lib/requestContext";
 
-export enum CircuitState {
-  CLOSED = "CLOSED",
-  OPEN = "OPEN",
-  HALF_OPEN = "HALF_OPEN",
-}
-
-export interface RpcOptions {
-  retries?: number;
-  initialDelayMs?: number;
-  maxDelayMs?: number;
+export interface RpcOptions extends CircuitBreakerOptions {
   timeoutMs?: number;
-  failureThreshold?: number;
-  resetTimeoutMs?: number;
-  maxConcurrency?: number;
 }
 
 const DEFAULT_OPTIONS: Required<RpcOptions> = {
@@ -29,18 +17,23 @@ const DEFAULT_OPTIONS: Required<RpcOptions> = {
 };
 
 export class ReliableRpcClient {
-  private state: CircuitState = CircuitState.CLOSED;
-  private failureCount: number = 0;
-  private lastFailureTime: number = 0;
-  private activeRequests: number = 0;
   private options: Required<RpcOptions>;
   private allowedHosts: Set<string>;
+  private circuitBreaker: CircuitBreaker;
 
   constructor(options: RpcOptions = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
     this.allowedHosts = new Set(
       config.RPC_ALLOWED_HOSTS.split(",").map((h) => h.trim())
     );
+    this.circuitBreaker = new CircuitBreaker({
+      retries: this.options.retries,
+      initialDelayMs: this.options.initialDelayMs,
+      maxDelayMs: this.options.maxDelayMs,
+      failureThreshold: this.options.failureThreshold,
+      resetTimeoutMs: this.options.resetTimeoutMs,
+      maxConcurrency: this.options.maxConcurrency,
+    });
   }
 
   /**
@@ -49,47 +42,16 @@ export class ReliableRpcClient {
   async call<T>(method: string, params: any[] | Record<string, any> = []): Promise<T> {
     this.validateHost();
 
-    if (this.state === CircuitState.OPEN) {
-      if (Date.now() - this.lastFailureTime > this.options.resetTimeoutMs) {
-        this.state = CircuitState.HALF_OPEN;
-      } else {
-        throw new Error("Circuit breaker is OPEN");
-      }
-    }
-
-    if (this.activeRequests >= this.options.maxConcurrency) {
-      throw new Error("Rate limit exceeded: max concurrency reached");
-    }
-
-    this.activeRequests++;
-    try {
-      return await this.executeWithRetries<T>(method, params);
-    } finally {
-      this.activeRequests--;
-    }
+    return this.circuitBreaker.execute(
+      () => this.performRequest<T>(method, params),
+      (error) => this.shouldRetry(error)
+    );
   }
 
   private validateHost() {
     const url = new URL(config.STELLAR_RPC_URL);
     if (!this.allowedHosts.has(url.hostname)) {
       throw new Error(`SSRF Prevention: Host ${url.hostname} is not in the allow-list.`);
-    }
-  }
-
-  private async executeWithRetries<T>(method: string, params: any, attempt: number = 0): Promise<T> {
-    try {
-      const result = await this.performRequest<T>(method, params);
-      this.onSuccess();
-      return result;
-    } catch (error: any) {
-      const retry = attempt < this.options.retries && this.shouldRetry(error);
-      if (retry) {
-        const delay = this.calculateBackoff(attempt);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        return this.executeWithRetries<T>(method, params, attempt + 1);
-      }
-      this.onFailure();
-      throw error;
     }
   }
 
@@ -154,30 +116,11 @@ export class ReliableRpcClient {
     );
   }
 
-  private calculateBackoff(attempt: number): number {
-    const base = this.options.initialDelayMs * Math.pow(2, attempt);
-    // Add full jitter to prevent retry storms: [0, base]
-    const jitter = Math.random() * base;
-    return Math.min(base + jitter, this.options.maxDelayMs);
-  }
-
-  private onSuccess() {
-    this.failureCount = 0;
-    this.state = CircuitState.CLOSED;
-  }
-
-  private onFailure() {
-    this.failureCount++;
-    this.lastFailureTime = Date.now();
-    if (this.failureCount >= this.options.failureThreshold) {
-      this.state = CircuitState.OPEN;
-    }
-  }
-
   // Public for testing/monitoring
   getState(): CircuitState {
-    return this.state;
+    return this.circuitBreaker.getState();
   }
 }
 
 export const rpcClient = new ReliableRpcClient();
+export { CircuitState };

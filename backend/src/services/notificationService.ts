@@ -37,6 +37,15 @@ export class NotificationService {
         pass: process.env.SMTP_PASS,
       },
     });
+
+    this.circuitBreaker = new CircuitBreaker({
+      retries: 3,
+      initialDelayMs: 1000,
+      maxDelayMs: 30000,
+      failureThreshold: 5,
+      resetTimeoutMs: 30000,
+      maxConcurrency: 50,
+    });
   }
 
   public static getInstance(): NotificationService {
@@ -215,11 +224,40 @@ export class NotificationService {
     const template = this.getEmailTemplate(event);
 
     try {
-      await this.sendEmail(preferences.email_address, template);
+      await this.circuitBreaker.execute(async () => {
+        await this.sendEmail(preferences.email_address as string, template);
+      });
       this.markSent(rowId);
       this.dedupCache.add(cacheKey);
     } catch (error: any) {
       this.markFailed(rowId, error?.message ?? String(error));
+      
+      auditService.append({
+        actor: "system",
+        operation: "NOTIFICATION_DELIVERY_FAILED",
+        params: {
+          eventId: event.id,
+          userId: event.user_id,
+          error: error?.message ?? String(error),
+        },
+        redactedParams: {
+          eventId: event.id,
+          userId: event.user_id,
+          error: error?.message ?? String(error),
+        },
+        ip: "127.0.0.1",
+        userAgent: "system-notification",
+        effect: "circuit_breaker_mark_failed",
+        success: false,
+        errorMessage: error?.message ?? String(error),
+      });
+
+      await alertRouter.routeAlert(
+        `notification-drop-${event.id}`,
+        Severity.HIGH,
+        `Permanent notification drop for event ${event.id}: ${error?.message ?? String(error)}`
+      ).catch(() => {});
+
       throw error;
     }
   }

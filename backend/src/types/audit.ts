@@ -12,6 +12,7 @@ export const AuditOperationSchema = z.enum([
   "ADMIN_API_KEY_ADD",
   "ADMIN_API_KEY_REVOKE",
   "RETENTION_RUN",
+  "NOTIFICATION_DELIVERY_FAILED",
 ]);
 
 export type AuditOperation = z.infer<typeof AuditOperationSchema>;
