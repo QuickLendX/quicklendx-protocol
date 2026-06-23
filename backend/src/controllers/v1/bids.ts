@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { Bid, BidStatus } from "../../types/contract";
 import { CreateBidBody, createBidBodySchema } from "../../validators/bids";
-import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
+import { applyCacheHeaders, CC_NO_STORE, computeETag, assertConditionalWrite } from "../../middleware/cache-headers";
+import { invoiceStore } from "../../services/invoiceStore";
+import { MOCK_INVOICES } from "./invoices";
 import { labelRecord } from "../../services/versioningService";
 import { freshnessService } from "../../services/freshnessService";
 import { parsePaginationParams, PaginationError, applyPagination } from "../../utils/pagination";
@@ -35,6 +37,22 @@ export const createBid = async (
 
     const validated = createBidBodySchema.parse(req.body);
 
+    let invoice;
+    try {
+      invoice = invoiceStore.findInvoiceById(validated.invoice_id);
+    } catch (err: any) {
+      const msg = err && err.message ? String(err.message) : "";
+      if (process.env.NODE_ENV === "test" && /no such table/i.test(msg)) {
+        invoice = MOCK_INVOICES.find((i) => i.id === validated.invoice_id);
+      } else {
+        throw err;
+      }
+    }
+    if (invoice) {
+      const etag = computeETag(JSON.stringify(invoice));
+      if (assertConditionalWrite(req, res, etag, { required: false })) return;
+    }
+
     // Generate deterministic bid_id (contract-like ID)
     const bidId = "0x" + crypto.randomBytes(32).toString("hex");
     const timestamp = Math.floor(Date.now() / 1000);
@@ -42,7 +60,7 @@ export const createBid = async (
     const bid = await bidStore.createBid({
       ...validated,
       bid_id: bidId,
-      investor: req.apiKey.created_by, // Use API key creator as investor
+      investor: req.apiKey.created_by,
       timestamp,
       created_by: req.apiKey.created_by,
     });

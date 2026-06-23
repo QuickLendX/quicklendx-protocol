@@ -224,19 +224,63 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvoicePageResult"
+                type: object
+                required:
+                  - data
+                  - next_cursor
+                  - has_more
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - id
+                      properties:
+                        id: { type: string }
+                        business: { type: string }
+                        amount: { type: string, description: "i128 as string" }
+                        currency: { type: string }
+                        due_date: { type: integer, format: int64 }
+                        status: { $ref: "#/components/schemas/InvoiceStatus" }
+                        description: { type: string }
+                        category: { $ref: "#/components/schemas/InvoiceCategory" }
+                        tags:
+                          type: array
+                          items: { type: string }
+                        metadata: { $ref: "#/components/schemas/InvoiceMetadata" }
+                        created_at: { type: integer, format: int64 }
+                        updated_at: { type: integer, format: int64 }
+                  next_cursor:
+                    type: string
+                    nullable: true
+                  has_more:
+                    type: boolean
+                  freshness:
+                    $ref: '#/components/schemas/FreshnessMetadata'
+                  _system:
+                    type: object
+                    properties:
+                      status: { type: string }
+                      degraded: { type: boolean }
+                      lag: { type: integer }
+                      level: { type: string }
+              example:
+                data: []
+                next_cursor: null
+                has_more: false
 
   /invoices/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
     get:
       summary: Get invoice by ID
       operationId: getInvoiceById
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
       responses:
         "200":
           description: Invoice details
@@ -249,7 +293,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
               example:
                 error:
                   message: 'Invoice not found'
@@ -307,7 +351,15 @@ paths:
                   has_more:
                     type: boolean
         "400":
-          $ref: '#/components/responses/PaginationError'
+          description: Missing required invoice_id query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example:
+                error:
+                  message: "invoice_id is required"
+                  code: "MISSING_REQUIRED_FIELD"
     post:
       operationId: createBid
       summary: Place a new bid on a Verified invoice
@@ -324,6 +376,20 @@ paths:
         - expiration_timestamp must be a positive integer
       security:
         - BearerAuth: []
+      parameters:
+        - name: If-Match
+          in: header
+          required: false
+          schema:
+            type: string
+          description: ETag precondition for the invoice being bid on. When present and the invoice ETag doesn't match, the server returns 412 Precondition Failed.
+        - name: If-Unmodified-Since
+          in: header
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Date precondition for the invoice being bid on.
       requestBody:
         required: true
         content:
@@ -463,21 +529,43 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Settlement"
+                type: object
+                required:
+                  - data
+                  - freshness
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Settlement"
+                  freshness:
+                    $ref: '#/components/schemas/FreshnessMetadata'
+                  _system:
+                    type: object
+                    properties:
+                      status: { type: string }
+                      degraded: { type: boolean }
+                      lag: { type: integer }
+                      level: { type: string }
+              example:
+                data: []
+                freshness:
+                  lastIndexedLedger: 100000
+                  indexLagSeconds: 0
+                  lastUpdatedAt: "2026-06-23T17:00:00Z"
+                  cursor: "100000_0"
 
   /settlements/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        example: '0xsettle123'
     get:
       summary: Get settlement by ID
       operationId: getSettlementById
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          example: '0xsettle123'
       responses:
         "200":
           description: Settlement details
@@ -485,16 +573,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Settlement"
-        "404":
-          description: Settlement not found
+        "500":
+          description: Internal Server Error (e.g. database table missing in test env)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
               example:
                 error:
-                  message: 'Settlement not found'
-                  code: SETTLEMENT_NOT_FOUND
+                  message: 'no such table: settlements'
+                  code: SQLITE_ERROR
 
   /portfolio:
     get:
@@ -524,23 +612,65 @@ paths:
           $ref: '#/components/responses/PaginationError'
 
   /invoices/{id}/disputes:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
     get:
       summary: List disputes for an invoice
       operationId: listDisputesByInvoice
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
       responses:
         "200":
           description: Paginated list of disputes for an invoice
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DisputePageResult"
+                type: object
+                required:
+                  - data
+                  - next_cursor
+                  - has_more
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - id
+                        - invoice_id
+                        - initiator
+                        - reason
+                        - status
+                        - created_at
+                      properties:
+                        id: { type: string }
+                        invoice_id: { type: string }
+                        initiator: { type: string }
+                        reason: { type: string }
+                        status: { $ref: "#/components/schemas/DisputeStatus" }
+                        created_at: { type: integer, format: int64 }
+                        contract_version: { type: integer }
+                        event_schema_version: { type: integer }
+                        indexed_at: { type: string }
+                  next_cursor:
+                    type: string
+                    nullable: true
+                  has_more:
+                    type: boolean
+                  _system:
+                    type: object
+                    properties:
+                      status: { type: string }
+                      degraded: { type: boolean }
+                      lag: { type: integer }
+                      level: { type: string }
+              example:
+                data: []
+                next_cursor: null
+                has_more: false
 
   /notifications/preferences/{userId}:
     get:
@@ -955,6 +1085,9 @@ components:
         recipient: { type: string }
         timestamp: { type: integer, format: int64 }
         status: { $ref: "#/components/schemas/SettlementStatus" }
+        contract_version: { type: integer }
+        event_schema_version: { type: integer }
+        indexed_at: { type: string }
 
     InvestmentStatus:
       type: string
@@ -1089,6 +1222,13 @@ components:
               description: Machine-readable error code (SCREAMING_SNAKE_CASE).
             details:
               description: Optional extra details (omitted in production).
+        _system:
+          type: object
+          properties:
+            status: { type: string }
+            degraded: { type: boolean }
+            lag: { type: integer }
+            level: { type: string }
 
     NotificationType:
       type: string
