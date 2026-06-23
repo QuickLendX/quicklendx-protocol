@@ -222,6 +222,8 @@ mod test_category_breakdown;
 mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
+#[cfg(test)]
+mod test_notifications;
 pub mod types;
 pub use types::*;
 pub mod verification;
@@ -3194,6 +3196,13 @@ impl QuickLendXContract {
         dispute::track_dispute_invoice(&env, &invoice_id);
         // Emit DisputeCreated / DisputeOpened event immediately after state mutation.
         emit_dispute_created(&env, &invoice_id, &creator, &reason);
+        if let Some(updated_invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
+            // Lifecycle trigger: dispute-opened notifications for business and investor.
+            let _ = notifications::NotificationSystem::notify_dispute_opened(
+                &env,
+                &updated_invoice,
+            );
+        }
         Ok(())
     }
 
@@ -3300,6 +3309,13 @@ impl QuickLendXContract {
         dispute::track_dispute_invoice(&env, &invoice_id);
         // Emit DisputeResolved event immediately after state mutation.
         emit_dispute_resolved(&env, &invoice_id, &admin, &resolution);
+        if let Some(updated_invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
+            // Lifecycle trigger: dispute-resolved notifications for business and investor.
+            let _ = notifications::NotificationSystem::notify_dispute_resolved(
+                &env,
+                &updated_invoice,
+            );
+        }
         Ok(())
     }
 

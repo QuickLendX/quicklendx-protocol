@@ -177,6 +177,10 @@ pub fn accept_bid_and_fund(
     // 7. Events
     emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
 
+    // Lifecycle trigger: emits `NotificationType::BidAccepted` to the investor
+    // after escrow funding and state transitions complete successfully.
+    let _ = crate::notifications::NotificationSystem::notify_bid_accepted(env, &invoice, &bid);
+
     Ok(escrow_id)
 }
 

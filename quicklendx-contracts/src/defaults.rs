@@ -346,6 +346,10 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     emit_invoice_defaulted(env, &invoice);
 
+    // Lifecycle trigger: emits `NotificationType::InvoiceDefaulted` to business
+    // and investor after the default transition is fully persisted.
+    let _ = crate::notifications::NotificationSystem::notify_invoice_defaulted(env, &invoice);
+
     Ok(())
 }
 
