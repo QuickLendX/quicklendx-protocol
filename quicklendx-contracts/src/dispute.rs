@@ -176,6 +176,9 @@ pub fn create_dispute(
     InvoiceStorage::update_invoice(env, &invoice);
     add_to_dispute_index(env, invoice_id);
 
+    // Lifecycle trigger: emits dispute-opened notifications to business and investor.
+    let _ = crate::notifications::NotificationSystem::notify_dispute_opened(env, &invoice);
+
     Ok(())
 }
 
@@ -298,6 +301,10 @@ pub fn resolve_dispute(
     invoice.dispute.resolved_by = admin.clone();
     invoice.dispute.resolved_at = env.ledger().timestamp();
     InvoiceStorage::update_invoice(env, &invoice);
+
+    // Lifecycle trigger: emits dispute-resolved notifications to business and investor.
+    let _ = crate::notifications::NotificationSystem::notify_dispute_resolved(env, &invoice);
+
     Ok(())
 }
 

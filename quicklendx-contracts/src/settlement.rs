@@ -178,6 +178,17 @@ pub fn process_partial_payment(
         transaction_id,
     );
 
+    if let Some(updated_invoice) = InvoiceStorage::get_invoice(env, invoice_id) {
+        // Lifecycle trigger: emits `NotificationType::PaymentReceived` for each
+        // applied partial payment. Notification failures must not roll back funds.
+        let applied = get_last_applied_amount(env, invoice_id).unwrap_or(payment_amount);
+        let _ = crate::notifications::NotificationSystem::notify_payment_received(
+            env,
+            &updated_invoice,
+            applied,
+        );
+    }
+
     if progress.total_paid >= progress.total_due {
         settle_invoice_internal(env, invoice_id)?;
     }
@@ -601,6 +612,15 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
 
     emit_invoice_settled(env, &invoice, investor_return, platform_fee);
     emit_invoice_settled_final(env, invoice_id, invoice.total_paid, paid_at);
+
+    // Lifecycle trigger: emits `NotificationType::InvoiceStatusChanged` when an
+    // invoice reaches the terminal `Paid` state during final settlement.
+    let _ = crate::notifications::NotificationSystem::notify_invoice_status_changed(
+        env,
+        &invoice,
+        &previous_status,
+        &invoice.status,
+    );
 
     Ok(())
 }
