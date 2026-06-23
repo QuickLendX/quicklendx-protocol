@@ -45,6 +45,11 @@ const schema = z.object({
   RETENTION_INTERVAL_MS: z.coerce.number().int().min(60000).default(24 * 60 * 60 * 1000),
   RETENTION_ARCHIVE_DIR: z.string().default(".data/retention-archives"),
   RETENTION_AUDIT_ACTOR: z.string().min(1).default("system:retention-worker"),
+  ARCHIVE_DIR: z.string().default(".data/archives"),
+  ARCHIVE_ENABLED: z.preprocess((val) => {
+    if (val === undefined || val === null) return true;
+    return val === "true" || val === "1" || val === true;
+  }, z.boolean()).default(true),
 });
 
 export type Config = z.infer<typeof schema>;
@@ -66,6 +71,8 @@ export const retentionConfig = {
   snapshotsMs: config.RETENTION_SNAPSHOTS_DAYS * 24 * 60 * 60 * 1000,
   batchSize: config.RETENTION_BATCH_SIZE,
   intervalMs: config.RETENTION_INTERVAL_MS,
-  archiveDir: config.RETENTION_ARCHIVE_DIR,
+  archiveDir: config.ARCHIVE_DIR,
   actor: config.RETENTION_AUDIT_ACTOR,
+  archiveEnabled: config.ARCHIVE_ENABLED,
 } as const;
+
