@@ -11,6 +11,7 @@ module.exports = {
     },
   },
   collectCoverageFrom: [
+    "scripts/lib/secret-scan-utils.js",
     "src/lib/migrations/**/*.ts",
     "!src/lib/migrations/cli.ts",
     "src/lib/database.ts",

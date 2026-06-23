@@ -13,6 +13,37 @@
    ```
    The hook scans staged files for patterns that look like real secrets and blocks the commit if any are found.
 
+## Committed-secret scanning
+
+CI and local security checks run a committed-secret scanner as part of `npm run security:scan`.
+
+- Script: `backend/scripts/secret-scan.js`
+- Allowlist: `backend/scripts/.secret-scan-allow.json`
+- Coverage: `backend/src`, `backend/tests`, `backend/scripts`, and `backend/.env.example`
+
+The scanner flags:
+
+- High-entropy literals in quoted strings (for example random signing material or export tokens)
+- Known secret formats:
+  - QuickLendX API keys (`qlx_…`)
+  - Stripe-style keys (`sk_live_…`, `sk_test_…`)
+  - Slack bot tokens (`xoxb-…`)
+  - AWS access keys (`AKIA…`)
+  - Stellar secret seeds (`S…`, 56-character StrKey)
+
+When a match is found, the gate exits non-zero and prints file, line, column, rule name, and a **redacted preview**. Full secret values are never written to CI logs.
+
+To suppress a documented false positive, add an entry to `.secret-scan-allow.json` with the file, line, and reason. Do not use the allowlist for real secrets.
+
+Run locally:
+
+```bash
+cd backend
+node scripts/secret-scan.js
+```
+
+The scanner is also exercised by `backend/tests/secret-scan.test.ts` during `npm test`.
+
 ## Environment variables
 
 | Variable | Required in prod | Default | Notes |
