@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { Bid, BidStatus } from "../../types/contract";
 import { CreateBidBody, createBidBodySchema } from "../../validators/bids";
-import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
+import { applyCacheHeaders, CC_NO_STORE, computeETag, assertConditionalWrite } from "../../middleware/cache-headers";
+import { invoiceStore } from "../../services/invoiceStore";
+import { MOCK_INVOICES } from "./invoices";
 import { labelRecord } from "../../services/versioningService";
 import { freshnessService } from "../../services/freshnessService";
 import { parsePaginationParams, PaginationError, applyPagination } from "../../utils/pagination";
@@ -89,7 +91,7 @@ export const createBid = async (
     const bid = await bidStore.createBid({
       ...validated,
       bid_id: bidId,
-      investor: req.apiKey.created_by, // Use API key creator as investor
+      investor: req.apiKey.created_by,
       timestamp,
       created_by: req.apiKey.created_by,
     });
