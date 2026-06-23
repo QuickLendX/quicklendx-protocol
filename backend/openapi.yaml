@@ -324,7 +324,7 @@ paths:
         Returns a cursor-paginated list of ranked bids for a given invoice, sorted by
         contract ranking semantics: (1) profit DESC, (2) expected_return DESC, (3) bid_amount DESC,
         (4) timestamp DESC, (5) bid_id ASC.
-        
+
         Only returns Placed bids. Query parameter `invoice_id` is **required**.
       security:
         - {}  # Optional authentication
@@ -377,15 +377,20 @@ paths:
       summary: Place a new bid on a Verified invoice
       description: |
         Creates a new bid for an investor on a Verified invoice.
-        
+
         Requires authentication (Bearer token in Authorization header).
-        
+
         **Validation rules:**
         - Invoice must be in Verified status
         - Investor cannot have an active bid on the same invoice (no duplicates)
         - bid_amount must be > 0
         - expected_return must be >= bid_amount
         - expiration_timestamp must be a positive integer
+        - The investor's aggregate USD-equivalent exposure (active bids +
+          unsettled settlements across MOCK_BIDS, MOCK_SETTLEMENTS, and the
+          persisted stores) plus this new bid must not exceed
+          `EXPOSURE_CAP_PER_INVESTOR_USD`. Otherwise the request is rejected
+          with `429 EXPOSURE_CAP_EXCEEDED` before any chain interaction.
       security:
         - BearerAuth: []
       requestBody:
@@ -419,6 +424,14 @@ paths:
                   type: integer
                   example: 1745599232
                   description: Unix timestamp when this bid expires
+                currency:
+                  type: string
+                  pattern: "^[A-Za-z]{3,4}$"
+                  example: "USDC"
+                  description: |
+                    Optional currency tag. Defaults to `USDC`. The exposure
+                    service normalizes the amount to USD-equivalent using
+                    the configured currency rate table.
             examples:
               standard:
                 description: Standard bid with expected return 1.5x bid amount
@@ -427,6 +440,7 @@ paths:
                   bid_amount: "1000000"
                   expected_return: "1500000"
                   expiration_timestamp: 1745599232
+                  currency: "USDC"
       responses:
         "201":
           description: Bid created successfully
@@ -453,8 +467,52 @@ paths:
                         type: string
                         enum:
                           - INVALID_BID
+                          - VALIDATION_ERROR
         "401":
           $ref: '#/components/responses/Unauthorized'
+        "429":
+          description: |
+            Investor exposure cap would be exceeded. The cap is configured
+            via `EXPOSURE_CAP_PER_INVESTOR_USD` and is denominated in whole
+            USD units (the response carries micro-USD strings for precision).
+            The investor should reduce active exposure (e.g. wait for a
+            settlement to finalize) before retrying.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: object
+                    required: [message, code]
+                    properties:
+                      message:
+                        type: string
+                        description: Human-readable description of why the cap was exceeded.
+                      code:
+                        type: string
+                        enum: [EXPOSURE_CAP_EXCEEDED]
+                      currentExposureUsd:
+                        type: string
+                        description: Current USD-equivalent exposure for the investor (micro-USD, BigInt as string).
+                      attemptedUsd:
+                        type: string
+                        description: USD-equivalent of the rejected bid (micro-USD, BigInt as string).
+                      capUsd:
+                        type: string
+                        description: Configured per-investor cap (micro-USD, BigInt as string).
+                      investor:
+                        type: string
+                        description: Investor (Stellar address) whose cap would be exceeded.
+              example:
+                error:
+                  message: "Investor GAX... exposure cap would be exceeded: current=1100000000000000, attempted=500000000000000, cap=1500000000000000"
+                  code: EXPOSURE_CAP_EXCEEDED
+                  currentExposureUsd: "1100000000000000"
+                  attemptedUsd: "500000000000000"
+                  capUsd: "1500000000000000"
+                  investor: "GAXMFSADZVDXTJSLL3HZJFVYH4JGBQBMX3I2WGPKH3YKRXL7ZJXZK23Q"
 
   /bids/{invoiceId}/best:
     get:

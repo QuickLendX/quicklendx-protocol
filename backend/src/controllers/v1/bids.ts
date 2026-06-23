@@ -7,6 +7,11 @@ import { freshnessService } from "../../services/freshnessService";
 import { parsePaginationParams, PaginationError, applyPagination } from "../../utils/pagination";
 import { SnapshotService } from "../../services/snapshotService";
 import { bidStore } from "../../services/bidStore";
+import {
+  exposureService,
+  ExposureCapExceededError,
+  InvalidAmountError,
+} from "../../services/exposureService";
 import crypto from "crypto";
 
 /**
@@ -17,6 +22,10 @@ import crypto from "crypto";
  * - No duplicate active bid from same investor on same invoice
  * - Bid amount >= 1
  * - Expected return >= bid amount
+ * - Investor's aggregate exposure (active bids + unsettled positions) plus
+ *   this new bid does not exceed EXPOSURE_CAP_PER_INVESTOR_USD — otherwise
+ *   the request is rejected with 429 EXPOSURE_CAP_EXCEEDED before any
+ *   expensive chain interaction is attempted.
  */
 export const createBid = async (
   req: Request,
@@ -34,6 +43,44 @@ export const createBid = async (
     }
 
     const validated = createBidBodySchema.parse(req.body);
+
+    // ── Exposure-cap gate ────────────────────────────────────────────────
+    // Compute the investor's current USD-equivalent exposure across
+    // MOCK_BIDS, MOCK_SETTLEMENTS, and the persisted bidStore / settlement
+    // tables, then check whether this new bid would push them past the
+    // configured EXPOSURE_CAP_PER_INVESTOR_USD. Returning 429 here avoids
+    // a wasted RPC round-trip when the chain would reject the bid anyway.
+    const investor = req.apiKey.created_by;
+    const currency = validated.currency ?? "USDC";
+    try {
+      await exposureService.assertWithinCap(
+        investor,
+        validated.bid_amount,
+        currency,
+      );
+    } catch (err) {
+      if (err instanceof ExposureCapExceededError) {
+        return res.status(429).json({
+          error: {
+            message: err.message,
+            code: "EXPOSURE_CAP_EXCEEDED",
+            currentExposureUsd: err.currentExposureUsd.toString(),
+            attemptedUsd: err.attemptedUsd.toString(),
+            capUsd: err.capUsd.toString(),
+            investor: err.investor,
+          },
+        });
+      }
+      if (err instanceof InvalidAmountError) {
+        return res.status(400).json({
+          error: {
+            message: err.message,
+            code: "INVALID_BID",
+          },
+        });
+      }
+      throw err;
+    }
 
     // Generate deterministic bid_id (contract-like ID)
     const bidId = "0x" + crypto.randomBytes(32).toString("hex");
@@ -152,4 +199,9 @@ export const getTopBids = async (
 };
 
 // Legacy mock export for compatibility with existing export/reporting services.
+//
+// IMPORTANT: this array is intentionally exposed (not encapsulated) so the
+// exposureService can read live mock fixtures in tests and so the export
+// pipeline keeps working. Mutations are allowed in tests; production code
+// must not push to this array.
 export const MOCK_BIDS: any[] = [];
