@@ -570,6 +570,15 @@ export class LagMonitor {
       `[LagMonitor] rollback: cursor=${cursor}, timestamp=${new Date().toISOString()}`
     );
   }
+
+  /**
+   * Stop the polling loop during graceful shutdown.
+   * Prevents noisy lag-alert transitions while other services wind down.
+   */
+  stopPolling(): void {
+    this._effectiveLevel = "none";
+    this._recoveryStreak = 0;
+  }
 }
 
 export const lagMonitor = LagMonitor.getInstance();

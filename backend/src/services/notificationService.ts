@@ -283,6 +283,14 @@ export class NotificationService {
   public getUserPreferencesPublic(userId: string): UserNotificationPreferences | null {
     return this.getUserPreferences(userId);
   }
+
+  /**
+   * Close the SMTP transport during graceful shutdown so in-flight sends
+   * complete and no new ones start.
+   */
+  public closeTransport(): void {
+    this.transporter.close();
+  }
 }
 
 export const notificationService = NotificationService.getInstance();
