@@ -162,11 +162,18 @@ describe("Audit Log Hash Chaining", () => {
     };
 
     const entry2: Omit<AuditEntry, "entryHash"> = {
+      // Properties are in a different order than entry1, but values are identical.
       actor: "test-actor",
       timestamp: "2026-04-25T10:00:00.000Z",
       id: "01H8XGJWBWBAQ0JDBQWEXXXXXX",
-      // Properties are in a different order than entry1
-      ...entry1,
+      operation: "CONFIG_CHANGE",
+      params: { key: "value" },
+      redactedParams: { key: "value" },
+      ip: "127.0.0.1",
+      userAgent: "jest",
+      effect: "Changed config",
+      success: true,
+      prevHash: AUDIT_CHAIN_GENESIS_HASH,
     };
 
     expect(auditService.append(entry1 as any).entryHash).toBe(auditService.append(entry2 as any).entryHash);
