@@ -16,9 +16,16 @@ pub enum TimePeriod {
     AllTime,
 }
 
+/// Analytics snapshot schema version exposed to off-chain indexers.
+///
+/// Increment this constant whenever `AnalyticsSnapshot` changes in a breaking
+/// way (field removal, rename, semantic change, or type change). Additive
+/// fields should be coordinated with indexers before bumping.
+pub const ANALYTICS_SCHEMA_VERSION: u32 = 1;
+
 /// Platform metrics structure
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformMetrics {
     pub total_invoices: u32,
     pub total_investments: u32,
@@ -32,6 +39,22 @@ pub struct PlatformMetrics {
     pub default_rate: i128,
     pub success_rate: i128,
     pub timestamp: u64,
+}
+
+/// Versioned analytics snapshot for off-chain indexers.
+///
+/// This contract type has a JSON-equivalent shape documented in
+/// `quicklendx-contracts/docs/analytics-snapshot.md`. The snapshot bundles
+/// platform and performance metrics produced during one read-only contract
+/// invocation, and `schema_version` is stamped from
+/// `ANALYTICS_SCHEMA_VERSION` so indexers can reject incompatible schemas.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AnalyticsSnapshot {
+    pub schema_version: u32,
+    pub ledger_timestamp: u64,
+    pub platform_metrics: PlatformMetrics,
+    pub performance_metrics: PerformanceMetrics,
 }
 
 /// User behavior analytics
@@ -68,7 +91,7 @@ pub struct FinancialMetrics {
 
 /// Performance tracking metrics
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PerformanceMetrics {
     pub platform_uptime: u64,
     pub average_settlement_time: u64,
@@ -446,6 +469,28 @@ impl AnalyticsCalculator {
             default_rate,
             success_rate,
             timestamp: current_timestamp,
+        })
+    }
+
+    /// Export a versioned analytics snapshot for off-chain indexers.
+    ///
+    /// The composed metrics are calculated in this single read-only host call,
+    /// so they observe one ledger close and cannot be torn by an intervening
+    /// contract mutation. The internal work is bounded by the same platform
+    /// invoice limits enforced at upload time (`max_invoices_per_business`,
+    /// default 100 active invoices per business) plus the finite stored status
+    /// indexes scanned by the reused calculators. This function performs no
+    /// storage writes and requires no auth.
+    pub fn export_analytics_snapshot(env: &Env) -> Result<AnalyticsSnapshot, QuickLendXError> {
+        let ledger_timestamp = env.ledger().timestamp();
+        let platform_metrics = Self::calculate_platform_metrics(env)?;
+        let performance_metrics = Self::calculate_performance_metrics(env)?;
+
+        Ok(AnalyticsSnapshot {
+            schema_version: ANALYTICS_SCHEMA_VERSION,
+            ledger_timestamp,
+            platform_metrics,
+            performance_metrics,
         })
     }
 
