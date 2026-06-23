@@ -35,17 +35,17 @@ All events in a batch are validated **before** `commitBatch` is called. If any e
 
 The `InMemoryIngestionStore` implementation satisfies this contract and is used in tests. A production implementation would wrap a database transaction.
 
+## Freshness state semantics
+
+- The backend persists current indexer freshness in the SQLite table `freshness_state`.
+- On boot, `backend/src/services/freshnessService.ts` loads the saved cursor and timestamp from `freshness_state` and uses them to compute response freshness.
+- If the table is empty or missing, the service falls back to the existing in-memory default behavior and returns a conservative freshness estimate.
+- Updates to freshness state are debounced by 100ms to avoid repeated database writes during rapid cursor advancement.
+- Concurrent freshness updates always keep the latest cursor/timestamp pair, and the final debounced write persists the most recent value.
+
 ## Security notes
 
 - Cursor can only advance, never regress. The idempotency check enforces this.
 - Validation runs before any write, so invalid payloads cannot corrupt the index.
 - The store interface is injected, making it straightforward to swap in a real DB-backed implementation with proper ACID transactions.
 
-
-# Indexer — Transaction Semantics
-
-## Overview
-
-The ingestion layer (`src/services/ingestion.ts`) processes on-chain event batches atomically. Either the full batch is committed together with the cursor advance, or nothing is written.
-
-## Unit of work
