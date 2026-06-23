@@ -97,6 +97,8 @@ mod test_cleanup_pagination;
 mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_match_funding;
+#[cfg(test)]
+mod test_currency_batch;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
 #[cfg(test)]
@@ -598,6 +600,32 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         currency::CurrencyWhitelist::remove_currency(&env, &admin, &currency)
+    }
+
+    /// Add multiple token addresses to the currency whitelist in one admin call.
+    ///
+    /// Returns a per-item `Vec<bool>`: `true` = newly added, `false` = already present.
+    /// Empty input returns an empty result. Admin auth is required before any mutation.
+    pub fn add_currencies_batch(
+        env: Env,
+        admin: Address,
+        currencies: Vec<Address>,
+    ) -> Result<Vec<bool>, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        currency::CurrencyWhitelist::add_currencies_batch(&env, &admin, &currencies)
+    }
+
+    /// Remove multiple token addresses from the currency whitelist in one admin call.
+    ///
+    /// Returns a per-item `Vec<bool>`: `true` = was present and removed, `false` = was not present.
+    /// Empty input returns an empty result. Admin auth is required before any mutation.
+    pub fn remove_currencies_batch(
+        env: Env,
+        admin: Address,
+        currencies: Vec<Address>,
+    ) -> Result<Vec<bool>, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        currency::CurrencyWhitelist::remove_currencies_batch(&env, &admin, &currencies)
     }
 
     /// Check if a token is allowed for invoice currency.
