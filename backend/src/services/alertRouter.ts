@@ -1,39 +1,32 @@
 /**
  * alertRouter.ts
  *
- * Routes severity-classified alerts to the appropriate notification channels.
+ * Routes severity-classified alerts to appropriate notification channels based on config.
  *
  * Design decisions:
- *  - Deduplication: only one open (unacknowledged) alert per `alertKey` is
- *    stored.  Consecutive calls with the same key are silently ignored so the
- *    worker never spams downstream channels.
- *  - Channels: HIGH alerts are dispatched to the critical channel; MEDIUM and
- *    LOW go to the standard channel.  Both channels are pluggable via the
- *    `NotificationChannel` interface so real webhook/email/PagerDuty adapters
- *    can be injected without touching this module.
- *  - Acknowledgement: `acknowledgeAlert(alertKey)` marks an alert resolved.
- *    The backfillService checks this status before permitting a resume.
+ *  - Deduplication: uses per-alert-key dedupe windows (default 15 minutes).
+ *    Consecutive calls with the same key within the window are silently ignored.
+ *  - Config-based routing: severity → channels mapping loaded from env (ALERT_ROUTES_JSON).
+ *    Channels are pluggable transports (email, Slack, PagerDuty).
+ *  - Transport isolation: failure in one transport does not block others.
+ *  - Secrets redaction: sensitive URLs are logged with placeholders.
  */
 
 import { Alert, AlertStatus, Severity } from "../types/reconciliation";
+import { alertConfig } from "../config";
+import { AlertTransport } from "./alerts/transports/AlertTransport";
+import { EmailTransport } from "./alerts/transports/EmailTransport";
+import { SlackTransport } from "./alerts/transports/SlackTransport";
+import { PagerDutyTransport } from "./alerts/transports/PagerDutyTransport";
 
-// Re-export Alert so consumers can import the alert shape directly from the
-// router module alongside the channel types defined here.
 export type { Alert } from "../types/reconciliation";
 
 // ---------------------------------------------------------------------------
-// Notification channel interface (pluggable adapter pattern)
+// Alert deduplication window tracking
 // ---------------------------------------------------------------------------
 
-export interface NotificationChannel {
-  send(alert: Alert): Promise<void>;
-}
-
-/** No-op channel used as default in production until real adapters are wired. */
-export class NoOpChannel implements NotificationChannel {
-  async send(_alert: Alert): Promise<void> {
-    // intentionally empty – replace with real adapter
-  }
+interface DedupeEntry {
+  lastFiredAt: number; // epoch-ms
 }
 
 // ---------------------------------------------------------------------------
@@ -43,18 +36,44 @@ export class NoOpChannel implements NotificationChannel {
 export class AlertRouter {
   private static instance: AlertRouter;
 
-  /** In-memory alert store keyed by alertKey.  Replace with DB in production. */
+  /** In-memory alert store keyed by alertKey. */
   private readonly alerts: Map<string, Alert> = new Map();
 
-  private criticalChannel: NotificationChannel;
-  private standardChannel: NotificationChannel;
+  /** Deduplication window tracking: alertKey → last fired timestamp. */
+  private readonly dedupeWindows: Map<string, DedupeEntry> = new Map();
 
-  private constructor(
-    criticalChannel: NotificationChannel = new NoOpChannel(),
-    standardChannel: NotificationChannel = new NoOpChannel()
-  ) {
-    this.criticalChannel = criticalChannel;
-    this.standardChannel = standardChannel;
+  /** Deduplication window duration in milliseconds. */
+  private readonly dedupeWindowMs: number;
+
+  /** Transports keyed by channel name. */
+  private readonly transports: Map<string, AlertTransport> = new Map();
+
+  private constructor(dedupeWindowMs: number = 15 * 60 * 1000) {
+    this.dedupeWindowMs = dedupeWindowMs;
+    this.initializeTransports();
+  }
+
+  private initializeTransports(): void {
+    // Initialize email transport if recipients are configured
+    if (alertConfig.emailRecipients.length > 0) {
+      this.transports.set(
+        "email",
+        new EmailTransport(alertConfig.emailRecipients)
+      );
+    }
+
+    // Initialize Slack transport if webhook URL is configured
+    if (alertConfig.slackWebhookUrl) {
+      this.transports.set("slack", new SlackTransport(alertConfig.slackWebhookUrl));
+    }
+
+    // Initialize PagerDuty transport if integration key is configured
+    if (alertConfig.pagerdutyIntegrationKey) {
+      this.transports.set(
+        "pagerduty",
+        new PagerDutyTransport(alertConfig.pagerdutyIntegrationKey)
+      );
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -62,88 +81,78 @@ export class AlertRouter {
   // --------------------------------------------------------------------------
 
   public static getInstance(
-    criticalChannel?: NotificationChannel,
-    standardChannel?: NotificationChannel
+    dedupeWindowMs?: number
   ): AlertRouter {
     if (!AlertRouter.instance) {
-      AlertRouter.instance = new AlertRouter(criticalChannel, standardChannel);
+      AlertRouter.instance = new AlertRouter(
+        dedupeWindowMs ?? alertConfig.dedupeWindowMs
+      );
     }
     return AlertRouter.instance;
   }
 
-  /**
-   * Replaces the singleton instance.  Used only in tests to obtain a fresh
-   * router without carrying state across test cases.
-   */
   public static resetInstance(): void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (AlertRouter as any).instance = undefined;
   }
 
   // --------------------------------------------------------------------------
-  // Channel configuration
-  // --------------------------------------------------------------------------
-
-  /** Override the critical-alert channel (e.g. for testing). */
-  public setCriticalChannel(channel: NotificationChannel): void {
-    this.criticalChannel = channel;
-  }
-
-  /** Override the standard-alert channel (e.g. for testing). */
-  public setStandardChannel(channel: NotificationChannel): void {
-    this.standardChannel = channel;
-  }
-
-  // --------------------------------------------------------------------------
-  // Core routing
+  // Core routing with deduplication
   // --------------------------------------------------------------------------
 
   /**
-   * Routes an alert, applying deduplication.
+   * Routes an alert based on severity → channels config, applying deduplication.
    *
-   * If an open alert with the same `alertKey` already exists it is NOT re-sent
-   * to the notification channel.  Returns `true` when the alert was dispatched,
-   * `false` when it was suppressed by deduplication.
+   * Returns `true` if the alert was dispatched, `false` if suppressed by dedupe window.
+   * Individual transport failures do not block other transports.
    */
   public async routeAlert(
     alertKey: string,
     severity: Severity,
     message: string
   ): Promise<boolean> {
-    const existing = this.alerts.get(alertKey);
+    const now = Date.now();
 
-    // Deduplication: suppress if an open alert already exists for this key
-    if (existing && existing.status === AlertStatus.Open) {
+    // Check deduplication window
+    const dedupeEntry = this.dedupeWindows.get(alertKey);
+    if (dedupeEntry && now - dedupeEntry.lastFiredAt < this.dedupeWindowMs) {
+      // Alert is within deduplication window; suppress it
       return false;
     }
 
+    // Create alert object
     const alert: Alert = {
       alertKey,
       severity,
       message,
       status: AlertStatus.Open,
-      createdAt: Date.now(),
+      createdAt: now,
     };
 
+    // Store alert and update dedupe window
     this.alerts.set(alertKey, alert);
+    this.dedupeWindows.set(alertKey, { lastFiredAt: now });
 
-    // Dispatch to the correct channel
-    if (severity === Severity.HIGH) {
-      await this.criticalChannel.send(alert);
-    } else {
-      await this.standardChannel.send(alert);
-    }
+    // Get channels for this severity from config
+    const channels = this.getChannelsForSeverity(severity);
+
+    // Dispatch to all configured channels, but don't fail if one fails
+    const results = await Promise.allSettled(
+      channels.map((channel) => this.sendToChannel(channel, alert))
+    );
+
+    // Log any failures but don't throw
+    results.forEach((result) => {
+      if (result.status === "rejected") {
+        console.error("Alert dispatch failed:", result.reason);
+      }
+    });
 
     return true;
   }
 
-  // --------------------------------------------------------------------------
-  // Acknowledgement
-  // --------------------------------------------------------------------------
-
   /**
    * Marks an alert as acknowledged.
-   * Throws if the alert does not exist or is already acknowledged.
    */
   public acknowledgeAlert(alertKey: string): void {
     const alert = this.alerts.get(alertKey);
@@ -158,30 +167,61 @@ export class AlertRouter {
   }
 
   // --------------------------------------------------------------------------
+  // Helpers
+  // --------------------------------------------------------------------------
+
+  private getChannelsForSeverity(severity: Severity): string[] {
+    const route = alertConfig.routes.find((r) => r.severity === severity);
+    return route?.channels || [];
+  }
+
+  private async sendToChannel(
+    channel: string,
+    alert: Alert
+  ): Promise<void> {
+    const transport = this.transports.get(channel);
+    if (!transport) {
+      throw new Error(`Transport not configured for channel: ${channel}`);
+    }
+    await transport.send(alert);
+  }
+
+  // --------------------------------------------------------------------------
   // Query helpers
   // --------------------------------------------------------------------------
 
-  /** Returns the alert for the given key, or undefined if not found. */
   public getAlert(alertKey: string): Alert | undefined {
     return this.alerts.get(alertKey);
   }
 
-  /** Returns true when an open (unacknowledged) alert exists for this key. */
   public hasOpenAlert(alertKey: string): boolean {
     const alert = this.alerts.get(alertKey);
     return alert !== undefined && alert.status === AlertStatus.Open;
   }
 
-  /** Returns all stored alerts (snapshot). */
   public getAllAlerts(): Alert[] {
     return [...this.alerts.values()];
   }
 
-  /**
-   * Clears all alerts.  Use only in tests.
-   */
   public clearAlerts(): void {
     this.alerts.clear();
+    this.dedupeWindows.clear();
+  }
+
+  /**
+   * Clears expired dedupe entries. Call periodically (e.g., every minute).
+   */
+  public clearExpiredDedupeEntries(): void {
+    const now = Date.now();
+    const expired: string[] = [];
+
+    this.dedupeWindows.forEach((entry, key) => {
+      if (now - entry.lastFiredAt > this.dedupeWindowMs) {
+        expired.push(key);
+      }
+    });
+
+    expired.forEach((key) => this.dedupeWindows.delete(key));
   }
 }
 

@@ -8,6 +8,7 @@ import {
   SettlementStatus,
 } from "../types/contract";
 import { withSpan } from "../lib/tracing";
+import { alertRouter, Severity } from "./alertRouter";
 
 const MAX_SAMPLE_IDS = 5;
 
@@ -419,15 +420,27 @@ export function emitInvariantAlert(report: FullInvariantReport): void {
         `accounting_mismatches: ${report.accounting.mismatches.count}`,
       );
 
+    const message = `Invariant violation detected: ${violations.join(", ")}`;
+
     console.error(
       JSON.stringify({
         level: "ALERT",
         type: "INVARIANT_VIOLATION",
         timestamp: report.timestamp,
         violations,
-        message: `Invariant violation detected: ${violations.join(", ")}`,
+        message,
       }),
     );
+
+    // Route to alert system via alertRouter
+    // Determine severity based on violation count
+    const totalViolations = violations.length;
+    const severity =
+      totalViolations > 2 ? Severity.HIGH : totalViolations > 0 ? Severity.MEDIUM : Severity.LOW;
+
+    alertRouter
+      .routeAlert("invariant-violation", severity, message)
+      .catch((err) => console.error("Failed to route invariant alert:", err));
   });
 }
 
