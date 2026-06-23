@@ -175,6 +175,8 @@ mod test_treasury_split_overflow_props;
 mod test_init_invariants;
 #[cfg(test)]
 mod test_input_matrix;
+#[cfg(test)]
+mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
 #[cfg(test)]
@@ -204,6 +206,7 @@ use defaults::{
 use errors::QuickLendXError;
 use escrow::{
     accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds,
+    withdraw_investment as do_withdraw_investment,
 };
 use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_dispute_created,
@@ -2122,6 +2125,36 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         reentrancy::with_payment_guard(&env, || do_refund_escrow_funds(&env, &invoice_id, &caller))
+    }
+
+    /// Withdraw an active investment, refunding escrowed funds to the investor.
+    ///
+    /// Only the investor may call this. The investment must be in `Active` status
+    /// and the associated escrow must still be `Held` (funds not yet released to
+    /// the business). On success the investment transitions `Active → Withdrawn`,
+    /// the invoice is restored to a fundable state, and the accepted bid is cancelled.
+    ///
+    /// Protected by payment reentrancy guard (see docs/contracts/security.md).
+    ///
+    /// # Returns
+    /// * `Ok(())` on successful withdrawal
+    ///
+    /// # Errors
+    /// * `Unauthorized` — caller is not the investment's investor
+    /// * `InvalidStatus` — investment is not Active, or escrow is not Held
+    /// * `InvoiceNotFound`, `StorageKeyNotFound`
+    /// * `ContractPaused` if the protocol is paused
+    /// * `OperationNotAllowed` if reentrancy is detected
+    ///
+    /// Pause-gated: rejects with `ContractPaused` when the emergency circuit
+    /// breaker is engaged, before any funds move.
+    pub fn withdraw_investment(
+        env: Env,
+        invoice_id: BytesN<32>,
+        investor: Address,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        reentrancy::with_payment_guard(&env, || do_withdraw_investment(&env, &invoice_id, &investor))
     }
 
     /// Check for overdue invoices and send notifications (admin or automated process)

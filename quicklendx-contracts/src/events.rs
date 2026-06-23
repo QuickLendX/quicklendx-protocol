@@ -50,6 +50,8 @@ pub const TOPIC_ESCROW_CREATED: &str = "escrow_created";
 pub const TOPIC_ESCROW_RELEASED: &str = "escrow_released";
 /// Topic for `EscrowRefunded` events.
 pub const TOPIC_ESCROW_REFUNDED: &str = "escrow_refunded";
+/// Topic for `InvestmentWithdrawn` events.
+pub const TOPIC_INVESTMENT_WITHDRAWN: &str = "investment_withdrawn";
 /// Topic for `DisputeCreated` / `DisputeOpened` events.
 pub const TOPIC_DISPUTE_CREATED: &str = "dispute_created";
 /// Topic for `DisputeUnderReview` events.
@@ -318,6 +320,18 @@ pub struct EscrowReleased {
 #[contractevent]
 pub struct EscrowRefunded {
     pub escrow_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub amount: i128,
+}
+
+/// Emitted when an investor withdraws their investment before settlement.
+///
+/// Topic: [`TOPIC_INVESTMENT_WITHDRAWN`] (`"inv_wd"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvestmentWithdrawn {
+    pub investment_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
     pub investor: Address,
     pub amount: i128,
@@ -949,6 +963,22 @@ pub fn emit_escrow_refunded(
 ) {
     EscrowRefunded {
         escrow_id: escrow_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        amount,
+    }
+    .publish(env);
+}
+
+pub fn emit_investment_withdrawn(
+    env: &Env,
+    investment_id: &BytesN<32>,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    amount: i128,
+) {
+    InvestmentWithdrawn {
+        investment_id: investment_id.clone(),
         invoice_id: invoice_id.clone(),
         investor: investor.clone(),
         amount,
