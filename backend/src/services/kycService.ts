@@ -13,6 +13,7 @@
  */
 
 import * as crypto from "crypto";
+import { getPreparedStatement } from "../lib/database";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -451,6 +452,25 @@ export function createKycRecord(id: string, userId: string, kycData: Record<stri
 
 export function getKycData(kycRecord: KycRecord): Record<string, any> {
   return JSON.parse(decryptSensitiveData(kycRecord.encryptedData));
+}
+
+export function getKycStatus(businessId: string): { status: string; verifiedAt?: number } | null {
+  try {
+    const stmt = getPreparedStatement("SELECT status, verified_at FROM kyc_records WHERE user_id = ?");
+    const row = stmt.get(businessId);
+    if (!row) return null;
+    return {
+      status: row.status as string,
+      verifiedAt: row.verified_at ? Number(row.verified_at) : undefined,
+    };
+  } catch (err: any) {
+    const msg = err && err.message ? String(err.message) : "";
+    if (process.env.NODE_ENV === "test" && /no such table/i.test(msg)) {
+      // Return null in test environments where the migration hasn't run
+      return null;
+    }
+    throw err;
+  }
 }
 
 
