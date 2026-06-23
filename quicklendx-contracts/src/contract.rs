@@ -270,6 +270,14 @@ impl QuickLendXContract {
         BidStorage::get_best_bid(&env, &invoice_id)
     }
 
+    pub fn get_bids_by_status(env: Env, invoice_id: BytesN<32>, status: BidStatus) -> Vec<Bid> {
+        BidStorage::get_bids_by_status(&env, &invoice_id, status)
+    }
+
+    pub fn get_bids_by_investor(env: Env, invoice_id: BytesN<32>, investor: Address) -> Vec<Bid> {
+        BidStorage::get_bids_by_investor(&env, &invoice_id, &investor)
+    }
+
     pub fn submit_kyc_application(env: Env, business: Address, kyc_data: soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
         submit_kyc_application(&env, &business, kyc_data)
     }
