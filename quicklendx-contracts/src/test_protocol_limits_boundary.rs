@@ -64,7 +64,7 @@ mod test_protocol_limits_boundary {
         let (env, contract_id, admin) = setup_with_admin();
         let result = env.as_contract(&contract_id, || {
             ProtocolLimitsContract::set_protocol_limits(
-                &env, &admin,
+                env.clone(), admin.clone(),
                 0,   // invalid: must be > 0
                 10, 100, 90, 86_400, 5,
             )
