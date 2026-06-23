@@ -45,6 +45,10 @@ const schema = z.object({
   RETENTION_INTERVAL_MS: z.coerce.number().int().min(60000).default(24 * 60 * 60 * 1000),
   RETENTION_ARCHIVE_DIR: z.string().default(".data/retention-archives"),
   RETENTION_AUDIT_ACTOR: z.string().min(1).default("system:retention-worker"),
+
+  // Notification deduplication cache
+  MAX_NOTIFICATION_DEDUP_ENTRIES: z.coerce.number().int().min(1).default(10_000),
+  NOTIFICATION_DEDUP_TTL_MS: z.coerce.number().int().min(1).default(24 * 60 * 60 * 1000),
 });
 
 export type Config = z.infer<typeof schema>;

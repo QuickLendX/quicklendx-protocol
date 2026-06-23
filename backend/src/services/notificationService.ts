@@ -7,6 +7,8 @@ import {
   UserNotificationPreferences,
   NotificationTemplate,
 } from '../types/contract';
+import { config } from '../config';
+import { NotificationDedupCache } from './notificationDedupCache';
 
 // Map NotificationType enum values to the notify_* column names
 const PREF_COLUMN: Record<NotificationType, string> = {
@@ -19,8 +21,13 @@ const PREF_COLUMN: Record<NotificationType, string> = {
 export class NotificationService {
   private static instance: NotificationService;
   private transporter: nodemailer.Transporter;
+  private dedupCache: NotificationDedupCache;
 
   private constructor() {
+    this.dedupCache = new NotificationDedupCache(
+      config.MAX_NOTIFICATION_DEDUP_ENTRIES,
+      config.NOTIFICATION_DEDUP_TTL_MS,
+    );
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: parseInt(process.env.SMTP_PORT || '587'),
@@ -175,9 +182,16 @@ export class NotificationService {
    * - If no row exists → insert 'pending', attempt send, update to 'sent'/'failed'.
    */
   public async processNotification(event: NotificationEvent): Promise<void> {
-    // Fast-path: already delivered
+    const cacheKey = `${event.id}:${event.user_id}`;
+
+    // Ultra-fast path: in-memory dedup cache (avoids DB hit entirely)
+    if (this.dedupCache.has(cacheKey)) {
+      return;
+    }
+
+    // Fast-path: already delivered (durable DB check)
     if (this.isNotificationSent(event.id, event.user_id)) {
-      // debug-level only — no PII
+      this.dedupCache.add(cacheKey);
       return;
     }
 
@@ -187,12 +201,14 @@ export class NotificationService {
     if (!preferences || !preferences.email_enabled || !preferences.email_address) {
       // No preferences row or email disabled — treat as opted-out, mark sent to avoid retry spam
       this.markSent(rowId);
+      this.dedupCache.add(cacheKey);
       return;
     }
 
     if (!preferences.notifications[event.type]) {
       // Notification type disabled for this user
       this.markSent(rowId);
+      this.dedupCache.add(cacheKey);
       return;
     }
 
@@ -201,6 +217,7 @@ export class NotificationService {
     try {
       await this.sendEmail(preferences.email_address, template);
       this.markSent(rowId);
+      this.dedupCache.add(cacheKey);
     } catch (error: any) {
       this.markFailed(rowId, error?.message ?? String(error));
       throw error;
@@ -282,6 +299,13 @@ export class NotificationService {
    */
   public getUserPreferencesPublic(userId: string): UserNotificationPreferences | null {
     return this.getUserPreferences(userId);
+  }
+
+  /**
+   * Number of cache entries evicted due to max-size (for metrics / #1054).
+   */
+  get dedupCacheEvictions(): number {
+    return this.dedupCache.evictions;
   }
 }
 
