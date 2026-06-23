@@ -141,6 +141,8 @@ mod test_profit_fee;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_storage;
 #[cfg(test)]
+mod test_storage_key_layout;
+#[cfg(test)]
 mod test_protocol_limits_boundary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_health;
