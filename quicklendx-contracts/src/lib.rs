@@ -52,6 +52,9 @@ mod test_maintenance;
 mod test_maintenance_write_matrix;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
+#[cfg(test)]
+mod bench;
+
 pub mod admin;
 pub mod analytics;
 pub mod audit;
