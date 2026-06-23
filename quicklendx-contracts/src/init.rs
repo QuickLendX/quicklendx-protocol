@@ -652,7 +652,7 @@ impl ProtocolInitializer {
     pub fn set_fee_config(env: &Env, admin: &Address, fee_bps: u32) -> Result<(), QuickLendXError> {
         AdminStorage::with_admin_auth(env, admin, || {
             // Validate fee
-            if fee_bps < MIN_FEE_BPS || fee_bps > MAX_FEE_BPS {
+            if !(MIN_FEE_BPS..=MAX_FEE_BPS).contains(&fee_bps) {
                 return Err(QuickLendXError::InvalidFeeBasisPoints);
             }
 

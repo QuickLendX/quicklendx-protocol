@@ -231,12 +231,12 @@ pub fn refund_escrow_funds(
     // 6. Update internal states
 
     // Update Invoice status to Refunded
-    let previous_status = invoice.status.clone();
+    let previous_status = invoice.status;
     invoice.mark_as_refunded(env, caller.clone());
     InvoiceStorage::update_invoice(env, &invoice);
 
     // Update status indices
-    InvoiceStorage::remove_from_status_invoices(env, previous_status.clone(), invoice_id);
+    InvoiceStorage::remove_from_status_invoices(env, previous_status, invoice_id);
     InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Refunded, invoice_id);
 
     // Update Bid status to Cancelled (find the accepted bid first)

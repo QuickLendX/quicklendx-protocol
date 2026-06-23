@@ -623,7 +623,7 @@ impl InvestorVerificationStorage {
 /// Normalizes a tag by trimming whitespace and converting to lowercase.
 /// Enforces length limits of 1-50 characters.
 pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError> {
-    if tag.len() == 0 || tag.len() > MAX_TAG_LENGTH.saturating_mul(2) {
+    if tag.is_empty() || tag.len() > MAX_TAG_LENGTH.saturating_mul(2) {
         return Err(QuickLendXError::InvalidTag);
     }
 
@@ -650,7 +650,7 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
 
     let mut normalized_bytes = [0u8; MAX_TAG_LENGTH as usize];
     for (idx, &b) in raw_slice[start..end].iter().enumerate() {
-        let lower = if b >= b'A' && b <= b'Z' { b + 32 } else { b };
+        let lower = if b.is_ascii_uppercase() { b + 32 } else { b };
         normalized_bytes[idx] = lower;
     }
 
@@ -660,7 +660,7 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
             .map_err(|_| QuickLendXError::InvalidTag)?,
     );
 
-    if normalized_str.len() == 0 {
+    if normalized_str.is_empty() {
         return Err(QuickLendXError::InvalidTag);
     }
     Ok(normalized_str)
@@ -938,7 +938,7 @@ pub fn verify_invoice_data(
 
     // Validate due date bounds using protocol limits (Default 365 days)
     let limits = crate::protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
-    let max_horizon = (limits.max_due_date_days as u64).saturating_mul(86400);
+    let max_horizon = limits.max_due_date_days.saturating_mul(86400);
     let max_due_date = current_timestamp.saturating_add(max_horizon);
 
     if due_date > max_due_date {
@@ -946,7 +946,7 @@ pub fn verify_invoice_data(
     }
 
     check_string_length(description, MAX_DESCRIPTION_LENGTH)?;
-    if description.len() == 0 {
+    if description.is_empty() {
         return Err(QuickLendXError::InvalidDescription);
     }
     Ok(())
@@ -1044,7 +1044,7 @@ pub fn validate_invoice_tags(env: &Env, tags: &Vec<String>) -> Result<(), QuickL
     for tag in tags.iter() {
         let normalized = normalize_tag(env, &tag)?;
 
-        if normalized.len() == 0 || normalized.len() > 50 {
+        if normalized.is_empty() || normalized.len() > 50 {
             return Err(QuickLendXError::InvalidTag);
         }
 
@@ -1450,23 +1450,23 @@ pub fn validate_invoice_metadata(
     invoice_amount: i128,
 ) -> Result<(), QuickLendXError> {
     check_string_length(&metadata.customer_name, MAX_NAME_LENGTH)?;
-    if metadata.customer_name.len() == 0 {
+    if metadata.customer_name.is_empty() {
         return Err(QuickLendXError::InvalidDescription);
     }
 
     check_string_length(&metadata.customer_address, MAX_ADDRESS_LENGTH)?;
-    if metadata.customer_address.len() == 0 {
+    if metadata.customer_address.is_empty() {
         return Err(QuickLendXError::InvalidDescription);
     }
 
     check_string_length(&metadata.tax_id, MAX_TAX_ID_LENGTH)?;
-    if metadata.tax_id.len() == 0 {
+    if metadata.tax_id.is_empty() {
         return Err(QuickLendXError::InvalidDescription);
     }
 
     check_string_length(&metadata.notes, MAX_NOTES_LENGTH)?;
 
-    if metadata.line_items.len() == 0 {
+    if metadata.line_items.is_empty() {
         return Err(QuickLendXError::InvalidDescription);
     }
     if metadata.line_items.len() > MAX_METADATA_LINE_ITEMS {
@@ -1476,7 +1476,7 @@ pub fn validate_invoice_metadata(
     let mut computed_total = 0i128;
     for record in metadata.line_items.iter() {
         check_string_length(&record.0, MAX_DESCRIPTION_LENGTH)?;
-        if record.0.len() == 0 {
+        if record.0.is_empty() {
             return Err(QuickLendXError::InvalidDescription);
         }
 
@@ -1515,7 +1515,7 @@ pub fn validate_invoice_metadata(
 /// @param reason The dispute reason to validate.
 /// @return Ok(()) if valid, Err(InvalidDisputeReason) otherwise.
 pub fn validate_dispute_reason(reason: &String) -> Result<(), QuickLendXError> {
-    if reason.len() == 0 {
+    if reason.is_empty() {
         return Err(QuickLendXError::InvalidDisputeReason);
     }
     if reason.len() > MAX_DISPUTE_REASON_LENGTH {
@@ -1530,7 +1530,7 @@ pub fn validate_dispute_reason(reason: &String) -> Result<(), QuickLendXError> {
 /// @param evidence The dispute evidence to validate.
 /// @return Ok(()) if valid, Err(InvalidDisputeEvidence) otherwise.
 pub fn validate_dispute_evidence(evidence: &String) -> Result<(), QuickLendXError> {
-    if evidence.len() == 0 {
+    if evidence.is_empty() {
         return Err(QuickLendXError::InvalidDisputeEvidence);
     }
     if evidence.len() > MAX_DISPUTE_EVIDENCE_LENGTH {
@@ -1544,7 +1544,7 @@ pub fn validate_dispute_evidence(evidence: &String) -> Result<(), QuickLendXErro
 /// @param resolution The resolution text to validate.
 /// @return Ok(()) if valid, Err(InvalidDisputeReason) otherwise.
 pub fn validate_dispute_resolution(resolution: &String) -> Result<(), QuickLendXError> {
-    if resolution.len() == 0 {
+    if resolution.is_empty() {
         return Err(QuickLendXError::InvalidDisputeReason);
     }
     if resolution.len() > MAX_DISPUTE_RESOLUTION_LENGTH {
@@ -1578,7 +1578,7 @@ pub fn validate_dispute_eligibility(
         || invoice
             .investor
             .as_ref()
-            .map_or(false, |inv| *creator == *inv);
+            .is_some_and(|inv| *creator == *inv);
     if !is_authorized {
         return Err(QuickLendXError::DisputeNotAuthorized);
     }

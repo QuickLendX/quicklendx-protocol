@@ -235,7 +235,7 @@ impl CurrencyWhitelist {
     /// - `InvalidCurrency` - whitelist is non-empty and `currency` is not in it.
     pub fn require_allowed_currency(env: &Env, currency: &Address) -> Result<(), QuickLendXError> {
         let list = Self::get_whitelisted_currencies(env);
-        if list.len() == 0 {
+        if list.is_empty() {
             return Ok(());
         }
         if Self::is_allowed_currency(env, currency) {

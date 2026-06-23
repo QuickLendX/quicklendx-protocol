@@ -88,7 +88,7 @@ impl BackupStorage {
             return Err(QuickLendXError::StorageError);
         }
 
-        if backup.description.len() == 0 || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
+        if backup.description.is_empty() || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
         {
             return Err(QuickLendXError::InvalidDescription);
         }
@@ -112,7 +112,7 @@ impl BackupStorage {
         env.storage()
             .instance()
             .get(&RETENTION_POLICY_KEY)
-            .unwrap_or_else(|| BackupRetentionPolicy::default())
+            .unwrap_or_default()
     }
 
     /// Set the backup retention policy (admin only - caller must enforce auth).
@@ -301,7 +301,7 @@ impl BackupStorage {
         let data =
             Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-        if data.len() as u32 != backup.invoice_count {
+        if data.len() != backup.invoice_count {
             return Err(QuickLendXError::StorageError);
         }
 

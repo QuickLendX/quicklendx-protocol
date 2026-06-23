@@ -148,7 +148,7 @@ impl PlatformFee {
         admin.require_auth();
 
         // Validate fee bounds
-        if new_fee_bps < 0 || new_fee_bps > MAX_PLATFORM_FEE_BPS {
+        if !(0..=MAX_PLATFORM_FEE_BPS).contains(&new_fee_bps) {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 

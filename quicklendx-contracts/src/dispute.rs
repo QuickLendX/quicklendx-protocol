@@ -65,7 +65,6 @@ use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 /// ### Documentation
 /// See `docs/settlement-dispute-interaction.md` for complete state machine diagrams
 /// and resolution outcome specifications.
-
 fn dispute_index_key() -> soroban_sdk::Symbol {
     symbol_short!("dispute")
 }

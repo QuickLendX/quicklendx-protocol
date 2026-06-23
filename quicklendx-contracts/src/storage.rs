@@ -247,7 +247,7 @@ impl InvoiceStorage {
             .set(&key, invoice);
         extend_persistent_ttl(env, &key);
         Self::add_to_business_index(env, &invoice.business, &invoice.id);
-        Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
+        Self::add_to_status_index(env, invoice.status, &invoice.id);
         if let Some(ref name) = invoice.metadata_customer_name {
             Self::add_to_customer_index(env, name, &invoice.id);
         }
@@ -319,7 +319,7 @@ impl InvoiceStorage {
         if let Some(old) = Self::get(env, &invoice.id) {
             if old.status != invoice.status {
                 Self::remove_from_status_index(env, old.status, &invoice.id);
-                Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
+                Self::add_to_status_index(env, invoice.status, &invoice.id);
             }
             if old.metadata_customer_name != invoice.metadata_customer_name {
                 if let Some(ref name) = old.metadata_customer_name {
@@ -436,7 +436,7 @@ impl InvoiceStorage {
             if let Some(invoice) = Self::get(env, &invoice_id) {
                 if invoice
                     .average_rating
-                    .map_or(false, |rating| rating > threshold)
+                    .is_some_and(|rating| rating > threshold)
                 {
                     matches.push_back(invoice_id);
                 }
@@ -494,7 +494,7 @@ impl InvoiceStorage {
     }
 
     fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
-        let mut invoices = Self::get_by_status(env, status.clone());
+        let mut invoices = Self::get_by_status(env, status);
         if !invoices.contains(invoice_id) {
             invoices.push_back(invoice_id.clone());
             let key = Indexes::invoices_by_status(status);
@@ -506,7 +506,7 @@ impl InvoiceStorage {
     }
 
     fn remove_from_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
-        let mut invoices = Self::get_by_status(env, status.clone());
+        let mut invoices = Self::get_by_status(env, status);
         if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
             invoices.remove(pos as u32);
             let key = Indexes::invoices_by_status(status);
@@ -610,7 +610,7 @@ impl InvoiceStorage {
     }
 
     pub fn add_category_index(env: &Env, category: &InvoiceCategory, invoice_id: &BytesN<32>) {
-        let key = Indexes::invoices_by_category(category.clone());
+        let key = Indexes::invoices_by_category(*category);
         let mut ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
@@ -624,7 +624,7 @@ impl InvoiceStorage {
     }
 
     pub fn remove_category_index(env: &Env, category: &InvoiceCategory, invoice_id: &BytesN<32>) {
-        let key = Indexes::invoices_by_category(category.clone());
+        let key = Indexes::invoices_by_category(*category);
         let ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
@@ -695,7 +695,7 @@ impl InvoiceStorage {
         env: &Env,
         category: &InvoiceCategory,
     ) -> Vec<BytesN<32>> {
-        let key = Indexes::invoices_by_category(category.clone());
+        let key = Indexes::invoices_by_category(*category);
         env.storage()
             .persistent()
             .get(&key)
@@ -705,7 +705,7 @@ impl InvoiceStorage {
     /// Efficiently counts invoices for a category directly from the category index.
     /// This is the preferred method for counting and is bounded by the index size.
     pub fn get_invoice_count_by_category_from_index(env: &Env, category: &InvoiceCategory) -> u32 {
-        Self::get_invoices_by_category_from_index(env, category).len() as u32
+        Self::get_invoices_by_category_from_index(env, category).len()
     }
 
     pub fn count_active_business_invoices(env: &Env, business: &Address) -> u32 {
@@ -836,7 +836,7 @@ impl StorageIntegrityAudit {
         );
 
         for status in statuses.iter() {
-            let ids = InvoiceStorage::get_by_status(env, status.clone());
+            let ids = InvoiceStorage::get_by_status(env, status);
             for id in ids.iter() {
                 if !discovered_ids.contains(&id) {
                     discovered_ids.push_back(id.clone());
@@ -898,7 +898,7 @@ impl StorageIntegrityAudit {
                 }
 
                 // Check category index
-                let category_ids = InvoiceStorage::get_by_category(env, invoice.category.clone());
+                let category_ids = InvoiceStorage::get_by_category(env, invoice.category);
                 if !category_ids.contains(&id) {
                     errors.push_back(String::from_str(env, "Invoice missing from category index"));
                 }
@@ -1073,7 +1073,7 @@ impl InvoiceStorage {
         let capped = if limit > MAX_REBUILD_PAGE { MAX_REBUILD_PAGE } else { limit };
 
         let all_ids = Self::get_all_invoice_ids(env);
-        let total = all_ids.len() as u32;
+        let total = all_ids.len();
 
         let start = offset.min(total);
         let end = start.saturating_add(capped).min(total);
