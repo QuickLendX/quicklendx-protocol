@@ -2780,6 +2780,20 @@ impl QuickLendXContract {
         })
     }
 
+    /// Export a versioned, JSON-shaped analytics snapshot for off-chain indexers.
+    ///
+    /// Schema version `analytics::ANALYTICS_SCHEMA_VERSION` identifies the
+    /// stable snapshot shape. The platform and performance metrics are composed
+    /// within one read-only host call so indexers receive values from the same
+    /// ledger close without storage writes or auth. Internal iteration is bounded
+    /// by the existing invoice status indexes and protocol invoice limits used by
+    /// the reused analytics calculators.
+    pub fn export_analytics_snapshot(
+        env: Env,
+    ) -> Result<analytics::AnalyticsSnapshot, QuickLendXError> {
+        analytics::AnalyticsCalculator::export_analytics_snapshot(&env)
+    }
+
     pub fn get_performance_metrics(env: Env) -> analytics::PerformanceMetrics {
         analytics::AnalyticsStorage::get_performance_metrics(&env).unwrap_or_else(|| {
             analytics::AnalyticsCalculator::calculate_performance_metrics(&env).unwrap_or(
