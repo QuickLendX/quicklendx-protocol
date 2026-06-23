@@ -236,7 +236,6 @@ use verification::{
 };
 
 use crate::storage::{BidStorage, InvoiceStorage};
-use crate::types::*;
 
 #[contract]
 pub struct QuickLendXContract;
