@@ -117,6 +117,29 @@ large cleanups.
 SSRF protections in `urlValidation.ts` and `egressPolicy.ts` are enforced on
 every retry attempt.
 
+### DNS rebinding protection
+
+Webhook deliveries pin the resolved IP into the TCP connection to prevent DNS
+rebinding attacks (where a domain first resolves to a public IP, passing the
+blocked-address check, and later resolves to a private/internal IP):
+
+- **IP pinning**: before every HTTPS request the target hostname is resolved
+  via DNS and the first public address is pinned.  The `https.Agent` uses a
+  custom `lookup` that always returns this pinned IP — it never re-resolves.
+- **Re-validation before connect**: the agent re-validates the pinned IP via
+  `isBlockedDestinationIP` immediately before every socket connect.  If the
+  IP has become blocked (e.g. the cached mapping expired and the attacker now
+  points to a private address), the request is aborted with an `EGRESS_BLOCKED`
+  error.
+- **Redirects blocked**: 3xx responses are rejected with `REDIRECT_NOT_ALLOWED`.
+  Redirects are not followed, closing the window for open-redirect chains that
+  could bypass the initial IP check.
+- **TLS SNI preserved**: `servername` is set to the original hostname so that
+  TLS certificate validation and SNI use the intended domain, not the pinned IP.
+
+These controls are implemented in `delivery.ts` (`resolveHostnameToPinnedIp`,
+`createPinnedAgent`).
+
 ## Testing
 
 ```bash
