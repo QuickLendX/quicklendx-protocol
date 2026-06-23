@@ -8,7 +8,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 use crate::protocol_limits;
 use crate::types::{
     BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
-    PlatformFeeConfig, RebuildReport,
+    PlatformFeeConfig, PruneReport, RebuildReport,
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
@@ -1107,6 +1107,69 @@ impl InvoiceStorage {
         RebuildReport {
             scanned: end.saturating_sub(start),
             reindexed,
+            next_offset: end,
+        }
+    }
+
+    /// Prune terminal-state invoices whose terminal timestamp is older than
+    /// `older_than_secs` from the current ledger timestamp.
+    ///
+    /// Only invoices in a terminal status (`Paid`, `Defaulted`, `Cancelled`,
+    /// `Refunded`) are eligible. For `Paid` invoices the terminal timestamp
+    /// is `settled_at`; for other terminal statuses it falls back to
+    /// `created_at`. Invoices in `Pending`, `Verified`, or `Funded` status
+    /// are never pruned regardless of age.
+    ///
+    /// The operation is paginated via `offset`/`limit` (capped at 100 per
+    /// page) and removes each pruned invoice from all secondary indexes
+    /// (status, business, customer, tax_id, tag, category) and from primary
+    /// persistent storage via [`delete_invoice`](Self::delete_invoice).
+    ///
+    /// # Resumability
+    /// Pass the `next_offset` from the returned `PruneReport` as `offset`
+    /// on the next call. Stop when `next_offset` stops advancing (last page).
+    ///
+    /// # Returns
+    /// A `PruneReport` containing:
+    /// * `scanned`   — number of invoice IDs examined in this page.
+    /// * `pruned`    — number of invoices actually deleted.
+    /// * `next_offset` — offset for the next call.
+    pub fn prune_terminal_invoices_page(
+        env: &Env,
+        older_than_secs: u64,
+        offset: u32,
+        limit: u32,
+    ) -> PruneReport {
+        const MAX_PRUNE_PAGE: u32 = 100;
+        let capped = if limit > MAX_PRUNE_PAGE { MAX_PRUNE_PAGE } else { limit };
+
+        let now = env.ledger().timestamp();
+        let all_ids = Self::get_all_invoice_ids(env);
+        let total = all_ids.len() as u32;
+
+        let start = offset.min(total);
+        let end = start.saturating_add(capped).min(total);
+
+        let mut pruned: u32 = 0;
+        let mut i = start;
+        while i < end {
+            if let Some(id) = all_ids.get(i) {
+                if let Some(invoice) = Self::get(env, &id) {
+                    if invoice.status.is_terminal() {
+                        let terminal_ts = invoice.settled_at.unwrap_or(invoice.created_at);
+                        if terminal_ts.saturating_add(older_than_secs) < now {
+                            Self::delete_invoice(env, &id);
+                            pruned = pruned.saturating_add(1);
+                        }
+                    }
+                }
+            }
+            i = i.saturating_add(1);
+        }
+
+        PruneReport {
+            scanned: end.saturating_sub(start),
+            pruned,
             next_offset: end,
         }
     }

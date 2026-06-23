@@ -3562,6 +3562,43 @@ impl QuickLendXContract {
         Ok(report)
     }
 
+    /// Prune terminal-state invoices whose terminal timestamp is older than
+    /// `older_than_secs` from the current ledger timestamp.
+    ///
+    /// Only invoices in a terminal status (`Paid`, `Defaulted`, `Cancelled`,
+    /// `Refunded`) are eligible. For `Paid` invoices the terminal timestamp
+    /// is `settled_at`; for other terminal statuses it falls back to
+    /// `created_at`. Invoices in `Pending`, `Verified`, or `Funded` status
+    /// are never pruned regardless of age.
+    ///
+    /// Each pruned invoice is removed from all secondary indexes (status,
+    /// business, customer, tax_id, tag, category) and from primary persistent
+    /// storage. This operation is **irreversible** — there is no undo.
+    ///
+    /// # Resumability
+    /// The operation is paginated and resumable. Pass the `next_offset` from the
+    /// returned `PruneReport` as `offset` on the next call. Stop when
+    /// `next_offset` stops advancing (last page reached).
+    ///
+    /// # Arguments
+    /// * `admin`           - Must be the current protocol admin (auth required).
+    /// * `older_than_secs` - Retention window in seconds. Only invoices whose
+    ///                       terminal timestamp is older than this are pruned.
+    /// * `offset`          - Zero-based start position in the full invoice list.
+    /// * `limit`           - Max invoices to scan per call (capped at 100).
+    pub fn prune_terminal_invoices(
+        env: Env,
+        admin: Address,
+        older_than_secs: u64,
+        offset: u32,
+        limit: u32,
+    ) -> Result<PruneReport, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+        let report = InvoiceStorage::prune_terminal_invoices_page(&env, older_than_secs, offset, limit);
+        Ok(report)
+    }
+
     /// Repair missing held escrow reserve entries for one token from indexed invoice records.
     ///
     /// The first call (`offset = 0`) snapshots the current status-derived
@@ -3602,3 +3639,6 @@ mod test_settlement_auto_release;
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_dispute_interaction;
+
+#[cfg(test)]
+mod test_prune_terminal_invoices;
