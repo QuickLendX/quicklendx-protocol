@@ -477,7 +477,7 @@ impl AuditStorage {
     /// **exactly match** the results of a full audit query (with capped limit).
     pub fn get_audit_stats(env: &Env) -> AuditStats {
         let all_entries = Self::get_all_audit_entries(env);
-        let total_entries = all_entries.len() as u32;
+        let total_entries = all_entries.len();
 
         let operations_count = Vec::new(env);
         let mut unique_actors: Vec<Address> = Vec::new(env);
@@ -504,7 +504,7 @@ impl AuditStorage {
         AuditStats {
             total_entries,
             operations_count,
-            unique_actors: unique_actors.len() as u32,
+            unique_actors: unique_actors.len(),
             date_range: (min_timestamp, max_timestamp),
         }
     }

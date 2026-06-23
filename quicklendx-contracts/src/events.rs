@@ -655,7 +655,7 @@ pub fn emit_invoice_metadata_updated(env: &Env, invoice: &Invoice, metadata: &In
 
     InvoiceMetadataUpdated {
         invoice_id: invoice.id.clone(),
-        line_item_count: metadata.line_items.len() as u32,
+        line_item_count: metadata.line_items.len(),
         total_value: total,
         timestamp: env.ledger().timestamp(),
     }
@@ -1105,8 +1105,8 @@ pub fn emit_invoice_category_updated(
     InvoiceCategoryUpdated {
         invoice_id: invoice_id.clone(),
         business: business.clone(),
-        old_category: old_category.clone(),
-        new_category: new_category.clone(),
+        old_category: *old_category,
+        new_category: *new_category,
     }
     .publish(env);
 }

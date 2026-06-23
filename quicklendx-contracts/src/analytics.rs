@@ -324,7 +324,7 @@ impl AnalyticsCalculator {
             return 0;
         }
         let v = (numer.saturating_mul(10000)).saturating_div(denom) as i128;
-        v.min(10000).max(0)
+        v.clamp(0, 10000)
     }
 
     /// Calculate a snapshot of comprehensive platform metrics from on-chain state.
@@ -349,11 +349,11 @@ impl AnalyticsCalculator {
         let defaulted_invoices =
             crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Defaulted);
 
-        let total_invoices = (pending_invoices.len()
+        let total_invoices = pending_invoices.len()
             + verified_invoices.len()
             + funded_invoices.len()
             + paid_invoices.len()
-            + defaulted_invoices.len()) as u32;
+            + defaulted_invoices.len();
 
         // Calculate total volume
         let mut total_volume = 0i128;
@@ -376,7 +376,7 @@ impl AnalyticsCalculator {
         // Calculate total investments by counting invoices that have been funded at least once.
         // In this contract model, an invoice that is Paid or Defaulted must have been funded.
         let total_investments =
-            (funded_invoices.len() + paid_invoices.len() + defaulted_invoices.len()) as u32;
+            funded_invoices.len() + paid_invoices.len() + defaulted_invoices.len();
 
         // Calculate total fees collected
         let mut total_fees = 0i128;
@@ -401,7 +401,7 @@ impl AnalyticsCalculator {
         // Count verified businesses
         let verified_businesses =
             crate::verification::BusinessVerificationStorage::get_verified_businesses(env);
-        let verified_businesses_count = verified_businesses.len() as u32;
+        let verified_businesses_count = verified_businesses.len();
 
         // Calculate averages
         let average_invoice_amount = if total_invoices > 0 {
@@ -436,10 +436,10 @@ impl AnalyticsCalculator {
 
         // Calculate default rate
         let _current_timestamp = env.ledger().timestamp();
-        let default_rate = Self::bps(defaulted_invoices.len() as u32, total_investments);
+        let default_rate = Self::bps(defaulted_invoices.len(), total_investments);
 
         // Calculate success rate
-        let success_rate = Self::bps(paid_invoices.len() as u32, total_investments);
+        let success_rate = Self::bps(paid_invoices.len(), total_investments);
 
         let success_rate = success_rate.min(10000);
         let default_rate = default_rate.min(10000);
@@ -469,7 +469,7 @@ impl AnalyticsCalculator {
 
         // Get user's invoices
         let user_invoices = crate::storage::InvoiceStorage::get_business_invoices(env, user);
-        let total_invoices_uploaded = user_invoices.len() as u32;
+        let total_invoices_uploaded = user_invoices.len();
 
         // Get user's investments (simplified - would need proper tracking)
         let total_investments_made = 0u32; // Placeholder - would need investor tracking
@@ -571,7 +571,7 @@ impl AnalyticsCalculator {
         ];
 
         for category in categories.iter() {
-            volume_by_category.push_back((category.clone(), 0i128));
+            volume_by_category.push_back((*category, 0i128));
         }
 
         // Get all invoices in the period by combining all statuses
@@ -738,7 +738,7 @@ impl AnalyticsCalculator {
         .iter()
         {
             let count =
-                crate::storage::InvoiceStorage::get_invoices_by_status(env, *status).len() as u32;
+                crate::storage::InvoiceStorage::get_invoices_by_status(env, *status).len();
             total_transactions += count;
             if *status == InvoiceStatus::Paid {
                 successful_transactions = count;
@@ -755,7 +755,7 @@ impl AnalyticsCalculator {
         let defaulted_invoices =
             crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Defaulted);
         let error_rate = if total_transactions > 0 {
-            (defaulted_invoices.len() as u32)
+            defaulted_invoices.len()
                 .saturating_mul(10000)
                 .saturating_div(total_transactions) as i128
         } else {
@@ -855,7 +855,7 @@ impl AnalyticsCalculator {
         ];
 
         for category in categories.iter() {
-            category_breakdown.push_back((category.clone(), 0u32));
+            category_breakdown.push_back((*category, 0u32));
         }
 
         for invoice_id in all_invoices.iter() {
@@ -1219,14 +1219,14 @@ impl AnalyticsCalculator {
         // Calculate portfolio diversity score (simplified)
         let portfolio_diversity_score = if total_investments > 0 {
             // In a real implementation, this would analyze category distribution
-            let diversity = if total_investments > 10 {
+            
+            if total_investments > 10 {
                 80
             } else if total_investments > 5 {
                 60
             } else {
                 40
-            };
-            diversity
+            }
         } else {
             0
         };
@@ -1308,7 +1308,7 @@ impl AnalyticsCalculator {
                     env,
                     tier.clone(),
                 );
-            investors_by_tier.push_back((tier.clone(), tier_investors.len() as u32));
+            investors_by_tier.push_back((tier.clone(), tier_investors.len()));
         }
 
         // Calculate investors by risk level
@@ -1326,7 +1326,7 @@ impl AnalyticsCalculator {
                     env,
                     risk_level.clone(),
                 );
-            investors_by_risk.push_back((risk_level.clone(), risk_investors.len() as u32));
+            investors_by_risk.push_back((risk_level.clone(), risk_investors.len()));
         }
 
         // Calculate total investment volume and average
@@ -1362,8 +1362,8 @@ impl AnalyticsCalculator {
             0
         };
 
-        let average_risk_score = if verified_investors.len() > 0 {
-            total_risk_score.saturating_div(verified_investors.len() as u32)
+        let average_risk_score = if !verified_investors.is_empty() {
+            total_risk_score.saturating_div(verified_investors.len())
         } else {
             0
         };
@@ -1384,10 +1384,10 @@ impl AnalyticsCalculator {
         }
 
         Ok(InvestorPerformanceMetrics {
-            total_investors: total_investors as u32,
+            total_investors,
             verified_investors: verified_investors.len(),
-            pending_investors: pending_investors.len() as u32,
-            rejected_investors: rejected_investors.len() as u32,
+            pending_investors: pending_investors.len(),
+            rejected_investors: rejected_investors.len(),
             investors_by_tier,
             investors_by_risk,
             total_investment_volume,

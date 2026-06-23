@@ -209,8 +209,7 @@ fn normalize_cursor(cursor: u32, funded_count: u32) -> u32 {
 fn resolve_scan_limit(limit: Option<u32>) -> u32 {
     limit
         .unwrap_or(DEFAULT_OVERDUE_SCAN_BATCH_LIMIT)
-        .max(1)
-        .min(MAX_OVERDUE_SCAN_BATCH_LIMIT)
+        .clamp(1, MAX_OVERDUE_SCAN_BATCH_LIMIT)
 }
 
 /// @notice Scans funded invoices in a deterministic bounded window for overdue/default handling.

@@ -389,7 +389,7 @@ fn eq_trimmed_lower_ascii(lhs: &String, rhs: &String) -> bool {
     }
 
     for idx in 0..rhs_len {
-        if lhs_buf[lhs_start + idx].to_ascii_lowercase() != rhs_buf[idx].to_ascii_lowercase() {
+        if !lhs_buf[lhs_start + idx].eq_ignore_ascii_case(&rhs_buf[idx]) {
             return false;
         }
     }

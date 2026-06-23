@@ -240,7 +240,7 @@ pub fn record_payment(
     payer.require_auth();
 
     // Replay protection: reject duplicate nonces.
-    if payment_nonce.len() > 0 {
+    if !payment_nonce.is_empty() {
         let nonce_key = SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce.clone());
         let seen: bool = env.storage().persistent().get(&nonce_key).unwrap_or(false);
         if seen {
@@ -302,7 +302,7 @@ pub fn record_payment(
         &next_count,
     );
 
-    if payment_nonce.len() > 0 {
+    if !payment_nonce.is_empty() {
         env.storage().persistent().set(
             &SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce),
             &true,
@@ -577,14 +577,14 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     // Mark finalized before status transition to prevent re-entry.
     mark_finalized(env, invoice_id);
 
-    let previous_status = invoice.status.clone();
+    let previous_status = invoice.status;
     let paid_at = env.ledger().timestamp();
     invoice.mark_as_paid(env, business_address.clone(), env.ledger().timestamp());
     InvoiceStorage::update_invoice(env, &invoice);
 
     if previous_status != invoice.status {
-        InvoiceStorage::remove_from_status_invoices(env, previous_status.clone(), invoice_id);
-        InvoiceStorage::add_to_status_invoices(env, invoice.status.clone(), invoice_id);
+        InvoiceStorage::remove_from_status_invoices(env, previous_status, invoice_id);
+        InvoiceStorage::add_to_status_invoices(env, invoice.status, invoice_id);
     }
 
     let mut updated_investment = investment;
@@ -718,7 +718,7 @@ fn emit_payment_recorded(
             payer.clone(),
             applied_amount,
             total_paid,
-            status.clone(),
+            *status,
         ),
     );
 }

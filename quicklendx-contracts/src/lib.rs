@@ -4,7 +4,17 @@
     unused_imports,
     unused_variables,
     unused_comparisons,
-    deprecated
+    deprecated,
+    clippy::too_many_arguments,
+    clippy::doc_overindented_list_items,
+    clippy::absurd_extreme_comparisons,
+    clippy::needless_range_loop,
+    clippy::manual_checked_ops,
+    clippy::collapsible_match,
+    clippy::let_unit_value,
+    clippy::needless_borrow,
+    clippy::match_like_matches_macro,
+    clippy::needless_return
 )]
 
 //! QuickLendX contracts library - minimal surface.
@@ -168,6 +178,8 @@ mod test_fuzz_invoice_metadata;
 mod test_fuzz_distribute_revenue;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_partial_payment;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_volume_tier_props;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_treasury_split_overflow_props;
 #[cfg(test)]
@@ -762,7 +774,7 @@ impl QuickLendXContract {
             protocol_limits::MAX_DESCRIPTION_LENGTH,
         )?;
 
-        if description.len() == 0 {
+        if description.is_empty() {
             return Err(QuickLendXError::InvalidDescription);
         }
 
@@ -1116,7 +1128,7 @@ impl QuickLendXContract {
     /// Get invoice count by status
     pub fn get_invoice_count_by_status(env: Env, status: InvoiceStatus) -> u32 {
         let invoices = InvoiceStorage::get_invoices_by_status(&env, status);
-        invoices.len() as u32
+        invoices.len()
     }
 
     /// Get total invoice count
@@ -1695,9 +1707,9 @@ impl QuickLendXContract {
         // Get the investment to track investor analytics
         let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
-        let result = do_handle_default(&env, &invoice_id);
+        
 
-        result
+        do_handle_default(&env, &invoice_id)
     }
 
     /// Mark an invoice as defaulted (admin only)
@@ -1730,9 +1742,9 @@ impl QuickLendXContract {
         // Get the investment to track investor analytics
         let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
-        let result = do_mark_invoice_defaulted(&env, &invoice_id, grace_period);
+        
 
-        result
+        do_mark_invoice_defaulted(&env, &invoice_id, grace_period)
     }
 
     /// Calculate profit and platform fee
@@ -2189,7 +2201,7 @@ impl QuickLendXContract {
 
     // Category and Tag Management Functions
 
-    /// Get invoices by category
+    // Get invoices by category
     /*
         pub fn get_invoices_by_category(
             env: Env,
@@ -2243,8 +2255,8 @@ impl QuickLendXContract {
         // Only the business owner can update the category
         invoice.business.require_auth();
 
-        let old_category = invoice.category.clone();
-        invoice.update_category(new_category.clone());
+        let old_category = invoice.category;
+        invoice.update_category(new_category);
 
         // Validate the new category
         verification::validate_invoice_category(&new_category)?;
@@ -2567,7 +2579,7 @@ impl QuickLendXContract {
 
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let len_u32 = filtered.len() as u32;
+        let len_u32 = filtered.len();
         let start = offset.min(len_u32);
         let end = start.saturating_add(capped_limit).min(len_u32);
         let mut idx = start;
@@ -2682,7 +2694,7 @@ impl QuickLendXContract {
 
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let len_u32 = filtered.len() as u32;
+        let len_u32 = filtered.len();
         let start = offset.min(len_u32);
         let end = start.saturating_add(capped_limit).min(len_u32);
         let mut idx = start;
@@ -2731,7 +2743,7 @@ impl QuickLendXContract {
 
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let len_u32 = filtered.len() as u32;
+        let len_u32 = filtered.len();
         let start = offset.min(len_u32);
         let end = start.saturating_add(capped_limit).min(len_u32);
         let mut idx = start;
@@ -2782,7 +2794,7 @@ impl QuickLendXContract {
 
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let len_u32 = filtered.len() as u32;
+        let len_u32 = filtered.len();
         let start = offset.min(len_u32);
         let end = start.saturating_add(capped_limit).min(len_u32);
         let mut idx = start;
@@ -2819,7 +2831,7 @@ impl QuickLendXContract {
             backup_id: backup_id.clone(),
             timestamp: env.ledger().timestamp(),
             description: String::from_str(&env, "Manual Backup"),
-            invoice_count: invoices.len() as u32,
+            invoice_count: invoices.len(),
             status: backup::BackupStatus::Active,
             format_version: 2,
         };
@@ -3067,7 +3079,7 @@ impl QuickLendXContract {
         if invoice.dispute_status != DisputeStatus::None {
             return Err(QuickLendXError::DisputeAlreadyExists);
         }
-        if reason.len() == 0 {
+        if reason.is_empty() {
             return Err(QuickLendXError::InvalidDisputeReason);
         }
         dispute_timeline::clear_under_review_timestamp(&env, &invoice_id);

@@ -237,7 +237,7 @@ impl EscrowStorage {
         } else {
             Self::get_repair_snapshot(env, currency).ok_or(QuickLendXError::InvalidStatus)?
         };
-        let total = ids.len() as u32;
+        let total = ids.len();
 
         if offset > total {
             return Err(QuickLendXError::InvalidStatus);
