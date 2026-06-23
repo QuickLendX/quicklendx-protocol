@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { auditService } from "../src/services/auditService";
+import { auditService } from "./auditService";
 
 function printUsage() {
   console.log("Usage: npm run verify-audit -- <date>");
