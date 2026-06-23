@@ -19,10 +19,26 @@ app.set("trust proxy", true);
 // has full control over which responses get ETags and which do not.
 app.set("etag", false);
 
+// Extend Express Request to include rawBody
+declare global {
+  namespace Express {
+    interface Request {
+      rawBody?: Buffer;
+    }
+  }
+}
+
 // Security Middleware
 app.use(helmet());
 app.use(cors(corsOptionsDelegate));
-app.use(express.json({ limit: "1mb" }));
+app.use(
+  express.json({
+    limit: "1mb",
+    verify: (req: express.Request, res: express.Response, buf: Buffer) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.set("trust proxy", true);
 
 // Test middleware to simulate no IP for coverage
