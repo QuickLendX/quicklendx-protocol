@@ -24,6 +24,11 @@ fn reason(env: &Env, msg: &str) -> String {
     String::from_str(env, msg)
 }
 
+fn reason_of_len(env: &Env, len: usize) -> String {
+    let s = "x".repeat(len);
+    String::from_str(env, &s)
+}
+
 #[test]
 fn test_enter_incident_mode_sets_pause_and_maintenance() {
     let env = Env::default();
@@ -61,13 +66,7 @@ fn test_enter_incident_mode_rejects_oversized_reason() {
     let env = Env::default();
     let (client, admin) = setup(&env);
 
-    let oversized: String = {
-        let bytes = soroban_sdk::Bytes::from_slice(
-            &env,
-            &vec![b'x'; (MAX_REASON_LEN + 1) as usize],
-        );
-        String::try_from_bytes(&bytes).unwrap()
-    };
+    let oversized = reason_of_len(&env, (MAX_REASON_LEN + 1) as usize);
 
     let result = client.try_enter_incident_mode(&admin, &oversized);
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidDescription);
