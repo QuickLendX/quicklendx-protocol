@@ -32,6 +32,7 @@ Each line in a `.jsonl` file is a valid JSON object:
   },
   "ip": "10.0.0.42",
   "userAgent": "curl/8.4.0",
+  "requestId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "effect": "Webhook secret rotated for keyId: wh-live-key-001",
   "success": true
 }
@@ -49,6 +50,7 @@ Each line in a `.jsonl` file is a valid JSON object:
 | `redactedParams` | object | Same as params, sensitive fields replaced |
 | `ip` | string | Client IP (first IP from X-Forwarded-For) |
 | `userAgent` | string | Client User-Agent header |
+| `requestId` | string? | Correlation/request id of the originating API call, propagated from the inbound `X-Request-Id` header via async-local-storage. Absent for entries written outside a request scope (e.g. background workers). |
 | `effect` | string | Human-readable summary of the resulting change |
 | `success` | boolean | Whether the operation completed successfully |
 | `errorMessage` | string? | Error message if `success` is false |
