@@ -135,9 +135,13 @@ Both tables are created by migration `v008_create_notifications` (forward-only).
 
 ## Retry Behaviour
 
-A `failed` row is retried automatically the next time the same event is replayed (e.g., via the backfill/replay service). There is no built-in exponential back-off at the notification layer; back-off is the responsibility of the upstream event replay scheduler.
+A structured retry budget with circuit-breaker behavior is implemented around outbound notification delivery.
+- Transient SMTP failures are retried automatically with an exponential backoff and jittered window.
+- A `failed` row is marked as such only after the in-process retry budget is exhausted (permanent drop).
+- On a permanent drop, the failure is persisted to the audit log and surfaced as a `HIGH` severity alert via `alertRouter`.
+- After a permanent drop, the row is stored as `failed` and is retryable the next time the same event is replayed (e.g., via the backfill/replay service).
 
-To manually trigger a retry, replay the originating on-chain event through `EventProcessor.processEvent()`.
+To manually trigger a retry of a permanent drop, replay the originating on-chain event through `EventProcessor.processEvent()`.
 
 ---
 

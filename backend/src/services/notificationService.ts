@@ -7,6 +7,10 @@ import {
   UserNotificationPreferences,
   NotificationTemplate,
 } from '../types/contract';
+import { CircuitBreaker } from '../lib/circuitBreaker';
+import { auditService } from './auditService';
+import { alertRouter } from './alertRouter';
+import { Severity } from '../types/reconciliation';
 
 // Map NotificationType enum values to the notify_* column names
 const PREF_COLUMN: Record<NotificationType, string> = {
@@ -19,6 +23,7 @@ const PREF_COLUMN: Record<NotificationType, string> = {
 export class NotificationService {
   private static instance: NotificationService;
   private transporter: nodemailer.Transporter;
+  private circuitBreaker: CircuitBreaker;
 
   private constructor() {
     this.transporter = nodemailer.createTransport({
@@ -29,6 +34,15 @@ export class NotificationService {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+    });
+
+    this.circuitBreaker = new CircuitBreaker({
+      retries: 3,
+      initialDelayMs: 1000,
+      maxDelayMs: 30000,
+      failureThreshold: 5,
+      resetTimeoutMs: 30000,
+      maxConcurrency: 50,
     });
   }
 
@@ -199,10 +213,39 @@ export class NotificationService {
     const template = this.getEmailTemplate(event);
 
     try {
-      await this.sendEmail(preferences.email_address, template);
+      await this.circuitBreaker.execute(async () => {
+        await this.sendEmail(preferences.email_address as string, template);
+      });
       this.markSent(rowId);
     } catch (error: any) {
       this.markFailed(rowId, error?.message ?? String(error));
+      
+      auditService.append({
+        actor: "system",
+        operation: "NOTIFICATION_DELIVERY_FAILED",
+        params: {
+          eventId: event.id,
+          userId: event.user_id,
+          error: error?.message ?? String(error),
+        },
+        redactedParams: {
+          eventId: event.id,
+          userId: event.user_id,
+          error: error?.message ?? String(error),
+        },
+        ip: "127.0.0.1",
+        userAgent: "system-notification",
+        effect: "circuit_breaker_mark_failed",
+        success: false,
+        errorMessage: error?.message ?? String(error),
+      });
+
+      await alertRouter.routeAlert(
+        `notification-drop-${event.id}`,
+        Severity.HIGH,
+        `Permanent notification drop for event ${event.id}: ${error?.message ?? String(error)}`
+      ).catch(() => {});
+
       throw error;
     }
   }
