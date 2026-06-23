@@ -16,6 +16,7 @@ describe('API Key Rotation Endpoint (Integration)', () => {
 
   beforeAll(async () => {
     process.env.DATABASE_PATH = TEST_DB_PATH;
+    fs.mkdirSync(TEST_DB_DIR, { recursive: true });
     closeDatabase();
     const conn = getDatabase();
 

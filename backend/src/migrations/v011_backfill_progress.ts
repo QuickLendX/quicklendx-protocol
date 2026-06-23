@@ -1,7 +1,7 @@
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
 
 export default {
-  version: 6,
+  version: 11,
   name: "backfill_progress",
   authoredAt: "2026-05-28T00:00:00Z",
   author: "QuickLendX Engineering",
