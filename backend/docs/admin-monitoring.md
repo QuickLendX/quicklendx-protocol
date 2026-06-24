@@ -232,3 +232,219 @@ npm run test:coverage
 - `src/services/statusService.ts` — provides `getLastIndexedLedger()`, `getCurrentLedger()`, `isMaintenanceEnabled()`
 - `src/services/invariantService.ts` — stateless FK checks over mock data arrays
 - `src/services/webhookQueueService.ts` — ring buffer with overflow tracking
+
+
+---
+
+## Per-Tenant Feature Flags
+
+Feature flags allow rolling out new endpoints (e.g. KYC tiers, dispute composer, bid ranking changes) to a subset of API key tenants without separate deployments. They are backed by the SQLite `feature_flags` table and gate routes via the `requireFlag` middleware.
+
+### Data model
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT (UUID) | Unique row identifier |
+| `api_key_id` | TEXT | The API key that this flag applies to |
+| `flag` | TEXT | Feature flag name (snake_case, e.g. `kyc_tiers`) |
+| `enabled` | INTEGER (0/1) | `1` = on, `0` = off |
+| `created_at` | ISO 8601 | When the row was first created |
+| `updated_at` | ISO 8601 | Last modification time |
+| `updated_by` | TEXT | Admin key identity that made the last change |
+
+**Unique constraint:** `(api_key_id, flag)` — one row per tenant per flag.  
+**Default-deny:** absence of a row means the flag is **off**. Tenants never see flags they haven't been explicitly granted.
+
+---
+
+### Middleware usage
+
+Protect a new endpoint by adding `requireFlag("flag_name")` after your auth middleware:
+
+```typescript
+import { requireFlag } from "../../middleware/feature-flag";
+import { apiKeyAuthMiddleware } from "../../middleware/api-key-auth";
+
+router.get(
+  "/kyc/tiers",
+  apiKeyAuthMiddleware,
+  requireFlag("kyc_tiers"),
+  kycTiersController,
+);
+```
+
+**Behaviour:**
+- Flag **on** → `next()` is called, request proceeds normally.
+- Flag **off** (or no row) → `404 NOT_FOUND` is returned. The 404 (not 403) is deliberate — it avoids leaking that a feature exists but is gated.
+- No `req.apiKey` (missing auth) → `401 UNAUTHORIZED`.
+
+**Performance:** flag checks use an in-process TTL cache (5 s). Cache hits cost ~0 µs. The full SQLite round-trip on cache miss is typically <0.5 ms and adds less than 1 ms of latency to any request.
+
+---
+
+### Admin Endpoints
+
+All feature flag admin endpoints require `Authorization: Bearer <api_key>` where the key holds at minimum `write:*` (operations_admin) for write operations, or `read:*` (support) for reads.
+
+#### List all flags
+
+```
+GET /api/v1/admin/feature-flags
+```
+
+**Requires:** `operations_admin` or `super_admin`
+
+**Response:**
+```json
+{
+  "flags": [
+    {
+      "id": "uuid",
+      "api_key_id": "key-id",
+      "flag": "kyc_tiers",
+      "enabled": true,
+      "created_at": "2026-06-24T00:00:00.000Z",
+      "updated_at": "2026-06-24T00:00:00.000Z",
+      "updated_by": "api_key:admin-key-id"
+    }
+  ]
+}
+```
+
+---
+
+#### List flags for a specific tenant
+
+```
+GET /api/v1/admin/feature-flags/:apiKeyId
+```
+
+**Requires:** `support`, `operations_admin`, or `super_admin`
+
+**Response:**
+```json
+{
+  "api_key_id": "key-id",
+  "flags": [ ... ]
+}
+```
+
+---
+
+#### Enable or disable a flag
+
+```
+PUT /api/v1/admin/feature-flags/:apiKeyId/:flag
+```
+
+**Requires:** `operations_admin` or `super_admin`
+
+**Body:**
+```json
+{ "enabled": true }
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | boolean | Yes | `true` to enable, `false` to disable |
+
+**Response:** `200 OK`
+```json
+{
+  "flag": {
+    "id": "uuid",
+    "api_key_id": "key-id",
+    "flag": "kyc_tiers",
+    "enabled": true,
+    ...
+  }
+}
+```
+
+**Errors:**
+- `400 VALIDATION_ERROR` — `enabled` is missing or not a boolean
+- `401/403` — missing or insufficient credentials
+
+Every successful toggle is recorded in the in-memory `auditLogService` with `action: "FEATURE_FLAG_TOGGLE"` and the full metadata (`api_key_id`, `flag`, `enabled`, `updated_by`).
+
+---
+
+#### Delete a flag (revert to default-deny)
+
+```
+DELETE /api/v1/admin/feature-flags/:apiKeyId/:flag
+```
+
+**Requires:** `operations_admin` or `super_admin`
+
+**Response:** `204 No Content` on success, `404 NOT_FOUND` if the row does not exist.
+
+---
+
+### Audit trail
+
+Every flag toggle and deletion records an entry via `auditLogService.recordAdminAction()`:
+
+| Field | Value |
+|-------|-------|
+| `action` | `"FEATURE_FLAG_TOGGLE"` or `"FEATURE_FLAG_DELETE"` |
+| `outcome` | `"performed"` |
+| `role` | Resolved role of the actor (e.g. `operations_admin`) |
+| `metadata.api_key_id` | Target tenant |
+| `metadata.flag` | Flag name |
+| `metadata.enabled` | New state (`true`/`false`) — present on toggle |
+| `metadata.updated_by` | Admin identity string |
+
+Audit entries are queryable via `auditLogService.listEntries()` and visible through the existing `GET /api/v1/admin/audit` endpoint.
+
+---
+
+### Cache behaviour
+
+| Event | Cache effect |
+|-------|-------------|
+| `isEnabled()` — first call | SQLite read → populates cache (TTL 5 s) |
+| `isEnabled()` — subsequent calls within TTL | In-memory hit, ~0 µs |
+| `setFlag()` (enable or disable) | Invalidates the `(api_key_id, flag)` entry immediately |
+| `deleteFlag()` | Invalidates the `(api_key_id, flag)` entry immediately |
+| TTL expiry | Next `isEnabled()` re-reads from SQLite |
+
+The cache is per-process and in-memory only. In a multi-process/multi-instance deployment, the TTL (5 s) bounds the propagation delay of a flag change across instances.
+
+---
+
+### Testing
+
+```bash
+cd backend
+npm test -- feature-flag
+```
+
+To run with coverage:
+
+```bash
+npm run test:coverage -- feature-flag
+```
+
+**Test coverage includes:**
+- Flag-on tenant sees endpoint (`next()` called)
+- Flag-off tenant gets 404
+- Default (no row) treats flag as off → 404
+- Admin toggle is audited
+- Cache invalidates on toggle
+- Flag check adds <1 ms overhead (performance assertion over 1 000 iterations)
+- Full HTTP integration: PUT, GET (all), GET (per-key), DELETE
+- Unauthenticated and under-privileged requests are rejected
+
+---
+
+### Migration
+
+The `feature_flags` table is created by migration `v012_feature_flags.ts`.
+
+```bash
+cd backend
+npm run migrate
+```
+
+The migration is reversible: `npm run migrate:down` drops the table and indexes cleanly.
