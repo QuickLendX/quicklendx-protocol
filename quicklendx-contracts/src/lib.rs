@@ -3327,10 +3327,46 @@ impl QuickLendXContract {
         invoice.dispute.resolution = resolution.clone();
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
+        invoice.dispute.resolution_outcome = None;
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
         // Emit DisputeResolved event immediately after state mutation.
         emit_dispute_resolved(&env, &invoice_id, &admin, &resolution);
+        if let Some(updated_invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
+            // Lifecycle trigger: dispute-resolved notifications for business and investor.
+            let _ = notifications::NotificationSystem::notify_dispute_resolved(
+                &env,
+                &updated_invoice,
+            );
+        }
+        Ok(())
+    }
+
+    pub fn resolve_dispute_structured(
+        env: Env,
+        invoice_id: BytesN<32>,
+        admin: Address,
+        outcome: DisputeResolution,
+        note: String,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        validate_dispute_resolution(&note)?;
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        if invoice.dispute_status != DisputeStatus::UnderReview {
+            return Err(QuickLendXError::DisputeNotUnderReview);
+        }
+
+        invoice.dispute_status = DisputeStatus::Resolved;
+        invoice.dispute.resolution = note.clone();
+        invoice.dispute.resolution_outcome = Some(outcome);
+        invoice.dispute.resolved_by = admin.clone();
+        invoice.dispute.resolved_at = env.ledger().timestamp();
+        InvoiceStorage::update_invoice(&env, &invoice);
+        dispute::track_dispute_invoice(&env, &invoice_id);
+        // Emit DisputeResolved event immediately after state mutation.
+        emit_dispute_resolved(&env, &invoice_id, &admin, &note);
         if let Some(updated_invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
             // Lifecycle trigger: dispute-resolved notifications for business and investor.
             let _ = notifications::NotificationSystem::notify_dispute_resolved(
