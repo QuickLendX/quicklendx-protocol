@@ -4,6 +4,7 @@ import { auditLogService } from "../../services/auditLogService";
 import { config } from "../../config";
 import { getUser } from "../../middleware/userAuth";
 import fs from "fs";
+import { assertExportToken } from "../../lib/entityId";
 
 export const requestExport = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -46,6 +47,7 @@ export const requestExport = async (req: Request, res: Response, next: NextFunct
 export const downloadExport = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token = req.params.token as string;
+    assertExportToken(token);
     const filePath = await exportService.getFilePath(token);
 
     if (!filePath) {
