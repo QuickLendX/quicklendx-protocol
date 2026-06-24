@@ -41,3 +41,21 @@ Example Response:
 ## Recovery
 
 Once metrics fall below degraded thresholds for a complete batch cycle, the controller automatically promotes the strategy back toward `Normal`.
+
+## Contract Health Snapshot
+
+Clients that need a single on-ledger answer to "can the protocol accept writes right now?"
+should call the Soroban entrypoint `get_health_status()` instead of polling
+`is_paused`, `is_maintenance_mode`, and related getters independently.
+
+The returned `HealthStatus` struct includes:
+
+- `is_paused`, `is_maintenance`, `maintenance_reason`
+- `backpressure_active` (contract-side load shedding)
+- `index_lag_seconds` and `data_is_stale` (freshness advisory fields)
+- `writes_allowed` — derived `true` only when pause, maintenance, and backpressure
+  all permit writes
+
+This read is pause-exempt, requires no authentication, and performs no storage
+writes. It gives UI, indexer, and monitoring clients one consistent ledger view
+for gating user actions or showing degraded-state banners.
