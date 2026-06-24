@@ -110,6 +110,8 @@ mod test_escrow_event_completeness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_expiry_boundary;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency;
