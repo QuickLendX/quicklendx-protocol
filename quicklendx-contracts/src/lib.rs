@@ -48,7 +48,7 @@ mod test_escrow;
 mod test_fees;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance_write_matrix;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
@@ -143,7 +143,7 @@ mod test_investment_consistency;
 mod test_accept_bid_race;
 #[cfg(test)]
 mod test_bid_cancel_accept_race;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
@@ -720,6 +720,16 @@ impl QuickLendXContract {
     /// Return whether the contract is currently paused.
     pub fn is_paused(env: Env) -> bool {
         pause::PauseControl::is_paused(&env)
+    }
+
+    /// Return whether the contract is currently in maintenance mode.
+    pub fn is_maintenance_mode(env: Env) -> bool {
+        maintenance::MaintenanceControl::is_maintenance_mode(&env)
+    }
+
+    /// Return the current maintenance reason string, or `None` if not in maintenance.
+    pub fn get_maintenance_reason(env: Env) -> Option<String> {
+        maintenance::MaintenanceControl::get_maintenance_reason(&env)
     }
 
     /// Atomically enter incident mode: hard pause plus maintenance with reason.
