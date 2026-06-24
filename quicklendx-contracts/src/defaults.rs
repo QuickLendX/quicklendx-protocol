@@ -209,8 +209,7 @@ fn normalize_cursor(cursor: u32, funded_count: u32) -> u32 {
 fn resolve_scan_limit(limit: Option<u32>) -> u32 {
     limit
         .unwrap_or(DEFAULT_OVERDUE_SCAN_BATCH_LIMIT)
-        .max(1)
-        .min(MAX_OVERDUE_SCAN_BATCH_LIMIT)
+        .clamp(1, MAX_OVERDUE_SCAN_BATCH_LIMIT)
 }
 
 /// @notice Scans funded invoices in a deterministic bounded window for overdue/default handling.
@@ -346,6 +345,10 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     }
 
     emit_invoice_defaulted(env, &invoice);
+
+    // Lifecycle trigger: emits `NotificationType::InvoiceDefaulted` to business
+    // and investor after the default transition is fully persisted.
+    let _ = crate::notifications::NotificationSystem::notify_invoice_defaulted(env, &invoice);
 
     Ok(())
 }

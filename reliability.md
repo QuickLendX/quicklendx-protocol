@@ -59,3 +59,32 @@ The returned `HealthStatus` struct includes:
 This read is pause-exempt, requires no authentication, and performs no storage
 writes. It gives UI, indexer, and monitoring clients one consistent ledger view
 for gating user actions or showing degraded-state banners.
+
+---
+
+## On-Chain Incident Mode (Protocol Runbook)
+
+During a **security incident**, operators must not call `pause` and
+`set_maintenance_mode` as separate transactions — that leaves a window where the
+protocol is half-frozen and half-live.
+
+Use the coordinated contract entrypoints instead:
+
+| Action | Entrypoint | Effect |
+| --- | --- | --- |
+| Engage incident response | `enter_incident_mode(admin, reason)` | Atomically sets hard pause **and** maintenance mode with an on-chain reason; returns `IncidentSnapshot` (`is_paused`, `is_maintenance`, `reason`, `timestamp`) for audit/runbook logs |
+| Clear incident response | `exit_incident_mode(admin)` | Atomically clears both flags; idempotent when already normal |
+
+**Operator checklist**
+
+1. Call `enter_incident_mode` with a concise reason (≤ 256 bytes).
+2. Record the returned `IncidentSnapshot` in the incident ticket.
+3. Use read-only queries (`get_protocol_health`, `get_health_status`, `get_invoice`, etc.) while investigating.
+4. When safe, call `exit_incident_mode` and confirm both flags are `false`.
+
+**Recovery from drift:** If pause and maintenance were toggled independently and
+are out of sync, call `exit_incident_mode` to reset both, or `enter_incident_mode`
+to realign them and refresh the reason.
+
+See [`docs/contracts/operations.md`](docs/contracts/operations.md) for the full
+pause vs. maintenance matrix.

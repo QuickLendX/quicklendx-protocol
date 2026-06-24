@@ -106,7 +106,7 @@ describe("requestContext", () => {
   describe("withCorrelationId", () => {
     it("should set correlation ID in context for synchronous function", () => {
       const testId = "test-correlation-id";
-      let capturedId: string | null = null;
+      let capturedId: string | undefined;
 
       withCorrelationId(testId, () => {
         capturedId = getCorrelationId();
@@ -117,7 +117,7 @@ describe("requestContext", () => {
 
     it("should set correlation ID in context for async function", async () => {
       const testId = "async-correlation-id";
-      let capturedId: string | null = null;
+      let capturedId: string | undefined;
 
       await withCorrelationId(testId, async () => {
         await Promise.resolve();
@@ -172,14 +172,14 @@ describe("requestContext", () => {
         expect(getCorrelationId()).toBe(testId);
       });
 
-      expect(getCorrelationId()).toBeNull();
+      expect(getCorrelationId()).toBeUndefined();
     });
 
     it("should handle nested contexts", () => {
       const outerId = "outer";
       const innerId = "inner";
-      let capturedInner: string | null = null;
-      let capturedOuter: string | null = null;
+      let capturedInner: string | undefined;
+      let capturedOuter: string | undefined;
 
       withCorrelationId(outerId, () => {
         capturedOuter = getCorrelationId();
@@ -191,13 +191,13 @@ describe("requestContext", () => {
 
       expect(capturedOuter).toBe(outerId);
       expect(capturedInner).toBe(innerId);
-      expect(getCorrelationId()).toBeNull();
+      expect(getCorrelationId()).toBeUndefined();
     });
   });
 
   describe("getCorrelationId", () => {
-    it("should return null when no context is set", () => {
-      expect(getCorrelationId()).toBeNull();
+    it("should return undefined when no context is set", () => {
+      expect(getCorrelationId()).toBeUndefined();
     });
 
     it("should return the correlation ID from context", () => {
@@ -207,14 +207,14 @@ describe("requestContext", () => {
       });
     });
 
-    it("should return null after context is cleared", () => {
+    it("should return undefined after context is cleared", () => {
       const testId = "test-id";
       
       withCorrelationId(testId, () => {
         expect(getCorrelationId()).toBe(testId);
       });
 
-      expect(getCorrelationId()).toBeNull();
+      expect(getCorrelationId()).toBeUndefined();
     });
   });
 

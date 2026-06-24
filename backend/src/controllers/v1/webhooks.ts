@@ -59,10 +59,11 @@ export const registerSubscriber = async (
       return;
     }
 
-    const { subscriber_id, grace_period_seconds } = parsed.data;
+    const { subscriber_id, grace_period_seconds, algorithm } = parsed.data;
     const result = webhookSecretService.registerSubscriber(
       subscriber_id,
-      grace_period_seconds
+      grace_period_seconds,
+      algorithm
     );
 
     res.status(201).json({

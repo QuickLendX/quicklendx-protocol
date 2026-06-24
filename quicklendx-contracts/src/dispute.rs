@@ -65,7 +65,6 @@ use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 /// ### Documentation
 /// See `docs/settlement-dispute-interaction.md` for complete state machine diagrams
 /// and resolution outcome specifications.
-
 fn dispute_index_key() -> soroban_sdk::Symbol {
     symbol_short!("dispute")
 }
@@ -175,6 +174,9 @@ pub fn create_dispute(
 
     InvoiceStorage::update_invoice(env, &invoice);
     add_to_dispute_index(env, invoice_id);
+
+    // Lifecycle trigger: emits dispute-opened notifications to business and investor.
+    let _ = crate::notifications::NotificationSystem::notify_dispute_opened(env, &invoice);
 
     Ok(())
 }
@@ -298,6 +300,10 @@ pub fn resolve_dispute(
     invoice.dispute.resolved_by = admin.clone();
     invoice.dispute.resolved_at = env.ledger().timestamp();
     InvoiceStorage::update_invoice(env, &invoice);
+
+    // Lifecycle trigger: emits dispute-resolved notifications to business and investor.
+    let _ = crate::notifications::NotificationSystem::notify_dispute_resolved(env, &invoice);
+
     Ok(())
 }
 

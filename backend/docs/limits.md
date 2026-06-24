@@ -9,6 +9,50 @@ To prevent abuse, memory pressure, and injection vectors, all incoming HTTP requ
 1. **Size limits** on body, query parameters, and headers
 2. **Input validation** via Zod schemas
 3. **Sanitization** to prevent XSS and injection attacks
+4. **Rate limits** that are documented in OpenAPI and surfaced through `/api/v1/status`
+
+## Rate Limits
+
+The backend exposes two always-on request limit layers and route-specific stricter
+policies for high-cost operations. The live thresholds come from
+`src/middleware/rate-limit.ts`, which is also the source used by
+`GET /api/v1/status`.
+
+| Policy | Default limit | Window | Block | Key | Applies to |
+|--------|---------------|--------|-------|-----|------------|
+| `global` | 100 requests | 60s | 60s | client IP | All public API endpoints |
+| `perKey` | 60 requests | 60s | 60s | API key, falling back to client IP | All API endpoints after auth context is available |
+| `strict` | 5 requests | 60s | 300s | client IP | Custom sensitive handlers using `strictRateLimitMiddleware` |
+| `reconciliation` | 10 requests | 60s | 120s | API key, falling back to client IP | Reconciliation and monitoring routes |
+| `export` | 5 requests | 60s | 120s | API key, falling back to client IP | Export generation and download routes |
+
+In `NODE_ENV=test`, the exported policy snapshot intentionally uses larger limits
+so conformance tests can exercise endpoints without tripping the limiter:
+`global` and `perKey` use 1000 requests, while `strict`, `reconciliation`, and
+`export` use 100 requests.
+
+### OpenAPI annotation
+
+Every operation in `openapi.yaml` has an `x-rate-limit` extension:
+
+```yaml
+x-rate-limit:
+  policies: [global, perKey]
+```
+
+Export endpoints include the stricter export layer:
+
+```yaml
+x-rate-limit:
+  policies: [global, perKey, export]
+```
+
+### Status response
+
+`GET /api/v1/status` returns the live policy snapshot under `rateLimits`.
+Only public thresholds, windows, keying mode, and response header names are
+returned. Runtime bucket state such as IP buckets, API key identifiers,
+remaining points, and reset timers is not exposed.
 
 ## Request Size Limits
 
@@ -193,9 +237,105 @@ backend/src/
 │   ├── invoices.ts             # Invoice-specific schemas
 │   ├── bids.ts               # Bid-specific schemas
 │   └── settlements.ts          # Settlement-specific schemas
+├── services/
+│   └── exposureService.ts      # Per-investor exposure cap enforcement
 ├── app.ts                      # Global middleware registration
 └── routes/v1/
     ├── bids.ts                 # Updated with query validation
     ├── invoices.ts             # Updated with param + query validation
     └── settlements.ts          # Updated with param + query validation
 ```
+
+---
+
+## Per-Investor Exposure Cap
+
+`POST /api/v1/bids` enforces an off-chain per-investor exposure cap that
+mirrors the on-chain `max_active_bids_per_investor` policy but operates
+across **both** active bids and unsettled settlement positions. The cap
+short-circuits bids that would violate policy before the on-chain
+contract rejects them — saving wasted RPC and producing a precise
+API-level error.
+
+### Policy
+
+- **Scope:** sum of bid amounts in `Placed` status **plus** settlement
+  amounts in `Pending` or `Processing` status for the same investor.
+- **Unit:** USD-equivalent. Each bid/settlement amount is normalized
+  through a per-currency rate (USDC/USDT/USD = 1:1, XLM = 0.12, unknown
+  currencies default to 1:1). All math is performed in BigInt at 6-decimal
+  precision (micro-USD) so no precision is lost during summation.
+- **Cap source:** `EXPOSURE_CAP_PER_INVESTOR_USD` env var, expressed in
+  whole USD units (e.g. `10000000` = $10M). Loaded at startup via the
+  zod-validated config in `src/config.ts`. Default = $10B (`10000000000`).
+  A value of `0` disables the cap.
+- **Withdrawn / finalized:** bids in `Withdrawn`/`Expired`/`Cancelled`
+  status and settlements in `Paid`/`Defaulted` status are **excluded**
+  from the exposure tally.
+
+### Configuration
+
+| Env var                            | Default          | Description |
+|------------------------------------|------------------|-------------|
+| `EXPOSURE_CAP_PER_INVESTOR_USD`    | `10000000000`    | Per-investor USD exposure cap (whole units). |
+
+### Response
+
+When the cap would be exceeded the request is rejected with:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Content-Type: application/json
+
+{
+  "error": {
+    "message": "Investor <id> exposure cap would be exceeded: current=..., attempted=..., cap=...",
+    "code": "EXPOSURE_CAP_EXCEEDED",
+    "currentExposureUsd": "<bigint as string, micro-USD>",
+    "attemptedUsd": "<bigint as string, micro-USD>",
+    "capUsd": "<bigint as string, micro-USD>",
+    "investor": "<stellar address>"
+  }
+}
+```
+
+| Error code                | HTTP status | Trigger                                                |
+|---------------------------|-------------|--------------------------------------------------------|
+| `EXPOSURE_CAP_EXCEEDED`   | `429`       | Projected exposure (current + new bid) > cap           |
+
+### Why 429?
+
+`429 Too Many Requests` is the conventional status for "slow down" /
+"back off" responses. We use it here for the same semantic intent:
+the investor is temporarily at capacity and should reduce their
+exposure (e.g. wait for a settlement to finalize, withdraw an active
+bid) before submitting again. A `Retry-After`-style hint is encoded in
+the response body's `remainingUsd` field for clients that want to
+surface a meaningful message.
+
+### Implementation Notes
+
+- The service is **fault-tolerant**: it falls back gracefully to the
+  in-memory `MOCK_BIDS` / `MOCK_SETTLEMENTS` arrays when the persistent
+  stores are unavailable (test environments, DB outages). This means
+  policy is enforced consistently even when only the mocks are
+  populated.
+- All summation is performed in `BigInt` — values above
+  `Number.MAX_SAFE_INTEGER` (~9 × 10¹⁵) are handled correctly. Tests
+  in `tests/exposure.test.ts` cover this property explicitly.
+- The exposure tally is **eventually consistent**. Two bids accepted
+  by the off-chain gate in the same instant may collectively exceed
+  the cap until both are persisted. The on-chain contract remains the
+  final source of truth; this layer is a soft, cheap pre-filter.
+
+### Files
+
+| File                                  | Purpose                                                  |
+|---------------------------------------|----------------------------------------------------------|
+| `src/services/exposureService.ts`     | Exposure computation + cap enforcement                   |
+| `src/controllers/v1/bids.ts`          | `POST /bids` gate returning 429 EXPOSURE_CAP_EXCEEDED    |
+| `src/validators/bids.ts`              | Optional `currency` tag in body; delegates cap to service|
+| `src/config.ts`                       | `EXPOSURE_CAP_PER_INVESTOR_USD` zod-validated env var    |
+| `openapi.yaml`                        | Documents 429 response on POST /bids                     |
+| `src/tests/exposure.test.ts`          | Unit + integration coverage (95%+ target)                |
+

@@ -3,6 +3,7 @@ import * as bidController from "../../controllers/v1/bids";
 import { createQueryValidationMiddleware, createBodyValidationMiddleware } from "../../middleware/validation";
 import { getBidsQuerySchema, createBidBodySchema } from "../../validators/bids";
 import { apiKeyAuthMiddleware } from "../../middleware/api-key-auth";
+import { requireSignature } from "../../middleware/request-signing";
 
 const router = Router();
 
@@ -20,6 +21,7 @@ router.get("/", createQueryValidationMiddleware(getBidsQuerySchema), bidControll
 router.post(
   "/",
   apiKeyAuthMiddleware,
+  requireSignature,
   createBodyValidationMiddleware(createBidBodySchema),
   bidController.createBid
 );

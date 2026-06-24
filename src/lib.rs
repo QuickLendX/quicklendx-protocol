@@ -30,6 +30,9 @@ pub mod profits;
 pub mod settlement;
 pub mod storage_types;
 pub mod verification;
+pub mod investment;
+pub mod payments;
+pub mod invariants;
 
 pub use admin::{AdminContract, AdminContractClient};
 pub use errors::ContractError;
@@ -49,3 +52,6 @@ mod test_investor_kyc;
 
 #[cfg(test)]
 mod test_pause;
+
+#[cfg(test)]
+mod test_solvency_invariant;

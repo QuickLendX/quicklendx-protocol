@@ -119,8 +119,7 @@ impl Investment {
     pub fn calculate_premium(amount: i128, coverage_percentage: u32) -> i128 {
         // Reject invalid inputs before any arithmetic.
         if amount <= 0
-            || coverage_percentage < MIN_COVERAGE_PERCENTAGE
-            || coverage_percentage > MAX_COVERAGE_PERCENTAGE
+            || !(MIN_COVERAGE_PERCENTAGE..=MAX_COVERAGE_PERCENTAGE).contains(&coverage_percentage)
         {
             return 0;
         }
@@ -186,8 +185,7 @@ impl Investment {
         premium: i128,
     ) -> Result<i128, QuickLendXError> {
         // Validate coverage percentage bounds.
-        if coverage_percentage < MIN_COVERAGE_PERCENTAGE
-            || coverage_percentage > MAX_COVERAGE_PERCENTAGE
+        if !(MIN_COVERAGE_PERCENTAGE..=MAX_COVERAGE_PERCENTAGE).contains(&coverage_percentage)
         {
             return Err(QuickLendXError::InvalidCoveragePercentage);
         }

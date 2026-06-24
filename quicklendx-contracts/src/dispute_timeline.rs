@@ -196,7 +196,7 @@ fn paginate(
     offset: u32,
     limit: u32,
 ) -> (Vec<DisputeTimelineEntry>, bool) {
-    let total = all.len() as u32;
+    let total = all.len();
     let capped_limit = limit.min(TIMELINE_MAX_PAGE_SIZE);
     let start = offset.min(total);
     let end = start.saturating_add(capped_limit).min(total);
@@ -258,7 +258,7 @@ pub fn get_dispute_timeline(
     }
 
     let all_entries = build_all_entries(env, invoice_id, &invoice.dispute, &invoice.dispute_status);
-    let total = all_entries.len() as u32;
+    let total = all_entries.len();
     let (entries, has_more) = paginate(env, &all_entries, offset, limit);
 
     Ok(DisputeTimeline {

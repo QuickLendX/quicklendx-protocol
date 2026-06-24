@@ -141,7 +141,7 @@ impl InvestmentQueries {
         }
 
         // Apply pagination with overflow-safe arithmetic
-        let collection_size = filtered.len() as u32;
+        let collection_size = filtered.len();
         let (start, end) = Self::calculate_safe_bounds(offset, limit, collection_size);
 
         let mut result = Vec::new(env);

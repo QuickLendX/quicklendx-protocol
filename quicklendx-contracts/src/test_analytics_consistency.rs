@@ -567,3 +567,56 @@ fn test_investor_report_stored_matches_live() {
     assert_eq!(stored.total_invested, live.total_invested);
     assert_eq!(stored.generated_at, ts);
 }
+
+#[test]
+fn test_analytics_snapshot_empty_platform_version_and_timestamp() {
+    let env = Env::default();
+    let ts = 9_876_543u64;
+    env.ledger().set_timestamp(ts);
+    let (client, _, _) = setup(&env);
+
+    let snapshot = client.export_analytics_snapshot();
+
+    assert_eq!(
+        snapshot.schema_version,
+        crate::analytics::ANALYTICS_SCHEMA_VERSION
+    );
+    assert_eq!(snapshot.ledger_timestamp, ts);
+    assert_eq!(snapshot.platform_metrics.timestamp, ts);
+    assert_eq!(snapshot.performance_metrics.platform_uptime, ts);
+    assert_eq!(snapshot.platform_metrics.total_invoices, 0);
+    assert_eq!(snapshot.platform_metrics.total_volume, 0);
+    assert_eq!(snapshot.performance_metrics.transaction_success_rate, 0);
+}
+
+#[test]
+fn test_analytics_snapshot_matches_individual_calculators() {
+    let env = Env::default();
+    env.ledger().set_timestamp(12_345_678u64);
+    let (client, _, business) = setup(&env);
+    upload(&env, &client, &business, 1_000, "snap-1");
+    upload(&env, &client, &business, 2_000, "snap-2");
+
+    let snapshot = client.export_analytics_snapshot();
+    let platform = AnalyticsCalculator::calculate_platform_metrics(&env).unwrap();
+    let performance = AnalyticsCalculator::calculate_performance_metrics(&env).unwrap();
+
+    assert_eq!(snapshot.platform_metrics, platform);
+    assert_eq!(snapshot.performance_metrics, performance);
+}
+
+#[test]
+fn test_analytics_snapshot_entrypoint_matches_public_metric_calls() {
+    let env = Env::default();
+    env.ledger().set_timestamp(22_222_222u64);
+    let (client, _, business) = setup(&env);
+    upload(&env, &client, &business, 3_000, "snap-public");
+
+    let snapshot = client.export_analytics_snapshot();
+
+    assert_eq!(snapshot.platform_metrics, client.get_platform_metrics());
+    assert_eq!(
+        snapshot.performance_metrics,
+        client.get_performance_metrics()
+    );
+}

@@ -59,6 +59,8 @@ servers:
 paths:
   /health:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Health check
       description: Returns the status of the API service and connectivity.
       operationId: getHealth
@@ -74,8 +76,54 @@ paths:
                 version: 1.0.0
                 timestamp: '2026-01-01T00:00:00.000Z'
 
+  /status:
+    get:
+      x-rate-limit:
+        policies: [global, perKey]
+      summary: Runtime status and rate limit policy snapshot
+      description: Returns indexer lag status plus the active public rate-limit thresholds.
+      responses:
+        "200":
+          description: Runtime status with live rate-limit policy values
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example:
+                lag: 0
+                warnThreshold: 10
+                criticalThreshold: 50
+                level: none
+                isDegraded: false
+                isCritical: false
+                checkedAt: '2026-01-01T00:00:00.000Z'
+                rateLimits:
+                  global:
+                    id: global
+                    scope: all public API endpoints
+                    limit: 100
+                    windowSeconds: 60
+                    blockSeconds: 60
+                    key: client-ip
+                    headers: [X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset]
+                  perKey:
+                    id: perKey
+                    scope: all API endpoints after authentication context is available
+                    limit: 60
+                    windowSeconds: 60
+                    blockSeconds: 60
+                    key: api-key-or-client-ip
+                    headers: [X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset]
+                _system:
+                  status: operational
+                  degraded: false
+                  lag: 0
+                  level: none
+
   /admin/status:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Read internal admin status
       description: Returns troubleshooting details for authenticated admin roles.
       security:
@@ -90,6 +138,8 @@ paths:
 
   /admin/audit-logs:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Read admin audit logs
       description: Returns recent authorization and admin action audit entries.
       security:
@@ -107,6 +157,8 @@ paths:
 
   /admin/maintenance:
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       operationId: toggleMaintenanceMode
       summary: Toggle maintenance mode
       description: Restricted to operations admin and super-admin.
@@ -137,6 +189,8 @@ paths:
 
   /admin/backfill:
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       operationId: queueBackfillJob
       summary: Queue a backfill job
       description: Restricted to operations admin and super-admin.
@@ -162,6 +216,8 @@ paths:
 
   /admin/config/dangerous:
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       operationId: updateDangerousAdminConfig
       summary: Update dangerous admin configuration
       description: Restricted to super-admin only.
@@ -193,6 +249,8 @@ paths:
 
   /invoices:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: List invoices (paginated)
       description: |
         Returns a cursor-paginated list of invoices sorted by `created_at DESC, id ASC`.
@@ -224,19 +282,65 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvoicePageResult"
+                type: object
+                required:
+                  - data
+                  - next_cursor
+                  - has_more
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - id
+                      properties:
+                        id: { type: string }
+                        business: { type: string }
+                        amount: { type: string, description: "i128 as string" }
+                        currency: { type: string }
+                        due_date: { type: integer, format: int64 }
+                        status: { $ref: "#/components/schemas/InvoiceStatus" }
+                        description: { type: string }
+                        category: { $ref: "#/components/schemas/InvoiceCategory" }
+                        tags:
+                          type: array
+                          items: { type: string }
+                        metadata: { $ref: "#/components/schemas/InvoiceMetadata" }
+                        created_at: { type: integer, format: int64 }
+                        updated_at: { type: integer, format: int64 }
+                  next_cursor:
+                    type: string
+                    nullable: true
+                  has_more:
+                    type: boolean
+                  freshness:
+                    $ref: '#/components/schemas/FreshnessMetadata'
+                  _system:
+                    type: object
+                    properties:
+                      status: { type: string }
+                      degraded: { type: boolean }
+                      lag: { type: integer }
+                      level: { type: string }
+              example:
+                data: []
+                next_cursor: null
+                has_more: false
 
   /invoices/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Get invoice by ID
       operationId: getInvoiceById
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
       responses:
         "200":
           description: Invoice details
@@ -249,7 +353,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
               example:
                 error:
                   message: 'Invoice not found'
@@ -257,12 +361,14 @@ paths:
 
   /bids:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: List ranked bids for an invoice (paginated)
       description: |
         Returns a cursor-paginated list of ranked bids for a given invoice, sorted by
         contract ranking semantics: (1) profit DESC, (2) expected_return DESC, (3) bid_amount DESC,
         (4) timestamp DESC, (5) bid_id ASC.
-        
+
         Only returns Placed bids. Query parameter `invoice_id` is **required**.
       security:
         - {}  # Optional authentication
@@ -307,23 +413,52 @@ paths:
                   has_more:
                     type: boolean
         "400":
-          $ref: '#/components/responses/PaginationError'
+          description: Missing required invoice_id query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example:
+                error:
+                  message: "invoice_id is required"
+                  code: "MISSING_REQUIRED_FIELD"
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       operationId: createBid
       summary: Place a new bid on a Verified invoice
       description: |
         Creates a new bid for an investor on a Verified invoice.
-        
+
         Requires authentication (Bearer token in Authorization header).
-        
+
         **Validation rules:**
         - Invoice must be in Verified status
         - Investor cannot have an active bid on the same invoice (no duplicates)
         - bid_amount must be > 0
         - expected_return must be >= bid_amount
         - expiration_timestamp must be a positive integer
+        - The investor's aggregate USD-equivalent exposure (active bids +
+          unsettled settlements across MOCK_BIDS, MOCK_SETTLEMENTS, and the
+          persisted stores) plus this new bid must not exceed
+          `EXPOSURE_CAP_PER_INVESTOR_USD`. Otherwise the request is rejected
+          with `429 EXPOSURE_CAP_EXCEEDED` before any chain interaction.
       security:
         - BearerAuth: []
+      parameters:
+        - name: If-Match
+          in: header
+          required: false
+          schema:
+            type: string
+          description: ETag precondition for the invoice being bid on. When present and the invoice ETag doesn't match, the server returns 412 Precondition Failed.
+        - name: If-Unmodified-Since
+          in: header
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Date precondition for the invoice being bid on.
       requestBody:
         required: true
         content:
@@ -355,6 +490,14 @@ paths:
                   type: integer
                   example: 1745599232
                   description: Unix timestamp when this bid expires
+                currency:
+                  type: string
+                  pattern: "^[A-Za-z]{3,4}$"
+                  example: "USDC"
+                  description: |
+                    Optional currency tag. Defaults to `USDC`. The exposure
+                    service normalizes the amount to USD-equivalent using
+                    the configured currency rate table.
             examples:
               standard:
                 description: Standard bid with expected return 1.5x bid amount
@@ -363,6 +506,7 @@ paths:
                   bid_amount: "1000000"
                   expected_return: "1500000"
                   expiration_timestamp: 1745599232
+                  currency: "USDC"
       responses:
         "201":
           description: Bid created successfully
@@ -389,11 +533,57 @@ paths:
                         type: string
                         enum:
                           - INVALID_BID
+                          - VALIDATION_ERROR
         "401":
           $ref: '#/components/responses/Unauthorized'
+        "429":
+          description: |
+            Investor exposure cap would be exceeded. The cap is configured
+            via `EXPOSURE_CAP_PER_INVESTOR_USD` and is denominated in whole
+            USD units (the response carries micro-USD strings for precision).
+            The investor should reduce active exposure (e.g. wait for a
+            settlement to finalize) before retrying.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: object
+                    required: [message, code]
+                    properties:
+                      message:
+                        type: string
+                        description: Human-readable description of why the cap was exceeded.
+                      code:
+                        type: string
+                        enum: [EXPOSURE_CAP_EXCEEDED]
+                      currentExposureUsd:
+                        type: string
+                        description: Current USD-equivalent exposure for the investor (micro-USD, BigInt as string).
+                      attemptedUsd:
+                        type: string
+                        description: USD-equivalent of the rejected bid (micro-USD, BigInt as string).
+                      capUsd:
+                        type: string
+                        description: Configured per-investor cap (micro-USD, BigInt as string).
+                      investor:
+                        type: string
+                        description: Investor (Stellar address) whose cap would be exceeded.
+              example:
+                error:
+                  message: "Investor GAX... exposure cap would be exceeded: current=1100000000000000, attempted=500000000000000, cap=1500000000000000"
+                  code: EXPOSURE_CAP_EXCEEDED
+                  currentExposureUsd: "1100000000000000"
+                  attemptedUsd: "500000000000000"
+                  capUsd: "1500000000000000"
+                  investor: "GAXMFSADZVDXTJSLL3HZJFVYH4JGBQBMX3I2WGPKH3YKRXL7ZJXZK23Q"
 
   /bids/{invoiceId}/best:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Get the best bid for an invoice
       description: |
         Returns the highest-ranked (best) bid for an invoice, or 404 if no Placed bids exist.
@@ -420,6 +610,8 @@ paths:
 
   /bids/{invoiceId}/ranked:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Get all ranked bids for an invoice
       description: |
         Returns all Placed bids for an invoice ranked by contract semantics.
@@ -447,6 +639,8 @@ paths:
 
   /settlements:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: List settlements (paginated)
       description: |
         Returns a cursor-paginated list of settlements sorted by `timestamp DESC, id ASC`.
@@ -463,21 +657,45 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Settlement"
+                type: object
+                required:
+                  - data
+                  - freshness
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Settlement"
+                  freshness:
+                    $ref: '#/components/schemas/FreshnessMetadata'
+                  _system:
+                    type: object
+                    properties:
+                      status: { type: string }
+                      degraded: { type: boolean }
+                      lag: { type: integer }
+                      level: { type: string }
+              example:
+                data: []
+                freshness:
+                  lastIndexedLedger: 100000
+                  indexLagSeconds: 0
+                  lastUpdatedAt: "2026-06-23T17:00:00Z"
+                  cursor: "100000_0"
 
   /settlements/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        example: '0xsettle123'
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Get settlement by ID
       operationId: getSettlementById
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          example: '0xsettle123'
       responses:
         "200":
           description: Settlement details
@@ -485,19 +703,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Settlement"
-        "404":
-          description: Settlement not found
+        "500":
+          description: Internal Server Error (e.g. database table missing in test env)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
               example:
                 error:
-                  message: 'Settlement not found'
-                  code: SETTLEMENT_NOT_FOUND
+                  message: 'no such table: settlements'
+                  code: SQLITE_ERROR
 
   /portfolio:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: List investor portfolio (paginated)
       description: |
         Returns a cursor-paginated list of portfolio entries for a given investor,
@@ -524,26 +744,72 @@ paths:
           $ref: '#/components/responses/PaginationError'
 
   /invoices/{id}/disputes:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: List disputes for an invoice
       operationId: listDisputesByInvoice
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
       responses:
         "200":
           description: Paginated list of disputes for an invoice
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DisputePageResult"
+                type: object
+                required:
+                  - data
+                  - next_cursor
+                  - has_more
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - id
+                        - invoice_id
+                        - initiator
+                        - reason
+                        - status
+                        - created_at
+                      properties:
+                        id: { type: string }
+                        invoice_id: { type: string }
+                        initiator: { type: string }
+                        reason: { type: string }
+                        status: { $ref: "#/components/schemas/DisputeStatus" }
+                        created_at: { type: integer, format: int64 }
+                        contract_version: { type: integer }
+                        event_schema_version: { type: integer }
+                        indexed_at: { type: string }
+                  next_cursor:
+                    type: string
+                    nullable: true
+                  has_more:
+                    type: boolean
+                  _system:
+                    type: object
+                    properties:
+                      status: { type: string }
+                      degraded: { type: boolean }
+                      lag: { type: integer }
+                      level: { type: string }
+              example:
+                data: []
+                next_cursor: null
+                has_more: false
 
   /notifications/preferences/{userId}:
     get:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Get user notification preferences
       parameters:
         - name: userId
@@ -562,6 +828,8 @@ paths:
         '404':
           description: User preferences not found
     put:
+      x-rate-limit:
+        policies: [global, perKey]
       operationId: updateNotificationPreferences
       summary: Update user notification preferences
       parameters:
@@ -596,6 +864,8 @@ paths:
 
   /notifications/unsubscribe/{userId}:
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Unsubscribe user from email notifications
       parameters:
         - name: userId
@@ -610,6 +880,8 @@ paths:
 
   /exports/generate:
     post:
+      x-rate-limit:
+        policies: [global, perKey, export]
       summary: Generate a signed data export link
       description: Returns a short-lived link to download all user-scoped data (invoices, bids, settlements) in CSV or JSON format.
       security:
@@ -643,8 +915,14 @@ paths:
 
   /exports/download/{token}:
     get:
+      x-rate-limit:
+        policies: [global, perKey, export]
       summary: Download exported data
-      description: Serves the export file using a signed token.
+      description: >
+        Serves the export file using a signed one-shot token. The file is
+        streamed from disk and deleted immediately after the first successful
+        download. Subsequent requests with the same token return 401.
+        The token expires after the configured TTL (default 1 hour).
       parameters:
         - name: token
           in: path
@@ -654,7 +932,12 @@ paths:
           description: Signed token representing the export request.
       responses:
         "200":
-          description: Export file content
+          description: Export file content (one-shot; file deleted after response)
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: 'attachment; filename="quicklendx-export-USER-2026-01-01.json"'
           content:
             application/json:
               schema:
@@ -663,10 +946,12 @@ paths:
               schema:
                 type: string
         "401":
-          description: Invalid or expired token
+          description: Invalid, expired, or already-consumed token
 
   /events:
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       operationId: processBlockchainEvents
       summary: Process blockchain events for notifications
       description: Internal endpoint for indexer to post events that trigger notifications
@@ -707,6 +992,8 @@ paths:
 
   /keys/{id}/rotate-signing-secret:
     post:
+      x-rate-limit:
+        policies: [global, perKey]
       summary: Rotate an API key's signing secret
       description: |
         Generates a new signing secret for the specified API key ID, retaining the old secret for a configurable grace window (default 24h). Requires admin RBAC privileges.
@@ -780,6 +1067,114 @@ components:
       bearerFormat: opaque-token
 
   schemas:
+    RateLimitPolicy:
+      type: object
+      description: Public rate-limit policy metadata. Runtime bucket state is intentionally not exposed.
+      required:
+        - id
+        - scope
+        - limit
+        - windowSeconds
+        - blockSeconds
+        - key
+        - headers
+      properties:
+        id:
+          type: string
+          enum: [global, perKey, strict, reconciliation, export]
+        scope:
+          type: string
+        limit:
+          type: integer
+          minimum: 1
+        windowSeconds:
+          type: integer
+          minimum: 1
+        blockSeconds:
+          type: integer
+          minimum: 0
+        key:
+          type: string
+          enum: [client-ip, api-key-or-client-ip]
+        headers:
+          type: array
+          items:
+            type: string
+
+    RateLimitPolicies:
+      type: object
+      required:
+        - global
+        - perKey
+        - strict
+        - reconciliation
+        - export
+      properties:
+        global:
+          $ref: '#/components/schemas/RateLimitPolicy'
+        perKey:
+          $ref: '#/components/schemas/RateLimitPolicy'
+        strict:
+          $ref: '#/components/schemas/RateLimitPolicy'
+        reconciliation:
+          $ref: '#/components/schemas/RateLimitPolicy'
+        export:
+          $ref: '#/components/schemas/RateLimitPolicy'
+
+    StatusResponse:
+      type: object
+      required:
+        - lag
+        - warnThreshold
+        - criticalThreshold
+        - level
+        - isDegraded
+        - isCritical
+        - checkedAt
+        - rateLimits
+        - _system
+      properties:
+        lag:
+          type: integer
+        warnThreshold:
+          type: integer
+        criticalThreshold:
+          type: integer
+        level:
+          type: string
+          enum: [none, warn, critical]
+        isDegraded:
+          type: boolean
+        isCritical:
+          type: boolean
+        checkedAt:
+          type: string
+          format: date-time
+        rateLimits:
+          $ref: '#/components/schemas/RateLimitPolicies'
+        _system:
+          $ref: '#/components/schemas/SystemStatusMetadata'
+
+    SystemStatusMetadata:
+      type: object
+      description: Additive system-health metadata injected into JSON responses.
+      required:
+        - status
+        - degraded
+        - lag
+        - level
+      properties:
+        status:
+          type: string
+          enum: [operational, degraded, maintenance]
+        degraded:
+          type: boolean
+        lag:
+          type: integer
+        level:
+          type: string
+          enum: [none, warn, critical]
+
     FreshnessMetadata:
       type: object
       description: >
@@ -955,6 +1350,9 @@ components:
         recipient: { type: string }
         timestamp: { type: integer, format: int64 }
         status: { $ref: "#/components/schemas/SettlementStatus" }
+        contract_version: { type: integer }
+        event_schema_version: { type: integer }
+        indexed_at: { type: string }
 
     InvestmentStatus:
       type: string
@@ -1089,6 +1487,13 @@ components:
               description: Machine-readable error code (SCREAMING_SNAKE_CASE).
             details:
               description: Optional extra details (omitted in production).
+        _system:
+          type: object
+          properties:
+            status: { type: string }
+            degraded: { type: boolean }
+            lag: { type: integer }
+            level: { type: string }
 
     NotificationType:
       type: string

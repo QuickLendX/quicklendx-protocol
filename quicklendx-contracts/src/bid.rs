@@ -312,7 +312,7 @@ impl BidStorage {
         if days == 0 {
             return Err(QuickLendXError::InvalidBidTtl);
         }
-        if days < MIN_BID_TTL_DAYS || days > MAX_BID_TTL_DAYS {
+        if !(MIN_BID_TTL_DAYS..=MAX_BID_TTL_DAYS).contains(&days) {
             return Err(QuickLendXError::InvalidBidTtl);
         }
 
@@ -573,7 +573,7 @@ impl BidStorage {
                 .storage()
                 .persistent()
                 .get::<_, BytesN<32>>(&entry_key)
-                .map_or(false, |bid_id| {
+                .is_some_and(|bid_id| {
                     bump_persistent(env, &entry_key);
                     if let Some(mut bid) = Self::get_bid(env, &bid_id) {
                         let is_terminal = bid.status == BidStatus::Accepted
@@ -752,7 +752,7 @@ impl BidStorage {
                 .storage()
                 .persistent()
                 .get::<_, BytesN<32>>(&entry_key)
-                .map_or(false, |bid_id| {
+                .is_some_and(|bid_id| {
                     bump_persistent(env, &entry_key);
                     if let Some(mut bid) = Self::get_bid(env, &bid_id) {
                         let is_terminal = bid.status == BidStatus::Accepted
@@ -908,7 +908,7 @@ impl BidStorage {
 
     /// Return the index of the best bid inside `records` using `compare_bids`.
     fn select_best_index(records: &Vec<Bid>) -> Option<u32> {
-        if records.len() == 0 {
+        if records.is_empty() {
             return None;
         }
 
@@ -955,7 +955,7 @@ impl BidStorage {
 
         let mut ranked = Vec::new(env);
 
-        while remaining.len() > 0 {
+        while !remaining.is_empty() {
             let best_idx = Self::select_best_index(&remaining).unwrap();
             let best_bid = remaining.get(best_idx).unwrap();
             ranked.push_back(best_bid);
@@ -1084,17 +1084,15 @@ impl BidStorage {
             let bid_id = bid_ids.get(idx).unwrap();
             if let Some(bid) = Self::get_bid(env, &bid_id) {
                 // Every Expired bid must have a past deadline
-                if bid.status == BidStatus::Expired {
-                    if bid.expiration_timestamp >= current_timestamp {
+                if bid.status == BidStatus::Expired
+                    && bid.expiration_timestamp >= current_timestamp {
                         return false;
                     }
-                }
                 // No Placed bid should remain past its deadline
-                if bid.status == BidStatus::Placed {
-                    if bid.is_expired(current_timestamp) {
+                if bid.status == BidStatus::Placed
+                    && bid.is_expired(current_timestamp) {
                         return false;
                     }
-                }
             }
             idx += 1;
         }

@@ -2,6 +2,7 @@ import request from 'supertest';
 import express from 'express';
 import { getInvoices, getInvoiceById, MOCK_INVOICES } from '../controllers/v1/invoices';
 import * as cacheHeaders from '../middleware/cache-headers';
+import { invoiceStore } from '../services/invoiceStore';
 
 const app = express();
 app.use(express.json());
@@ -17,8 +18,28 @@ jest.mock('../middleware/cache-headers', () => ({
   CC_SHORT: 'short',
 }));
 
+jest.mock('../services/invoiceStore', () => ({
+  invoiceStore: {
+    findInvoices: jest.fn(),
+    findInvoiceById: jest.fn(),
+  },
+}));
+
 const KNOWN_ID = MOCK_INVOICES[0].id;
 const KNOWN_BUSINESS = MOCK_INVOICES[0].business;
+
+beforeEach(() => {
+  (invoiceStore.findInvoices as jest.Mock).mockImplementation((filter: any) => {
+    return MOCK_INVOICES.filter((inv: any) => {
+      if (filter.business && inv.business !== filter.business) return false;
+      if (filter.status && inv.status !== filter.status) return false;
+      return true;
+    });
+  });
+  (invoiceStore.findInvoiceById as jest.Mock).mockImplementation((id: string) =>
+    MOCK_INVOICES.find((i: any) => i.id === id) || null
+  );
+});
 
 describe('invoices controller', () => {
   beforeEach(() => {

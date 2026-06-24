@@ -24,6 +24,12 @@ pub enum InvoiceStatus {
     Refunded,
 }
 
+impl InvoiceStatus {
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, InvoiceStatus::Paid | InvoiceStatus::Defaulted | InvoiceStatus::Cancelled | InvoiceStatus::Refunded)
+    }
+}
+
 /// Bid status enumeration
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -247,6 +253,21 @@ pub struct RebuildReport {
     pub scanned: u32,
     /// Number of records repaired or rewritten by the rebuild helper.
     pub reindexed: u32,
+    /// Offset to pass on the next call.
+    pub next_offset: u32,
+}
+
+/// Report returned by paginated admin prune helpers.
+///
+/// The prune is paginated and resumable. Pass `next_offset` as the `offset`
+/// on the next call. The last page is reached when `next_offset` stops advancing.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PruneReport {
+    /// Number of invoice IDs examined in this page.
+    pub scanned: u32,
+    /// Number of invoices actually pruned (deleted).
+    pub pruned: u32,
     /// Offset to pass on the next call.
     pub next_offset: u32,
 }

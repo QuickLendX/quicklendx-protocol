@@ -210,3 +210,85 @@ export function applyCacheHeaders(
 
   return isNotModified(req, etag, lastModified);
 }
+
+// ---------------------------------------------------------------------------
+// Conditional-write precondition support (If-Match / If-Unmodified-Since)
+// ---------------------------------------------------------------------------
+
+export interface ConditionalWriteOptions {
+  /** When true, a missing If-Match header is rejected with 400. Default false. */
+  required?: boolean;
+  /** Resource last-modified date for If-Unmodified-Since comparison. */
+  lastModified?: Date | null;
+}
+
+/**
+ * Evaluates If-Match / If-Unmodified-Since preconditions for write requests.
+ *
+ * Returns `true` when the response has already been sent (caller must stop).
+ * Returns `false` when the caller should proceed with the write.
+ *
+ * Must be called BEFORE any state mutation so that a failed precondition
+ * does not produce a side-effect.
+ */
+export function assertConditionalWrite(
+  req: Request,
+  res: Response,
+  etag: string | null,
+  options?: ConditionalWriteOptions
+): boolean {
+  const ifMatch = req.headers["if-match"] as string | undefined;
+
+  if (ifMatch) {
+    const tags = ifMatch.split(",").map((t) => t.trim());
+    const isWildcard = tags.includes("*");
+
+    if (etag === null) {
+      res.setHeader("Cache-Control", CC_NO_STORE);
+      res.status(412).json({
+        error: {
+          message: "Precondition Failed: resource has been modified",
+          code: "PRECONDITION_FAILED",
+        },
+      });
+      return true;
+    }
+
+    if (!isWildcard && !tags.includes(etag)) {
+      res.setHeader("Cache-Control", CC_NO_STORE);
+      res.status(412).json({
+        error: {
+          message: "Precondition Failed: resource has been modified",
+          code: "PRECONDITION_FAILED",
+        },
+      });
+      return true;
+    }
+  } else if (options?.required) {
+    res.setHeader("Cache-Control", CC_NO_STORE);
+    res.status(400).json({
+      error: {
+        message: "If-Match header is required",
+        code: "PRECONDITION_REQUIRED",
+      },
+    });
+    return true;
+  }
+
+  const ifUnmodifiedSince = req.headers["if-unmodified-since"] as string | undefined;
+  if (ifUnmodifiedSince && options?.lastModified) {
+    const since = new Date(ifUnmodifiedSince);
+    if (!isNaN(since.getTime()) && options.lastModified > since) {
+      res.setHeader("Cache-Control", CC_NO_STORE);
+      res.status(412).json({
+        error: {
+          message: "Precondition Failed: resource has been modified",
+          code: "PRECONDITION_FAILED",
+        },
+      });
+      return true;
+    }
+  }
+
+  return false;
+}

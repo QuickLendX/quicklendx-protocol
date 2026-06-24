@@ -329,7 +329,7 @@ impl NotificationSystem {
             .get(&set_key)
             .unwrap_or_else(|| Vec::new(env));
 
-        if key_set.len() < MAX_IDEMPOTENCY_KEYS.try_into().unwrap_or(u32::MAX) {
+        if key_set.len() < MAX_IDEMPOTENCY_KEYS {
             key_set.push_back(key.clone());
             env.storage().instance().set(&set_key, &key_set);
         }
@@ -791,6 +791,76 @@ impl NotificationSystem {
                 NotificationPriority::Critical,
                 investor_title,
                 investor_message,
+                Some(invoice.id.clone()),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Notify business and investor that a dispute was opened on an invoice.
+    ///
+    /// Uses `NotificationType::SystemAlert` so dispute lifecycle signals are delivered
+    /// under default preferences (`general` is opt-in). Failures are isolated from
+    /// fund-moving calls.
+    pub fn notify_dispute_opened(
+        env: &Env,
+        invoice: &Invoice,
+    ) -> Result<(), crate::errors::QuickLendXError> {
+        let title = String::from_str(env, "Dispute Opened");
+        let message = String::from_str(env, "A dispute has been opened on your invoice");
+
+        Self::create_notification(
+            env,
+            invoice.business.clone(),
+            NotificationType::SystemAlert,
+            NotificationPriority::High,
+            title.clone(),
+            message.clone(),
+            Some(invoice.id.clone()),
+        )?;
+
+        if let Some(investor) = &invoice.investor {
+            Self::create_notification(
+                env,
+                investor.clone(),
+                NotificationType::SystemAlert,
+                NotificationPriority::High,
+                title,
+                message,
+                Some(invoice.id.clone()),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Notify business and investor that a dispute was resolved.
+    pub fn notify_dispute_resolved(
+        env: &Env,
+        invoice: &Invoice,
+    ) -> Result<(), crate::errors::QuickLendXError> {
+        let title = String::from_str(env, "Dispute Resolved");
+        let message = String::from_str(env, "The dispute on your invoice has been resolved");
+
+        Self::create_notification(
+            env,
+            invoice.business.clone(),
+            NotificationType::SystemAlert,
+            NotificationPriority::High,
+            title.clone(),
+            message.clone(),
+            Some(invoice.id.clone()),
+        )?;
+
+        if let Some(investor) = &invoice.investor {
+            Self::create_notification(
+                env,
+                investor.clone(),
+                NotificationType::SystemAlert,
+                NotificationPriority::High,
+                title,
+                message,
                 Some(invoice.id.clone()),
             )?;
         }

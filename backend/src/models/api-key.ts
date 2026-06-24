@@ -3,6 +3,7 @@ import crypto from 'crypto';
 export interface ApiKey {
   id: string;
   key_hash: string;
+  signing_secret_hash: string | null;
   prev_signing_secret_hash: string | null;
   prefix: string;
   name: string;
@@ -24,13 +25,14 @@ export interface ApiKeyCreateInput {
 
 export interface ApiKeyWithPlaintext extends ApiKey {
   plaintext_key: string;
+  plaintext_signing_secret?: string;
 }
 
 /**
  * Generate a cryptographically secure API key
  * Format: qlx_<env>_<random>
  */
-export function generateApiKey(): { key: string; prefix: string; hash: string } {
+export function generateApiKey(): { key: string; prefix: string; hash: string; signingSecret: string; signingSecretHash: string } {
   const env = process.env.NODE_ENV === 'production' ? 'live' : 'test';
   const randomBytes = crypto.randomBytes(32);
   const randomPart = randomBytes.toString('base64url');
@@ -42,7 +44,11 @@ export function generateApiKey(): { key: string; prefix: string; hash: string } 
   // Hash the key using SHA-256
   const hash = hashApiKey(key);
   
-  return { key, prefix, hash };
+  // Generate signing secret (stored as-is in signing_secret_hash column despite the name, to allow HMAC verification)
+  const signingSecret = crypto.randomBytes(32).toString('hex');
+  const signingSecretHash = signingSecret; // We must store the actual secret to verify HMAC
+  
+  return { key, prefix, hash, signingSecret, signingSecretHash };
 }
 
 /**

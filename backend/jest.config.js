@@ -9,8 +9,21 @@ module.exports = {
       lines: 58,
       statements: 58,
     },
+    "src/middleware/cache-headers.ts": {
+      branches: 95,
+      functions: 95,
+      lines: 95,
+      statements: 95,
+    },
+    "src/controllers/v1/bids.ts": {
+      branches: 90,
+      functions: 90,
+      lines: 90,
+      statements: 90,
+    },
   },
   collectCoverageFrom: [
+    "scripts/lib/secret-scan-utils.js",
     "src/lib/migrations/**/*.ts",
     "!src/lib/migrations/cli.ts",
     "src/lib/database.ts",
@@ -19,6 +32,8 @@ module.exports = {
     "src/middleware/request-logger.ts",
     "src/middleware/access-log.ts",
     "src/services/eventProcessor.ts",
+    "src/middleware/cache-headers.ts",
+    "src/controllers/v1/bids.ts",
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
