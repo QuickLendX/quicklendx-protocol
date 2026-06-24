@@ -43,12 +43,8 @@ pub fn initialize_protocol(
     env.storage()
         .instance()
         .set(&DataKey::ProtocolConfig, &protocol_cfg);
-    env.storage()
-        .instance()
-        .set(&DataKey::FeeConfig, &fee_cfg);
-    env.storage()
-        .instance()
-        .set(&DataKey::Initialized, &true);
+    env.storage().instance().set(&DataKey::FeeConfig, &fee_cfg);
+    env.storage().instance().set(&DataKey::Initialized, &true);
 
     env.events()
         .publish((symbol_short!("proto_in"),), (protocol_cfg, fee_cfg));

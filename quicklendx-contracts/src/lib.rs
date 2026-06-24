@@ -180,6 +180,7 @@ mod test_backpressure_shedding;
 // mod test_vesting;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_analytics_consistency;
+mod test_platform_metrics_reconciliation;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
 #[cfg(all(test, feature = "legacy-tests"))]
