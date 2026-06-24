@@ -170,6 +170,10 @@ mod test_fuzz_distribute_revenue;
 mod test_fuzz_partial_payment;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_treasury_split_overflow_props;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_bid_compare_order_props;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_seed;
 #[cfg(test)]
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_invariants;
