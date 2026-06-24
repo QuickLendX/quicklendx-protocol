@@ -340,6 +340,22 @@ export class WebhookDeliveryRepo {
     this.overflowCount = 0;
   }
 
+  drain(subscriberId: string): { pending: number; drained: number } {
+    const db = getDatabase();
+    const now = new Date().toISOString();
+    const result = db
+      .prepare(
+        `UPDATE webhook_deliveries
+         SET status = 'dead_letter', next_retry_at = NULL, updated_at = ?
+         WHERE subscriber_id = ? AND status IN ('pending', 'processing', 'failed')`
+      )
+      .run(now, subscriberId);
+    return {
+      pending: 0,
+      drained: result.changes,
+    };
+  }
+
   vacuum(): void {
     const db = getDatabase();
     db.exec("PRAGMA incremental_vacuum");

@@ -1,4 +1,4 @@
-import { Alert } from "../../types/reconciliation";
+import { Alert } from "../../../types/reconciliation";
 import { AlertTransport } from "./AlertTransport";
 import nodemailer from "nodemailer";
 

@@ -45,6 +45,12 @@ const schema = z.object({
   RETENTION_INTERVAL_MS: z.coerce.number().int().min(60000).default(24 * 60 * 60 * 1000),
   RETENTION_ARCHIVE_DIR: z.string().default(".data/retention-archives"),
   RETENTION_AUDIT_ACTOR: z.string().min(1).default("system:retention-worker"),
+  ARCHIVE_DIR: z.string().default(".data/retention-archives"),
+  ARCHIVE_ENABLED: z.coerce.boolean().default(true),
+  EXPORT_DIR: z.string().default(".data/exports"),
+  EXPORT_TTL_MS: z.coerce.number().int().min(1).default(1 * 60 * 60 * 1000),
+  MAX_NOTIFICATION_DEDUP_ENTRIES: z.coerce.number().int().min(1).default(5000),
+  NOTIFICATION_DEDUP_TTL_MS: z.coerce.number().int().min(1).default(24 * 60 * 60 * 1000),
 
   // Alert routing configuration
   ALERT_ROUTES_JSON: z.string().optional(),
@@ -56,6 +62,7 @@ const schema = z.object({
     ? z.string().url().optional()
     : z.string().url().optional(),
   ALERT_EMAIL_RECIPIENTS: z.string().optional(), // comma-separated emails
+  EXPOSURE_CAP_PER_INVESTOR_USD: z.string().default("10000000"),
 });
 
 export type Config = z.infer<typeof schema>;

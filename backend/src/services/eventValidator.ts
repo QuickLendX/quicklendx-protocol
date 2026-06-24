@@ -8,6 +8,7 @@ const eventEnvelopeSchema = z.object({
   id: z.string().min(1),
   ledger: z.number().int().nonnegative(),
   txHash: z.string().min(1),
+  eventIndex: z.number().int().nonnegative().default(0),
   timestamp: z.number().int().nonnegative(),
   complianceHold: z.boolean().default(false),
   indexedAt: isoDateTimeSchema,

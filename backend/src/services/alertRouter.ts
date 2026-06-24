@@ -20,6 +20,7 @@ import { SlackTransport } from "./alerts/transports/SlackTransport";
 import { PagerDutyTransport } from "./alerts/transports/PagerDutyTransport";
 
 export type { Alert } from "../types/reconciliation";
+export { Severity } from "../types/reconciliation";
 
 // ---------------------------------------------------------------------------
 // Alert deduplication window tracking

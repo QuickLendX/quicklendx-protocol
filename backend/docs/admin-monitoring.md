@@ -184,6 +184,43 @@ Mark a pending webhook event as failed.
 
 Idempotent — returns `not_found_or_already_resolved` for unknown or already-resolved IDs.
 
+---
+
+### POST /webhooks/:subscriberId/drain
+
+Drain all pending, processing, and failed webhook deliveries for a specified subscriber. The deliveries are immediately marked as `dead_letter` and their `next_retry_at` timestamp is cleared. 
+
+This endpoint is restricted to the `super_admin` role.
+
+**Parameters:**
+- `subscriberId` (path parameter, string) — The identifier of the subscriber.
+
+**Headers:**
+- `Authorization: Bearer <API_KEY>` (required) — API key with `super_admin` role.
+- `X-API-Key: <API_KEY>` (required in production) — Admin API key for general admin namespace authentication.
+
+**Response:**
+```json
+{
+  "pending": 0,
+  "drained": 2,
+  "audit_entry_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pending` | integer | Number of remaining pending deliveries for the subscriber (always 0 on success) |
+| `drained` | integer | Number of deliveries that were successfully drained (marked as `dead_letter`) |
+| `audit_entry_id` | string | The UUID of the generated audit log entry recording this action |
+
+**Errors:**
+- `401 AUTH_REQUIRED` — missing or invalid bearer token or API key
+- `403 INSUFFICIENT_ROLE` — caller does not have the `super_admin` role
+- `404 NOT_FOUND` — subscriber does not exist
+
+---
+
 ## Webhook Queue — Ring Buffer Semantics
 
 The webhook queue is a fixed-capacity circular buffer (default 1000 entries, configurable via `WEBHOOK_QUEUE_MAX`).

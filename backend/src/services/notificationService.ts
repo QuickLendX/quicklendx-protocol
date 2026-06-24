@@ -9,6 +9,10 @@ import {
 } from '../types/contract';
 import { config } from '../config';
 import { NotificationDedupCache } from './notificationDedupCache';
+import { CircuitBreaker } from '../lib/circuitBreaker';
+import { auditService } from './auditService';
+import { alertRouter } from './alertRouter';
+import { Severity } from '../types/reconciliation';
 
 // Map NotificationType enum values to the notify_* column names
 const PREF_COLUMN: Record<NotificationType, string> = {
@@ -22,6 +26,7 @@ export class NotificationService {
   private static instance: NotificationService;
   private transporter: nodemailer.Transporter;
   private dedupCache: NotificationDedupCache;
+  private circuitBreaker: CircuitBreaker;
 
   private constructor() {
     this.dedupCache = new NotificationDedupCache(

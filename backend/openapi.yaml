@@ -243,9 +243,53 @@ paths:
                 value:
                   allowEmergencyConfigChanges: true
                   maintenanceWindowMinutes: 60
-      responses:
         "200":
           description: Dangerous config updated
+
+  /admin/webhooks/{subscriberId}/drain:
+    post:
+      x-rate-limit:
+        policies: [global, perKey]
+      operationId: drainWebhookQueue
+      summary: Drain webhook queue for a subscriber
+      description: Pause delivery and drain all pending, processing, and failed webhook deliveries for the specified subscriber by marking them as dead_letter. Restricted to super-admin only.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriberId
+          in: path
+          required: true
+          description: Unique identifier of the downstream webhook subscriber.
+          schema:
+            type: string
+            example: sub-test-1
+      responses:
+        "200":
+          description: Webhook queue drained successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pending, drained, audit_entry_id]
+                properties:
+                  pending:
+                    type: integer
+                    description: The number of remaining pending deliveries (always 0 on success).
+                    example: 0
+                  drained:
+                    type: integer
+                    description: The number of webhook deliveries that were drained.
+                    example: 2
+                  audit_entry_id:
+                    type: string
+                    description: The ID of the generated audit log entry.
+                    example: "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+        "401":
+          description: Unauthorized - missing or invalid credentials
+        "403":
+          description: Forbidden - caller does not have super-admin privileges
+        "404":
+          description: Not Found - subscriber does not exist
 
   /invoices:
     get:

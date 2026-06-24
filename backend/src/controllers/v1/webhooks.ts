@@ -5,6 +5,9 @@ import {
   RegisterSubscriberRequestSchema,
   InitiateRotationRequestSchema,
 } from "../../types/webhook";
+import { webhookQueueService } from "../../services/webhookQueueService";
+import { auditService } from "../../services/auditService";
+import { getAdminContext } from "../../middleware/rbac";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -195,5 +198,62 @@ export const ingestWebhook = async (
     });
   } catch (err) {
     next(err);
+  }
+};
+
+/**
+ * POST /api/v1/admin/webhooks/:subscriberId/drain
+ *
+ * Pauses webhook delivery for a subscriber by marking all pending, processing, and
+ * failed deliveries as dead_letter. Surfaces progress.
+ */
+export const drainWebhook = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const subscriberId = req.params["subscriberId"] as string;
+
+    // Check if the subscriber exists (throws 404 WebhookSecretError if not found)
+    webhookSecretService.getSubscriberView(subscriberId);
+
+    // Call drain operation
+    const progress = webhookQueueService.drain(subscriberId);
+
+    // Resolve actor from admin context or request
+    let actor = "unknown";
+    try {
+      const adminCtx = getAdminContext(req);
+      actor = adminCtx.envName || "unknown";
+    } catch {
+      actor = (req as any).actor || "unknown";
+    }
+
+    const clientIp =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      (req.headers["x-real-ip"] as string) ||
+      req.socket.remoteAddress ||
+      "unknown";
+
+    // Append to audit log
+    const auditEntry = auditService.append({
+      actor,
+      operation: "WEBHOOK_DRAIN",
+      params: { subscriberId },
+      redactedParams: { subscriberId },
+      ip: clientIp,
+      userAgent: req.headers["user-agent"] || "unknown",
+      effect: `Drained ${progress.drained} pending webhooks for subscriber ${subscriberId}`,
+      success: true,
+    });
+
+    res.json({
+      pending: progress.pending,
+      drained: progress.drained,
+      audit_entry_id: auditEntry.id,
+    });
+  } catch (err) {
+    handleError(err, res, next);
   }
 };

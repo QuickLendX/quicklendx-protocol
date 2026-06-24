@@ -6,6 +6,8 @@ import {
   AuditOperationSchema,
   AuditEntrySchema,
 } from "../../types/audit";
+import { requireAdminRoles } from "../../middleware/rbac";
+import { drainWebhook } from "../../controllers/v1/webhooks";
 
 const router = Router();
 
@@ -69,6 +71,12 @@ router.get(
       });
     }
   }
+);
+
+router.post(
+  "/webhooks/:subscriberId/drain",
+  requireAdminRoles(["super_admin"], "webhook:drain"),
+  drainWebhook
 );
 
 export default router;

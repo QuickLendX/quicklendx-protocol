@@ -38,7 +38,7 @@ export class AuditLogService {
         db.createAuditLog(log);
       } catch (error) {
         // Log errors but don't throw - audit logging should never break the main flow
-        console.error('[AuditLog] Failed to write audit log:', error);
+        console.error('[AuditLog] Failed to write audit log:', error instanceof Error ? error.message : error, error instanceof Error ? error.stack : '');
       }
     });
   }

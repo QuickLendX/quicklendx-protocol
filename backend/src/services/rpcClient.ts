@@ -1,6 +1,7 @@
 import { config } from "../config";
 import { URL } from "url";
 import { getCorrelationId } from "../lib/requestContext";
+import { CircuitBreaker, CircuitBreakerOptions, CircuitState } from "../lib/circuitBreaker";
 
 export interface RpcOptions extends CircuitBreakerOptions {
   timeoutMs?: number;
@@ -44,7 +45,7 @@ export class ReliableRpcClient {
 
     return this.circuitBreaker.execute(
       () => this.performRequest<T>(method, params),
-      (error) => this.shouldRetry(error)
+      (error: any) => this.shouldRetry(error)
     );
   }
 
