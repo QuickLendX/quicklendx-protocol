@@ -176,8 +176,8 @@ mod test_string_limits;
 mod test_backpressure_shedding;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_types;
-// #[cfg(all(test, feature = "legacy-tests"))]
-// mod test_vesting;
+#[cfg(test)]
+mod test_vesting;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_analytics_consistency;
 mod test_platform_metrics_reconciliation;
@@ -3024,6 +3024,19 @@ impl QuickLendXContract {
     // Vesting Functions
     // ============================================================================
 
+    /// Create a new vesting schedule funded from `admin`'s token balance.
+    ///
+    /// # Cliff/slope semantics
+    /// Tokens accrue linearly from `start_time` to `end_time`. No tokens are
+    /// releasable before `cliff_time = start_time + cliff_seconds`. At the cliff
+    /// the full elapsed proportion since `start_time` is immediately claimable;
+    /// additional tokens unlock each second until `end_time`, when the complete
+    /// `total_amount` is vested.
+    ///
+    /// # Security
+    /// - Requires admin authorization via [`AdminStorage::require_admin`].
+    /// - Transfers `total_amount` of `token` from `admin` into contract custody atomically.
+    /// - Protected by the payment reentrancy guard because this performs a token transfer.
     pub fn create_vesting_schedule(
         env: Env,
         admin: Address,
@@ -3035,34 +3048,116 @@ impl QuickLendXContract {
         end_time: u64,
     ) -> Result<u64, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        vesting::Vesting::create_schedule(
-            &env,
-            &admin,
-            token,
-            beneficiary,
-            total_amount,
-            start_time,
-            cliff_seconds,
-            end_time,
-        )
+        reentrancy::with_payment_guard(&env, || {
+            vesting::Vesting::create_schedule(
+                &env,
+                &admin,
+                token,
+                beneficiary,
+                total_amount,
+                start_time,
+                cliff_seconds,
+                end_time,
+            )
+        })
     }
 
+    /// Return the vesting schedule for `id`, or `None` if it does not exist.
     pub fn get_vesting_schedule(env: Env, id: u64) -> Option<vesting::VestingSchedule> {
         vesting::Vesting::get_schedule(&env, id)
     }
 
+    /// Return the total vested amount for schedule `id` at the current ledger timestamp.
+    ///
+    /// Returns `None` if the schedule does not exist or arithmetic overflows.
+    pub fn get_vesting_vested(env: Env, id: u64) -> Option<i128> {
+        let schedule = vesting::Vesting::get_schedule(&env, id)?;
+        vesting::Vesting::vested_amount(&env, &schedule).ok()
+    }
+
+    /// Return the immediately releasable amount for schedule `id`.
+    ///
+    /// Returns `None` if the schedule does not exist or arithmetic overflows.
+    pub fn get_vesting_releasable(env: Env, id: u64) -> Option<i128> {
+        let schedule = vesting::Vesting::get_schedule(&env, id)?;
+        vesting::Vesting::releasable_amount(&env, &schedule).ok()
+    }
+
+    /// Release vested tokens for schedule `id` to the beneficiary.
+    ///
+    /// # Security
+    /// - Requires beneficiary authorization (`beneficiary.require_auth()`).
+    /// - Returns `Err(InvalidTimestamp)` if called before `cliff_time`.
+    /// - Returns `Ok(0)` (idempotent) when nothing new has vested since the last release.
+    /// - Protected by the payment reentrancy guard because this performs a SAC token transfer.
     pub fn release_vested_tokens(
         env: Env,
         beneficiary: Address,
         id: u64,
     ) -> Result<i128, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        vesting::Vesting::release(&env, &beneficiary, id)
+        reentrancy::with_payment_guard(&env, || vesting::Vesting::release(&env, &beneficiary, id))
     }
 
-    pub fn get_vesting_releasable(env: Env, id: u64) -> Option<i128> {
-        let schedule = vesting::Vesting::get_schedule(&env, id)?;
-        vesting::Vesting::releasable_amount(&env, &schedule).ok()
+    /// Distribute accumulated period revenue then vest the developer share on-chain.
+    ///
+    /// The standard [`distribute_revenue`] entrypoint computes treasury / developer /
+    /// platform splits and updates the period accounting record. This wrapper
+    /// additionally locks the developer share in a new on-chain vesting schedule,
+    /// giving the developer a time-locked claim rather than an immediate credit.
+    ///
+    /// # Arguments
+    /// * `admin`                 - Admin address; must match the stored protocol admin.
+    /// * `period`                - Revenue accounting period to distribute.
+    /// * `developer`             - Beneficiary address for the developer vesting schedule.
+    /// * `token`                 - Token address used for the vesting schedule.
+    /// * `vesting_start`         - Unix timestamp when linear vesting begins (must be >= now).
+    /// * `vesting_cliff_seconds` - Seconds after `vesting_start` before any tokens unlock.
+    /// * `vesting_end`           - Unix timestamp when all developer tokens are fully vested.
+    ///
+    /// # Returns
+    /// `(treasury_amount, schedule_id, platform_amount)` where `schedule_id` is the
+    /// newly created developer vesting schedule ID (0 when `developer_amount` is 0).
+    ///
+    /// # Emits
+    /// - `VestingEvent::NewSchedule` via the `(vesting, created)` event topic when a schedule
+    ///   is created.
+    ///
+    /// # Security
+    /// Protected by the payment reentrancy guard because vesting schedule creation
+    /// transfers `developer_amount` tokens from `admin` into contract custody.
+    pub fn distribute_revenue_vested(
+        env: Env,
+        admin: Address,
+        period: u64,
+        developer: Address,
+        token: Address,
+        vesting_start: u64,
+        vesting_cliff_seconds: u64,
+        vesting_end: u64,
+    ) -> Result<(i128, u64, i128), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        reentrancy::with_payment_guard(&env, || {
+            let (treasury_amount, developer_amount, platform_amount) =
+                fees::FeeManager::distribute_revenue(&env, &admin, period)?;
+
+            let schedule_id = if developer_amount > 0 {
+                vesting::Vesting::create_schedule(
+                    &env,
+                    &admin,
+                    token,
+                    developer,
+                    developer_amount,
+                    vesting_start,
+                    vesting_cliff_seconds,
+                    vesting_end,
+                )?
+            } else {
+                0
+            };
+
+            Ok((treasury_amount, schedule_id, platform_amount))
+        })
     }
 
     // ============================================================================
