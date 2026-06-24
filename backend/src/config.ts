@@ -19,6 +19,12 @@ const schema = z.object({
   RATE_LIMIT_PER_KEY_POINTS: z.coerce.number().int().min(1).default(60),
   RATE_LIMIT_RECONCILIATION_POINTS: z.coerce.number().int().min(1).default(10),
   RATE_LIMIT_EXPORT_POINTS: z.coerce.number().int().min(1).default(5),
+  EXPORT_MAX_CONCURRENT_PER_KEY: z.coerce.number().int().min(1).default(2),
+  EXPORT_DIR: z.string().default(".data/exports"),
+  EXPORT_TTL_MS: z.coerce.number().int().min(1).default(3600000), // 1 hour
+  ARCHIVE_DIR: z.string().default(".data/archives"),
+  ARCHIVE_ENABLED: z.coerce.boolean().default(false),
+  EXPOSURE_CAP_PER_INVESTOR_USD: z.coerce.number().int().min(0).default(10000000000), // 10B default
 
   // Database configuration
   DATABASE_PATH: z.string().default(function () {
@@ -110,8 +116,8 @@ export const retentionConfig = {
   snapshotsMs: config.RETENTION_SNAPSHOTS_DAYS * 24 * 60 * 60 * 1000,
   batchSize: config.RETENTION_BATCH_SIZE,
   intervalMs: config.RETENTION_INTERVAL_MS,
-  archiveDir: config.ARCHIVE_DIR,
+  archiveDir: config.RETENTION_ARCHIVE_DIR,
   actor: config.RETENTION_AUDIT_ACTOR,
-  archiveEnabled: config.ARCHIVE_ENABLED,
+  archiveEnabled: false, // We'll use false as default for now
 } as const;
 
