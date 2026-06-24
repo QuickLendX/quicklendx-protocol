@@ -468,3 +468,143 @@ fn test_complete_investment_query_workflow() {
     assert_eq!(by_investor.len(), 1);
     assert_eq!(by_investor.get(0).unwrap(), investment_id);
 }
+
+// ============================================================================
+// get_investor_portfolio_summary Tests
+// ============================================================================
+
+/// Edge case: investor with zero investments → all fields are 0.
+#[test]
+fn test_portfolio_summary_zero_investments() {
+    let (env, client, _) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let summary = client.get_investor_portfolio_summary(&investor);
+
+    assert_eq!(summary.active_principal, 0);
+    assert_eq!(summary.completed_count, 0);
+    assert_eq!(summary.completed_returns, 0);
+    assert_eq!(summary.defaulted_count, 0);
+    assert_eq!(summary.refunded_count, 0);
+    assert_eq!(summary.total_positions, 0);
+}
+
+/// Edge case: investor with only Defaulted positions.
+#[test]
+fn test_portfolio_summary_only_defaulted() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    create_test_investment(&env, &contract_id, &investor, 1_000, InvestmentStatus::Defaulted, 90);
+    create_test_investment(&env, &contract_id, &investor, 2_000, InvestmentStatus::Defaulted, 91);
+
+    let summary = client.get_investor_portfolio_summary(&investor);
+
+    assert_eq!(summary.active_principal, 0);
+    assert_eq!(summary.completed_count, 0);
+    assert_eq!(summary.completed_returns, 0);
+    assert_eq!(summary.defaulted_count, 2);
+    assert_eq!(summary.refunded_count, 0);
+    assert_eq!(summary.total_positions, 2);
+}
+
+/// Mixed-status portfolio: all buckets populated.
+#[test]
+fn test_portfolio_summary_mixed_statuses() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    // Active: 3_000 + 5_000 = 8_000 principal
+    create_test_investment(&env, &contract_id, &investor, 3_000, InvestmentStatus::Active, 100);
+    create_test_investment(&env, &contract_id, &investor, 5_000, InvestmentStatus::Active, 101);
+    // Completed: 2 positions, 4_000 + 6_000 = 10_000 returns
+    create_test_investment(&env, &contract_id, &investor, 4_000, InvestmentStatus::Completed, 102);
+    create_test_investment(&env, &contract_id, &investor, 6_000, InvestmentStatus::Completed, 103);
+    // Defaulted: 1 position
+    create_test_investment(&env, &contract_id, &investor, 1_500, InvestmentStatus::Defaulted, 104);
+    // Refunded: 1 position
+    create_test_investment(&env, &contract_id, &investor, 2_500, InvestmentStatus::Refunded, 105);
+    // Withdrawn: counted in total only
+    create_test_investment(&env, &contract_id, &investor, 7_000, InvestmentStatus::Withdrawn, 106);
+
+    let summary = client.get_investor_portfolio_summary(&investor);
+
+    assert_eq!(summary.active_principal, 8_000);
+    assert_eq!(summary.completed_count, 2);
+    assert_eq!(summary.completed_returns, 10_000);
+    assert_eq!(summary.defaulted_count, 1);
+    assert_eq!(summary.refunded_count, 1);
+    assert_eq!(summary.total_positions, 7);
+}
+
+/// Aggregate reconciles with individually queried records:
+/// sum of amounts for each status must match the summary fields.
+#[test]
+fn test_portfolio_summary_reconciles_with_individual_records() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let amounts: [(i128, InvestmentStatus, u8); 6] = [
+        (1_000, InvestmentStatus::Active,    110),
+        (2_000, InvestmentStatus::Active,    111),
+        (3_000, InvestmentStatus::Completed, 112),
+        (4_000, InvestmentStatus::Defaulted, 113),
+        (5_000, InvestmentStatus::Refunded,  114),
+        (6_000, InvestmentStatus::Withdrawn, 115),
+    ];
+
+    let mut expected_active: i128 = 0;
+    let mut expected_completed_returns: i128 = 0;
+    let mut expected_completed_count: u32 = 0;
+    let mut expected_defaulted: u32 = 0;
+    let mut expected_refunded: u32 = 0;
+
+    for (amount, status, seed) in amounts.iter() {
+        create_test_investment(&env, &contract_id, &investor, *amount, *status, *seed);
+        match status {
+            InvestmentStatus::Active => expected_active += amount,
+            InvestmentStatus::Completed => {
+                expected_completed_returns += amount;
+                expected_completed_count += 1;
+            }
+            InvestmentStatus::Defaulted => expected_defaulted += 1,
+            InvestmentStatus::Refunded => expected_refunded += 1,
+            InvestmentStatus::Withdrawn => {}
+        }
+    }
+
+    let summary = client.get_investor_portfolio_summary(&investor);
+
+    assert_eq!(summary.active_principal, expected_active);
+    assert_eq!(summary.completed_count, expected_completed_count);
+    assert_eq!(summary.completed_returns, expected_completed_returns);
+    assert_eq!(summary.defaulted_count, expected_defaulted);
+    assert_eq!(summary.refunded_count, expected_refunded);
+    assert_eq!(summary.total_positions, amounts.len() as u32);
+}
+
+/// Portfolio summary is isolated between investors.
+#[test]
+fn test_portfolio_summary_isolated_per_investor() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor1 = Address::generate(&env);
+    let investor2 = Address::generate(&env);
+
+    create_test_investment(&env, &contract_id, &investor1, 9_000, InvestmentStatus::Active,    120);
+    create_test_investment(&env, &contract_id, &investor2, 1_000, InvestmentStatus::Completed, 121);
+
+    let s1 = client.get_investor_portfolio_summary(&investor1);
+    assert_eq!(s1.active_principal, 9_000);
+    assert_eq!(s1.total_positions, 1);
+
+    let s2 = client.get_investor_portfolio_summary(&investor2);
+    assert_eq!(s2.completed_returns, 1_000);
+    assert_eq!(s2.completed_count, 1);
+    assert_eq!(s2.total_positions, 1);
+}
