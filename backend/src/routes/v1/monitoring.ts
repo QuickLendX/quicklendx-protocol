@@ -9,6 +9,7 @@ import {
 } from "../../services/invariantService";
 import { webhookQueueService } from "../../services/webhookQueueService";
 import { ReconciliationWorker } from "../../services/reconciliationWorker";
+import { latencyTracker, DEFAULT_WINDOW_MS } from "../../services/latencyTracker";
 
 const router = Router();
 router.use(apiKeyAuth);
@@ -220,6 +221,50 @@ router.get("/reconciliation", async (_req: AuthenticatedRequest, res: Response) 
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to read reconciliation";
     res.status(500).json({ error: { message, code: "RECONCILIATION_READ_ERROR" } });
+  }
+});
+
+/**
+ * GET /api/v1/admin/monitoring/latency
+ *
+ * Returns p50 / p95 / p99 latencies per normalised route over the last
+ * `windowMs` milliseconds (default: 5 minutes).
+ *
+ * Query parameters:
+ *   windowMs  (optional) Override rolling window width in ms (min: 1000, max: 3600000).
+ *
+ * Response shape:
+ *   {
+ *     routes: Array<{
+ *       route: string;       // Normalised route key (e.g. /api/v1/invoices/:id)
+ *       count: number;       // Samples in window
+ *       p50: number | null;  // ms
+ *       p95: number | null;  // ms
+ *       p99: number | null;  // ms
+ *       min: number | null;  // ms
+ *       max: number | null;  // ms
+ *       windowMs: number;
+ *     }>;
+ *     windowMs: number;
+ *     totalRoutes: number;
+ *     maxRoutes: number;
+ *     overflowed: boolean;
+ *     generatedAt: string;   // ISO timestamp
+ *   }
+ */
+router.get("/latency", (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const rawWindow = Number((_req.query as Record<string, unknown>).windowMs);
+    const windowMs =
+      Number.isFinite(rawWindow) && rawWindow >= 1_000 && rawWindow <= 3_600_000
+        ? rawWindow
+        : DEFAULT_WINDOW_MS;
+
+    const stats = latencyTracker.getStats(windowMs);
+    res.json(stats);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to compute latency stats";
+    res.status(500).json({ error: { message, code: "LATENCY_STATS_ERROR" } });
   }
 });
 
