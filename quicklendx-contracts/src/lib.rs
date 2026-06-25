@@ -37,6 +37,8 @@ mod scratch_events;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default;
 #[cfg(test)]
+mod test_concurrent_default_overlap;
+#[cfg(test)]
 mod test_default_finality_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality;
