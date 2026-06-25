@@ -190,7 +190,7 @@ fn test_withdraw_accepted_bid_fails() {
     let err_result = result.unwrap();
     assert!(err_result.is_err(), "withdrawing an Accepted bid must fail");
     assert_eq!(
-        result.unwrap_err(),
+        err_result.unwrap_err(),
         QuickLendXError::OperationNotAllowed,
         "error must be OperationNotAllowed"
     );
