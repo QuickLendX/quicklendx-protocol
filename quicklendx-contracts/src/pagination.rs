@@ -18,8 +18,6 @@
 //! 5. **No panics** - Only `saturating_*` arithmetic is used and all indexing
 //!    goes through pre-computed safe bounds.
 
-extern crate alloc;
-
 use alloc::vec::Vec;
 
 /// Maximum number of records any paginated query endpoint may return in a
