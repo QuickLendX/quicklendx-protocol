@@ -477,3 +477,43 @@ fn test_diagnostics_tag_uniqueness() {
         }
     }
 }
+
+#[cfg(feature = "diagnostics")]
+#[test]
+fn test_get_protocol_diagnostics_basic() {
+    let (env, client, admin, contract_addr) = full_setup();
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &client, &admin, &business, &investor, &contract_addr);
+
+    // Before any invoices: counts should be zero.
+    let diag = client.get_protocol_diagnostics();
+    assert_eq!(diag.total_invoices, 0);
+    assert_eq!(diag.pending_invoices, 0);
+    assert_eq!(diag.verified_invoices, 0);
+    assert!(!diag.is_paused);
+    assert!(!diag.is_maintenance);
+    assert!(!diag.backpressure_active);
+    assert_eq!(diag.currency_count, 1);
+
+    // Upload and verify an invoice, then check counts update.
+    let invoice_id = client.upload_invoice(
+        &business,
+        &10_000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86_400),
+        &String::from_str(&env, "Diagnostics entry-point test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let diag2 = client.get_protocol_diagnostics();
+    assert_eq!(diag2.total_invoices, 1);
+    assert_eq!(diag2.pending_invoices, 1);
+    assert_eq!(diag2.verified_invoices, 0);
+
+    client.verify_invoice(&invoice_id);
+    let diag3 = client.get_protocol_diagnostics();
+    assert_eq!(diag3.pending_invoices, 0);
+    assert_eq!(diag3.verified_invoices, 1);
+    assert_eq!(diag3.ledger_sequence, env.ledger().sequence());
+}
