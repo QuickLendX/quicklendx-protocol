@@ -90,9 +90,12 @@ pub mod pause;
 pub mod payments;
 pub mod profits;
 pub mod protocol_limits;
+pub mod panic_handler;
 pub mod reentrancy;
 pub mod settlement;
 pub mod storage;
+#[cfg(test)]
+mod test_panic_handler;
 #[cfg(test)]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]
