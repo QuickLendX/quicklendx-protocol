@@ -104,6 +104,8 @@ mod test_admin_two_step;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit;
 #[cfg(test)]
+mod test_audit_config;
+#[cfg(test)]
 mod test_backup;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_safety;
