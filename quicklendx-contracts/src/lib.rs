@@ -62,6 +62,7 @@ pub mod analytics;
 pub mod audit;
 pub mod backup;
 pub mod backup_v1;
+pub mod backpressure;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
@@ -83,6 +84,7 @@ pub mod investment_queries;
 pub mod invoice;
 pub mod invoice_search;
 pub mod maintenance;
+pub mod monitor;
 pub mod notifications;
 pub mod pause;
 pub mod payments;
@@ -133,6 +135,8 @@ mod test_expired_bids_cleanup;
 mod test_freshness;
 #[cfg(test)]
 mod test_freshness_bounds;
+#[cfg(test)]
+mod test_health_status;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
 #[cfg(test)]
@@ -728,6 +732,26 @@ impl QuickLendXContract {
         pause::PauseControl::is_paused(&env)
     }
 
+    /// Return whether the protocol is in maintenance (read-only) mode.
+    pub fn is_maintenance_mode(env: Env) -> bool {
+        maintenance::MaintenanceControl::is_maintenance_mode(&env)
+    }
+
+    /// Return the maintenance reason string, if maintenance mode is active.
+    pub fn get_maintenance_reason(env: Env) -> Option<String> {
+        maintenance::MaintenanceControl::get_maintenance_reason(&env)
+    }
+
+    /// Enable or disable maintenance mode (admin only).
+    pub fn set_maintenance_mode(
+        env: Env,
+        admin: Address,
+        enabled: bool,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        maintenance::MaintenanceControl::set_maintenance_mode(&env, &admin, enabled, &reason)
+    }
+
     /// Atomically enter incident mode: hard pause plus maintenance with reason.
     ///
     /// Coordinates [`pause::PauseControl`] and [`maintenance::MaintenanceControl`]
@@ -747,6 +771,20 @@ impl QuickLendXContract {
         admin: Address,
     ) -> Result<incident::IncidentSnapshot, QuickLendXError> {
         incident::IncidentControl::exit_incident_mode(&env, &admin)
+    }
+
+    /// Consolidated operational health snapshot for write-gating and degraded banners.
+    ///
+    /// Composes pause, maintenance, backpressure, and freshness signals in a single
+    /// ledger-consistent read. No new state is stored; all fields are read-through
+    /// aggregates of existing flags.
+    ///
+    /// # `writes_allowed`
+    /// `true` only when the protocol is not paused, not in maintenance, and not
+    /// shedding load via backpressure. Freshness (`data_is_stale`) is advisory for
+    /// indexed off-chain reads and does not affect `writes_allowed`.
+    pub fn get_health_status(env: Env) -> monitor::HealthStatus {
+        monitor::get_health_status(&env)
     }
 
     /// Get a snapshot of the protocol's current health status.
