@@ -97,6 +97,8 @@ pub mod storage;
 #[cfg(test)]
 mod test_panic_handler;
 #[cfg(test)]
+mod test_due_date_guard;
+#[cfg(test)]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;

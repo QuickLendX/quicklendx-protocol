@@ -37,6 +37,10 @@ impl Invoice {
             return Err(QuickLendXError::InvalidAmount);
         }
 
+        if due_date <= env.ledger().timestamp() {
+            return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
+
         let mut normalized_tags = Vec::new(env);
         for tag in tags.iter() {
             let normalized = normalize_tag(env, &tag)?;
