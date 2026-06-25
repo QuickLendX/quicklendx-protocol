@@ -65,6 +65,7 @@ fn make_invoice(env: &Env, idx: u32) -> Invoice {
             resolution: String::from_str(env, ""),
             resolved_by: Address::generate(env),
             resolved_at: 0,
+            resolution_outcome: None,
         },
         total_paid: 0,
         payment_history: vec![env],
@@ -245,6 +246,7 @@ fn test_invoice_storage() {
             resolution: String::from_str(&env, ""),
             resolved_by: Address::generate(&env),
             resolved_at: 0,
+            resolution_outcome: None,
         };
 
         let invoice = Invoice {
@@ -573,6 +575,7 @@ fn create_test_invoice(env: &Env, id: BytesN<32>, business: Address) -> Invoice 
         resolution: String::from_str(env, ""),
         resolved_by: Address::generate(env),
         resolved_at: 0,
+        resolution_outcome: None,
     };
 
     Invoice {
@@ -972,6 +975,7 @@ fn test_maximum_values(env: &Env) {
             resolution: String::from_str(env, ""),
             resolved_by: Address::generate(env),
             resolved_at: 0,
+            resolution_outcome: None,
         },
         total_paid: 0,
         payment_history: Vec::new(env),
