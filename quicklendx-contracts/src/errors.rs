@@ -24,7 +24,7 @@ pub enum QuickLendXError {
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceAlreadyDefaulted = 1006,
 
-    // Authorization (1100-1103)
+    // Authorization (1100-1104)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     Unauthorized = 1100,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -33,6 +33,9 @@ pub enum QuickLendXError {
     NotInvestor = 1102,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotAdmin = 1103,
+    /// Caller address equals the contract's own address (confused-deputy prevention).
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    SelfCallNotAllowed = 1104,
 
     // Input validation (1200-1204)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -191,6 +194,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
             QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
+            QuickLendXError::SelfCallNotAllowed => symbol_short!("SELF_NA"),
             // Input validation
             QuickLendXError::InvalidAmount => symbol_short!("INV_AMT"),
             QuickLendXError::InvalidAddress => symbol_short!("INV_ADR"),
