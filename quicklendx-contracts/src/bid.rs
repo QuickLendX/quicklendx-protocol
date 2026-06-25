@@ -984,6 +984,7 @@ impl BidStorage {
             if bid.status == BidStatus::Placed {
                 bid.status = BidStatus::Cancelled;
                 Self::update_bid(env, &bid);
+                crate::events::emit_bid_cancelled(env, &bid);
                 return true;
             }
         }

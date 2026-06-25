@@ -42,6 +42,8 @@ pub const TOPIC_BID_PLACED: &str = "bid_placed";
 pub const TOPIC_BID_ACCEPTED: &str = "bid_accepted";
 /// Topic for `BidWithdrawn` events.
 pub const TOPIC_BID_WITHDRAWN: &str = "bid_withdrawn";
+/// Topic for `BidCancelled` events.
+pub const TOPIC_BID_CANCELLED: &str = "bid_cancelled";
 /// Topic for `BidExpired` events.
 pub const TOPIC_BID_EXPIRED: &str = "bid_expired";
 /// Topic for `EscrowCreated` / `FundsLocked` events.
@@ -258,6 +260,19 @@ pub struct BidAccepted {
 #[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct BidWithdrawn {
+    pub bid_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub bid_amount: i128,
+    pub timestamp: u64,
+}
+
+/// Emitted when a bid is cancelled by its investor.
+///
+/// Topic: [`TOPIC_BID_CANCELLED`] (`"bid_cancelled"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct BidCancelled {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
     pub investor: Address,
@@ -1005,6 +1020,17 @@ pub fn emit_bid_placed(env: &Env, bid: &Bid) {
 
 pub fn emit_bid_withdrawn(env: &Env, bid: &Bid) {
     BidWithdrawn {
+        bid_id: bid.bid_id.clone(),
+        invoice_id: bid.invoice_id.clone(),
+        investor: bid.investor.clone(),
+        bid_amount: bid.bid_amount,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_bid_cancelled(env: &Env, bid: &Bid) {
+    BidCancelled {
         bid_id: bid.bid_id.clone(),
         invoice_id: bid.invoice_id.clone(),
         investor: bid.investor.clone(),

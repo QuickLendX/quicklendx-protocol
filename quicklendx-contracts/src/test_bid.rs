@@ -32,9 +32,10 @@
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::{QuickLendXContract, QuickLendXContractClient};
+use crate::events::TOPIC_BID_CANCELLED;
 use soroban_sdk::{
     testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke},
-    Address, BytesN, Env, IntoVal, String, Vec,
+    xdr, Address, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -101,6 +102,22 @@ fn test_investor_can_cancel_own_placed_bid() {
         "bid status must be Cancelled after cancel_bid"
     );
     assert_eq!(bid.investor, investor, "investor field must be unchanged");
+    let topic_sym = Symbol::new(&env, TOPIC_BID_CANCELLED);
+    let topic_xdr = xdr::ScVal::try_from_val(&env, &topic_sym).expect("topic to ScVal");
+    let cancelled_events = env
+        .events()
+        .all()
+        .events()
+        .iter()
+        .filter(|e| {
+            if let xdr::ContractEventBody::V0(body) = &e.body {
+                body.topics.first() == Some(&topic_xdr)
+            } else {
+                false
+            }
+        })
+        .count();
+    assert_eq!(cancelled_events, 1, "cancel_bid must emit exactly one BidCancelled event");
 }
 
 #[test]
