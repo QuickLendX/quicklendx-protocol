@@ -37,6 +37,7 @@ npm run dev
 ## Documentation
 
 - `docs/`: Project-wide design, implementation, and audit documentation.
+- `docs/ON_CHAIN_LOGS.md`: Where to find tx-level vs contract-level events and how to subscribe to them.
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
