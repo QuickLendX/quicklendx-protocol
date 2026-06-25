@@ -158,7 +158,7 @@ pub fn store_invoice(
 **Parameters:**
 
 - `business`: Address of the business creating the invoice
-- `amount`: Invoice amount in smallest currency unit (e.g., cents)
+- `amount`: Invoice amount in the token's smallest indivisible unit (e.g. 1 000 000 for 1.000000 USDC with 6 decimals, or 10 000 000 for 1 XLM with 7 decimals). The contract stores this value verbatim — **no decimal conversion is performed internally**. See [`docs/contracts/token-decimals.md`](../docs/contracts/token-decimals.md) for the full explanation and integration examples.
 - `currency`: Token address for the invoice currency
 - `due_date`: Unix timestamp for invoice due date
 - `description`: Human-readable invoice description
@@ -1228,6 +1228,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
+- [Token Decimals — how non-standard decimals are handled internally](../docs/contracts/token-decimals.md)
 - [Stellar Documentation](https://developers.stellar.org/)
 - [Soroban Documentation](https://soroban.stellar.org/)
 - [Rust Documentation](https://doc.rust-lang.org/)
