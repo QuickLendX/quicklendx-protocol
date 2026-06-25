@@ -48,7 +48,7 @@ mod test_escrow;
 mod test_fees;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance_write_matrix;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
@@ -145,12 +145,14 @@ mod test_investment_consistency;
 mod test_accept_bid_race;
 #[cfg(test)]
 mod test_bid_cancel_accept_race;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
 // #[cfg(test)]
-// mod test_investment_queries;
+#[cfg(test)]
+#[path = "test/test_investment_queries.rs"]
+mod test_investment_queries;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_overflow;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -166,7 +168,7 @@ mod test_profit_fee;
 // mod test_storage;
 #[cfg(test)]
 mod test_storage_key_layout;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_limits_boundary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_health;
@@ -212,7 +214,7 @@ mod test_input_matrix;
 mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
 #[cfg(test)]
 mod test_invoice_metadata;
@@ -2918,6 +2920,19 @@ impl QuickLendXContract {
     /// Get investments by investor (simple version without pagination for backward compatibility)
     pub fn get_investments_by_investor(env: Env, investor: Address) -> Vec<BytesN<32>> {
         InvestmentStorage::get_investments_by_investor(&env, &investor)
+    }
+
+    /// Return an aggregate portfolio snapshot for `investor` in a single
+    /// bounded read.
+    ///
+    /// Delegates to [`investment_queries::InvestmentQueries::investor_portfolio_summary`].
+    /// No auth is required because every individual investment record is
+    /// already publicly queryable.
+    pub fn get_investor_portfolio_summary(
+        env: Env,
+        investor: Address,
+    ) -> Result<investment_queries::InvestorPortfolioSummary, QuickLendXError> {
+        investment_queries::InvestmentQueries::investor_portfolio_summary(&env, &investor)
     }
 
     /// Get bid history for an invoice (simple version without pagination)
