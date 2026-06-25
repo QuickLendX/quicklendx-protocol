@@ -242,6 +242,8 @@ mod test_diagnostics;
 mod test_insurance_claim_payout;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_cancelled_noop;
 #[cfg(test)]
 mod test_notifications;
 pub mod types;
