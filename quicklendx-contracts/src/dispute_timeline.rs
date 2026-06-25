@@ -80,7 +80,7 @@ pub struct DisputeTimelineEntry {
     pub summary: String,
     /// Structured resolution outcome (only present for "Resolved" events
     /// that were resolved using resolve_dispute_structured).
-    pub resolution_outcome: Option<DisputeResolution>,
+    pub resolution_outcome: DisputeResolution,
 }
 
 /// Paginated dispute timeline response.
@@ -149,7 +149,7 @@ fn build_all_entries(
         actor: dispute.created_by.clone(),
         // Reason is safe to surface; evidence is not included here.
         summary: dispute.reason.clone(),
-        resolution_outcome: None,
+        resolution_outcome: DisputeResolution::None,
     });
 
     // --- Event 1: UnderReview ----------------------------------------------
@@ -173,7 +173,7 @@ fn build_all_entries(
             // Admin identity is redacted to avoid leaking privileged info.
             actor: redacted_address(env),
             summary: String::from_str(env, ""),
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         });
     }
 

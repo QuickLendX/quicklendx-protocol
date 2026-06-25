@@ -1639,7 +1639,7 @@ pub fn recompute_investor_tier(
     InvestorVerificationStorage::update(env, &verification);
     Ok(())
 }
-}
+
 
 
 /// Validate structured invoice metadata against the invoice amount

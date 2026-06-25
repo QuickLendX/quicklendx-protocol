@@ -500,9 +500,11 @@ impl AuditStorage {
                 }
                 // Increment operation counters
                 let mut found = false;
-                for (op, cnt) in operations_count.iter_mut() {
-                    if *op == entry.operation {
-                        *cnt += 1;
+                for i in 0..operations_count.len() {
+                    let (op, mut cnt) = operations_count.get(i).unwrap();
+                    if op == entry.operation {
+                        cnt += 1;
+                        operations_count.set(i, (op, cnt));
                         found = true;
                         break;
                     }
