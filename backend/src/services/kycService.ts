@@ -14,6 +14,7 @@
 
 import * as crypto from "crypto";
 import { getPreparedStatement } from "../lib/database";
+import { getPolicyFields, FieldTier, isSecret } from "../lib/logging/policy";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -28,48 +29,10 @@ const TAG_BYTES = 16;
 // ---------------------------------------------------------------------------
 
 /** Fields redacted to "[REDACTED]" on every decrypt() call. */
-export const SENSITIVE_FIELDS = [
-  // snake_case (legacy/storage)
-  "tax_id",
-  "customer_name",
-  "customer_address",
-  "date_of_birth",
-  "dateOfBirth",
-  "ssn",
-  "passport_number",
-  "passportNumber",
-  "national_id",
-  "phone_number",
-  "email",
-  "bank_account",
-  "bankAccountNumber",
-  "routingNumber",
-  "kyc_document",
-  "kyc_data",
-  // camelCase (API/tests)
-  "taxId",
-  "dateOfBirth",
-  "passportNumber",
-  "bankAccountNumber",
-  "routingNumber",
-] as const;
-
+export const SENSITIVE_FIELDS = getPolicyFields(FieldTier.SECRET);
 export type SensitiveField = (typeof SENSITIVE_FIELDS)[number];
 
-export const PII_FIELDS = [
-  "tax_id",
-  "customer_name",
-  "customer_address",
-  "date_of_birth",
-  "ssn",
-  "passport_number",
-  "national_id",
-  "phone_number",
-  "email",
-  "bank_account",
-  "ipAddress",
-] as const;
-
+export const PII_FIELDS = getPolicyFields(FieldTier.SECRET);
 export type PiiField = (typeof PII_FIELDS)[number];
 
 /**
@@ -473,4 +436,4 @@ export function getKycStatus(businessId: string): { status: string; verifiedAt?:
   }
 }
 
-
+

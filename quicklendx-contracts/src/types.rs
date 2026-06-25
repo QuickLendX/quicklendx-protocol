@@ -26,7 +26,13 @@ pub enum InvoiceStatus {
 
 impl InvoiceStatus {
     pub fn is_terminal(&self) -> bool {
-        matches!(self, InvoiceStatus::Paid | InvoiceStatus::Defaulted | InvoiceStatus::Cancelled | InvoiceStatus::Refunded)
+        matches!(
+            self,
+            InvoiceStatus::Paid
+                | InvoiceStatus::Defaulted
+                | InvoiceStatus::Cancelled
+                | InvoiceStatus::Refunded
+        )
     }
 }
 
@@ -66,6 +72,16 @@ pub enum DisputeStatus {
     Disputed,
     UnderReview,
     Resolved,
+}
+
+/// Dispute resolution outcome enumeration
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DisputeResolution {
+    FavorBusiness,
+    FavorInvestor,
+    Split,
+    Dismissed,
 }
 
 /// Invoice category for classification
@@ -109,6 +125,7 @@ pub struct Dispute {
     pub resolution: String,
     pub resolved_by: Address,
     pub resolved_at: u64,
+    pub resolution_outcome: Option<DisputeResolution>,
 }
 
 /// Invoice rating structure

@@ -112,6 +112,7 @@ impl Invoice {
             resolution: String::from_str(env, ""),
             resolved_by: zero_address(env),
             resolved_at: 0,
+            resolution_outcome: None,
         }
     }
 
