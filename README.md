@@ -41,6 +41,7 @@ npm run dev
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
 - `quicklendx-frontend/README.md`: Frontend-specific documentation.
+- `docs/PLATFORM_FEES.md`: Fee schedule and tenant override documentation.
 
 ## Contribution
 
