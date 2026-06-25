@@ -23,7 +23,12 @@ jobs:
         with:
           filters: |
             contracts:
-              - 'quicklendx-contracts/**'
+              - 'quicklendx-contracts/**/*.rs'
+              - 'quicklendx-contracts/**/Cargo.toml'
+              - 'quicklendx-contracts/**/Cargo.lock'
+              - 'quicklendx-contracts/**/*.sh'
+              - 'quicklendx-contracts/tests/**'
+              - 'quicklendx-contracts/scripts/**'
 
       - name: Skip contract build for docs-only PRs
         if: github.event_name == 'pull_request' && steps.changes.outputs.contracts != 'true'
