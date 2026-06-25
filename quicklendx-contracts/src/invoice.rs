@@ -6,7 +6,7 @@ use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 use crate::storage::InvoiceStorage;
 pub use crate::types::{
-    Dispute, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceRating,
+    Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceRating,
     InvoiceStatus,
 };
 
@@ -112,7 +112,7 @@ impl Invoice {
             resolution: String::from_str(env, ""),
             resolved_by: zero_address(env),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         }
     }
 

@@ -54,8 +54,8 @@ mod test_maintenance_write_matrix;
 mod test_settlement_history_reconstruction;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
-#[cfg(test)]
-mod bench;
+#[cfg(any(test, feature = "testutils"))]
+pub mod bench;
 
 pub mod admin;
 pub mod analytics;
@@ -267,7 +267,7 @@ use events::{
 use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
 use payments::{create_escrow, release_escrow, EscrowStorage};
-use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
+use profits::{calculate_profit as do_calculate_profit, PlatformFee};
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
@@ -1968,16 +1968,6 @@ impl QuickLendXContract {
         recompute_investor_tier(&env, &admin, &investor)
     }
 
-    /// Recompute investor tier from tracked investment performance.
-    pub fn recompute_investor_tier(
-        env: Env,
-        admin: Address,
-        investor: Address,
-    ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        recompute_investor_tier(&env, &admin, &investor)
-    }
-
 
     /// Verify business (admin only)
     pub fn verify_business(
@@ -3293,6 +3283,7 @@ impl QuickLendXContract {
                 "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
             ),
             resolved_at: 0,
+            resolution_outcome: DisputeResolution::None,
         };
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
@@ -3407,7 +3398,7 @@ impl QuickLendXContract {
         invoice.dispute.resolution = resolution.clone();
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
-        invoice.dispute.resolution_outcome = None;
+        invoice.dispute.resolution_outcome = DisputeResolution::None;
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
         // Emit DisputeResolved event immediately after state mutation.
@@ -3440,7 +3431,7 @@ impl QuickLendXContract {
 
         invoice.dispute_status = DisputeStatus::Resolved;
         invoice.dispute.resolution = note.clone();
-        invoice.dispute.resolution_outcome = Some(outcome);
+        invoice.dispute.resolution_outcome = outcome;
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
         InvoiceStorage::update_invoice(&env, &invoice);

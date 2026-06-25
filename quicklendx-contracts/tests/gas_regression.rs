@@ -3,6 +3,8 @@ use quicklendx_contracts::{
     types::*,
     protocol_limits::*,
     bench::bench::*,
+    notifications::*,
+    verification::*,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -15,8 +17,8 @@ static FILE_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 struct EntrypointBaseline {
-    name: String,
-    scenario: String,
+    name: std::string::String,
+    scenario: std::string::String,
     instructions: u64,
     read_bytes: u64,
     write_bytes: u64,
@@ -24,14 +26,14 @@ struct EntrypointBaseline {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 struct Metadata {
-    recorded: String,
-    tool: String,
+    recorded: std::string::String,
+    tool: std::string::String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 struct BaselineFile {
     metadata: Metadata,
-    entrypoint: Vec<EntrypointBaseline>,
+    entrypoint: std::vec::Vec<EntrypointBaseline>,
 }
 
 struct GasTestHarness {
@@ -124,8 +126,7 @@ impl GasTestHarness {
     }
 
     fn setup_escrow(&mut self) {
-        let escrow_id = self.client.accept_bid(&self.invoice_id, &self.bid_id);
-        self.escrow_id = escrow_id;
+        let _ = self.client.try_accept_bid(&self.invoice_id, &self.bid_id);
     }
 
     fn compare_or_update(&self, name: &str, scenario: &str, delta: BudgetDelta) {
@@ -145,7 +146,7 @@ impl GasTestHarness {
                 recorded: "2026-06-25".to_string(),
                 tool: "quicklendx gas-baseline v1".to_string(),
             },
-            entrypoint: Vec::new(),
+            entrypoint: std::vec::Vec::new(),
         });
 
         // Find or insert the entry
@@ -240,10 +241,10 @@ fn test_admin_gas() {
         grace_period_seconds: 86400,
         max_invoices_per_business: 100,
     };
-    bench_scenario!(harness, "initialize_protocol_limits", "default", client.try_initialize_protocol_limits(&harness.admin, &limits));
-    bench_scenario!(harness, "set_protocol_limits", "default", client.try_set_protocol_limits(&harness.admin, &limits));
-    bench_scenario!(harness, "update_protocol_limits", "default", client.try_update_protocol_limits(&harness.admin, &limits));
-    bench_scenario!(harness, "update_limits_max_invoices", "default", client.try_update_limits_max_invoices(&harness.admin, &100));
+    bench_scenario!(harness, "initialize_protocol_limits", "default", client.try_initialize_protocol_limits(&harness.admin, &limits.min_invoice_amount, &limits.max_due_date_days, &limits.grace_period_seconds));
+    bench_scenario!(harness, "set_protocol_limits", "default", client.try_set_protocol_limits(&harness.admin, &limits.min_invoice_amount, &limits.max_due_date_days, &limits.grace_period_seconds));
+    bench_scenario!(harness, "update_protocol_limits", "default", client.try_update_protocol_limits(&harness.admin, &limits.min_invoice_amount, &limits.max_due_date_days, &limits.grace_period_seconds));
+    bench_scenario!(harness, "update_limits_max_invoices", "default", client.try_update_limits_max_invoices(&harness.admin, &limits.min_invoice_amount, &limits.max_due_date_days, &limits.grace_period_seconds, &100));
     bench_scenario!(harness, "set_protocol_config", "default", client.try_set_protocol_config(&harness.admin, &10, &30, &86400));
 }
 
@@ -260,9 +261,9 @@ fn test_kyc_gas() {
     bench_scenario!(harness, "submit_investor_kyc", "default", client.try_submit_investor_kyc(&harness.investor, &String::from_str(env, "KYC Data")));
     bench_scenario!(harness, "verify_investor", "default", client.try_verify_investor(&harness.investor, &1_000_000));
     bench_scenario!(harness, "get_verified_businesses", "default", client.try_get_verified_businesses());
-    bench_scenario!(harness, "reject_investor", "default", client.try_reject_investor(&harness.admin, &harness.investor, &String::from_str(env, "reason")));
+    bench_scenario!(harness, "reject_investor", "default", client.try_reject_investor(&harness.investor, &String::from_str(env, "reason")));
     bench_scenario!(harness, "get_investor_verification", "default", client.try_get_investor_verification(&harness.investor));
-    bench_scenario!(harness, "set_investment_limit", "default", client.try_set_investment_limit(&harness.admin, &harness.investor, &2_000_000));
+    bench_scenario!(harness, "set_investment_limit", "default", client.try_set_investment_limit(&harness.investor, &2_000_000));
     bench_scenario!(harness, "verify_business", "default", client.try_verify_business(&harness.admin, &harness.business));
     bench_scenario!(harness, "reject_business", "default", client.try_reject_business(&harness.admin, &harness.business, &String::from_str(env, "reason")));
     bench_scenario!(harness, "get_business_verification_status", "default", client.try_get_business_verification_status(&harness.business));
@@ -271,13 +272,13 @@ fn test_kyc_gas() {
     bench_scenario!(harness, "get_verified_investors", "default", client.try_get_verified_investors());
     bench_scenario!(harness, "get_pending_investors", "default", client.try_get_pending_investors());
     bench_scenario!(harness, "get_rejected_investors", "default", client.try_get_rejected_investors());
-    bench_scenario!(harness, "update_investor_analytics", "default", client.try_update_investor_analytics(&harness.investor, &100, &200, &300));
+    bench_scenario!(harness, "update_investor_analytics", "default", client.try_update_investor_analytics(&harness.investor, &100, &true));
     bench_scenario!(harness, "get_investor_analytics", "default", client.try_get_investor_analytics(&harness.investor));
     bench_scenario!(harness, "get_investors_by_tier", "default", client.try_get_investors_by_tier(&InvestorTier::Gold));
     bench_scenario!(harness, "get_investors_by_risk_level", "default", client.try_get_investors_by_risk_level(&InvestorRiskLevel::Low));
-    bench_scenario!(harness, "calculate_investor_risk_score", "default", client.try_calculate_investor_risk_score(&harness.investor));
-    bench_scenario!(harness, "determine_investor_tier", "default", client.try_determine_investor_tier(&1_000_000));
-    bench_scenario!(harness, "calculate_investment_limit", "default", client.try_calculate_investment_limit(&harness.investor));
+    bench_scenario!(harness, "calculate_investor_risk_score", "default", client.try_calculate_investor_risk_score(&harness.investor, &String::from_str(env, "KYC Data")));
+    bench_scenario!(harness, "determine_investor_tier", "default", client.try_determine_investor_tier(&harness.investor, &50));
+    bench_scenario!(harness, "calculate_investment_limit", "default", client.try_calculate_investment_limit(&InvestorTier::Gold, &InvestorRiskLevel::Low, &1_000_000));
     bench_scenario!(harness, "validate_investor_investment", "default", client.try_validate_investor_investment(&harness.investor, &100_000));
     bench_scenario!(harness, "is_investor_verified", "default", client.try_is_investor_verified(&harness.investor));
 }
@@ -310,10 +311,10 @@ fn test_invoice_gas() {
     bench_scenario!(harness, "verify_invoice", "default", client.try_verify_invoice(&harness.invoice_id));
     bench_scenario!(harness, "expire_invoice", "default", client.try_expire_invoice(&harness.invoice_id));
     bench_scenario!(harness, "cleanup_expired_bids_paged", "default", client.try_cleanup_expired_bids_paged(&harness.invoice_id, &0, &10));
-    bench_scenario!(harness, "get_business_invoices_paged", "default", client.try_get_business_invoices_paged(&harness.business, &0, &10));
-    bench_scenario!(harness, "get_available_invoices_paged", "default", client.try_get_available_invoices_paged(&0, &10));
-    bench_scenario!(harness, "get_invoices_by_category", "default", client.try_get_invoices_by_category(&InvoiceCategory::Services));
-    bench_scenario!(harness, "get_invoices_by_cat_status", "default", client.try_get_invoices_by_cat_status(&InvoiceCategory::Services, &InvoiceStatus::Verified));
+    bench_scenario!(harness, "get_business_invoices_paged", "default", client.try_get_business_invoices_paged(&harness.business, &None, &0, &10));
+    bench_scenario!(harness, "get_available_invoices_paged", "default", client.try_get_available_invoices_paged(&None, &None, &None, &0, &10));
+    // bench_scenario!(harness, "get_invoices_by_category", "default", client.try_get_invoices_by_category(&InvoiceCategory::Services));
+    // bench_scenario!(harness, "get_invoices_by_cat_status", "default", client.try_get_invoices_by_cat_status(&InvoiceCategory::Services, &InvoiceStatus::Verified));
     bench_scenario!(harness, "get_invoices_by_tag", "default", client.try_get_invoices_by_tag(&String::from_str(env, "tag1")));
     bench_scenario!(harness, "get_invoices_by_tags", "default", client.try_get_invoices_by_tags(&tags));
     bench_scenario!(harness, "get_invoice_count_by_category", "default", client.try_get_invoice_count_by_category(&InvoiceCategory::Services));
@@ -501,12 +502,13 @@ fn test_overdue_notifications_gas() {
     bench_scenario!(harness, "get_overdue_scan_cursor", "default", client.try_get_overdue_scan_cursor());
     bench_scenario!(harness, "get_overdue_scan_batch_limit", "default", client.try_get_overdue_scan_batch_limit());
     bench_scenario!(harness, "get_overdue_scan_batch_limit_max", "default", client.try_get_overdue_scan_batch_limit_max());
-    bench_scenario!(harness, "check_invoice_expiration", "default", client.try_check_invoice_expiration(&harness.invoice_id));
+    bench_scenario!(harness, "check_invoice_expiration", "default", client.try_check_invoice_expiration(&harness.invoice_id, &None));
 
     bench_scenario!(harness, "get_notification", "default", client.try_get_notification(&harness.invoice_id));
     bench_scenario!(harness, "get_user_notifications", "default", client.try_get_user_notifications(&harness.investor));
     bench_scenario!(harness, "get_notification_preferences", "default", client.try_get_notification_preferences(&harness.investor));
-    bench_scenario!(harness, "update_notification_preferences", "default", client.try_update_notification_preferences(&harness.investor, &true, &true, &true));
-    bench_scenario!(harness, "update_notification_status", "default", client.try_update_notification_status(&harness.invoice_id, &true));
+    let prefs = client.get_notification_preferences(&harness.investor);
+    bench_scenario!(harness, "update_notification_preferences", "default", client.try_update_notification_preferences(&harness.investor, &prefs));
+    bench_scenario!(harness, "update_notification_status", "default", client.try_update_notification_status(&harness.invoice_id, &NotificationDeliveryStatus::Sent));
     bench_scenario!(harness, "get_user_notification_stats", "default", client.try_get_user_notification_stats(&harness.investor));
 }

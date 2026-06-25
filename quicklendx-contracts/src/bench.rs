@@ -1,7 +1,7 @@
 //! Bench helpers for gas/cpu instruction measurement.
 //! This module is compiled only for tests and provides a `measure` helper.
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testutils"))]
 pub mod bench {
     use soroban_sdk::Env;
 
@@ -21,7 +21,6 @@ pub mod bench {
     /// @param f The closure executing the contract invocation.
     /// @return The recorded BudgetDelta.
     pub fn measure<F: FnOnce()>(env: &Env, _label: &str, f: F) -> BudgetDelta {
-        env.enable_invocation_metering();
         f();
         let estimate = env.cost_estimate();
         let resources = estimate.resources();

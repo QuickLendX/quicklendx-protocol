@@ -46,7 +46,7 @@ fn create_invoice(
    /// Create a minimal Invoice suitable for backup tests.
     fn make_invoice(env: &Env, idx: u32) -> Invoice {
         use soroban_sdk::{vec, Address, BytesN};
-        use crate::invoice::{Dispute, DisputeStatus};
+        use crate::invoice::{Dispute, DisputeResolution, DisputeStatus};
  
         let mut id_bytes = [0u8; 32];
         id_bytes[28..32].copy_from_slice(&idx.to_be_bytes());
@@ -84,6 +84,7 @@ fn create_invoice(
                 resolution: String::from_str(env, ""),
                 resolved_by: Address::generate(env),
                 resolved_at: 0,
+                resolution_outcome: DisputeResolution::None,
             },
             total_paid: 0,
             payment_history: vec![env],
