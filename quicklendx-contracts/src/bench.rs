@@ -21,14 +21,14 @@ pub mod bench {
     /// @param f The closure executing the contract invocation.
     /// @return The recorded BudgetDelta.
     pub fn measure<F: FnOnce()>(env: &Env, _label: &str, f: F) -> BudgetDelta {
-        env.enable_invocation_metering();
+        // Reset the budget tracker so we get a clean delta for this closure.
+        env.budget().reset_unlimited();
         f();
-        let estimate = env.cost_estimate();
-        let resources = estimate.resources();
+        let budget = env.budget();
         BudgetDelta {
-            instructions: resources.instructions as u64,
-            read_bytes: resources.disk_read_bytes as u64,
-            write_bytes: resources.write_bytes as u64,
+            instructions: budget.cpu_instruction_cost(),
+            read_bytes: budget.memory_bytes_cost(),
+            write_bytes: 0,
         }
     }
 }

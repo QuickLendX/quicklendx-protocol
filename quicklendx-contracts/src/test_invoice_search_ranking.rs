@@ -5,7 +5,8 @@ mod test_invoice_search_ranking {
     use crate::invoice_search::InvoiceSearch;
     use crate::storage::InvoiceStorage;
     use crate::types::{
-        Dispute, Invoice, InvoiceCategory, InvoiceStatus, SearchRank, SearchResult,
+        Dispute, Invoice, InvoiceCategory, InvoiceStatus, OptionalDisputeResolution, SearchRank,
+        SearchResult,
     };
     use crate::QuickLendXContract;
     use soroban_sdk::testutils::Address as _;
@@ -57,6 +58,7 @@ mod test_invoice_search_ranking {
             resolution: String::from_str(env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,
+            resolution_outcome: OptionalDisputeResolution::None,
         };
 
         Invoice {
@@ -111,6 +113,7 @@ mod test_invoice_search_ranking {
             resolution: String::from_str(&env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,
+            resolution_outcome: OptionalDisputeResolution::None,
         };
 
         // Invoice 1: Exact ID match
@@ -231,6 +234,7 @@ mod test_invoice_search_ranking {
             resolution: String::from_str(&env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,
+            resolution_outcome: OptionalDisputeResolution::None,
         };
 
         // Invoice with Exact ID match, created at 1000

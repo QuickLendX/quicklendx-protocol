@@ -44,6 +44,7 @@ mod test_default_finality {
                 resolution: String::from_str(&env, ""),
                 resolved_by: admin.clone(),
                 resolved_at: 0,
+                resolution_outcome: crate::types::OptionalDisputeResolution::None,
             },
         };
         InvoiceStorage::store_invoice(&env, &invoice);
@@ -98,6 +99,7 @@ mod test_default_finality {
                 resolution: String::from_str(&env, ""),
                 resolved_by: admin.clone(),
                 resolved_at: 0,
+                resolution_outcome: crate::types::OptionalDisputeResolution::None,
             },
         };
         InvoiceStorage::store_invoice(&env, &invoice);
