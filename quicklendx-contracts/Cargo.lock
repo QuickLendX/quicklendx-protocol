@@ -1116,6 +1116,8 @@ name = "quicklendx-contracts"
 version = "0.1.0"
 dependencies = [
  "proptest",
+ "serde",
+ "serde_json",
  "soroban-sdk",
 ]
 

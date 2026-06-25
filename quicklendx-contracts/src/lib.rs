@@ -50,6 +50,8 @@ mod test_fees;
 mod test_maintenance;
 #[cfg(test)]
 mod test_maintenance_write_matrix;
+#[cfg(test)]
+mod test_settlement_history_reconstruction;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 #[cfg(test)]
