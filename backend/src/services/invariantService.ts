@@ -7,6 +7,8 @@ import {
   BidStatus,
   SettlementStatus,
 } from "../types/contract";
+import { withSpan } from "../lib/tracing";
+import { alertRouter, Severity } from "./alertRouter";
 
 const MAX_SAMPLE_IDS = 5;
 
@@ -72,6 +74,7 @@ export const FullInvariantReportSchema = z.object({
   orphans: InvariantReportSchema,
   cursorSequence: CursorRegressionSchema,
   accounting: AccountingReportSchema,
+  rawEventDuplicates: InvariantCounterSchema,
   timestamp: z.string().datetime(),
   pass: z.boolean(),
 });
@@ -90,6 +93,11 @@ export interface InvariantDataProvider {
   getBids(): Promise<Bid[]>;
   getSettlements(): Promise<Settlement[]>;
   getDisputes(): Promise<Dispute[]>;
+}
+
+/** Optional provider for persisted raw-event idempotency keys. */
+export interface RawEventIdempotencyProvider {
+  getRawEventKeys(): Promise<Array<{ tx_hash: string; event_index: number }>>;
 }
 
 /** Creates a provider from static in-memory arrays. Useful in tests and local dev. */
@@ -145,24 +153,26 @@ function scanMismatchSettlements(
 export async function checkOrphans(
   provider: InvariantDataProvider,
 ): Promise<InvariantReport> {
-  const [invoices, bids, settlements, disputes] = await Promise.all([
-    provider.getInvoices(),
-    provider.getBids(),
-    provider.getSettlements(),
-    provider.getDisputes(),
-  ]);
+  return withSpan("invariant.checkOrphans", {}, async () => {
+    const [invoices, bids, settlements, disputes] = await Promise.all([
+      provider.getInvoices(),
+      provider.getBids(),
+      provider.getSettlements(),
+      provider.getDisputes(),
+    ]);
 
-  const validInvoiceIds = new Set(invoices.map((i) => i.id));
-  return {
-    orphanBids: scanOrphans(bids as HasInvoiceId[], validInvoiceIds),
-    orphanSettlements: scanOrphans(
-      settlements as HasInvoiceId[],
-      validInvoiceIds,
-    ),
-    orphanDisputes: scanOrphans(disputes as HasInvoiceId[], validInvoiceIds),
-    mismatchSettlements: scanMismatchSettlements(bids, settlements),
-    timestamp: new Date().toISOString(),
-  };
+    const validInvoiceIds = new Set(invoices.map((i) => i.id));
+    return {
+      orphanBids: scanOrphans(bids as HasInvoiceId[], validInvoiceIds),
+      orphanSettlements: scanOrphans(
+        settlements as HasInvoiceId[],
+        validInvoiceIds,
+      ),
+      orphanDisputes: scanOrphans(disputes as HasInvoiceId[], validInvoiceIds),
+      mismatchSettlements: scanMismatchSettlements(bids, settlements),
+      timestamp: new Date().toISOString(),
+    };
+  });
 }
 
 // ── Cursor sequence ───────────────────────────────────────────────────────────
@@ -173,25 +183,31 @@ export async function checkOrphans(
  * indicate a regression (duplicate replay or rollback without re-index).
  */
 export function checkCursorSequence(cursors: number[]): CursorRegressionReport {
-  const regressions: Array<{
-    index: number;
-    previous: number;
-    current: number;
-  }> = [];
-  for (let i = 1; i < cursors.length; i++) {
-    if (cursors[i] <= cursors[i - 1]) {
-      regressions.push({
-        index: i,
-        previous: cursors[i - 1],
-        current: cursors[i],
-      });
-    }
-  }
-  return {
-    hasRegression: regressions.length > 0,
-    regressionCount: regressions.length,
-    regressions,
-  };
+  return withSpan(
+    "invariant.checkCursorSequence",
+    { cursor_count: cursors.length },
+    () => {
+      const regressions: Array<{
+        index: number;
+        previous: number;
+        current: number;
+      }> = [];
+      for (let i = 1; i < cursors.length; i++) {
+        if (cursors[i] <= cursors[i - 1]) {
+          regressions.push({
+            index: i,
+            previous: cursors[i - 1],
+            current: cursors[i],
+          });
+        }
+      }
+      return {
+        hasRegression: regressions.length > 0,
+        regressionCount: regressions.length,
+        regressions,
+      };
+    },
+  );
 }
 
 // ── Accounting totals ─────────────────────────────────────────────────────────
@@ -205,37 +221,77 @@ export function checkCursorSequence(cursors: number[]): CursorRegressionReport {
 export async function checkAccountingTotals(
   provider: InvariantDataProvider,
 ): Promise<AccountingReport> {
-  const [bids, settlements] = await Promise.all([
-    provider.getBids(),
-    provider.getSettlements(),
-  ]);
+  return withSpan("invariant.checkAccountingTotals", {}, async () => {
+    const [bids, settlements] = await Promise.all([
+      provider.getBids(),
+      provider.getSettlements(),
+    ]);
 
-  const acceptedBidByInvoice = new Map<string, Bid>();
-  for (const bid of bids) {
-    if (bid.status === BidStatus.Accepted) {
-      acceptedBidByInvoice.set(bid.invoice_id, bid);
+    const acceptedBidByInvoice = new Map<string, Bid>();
+    for (const bid of bids) {
+      if (bid.status === BidStatus.Accepted) {
+        acceptedBidByInvoice.set(bid.invoice_id, bid);
+      }
     }
-  }
 
-  const mismatchIds: string[] = [];
-  for (const settlement of settlements) {
-    if (settlement.status !== SettlementStatus.Paid) continue;
-    const bid = acceptedBidByInvoice.get(settlement.invoice_id);
-    if (!bid) {
-      mismatchIds.push(settlement.invoice_id);
-      continue;
+    const mismatchIds: string[] = [];
+    for (const settlement of settlements) {
+      if (settlement.status !== SettlementStatus.Paid) continue;
+      const bid = acceptedBidByInvoice.get(settlement.invoice_id);
+      if (!bid) {
+        mismatchIds.push(settlement.invoice_id);
+        continue;
+      }
+      if (BigInt(settlement.amount) !== BigInt(bid.bid_amount)) {
+        mismatchIds.push(settlement.invoice_id);
+      }
     }
-    if (BigInt(settlement.amount) !== BigInt(bid.bid_amount)) {
-      mismatchIds.push(settlement.invoice_id);
-    }
-  }
 
-  return {
-    mismatches: {
-      count: mismatchIds.length,
-      sampleIds: mismatchIds.slice(0, MAX_SAMPLE_IDS),
-    },
-  };
+    return {
+      mismatches: {
+        count: mismatchIds.length,
+        sampleIds: mismatchIds.slice(0, MAX_SAMPLE_IDS),
+      },
+    };
+  });
+}
+
+// ── Raw event idempotency ─────────────────────────────────────────────────────
+
+/**
+ * Detect accidental duplicate (tx_hash, event_index) rows in the persisted raw
+ * event store. The migration-level UNIQUE index should make this impossible; any
+ * hit indicates a bypass of the insert path or manual data corruption.
+ */
+export async function checkRawEventIdempotency(
+  provider: RawEventIdempotencyProvider,
+): Promise<InvariantCounter> {
+  return withSpan("invariant.checkRawEventIdempotency", {}, async () => {
+    const keys = await provider.getRawEventKeys();
+    const seen = new Map<string, number>();
+    const duplicateSamples: string[] = [];
+
+    for (const key of keys) {
+      const composite = `${key.tx_hash}:${key.event_index}`;
+      const count = (seen.get(composite) ?? 0) + 1;
+      seen.set(composite, count);
+      if (count === 2 && duplicateSamples.length < MAX_SAMPLE_IDS) {
+        duplicateSamples.push(composite);
+      }
+    }
+
+    let duplicateCount = 0;
+    for (const count of seen.values()) {
+      if (count > 1) {
+        duplicateCount += count - 1;
+      }
+    }
+
+    return {
+      count: duplicateCount,
+      sampleIds: duplicateSamples,
+    };
+  });
 }
 
 // ── Full suite ────────────────────────────────────────────────────────────────
@@ -248,28 +304,40 @@ export async function checkAccountingTotals(
 export async function runFullInvariantSuite(
   provider: InvariantDataProvider,
   cursorHistory: number[],
+  rawEventProvider?: RawEventIdempotencyProvider,
 ): Promise<FullInvariantReport> {
-  const [orphans, accounting] = await Promise.all([
-    checkOrphans(provider),
-    checkAccountingTotals(provider),
-  ]);
-  const cursorSequence = checkCursorSequence(cursorHistory);
+  return withSpan(
+    "invariant.runFullInvariantSuite",
+    { cursor_history_count: cursorHistory.length },
+    async () => {
+      const [orphans, accounting] = await Promise.all([
+        checkOrphans(provider),
+        checkAccountingTotals(provider),
+      ]);
+      const cursorSequence = checkCursorSequence(cursorHistory);
+      const rawEventDuplicates = rawEventProvider
+        ? await checkRawEventIdempotency(rawEventProvider)
+        : { count: 0, sampleIds: [] };
 
-  const pass =
-    orphans.orphanBids.count === 0 &&
-    orphans.orphanSettlements.count === 0 &&
-    orphans.orphanDisputes.count === 0 &&
-    orphans.mismatchSettlements.count === 0 &&
-    !cursorSequence.hasRegression &&
-    accounting.mismatches.count === 0;
+      const pass =
+        orphans.orphanBids.count === 0 &&
+        orphans.orphanSettlements.count === 0 &&
+        orphans.orphanDisputes.count === 0 &&
+        orphans.mismatchSettlements.count === 0 &&
+        !cursorSequence.hasRegression &&
+        accounting.mismatches.count === 0 &&
+        rawEventDuplicates.count === 0;
 
-  return {
-    orphans,
-    cursorSequence,
-    accounting,
-    timestamp: new Date().toISOString(),
-    pass,
-  };
+      return {
+        orphans,
+        cursorSequence,
+        accounting,
+        rawEventDuplicates,
+        timestamp: new Date().toISOString(),
+        pass,
+      };
+    },
+  );
 }
 
 // ── Persistence ───────────────────────────────────────────────────────────────
@@ -375,39 +443,59 @@ function recordMetrics(report: FullInvariantReport): void {
 // ── Alerting ────────────────────────────────────────────────────────────────
 
 export function emitInvariantAlert(report: FullInvariantReport): void {
-  if (report.pass) return;
+  withSpan("invariant.emitInvariantAlert", { pass: report.pass }, () => {
+    if (report.pass) return;
 
-  const violations: string[] = [];
-  if (report.orphans.orphanBids.count > 0)
-    violations.push(`orphan_bids: ${report.orphans.orphanBids.count}`);
-  if (report.orphans.orphanSettlements.count > 0)
-    violations.push(
-      `orphan_settlements: ${report.orphans.orphanSettlements.count}`,
-    );
-  if (report.orphans.orphanDisputes.count > 0)
-    violations.push(`orphan_disputes: ${report.orphans.orphanDisputes.count}`);
-  if (report.orphans.mismatchSettlements.count > 0)
-    violations.push(
-      `mismatch_settlements: ${report.orphans.mismatchSettlements.count}`,
-    );
-  if (report.cursorSequence.hasRegression)
-    violations.push(
-      `cursor_regression: ${report.cursorSequence.regressionCount}`,
-    );
-  if (report.accounting.mismatches.count > 0)
-    violations.push(
-      `accounting_mismatches: ${report.accounting.mismatches.count}`,
+    const violations: string[] = [];
+    if (report.orphans.orphanBids.count > 0)
+      violations.push(`orphan_bids: ${report.orphans.orphanBids.count}`);
+    if (report.orphans.orphanSettlements.count > 0)
+      violations.push(
+        `orphan_settlements: ${report.orphans.orphanSettlements.count}`,
+      );
+    if (report.orphans.orphanDisputes.count > 0)
+      violations.push(
+        `orphan_disputes: ${report.orphans.orphanDisputes.count}`,
+      );
+    if (report.orphans.mismatchSettlements.count > 0)
+      violations.push(
+        `mismatch_settlements: ${report.orphans.mismatchSettlements.count}`,
+      );
+    if (report.cursorSequence.hasRegression)
+      violations.push(
+        `cursor_regression: ${report.cursorSequence.regressionCount}`,
+      );
+    if (report.accounting.mismatches.count > 0)
+      violations.push(
+        `accounting_mismatches: ${report.accounting.mismatches.count}`,
+      );
+    if (report.rawEventDuplicates.count > 0)
+      violations.push(
+        `raw_event_duplicates: ${report.rawEventDuplicates.count}`,
+      );
+
+    const message = `Invariant violation detected: ${violations.join(", ")}`;
+
+    console.error(
+      JSON.stringify({
+        level: "ALERT",
+        type: "INVARIANT_VIOLATION",
+        timestamp: report.timestamp,
+        violations,
+        message,
+      }),
     );
 
-  console.error(
-    JSON.stringify({
-      level: "ALERT",
-      type: "INVARIANT_VIOLATION",
-      timestamp: report.timestamp,
-      violations,
-      message: `Invariant violation detected: ${violations.join(", ")}`,
-    }),
-  );
+    // Route to alert system via alertRouter
+    // Determine severity based on violation count
+    const totalViolations = violations.length;
+    const severity =
+      totalViolations > 2 ? Severity.HIGH : totalViolations > 0 ? Severity.MEDIUM : Severity.LOW;
+
+    alertRouter
+      .routeAlert("invariant-violation", severity, message)
+      .catch((err) => console.error("Failed to route invariant alert:", err));
+  });
 }
 
 // ── Scheduler ───────────────────────────────────────────────────────────────
@@ -454,30 +542,36 @@ export class InvariantScheduler {
   }
 
   private async runCheck(): Promise<void> {
-    if (!this.provider) return;
+    await withSpan(
+      "invariant.scheduler.runCheck",
+      { cursor_history_count: this.cursorHistory.length },
+      async () => {
+        if (!this.provider) return;
 
-    try {
-      const report = await runFullInvariantSuite(
-        this.provider,
-        this.cursorHistory,
-      );
-      recordMetrics(report);
-      reportStore.add({
-        report,
-        cursorHistory: [...this.cursorHistory],
-        runAt: report.timestamp,
-      });
-      emitInvariantAlert(report);
-    } catch (err) {
-      console.error(
-        JSON.stringify({
-          level: "ERROR",
-          type: "INVARIANT_CHECK_FAILED",
-          timestamp: new Date().toISOString(),
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      );
-    }
+        try {
+          const report = await runFullInvariantSuite(
+            this.provider,
+            this.cursorHistory,
+          );
+          recordMetrics(report);
+          reportStore.add({
+            report,
+            cursorHistory: [...this.cursorHistory],
+            runAt: report.timestamp,
+          });
+          emitInvariantAlert(report);
+        } catch (err) {
+          console.error(
+            JSON.stringify({
+              level: "ERROR",
+              type: "INVARIANT_CHECK_FAILED",
+              timestamp: new Date().toISOString(),
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        }
+      },
+    );
   }
 
   isStarted(): boolean {

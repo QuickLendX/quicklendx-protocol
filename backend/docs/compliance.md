@@ -101,6 +101,14 @@ const safeResponse = redactPii(kycData);
 res.json(safeResponse);
 ```
 
+### Invoice Creation (KYC Gating)
+
+To prevent unverified businesses from hitting the on-chain contracts and wasting RPC calls, the `POST /api/v1/invoices` endpoint is gated by a KYC check.
+
+- If the business's KYC status is not `verified`, the request is rejected with a `403 Forbidden` (`KYC_NOT_VERIFIED`).
+- If the business's KYC status is `verified` but the verification is older than 12 months, the request is rejected with a `403 Forbidden` (`KYC_NOT_VERIFIED`).
+- The error response does not leak whether the business exists in the system to prevent enumeration attacks.
+
 ## Testing Requirements
 
 ### Minimum Coverage: 95%

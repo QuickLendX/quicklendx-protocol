@@ -1,12 +1,15 @@
 import { z } from "zod";
-import { ulid } from "ulid";
+import { webhookDeliveryRepo } from "./webhookDeliveryRepo";
+import type { WebhookDelivery } from "./webhookDeliveryRepo";
 
-const DEFAULT_MAX_SIZE = 1000;
+const MAX_CAPACITY = 5000;
 
 export const WebhookEventStatusSchema = z.enum([
   "pending",
+  "processing",
   "success",
   "failed",
+  "dead_letter",
 ]);
 
 export type WebhookEventStatus = z.infer<typeof WebhookEventStatusSchema>;
@@ -19,143 +22,168 @@ export interface WebhookEvent {
   status: WebhookEventStatus;
 }
 
+export interface WebhookDeliveryInfo {
+  id: string;
+  eventType: string;
+  payload: unknown;
+  subscriberId: string | null;
+  status: WebhookEventStatus;
+  enqueuedAt: string;
+  attemptCount: number;
+  maxAttempts: number;
+  nextRetryAt: string | null;
+  lastError: string | null;
+  lastAttemptAt: string | null;
+}
+
 const WebhookQueueStatsSchema = z.object({
   depth: z.number().int().min(0),
+  size: z.number().int().min(0),
+  capacity: z.number().int().min(0),
+  overflowCount: z.number().int().min(0),
+  pendingCount: z.number().int().min(0),
   successCount: z.number().int().min(0),
   failureCount: z.number().int().min(0),
-  overflowCount: z.number().int().min(0),
   oldestTimestamp: z.string().datetime().nullable(),
 });
 
 export type WebhookQueueStats = z.infer<typeof WebhookQueueStatsSchema>;
 
+function deliveryToEvent(d: WebhookDelivery): WebhookEvent {
+  return {
+    id: d.id,
+    type: d.eventType,
+    payload: d.payload,
+    enqueuedAt: d.enqueuedAt,
+    status: d.status,
+  };
+}
+
 class WebhookQueueService {
   private static instance: WebhookQueueService;
 
-  private buffer: WebhookEvent[];
-  private maxSize: number;
-  private head: number = 0;
-  private tail: number = 0;
-  private count: number = 0;
-  private overflowCount: number = 0;
-  private successCount: number = 0;
-  private failureCount: number = 0;
-
-  private constructor(maxSize?: number) {
-    this.maxSize = maxSize ?? DEFAULT_MAX_SIZE;
-    this.buffer = new Array(this.maxSize);
-  }
-
-  public static getInstance(maxSize?: number): WebhookQueueService {
+  public static getInstance(): WebhookQueueService {
     if (!WebhookQueueService.instance) {
-      WebhookQueueService.instance = new WebhookQueueService(maxSize);
+      WebhookQueueService.instance = new WebhookQueueService();
     }
     return WebhookQueueService.instance;
   }
 
-  public static resetInstance(maxSize?: number): void {
-    WebhookQueueService.instance = new WebhookQueueService(maxSize);
+  public static resetInstance(): void {
+    if (WebhookQueueService.instance) {
+      WebhookQueueService.instance.db = getDatabase();
+    } else {
+      WebhookQueueService.instance = new WebhookQueueService();
+    }
   }
 
   enqueue(type: string, payload?: unknown): WebhookEvent {
-    const id = ulid();
-    const enqueuedAt = new Date().toISOString();
-
-    if (this.count === this.maxSize) {
-      this.tail = (this.tail + 1) % this.maxSize;
-      this.overflowCount++;
-    } else {
-      this.count++;
+    const stats = webhookDeliveryRepo.getStats();
+    if (stats.pending + stats.processing >= MAX_CAPACITY) {
+      webhookDeliveryRepo.incrementOverflow();
+      const err = new Error("Webhook queue capacity exceeded");
+      (err as any).statusCode = 503;
+      throw err;
     }
 
-    const event: WebhookEvent = {
-      id,
-      type,
+    const delivery = webhookDeliveryRepo.create({
+      eventType: type,
       payload,
-      enqueuedAt,
-      status: "pending",
-    };
+    });
+    return deliveryToEvent(delivery);
+  }
 
-    this.buffer[this.head] = event;
-    this.head = (this.head + 1) % this.maxSize;
+  enqueueWithSubscriber(
+    type: string,
+    payload: unknown,
+    subscriberId: string
+  ): WebhookEvent {
+    const stats = webhookDeliveryRepo.getStats();
+    if (stats.pending + stats.processing >= MAX_CAPACITY) {
+      webhookDeliveryRepo.incrementOverflow();
+      const err = new Error("Webhook queue capacity exceeded");
+      (err as any).statusCode = 503;
+      throw err;
+    }
 
-    return event;
+    const delivery = webhookDeliveryRepo.create({
+      eventType: type,
+      payload,
+      subscriberId,
+    });
+    return deliveryToEvent(delivery);
   }
 
   markSuccess(id: string): boolean {
-    const event = this.findById(id);
-    if (!event) return false;
-    if (event.status !== "pending") return false;
-    event.status = "success";
-    this.successCount++;
-    return true;
+    return webhookDeliveryRepo.markSuccess(id);
   }
 
-  markFailed(id: string): boolean {
-    const event = this.findById(id);
-    if (!event) return false;
-    if (event.status !== "pending") return false;
-    event.status = "failed";
-    this.failureCount++;
-    return true;
+  markFailed(id: string): WebhookDelivery | null {
+    return webhookDeliveryRepo.markFailed(id);
   }
 
   getStats(): WebhookQueueStats {
-    let oldestTimestamp: string | null = null;
-    if (this.count > 0) {
-      const oldest = this.buffer[this.tail];
-      if (oldest) {
-        oldestTimestamp = oldest.enqueuedAt;
-      }
-    }
-
+    const s = webhookDeliveryRepo.getStats();
     return {
-      depth: this.count,
-      successCount: this.successCount,
-      failureCount: this.failureCount,
-      overflowCount: this.overflowCount,
-      oldestTimestamp,
+      depth: s.pending + s.processing,
+      size: s.pending + s.processing,
+      capacity: MAX_CAPACITY,
+      overflowCount: webhookDeliveryRepo.getOverflowCount(),
+      pendingCount: s.pending,
+      successCount: s.success,
+      failureCount: s.failed,
+      oldestTimestamp: s.oldestPending,
     };
   }
 
-  private findById(id: string): WebhookEvent | undefined {
-    for (let i = 0; i < this.count; i++) {
-      const idx = (this.tail + i) % this.maxSize;
-      const event = this.buffer[idx];
-      if (event && event.id === id) {
-        return event;
-      }
-    }
-    return undefined;
-  }
-
   getDepth(): number {
-    return this.count;
+    return this.getStats().size;
   }
 
-  /**
-   * Drain all pending events from the queue and reset it to empty.
-   *
-   * Returns copies of every event whose status is still "pending" so the
-   * caller (e.g. the shutdown handler) can log or persist undelivered work.
-   * Events that have already been marked success or failed are discarded
-   * silently — they have already been handled.
-   *
-   * After flush() the queue depth is zero and counters are reset.
-   */
   flush(): WebhookEvent[] {
-    const pending: WebhookEvent[] = [];
-    for (let i = 0; i < this.count; i++) {
-      const idx = (this.tail + i) % this.maxSize;
-      const event = this.buffer[idx];
-      if (event && event.status === 'pending') {
-        pending.push({ ...event });
-      }
+    const pending = webhookDeliveryRepo.getPending();
+    for (const delivery of pending) {
+      webhookDeliveryRepo.markSuccess(delivery.id);
     }
-    this.head = 0;
-    this.tail = 0;
-    this.count = 0;
-    return pending;
+    return pending.map(deliveryToEvent);
+  }
+
+  getPendingDeliveries(): WebhookDelivery[] {
+    return webhookDeliveryRepo.getPending();
+  }
+
+  getDeadLetters(): WebhookDelivery[] {
+    return webhookDeliveryRepo.getDeadLetters();
+  }
+
+  retryDeadLetter(id: string): boolean {
+    return webhookDeliveryRepo.retryDeadLetter(id);
+  }
+
+  cleanupDeliveries(olderThanDays?: number): number {
+    return webhookDeliveryRepo.cleanup(olderThanDays);
+  }
+
+  vacuumDeliveries(): void {
+    webhookDeliveryRepo.vacuum();
+  }
+
+  getDeliveryInfo(id: string): WebhookDeliveryInfo | null {
+    const delivery = webhookDeliveryRepo.getById(id);
+    if (!delivery) return null;
+    return {
+      id: delivery.id,
+      eventType: delivery.eventType,
+      payload: delivery.payload,
+      subscriberId: delivery.subscriberId,
+      status: delivery.status,
+      enqueuedAt: delivery.enqueuedAt,
+      attemptCount: delivery.attemptCount,
+      maxAttempts: delivery.maxAttempts,
+      nextRetryAt: delivery.nextRetryAt,
+      lastError: delivery.lastError,
+      lastAttemptAt: delivery.lastAttemptAt,
+    };
   }
 }
 

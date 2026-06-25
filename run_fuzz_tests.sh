@@ -70,10 +70,17 @@ case "${1:-quick}" in
         run_test "Bid Fuzz Tests" "cargo test --features fuzz-tests fuzz_place_bid --lib"
         ;;
     
-    settlement)
+settlement)
         echo "Running settlement fuzz tests..."
         echo ""
-        run_test "Settlement Fuzz Tests" "cargo test --features fuzz-tests fuzz_settle_invoice --lib"
+        run_test "Settlement Fuzz Tests" "cargo test --features fuzz-tests fuzz_settlement --lib"
+        ;;
+
+    payment)
+        echo "Running payment capping and replay protection fuzz tests (Issue #1080)..."
+        echo ""
+        run_test "Payment Fuzz Tests" "cargo test --features fuzz-tests fuzz_payment --lib"
+        run_test "Partial Payment Tests" "cargo test --features fuzz-tests test_partial_payments --lib"
         ;;
     
     all)
@@ -85,16 +92,17 @@ case "${1:-quick}" in
     help|--help|-h)
         echo "Usage: $0 [mode]"
         echo ""
-        echo "Modes:"
-        echo "  quick      - Run with 50 cases per test (~30s, default)"
-        echo "  standard   - Run with 1,000 cases per test (~5min)"
-        echo "  extended   - Run with 10,000 cases per test (~30min)"
-        echo "  thorough   - Run with 100,000 cases per test (hours)"
-        echo "  invoice    - Run only invoice creation tests"
-        echo "  bid        - Run only bid placement tests"
-        echo "  settlement - Run only settlement tests"
-        echo "  all        - Run all tests including non-fuzz"
-        echo "  help       - Show this help message"
+echo "Modes:"
+    echo "  quick      - Run with 50 cases per test (~30s, default)"
+    echo "  standard   - Run with 1,000 cases per test (~5min)"
+    echo "  extended   - Run with 10,000 cases per test (~30min)"
+    echo "  thorough   - Run with 100,000 cases per test (hours)"
+    echo "  invoice    - Run only invoice creation tests"
+    echo "  bid        - Run only bid placement tests"
+    echo "  settlement - Run only settlement tests"
+    echo "  payment    - Run payment capping and replay protection tests (Issue #1080)"
+    echo "  all        - Run all tests including non-fuzz"
+    echo "  help       - Show this help message"
         echo ""
         echo "Examples:"
         echo "  $0              # Quick test (default)"

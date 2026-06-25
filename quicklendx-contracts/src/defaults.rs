@@ -1,6 +1,7 @@
 use crate::errors::QuickLendXError;
 use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice_expired};
 use crate::init::ProtocolInitializer;
+use crate::payments::{EscrowStatus, EscrowStorage};
 use crate::storage::{InvestmentStorage, InvoiceStorage};
 use crate::types::{InvestmentStatus, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, BytesN, Env, Vec};
@@ -20,6 +21,10 @@ const DEFAULT_TRANSITION_GUARD_KEY: soroban_sdk::Symbol = symbol_short!("def_gua
 
 /// Transition guard to ensure default transitions are atomic and idempotent.
 /// Tracks whether a default transition has been initiated for a specific invoice.
+///
+/// **Finality**: Once a default transition is guarded and triggered, the invoice reaches
+/// a terminal `Defaulted` state. It cannot be subsequently funded, settled, or have payments
+/// recorded. Insurance claims are processed exactly once during this atomic transition.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TransitionGuard {
@@ -124,6 +129,11 @@ pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64,
 /// # Returns
 /// * `Ok(())` if the invoice was successfully marked as defaulted
 /// * `Err(QuickLendXError)` if the operation fails
+///
+/// # Finality Matrix
+/// The defaulting decision table for invoice status, settlement finalization, and escrow status
+/// is documented in `docs/default-finality-matrix.md` and enforced by
+/// `test_default_finality_matrix.rs`.
 pub fn mark_invoice_defaulted(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -143,6 +153,8 @@ pub fn mark_invoice_defaulted(
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvoiceNotAvailableForFunding);
     }
+
+    ensure_default_transition_open(env, invoice_id)?;
 
     let current_timestamp = env.ledger().timestamp();
     let grace = resolve_grace_period(env, grace_period)?;
@@ -197,8 +209,7 @@ fn normalize_cursor(cursor: u32, funded_count: u32) -> u32 {
 fn resolve_scan_limit(limit: Option<u32>) -> u32 {
     limit
         .unwrap_or(DEFAULT_OVERDUE_SCAN_BATCH_LIMIT)
-        .max(1)
-        .min(MAX_OVERDUE_SCAN_BATCH_LIMIT)
+        .clamp(1, MAX_OVERDUE_SCAN_BATCH_LIMIT)
 }
 
 /// @notice Scans funded invoices in a deterministic bounded window for overdue/default handling.
@@ -283,10 +294,9 @@ pub fn scan_funded_invoice_expirations(
 /// validated call sites such as `mark_invoice_defaulted` or `check_and_handle_expiration`.
 /// The transition guard ensures atomicity and idempotency of default operations.
 /// @security The guard prevents race conditions and duplicate side effects (analytics, state initialization).
+/// @security Settlement finalization and non-held escrow states block defaulting to prevent
+///           double-finality or double-payout drift. See `docs/default-finality-matrix.md`.
 pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    // Atomically check and set the transition guard to prevent duplicate defaults
-    check_and_set_default_guard(env, invoice_id)?;
-
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
@@ -297,6 +307,13 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvalidStatus);
     }
+
+    ensure_default_transition_open(env, invoice_id)?;
+
+    // Atomically check and set the transition guard only after all finality checks pass.
+    // This avoids poisoning future legitimate retries on invoices that were never eligible
+    // for default because another terminal path already completed first.
+    check_and_set_default_guard(env, invoice_id)?;
 
     InvoiceStorage::remove_from_status_invoices(env, InvoiceStatus::Funded, invoice_id);
 
@@ -328,6 +345,27 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     }
 
     emit_invoice_defaulted(env, &invoice);
+
+    // Lifecycle trigger: emits `NotificationType::InvoiceDefaulted` to business
+    // and investor after the default transition is fully persisted.
+    let _ = crate::notifications::NotificationSystem::notify_invoice_defaulted(env, &invoice);
+
+    Ok(())
+}
+
+fn ensure_default_transition_open(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+) -> Result<(), QuickLendXError> {
+    if crate::settlement::is_invoice_finalized(env, invoice_id)? {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    if let Some(escrow) = EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
+        if escrow.status != EscrowStatus::Held {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+    }
 
     Ok(())
 }

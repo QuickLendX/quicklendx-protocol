@@ -35,7 +35,9 @@
 
 use crate::errors::QuickLendXError;
 use crate::types::{Invoice, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{
+    contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Vec,
+};
 
 /// Audit operation types
 #[contracttype]
@@ -59,6 +61,9 @@ pub enum AuditOperation {
     SettlementCompleted,
 }
 
+/// Fixed genesis sentinel for invoice-local audit hash chains.
+pub const AUDIT_CHAIN_GENESIS: [u8; 32] = [0u8; 32];
+
 /// Audit log entry structure
 ///
 /// **IMMUTABLE**: Once created, this entry is never modified or overwritten.
@@ -77,6 +82,13 @@ pub struct AuditLogEntry {
     pub additional_data: Option<String>,
     pub block_height: u32,
     pub transaction_hash: Option<BytesN<32>>,
+    /// Hash of the previous audit entry in this invoice trail.
+    ///
+    /// The first entry uses [`AUDIT_CHAIN_GENESIS`] as a fixed sentinel.
+    /// Each later value is computed with domain-separated SHA-256 over the
+    /// previous entry fields, so tampering with any stored predecessor changes
+    /// the expected hash for its successor.
+    pub prev_hash: BytesN<32>,
 }
 
 /// Audit operation filter
@@ -109,6 +121,23 @@ pub struct AuditStats {
 }
 
 impl AuditLogEntry {
+    /// Domain separator for audit-chain hashes.
+    ///
+    /// The tag is prepended to every SHA-256 preimage so an audit-link hash
+    /// cannot be confused with any other protocol digest computed over similar
+    /// fields.
+    pub const HASH_DOMAIN_TAG: &'static [u8] = b"QLX_AUDIT_CHAIN_V1";
+
+    /// Fixed previous-hash sentinel used by the first audit entry for an invoice.
+    pub fn genesis_prev_hash(env: &Env) -> BytesN<32> {
+        BytesN::from_array(env, &AUDIT_CHAIN_GENESIS)
+    }
+
+    /// Compute this entry's domain-separated SHA-256 hash.
+    pub fn entry_hash(&self, env: &Env) -> BytesN<32> {
+        hash_audit_entry(env, self)
+    }
+
     /// Create a new audit log entry
     pub fn new(
         env: &Env,
@@ -124,6 +153,8 @@ impl AuditLogEntry {
         let timestamp = env.ledger().timestamp();
         let block_height = env.ledger().sequence();
 
+        let prev_hash = AuditStorage::last_entry_hash(env, &invoice_id);
+
         Self {
             audit_id,
             invoice_id,
@@ -136,6 +167,7 @@ impl AuditLogEntry {
             additional_data,
             block_height,
             transaction_hash: None, // Could be populated if available
+            prev_hash,
         }
     }
 
@@ -200,6 +232,76 @@ impl AuditLogEntry {
     }
 }
 
+fn append_optional_string(env: &Env, out: &mut Bytes, value: &Option<String>) {
+    match value {
+        Some(v) => {
+            out.append(&Bytes::from_array(env, &[1u8]));
+            out.append(&v.to_xdr(env));
+        }
+        None => out.append(&Bytes::from_array(env, &[0u8])),
+    }
+}
+
+fn append_optional_amount(env: &Env, out: &mut Bytes, value: Option<i128>) {
+    match value {
+        Some(v) => {
+            out.append(&Bytes::from_array(env, &[1u8]));
+            out.append(&Bytes::from_array(env, &v.to_be_bytes()));
+        }
+        None => out.append(&Bytes::from_array(env, &[0u8])),
+    }
+}
+
+fn append_optional_hash(env: &Env, out: &mut Bytes, value: &Option<BytesN<32>>) {
+    match value {
+        Some(v) => {
+            out.append(&Bytes::from_array(env, &[1u8]));
+            out.append(&v.to_xdr(env));
+        }
+        None => out.append(&Bytes::from_array(env, &[0u8])),
+    }
+}
+
+fn operation_tag(operation: &AuditOperation) -> u8 {
+    match operation {
+        AuditOperation::InvoiceCreated => 0,
+        AuditOperation::InvoiceUploaded => 1,
+        AuditOperation::InvoiceVerified => 2,
+        AuditOperation::InvoiceFunded => 3,
+        AuditOperation::InvoicePaid => 4,
+        AuditOperation::InvoiceDefaulted => 5,
+        AuditOperation::InvoiceStatusChanged => 6,
+        AuditOperation::InvoiceRated => 7,
+        AuditOperation::BidPlaced => 8,
+        AuditOperation::BidAccepted => 9,
+        AuditOperation::BidWithdrawn => 10,
+        AuditOperation::EscrowCreated => 11,
+        AuditOperation::EscrowReleased => 12,
+        AuditOperation::EscrowRefunded => 13,
+        AuditOperation::PaymentProcessed => 14,
+        AuditOperation::SettlementCompleted => 15,
+    }
+}
+
+fn hash_audit_entry(env: &Env, entry: &AuditLogEntry) -> BytesN<32> {
+    let mut preimage = Bytes::new(env);
+    preimage.append(&Bytes::from_slice(env, AuditLogEntry::HASH_DOMAIN_TAG));
+    preimage.append(&entry.prev_hash.clone().to_xdr(env));
+    preimage.append(&entry.audit_id.clone().to_xdr(env));
+    preimage.append(&entry.invoice_id.clone().to_xdr(env));
+    preimage.append(&Bytes::from_array(env, &[operation_tag(&entry.operation)]));
+    preimage.append(&entry.actor.clone().to_xdr(env));
+    preimage.append(&Bytes::from_array(env, &entry.timestamp.to_be_bytes()));
+    append_optional_string(env, &mut preimage, &entry.old_value);
+    append_optional_string(env, &mut preimage, &entry.new_value);
+    append_optional_amount(env, &mut preimage, entry.amount);
+    append_optional_string(env, &mut preimage, &entry.additional_data);
+    preimage.append(&Bytes::from_array(env, &entry.block_height.to_be_bytes()));
+    append_optional_hash(env, &mut preimage, &entry.transaction_hash);
+
+    env.crypto().sha256(&preimage).into()
+}
+
 /// Audit storage and management
 ///
 /// Handles all audit trail operations with strict append-only semantics.
@@ -207,6 +309,46 @@ impl AuditLogEntry {
 pub struct AuditStorage;
 
 impl AuditStorage {
+    /// Return the expected `prev_hash` for the next entry in an invoice trail.
+    pub fn last_entry_hash(env: &Env, invoice_id: &BytesN<32>) -> BytesN<32> {
+        let trail = Self::get_invoice_audit_trail(env, invoice_id);
+        if trail.is_empty() {
+            return AuditLogEntry::genesis_prev_hash(env);
+        }
+
+        let last_id = trail.get(trail.len() - 1).unwrap();
+        Self::get_audit_entry(env, &last_id)
+            .map(|entry| entry.entry_hash(env))
+            .unwrap_or_else(|| AuditLogEntry::genesis_prev_hash(env))
+    }
+
+    /// Verify the invoice-local audit hash chain.
+    pub fn verify_audit_chain(env: &Env, invoice_id: &BytesN<32>) -> bool {
+        Self::first_audit_chain_divergence(env, invoice_id).is_none()
+    }
+
+    /// Return the zero-based first divergence point in the invoice trail.
+    ///
+    /// A divergence is either a missing entry, a malformed entry, or a
+    /// `prev_hash` that does not equal the hash of the previous stored entry.
+    pub fn first_audit_chain_divergence(env: &Env, invoice_id: &BytesN<32>) -> Option<u32> {
+        let trail = Self::get_invoice_audit_trail(env, invoice_id);
+        let mut expected_prev = AuditLogEntry::genesis_prev_hash(env);
+
+        for i in 0..trail.len() {
+            let audit_id = trail.get(i).unwrap();
+            let Some(entry) = Self::get_audit_entry(env, &audit_id) else {
+                return Some(i);
+            };
+            if entry.prev_hash != expected_prev || !entry.validate_integrity(env).unwrap_or(false) {
+                return Some(i);
+            }
+            expected_prev = entry.entry_hash(env);
+        }
+
+        None
+    }
+
     /// Store an audit log entry (**APPEND-ONLY**)
     ///
     /// This function **never overwrites** existing entries. It appends the new
@@ -335,7 +477,7 @@ impl AuditStorage {
     /// **exactly match** the results of a full audit query (with capped limit).
     pub fn get_audit_stats(env: &Env) -> AuditStats {
         let all_entries = Self::get_all_audit_entries(env);
-        let total_entries = all_entries.len() as u32;
+        let total_entries = all_entries.len();
 
         // Initialize operation counters vector
         let mut operations_count: Vec<(AuditOperation, u32)> = Vec::new(env);
@@ -374,7 +516,7 @@ impl AuditStorage {
         AuditStats {
             total_entries,
             operations_count,
-            unique_actors: unique_actors.len() as u32,
+            unique_actors: unique_actors.len(),
             date_range: (min_timestamp, max_timestamp),
         }
     }
@@ -396,7 +538,7 @@ impl AuditStorage {
             }
         }
 
-        Ok(true)
+        Ok(Self::verify_audit_chain(env, invoice_id))
     }
 
     // Helper methods

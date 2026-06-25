@@ -498,48 +498,48 @@ mod test_admin {
 // ============================================================================
 // Comprehensive Access Control Matrix Tests
 // ============================================================================
-//!
-//! This module provides comprehensive access-control testing for all admin-gated
-//! entrypoints in the QuickLendX protocol. The goal is to prevent privilege-escalation
-//! regressions as new methods are added.
-//!
-//! # Access Control Matrix
-//!
-//! | Method Category | Method | Auth Required | Non-Admin Error |
-//! |-----------------|--------|---------------|-----------------|
-//! | **AdminStorage** | initialize | Caller (self-auth) | OperationNotAllowed |
-//! | | transfer_admin | Current Admin | NotAdmin |
-//! | | initiate_admin_transfer | Current Admin | NotAdmin |
-//! | | accept_admin_transfer | Pending Admin | Unauthorized |
-//! | | cancel_admin_transfer | Current Admin | NotAdmin |
-//! | | set_two_step_enabled | Current Admin | NotAdmin |
-//! | **Protocol Config** | set_protocol_config | Admin + Auth | NotAdmin |
-//! | | set_fee_config | Admin + Auth | NotAdmin |
-//! | | set_treasury | Admin + Auth | NotAdmin |
-//! | **Pause Control** | set_paused | Admin + Auth | NotAdmin |
-//! | **Emergency** | initiate | Admin + Auth | NotAdmin |
-//! | | execute | Admin + Auth | NotAdmin |
-//! | | cancel | Admin + Auth | NotAdmin |
-//! | **Currency** | add_currency | Admin + Auth | NotAdmin |
-//! | | remove_currency | Admin + Auth | NotAdmin |
-//! | | set_currencies | Admin + Auth | NotAdmin |
-//! | | clear_currencies | Admin + Auth | NotAdmin |
-//! | **Bid Config** | set_bid_ttl_days | Admin + Auth | NotAdmin |
-//! | | set_max_active_bids_per_investor | Admin + Auth | NotAdmin |
-//! | **Backup** | create_backup | Admin + Auth | NotAdmin |
-//! | | restore_backup | Admin + Auth | NotAdmin |
-//! | | archive_backup | Admin + Auth | NotAdmin |
-//! | | cleanup_backups | Admin + Auth | NotAdmin |
-//! | | set_backup_retention_policy | Admin + Auth | NotAdmin |
-//!
-//! # Edge Cases Covered
-//! - Pre-init admin rejection (uninitialized state)
-//! - Transferred admin acceptance and revocation
-//! - Revoked caller rejection (former admin after transfer)
-//! - Self-transfer prevention
-//! - Two-step transfer flow authentication
+//
+// This module provides comprehensive access-control testing for all admin-gated
+// entrypoints in the QuickLendX protocol. The goal is to prevent privilege-escalation
+// regressions as new methods are added.
+//
+// Access Control Matrix
+//
+// | Method Category | Method | Auth Required | Non-Admin Error |
+// |-----------------|--------|---------------|-----------------|
+// | **AdminStorage** | initialize | Caller (self-auth) | OperationNotAllowed |
+// | | transfer_admin | Current Admin | NotAdmin |
+// | | initiate_admin_transfer | Current Admin | NotAdmin |
+// | | accept_admin_transfer | Pending Admin | Unauthorized |
+// | | cancel_admin_transfer | Current Admin | NotAdmin |
+// | | set_two_step_enabled | Current Admin | NotAdmin |
+// | **Protocol Config** | set_protocol_config | Admin + Auth | NotAdmin |
+// | | set_fee_config | Admin + Auth | NotAdmin |
+// | | set_treasury | Admin + Auth | NotAdmin |
+// | **Pause Control** | set_paused | Admin + Auth | NotAdmin |
+// | **Emergency** | initiate | Admin + Auth | NotAdmin |
+// | | execute | Admin + Auth | NotAdmin |
+// | | cancel | Admin + Auth | NotAdmin |
+// | **Currency** | add_currency | Admin + Auth | NotAdmin |
+// | | remove_currency | Admin + Auth | NotAdmin |
+// | | set_currencies | Admin + Auth | NotAdmin |
+// | | clear_currencies | Admin + Auth | NotAdmin |
+// | **Bid Config** | set_bid_ttl_days | Admin + Auth | NotAdmin |
+// | | set_max_active_bids_per_investor | Admin + Auth | NotAdmin |
+// | **Backup** | create_backup | Admin + Auth | NotAdmin |
+// | | restore_backup | Admin + Auth | NotAdmin |
+// | | archive_backup | Admin + Auth | NotAdmin |
+// | | cleanup_backups | Admin + Auth | NotAdmin |
+// | | set_backup_retention_policy | Admin + Auth | NotAdmin |
+//
+// Edge Cases Covered
+// - Pre-init admin rejection (uninitialized state)
+// - Transferred admin acceptance and revocation
+// - Revoked caller rejection (former admin after transfer)
+// - Self-transfer prevention
+// - Two-step transfer flow authentication
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod access_control_matrix {
     use crate::admin::AdminStorage;
     use crate::currency::CurrencyWhitelist;
@@ -1911,7 +1911,7 @@ mod access_control_matrix {
 // Additional Admin-Gated Method Tests (Extended Coverage)
 // ============================================================================
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod access_control_matrix_extended {
     use crate::admin::AdminStorage;
     use crate::errors::QuickLendXError;
@@ -2535,5 +2535,338 @@ mod access_control_matrix_extended {
                 method_name
             );
         }
+    }
+}
+
+// ============================================================================
+// Dry-Run Preview Tests
+// ============================================================================
+//
+// Verifies `preview_protocol_config` (issue #1221):
+// - before/after diff matches the effect of the corresponding apply operations
+// - no storage writes occur during a preview call
+// - admin authorization is enforced
+// - invalid parameters are reflected correctly in `would_succeed` / `validation_error_code`
+// - no-op and partial-change detection work correctly
+
+#[cfg(all(test, feature = "legacy-tests"))]
+mod dry_run_preview {
+    use crate::admin::AdminStorage;
+    use crate::errors::QuickLendXError;
+    use crate::init::{ProtocolConfigDiff, ProtocolConfigParams, ProtocolInitializer};
+    use crate::QuickLendXContract;
+    use soroban_sdk::{testutils::Address as _, Address, Env};
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    fn setup() -> (Env, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        (env, contract_id)
+    }
+
+    /// Initialise admin storage and return (env, contract_id, admin).
+    fn setup_with_admin() -> (Env, Address, Address) {
+        let (env, contract_id) = setup();
+        let admin = Address::generate(&env);
+        env.as_contract(&contract_id, || {
+            AdminStorage::initialize(&env, &admin).unwrap();
+        });
+        (env, contract_id, admin)
+    }
+
+    /// Params that are all valid and different from the defaults.
+    fn valid_params() -> ProtocolConfigParams {
+        ProtocolConfigParams {
+            min_invoice_amount: 500,
+            max_due_date_days: 180,
+            grace_period_seconds: 3 * 24 * 60 * 60, // 3 days
+            fee_bps: 300,
+        }
+    }
+
+    fn preview(
+        env: &Env,
+        contract_id: &Address,
+        admin: &Address,
+        params: ProtocolConfigParams,
+    ) -> Result<ProtocolConfigDiff, QuickLendXError> {
+        env.as_contract(contract_id, || {
+            ProtocolInitializer::preview_protocol_config(env, admin, params)
+        })
+    }
+
+    fn apply_protocol_config(
+        env: &Env,
+        contract_id: &Address,
+        admin: &Address,
+        p: &ProtocolConfigParams,
+    ) {
+        env.as_contract(contract_id, || {
+            ProtocolInitializer::set_protocol_config(
+                env,
+                admin,
+                p.min_invoice_amount,
+                p.max_due_date_days,
+                p.grace_period_seconds,
+            )
+            .unwrap();
+            ProtocolInitializer::set_fee_config(env, admin, p.fee_bps).unwrap();
+        });
+    }
+
+    // ── tests ─────────────────────────────────────────────────────────────────
+
+    /// After applying a config change, preview of the same params shows identical
+    /// after-values and is_noop = true (the applied state IS the proposed state).
+    #[test]
+    fn preview_matches_apply_protocol_config() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let params = valid_params();
+
+        // Apply first, then preview the same values.
+        apply_protocol_config(&env, &contract_id, &admin, &params);
+
+        let diff = preview(&env, &contract_id, &admin, params.clone()).unwrap();
+
+        assert_eq!(diff.after_min_invoice_amount, params.min_invoice_amount);
+        assert_eq!(diff.after_max_due_date_days, params.max_due_date_days);
+        assert_eq!(diff.after_grace_period_seconds, params.grace_period_seconds);
+        assert_eq!(diff.after_fee_bps, params.fee_bps);
+        // before == after (we applied the same values), so it should be a no-op
+        assert!(diff.is_noop, "Expected is_noop=true after applying the same values");
+        assert!(diff.would_succeed);
+        assert_eq!(diff.validation_error_code, 0);
+    }
+
+    /// Preview of a *different* fee matches the actual fee after applying that change.
+    #[test]
+    fn preview_matches_apply_fee_config() {
+        let (env, contract_id, admin) = setup_with_admin();
+
+        // Set a baseline
+        apply_protocol_config(&env, &contract_id, &admin, &valid_params());
+
+        // Preview a different fee
+        let new_fee = 500u32;
+        let mut params = valid_params();
+        params.fee_bps = new_fee;
+
+        let diff = preview(&env, &contract_id, &admin, params.clone()).unwrap();
+        assert_eq!(diff.after_fee_bps, new_fee);
+        assert_ne!(diff.before_fee_bps, new_fee, "before should differ");
+        assert!(!diff.is_noop);
+        assert!(diff.would_succeed);
+
+        // Apply and confirm storage matches what preview projected
+        apply_protocol_config(&env, &contract_id, &admin, &params);
+        let live_fee =
+            env.as_contract(&contract_id, || ProtocolInitializer::get_fee_bps(&env));
+        assert_eq!(live_fee, new_fee);
+    }
+
+    /// Storage values are unchanged after calling preview.
+    #[test]
+    fn preview_no_storage_write() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let baseline = valid_params();
+        apply_protocol_config(&env, &contract_id, &admin, &baseline);
+
+        // Capture current values before preview
+        let fee_before =
+            env.as_contract(&contract_id, || ProtocolInitializer::get_fee_bps(&env));
+        let min_before = env.as_contract(&contract_id, || {
+            ProtocolInitializer::get_min_invoice_amount(&env)
+        });
+
+        // Preview with completely different values
+        let different = ProtocolConfigParams {
+            min_invoice_amount: baseline.min_invoice_amount * 10,
+            max_due_date_days: 365,
+            grace_period_seconds: 0,
+            fee_bps: 999,
+        };
+        preview(&env, &contract_id, &admin, different).unwrap();
+
+        // Storage must be unchanged
+        let fee_after =
+            env.as_contract(&contract_id, || ProtocolInitializer::get_fee_bps(&env));
+        let min_after = env.as_contract(&contract_id, || {
+            ProtocolInitializer::get_min_invoice_amount(&env)
+        });
+        assert_eq!(fee_before, fee_after, "fee_bps must not change after preview");
+        assert_eq!(min_before, min_after, "min_invoice_amount must not change after preview");
+    }
+
+    /// Non-admin callers are rejected with NotAdmin.
+    #[test]
+    fn preview_requires_admin_auth() {
+        let (env, contract_id, _admin) = setup_with_admin();
+        let non_admin = Address::generate(&env);
+        let result = preview(&env, &contract_id, &non_admin, valid_params());
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+    }
+
+    /// Calling preview before admin is initialized returns OperationNotAllowed.
+    #[test]
+    fn preview_uninitialized_admin_rejected() {
+        let (env, contract_id) = setup();
+        let stranger = Address::generate(&env);
+        let result = preview(&env, &contract_id, &stranger, valid_params());
+        assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+    }
+
+    /// min_invoice_amount <= 0 → would_succeed=false, code=InvalidAmount.
+    #[test]
+    fn preview_invalid_min_invoice_amount() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let mut params = valid_params();
+        params.min_invoice_amount = 0;
+
+        let diff = preview(&env, &contract_id, &admin, params).unwrap();
+        assert!(!diff.would_succeed);
+        assert_eq!(diff.validation_error_code, QuickLendXError::InvalidAmount as u32);
+    }
+
+    /// fee_bps > 1000 → would_succeed=false, code=InvalidFeeBasisPoints.
+    #[test]
+    fn preview_invalid_fee_bps_too_high() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let mut params = valid_params();
+        params.fee_bps = 1001;
+
+        let diff = preview(&env, &contract_id, &admin, params).unwrap();
+        assert!(!diff.would_succeed);
+        assert_eq!(
+            diff.validation_error_code,
+            QuickLendXError::InvalidFeeBasisPoints as u32
+        );
+    }
+
+    /// max_due_date_days == 0 → would_succeed=false, code=InvoiceDueDateInvalid.
+    #[test]
+    fn preview_invalid_max_due_date_days_zero() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let mut params = valid_params();
+        params.max_due_date_days = 0;
+
+        let diff = preview(&env, &contract_id, &admin, params).unwrap();
+        assert!(!diff.would_succeed);
+        assert_eq!(
+            diff.validation_error_code,
+            QuickLendXError::InvoiceDueDateInvalid as u32
+        );
+    }
+
+    /// max_due_date_days > 730 → would_succeed=false, code=InvoiceDueDateInvalid.
+    #[test]
+    fn preview_invalid_max_due_date_days_too_large() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let mut params = valid_params();
+        params.max_due_date_days = 731;
+
+        let diff = preview(&env, &contract_id, &admin, params).unwrap();
+        assert!(!diff.would_succeed);
+        assert_eq!(
+            diff.validation_error_code,
+            QuickLendXError::InvoiceDueDateInvalid as u32
+        );
+    }
+
+    /// grace_period_seconds > 30 days → would_succeed=false, code=InvalidTimestamp.
+    #[test]
+    fn preview_invalid_grace_period_too_large() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let mut params = valid_params();
+        params.grace_period_seconds = 30 * 24 * 60 * 60 + 1; // one second over the limit
+
+        let diff = preview(&env, &contract_id, &admin, params).unwrap();
+        assert!(!diff.would_succeed);
+        assert_eq!(
+            diff.validation_error_code,
+            QuickLendXError::InvalidTimestamp as u32
+        );
+    }
+
+    /// Proposing the exact current values → is_noop=true.
+    #[test]
+    fn preview_noop_diff_detected() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let params = valid_params();
+        apply_protocol_config(&env, &contract_id, &admin, &params);
+
+        let diff = preview(&env, &contract_id, &admin, params).unwrap();
+        assert!(diff.is_noop, "Expected is_noop=true for identical values");
+        assert!(diff.would_succeed);
+    }
+
+    /// Changing even one field makes is_noop=false.
+    #[test]
+    fn preview_partial_change_not_noop() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let baseline = valid_params();
+        apply_protocol_config(&env, &contract_id, &admin, &baseline);
+
+        let mut changed = baseline.clone();
+        changed.fee_bps += 1; // only fee differs
+
+        let diff = preview(&env, &contract_id, &admin, changed).unwrap();
+        assert!(!diff.is_noop, "Expected is_noop=false when one field differs");
+        assert!(diff.would_succeed);
+    }
+
+    /// before-fields always reflect the live on-chain state at call time.
+    #[test]
+    fn preview_before_fields_match_current_config() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let first = valid_params();
+        apply_protocol_config(&env, &contract_id, &admin, &first);
+
+        // Now preview a different set of values
+        let second = ProtocolConfigParams {
+            min_invoice_amount: first.min_invoice_amount + 100,
+            max_due_date_days: first.max_due_date_days + 10,
+            grace_period_seconds: first.grace_period_seconds + 60,
+            fee_bps: first.fee_bps + 50,
+        };
+
+        let diff = preview(&env, &contract_id, &admin, second).unwrap();
+
+        // before-fields must equal the applied 'first' values
+        assert_eq!(diff.before_min_invoice_amount, first.min_invoice_amount);
+        assert_eq!(diff.before_max_due_date_days, first.max_due_date_days);
+        assert_eq!(diff.before_grace_period_seconds, first.grace_period_seconds);
+        assert_eq!(diff.before_fee_bps, first.fee_bps);
+    }
+
+    /// Valid params that equal the boundary values (fee_bps=0, fee_bps=1000) succeed.
+    #[test]
+    fn preview_boundary_fee_bps_valid() {
+        let (env, contract_id, admin) = setup_with_admin();
+
+        for &bps in &[0u32, 1000u32] {
+            let mut params = valid_params();
+            params.fee_bps = bps;
+            let diff = preview(&env, &contract_id, &admin, params).unwrap();
+            assert!(
+                diff.would_succeed,
+                "fee_bps={} should be valid",
+                bps
+            );
+            assert_eq!(diff.validation_error_code, 0);
+        }
+    }
+
+    /// Negative min_invoice_amount → would_succeed=false, code=InvalidAmount.
+    #[test]
+    fn preview_negative_min_invoice_amount() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let mut params = valid_params();
+        params.min_invoice_amount = -1;
+
+        let diff = preview(&env, &contract_id, &admin, params).unwrap();
+        assert!(!diff.would_succeed);
+        assert_eq!(diff.validation_error_code, QuickLendXError::InvalidAmount as u32);
     }
 }

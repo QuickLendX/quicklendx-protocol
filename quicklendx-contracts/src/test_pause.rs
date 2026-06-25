@@ -604,3 +604,336 @@ fn test_pause_unpause_cycle_is_deterministic() {
     }
 }
 
+// ============================================================================
+// Full mutating-entrypoint coverage matrix
+//
+// The emergency circuit breaker is only as strong as its weakest entrypoint:
+// a single mutating path that ignores the pause flag lets value move while the
+// protocol is supposed to be frozen. The tests below enumerate every
+// state-mutating entrypoint named in the pause matrix — store_invoice,
+// place_bid, accept_bid_and_fund, process_partial_payment, settle_invoice —
+// and assert two properties for each:
+//
+//   1. Blocked: while paused, the call rejects with `ContractPaused` and no
+//      state is mutated.
+//   2. Recovery: after unpause, the same call succeeds, proving the breaker is
+//      fully reversible.
+//
+// `process_partial_payment` previously lacked a `require_not_paused` guard;
+// `test_pause_blocks_process_partial_payment` is the regression test for that
+// fix. See docs/contracts/operations.md for the authoritative pause matrix.
+// ============================================================================
+
+/// Token-backed fixture that drives an invoice to `Funded` status so the
+/// payment and settlement entrypoints can be exercised end to end.
+///
+/// Funding and settlement move real value (`accept_bid_and_fund` pulls the bid
+/// into escrow; `settle_invoice` / a completing `process_partial_payment`
+/// release escrow and disburse returns), so these paths require a registered
+/// Stellar Asset Contract with funded, pre-approved balances — a
+/// `generate()`-only currency is not enough. Modeled on the e2e fixture in
+/// tests/invoice_lifecycle_e2e.rs.
+///
+/// Returns `(client, admin, invoice_id)` with the invoice in `Funded` status.
+fn fund_invoice(
+    env: &Env,
+) -> (
+    QuickLendXContractClient<'static>,
+    Address,
+    soroban_sdk::BytesN<32>,
+) {
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(env, &contract_id);
+
+    let admin = Address::generate(env);
+    let business = Address::generate(env);
+    let investor = Address::generate(env);
+    client.initialize_admin(&admin);
+
+    // Real SAC token with funded, pre-approved balances.
+    let token_admin = Address::generate(env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
+    let sac = token::StellarAssetClient::new(env, &currency);
+    let tok = token::Client::new(env, &currency);
+    sac.mint(&business, &20_000i128);
+    sac.mint(&investor, &15_000i128);
+    sac.mint(&contract_id, &1i128);
+    let exp = env.ledger().sequence() + 100_000;
+    tok.approve(&business, &contract_id, &20_000i128, &exp);
+    tok.approve(&investor, &contract_id, &15_000i128, &exp);
+    client.add_currency(&admin, &currency);
+
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(env, "Funded invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(env),
+    );
+    client.verify_invoice(&invoice_id);
+    verify_investor_for_test(env, &client, &investor, 15_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    client.accept_bid_and_fund(&invoice_id, &bid_id);
+
+    (client, admin, invoice_id)
+}
+
+#[test]
+fn test_pause_blocks_place_bid() {
+    let env = Env::default();
+    let (client, admin, business, investor, currency) = setup(&env);
+    let due_date = env.ledger().timestamp() + 86_400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+
+    client.pause(&admin);
+
+    let result = client.try_place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
+}
+
+#[test]
+fn test_pause_blocks_process_partial_payment() {
+    // Regression: process_partial_payment must honor the pause flag. Before the
+    // guard was added this call mutated payment state while paused.
+    let env = Env::default();
+    let (client, admin, invoice_id) = fund_invoice(&env);
+
+    client.pause(&admin);
+
+    let result = client.try_process_partial_payment(
+        &invoice_id,
+        &400i128,
+        &String::from_str(&env, "tx-blocked"),
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
+
+    // No payment was recorded while paused.
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_paid, 0);
+}
+
+#[test]
+fn test_pause_blocks_make_payment_alias() {
+    // make_payment delegates to process_partial_payment and must also be gated.
+    let env = Env::default();
+    let (client, admin, invoice_id) = fund_invoice(&env);
+
+    client.pause(&admin);
+
+    let result =
+        client.try_make_payment(&invoice_id, &400i128, &String::from_str(&env, "tx-alias"));
+    assert!(result.is_err());
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::ContractPaused);
+}
+
+// ============================================================================
+// Unpause recovery: each mutating entrypoint resumes after the breaker clears
+// ============================================================================
+
+#[test]
+fn test_unpause_restores_store_invoice() {
+    let env = Env::default();
+    let (client, admin, business, _investor, currency) = setup(&env);
+    let due_date = env.ledger().timestamp() + 86_400;
+
+    client.pause(&admin);
+    let blocked = client.try_store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Blocked"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    assert_eq!(blocked.unwrap_err().unwrap(), QuickLendXError::ContractPaused);
+
+    client.unpause(&admin);
+    assert!(!client.is_paused());
+
+    // Same call now succeeds.
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "After unpause"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.amount, 1_000i128);
+}
+
+#[test]
+fn test_unpause_restores_place_bid() {
+    let env = Env::default();
+    let (client, admin, business, investor, currency) = setup(&env);
+    let due_date = env.ledger().timestamp() + 86_400;
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+    verify_investor_for_test(&env, &client, &investor, 10_000);
+
+    client.pause(&admin);
+    let blocked = client.try_place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    assert_eq!(blocked.unwrap_err().unwrap(), QuickLendXError::ContractPaused);
+
+    client.unpause(&admin);
+
+    // Same call now succeeds and returns a stored bid id.
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    assert!(client.get_bid(&bid_id).is_some());
+}
+
+#[test]
+fn test_unpause_restores_accept_bid_and_fund() {
+    // Token-backed: accept_bid_and_fund pulls the bid into escrow via a real
+    // transfer, so it needs a registered SAC and funded balances.
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    client.initialize_admin(&admin);
+
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&business, &20_000i128);
+    sac.mint(&investor, &15_000i128);
+    sac.mint(&contract_id, &1i128);
+    let exp = env.ledger().sequence() + 100_000;
+    tok.approve(&business, &contract_id, &20_000i128, &exp);
+    tok.approve(&investor, &contract_id, &15_000i128, &exp);
+    client.add_currency(&admin, &currency);
+
+    let due_date = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+    verify_investor_for_test(&env, &client, &investor, 15_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+
+    client.pause(&admin);
+    let blocked = client.try_accept_bid_and_fund(&invoice_id, &bid_id);
+    assert_eq!(blocked.unwrap_err().unwrap(), QuickLendXError::ContractPaused);
+
+    client.unpause(&admin);
+
+    // Same call now succeeds; invoice transitions to Funded.
+    client.accept_bid_and_fund(&invoice_id, &bid_id);
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, crate::invoice::InvoiceStatus::Funded);
+}
+
+#[test]
+fn test_unpause_restores_process_partial_payment() {
+    let env = Env::default();
+    let (client, admin, invoice_id) = fund_invoice(&env);
+
+    client.pause(&admin);
+    let blocked = client.try_process_partial_payment(
+        &invoice_id,
+        &400i128,
+        &String::from_str(&env, "tx-blocked"),
+    );
+    assert_eq!(blocked.unwrap_err().unwrap(), QuickLendXError::ContractPaused);
+
+    client.unpause(&admin);
+
+    // Same call now succeeds and records the payment.
+    client.process_partial_payment(&invoice_id, &400i128, &String::from_str(&env, "tx-ok"));
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_paid, 400i128);
+}
+
+#[test]
+fn test_unpause_restores_settle_invoice() {
+    let env = Env::default();
+    let (client, admin, invoice_id) = fund_invoice(&env);
+
+    client.pause(&admin);
+    let blocked = client.try_settle_invoice(&invoice_id, &1_000i128);
+    assert_eq!(blocked.unwrap_err().unwrap(), QuickLendXError::ContractPaused);
+
+    client.unpause(&admin);
+
+    // Same call now succeeds; invoice reaches a terminal Paid state.
+    client.settle_invoice(&invoice_id, &1_000i128);
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, crate::invoice::InvoiceStatus::Paid);
+}
+
+// ============================================================================
+// Mid-lifecycle pause: a breaker engaged after funding still freezes payments
+// ============================================================================
+
+#[test]
+fn test_pause_mid_lifecycle_freezes_then_resumes_payment() {
+    let env = Env::default();
+    let (client, admin, invoice_id) = fund_invoice(&env);
+
+    // Take one partial payment while operating normally.
+    client.process_partial_payment(&invoice_id, &400i128, &String::from_str(&env, "tx-1"));
+    assert_eq!(client.get_invoice(&invoice_id).total_paid, 400i128);
+
+    // Breaker engaged mid-lifecycle: the next payment is rejected and state is
+    // unchanged. Reads still work.
+    client.pause(&admin);
+    let blocked =
+        client.try_process_partial_payment(&invoice_id, &600i128, &String::from_str(&env, "tx-2"));
+    assert_eq!(blocked.unwrap_err().unwrap(), QuickLendXError::ContractPaused);
+    assert_eq!(client.get_invoice(&invoice_id).total_paid, 400i128);
+
+    // Recovery: the remaining payment completes the lifecycle (triggers settle).
+    client.unpause(&admin);
+    client.process_partial_payment(&invoice_id, &600i128, &String::from_str(&env, "tx-2"));
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_paid, 1_000i128);
+    assert_eq!(invoice.status, crate::invoice::InvoiceStatus::Paid);
+}
+

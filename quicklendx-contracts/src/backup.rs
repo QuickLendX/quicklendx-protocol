@@ -1,6 +1,6 @@
 use crate::errors::QuickLendXError;
 use crate::types::Invoice;
-use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, Vec, TryFromVal};
 
 const RETENTION_POLICY_KEY: soroban_sdk::Symbol = symbol_short!("bkup_pol");
 const BACKUP_COUNTER_KEY: soroban_sdk::Symbol = symbol_short!("bkup_cnt");
@@ -17,6 +17,20 @@ pub struct Backup {
     pub description: String,
     pub invoice_count: u32,
     pub status: BackupStatus,
+    pub format_version: u32,
+}
+
+impl Backup {
+    pub fn from_v1(v1: crate::backup_v1::BackupV1) -> Self {
+        Self {
+            backup_id: v1.backup_id,
+            timestamp: v1.timestamp,
+            description: v1.description,
+            invoice_count: v1.invoice_count,
+            status: v1.status,
+            format_version: 2,
+        }
+    }
 }
 
 /// Lifecycle state of a [`Backup`] record.
@@ -74,7 +88,7 @@ impl BackupStorage {
             return Err(QuickLendXError::StorageError);
         }
 
-        if backup.description.len() == 0 || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
+        if backup.description.is_empty() || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
         {
             return Err(QuickLendXError::InvalidDescription);
         }
@@ -98,7 +112,7 @@ impl BackupStorage {
         env.storage()
             .instance()
             .get(&RETENTION_POLICY_KEY)
-            .unwrap_or_else(|| BackupRetentionPolicy::default())
+            .unwrap_or_default()
     }
 
     /// Set the backup retention policy (admin only - caller must enforce auth).
@@ -147,7 +161,7 @@ impl BackupStorage {
     ) -> Result<(), QuickLendXError> {
         Self::validate_backup_metadata(backup, invoices)?;
 
-        if Self::get_backup(env, &backup.backup_id).is_some() {
+        if env.storage().instance().has(&backup.backup_id) {
             return Err(QuickLendXError::OperationNotAllowed);
         }
 
@@ -155,9 +169,59 @@ impl BackupStorage {
         Ok(())
     }
 
-    /// Retrieve a backup record by ID.
+    /// Retrieve a backup record by ID and handle format versioning / upgrades.
     pub fn get_backup(env: &Env, backup_id: &BytesN<32>) -> Option<Backup> {
-        env.storage().instance().get(backup_id)
+        let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id)?;
+
+        if let Ok(map) = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val) {
+            let version_key = soroban_sdk::Symbol::new(env, "format_version");
+            if map.contains_key(version_key.clone()) {
+                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v)) {
+                    if version == 2 {
+                        Backup::try_from_val(env, &raw_val).ok()
+                    } else if version == 1 {
+                        let v1 = crate::backup_v1::BackupV1::try_from_val(env, &raw_val).ok()?;
+                        Some(Backup::from_v1(v1))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                let v1 = crate::backup_v1::BackupV1::try_from_val(env, &raw_val).ok()?;
+                Some(Backup::from_v1(v1))
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Verify version of a stored backup and reject unsupported/malformed payloads.
+    pub fn verify_backup_version(env: &Env, backup_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
+        let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+        if let Ok(map) = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val) {
+            let version_key = soroban_sdk::Symbol::new(env, "format_version");
+            if map.contains_key(version_key.clone()) {
+                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v)) {
+                    if version == 2 {
+                        Ok(2)
+                    } else if version == 1 {
+                        Ok(1)
+                    } else {
+                        Err(QuickLendXError::BackupVersionUnsupported)
+                    }
+                } else {
+                    Err(QuickLendXError::StorageError)
+                }
+            } else {
+                Ok(1)
+            }
+        } else {
+            Err(QuickLendXError::StorageError)
+        }
     }
 
     /// Update an existing backup record (e.g. to mark it `Archived`).
@@ -227,6 +291,7 @@ impl BackupStorage {
     /// 3. The payload length matches `backup.invoice_count`.
     /// 4. Every invoice in the payload has a positive `amount`.
     pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+        let _version = Self::verify_backup_version(env, backup_id)?;
         let backup = Self::get_backup(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         // Validate metadata alone first (cheap).
@@ -236,7 +301,7 @@ impl BackupStorage {
         let data =
             Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-        if data.len() as u32 != backup.invoice_count {
+        if data.len() != backup.invoice_count {
             return Err(QuickLendXError::StorageError);
         }
 

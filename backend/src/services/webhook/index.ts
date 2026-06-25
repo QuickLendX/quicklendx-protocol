@@ -18,3 +18,9 @@ export {
 } from "./delivery";
 export { createWebhookSecureLookup, type DnsLookupFn } from "./secureLookup";
 export { validateWebhookUrl, WebhookUrlValidationError } from "./urlValidation";
+
+export {
+  deliverWithRetry,
+  type RetryPolicy,
+  type DeliveryAttemptResult,
+} from "./retryScheduler";

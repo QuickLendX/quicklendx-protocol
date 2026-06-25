@@ -144,6 +144,25 @@ pub struct Escrow {
 3. **Balance/allowance prechecks:** `transfer_funds` inspects token state before invoking any transfer, preventing the protocol from entering an inconsistent partial-transfer state.
 4. **Idempotency:** `release_escrow` and `refund_escrow` require `Held` status; once updated to `Released` or `Refunded`, repeated calls return `InvalidStatus`.
 
+### Payment Capping and Replay Protection
+
+**See:** `src/settlement.rs` for implementation; `src/test_fuzz.rs` for fuzz tests.
+
+The settlement layer provides hardened payment recording with the following security guarantees:
+
+| Invariant | Implementation | Test Coverage |
+|-----------|----------------|---------------|
+| `total_paid <= total_due` | `record_payment` caps `applied_amount = min(requested, remaining_due)` | `fuzz_payment_capping_invariant`, `test_overpayment_is_capped_at_total_due` |
+| `(invoice_id, nonce)` uniqueness | `PaymentNonce` durable storage rejects duplicates idempotently | `fuzz_repeated_nonce_replay_protection`, `test_duplicate_transaction_id_is_deduplicated` |
+| `payment_count <= MAX_PAYMENT_COUNT` | Guard rejects at `1_000` payment limit | `fuzz_payment_count_exhaustion`, `test_payment_count_cap_is_enforced` |
+
+**Security Note:** Overpayment attempts (amount > remaining_due) are silently capped. The recorded amount reflects what was applied, never the requested excess. This design prevents callers from accidentally or maliciously exceeding the invoice balance.
+
+**Replay Protection Semantics:**
+- Non-empty nonces are checked against durable storage before recording.
+- Duplicate nonces return current progress without error (idempotent).
+- Empty nonces bypass the check (caller responsibility for uniqueness).
+
 ## NatSpec-Style Documentation
 
 All public items in `payments.rs` carry Rust doc comments that serve as NatSpec-style documentation:

@@ -148,7 +148,7 @@ impl PlatformFee {
         admin.require_auth();
 
         // Validate fee bounds
-        if new_fee_bps < 0 || new_fee_bps > MAX_PLATFORM_FEE_BPS {
+        if !(0..=MAX_PLATFORM_FEE_BPS).contains(&new_fee_bps) {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
@@ -464,8 +464,9 @@ pub fn calculate_treasury_split_checked(
 
     let treasury_amount = platform_fee
         .checked_mul(treasury_share_bps)
-        .and_then(|v| v.checked_div(BPS_DENOMINATOR))
-        .unwrap_or(0);
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_div(BPS_DENOMINATOR)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
 
     let remaining = platform_fee
         .checked_sub(treasury_amount)

@@ -9,6 +9,19 @@
 //! must not leak to unprivileged callers (evidence, resolution text), and
 //! returns a paginated [`DisputeTimeline`] value.
 //!
+//! # Invariants
+//!
+//! The timeline is intentionally stricter than the dispute storage shape:
+//! - `Opened` always comes first.
+//! - `UnderReview` may appear at most once and only after `Opened`.
+//! - `Resolved` may appear at most once and only after `UnderReview`.
+//! - `update_dispute_evidence` never appends a visible timeline entry.
+//! - `Resolved` is terminal; later actions must be rejected by the state machine.
+//!
+//! The executable version of this ordering lives in
+//! `docs/dispute-timeline-invariants.md`, and the property tests lock that
+//! document to the code path so drift becomes a test failure.
+//!
 //! # Security
 //!
 //! - Evidence is **always** redacted from timeline entries; it is only
@@ -16,10 +29,13 @@
 //! - Resolution text is redacted until the dispute reaches `Resolved` status.
 //! - No PII from invoice metadata is included.
 //! - Pagination bounds use saturating arithmetic to prevent overflow.
+//! - The dispute timeline is a user-facing summary, not a replacement for the
+//!   append-only invoice audit trail.
 
 use crate::errors::QuickLendXError;
-use crate::invoice::{Dispute, DisputeStatus, InvoiceStorage};
-use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
+use crate::storage::InvoiceStorage;
+use crate::types::{Dispute, DisputeResolution, DisputeStatus};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -30,6 +46,9 @@ pub const TIMELINE_MAX_PAGE_SIZE: u32 = 50;
 
 /// Sentinel address used when a field is redacted (all-zero Stellar address).
 const REDACTED_ADDRESS: &str = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+
+/// Persistent dispute-review timestamp namespace.
+const DISPUTE_REVIEW_AT_KEY: Symbol = symbol_short!("dsp_rvat");
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -59,6 +78,9 @@ pub struct DisputeTimelineEntry {
     /// For "Resolved": resolution text (only when status == Resolved,
     ///   otherwise redacted as empty string).
     pub summary: String,
+    /// Structured resolution outcome (only present for "Resolved" events
+    /// that were resolved using resolve_dispute_structured).
+    pub resolution_outcome: Option<DisputeResolution>,
 }
 
 /// Paginated dispute timeline response.
@@ -83,10 +105,36 @@ fn redacted_address(env: &Env) -> Address {
     Address::from_str(env, REDACTED_ADDRESS)
 }
 
+fn dispute_review_at_key(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
+    (DISPUTE_REVIEW_AT_KEY, invoice_id.clone())
+}
+
+/// Persist the exact ledger timestamp when a dispute entered `UnderReview`.
+pub(crate) fn set_under_review_timestamp(env: &Env, invoice_id: &BytesN<32>, timestamp: u64) {
+    env.storage()
+        .persistent()
+        .set(&dispute_review_at_key(invoice_id), &timestamp);
+}
+
+/// Read the persisted `UnderReview` timestamp, if the dispute reached review.
+pub(crate) fn get_under_review_timestamp(env: &Env, invoice_id: &BytesN<32>) -> Option<u64> {
+    env.storage()
+        .persistent()
+        .get(&dispute_review_at_key(invoice_id))
+}
+
+/// Remove any stale persisted `UnderReview` timestamp for a dispute.
+pub(crate) fn clear_under_review_timestamp(env: &Env, invoice_id: &BytesN<32>) {
+    env.storage()
+        .persistent()
+        .remove(&dispute_review_at_key(invoice_id));
+}
+
 /// Builds the full ordered event list from a [`Dispute`] and its current
 /// [`DisputeStatus`].  Returns at most 3 entries (one per lifecycle stage).
 fn build_all_entries(
     env: &Env,
+    invoice_id: &BytesN<32>,
     dispute: &Dispute,
     status: &DisputeStatus,
 ) -> Vec<DisputeTimelineEntry> {
@@ -101,27 +149,31 @@ fn build_all_entries(
         actor: dispute.created_by.clone(),
         // Reason is safe to surface; evidence is not included here.
         summary: dispute.reason.clone(),
+        resolution_outcome: None,
     });
 
     // --- Event 1: UnderReview ----------------------------------------------
     // Present when status is UnderReview or Resolved.
     let include_review = matches!(status, DisputeStatus::UnderReview | DisputeStatus::Resolved);
     if include_review {
+        let review_timestamp = get_under_review_timestamp(env, invoice_id).unwrap_or_else(|| {
+            // Older records may predate the dedicated review timestamp key.
+            // Fall back to the best available lower bound without mutating state.
+            if dispute.resolved_at > dispute.created_at {
+                dispute.resolved_at.saturating_sub(1)
+            } else {
+                dispute.created_at
+            }
+        });
+
         entries.push_back(DisputeTimelineEntry {
             sequence: 1,
             event: String::from_str(env, "UnderReview"),
-            // The review timestamp is not stored separately; we use the
-            // resolution timestamp as a lower bound when resolved, otherwise
-            // we use created_at as a conservative placeholder.  This reflects
-            // on-chain truth: the exact review time is not persisted.
-            timestamp: if dispute.resolved_at > 0 {
-                dispute.resolved_at
-            } else {
-                dispute.created_at
-            },
+            timestamp: review_timestamp,
             // Admin identity is redacted to avoid leaking privileged info.
             actor: redacted_address(env),
             summary: String::from_str(env, ""),
+            resolution_outcome: None,
         });
     }
 
@@ -136,6 +188,7 @@ fn build_all_entries(
             // so callers can verify finality without exposing review identity.
             actor: dispute.resolved_by.clone(),
             summary: dispute.resolution.clone(),
+            resolution_outcome: dispute.resolution_outcome,
         });
     }
 
@@ -149,7 +202,7 @@ fn paginate(
     offset: u32,
     limit: u32,
 ) -> (Vec<DisputeTimelineEntry>, bool) {
-    let total = all.len() as u32;
+    let total = all.len();
     let capped_limit = limit.min(TIMELINE_MAX_PAGE_SIZE);
     let start = offset.min(total);
     let end = start.saturating_add(capped_limit).min(total);
@@ -203,15 +256,14 @@ pub fn get_dispute_timeline(
     offset: u32,
     limit: u32,
 ) -> Result<DisputeTimeline, QuickLendXError> {
-    let invoice =
-        InvoiceStorage::get(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    let invoice = InvoiceStorage::get(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     if invoice.dispute_status == DisputeStatus::None {
         return Err(QuickLendXError::DisputeNotFound);
     }
 
-    let all_entries = build_all_entries(env, &invoice.dispute, &invoice.dispute_status);
-    let total = all_entries.len() as u32;
+    let all_entries = build_all_entries(env, invoice_id, &invoice.dispute, &invoice.dispute_status);
+    let total = all_entries.len();
     let (entries, has_more) = paginate(env, &all_entries, offset, limit);
 
     Ok(DisputeTimeline {

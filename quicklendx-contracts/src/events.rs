@@ -50,6 +50,8 @@ pub const TOPIC_ESCROW_CREATED: &str = "escrow_created";
 pub const TOPIC_ESCROW_RELEASED: &str = "escrow_released";
 /// Topic for `EscrowRefunded` events.
 pub const TOPIC_ESCROW_REFUNDED: &str = "escrow_refunded";
+/// Topic for `InvestmentWithdrawn` events.
+pub const TOPIC_INVESTMENT_WITHDRAWN: &str = "investment_withdrawn";
 /// Topic for `DisputeCreated` / `DisputeOpened` events.
 pub const TOPIC_DISPUTE_CREATED: &str = "dispute_created";
 /// Topic for `DisputeUnderReview` events.
@@ -323,6 +325,18 @@ pub struct EscrowRefunded {
     pub amount: i128,
 }
 
+/// Emitted when an investor withdraws their investment before settlement.
+///
+/// Topic: [`TOPIC_INVESTMENT_WITHDRAWN`] (`"inv_wd"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvestmentWithdrawn {
+    pub investment_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub amount: i128,
+}
+
 /// Emitted when invoice metadata is updated.
 ///
 /// Topic: `"invoice_metadata_updated"`
@@ -559,6 +573,12 @@ pub struct ProfitFeeBreakdown {
 }
 
 #[contractevent]
+pub struct TtlExtended {
+    pub kind: String,
+    pub count: u32,
+}
+
+#[contractevent]
 pub struct BidTtlUpdated {
     pub old_days: u64,
     pub new_days: u64,
@@ -566,43 +586,16 @@ pub struct BidTtlUpdated {
     pub timestamp: u64,
 }
 
-#[contractevent]
-pub struct EmergencyWithdrawalInitiated {
-    pub token: Address,
-    pub amount: i128,
-    pub target: Address,
-    pub unlock_at: u64,
-    pub admin: Address,
+pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
+    TtlExtended {
+        kind: kind.clone(),
+        count,
+    }
+    .publish(env);
 }
 
-#[contractevent]
-pub struct EmergencyWithdrawalExecuted {
-    pub token: Address,
-    pub amount: i128,
-    pub target: Address,
-    pub admin: Address,
-}
 
-#[contractevent]
-pub struct EmergencyWithdrawalCancelled {
-    pub token: Address,
-    pub amount: i128,
-    pub target: Address,
-    pub admin: Address,
-}
 
-#[contractevent]
-pub struct AdminSet {
-    pub admin: Address,
-    pub timestamp: u64,
-}
-
-#[contractevent]
-pub struct AdminTransferred {
-    pub old_admin: Address,
-    pub new_admin: Address,
-    pub timestamp: u64,
-}
 
 #[contractevent]
 pub struct RevenueDistributed {
@@ -676,7 +669,7 @@ pub fn emit_invoice_metadata_updated(env: &Env, invoice: &Invoice, metadata: &In
 
     InvoiceMetadataUpdated {
         invoice_id: invoice.id.clone(),
-        line_item_count: metadata.line_items.len() as u32,
+        line_item_count: metadata.line_items.len(),
         total_value: total,
         timestamp: env.ledger().timestamp(),
     }
@@ -977,6 +970,22 @@ pub fn emit_escrow_refunded(
     .publish(env);
 }
 
+pub fn emit_investment_withdrawn(
+    env: &Env,
+    investment_id: &BytesN<32>,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    amount: i128,
+) {
+    InvestmentWithdrawn {
+        investment_id: investment_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        amount,
+    }
+    .publish(env);
+}
+
 // ============================================================================
 // Bid Event Emitters
 // ============================================================================
@@ -1126,8 +1135,8 @@ pub fn emit_invoice_category_updated(
     InvoiceCategoryUpdated {
         invoice_id: invoice_id.clone(),
         business: business.clone(),
-        old_category: old_category.clone(),
-        new_category: new_category.clone(),
+        old_category: *old_category,
+        new_category: *new_category,
     }
     .publish(env);
 }
@@ -1239,6 +1248,37 @@ pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Add
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
+}
+
+#[contractevent]
+pub struct EmergencyWithdrawalInitiated {
+    pub token: Address,
+    pub amount: i128,
+    pub target: Address,
+    pub unlock_at: u64,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct EmergencyWithdrawalExecuted {
+    pub token: Address,
+    pub amount: i128,
+    pub target: Address,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct EmergencyWithdrawalCancelled {
+    pub token: Address,
+    pub amount: i128,
+    pub target: Address,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct AdminSet {
+    pub admin: Address,
+    pub timestamp: u64,
 }
 
 pub fn emit_emergency_withdrawal_initiated(

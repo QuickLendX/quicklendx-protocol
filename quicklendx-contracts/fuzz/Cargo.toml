@@ -1,0 +1,26 @@
+[package]
+name = "quicklendx-contracts-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "contracttype_roundtrip"
+path = "fuzz_targets/contracttype_roundtrip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "validate_fuzzer"
+path = "validate_fuzzer.rs"
+test = false
+doc = false
+
+[dependencies]
+libfuzzer-sys = "0.4"
+soroban-sdk = { version = "25.1.1", features = ["alloc"] }
+
+[dependencies.quicklendx-contracts]
+path = ".."
+
+[workspace]

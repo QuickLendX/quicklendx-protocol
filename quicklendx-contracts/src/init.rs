@@ -132,6 +132,83 @@ pub struct InitializationParams {
     pub initial_currencies: Vec<Address>,
 }
 
+/// Proposed parameter bundle for [`ProtocolInitializer::preview_protocol_config`].
+///
+/// Bundles all four mutable protocol configuration values into a single argument
+/// to keep the preview API stable as fields evolve — consistent with the
+/// [`InitializationParams`] convention used elsewhere in this module.
+#[contracttype]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+pub struct ProtocolConfigParams {
+    /// Proposed minimum invoice amount (must be positive).
+    pub min_invoice_amount: i128,
+    /// Proposed maximum due-date days (1–730).
+    pub max_due_date_days: u64,
+    /// Proposed grace period in seconds (0–2 592 000).
+    pub grace_period_seconds: u64,
+    /// Proposed protocol fee in basis points (0–1 000).
+    pub fee_bps: u32,
+}
+
+/// Projected before/after diff for a proposed protocol or fee configuration change.
+///
+/// Returned by [`ProtocolInitializer::preview_protocol_config`]. Every field is
+/// derived from **live storage reads** — no writes are performed. Operators can
+/// use this struct to validate a pending configuration change before committing it.
+///
+/// # No-op detection
+///
+/// When `is_noop` is `true` all four proposed values already match the current
+/// on-chain values. Applying the change would produce no observable effect.
+///
+/// # Validation metadata
+///
+/// `would_succeed` is `true` when all proposed values pass the same validation
+/// rules enforced by [`ProtocolInitializer::set_protocol_config`] and
+/// [`ProtocolInitializer::set_fee_config`]. When `false`, `validation_error_code`
+/// contains the `u32` discriminant of the [`crate::errors::QuickLendXError`]
+/// variant that would be returned (e.g. `1852` for `InvalidFeeBasisPoints`).
+/// A code of `0` means no validation error.
+#[contracttype]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+pub struct ProtocolConfigDiff {
+    // ── before (current on-chain values) ────────────────────────────────────
+    /// Current minimum invoice amount stored on-chain.
+    pub before_min_invoice_amount: i128,
+    /// Current maximum due-date days stored on-chain.
+    pub before_max_due_date_days: u64,
+    /// Current grace period in seconds stored on-chain.
+    pub before_grace_period_seconds: u64,
+    /// Current fee in basis points stored on-chain.
+    pub before_fee_bps: u32,
+
+    // ── after (projected from proposed params) ───────────────────────────────
+    /// Proposed minimum invoice amount.
+    pub after_min_invoice_amount: i128,
+    /// Proposed maximum due-date days.
+    pub after_max_due_date_days: u64,
+    /// Proposed grace period in seconds.
+    pub after_grace_period_seconds: u64,
+    /// Proposed fee in basis points.
+    pub after_fee_bps: u32,
+
+    // ── metadata ────────────────────────────────────────────────────────────
+    /// `true` when all proposed values equal the current on-chain values
+    /// (applying the change would be a no-op).
+    pub is_noop: bool,
+    /// `true` when all proposed values pass validation and would be accepted
+    /// by [`ProtocolInitializer::set_protocol_config`] /
+    /// [`ProtocolInitializer::set_fee_config`] if applied.
+    pub would_succeed: bool,
+    /// `u32` discriminant of the [`crate::errors::QuickLendXError`] variant
+    /// that would be returned if the change were applied, or `0` when
+    /// `would_succeed` is `true`. Callers can cast this to the error enum for
+    /// human-readable display.
+    pub validation_error_code: u32,
+}
+
 /// Protocol initialization and configuration management with hardened security
 pub struct ProtocolInitializer;
 
@@ -462,6 +539,106 @@ impl ProtocolInitializer {
         })
     }
 
+    /// Dry-run preview for `set_protocol_config` and `set_fee_config` (admin-gated, read-only).
+    ///
+    /// Reads the current protocol configuration from storage, validates the
+    /// proposed `params` using **exactly the same rules** applied by
+    /// [`Self::set_protocol_config`] and [`Self::set_fee_config`], and returns
+    /// a [`ProtocolConfigDiff`] containing projected before/after values and
+    /// validation metadata.
+    ///
+    /// # Security
+    ///
+    /// - Requires admin authorization: `admin.require_auth()` is called and
+    ///   the caller must be the current protocol admin.
+    /// - **No storage writes occur** — this function is entirely read-only.
+    ///   It is safe to call from monitoring tooling, operator scripts, or
+    ///   governance UIs without risk of unintended state mutation.
+    ///
+    /// # Arguments
+    ///
+    /// * `env`    — The contract environment.
+    /// * `admin`  — The admin address (must authorize the call).
+    /// * `params` — The proposed configuration values to preview.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(ProtocolConfigDiff)` — diff with before/after fields and validation
+    ///   metadata. Inspect `would_succeed` and `is_noop` before applying.
+    /// * `Err(QuickLendXError::NotAdmin)` — caller is not the current admin.
+    /// * `Err(QuickLendXError::OperationNotAllowed)` — admin subsystem not initialized.
+    pub fn preview_protocol_config(
+        env: &Env,
+        admin: &Address,
+        params: ProtocolConfigParams,
+    ) -> Result<ProtocolConfigDiff, QuickLendXError> {
+        AdminStorage::with_admin_auth(env, admin, || {
+            // ── Read current on-chain values (no writes below this line) ────
+            let current_config = Self::get_protocol_config(env);
+            let before_min_invoice_amount = current_config
+                .as_ref()
+                .map(|c| c.min_invoice_amount)
+                .unwrap_or(DEFAULT_MIN_INVOICE_AMOUNT);
+            let before_max_due_date_days = current_config
+                .as_ref()
+                .map(|c| c.max_due_date_days)
+                .unwrap_or(DEFAULT_MAX_DUE_DATE_DAYS);
+            let before_grace_period_seconds = current_config
+                .as_ref()
+                .map(|c| c.grace_period_seconds)
+                .unwrap_or(DEFAULT_GRACE_PERIOD_SECONDS);
+            let before_fee_bps = Self::get_fee_bps(env);
+
+            // ── Validate proposed params (mirrors set_protocol_config + set_fee_config) ──
+            let (would_succeed, validation_error_code) =
+                Self::validate_config_params(&params);
+
+            // ── Compute no-op flag ───────────────────────────────────────────
+            let is_noop = params.min_invoice_amount == before_min_invoice_amount
+                && params.max_due_date_days == before_max_due_date_days
+                && params.grace_period_seconds == before_grace_period_seconds
+                && params.fee_bps == before_fee_bps;
+
+            Ok(ProtocolConfigDiff {
+                before_min_invoice_amount,
+                before_max_due_date_days,
+                before_grace_period_seconds,
+                before_fee_bps,
+                after_min_invoice_amount: params.min_invoice_amount,
+                after_max_due_date_days: params.max_due_date_days,
+                after_grace_period_seconds: params.grace_period_seconds,
+                after_fee_bps: params.fee_bps,
+                is_noop,
+                would_succeed,
+                validation_error_code,
+            })
+        })
+    }
+
+    /// Validate proposed config params without touching storage.
+    ///
+    /// Returns `(true, 0)` on success or `(false, error_discriminant)` on the
+    /// first validation failure. Discriminants match `QuickLendXError` repr values.
+    fn validate_config_params(params: &ProtocolConfigParams) -> (bool, u32) {
+        // fee_bps: 0–1 000  (mirrors set_fee_config)
+        if params.fee_bps < MIN_FEE_BPS || params.fee_bps > MAX_FEE_BPS {
+            return (false, QuickLendXError::InvalidFeeBasisPoints as u32);
+        }
+        // min_invoice_amount must be positive  (mirrors set_protocol_config)
+        if params.min_invoice_amount <= 0 {
+            return (false, QuickLendXError::InvalidAmount as u32);
+        }
+        // max_due_date_days: 1–730
+        if params.max_due_date_days == 0 || params.max_due_date_days > MAX_DUE_DATE_DAYS {
+            return (false, QuickLendXError::InvoiceDueDateInvalid as u32);
+        }
+        // grace_period_seconds: max 30 days
+        if params.grace_period_seconds > MAX_GRACE_PERIOD_SECONDS {
+            return (false, QuickLendXError::InvalidTimestamp as u32);
+        }
+        (true, 0)
+    }
+
     /// Update fee configuration (admin only).
     ///
     /// # Arguments
@@ -475,7 +652,7 @@ impl ProtocolInitializer {
     pub fn set_fee_config(env: &Env, admin: &Address, fee_bps: u32) -> Result<(), QuickLendXError> {
         AdminStorage::with_admin_auth(env, admin, || {
             // Validate fee
-            if fee_bps < MIN_FEE_BPS || fee_bps > MAX_FEE_BPS {
+            if !(MIN_FEE_BPS..=MAX_FEE_BPS).contains(&fee_bps) {
                 return Err(QuickLendXError::InvalidFeeBasisPoints);
             }
 

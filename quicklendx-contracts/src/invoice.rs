@@ -112,6 +112,7 @@ impl Invoice {
             resolution: String::from_str(env, ""),
             resolved_by: zero_address(env),
             resolved_at: 0,
+            resolution_outcome: None,
         }
     }
 
@@ -210,6 +211,7 @@ impl Invoice {
     ) -> Result<(), QuickLendXError> {
         match metadata {
             Some(metadata) => {
+                crate::verification::validate_invoice_metadata(&metadata, self.amount)?;
                 self.metadata_customer_name = Some(metadata.customer_name);
                 self.metadata_customer_address = Some(metadata.customer_address);
                 self.metadata_tax_id = Some(metadata.tax_id);
@@ -260,6 +262,11 @@ impl Invoice {
         self.category = category;
     }
 
+    /// Append a normalized tag to this invoice.
+    ///
+    /// Duplicate tags (after normalization) are silently ignored.
+    /// Returns `TagLimitExceeded` when the tag vector is already at capacity
+    /// (`MAX_INVOICE_TAGS`), ensuring the vector never exceeds its declared bound.
     pub fn add_tag(&mut self, env: &Env, tag: String) -> Result<(), QuickLendXError> {
         let normalized = normalize_tag(env, &tag)?;
         if !self.has_tag(normalized.clone()) {
@@ -284,6 +291,12 @@ impl Invoice {
         Ok(())
     }
 
+    /// Append an investor rating to this invoice.
+    ///
+    /// Returns `OperationNotAllowed` when the ratings vector has reached
+    /// `MAX_RATINGS_PER_INVOICE`, preventing unbounded on-chain growth.
+    /// Also rejects duplicate raters (`AlreadyRated`) and invalid scores or
+    /// invoice states.
     pub fn add_rating(
         &mut self,
         rating: u32,
@@ -377,7 +390,7 @@ fn eq_trimmed_lower_ascii(lhs: &String, rhs: &String) -> bool {
     }
 
     for idx in 0..rhs_len {
-        if lhs_buf[lhs_start + idx].to_ascii_lowercase() != rhs_buf[idx].to_ascii_lowercase() {
+        if !lhs_buf[lhs_start + idx].eq_ignore_ascii_case(&rhs_buf[idx]) {
             return false;
         }
     }

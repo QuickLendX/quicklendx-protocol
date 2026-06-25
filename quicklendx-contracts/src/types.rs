@@ -24,6 +24,18 @@ pub enum InvoiceStatus {
     Refunded,
 }
 
+impl InvoiceStatus {
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            InvoiceStatus::Paid
+                | InvoiceStatus::Defaulted
+                | InvoiceStatus::Cancelled
+                | InvoiceStatus::Refunded
+        )
+    }
+}
+
 /// Bid status enumeration
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -35,14 +47,20 @@ pub enum BidStatus {
     Cancelled,
 }
 
-/// Investment status enumeration
+/// Investment status enumeration tracking the lifecycle of investor positions.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvestmentStatus {
+    /// The investment is active, funded, and tracked in the active investment index.
+    /// This is the only non-terminal state.
     Active,
+    /// Investment funds were withdrawn by the investor (terminal status).
     Withdrawn,
+    /// Investment completed successfully, and the investor has received their payouts (terminal status).
     Completed,
+    /// The associated invoice defaulted due to non-payment, triggering default/insurance logic (terminal status).
     Defaulted,
+    /// Investment was refunded due to invoice cancellation (terminal status).
     Refunded,
 }
 
@@ -54,6 +72,16 @@ pub enum DisputeStatus {
     Disputed,
     UnderReview,
     Resolved,
+}
+
+/// Dispute resolution outcome enumeration
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DisputeResolution {
+    FavorBusiness,
+    FavorInvestor,
+    Split,
+    Dismissed,
 }
 
 /// Invoice category for classification
@@ -97,6 +125,7 @@ pub struct Dispute {
     pub resolution: String,
     pub resolved_by: Address,
     pub resolved_at: u64,
+    pub resolution_outcome: Option<DisputeResolution>,
 }
 
 /// Invoice rating structure
@@ -228,4 +257,34 @@ pub struct SearchResult {
     pub invoice_id: BytesN<32>,
     pub rank: SearchRank,
     pub created_at: u64,
+}
+
+/// Report returned by paginated admin rebuild helpers.
+///
+/// The rebuild is paginated and resumable. Each helper documents its completion
+/// signal and what it counts as `reindexed`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RebuildReport {
+    /// Number of invoice IDs examined in this page.
+    pub scanned: u32,
+    /// Number of records repaired or rewritten by the rebuild helper.
+    pub reindexed: u32,
+    /// Offset to pass on the next call.
+    pub next_offset: u32,
+}
+
+/// Report returned by paginated admin prune helpers.
+///
+/// The prune is paginated and resumable. Pass `next_offset` as the `offset`
+/// on the next call. The last page is reached when `next_offset` stops advancing.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PruneReport {
+    /// Number of invoice IDs examined in this page.
+    pub scanned: u32,
+    /// Number of invoices actually pruned (deleted).
+    pub pruned: u32,
+    /// Offset to pass on the next call.
+    pub next_offset: u32,
 }

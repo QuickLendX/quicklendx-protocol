@@ -1,0 +1,9 @@
+[build]
+rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]
+
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]
+
+[profile.test]
+# Removed platform-forcing linker flags that trigger the GNU linker on Windows.
+# Tests should use the default linker for the active toolchain (MSVC on typical Windows setups).

@@ -1,277 +1,158 @@
-# Webhook Secret Rotation
-
-This document describes the per-subscriber webhook signing system and the
-**dual-verify rotation workflow** that enables zero-downtime secret rollover
-for integrators.
-
----
+# Webhook Retry & Backoff Policy
 
 ## Overview
+Failed webhook deliveries are persisted in the `webhook_deliveries` table and
+retried with an exponential backoff schedule and jitter before being promoted
+to the dead-letter queue (DLQ).
 
-Every subscriber receives a unique HMAC-SHA256 signing secret.  Outgoing
-webhook events are signed with that secret; incoming events (sent by the
-subscriber back to the platform) are verified against it.
+## Schema
 
-Secrets are **never** returned after initial registration, never logged, and
-never included in error responses.
+### `webhook_deliveries`
 
----
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `TEXT PK` | ULID, unique delivery identifier |
+| `event_type` | `TEXT NOT NULL` | Event name (e.g. `invoice.paid`) |
+| `payload` | `TEXT NOT NULL` | JSON-serialised event payload |
+| `subscriber_id` | `TEXT` | Target subscriber, if known |
+| `status` | `TEXT` | One of: `pending`, `processing`, `success`, `failed`, `dead_letter` |
+| `enqueued_at` | `TEXT` | ISO-8601 timestamp of enqueue |
+| `attempt_count` | `INTEGER` | Number of delivery attempts so far |
+| `max_attempts` | `INTEGER` | Maximum attempts before DLQ (default 5) |
+| `next_retry_at` | `TEXT` | ISO-8601 timestamp for next scheduled retry |
+| `last_error` | `TEXT` | Error message from the last failed attempt |
+| `last_attempt_at` | `TEXT` | ISO-8601 timestamp of the last delivery attempt |
+| `created_at` | `TEXT` | ISO-8601 timestamp of row creation |
+| `updated_at` | `TEXT` | ISO-8601 timestamp of last update |
 
-## Signing Algorithm
+### Indexes
 
-```
-signature = "sha256=" + HMAC-SHA256(secret_bytes, raw_request_body_bytes)
-```
+- `idx_webhook_deliveries_status_next_retry` on `(status, next_retry_at)` — fast
+  polling of pending and due deliveries.
+- `idx_webhook_deliveries_created_at` on `(created_at)` — efficient cleanup of
+  expired rows.
 
-- `secret_bytes` – the subscriber's active secret decoded from hex.
-- `raw_request_body_bytes` – the exact bytes of the HTTP request body
-  (before any JSON parsing).  Byte-for-byte fidelity is required.
-
-The computed signature is placed in the `X-Webhook-Signature` header.
-
----
-
-## API Reference
-
-All endpoints are under `/api/v1/webhooks`.
-
-### Register a subscriber
-
-```
-POST /api/v1/webhooks/subscribers
-```
-
-**Request body**
-
-| Field                  | Type    | Required | Description                                      |
-|------------------------|---------|----------|--------------------------------------------------|
-| `subscriber_id`        | string  | ✓        | Unique identifier for the subscriber (≤128 chars)|
-| `grace_period_seconds` | integer |          | Default dual-verify window (60–86400, default 3600)|
-
-**Response `201`**
-
-```json
-{
-  "subscriber_id": "acme-corp",
-  "status": "active",
-  "has_pending_secret": false,
-  "grace_period_seconds": 3600,
-  "initial_secret": "a3f8...c2d1",
-  "created_at": "2026-04-23T10:00:00.000Z",
-  "updated_at": "2026-04-23T10:00:00.000Z"
-}
-```
-
-> ⚠️ `initial_secret` is returned **once only**.  Store it in a secrets
-> manager immediately.  It cannot be retrieved again.
-
----
-
-### Get subscriber state
+## Lifecycle
 
 ```
-GET /api/v1/webhooks/subscribers/:subscriberId
+enqueue
+  │
+  ▼
+pending ──► processing ──► success
+  │              │
+  │              ▼ (failure with remaining attempts)
+  │           failed
+  │              │
+  │              ▼ (next_retry_at timer expires)
+  │           pending (re-queued automatically)
+  │
+  └──► processing ──► dead_letter (max attempts exhausted)
+                          │
+                          ▼ (manual intervention)
+                       pending (retryDeadLetter)
 ```
 
-Returns the public rotation state.  Secrets are never included.
+1. **Enqueue**: a delivery is inserted with `status = 'pending'` and
+   `attempt_count = 0`.
+2. **Processing**: picked up by the worker, moved to `processing`.
+3. **Success**: removed from the active queue; kept for auditability.
+4. **Failure**: `attempt_count` incremented, `next_retry_at` set per the retry
+   schedule, status set to `failed`.
+5. **Re-queue**: `getPending()` returns rows where `status = 'pending'` AND
+   (`next_retry_at IS NULL` OR `next_retry_at <= now`).
+6. **Dead letter**: when `attempt_count >= max_attempts`, status becomes
+   `dead_letter`. These rows are NOT returned by `getPending()`.
+7. **Manual retry**: `retryDeadLetter()` moves a `dead_letter` row back to
+   `pending` with `next_retry_at = now`.
 
-**Response `200`**
+## Retry Schedule
 
-```json
-{
-  "subscriber_id": "acme-corp",
-  "status": "active",
-  "has_pending_secret": false,
-  "pending_created_at": null,
-  "grace_period_seconds": 3600,
-  "created_at": "2026-04-23T10:00:00.000Z",
-  "updated_at": "2026-04-23T10:00:00.000Z"
-}
-```
+The retry delays follow an exponential schedule with jitter:
 
-`status` is one of:
+| Attempt count | Base delay | Jitter range |
+|--------------:|-----------:|-------------:|
+| 1 | 1 minute | 0–30 s |
+| 2 | 5 minutes | 0–2.5 min |
+| 3 | 30 minutes | 0–15 min |
+| 4 | 2 hours | 0–1 h |
+| 5 | 12 hours | 0–6 h |
 
-| Value      | Meaning                                                  |
-|------------|----------------------------------------------------------|
-| `active`   | Only the primary secret is in use.                       |
-| `rotating` | A pending secret exists; both secrets are accepted.      |
+Jitter is computed as `Math.round(Math.random() * baseDelay * 0.5)`. The total
+is `baseDelay + jitter` milliseconds.
 
----
+After 5 failed attempts the delivery is promoted to `dead_letter` and will NOT
+be retried automatically.
 
-## Secret Rotation
+## Retry Conditions
 
-### Why rotate?
+- **Retried:** TIMEOUT, TRANSPORT_ERROR, 5xx responses, 429 Too Many Requests
+- **Not retried:** 4xx responses (except 429), URL_INVALID, non-retryable errors
 
-Periodic rotation limits the blast radius of a compromised secret.  The
-dual-verify window ensures integrators can update their signing key without
-any dropped events.
+## Dead-Letter Queue (DLQ)
 
-### Rotation workflow
+An event is dead-lettered when:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Step 1 – Initiate                                              │
-│  POST /subscribers/:id/rotate                                   │
-│                                                                 │
-│  • Generates a new pending secret.                              │
-│  • Status → "rotating".                                         │
-│  • Both primary (old) and pending (new) secrets are accepted    │
-│    for the configured grace period.                             │
-│  • new_secret returned ONCE – store it immediately.             │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-                    grace window open
-                    (both keys valid)
-                             │
-          ┌──────────────────┴──────────────────┐
-          │                                     │
-          ▼                                     ▼
-┌─────────────────────┐             ┌─────────────────────────┐
-│  Step 2a – Finalize │             │  Step 2b – Cancel       │
-│  POST …/finalize    │             │  POST …/cancel          │
-│                     │             │                         │
-│  • pending → primary│             │  • Discards pending.    │
-│  • Old secret gone. │             │  • Reverts to primary.  │
-│  • Status → active. │             │  • Status → active.     │
-└─────────────────────┘             └─────────────────────────┘
-```
+- Max attempts are exhausted
+- A permanent 4xx response is received
+- A non-retryable error occurs
 
-#### Step 1 – Initiate rotation
+DLQ entries are persisted in the `webhook_deliveries` table with
+`status = 'dead_letter'`. They can be:
 
-```
-POST /api/v1/webhooks/subscribers/:subscriberId/rotate
-```
+- **Listed** via `getDeadLetters()` or queried directly.
+- **Retried** via `retryDeadLetter(id)`, which resets status to `pending` and
+  clears the retry schedule so the next poll picks it up immediately.
 
-**Optional request body**
+## Retention & Cleanup
 
-```json
-{ "grace_period_seconds": 3600 }
-```
+The `cleanup(olderThanDays)` method deletes `success` and `dead_letter` rows
+older than the given threshold (default 90 days). `pending`, `processing`, and
+`failed` rows are never cleaned up this way.
 
-**Response `202`**
+The `vacuum()` method runs `PRAGMA incremental_vacuum` to reclaim space after
+large cleanups.
 
-```json
-{
-  "subscriber_id": "acme-corp",
-  "status": "rotating",
-  "new_secret": "7b2e...f901",
-  "grace_period_seconds": 3600,
-  "pending_created_at": "2026-04-23T11:00:00.000Z"
-}
-```
+## Security
 
-> ⚠️ `new_secret` is returned **once only**.
+SSRF protections in `urlValidation.ts` and `egressPolicy.ts` are enforced on
+every retry attempt.
 
-#### Step 2a – Finalize rotation
+### DNS rebinding protection
 
-Call this once your integrator has updated their signing key to the new secret.
+Webhook deliveries pin the resolved IP into the TCP connection to prevent DNS
+rebinding attacks (where a domain first resolves to a public IP, passing the
+blocked-address check, and later resolves to a private/internal IP):
 
-```
-POST /api/v1/webhooks/subscribers/:subscriberId/rotate/finalize
-```
+- **IP pinning**: before every HTTPS request the target hostname is resolved
+  via DNS and the first public address is pinned.  The `https.Agent` uses a
+  custom `lookup` that always returns this pinned IP — it never re-resolves.
+- **Re-validation before connect**: the agent re-validates the pinned IP via
+  `isBlockedDestinationIP` immediately before every socket connect.  If the
+  IP has become blocked (e.g. the cached mapping expired and the attacker now
+  points to a private address), the request is aborted with an `EGRESS_BLOCKED`
+  error.
+- **Redirects blocked**: 3xx responses are rejected with `REDIRECT_NOT_ALLOWED`.
+  Redirects are not followed, closing the window for open-redirect chains that
+  could bypass the initial IP check.
+- **TLS SNI preserved**: `servername` is set to the original hostname so that
+  TLS certificate validation and SNI use the intended domain, not the pinned IP.
 
-**Response `200`**
+These controls are implemented in `delivery.ts` (`resolveHostnameToPinnedIp`,
+`createPinnedAgent`).
 
-```json
-{
-  "subscriber_id": "acme-corp",
-  "status": "active",
-  "message": "Rotation finalized. The new secret is now the only accepted signing key."
-}
-```
-
-#### Step 2b – Cancel rotation
-
-Call this to abort a rotation and revert to the primary secret only.
-
-```
-POST /api/v1/webhooks/subscribers/:subscriberId/rotate/cancel
-```
-
-**Response `200`** – returns the public subscriber view with `status: "active"`.
-
----
-
-### Grace period behaviour
-
-| Scenario                                    | Result                                      |
-|---------------------------------------------|---------------------------------------------|
-| Signature computed with **primary** secret  | ✅ Accepted (`matched_secret: "primary"`)   |
-| Signature computed with **pending** secret  | ✅ Accepted (`matched_secret: "pending"`)   |
-| Grace period elapses without finalization   | Pending auto-promoted to primary (lazy)     |
-| Rotation finalized                          | Only new (now primary) secret accepted      |
-| Rotation cancelled                          | Only original primary secret accepted       |
-
----
-
-## Ingest endpoint
-
-```
-POST /api/v1/webhooks/ingest/:subscriberId
-```
-
-Protected by HMAC-SHA256 signature verification.  Required headers:
-
-| Header                    | Description                                      |
-|---------------------------|--------------------------------------------------|
-| `X-Webhook-Subscriber-Id` | The subscriber's identifier.                     |
-| `X-Webhook-Signature`     | `sha256=<hmac-hex>` of the raw request body.     |
-
-**Success `200`**
-
-```json
-{
-  "received": true,
-  "subscriber_id": "acme-corp",
-  "matched_secret": "primary"
-}
-```
-
-**Error responses**
-
-| Status | Code                          | Cause                                      |
-|--------|-------------------------------|--------------------------------------------|
-| 400    | `MISSING_SUBSCRIBER_HEADER`   | `X-Webhook-Subscriber-Id` header absent.   |
-| 400    | `MISSING_SIGNATURE_HEADER`    | `X-Webhook-Signature` header absent.       |
-| 401    | `INVALID_WEBHOOK_SIGNATURE`   | Signature mismatch or unknown subscriber.  |
-
-> **Security note:** Unknown subscribers return `401` (not `404`) to prevent
-> subscriber enumeration.
-
----
-
-## Security considerations
-
-- Secrets are generated with Node.js `crypto.randomBytes(32)` (256-bit entropy).
-- Verification uses `crypto.timingSafeEqual` to prevent timing oracle attacks.
-- Secrets are never logged, never included in error responses, and never
-  returned after the initial registration / rotation initiation call.
-- The grace period defaults to 1 hour and is capped at 24 hours.
-- If `finalizeRotation` is never called, the pending secret is automatically
-  promoted to primary once the grace period elapses (lazy expiry on next
-  verification call).
-
----
-
-## Example: integrator rotation walkthrough
+## Testing
 
 ```bash
-# 1. Register
-curl -X POST /api/v1/webhooks/subscribers \
-  -H "Content-Type: application/json" \
-  -d '{"subscriber_id":"acme"}'
-# → save initial_secret as OLD_SECRET
+cd backend
+npm test -- webhook-delivery-repo
+npm test -- webhookMiddleware
+```
 
-# 2. Initiate rotation
-curl -X POST /api/v1/webhooks/subscribers/acme/rotate \
-  -H "Content-Type: application/json" \
-  -d '{"grace_period_seconds":3600}'
-# → save new_secret as NEW_SECRET
+## Migration
 
-# 3. Update your signing code to use NEW_SECRET
-#    (OLD_SECRET still works during the grace window)
+The schema is created by migration `v006_webhook_deliveries.ts`. Run:
 
-# 4. Finalize once all your services are using NEW_SECRET
-curl -X POST /api/v1/webhooks/subscribers/acme/rotate/finalize
-# → OLD_SECRET is now invalid
+```bash
+cd backend
+npm run migrate
 ```

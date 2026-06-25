@@ -8,13 +8,13 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 use crate::protocol_limits;
 use crate::types::{
     BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
-    PlatformFeeConfig,
+    PlatformFeeConfig, PruneReport, RebuildReport,
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
 pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800; // ~30 days at 5s/ledger
 
-pub fn extend_persistent_ttl<T>(env: &Env, key: &T) 
+pub fn extend_persistent_ttl<T>(env: &Env, key: &T)
 where
     T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
 {
@@ -22,10 +22,29 @@ where
     env.storage().persistent().extend_ttl(key, ttl_u32, ttl_u32);
 }
 
-/// Storage keys for the contract
+pub fn bump_persistent<T>(env: &Env, key: &T)
+where
+    T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
+{
+    extend_persistent_ttl(env, key);
+}
+
+/// Counter and configuration keys for the contract.
+///
+/// # BREAKING: Rename Requires Migration
+///
+/// Each method here produces a storage key persisted on-chain.  Renaming the
+/// inner `symbol_short!` string is a **breaking change**: the value stored under
+/// the old key becomes permanently unreadable.  See `docs/storage-key-stability.md`
+/// for the migration checklist.
 pub struct StorageKeys;
 
 /// Primary storage key namespace for core entities.
+///
+/// # BREAKING: Rename Requires Migration
+///
+/// Renaming a variant's discriminant (e.g., `Invoice` → `Inv`) changes the
+/// XDR encoding of every key in that variant, orphaning all existing records.
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -35,28 +54,57 @@ pub enum DataKey {
 }
 
 impl StorageKeys {
+    /// **Storage class**: Instance  
+    /// **BREAKING**: Renaming `"fees"` loses the persisted platform-fee configuration.
     pub fn platform_fees() -> Symbol {
         symbol_short!("fees")
     }
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"inv_count"` resets the invoice counter on all deployed contracts.
     pub fn invoice_count() -> Symbol {
         symbol_short!("inv_count")
     }
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"bid_count"` resets the bid counter on all deployed contracts.
     pub fn bid_count() -> Symbol {
         symbol_short!("bid_count")
     }
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"inv_cnt"` resets the investment counter on all deployed contracts.
     pub fn investment_count() -> Symbol {
         symbol_short!("inv_cnt")
     }
 }
 
-/// Secondary indexes for efficient querying
+/// Secondary indexes for efficient querying.
+///
+/// # BREAKING: Rename Requires Migration
+///
+/// Every method in this struct produces a storage key that is persisted on-chain.
+/// Renaming the inner `symbol_short!` string in **any** method is a **breaking change**:
+/// existing contract data stored under the old key becomes permanently unreachable
+/// (orphaned) unless a migration function explicitly copies it to the new key.
+///
+/// Before changing any key string:
+/// 1. Write a migration function that reads from the old key and writes to the new key.
+/// 2. Update `src/test_snapshots/storage_keys.txt` with the new expected values.
+/// 3. Obtain admin/security-team review of the snapshot diff.
+/// 4. Document the migration in `docs/storage-key-stability.md`.
 pub struct Indexes;
 
 impl Indexes {
+    /// Returns the persistent storage key for the invoice list owned by a business.
+    ///
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"inv_bus"` orphans all per-business invoice indexes.
     pub fn invoices_by_business(business: &Address) -> (Symbol, Address) {
         (symbol_short!("inv_bus"), business.clone())
     }
 
+    /// Returns the persistent storage key for the invoice list in a given status bucket.
+    ///
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming any status symbol or `"inv_st"` orphans that status index.
     pub fn invoices_by_status(status: InvoiceStatus) -> (Symbol, Symbol) {
         let status_symbol = match status {
             InvoiceStatus::Pending => symbol_short!("pending"),
@@ -70,14 +118,26 @@ impl Indexes {
         (symbol_short!("inv_st"), status_symbol)
     }
 
+    /// Returns the persistent storage key for the bid list attached to an invoice.
+    ///
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"bids_inv"` orphans all per-invoice bid indexes.
     pub fn bids_by_invoice(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
         (symbol_short!("bids_inv"), invoice_id.clone())
     }
 
+    /// Returns the persistent storage key for the bid list owned by an investor.
+    ///
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"bids_invr"` orphans all per-investor bid indexes.
     pub fn bids_by_investor(investor: &Address) -> (Symbol, Address) {
         (symbol_short!("bids_invr"), investor.clone())
     }
 
+    /// Returns the persistent storage key for the bid list in a given status bucket.
+    ///
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming any status symbol or `"bids_stat"` orphans that status index.
     pub fn bids_by_status(status: BidStatus) -> (Symbol, Symbol) {
         let status_symbol = match status {
             BidStatus::Placed => symbol_short!("placed"),
@@ -89,14 +149,28 @@ impl Indexes {
         (symbol_short!("bids_stat"), status_symbol)
     }
 
+    /// Returns the persistent storage key for the investment list attached to an invoice.
+    ///
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"invst_inv"` orphans all per-invoice investment indexes.
     pub fn investments_by_invoice(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
         (symbol_short!("invst_inv"), invoice_id.clone())
     }
 
+    /// Returns the persistent storage key for the investment list owned by an investor.
+    ///
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"inv_invst"` orphans all per-investor investment indexes.
     pub fn investments_by_investor(investor: &Address) -> (Symbol, Address) {
         (symbol_short!("inv_invst"), investor.clone())
     }
 
+    /// Returns the persistent storage key for the investment list in a given status bucket.
+    ///
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming any status symbol or `"inv_st"` here orphans that index.
+    /// Note: this shares the `"inv_st"` prefix with `invoices_by_status`; the second
+    /// tuple element (the status symbol) acts as the discriminator.
     pub fn investments_by_status(status: InvestmentStatus) -> (Symbol, Symbol) {
         let status_symbol = match status {
             InvestmentStatus::Active => symbol_short!("active"),
@@ -108,18 +182,34 @@ impl Indexes {
         (symbol_short!("inv_st"), status_symbol)
     }
 
+    /// Returns the persistent storage key for the invoice list indexed by customer name.
+    ///
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"inv_cust"` orphans all customer-name metadata indexes.
     pub fn invoices_by_customer(customer_name: &String) -> (Symbol, String) {
         (symbol_short!("inv_cust"), customer_name.clone())
     }
 
+    /// Returns the persistent storage key for the invoice list indexed by tax ID.
+    ///
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"inv_taxid"` orphans all tax-ID metadata indexes.
     pub fn invoices_by_tax_id(tax_id: &String) -> (Symbol, String) {
         (symbol_short!("inv_taxid"), tax_id.clone())
     }
 
+    /// Returns the persistent storage key for the invoice list indexed by a tag string.
+    ///
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"inv_tag"` orphans all tag indexes.
     pub fn invoices_by_tag(tag: &String) -> (Symbol, String) {
         (symbol_short!("inv_tag"), tag.clone())
     }
 
+    /// Returns the persistent storage key for the invoice list in a given category bucket.
+    ///
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming any category symbol or `"inv_cat"` orphans that category index.
     pub fn invoices_by_category(category: InvoiceCategory) -> (Symbol, Symbol) {
         let cat_symbol = match category {
             InvoiceCategory::Services => symbol_short!("services"),
@@ -155,14 +245,18 @@ impl InvoiceStorage {
         env.storage()
             .persistent()
             .set(&key, invoice);
-        bump_persistent(env, &key);
+        extend_persistent_ttl(env, &key);
         Self::add_to_business_index(env, &invoice.business, &invoice.id);
-        Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
+        Self::add_to_status_index(env, invoice.status, &invoice.id);
         if let Some(ref name) = invoice.metadata_customer_name {
             Self::add_to_customer_index(env, name, &invoice.id);
         }
         if let Some(ref tax_id) = invoice.metadata_tax_id {
             Self::add_to_tax_id_index(env, tax_id, &invoice.id);
+        }
+        Self::add_category_index(env, &invoice.category, &invoice.id);
+        for tag in invoice.tags.iter() {
+            Self::add_tag_index(env, &tag, &invoice.id);
         }
     }
 
@@ -212,7 +306,7 @@ impl InvoiceStorage {
         let key = DataKey::Invoice(invoice_id.clone());
         let result = env.storage().persistent().get(&key);
         if result.is_some() {
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
         result
     }
@@ -225,7 +319,7 @@ impl InvoiceStorage {
         if let Some(old) = Self::get(env, &invoice.id) {
             if old.status != invoice.status {
                 Self::remove_from_status_index(env, old.status, &invoice.id);
-                Self::add_to_status_index(env, invoice.status.clone(), &invoice.id);
+                Self::add_to_status_index(env, invoice.status, &invoice.id);
             }
             if old.metadata_customer_name != invoice.metadata_customer_name {
                 if let Some(ref name) = old.metadata_customer_name {
@@ -243,12 +337,24 @@ impl InvoiceStorage {
                     Self::add_to_tax_id_index(env, tax_id, &invoice.id);
                 }
             }
+            if old.category != invoice.category {
+                Self::remove_category_index(env, &old.category, &invoice.id);
+                Self::add_category_index(env, &invoice.category, &invoice.id);
+            }
+            if old.tags != invoice.tags {
+                for tag in old.tags.iter() {
+                    Self::remove_tag_index(env, &tag, &invoice.id);
+                }
+                for tag in invoice.tags.iter() {
+                    Self::add_tag_index(env, &tag, &invoice.id);
+                }
+            }
         }
         let key = DataKey::Invoice(invoice.id.clone());
         env.storage()
             .persistent()
             .set(&key, invoice);
-        bump_persistent(env, &key);
+        extend_persistent_ttl(env, &key);
     }
 
     pub fn update_invoice(env: &Env, invoice: &Invoice) {
@@ -285,6 +391,10 @@ impl InvoiceStorage {
             if let Some(ref tax_id) = invoice.metadata_tax_id {
                 Self::remove_from_tax_id_index(env, tax_id, invoice_id);
             }
+            Self::remove_category_index(env, &invoice.category, invoice_id);
+            for tag in invoice.tags.iter() {
+                Self::remove_tag_index(env, &tag, invoice_id);
+            }
         }
         env.storage()
             .persistent()
@@ -292,6 +402,10 @@ impl InvoiceStorage {
     }
 
     pub fn clear_all(env: &Env) {
+        let ids = Self::get_all_invoice_ids(env);
+        for id in ids.iter() {
+            Self::delete_invoice(env, &id);
+        }
         StorageManager::clear_all_mappings(env);
     }
 
@@ -322,7 +436,7 @@ impl InvoiceStorage {
             if let Some(invoice) = Self::get(env, &invoice_id) {
                 if invoice
                     .average_rating
-                    .map_or(false, |rating| rating > threshold)
+                    .is_some_and(|rating| rating > threshold)
                 {
                     matches.push_back(invoice_id);
                 }
@@ -363,7 +477,7 @@ impl InvoiceStorage {
             env.storage()
                 .persistent()
                 .set(&key, &invoices);
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
     }
 
@@ -375,31 +489,31 @@ impl InvoiceStorage {
             env.storage()
                 .persistent()
                 .set(&key, &invoices);
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
     }
 
     fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
-        let mut invoices = Self::get_by_status(env, status.clone());
+        let mut invoices = Self::get_by_status(env, status);
         if !invoices.contains(invoice_id) {
             invoices.push_back(invoice_id.clone());
             let key = Indexes::invoices_by_status(status);
             env.storage()
                 .persistent()
                 .set(&key, &invoices);
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
     }
 
     fn remove_from_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
-        let mut invoices = Self::get_by_status(env, status.clone());
+        let mut invoices = Self::get_by_status(env, status);
         if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
             invoices.remove(pos as u32);
             let key = Indexes::invoices_by_status(status);
             env.storage()
                 .persistent()
                 .set(&key, &invoices);
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
     }
 
@@ -413,7 +527,7 @@ impl InvoiceStorage {
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
     }
 
@@ -431,7 +545,7 @@ impl InvoiceStorage {
             }
         }
         env.storage().persistent().set(&key, &filtered);
-        bump_persistent(env, &key);
+        extend_persistent_ttl(env, &key);
     }
 
     pub fn add_to_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
@@ -444,7 +558,7 @@ impl InvoiceStorage {
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
     }
 
@@ -462,7 +576,7 @@ impl InvoiceStorage {
             }
         }
         env.storage().persistent().set(&key, &filtered);
-        bump_persistent(env, &key);
+        extend_persistent_ttl(env, &key);
     }
     pub fn add_tag_index(env: &Env, tag: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_tag(tag);
@@ -474,7 +588,7 @@ impl InvoiceStorage {
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
     }
 
@@ -492,11 +606,11 @@ impl InvoiceStorage {
             }
         }
         env.storage().persistent().set(&key, &filtered);
-        bump_persistent(env, &key);
+        extend_persistent_ttl(env, &key);
     }
 
     pub fn add_category_index(env: &Env, category: &InvoiceCategory, invoice_id: &BytesN<32>) {
-        let key = Indexes::invoices_by_category(category.clone());
+        let key = Indexes::invoices_by_category(*category);
         let mut ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
@@ -505,12 +619,12 @@ impl InvoiceStorage {
         if !ids.iter().any(|id| id == *invoice_id) {
             ids.push_back(invoice_id.clone());
             env.storage().persistent().set(&key, &ids);
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
     }
 
     pub fn remove_category_index(env: &Env, category: &InvoiceCategory, invoice_id: &BytesN<32>) {
-        let key = Indexes::invoices_by_category(category.clone());
+        let key = Indexes::invoices_by_category(*category);
         let ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
@@ -523,7 +637,7 @@ impl InvoiceStorage {
             }
         }
         env.storage().persistent().set(&key, &filtered);
-        bump_persistent(env, &key);
+        extend_persistent_ttl(env, &key);
     }
 
     pub fn get_invoices_by_customer(env: &Env, customer_name: &String) -> Vec<BytesN<32>> {
@@ -573,6 +687,25 @@ impl InvoiceStorage {
 
     pub fn get_invoice_count_by_category(env: &Env, category: &InvoiceCategory) -> u32 {
         Self::get_invoices_by_category(env, category).len()
+    }
+
+    /// Efficiently retrieves invoice IDs for a category directly from the category index.
+    /// Unlike `get_invoices_by_category`, this reads the index without scanning all invoices.
+    pub fn get_invoices_by_category_from_index(
+        env: &Env,
+        category: &InvoiceCategory,
+    ) -> Vec<BytesN<32>> {
+        let key = Indexes::invoices_by_category(*category);
+        env.storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(env))
+    }
+
+    /// Efficiently counts invoices for a category directly from the category index.
+    /// This is the preferred method for counting and is bounded by the index size.
+    pub fn get_invoice_count_by_category_from_index(env: &Env, category: &InvoiceCategory) -> u32 {
+        Self::get_invoices_by_category_from_index(env, category).len()
     }
 
     pub fn count_active_business_invoices(env: &Env, business: &Address) -> u32 {
@@ -640,6 +773,7 @@ impl InvoiceStorage {
         Self::remove_from_customer_index(env, &metadata.customer_name, invoice_id);
         Self::remove_from_tax_id_index(env, &metadata.tax_id, invoice_id);
     }
+
 }
 
 /// Storage operations for bids
@@ -702,7 +836,7 @@ impl StorageIntegrityAudit {
         );
 
         for status in statuses.iter() {
-            let ids = InvoiceStorage::get_by_status(env, status.clone());
+            let ids = InvoiceStorage::get_by_status(env, status);
             for id in ids.iter() {
                 if !discovered_ids.contains(&id) {
                     discovered_ids.push_back(id.clone());
@@ -764,7 +898,7 @@ impl StorageIntegrityAudit {
                 }
 
                 // Check category index
-                let category_ids = InvoiceStorage::get_by_category(env, invoice.category.clone());
+                let category_ids = InvoiceStorage::get_by_category(env, invoice.category);
                 if !category_ids.contains(&id) {
                     errors.push_back(String::from_str(env, "Invoice missing from category index"));
                 }
@@ -902,6 +1036,141 @@ impl StorageIntegrityAudit {
             Ok(())
         } else {
             Err(all_errors)
+        }
+    }
+}
+
+// ============================================================================
+// Index Rebuild
+// ============================================================================
+
+impl InvoiceStorage {
+    /// Recompute secondary indexes for a page of invoices from their canonical records.
+    ///
+    /// # Why this exists
+    /// Secondary indexes (`invoices_by_customer`, `invoices_by_tax_id`,
+    /// `invoices_by_tag`, `invoices_by_category`) are denormalized state that can
+    /// drift after a backup restore, a partial migration, or a past bug. This
+    /// function rebuilds them from the source-of-truth `Invoice` records.
+    ///
+    /// # Idempotency
+    /// Every index write is a deduplication-guarded append (`add_to_*_index`
+    /// checks for duplicates before inserting). Calling this function twice over
+    /// the same range leaves the indexes in the same state as calling it once.
+    ///
+    /// # Resumability
+    /// `offset` and `limit` work against the list returned by
+    /// `get_all_invoice_ids`, which is stable within a ledger. Pass
+    /// `report.next_offset` as `offset` on the next call. Stop when
+    /// `report.next_offset == report.scanned` (last page reached).
+    ///
+    /// # Arguments
+    /// * `env`    - Contract environment.
+    /// * `offset` - Zero-based starting position in the full invoice ID list.
+    /// * `limit`  - Max invoices to process; capped at `MAX_REBUILD_PAGE`.
+    pub fn rebuild_indexes_page(env: &Env, offset: u32, limit: u32) -> RebuildReport {
+        const MAX_REBUILD_PAGE: u32 = 100;
+        let capped = if limit > MAX_REBUILD_PAGE { MAX_REBUILD_PAGE } else { limit };
+
+        let all_ids = Self::get_all_invoice_ids(env);
+        let total = all_ids.len();
+
+        let start = offset.min(total);
+        let end = start.saturating_add(capped).min(total);
+
+        let mut reindexed: u32 = 0;
+        let mut i = start;
+        while i < end {
+            if let Some(id) = all_ids.get(i) {
+                if let Some(invoice) = Self::get(env, &id) {
+                    // customer name
+                    if let Some(ref name) = invoice.metadata_customer_name {
+                        Self::add_to_customer_index(env, name, &invoice.id);
+                    }
+                    // tax id
+                    if let Some(ref tax_id) = invoice.metadata_tax_id {
+                        Self::add_to_tax_id_index(env, tax_id, &invoice.id);
+                    }
+                    // tags
+                    for tag in invoice.tags.iter() {
+                        Self::add_tag_index(env, &tag, &invoice.id);
+                    }
+                    // category
+                    Self::add_category_index(env, &invoice.category, &invoice.id);
+
+                    reindexed = reindexed.saturating_add(1);
+                }
+            }
+            i = i.saturating_add(1);
+        }
+
+        RebuildReport {
+            scanned: end.saturating_sub(start),
+            reindexed,
+            next_offset: end,
+        }
+    }
+
+    /// Prune terminal-state invoices whose terminal timestamp is older than
+    /// `older_than_secs` from the current ledger timestamp.
+    ///
+    /// Only invoices in a terminal status (`Paid`, `Defaulted`, `Cancelled`,
+    /// `Refunded`) are eligible. For `Paid` invoices the terminal timestamp
+    /// is `settled_at`; for other terminal statuses it falls back to
+    /// `created_at`. Invoices in `Pending`, `Verified`, or `Funded` status
+    /// are never pruned regardless of age.
+    ///
+    /// The operation is paginated via `offset`/`limit` (capped at 100 per
+    /// page) and removes each pruned invoice from all secondary indexes
+    /// (status, business, customer, tax_id, tag, category) and from primary
+    /// persistent storage via [`delete_invoice`](Self::delete_invoice).
+    ///
+    /// # Resumability
+    /// Pass the `next_offset` from the returned `PruneReport` as `offset`
+    /// on the next call. Stop when `next_offset` stops advancing (last page).
+    ///
+    /// # Returns
+    /// A `PruneReport` containing:
+    /// * `scanned`   — number of invoice IDs examined in this page.
+    /// * `pruned`    — number of invoices actually deleted.
+    /// * `next_offset` — offset for the next call.
+    pub fn prune_terminal_invoices_page(
+        env: &Env,
+        older_than_secs: u64,
+        offset: u32,
+        limit: u32,
+    ) -> PruneReport {
+        const MAX_PRUNE_PAGE: u32 = 100;
+        let capped = if limit > MAX_PRUNE_PAGE { MAX_PRUNE_PAGE } else { limit };
+
+        let now = env.ledger().timestamp();
+        let all_ids = Self::get_all_invoice_ids(env);
+        let total = all_ids.len() as u32;
+
+        let start = offset.min(total);
+        let end = start.saturating_add(capped).min(total);
+
+        let mut pruned: u32 = 0;
+        let mut i = start;
+        while i < end {
+            if let Some(id) = all_ids.get(i) {
+                if let Some(invoice) = Self::get(env, &id) {
+                    if invoice.status.is_terminal() {
+                        let terminal_ts = invoice.settled_at.unwrap_or(invoice.created_at);
+                        if terminal_ts.saturating_add(older_than_secs) < now {
+                            Self::delete_invoice(env, &id);
+                            pruned = pruned.saturating_add(1);
+                        }
+                    }
+                }
+            }
+            i = i.saturating_add(1);
+        }
+
+        PruneReport {
+            scanned: end.saturating_sub(start),
+            pruned,
+            next_offset: end,
         }
     }
 }

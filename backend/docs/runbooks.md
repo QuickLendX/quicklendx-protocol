@@ -268,6 +268,42 @@ Expected output:
 3. File follow-up tasks for missing metrics/alerts and automation gaps.
 4. Add regression tests for failure-handling logic if code changes were needed.
 
+## Streaming Data Export
+
+### Overview
+
+`POST /api/v1/exports/generate` creates a file on disk containing the user's
+invoices, bids, and settlements in JSON or CSV. The file is streamed to disk
+via `fs.createWriteStream` to avoid building the entire payload in memory.
+A signed one-shot token is returned.
+
+`GET /api/v1/exports/download/:token` streams the file from disk to the client,
+then deletes it. The token is single-use and TTL-bound (default 1 hour).
+
+### Export directory
+
+Files are written to `config.EXPORT_DIR` (default `.data/exports/`) with
+`0o600` permissions. Each export is a single file named `{safe_token}.{json|csv}`.
+A `.tmp` file is used during writing and atomically renamed on completion.
+If the write fails, the `.tmp` file is cleaned up automatically.
+
+### Retention & cleanup
+
+- Files are deleted immediately after the first successful download (one-shot).
+- Expired files (mtime older than `EXPORT_TTL_MS`) are removed by
+  `cleanupExpiredFiles()` — call this from a cron job or scheduled task.
+- There is no automatic sweep in the request path; the admin must invoke
+  the cleanup periodically to reclaim space.
+
+### Troubleshooting
+
+| Symptom | Likely cause | Resolution |
+|---------|-------------|------------|
+| `INVALID_TOKEN` on download | Token expired, already used, or tampered | Generate a new export |
+| `INVALID_FORMAT` on generate | `format` query param not `json` or `csv` | Use one of the supported formats |
+| Export file not found on disk after generate | Disk full or permission error | Check `EXPORT_DIR` permissions and disk space |
+| Large export (10k+ rows) uses high memory | ExportService writes via stream, so RSS stays low | Verify with `ps` / RSS monitoring |
+
 ## Gaps to Track (if observed)
 
 If any of the following are missing in runtime telemetry, create follow-up issues:
@@ -275,4 +311,87 @@ If any of the following are missing in runtime telemetry, create follow-up issue
 - Indexer cursor freshness metric and lag-by-block gauge.
 - Webhook queue depth, success/failure by status class, retry age histogram.
 - DB pool saturation metrics from each backend service.
+
+---
+
+## Alert Routing Configuration
+
+The backend uses a severity-based alert routing layer to dispatch operational alerts to appropriate channels (PagerDuty, Slack, email).
+
+### Environment Variables
+
+Configure alerts via the following environment variables:
+
+```bash
+# Alert deduplication window (milliseconds; default 15 minutes)
+ALERT_DEDUPE_WINDOW_MS=900000
+
+# PagerDuty integration key (for critical alerts)
+PAGERDUTY_INTEGRATION_KEY=<integration_key>
+
+# Slack webhook URL (for medium/high alerts)
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/<your_webhook>
+
+# Email recipients (comma-separated)
+ALERT_EMAIL_RECIPIENTS=ops@example.com,oncall@example.com
+
+# Alert routing configuration (JSON, optional)
+ALERT_ROUTES_JSON='{"routes":[
+  {"severity":"HIGH","channels":["pagerduty","slack"]},
+  {"severity":"MEDIUM","channels":["slack","email"]},
+  {"severity":"LOW","channels":["email"]}
+]}'
+```
+
+### Alert Deduplication
+
+Alerts are automatically deduplicated per alert key within a configurable window (default 15 minutes). This prevents alert fatigue for transient issues.
+
+- **How it works**: Once an alert is fired for a given key, duplicate alerts within the window are suppressed.
+- **Window expiration**: After the window elapses, the same alert key can fire again.
+- **Clear-up**: Expired deduplication entries are cleaned up automatically.
+
+### Alert Sources
+
+Currently, the following components emit alerts:
+
+1. **Lag Monitor** (`lagMonitor.ts`):
+   - Severity: `HIGH` (critical), `MEDIUM` (warn), `LOW` (recovery)
+   - Triggered on indexer lag escalation/recovery
+   - Alert key: `lag-<level>` (e.g., `lag-critical`)
+
+2. **Invariant Service** (`invariantService.ts`):
+   - Severity: `HIGH` (3+ violations), `MEDIUM` (1-2 violations)
+   - Triggered when invariant checks fail (orphans, mismatches, regressions)
+   - Alert key: `invariant-violation`
+
+### Transport Failure Handling
+
+If one notification channel fails (e.g., Slack webhook timeout), other channels are not blocked. Failures are logged but do not prevent alert propagation.
+
+Example log output on partial failure:
+```
+ERROR Failed to route alert: Failed to route lag alert: Slack webhook timeout
+```
+
+### Troubleshooting
+
+**Alerts not being sent:**
+- Verify secrets are correctly set (PAGERDUTY_INTEGRATION_KEY, SLACK_WEBHOOK_URL).
+- Check alert routing config for syntax errors.
+- Confirm transports have recipients/URLs configured.
+- Check application logs for transport errors.
+
+**Alert spam:**
+- Increase `ALERT_DEDUPE_WINDOW_MS` to suppress noisy alerts longer.
+- Adjust severity thresholds in the source services (e.g., lag alert threshold in lagMonitor).
+
+**Testing alerts manually:**
+```bash
+# Trigger a test alert via the alertRouter
+curl -X POST http://localhost:3001/api/v1/test-alert \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <admin_api_key>" \
+  -d '{"severity":"HIGH","message":"Test alert","alertKey":"test-alert"}'
+```
 

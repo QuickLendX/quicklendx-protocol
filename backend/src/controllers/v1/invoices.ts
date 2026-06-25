@@ -3,9 +3,15 @@ import { InvoiceStatus, InvoiceCategory, Invoice } from "../../types/contract";
 import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
 import { freshnessService } from "../../services/freshnessService";
 import { invoiceStore } from "../../services/invoiceStore";
-export const MOCK_INVOICES = [
+import { parsePaginationParams, PaginationError, applyPagination } from "../../utils/pagination";
+import { getKycStatus } from "../../services/kycService";
+
+export const MOCK_INVOICES: any[] = [
   {
     id: "mock-invoice-1",
+    business: "mock-business",
+    status: "Pending",
+    created_at: "2026-06-01T00:00:00Z",
   },
 ];
 
@@ -88,6 +94,34 @@ export const getInvoiceById = async (
       return;
     }
     res.json(invoice);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createInvoice = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { business } = req.body;
+    if (!business) {
+      return res.status(400).json({ error: { message: "Business ID required", code: "BAD_REQUEST" } });
+    }
+
+    const kyc = getKycStatus(business);
+
+    if (!kyc || kyc.status !== "verified") {
+      return res.status(403).json({ error: { message: "KYC not verified", code: "KYC_NOT_VERIFIED" } });
+    }
+
+    const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
+    if (kyc.verifiedAt && (Date.now() - kyc.verifiedAt > TWELVE_MONTHS_MS)) {
+      return res.status(403).json({ error: { message: "KYC not verified", code: "KYC_NOT_VERIFIED" } });
+    }
+
+    res.status(201).json({ success: true, message: "Invoice creation accepted" });
   } catch (error) {
     next(error);
   }

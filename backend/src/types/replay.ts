@@ -4,6 +4,7 @@ export const RawEventSchema = z.object({
   id: z.string().min(1),
   ledger: z.number().int().nonnegative(),
   txHash: z.string().min(1),
+  eventIndex: z.number().int().nonnegative().default(0),
   type: z.string().min(1),
   payload: z.record(z.string(), z.unknown()),
   timestamp: z.number().int().nonnegative(),
@@ -148,3 +149,33 @@ export interface EventValidator {
   validateEvent(event: RawEvent): Promise<string[]>; // Returns array of validation errors
   sanitizeEvent(event: RawEvent): Promise<RawEvent>; // Returns sanitized event
 }
+
+// ── Replay-verification integration types ────────────────────────────────────
+
+/**
+ * Request to trigger a replay-equivalence verification pass against a
+ * previously captured DerivedStateSnapshot.
+ */
+export interface ReplayVerificationRequest {
+  /** ID of the snapshot to verify against. */
+  snapshotId: string;
+  /**
+   * Optionally override the batch size used while replaying events.
+   * Defaults to 100.
+   */
+  batchSize?: number;
+  /**
+   * Actor identity recorded in the audit log.
+   */
+  actor: string;
+}
+
+/**
+ * Live status of an in-progress or completed verification run.
+ */
+export type ReplayVerificationStatus =
+  | "pending"
+  | "replaying"
+  | "diffing"
+  | "completed"
+  | "failed";

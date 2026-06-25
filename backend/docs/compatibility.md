@@ -148,6 +148,91 @@ confirmed, decommission the old indexer pipeline.
 
 ---
 
+---
+
+## OpenAPI Request Example Validation Gate
+
+To prevent silent documentation drift, the build system validates every
+`requestBody.examples.value` in `backend/openapi.yaml` against its
+corresponding Zod schema validator.
+
+### What happens when an example doesn't validate?
+
+Running `npm test -- openapi-example-validation` will:
+
+1. Parse `openapi.yaml`
+2. Extract `operationId` and all `examples` from each `requestBody`
+3. Look up the registered Zod schema in `backend/src/tests/helpers/example-routing.ts`
+4. Validate each example against the schema using Zod's `safeParse()`
+5. **Fail the test if any example fails validation or if an operationId is unmapped**
+
+### Example: Adding a new POST endpoint with examples
+
+**Step 1 — Add to openapi.yaml**
+
+```yaml
+/my-endpoint:
+  post:
+    operationId: myNewEndpoint
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { ... }
+          examples:
+            basic:
+              description: A valid example
+              value: { field1: "value", field2: 123 }
+```
+
+**Step 2 — Import or define the Zod schema in example-routing.ts**
+
+```typescript
+import { myNewEndpointBodySchema } from "../../validators/my-validators";
+
+export const OPERATION_ID_TO_SCHEMA: Record<string, z.ZodType<any>> = {
+  // ... existing mappings ...
+  myNewEndpoint: myNewEndpointBodySchema,
+};
+```
+
+**Step 3 — Run the test**
+
+```bash
+npm test -- openapi-example-validation
+```
+
+If the example doesn't match the schema, the test fails and describes the
+validation error.
+
+### When is this test run?
+
+- **Locally**: `npm test` or `npm test -- openapi-example-validation`
+- **CI/CD**: Runs as part of `npm run test` in the GitHub workflow
+- **Pre-commit**: Optionally via a git hook (not currently enforced)
+
+### Key files
+
+- **Spec**: `backend/openapi.yaml`
+- **Test**: `backend/tests/openapi-example-validation.test.ts`
+- **Manifest**: `backend/src/tests/helpers/example-routing.ts` — maps operationId → schema
+- **Validators**: `backend/src/validators/*.ts` — Zod schemas
+
+### Why this matters
+
+Developers frequently update validators (Zod schemas) to support new fields
+or fix validation logic. Without this gate, the OpenAPI examples can silently
+drift out of sync with the actual validators, misleading API consumers and
+causing integration bugs.
+
+By **failing loud** on mismatches, we ensure:
+- Examples always reflect what the API actually accepts
+- New endpoints force explicit registration (no silent skips)
+- Documentation stays a reliable source of truth
+- Integration test suites can rely on examples to verify their own payloads
+
+---
+
 ## References
 
 - Contract version constant: `quicklendx-contracts/src/init.rs` — `PROTOCOL_VERSION`
@@ -156,3 +241,5 @@ confirmed, decommission the old indexer pipeline.
 - Versioning service: `backend/src/services/versioningService.ts`
 - Type definitions: `backend/src/types/contract.ts` — `VersionedRecord`
 - Tests: `backend/tests/versioning.test.ts`
+- OpenAPI examples test: `backend/tests/openapi-example-validation.test.ts`
+- Example routing manifest: `backend/src/tests/helpers/example-routing.ts`

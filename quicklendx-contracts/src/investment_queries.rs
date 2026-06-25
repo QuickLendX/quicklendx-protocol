@@ -1,6 +1,51 @@
+use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
 use crate::types::InvestmentStatus;
-use soroban_sdk::{symbol_short, Address, BytesN, Env, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Vec};
+
+/// Aggregate portfolio snapshot for a single investor, computed in one bounded
+/// pass over `InvestmentStorage::get_investments_by_investor`.
+///
+/// ## Bucket semantics
+/// | Field              | Status(es) counted     | Notes                              |
+/// |--------------------|------------------------|------------------------------------|
+/// | `active_principal` | `Active`               | Sum of `investment.amount`.        |
+/// | `completed_count`  | `Completed`            | Number of completed positions.     |
+/// | `completed_returns`| `Completed`            | Sum of `investment.amount`.        |
+/// | `defaulted_count`  | `Defaulted`            | Number of defaulted positions.     |
+/// | `refunded_count`   | `Refunded`             | Number of refunded positions.      |
+/// | `total_positions`  | all statuses           | Total number of investment records.|
+///
+/// `Withdrawn` investments are included in `total_positions` but have no
+/// dedicated counter because they represent positions the investor already
+/// exited voluntarily and are fully accounted for off-chain.
+///
+/// ## Auth
+/// No auth is required: every individual investment is already publicly
+/// queryable, so an aggregate of public data does not expose new information.
+///
+/// ## Iteration bound
+/// The pass iterates at most `MAX_QUERY_LIMIT` investment IDs. Any IDs beyond
+/// that cap are silently skipped so that on-chain instruction costs stay within
+/// the Soroban budget. Callers that need full coverage must paginate using
+/// `get_investor_investments_paged`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvestorPortfolioSummary {
+    /// Sum of `amount` for all Active investments (unchecked i128 addition is
+    /// safe because `overflow-checks = true` in the Cargo profile).
+    pub active_principal: i128,
+    /// Number of investments that reached `Completed` status.
+    pub completed_count: u32,
+    /// Sum of `amount` for all Completed investments.
+    pub completed_returns: i128,
+    /// Number of investments that reached `Defaulted` status.
+    pub defaulted_count: u32,
+    /// Number of investments that reached `Refunded` status.
+    pub refunded_count: u32,
+    /// Total number of investment records iterated (≤ `MAX_QUERY_LIMIT`).
+    pub total_positions: u32,
+}
 
 /// Maximum number of records returned by paginated query endpoints.
 /// This constant ensures memory usage stays within reasonable bounds.
@@ -141,7 +186,7 @@ impl InvestmentQueries {
         }
 
         // Apply pagination with overflow-safe arithmetic
-        let collection_size = filtered.len() as u32;
+        let collection_size = filtered.len();
         let (start, end) = Self::calculate_safe_bounds(offset, limit, collection_size);
 
         let mut result = Vec::new(env);
@@ -155,6 +200,85 @@ impl InvestmentQueries {
         }
 
         result
+    }
+
+    /// Aggregate an investor's portfolio in a single bounded pass.
+    ///
+    /// Iterates up to `MAX_QUERY_LIMIT` investment IDs from the investor index
+    /// and buckets each resolved record by `InvestmentStatus`. Records whose
+    /// storage entry is missing (orphaned IDs) are silently skipped.
+    ///
+    /// Arithmetic uses `checked_add` on every accumulation; an overflow returns
+    /// `Err(QuickLendXError::ArithmeticOverflow)` rather than wrapping or
+    /// panicking (though `overflow-checks = true` would also catch it).
+    ///
+    /// # Arguments
+    /// * `env`      - Soroban environment.
+    /// * `investor` - Address whose portfolio is summarised.
+    ///
+    /// # Returns
+    /// * `Ok(InvestorPortfolioSummary)` — consistent snapshot.
+    /// * `Err(ArithmeticOverflow)`      — impossible in practice; present as a
+    ///   safety net.
+    pub fn investor_portfolio_summary(
+        env: &Env,
+        investor: &Address,
+    ) -> Result<InvestorPortfolioSummary, QuickLendXError> {
+        let ids = InvestmentStorage::get_investments_by_investor(env, investor);
+
+        let mut active_principal: i128 = 0;
+        let mut completed_count: u32 = 0;
+        let mut completed_returns: i128 = 0;
+        let mut defaulted_count: u32 = 0;
+        let mut refunded_count: u32 = 0;
+        let mut total_positions: u32 = 0;
+
+        let cap = Self::cap_query_limit(ids.len());
+        let mut idx = 0u32;
+        while idx < cap {
+            if let Some(id) = ids.get(idx) {
+                if let Some(inv) = InvestmentStorage::get_investment(env, &id) {
+                    total_positions =
+                        total_positions.checked_add(1).ok_or(QuickLendXError::ArithmeticOverflow)?;
+                    match inv.status {
+                        InvestmentStatus::Active => {
+                            active_principal = active_principal
+                                .checked_add(inv.amount)
+                                .ok_or(QuickLendXError::ArithmeticOverflow)?;
+                        }
+                        InvestmentStatus::Completed => {
+                            completed_count = completed_count
+                                .checked_add(1)
+                                .ok_or(QuickLendXError::ArithmeticOverflow)?;
+                            completed_returns = completed_returns
+                                .checked_add(inv.amount)
+                                .ok_or(QuickLendXError::ArithmeticOverflow)?;
+                        }
+                        InvestmentStatus::Defaulted => {
+                            defaulted_count = defaulted_count
+                                .checked_add(1)
+                                .ok_or(QuickLendXError::ArithmeticOverflow)?;
+                        }
+                        InvestmentStatus::Refunded => {
+                            refunded_count = refunded_count
+                                .checked_add(1)
+                                .ok_or(QuickLendXError::ArithmeticOverflow)?;
+                        }
+                        InvestmentStatus::Withdrawn => {} // counted in total_positions only
+                    }
+                }
+            }
+            idx = idx.saturating_add(1);
+        }
+
+        Ok(InvestorPortfolioSummary {
+            active_principal,
+            completed_count,
+            completed_returns,
+            defaulted_count,
+            refunded_count,
+            total_positions,
+        })
     }
 
     /// Counts total investments for an investor with optional status filter.

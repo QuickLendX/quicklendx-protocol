@@ -6,8 +6,11 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[dependencies]
+soroban-sdk = { version = "20.3.1", features = [] }
+
 [dev-dependencies]
-proptest = "1.4"
+soroban-sdk = { version = "20.3.1", features = ["testutils"] }
 
 [profile.release]
 opt-level = "z"
@@ -23,10 +26,5 @@ lto = true
 inherits = "release"
 debug-assertions = true
 
-[features]
-# Enable property-based fuzz tests (disabled by default to keep CI fast)
-fuzz-tests = []
-
-[lints.rust]
-# Deny warnings by default to catch them in CI, while respecting #![allow] directives in code
-warnings = "deny"
+# [patch.crates-io]
+# stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr.git", tag = "v20.3.1" }

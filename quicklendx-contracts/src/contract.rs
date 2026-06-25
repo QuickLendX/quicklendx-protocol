@@ -56,6 +56,20 @@ impl QuickLendXContract {
         AdminStorage::get_admin(&env).expect("Admin not initialized")
     }
 
+    /// Admin-gated, read-only protocol invariant self-check ("heartbeat").
+    ///
+    /// Aggregates the cross-module integrity checks (orphan investments, audit
+    /// chain integrity, solvency, and storage-index coherence) into a single
+    /// [`InvariantReport`] of `(check_name, passed, evidence)` rows for incident
+    /// response. Authenticates `admin` before running; the checks never mutate
+    /// state, so an unauthorized or failing call leaves the ledger unchanged.
+    pub fn invariant_self_check(
+        env: Env,
+        admin: Address,
+    ) -> Result<crate::invariants::InvariantReport, QuickLendXError> {
+        crate::invariants::invariant_self_check(&env, &admin)
+    }
+
     /// Initialize protocol limits.
     pub fn initialize_protocol_limits(
         env: Env,
@@ -256,6 +270,14 @@ impl QuickLendXContract {
         BidStorage::get_best_bid(&env, &invoice_id)
     }
 
+    pub fn get_bids_by_status(env: Env, invoice_id: BytesN<32>, status: BidStatus) -> Vec<Bid> {
+        BidStorage::get_bids_by_status(&env, &invoice_id, status)
+    }
+
+    pub fn get_bids_by_investor(env: Env, invoice_id: BytesN<32>, investor: Address) -> Vec<Bid> {
+        BidStorage::get_bids_by_investor(&env, &invoice_id, &investor)
+    }
+
     pub fn submit_kyc_application(env: Env, business: Address, kyc_data: soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
         submit_kyc_application(&env, &business, kyc_data)
     }
@@ -429,6 +451,8 @@ impl QuickLendXContract {
         AdminStorage::require_admin(&env, &admin)?;
         let mut backup = BackupStorage::get_backup(&env, &backup_id).ok_or(QuickLendXError::OperationNotAllowed)?;
         backup.status = BackupStatus::Archived;
-        BackupStorage::update_backup(&env, &backup)
+        BackupStorage::update_backup(&env, &backup)?;
+        BackupStorage::remove_from_backup_list(&env, &backup_id);
+        Ok(())
     }
 }

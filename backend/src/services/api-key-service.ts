@@ -39,19 +39,22 @@ export class ApiKeyService {
     }
 
     // Generate key
-    const { key, prefix, hash } = generateApiKey();
+    const { key, prefix, hash, signingSecret, signingSecretHash } = generateApiKey();
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
     const dbKey: DbApiKey = {
       id,
       key_hash: hash,
+      signing_secret_hash: signingSecretHash,
       prefix,
       name: input.name,
       scopes: JSON.stringify(input.scopes),
       created_at: now,
       last_used_at: null,
       expires_at: input.expires_at || null,
+      prev_signing_secret_hash: null,
+      prev_secret_expires_at: null,
       revoked: 0,
       created_by: input.created_by,
     };
@@ -65,6 +68,7 @@ export class ApiKeyService {
     return {
       ...this.dbKeyToApiKey(dbKey),
       plaintext_key: key,
+      plaintext_signing_secret: signingSecret,
     };
   }
 
@@ -85,7 +89,17 @@ export class ApiKeyService {
     const providedHash = hashApiKey(plaintextKey);
 
     // Timing-safe comparison
-    if (!timingSafeCompare(providedHash, dbKey.key_hash)) {
+    let isValid = timingSafeCompare(providedHash, dbKey.key_hash);
+    
+    // Check grace window for previous secret
+    if (!isValid && dbKey.prev_signing_secret_hash && dbKey.prev_secret_expires_at) {
+      const prevExpiresAt = new Date(dbKey.prev_secret_expires_at);
+      if (prevExpiresAt > new Date()) {
+        isValid = timingSafeCompare(providedHash, dbKey.prev_signing_secret_hash);
+      }
+    }
+
+    if (!isValid) {
       return null;
     }
 
@@ -143,7 +157,7 @@ export class ApiKeyService {
     }
 
     // Generate new key
-    const { key, prefix, hash } = generateApiKey();
+    const { key, prefix, hash, signingSecret, signingSecretHash } = generateApiKey();
     const newId = crypto.randomUUID();
     const now = new Date().toISOString();
 
@@ -152,12 +166,15 @@ export class ApiKeyService {
     const newDbKey: DbApiKey = {
       id: newId,
       key_hash: hash,
+      signing_secret_hash: signingSecretHash,
       prefix,
       name: oldKey.name,
       scopes: oldKey.scopes,
       created_at: now,
       last_used_at: null,
       expires_at: oldKey.expires_at,
+      prev_signing_secret_hash: null,
+      prev_secret_expires_at: null,
       revoked: 0,
       created_by: oldKey.created_by,
     };
@@ -174,6 +191,63 @@ export class ApiKeyService {
     return {
       ...this.dbKeyToApiKey(newDbKey),
       plaintext_key: key,
+      plaintext_signing_secret: signingSecret,
+    };
+  }
+
+  /**
+   * Rotate an API key's signing secret only (retains same key ID),
+   * with a grace period for the old secret.
+   */
+  async rotateSigningSecret(
+    keyId: string,
+    actor: string,
+    ipAddress?: string,
+    graceWindowHours: number = 24
+  ): Promise<ApiKeyWithPlaintext> {
+    const oldKey = db.getApiKeyById(keyId);
+    if (!oldKey) {
+      throw new Error('API key not found');
+    }
+
+    if (oldKey.revoked === 1) {
+      throw new Error('Cannot rotate a revoked key');
+    }
+
+    // Generate new key bytes but retain the same prefix so existing prefixes are stable
+    // Wait, generating a new key creates a new prefix. But prefix is tied to the plaintext key.
+    // If we keep the same prefix, the first 15 chars are the same, but the random part changes.
+    // Actually, generateApiKey generates a fully random key and derives the prefix from it.
+    // If we rotate the signing secret, we can either generate a fully new key (new prefix)
+    // or keep the old prefix and just replace the rest.
+    // Let's generate a new key but replace the prefix with the old prefix to keep it stable.
+    const randomBytes = crypto.randomBytes(32).toString('base64url');
+    // Ensure the new plaintext key starts with the old prefix so existing logs/UI still match
+    const newPlaintextKey = oldKey.prefix + randomBytes;
+    const newHash = hashApiKey(newPlaintextKey);
+
+    const newSigningSecret = crypto.randomBytes(32).toString('hex');
+    const newSigningSecretHash = newSigningSecret; // Must store plaintext to verify HMAC
+
+    const prevSecretExpiresAt = new Date(Date.now() + graceWindowHours * 60 * 60 * 1000).toISOString();
+
+    db.updateApiKey(keyId, {
+      key_hash: newHash,
+      signing_secret_hash: newSigningSecretHash,
+      prev_signing_secret_hash: oldKey.signing_secret_hash || oldKey.key_hash,
+      prev_secret_expires_at: prevSecretExpiresAt,
+    });
+
+    // We use 'rotated' for this as well, or we can use a new event type. 
+    // The schema allows 'rotated', let's stick to it.
+    await auditLogService.logRotated(keyId, keyId, actor, ipAddress);
+
+    const updatedDbKey = db.getApiKeyById(keyId)!;
+
+    return {
+      ...this.dbKeyToApiKey(updatedDbKey),
+      plaintext_key: newPlaintextKey,
+      plaintext_signing_secret: newSigningSecret,
     };
   }
 
@@ -219,12 +293,15 @@ export class ApiKeyService {
     return {
       id: dbKey.id,
       key_hash: dbKey.key_hash,
+      signing_secret_hash: dbKey.signing_secret_hash ?? null,
       prefix: dbKey.prefix,
       name: dbKey.name,
       scopes: JSON.parse(dbKey.scopes),
       created_at: dbKey.created_at,
       last_used_at: dbKey.last_used_at,
       expires_at: dbKey.expires_at,
+      prev_signing_secret_hash: dbKey.prev_signing_secret_hash,
+      prev_secret_expires_at: dbKey.prev_secret_expires_at,
       revoked: dbKey.revoked === 1,
       created_by: dbKey.created_by,
     };

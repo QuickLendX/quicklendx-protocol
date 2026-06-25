@@ -787,3 +787,486 @@ fn test_zero_target_address_fails_validation() {
     let result = client.try_initiate_emergency_withdraw(&admin, &token, &0i128, &target);
     assert!(result.is_err());
 }
+
+// ============================================================================
+// CRITICAL EDGE CASES - Phase 3 Tests
+// ============================================================================
+
+#[test]
+fn test_double_execution_fails() {
+    let env = Env::default();
+    let (client, admin, token_id, _, _) = setup_with_tokens(&env);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
+
+    // First execution succeeds
+    let result = client.try_execute_emergency_withdraw(&admin);
+    assert!(result.is_ok());
+
+    // Second execution must fail (no pending withdrawal exists)
+    let result2 = client.try_execute_emergency_withdraw(&admin);
+    assert!(result2.is_err());
+
+    // Verify no pending withdrawal exists
+    assert!(client.get_pending_emergency_withdraw().is_none());
+}
+
+#[test]
+fn test_execute_then_cancel_fails() {
+    let env = Env::default();
+    let (client, admin, token_id, _, _) = setup_with_tokens(&env);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
+
+    // Execute successfully
+    client.execute_emergency_withdraw(&admin);
+
+    // Trying to cancel after execution must fail
+    let result = client.try_cancel_emergency_withdraw(&admin);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_exact_unlock_second_inclusive_boundary() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1000);
+    let (client, admin, token_id, _, _) = setup_with_tokens(&env);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+
+    let pending = client.get_pending_emergency_withdraw().unwrap();
+    assert_eq!(pending.unlock_at, 1000 + DEFAULT_EMERGENCY_TIMELOCK_SECS);
+
+    // Set time to exactly unlock_at (inclusive boundary)
+    env.ledger().set_timestamp(pending.unlock_at);
+
+    // Execution at exact unlock_at must succeed
+    let result = client.try_execute_emergency_withdraw(&admin);
+    assert!(
+        result.is_ok(),
+        "Execution at exact unlock_at must succeed (inclusive boundary)"
+    );
+}
+
+#[test]
+fn test_one_second_after_unlock_succeeds() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1000);
+    let (client, admin, token_id, _, _) = setup_with_tokens(&env);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+
+    let pending = client.get_pending_emergency_withdraw().unwrap();
+
+    // Set time to unlock_at + 1 (should succeed)
+    env.ledger().set_timestamp(pending.unlock_at + 1);
+
+    let result = client.try_execute_emergency_withdraw(&admin);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_exact_expiry_second_exclusive_boundary() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1000);
+    let (client, admin, token_id, _, _) = setup_with_tokens(&env);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+
+    let pending = client.get_pending_emergency_withdraw().unwrap();
+    assert_eq!(
+        pending.expires_at,
+        1000 + DEFAULT_EMERGENCY_TIMELOCK_SECS + DEFAULT_EMERGENCY_EXPIRATION_SECS
+    );
+
+    // Set time to exactly expires_at (exclusive boundary)
+    env.ledger().set_timestamp(pending.expires_at);
+
+    // Execution at exact expires_at must fail
+    let result = client.try_execute_emergency_withdraw(&admin);
+    assert!(
+        result.is_err(),
+        "Execution at exact expires_at must fail (exclusive boundary)"
+    );
+}
+
+#[test]
+fn test_last_valid_second_before_expiry_succeeds() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1000);
+    let (client, admin, token_id, _, _) = setup_with_tokens(&env);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+
+    let pending = client.get_pending_emergency_withdraw().unwrap();
+
+    // Set time to expires_at - 1 (last valid second)
+    env.ledger().set_timestamp(pending.expires_at - 1);
+
+    let result = client.try_execute_emergency_withdraw(&admin);
+    assert!(
+        result.is_ok(),
+        "Execution at expires_at - 1 must succeed (last valid second)"
+    );
+}
+
+#[test]
+fn test_non_admin_cannot_initiate() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let token = Address::generate(&env);
+    let target = Address::generate(&env);
+
+    client.mock_all_auths().initialize_admin(&admin);
+
+    // Attacker tries to initiate
+    let spoofed_auth = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "initiate_emergency_withdraw",
+            args: (admin.clone(), token.clone(), 1000i128, target.clone()).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+
+    let result = client
+        .mock_auths(&[spoofed_auth])
+        .try_initiate_emergency_withdraw(&admin, &token, &1000i128, &target);
+
+    assert!(result.is_err(), "Non-admin must not be able to initiate");
+    assert!(client.get_pending_emergency_withdraw().is_none());
+}
+
+#[test]
+fn test_non_admin_cannot_execute() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+
+    client.mock_all_auths().initialize_admin(&admin);
+    client.mock_all_auths().initialize_fee_system(&admin);
+
+    let token_admin = Address::generate(&env);
+    let token_id = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac = token::StellarAssetClient::new(&env, &token_id);
+    sac.mint(&contract_id, &10_000i128);
+
+    let target = Address::generate(&env);
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &1000i128, &target);
+
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
+
+    // Attacker tries to execute
+    let spoofed_auth = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "execute_emergency_withdraw",
+            args: (admin.clone(),).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+
+    let result = client
+        .mock_auths(&[spoofed_auth])
+        .try_execute_emergency_withdraw(&admin);
+
+    assert!(result.is_err(), "Non-admin must not be able to execute");
+
+    // Verify withdrawal still pending
+    assert!(client.get_pending_emergency_withdraw().is_some());
+}
+
+#[test]
+fn test_non_admin_cannot_cancel() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let token = Address::generate(&env);
+    let target = Address::generate(&env);
+
+    client.mock_all_auths().initialize_admin(&admin);
+
+    client.initiate_emergency_withdraw(&admin, &token, &1000i128, &target);
+
+    // Attacker tries to cancel
+    let spoofed_auth = MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "cancel_emergency_withdraw",
+            args: (admin.clone(),).into_val(&env),
+            sub_invokes: &[],
+        },
+    };
+
+    let result = client
+        .mock_auths(&[spoofed_auth])
+        .try_cancel_emergency_withdraw(&admin);
+
+    assert!(result.is_err(), "Non-admin must not be able to cancel");
+
+    // Verify withdrawal not cancelled
+    let pending = client.get_pending_emergency_withdraw().unwrap();
+    assert!(!pending.cancelled);
+}
+
+#[test]
+fn test_cancel_completely_clears_execution_path() {
+    let env = Env::default();
+    let (client, admin, token_id, _, _) = setup_with_tokens(&env);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+
+    let pending_before = client.get_pending_emergency_withdraw().unwrap();
+    assert!(!pending_before.cancelled);
+
+    // Cancel the withdrawal
+    client.cancel_emergency_withdraw(&admin);
+
+    let pending_after = client.get_pending_emergency_withdraw().unwrap();
+    assert!(pending_after.cancelled);
+    assert!(pending_after.cancelled_at > 0);
+
+    // Advance past unlock time
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
+
+    // Execution must still fail even after timelock
+    let result = client.try_execute_emergency_withdraw(&admin);
+    assert!(
+        result.is_err(),
+        "Cancelled withdrawal must not be executable even after timelock"
+    );
+
+    // Verify can_execute returns false
+    assert!(
+        !client.can_exec_emergency(),
+        "can_execute must return false for cancelled withdrawal"
+    );
+}
+
+#[test]
+fn test_state_cleared_after_successful_execution() {
+    let env = Env::default();
+    let (client, admin, token_id, _, _) = setup_with_tokens(&env);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
+
+    client.execute_emergency_withdraw(&admin);
+
+    // Verify complete state clearing
+    assert!(
+        client.get_pending_emergency_withdraw().is_none(),
+        "Pending withdrawal must be completely cleared after execution"
+    );
+    assert!(
+        !client.can_exec_emergency(),
+        "can_execute must return false when no pending withdrawal"
+    );
+    assert_eq!(
+        client.emg_time_until_unlock(),
+        0,
+        "time_until_unlock must return 0 when no pending withdrawal"
+    );
+    assert_eq!(
+        client.emg_time_until_expire(),
+        0,
+        "time_until_expiration must return 0 when no pending withdrawal"
+    );
+}
+
+#[test]
+fn test_timelock_window_enforcement_comprehensive() {
+    let env = Env::default();
+    env.ledger().set_timestamp(10000);
+    let (client, admin, token_id, _, _) = setup_with_tokens(&env);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &amount, &target);
+
+    let pending = client.get_pending_emergency_withdraw().unwrap();
+    let unlock_at = pending.unlock_at;
+    let expires_at = pending.expires_at;
+
+    // Test various points in the timeline
+
+    // 1. Way before unlock: FAIL
+    env.ledger().set_timestamp(unlock_at - 1000);
+    assert!(client.try_execute_emergency_withdraw(&admin).is_err());
+
+    // 2. One second before unlock: FAIL
+    env.ledger().set_timestamp(unlock_at - 1);
+    assert!(client.try_execute_emergency_withdraw(&admin).is_err());
+
+    // 3. Exactly at unlock: SUCCESS
+    env.ledger().set_timestamp(unlock_at);
+    // Don't execute, just verify it would succeed
+    assert!(client.can_exec_emergency());
+
+    // 4. One second after unlock: SUCCESS
+    env.ledger().set_timestamp(unlock_at + 1);
+    assert!(client.can_exec_emergency());
+
+    // 5. Middle of window: SUCCESS
+    env.ledger().set_timestamp((unlock_at + expires_at) / 2);
+    assert!(client.can_exec_emergency());
+
+    // 6. One second before expiry: SUCCESS
+    env.ledger().set_timestamp(expires_at - 1);
+    assert!(client.can_exec_emergency());
+
+    // 7. Exactly at expiry: FAIL
+    env.ledger().set_timestamp(expires_at);
+    assert!(!client.can_exec_emergency());
+    assert!(client.try_execute_emergency_withdraw(&admin).is_err());
+
+    // 8. After expiry: FAIL
+    env.ledger().set_timestamp(expires_at + 1000);
+    assert!(client.try_execute_emergency_withdraw(&admin).is_err());
+}
+
+#[test]
+fn test_nonce_prevents_replay_after_cancel() {
+    let env = Env::default();
+    let (client, admin, token_id, _, _) = setup_with_tokens(&env);
+    let target = Address::generate(&env);
+
+    // Initiate first withdrawal
+    client.initiate_emergency_withdraw(&admin, &token_id, &1000i128, &target);
+    let nonce1 = client.get_pending_emergency_withdraw().unwrap().nonce;
+
+    // Cancel it
+    client.cancel_emergency_withdraw(&admin);
+
+    // Verify cancelled state persists
+    let pending = client.get_pending_emergency_withdraw().unwrap();
+    assert!(pending.cancelled);
+    assert_eq!(pending.nonce, nonce1);
+
+    // Advance time past unlock
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
+
+    // Execution must fail with cancelled error, not replay
+    let result = client.try_execute_emergency_withdraw(&admin);
+    assert!(
+        result.is_err(),
+        "Execution must fail for cancelled nonce even after timelock"
+    );
+
+    // Initiate new withdrawal with new nonce
+    client.initiate_emergency_withdraw(&admin, &token_id, &2000i128, &target);
+    let nonce2 = client.get_pending_emergency_withdraw().unwrap().nonce;
+
+    assert!(nonce2 > nonce1, "New nonce must be greater than cancelled nonce");
+
+    // New withdrawal should be executable after timelock
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEFAULT_EMERGENCY_TIMELOCK_SECS + 1);
+    assert!(client.can_exec_emergency());
+}
+
+#[test]
+fn test_can_execute_false_for_all_invalid_states() {
+    let env = Env::default();
+    let (client, admin, token_id, _, _) = setup_with_tokens(&env);
+    let target = Address::generate(&env);
+
+    // No pending withdrawal
+    assert!(!client.can_exec_emergency());
+
+    // Before timelock
+    client.initiate_emergency_withdraw(&admin, &token_id, &1000i128, &target);
+    assert!(!client.can_exec_emergency());
+
+    // After cancel
+    client.cancel_emergency_withdraw(&admin);
+    assert!(!client.can_exec_emergency());
+
+    // After expiry
+    client.initiate_emergency_withdraw(&admin, &token_id, &1000i128, &target);
+    let pending = client.get_pending_emergency_withdraw().unwrap();
+    env.ledger().set_timestamp(pending.expires_at + 1);
+    assert!(!client.can_exec_emergency());
+}
+
+#[test]
+fn test_time_helpers_return_correct_values_throughout_lifecycle() {
+    let env = Env::default();
+    env.ledger().set_timestamp(5000);
+    let (client, admin, token_id, _, _) = setup_with_tokens(&env);
+    let target = Address::generate(&env);
+
+    // Before initiation: returns 0
+    assert_eq!(client.emg_time_until_unlock(), 0);
+    assert_eq!(client.emg_time_until_expire(), 0);
+
+    client.initiate_emergency_withdraw(&admin, &token_id, &1000i128, &target);
+
+    let pending = client.get_pending_emergency_withdraw().unwrap();
+
+    // Just after initiation
+    assert_eq!(
+        client.emg_time_until_unlock(),
+        DEFAULT_EMERGENCY_TIMELOCK_SECS
+    );
+    assert!(client.emg_time_until_expire() > DEFAULT_EMERGENCY_TIMELOCK_SECS);
+
+    // Halfway to unlock
+    env.ledger()
+        .set_timestamp(5000 + DEFAULT_EMERGENCY_TIMELOCK_SECS / 2);
+    assert!(client.emg_time_until_unlock() > 0);
+    assert!(client.emg_time_until_unlock() < DEFAULT_EMERGENCY_TIMELOCK_SECS);
+
+    // At unlock
+    env.ledger().set_timestamp(pending.unlock_at);
+    assert_eq!(client.emg_time_until_unlock(), 0);
+    assert_eq!(
+        client.emg_time_until_expire(),
+        DEFAULT_EMERGENCY_EXPIRATION_SECS
+    );
+
+    // At expiry
+    env.ledger().set_timestamp(pending.expires_at);
+    assert_eq!(client.emg_time_until_unlock(), 0);
+    assert_eq!(client.emg_time_until_expire(), 0);
+}

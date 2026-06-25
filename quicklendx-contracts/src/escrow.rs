@@ -18,8 +18,8 @@
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use crate::events::{emit_escrow_refunded, emit_invoice_funded};
-use crate::payments::{create_escrow, refund_escrow, EscrowStorage};
+use crate::events::{emit_escrow_refunded, emit_investment_withdrawn, emit_invoice_funded};
+use crate::payments::{create_escrow, refund_escrow, EscrowStatus, EscrowStorage};
 use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
 use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
 use crate::verification::require_business_not_pending;
@@ -32,11 +32,18 @@ pub(crate) struct AcceptBidContext {
 }
 
 /// Validate the invoice, bid, and escrow state before any funds move.
-///
+/// 
 /// # Security
 /// - Authorization is checked against the exact invoice being funded
 /// - The bid must belong to that invoice
 /// - The invoice must not already have escrow, funding metadata, or an investment
+/// 
+/// ## One-Escrow-Per-Invoice Invariant (Two-Layer Guard)
+/// This function implements the outer guard of the one-escrow-per-invoice invariant:
+/// it checks for existing escrow or investment records before any state changes.
+/// The inner guard is in `payments::create_escrow`, which re-checks
+/// `EscrowStorage::get_escrow_by_invoice` before the token transfer.
+/// If either guard fails, the function returns an error and no state is mutated.
 pub(crate) fn load_accept_bid_context(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -62,6 +69,10 @@ pub(crate) fn load_accept_bid_context(
         return Err(QuickLendXError::InvalidStatus);
     }
 
+    // Outer guard: check for existing escrow or investment record before any state changes.
+    // This is the first layer of the one-escrow-per-invoice invariant.
+    // The second layer is in payments::create_escrow which re-checks get_escrow_by_invoice
+    // before the token transfer, ensuring the invariant holds even if this check is bypassed.
     if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some()
         || InvestmentStorage::get_investment_by_invoice(env, invoice_id).is_some()
     {
@@ -113,6 +124,8 @@ pub fn accept_bid_and_fund(
         mut bid,
     } = load_accept_bid_context(env, invoice_id, bid_id)?;
 
+    crate::qlx_log!(env, "escrow", "Accepting bid and funding invoice");
+
     // 5. Lock funds in escrow
     // This calls payments::create_escrow which calls token transfer and emits emit_escrow_created
     let escrow_id = create_escrow(
@@ -159,8 +172,14 @@ pub fn accept_bid_and_fund(
     };
     InvestmentStorage::store_investment(env, &investment);
 
+    crate::qlx_log!(env, "escrow", "Invoice funded and bid accepted");
+
     // 7. Events
     emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
+
+    // Lifecycle trigger: emits `NotificationType::BidAccepted` to the investor
+    // after escrow funding and state transitions complete successfully.
+    let _ = crate::notifications::NotificationSystem::notify_bid_accepted(env, &invoice, &bid);
 
     Ok(escrow_id)
 }
@@ -216,12 +235,12 @@ pub fn refund_escrow_funds(
     // 6. Update internal states
 
     // Update Invoice status to Refunded
-    let previous_status = invoice.status.clone();
+    let previous_status = invoice.status;
     invoice.mark_as_refunded(env, caller.clone());
     InvoiceStorage::update_invoice(env, &invoice);
 
     // Update status indices
-    InvoiceStorage::remove_from_status_invoices(env, previous_status.clone(), invoice_id);
+    InvoiceStorage::remove_from_status_invoices(env, previous_status, invoice_id);
     InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Refunded, invoice_id);
 
     // Update Bid status to Cancelled (find the accepted bid first)
@@ -241,12 +260,140 @@ pub fn refund_escrow_funds(
         InvestmentStorage::update_investment(env, &investment);
     }
 
+    crate::qlx_log!(env, "escrow", "Escrow refunded successfully");
+
     // 7. Emit events
     emit_escrow_refunded(
         env,
         &escrow.escrow_id,
         invoice_id,
         &escrow.investor,
+        escrow.amount,
+    );
+
+    Ok(())
+}
+
+/// Withdraw an active investment: refunds escrowed funds to the investor and
+/// transitions the investment to [`InvestmentStatus::Withdrawn`].
+///
+/// Only the investor who owns the investment may call this entry point.
+///
+/// # Preconditions (checked)
+/// - `investor` is authorized
+/// - The investment exists, is in [`InvestmentStatus::Active`], and belongs to `investor`
+/// - The associated escrow is still [`EscrowStatus::Held`] (funds have not been released)
+/// - The invoice is in [`InvoiceStatus::Funded`] (no settlement has occurred)
+///
+/// # Postconditions
+/// - Escrowed funds are returned to the investor via the existing `refund_escrow` path
+/// - The investment transitions `Active → Withdrawn` via `InvestmentStorage::update_investment`,
+///   which enforces `validate_transition` and removes the investment from the active index
+/// - The invoice has its funded fields cleared and status restored to `Verified`
+/// - The accepted bid is cancelled
+/// - A [`TOPIC_INVESTMENT_WITHDRAWN`] event is emitted
+///
+/// # Reentrancy
+/// The token-moving path is wrapped in `with_payment_guard` by the caller (lib.rs entrypoint).
+/// This function performs the refund before updating state, so a reentrant call would
+/// fail at the escrow status check (escrow no longer `Held`).
+///
+/// # Security
+/// - Authorization: `investor.require_auth()` ensures only the investor can withdraw
+/// - Escrow guard: `payments::refund_escrow` rejects any escrow not in `Held` status,
+///   preventing double-withdrawal even if `withdraw_investment` is called again
+/// - Transition guard: `InvestmentStorage::update_investment` calls `validate_transition`,
+///   rejecting any attempt to withdraw from a terminal state
+/// - Cross-module consistency: invoice, escrow, bid, and investment state are all updated
+///   atomically in the same function body, preserving the protocol's state machine
+///
+/// # Errors
+/// * `QuickLendXError::Unauthorized` — caller is not the investment's investor
+/// * `QuickLendXError::InvalidStatus` — investment is not Active, or escrow is not Held
+/// * `QuickLendXError::InvoiceNotFound` — invoice not found
+/// * `QuickLendXError::InvoiceNotAvailableForFunding` — invoice is not in Funded status
+/// * `QuickLendXError::StorageKeyNotFound` — escrow not found for the invoice
+pub fn withdraw_investment(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+) -> Result<(), QuickLendXError> {
+    // 1. Mandatory authentication check
+    investor.require_auth();
+
+    // 2. Validate investment exists, is Active, and belongs to caller
+    let mut investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    if investment.status != InvestmentStatus::Active {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    if &investment.investor != investor {
+        return Err(QuickLendXError::Unauthorized);
+    }
+
+    // 3. Validate invoice is still Funded (not yet settled/paid/defaulted)
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+    if invoice.status != InvoiceStatus::Funded {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    // 4. Validate escrow exists and is still Held
+    let escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    if escrow.status != EscrowStatus::Held {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    // 5. Refund escrowed funds to the investor (token transfer + escrow status → Refunded)
+    refund_escrow(env, invoice_id)?;
+
+    // 6. Restore invoice to Verified state and clear funded fields
+    let previous_status = invoice.status.clone();
+    invoice.status = InvoiceStatus::Verified;
+    invoice.funded_amount = 0;
+    invoice.funded_at = None;
+    invoice.investor = None;
+    InvoiceStorage::update_invoice(env, &invoice);
+
+    // Update invoice status lists
+    InvoiceStorage::remove_from_status_invoices(env, previous_status, invoice_id);
+    InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Verified, invoice_id);
+
+    // 7. Cancel the accepted bid
+    let bids = BidStorage::get_bid_records_for_invoice(env, invoice_id);
+    for mut bid in bids.iter() {
+        if bid.status == BidStatus::Accepted {
+            bid.status = BidStatus::Cancelled;
+            BidStorage::update_bid(env, &bid);
+            break;
+        }
+    }
+
+    // 8. Transition investment Active → Withdrawn
+    investment.status = InvestmentStatus::Withdrawn;
+    InvestmentStorage::update_investment(env, &investment);
+
+    crate::qlx_log!(env, "escrow", "Investment withdrawn successfully");
+
+    // 9. Emit events
+    emit_investment_withdrawn(
+        env,
+        &investment.investment_id,
+        invoice_id,
+        investor,
+        escrow.amount,
+    );
+
+    emit_escrow_refunded(
+        env,
+        &escrow.escrow_id,
+        invoice_id,
+        investor,
         escrow.amount,
     );
 

@@ -61,6 +61,20 @@ caps for High/VeryHigh risk investors.
 |------|-------------------|
 | `fuzz_valid_bid_settlement_no_investor_loss` | Valid bid + settlement → investor profit ≥ 0 |
 
+### 4. Payment capping and replay protection (Issue #1080)
+
+**File:** `src/test_fuzz.rs`
+
+Partial payments enforce strict capping and nonce-based replay protection under random
+sequences, providing coverage beyond the deterministic unit tests in `test_partial_payments.rs`.
+
+| Test | What it validates |
+|------|-------------------|
+| `fuzz_payment_capping_invariant` | Random payment sequences never exceed `total_due`; nonce uniqueness preserved |
+| `fuzz_overpay_then_underpay_sequence` | Overpayment followed by underpayment caps correctly at settlement boundary |
+| `fuzz_repeated_nonce_replay_protection` | Duplicate nonces are idempotent; state unchanged after replay |
+| `fuzz_payment_count_exhaustion` | Payments rejected at `MAX_PAYMENT_COUNT` boundary (`1_000` limit) |
+
 ---
 
 ## Existing Arithmetic Fuzz Tests

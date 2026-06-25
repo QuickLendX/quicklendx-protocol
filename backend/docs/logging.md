@@ -11,11 +11,14 @@
 QuickLendX Backend enforces a **field-level logging policy** for all HTTP request and response data. The policy classifies every known field into one of three sensitivity tiers and automatically redacts or hashes values before they reach any log sink.
 
 This ensures:
+
 - Wallet signatures, auth tokens, and KYC payloads **never** appear in logs.
 - Business-sensitive values (wallet addresses, amounts) are **pseudonymised**.
 - Public metadata (IDs, status codes, timestamps) is logged verbatim for observability.
 
 Additionally, the backend implements **correlation IDs** to thread request context across the request lifecycle, event processing, and outbound webhook delivery. This enables end-to-end tracing and debugging without manual log stitching.
+
+The ingestion, invariant, and reconciliation pipeline also emits **structured trace spans** in JSON lines so external collectors can build a causal span graph without coupling QuickLendX to a specific tracing vendor.
 
 ---
 
@@ -24,6 +27,7 @@ Additionally, the backend implements **correlation IDs** to thread request conte
 ### Overview
 
 Correlation IDs are ULID-based identifiers that thread through the entire request lifecycle:
+
 - **Request entry**: Generated or accepted from `X-Request-Id` header
 - **Event processing**: Propagated through `eventProcessor.ts` → `notificationService.ts`
 - **Webhook delivery**: Included in outbound webhook requests as `X-Request-Id` header
@@ -33,17 +37,17 @@ This enables end-to-end tracing of a settlement notification from HTTP request �
 
 ### X-Request-Id Header Contract
 
-| Aspect | Specification |
-|--------|----------------|
-| **Header name** | `X-Request-Id` (case-insensitive) |
-| **Direction** | Bidirectional (request and response) |
-| **Client → Server** | Optional. If present and valid, used as correlation ID. If absent or invalid, a new ULID is generated. |
-| **Server → Client** | Always present. Echoes the correlation ID used for the request. |
-| **Format** | ULID (26 chars) or alphanumeric with hyphens/underscores |
-| **Max length** | 128 characters |
-| **Valid characters** | `A-Z`, `a-z`, `0-9`, `-`, `_` |
+| Aspect                 | Specification                                                                                                     |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Header name**        | `X-Request-Id` (case-insensitive)                                                                                 |
+| **Direction**          | Bidirectional (request and response)                                                                              |
+| **Client → Server**    | Optional. If present and valid, used as correlation ID. If absent or invalid, a new ULID is generated.            |
+| **Server → Client**    | Always present. Echoes the correlation ID used for the request.                                                   |
+| **Format**             | ULID (26 chars) or alphanumeric with hyphens/underscores                                                          |
+| **Max length**         | 128 characters                                                                                                    |
+| **Valid characters**   | `A-Z`, `a-z`, `0-9`, `-`, `_`                                                                                     |
 | **Invalid characters** | Newlines, carriage returns, tabs, semicolons, pipes, ANSI escape sequences, null bytes (log injection prevention) |
-| **Security** | All client-supplied IDs are sanitized before use. Invalid IDs are rejected and a new ULID is generated. |
+| **Security**           | All client-supplied IDs are sanitized before use. Invalid IDs are rejected and a new ULID is generated.           |
 
 ### Header Flow
 
@@ -55,14 +59,54 @@ X-Request-Id: client-123  ──►   X-Request-Id: client-123  (if valid)
                               X-Request-Id: 01H9K4W2... (if invalid/missing)
 ```
 
+### Down-Stack Propagation: Audit Log & Outbound RPC
+
+The correlation id (request id) flows through the entire backend call stack
+without manual threading. The chain is:
+
+```
+Inbound HTTP request
+  │  X-Request-Id: client-123   (or absent → server-generated ULID)
+  ▼
+request-logger middleware
+  │  sanitize / generate id, echo X-Request-Id response header,
+  │  open AsyncLocalStorage context: withCorrelationId(id, next)
+  ▼
+Route handlers & service layer (run inside the ALS context)
+  ├─► auditService.append()      → getCorrelationId() → AuditEntry.requestId
+  └─► rpcClient.call()           → getCorrelationId() → X-Request-Id header
+                                                         on the outbound
+                                                         Soroban RPC request
+```
+
+Because the context is opened with `AsyncLocalStorage`, the id survives
+`await`, `setTimeout`, `setImmediate`, and Promise chains, so async callbacks
+observe the correct id and concurrent requests never cross-contaminate.
+
+**Audit entries** (`src/services/auditService.ts`): every entry written within a
+request scope is stamped with `requestId` taken from the active context, so a
+backend mutation (e.g. `WEBHOOK_SECRET_ROTATE`) can be traced back to the API
+call that triggered it. An explicit `requestId` on the entry takes precedence;
+otherwise the field is omitted when no context is active (background workers).
+See [`docs/audit-log.md`](./audit-log.md).
+
+**Outbound RPC** (`src/services/rpcClient.ts`): the reliable RPC client forwards
+the active id as an `X-Request-Id` header on every JSON-RPC call to the upstream
+Soroban RPC, extending the trace beyond the QuickLendX backend. When there is no
+request context the header is simply omitted.
+
 ### Implementation Details
 
 **Request Context Storage**
+
 - Uses Node.js `AsyncLocalStorage` for thread-safe context propagation
 - Automatic context isolation prevents bleeding between concurrent requests
 - Context is automatically available in all downstream async operations
+- `request-logger.ts` opens the context via `withCorrelationId(id, next)`, so
+  the id is live for the full duration of request handling
 
 **Middleware Integration**
+
 1. `request-logger.ts`: Accepts/sanitizes client `X-Request-Id`, generates ULID if needed, sets response header
 2. `requestContext.ts`: Provides `withCorrelationId()`, `getCorrelationId()`, `getOrGenerateCorrelationId()` helpers
 3. `access-log.ts`: Includes correlation ID in all access log entries
@@ -72,6 +116,7 @@ X-Request-Id: client-123  ──►   X-Request-Id: client-123  (if valid)
 ### Usage Examples
 
 **Client-supplied correlation ID**
+
 ```bash
 curl -H "X-Request-Id: my-trace-123" https://api.example.com/invoices
 # Response header: X-Request-Id: my-trace-123
@@ -79,6 +124,7 @@ curl -H "X-Request-Id: my-trace-123" https://api.example.com/invoices
 ```
 
 **Server-generated correlation ID**
+
 ```bash
 curl https://api.example.com/invoices
 # Response header: X-Request-Id: 01H9K4W2X8Y9Z0A1B2C3D4E5F6
@@ -86,6 +132,7 @@ curl https://api.example.com/invoices
 ```
 
 **Programmatic usage in handlers**
+
 ```ts
 import { getCorrelationId } from "../lib/requestContext";
 
@@ -97,6 +144,7 @@ function myHandler(req, res) {
 ```
 
 **Setting context for background tasks**
+
 ```ts
 import { withCorrelationId } from "../lib/requestContext";
 
@@ -111,17 +159,20 @@ async function backgroundTask(correlationId: string) {
 ### Security Considerations
 
 **Log Injection Prevention**
+
 - Client-supplied correlation IDs are strictly validated against a whitelist pattern
 - Special characters (newlines, carriage returns, tabs, ANSI escape sequences) are rejected
 - Maximum length enforced (128 characters) to prevent DoS via oversized headers
 - Invalid IDs are silently rejected and replaced with server-generated ULIDs
 
 **Context Isolation**
+
 - AsyncLocalStorage ensures concurrent requests cannot bleed correlation IDs
 - Each request has its own isolated context
 - Context is automatically cleaned up after request completes
 
 **Redaction Compliance**
+
 - Correlation IDs are classified as PUBLIC in the logging policy
 - They appear verbatim in logs for easy filtering
 - They do not contain sensitive information by design
@@ -146,11 +197,90 @@ npx jest correlation-id.test.ts --coverage
 
 ---
 
-| Tier | Symbol | Behaviour in logs |
-|------|--------|-------------------|
-| **PUBLIC** | `FieldTier.PUBLIC` | Value logged verbatim. |
-| **PRIVATE** | `FieldTier.PRIVATE` | Value replaced with `sha256:<8-hex-chars>` (non-reversible). |
-| **SECRET** | `FieldTier.SECRET` | Value replaced with the literal string `[REDACTED]`. No crypto is applied — the value is simply discarded. |
+## Trace Spans
+
+### Overview
+
+Pipeline services emit span logs for start and end events:
+
+- `ingestion.ingestBatch`, `ingestion.rollbackAndReingest`
+- `invariant.*` public checks and scheduler run loop
+- `reconciliation.*` worker entrypoints
+
+Each span line is independent JSON written to stdout and can be shipped by any log forwarder.
+
+### Span JSON Format
+
+```json
+{
+  "level": "INFO",
+  "type": "TRACE_SPAN",
+  "event": "start",
+  "timestamp": "2026-05-31T12:34:56.789Z",
+  "name": "ingestion.ingestBatch",
+  "trace_id": "01J0NQ7H4N6R5X8TQKBV7PZ6Y1",
+  "span_id": "01J0NQ7H7BFW5H0NQYV0GJQJ0T",
+  "parent_span_id": null,
+  "attrs": {
+    "batch_cursor": 91234,
+    "events_count": 25
+  }
+}
+```
+
+End events include duration and error metadata:
+
+```json
+{
+  "level": "INFO",
+  "type": "TRACE_SPAN",
+  "event": "end",
+  "timestamp": "2026-05-31T12:34:56.811Z",
+  "name": "ingestion.ingestBatch",
+  "trace_id": "01J0NQ7H4N6R5X8TQKBV7PZ6Y1",
+  "span_id": "01J0NQ7H7BFW5H0NQYV0GJQJ0T",
+  "parent_span_id": null,
+  "duration_ms": 22.14,
+  "error": false,
+  "attrs": {
+    "batch_cursor": 91234,
+    "events_count": 25
+  }
+}
+```
+
+### Field Semantics
+
+| Field            | Description                                                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `trace_id`       | Root trace identifier. If a request correlation ID exists in async context, it is reused. Otherwise a ULID is generated. |
+| `span_id`        | ULID for the current span instance.                                                                                      |
+| `parent_span_id` | ULID of the direct parent span, or `null` for root spans.                                                                |
+| `name`           | Logical operation name (`service.operation`).                                                                            |
+| `attrs`          | Span attributes for filtering and debugging (cursor, counts, batch size, etc.).                                          |
+| `error`          | `true` when the wrapped operation throws.                                                                                |
+| `error_message`  | Captured exception message when `error=true`.                                                                            |
+| `duration_ms`    | Present on `event=end`; wall clock duration of the span.                                                                 |
+
+### Parent/Child Behavior
+
+- Nested spans automatically inherit the same `trace_id`.
+- Child spans automatically set `parent_span_id` to the active span.
+- Async boundaries are preserved through `AsyncLocalStorage`, so parent-child linkage survives `await`, timers, and Promise chains.
+
+### Operational Notes
+
+- Spans are logs, not a direct OpenTelemetry exporter.
+- Any collector can ingest these JSON lines and transform them to OTel, Honeycomb, Datadog, or internal trace stores.
+- Existing request logging and redaction policy remain unchanged.
+
+---
+
+| Tier        | Symbol              | Behaviour in logs                                                                                          |
+| ----------- | ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **PUBLIC**  | `FieldTier.PUBLIC`  | Value logged verbatim.                                                                                     |
+| **PRIVATE** | `FieldTier.PRIVATE` | Value replaced with `sha256:<8-hex-chars>` (non-reversible).                                               |
+| **SECRET**  | `FieldTier.SECRET`  | Value replaced with the literal string `[REDACTED]`. No crypto is applied — the value is simply discarded. |
 
 **Deny-by-default:** any field whose name does not appear in the registry is treated as `PRIVATE`.
 
@@ -180,6 +310,7 @@ description, reason, tags, notes
 ### SECRET fields (never logged)
 
 **Authentication / Wallet**
+
 ```
 signature, wallet_signature, private_key
 secret, token, access_token, refresh_token, api_key
@@ -188,6 +319,7 @@ mnemonic, seed_phrase
 ```
 
 **KYC / PII**
+
 ```
 tax_id, ssn, national_id, passport_number, date_of_birth
 bank_account, kyc_document, kyc_data
@@ -195,6 +327,7 @@ customer_name, customer_address, phone_number, email
 ```
 
 **Webhook**
+
 ```
 webhook_secret, signing_secret
 ```
@@ -230,14 +363,14 @@ HTTP Request
 
 ### Core modules
 
-| File | Purpose |
-|------|---------|
-| `src/lib/logging/policy.ts` | Field registry, classification helpers, redaction engine, `findSecretLeak` assertion helper |
-| `src/lib/requestContext.ts` | AsyncLocalStorage-based correlation ID context management, sanitization, propagation helpers |
+| File                               | Purpose                                                                                                                                            |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/logging/policy.ts`        | Field registry, classification helpers, redaction engine, `findSecretLeak` assertion helper                                                        |
+| `src/lib/requestContext.ts`        | AsyncLocalStorage-based correlation ID context management, sanitization, propagation helpers                                                       |
 | `src/middleware/request-logger.ts` | Express middleware — accepts/sanitizes X-Request-Id header, generates ULID if needed, captures and redacts request/response, emits structured JSON |
-| `src/middleware/access-log.ts` | Access logging middleware for sensitive data with correlation ID support |
-| `src/services/eventProcessor.ts` | Event processing with correlation ID logging |
-| `src/services/webhook/delivery.ts` | Webhook delivery with correlation ID propagation to outbound requests |
+| `src/middleware/access-log.ts`     | Access logging middleware for sensitive data with correlation ID support                                                                           |
+| `src/services/eventProcessor.ts`   | Event processing with correlation ID logging                                                                                                       |
+| `src/services/webhook/delivery.ts` | Webhook delivery with correlation ID propagation to outbound requests                                                                              |
 
 ---
 
@@ -261,13 +394,13 @@ import { classifyField, isSecret, redactObject } from "../lib/logging/policy";
 
 // Classify a single field
 classifyField("authorization"); // → "secret"
-classifyField("invoice_id");    // → "public"
-classifyField("amount");        // → "private"
+classifyField("invoice_id"); // → "public"
+classifyField("amount"); // → "private"
 
 // Type-guards
-isSecret("tax_id");   // true
-isPublic("status");   // true
-isPrivate("amount");  // true
+isSecret("tax_id"); // true
+isPublic("status"); // true
+isPrivate("amount"); // true
 
 // Redact a whole object
 const safe = redactObject(rawBody);
@@ -347,13 +480,13 @@ Each request produces one JSON line on `stdout`:
 
 ## Security Assumptions
 
-| Assumption | Rationale |
-|------------|-----------|
-| Log sinks are **untrusted** surfaces | Logs may be forwarded to third-party aggregators. No SECRET value must ever reach them. |
-| Hash prefix only (8 hex chars) | Full SHA-256 of short values like wallet addresses is brute-forceable. An 8-char prefix is correlation-safe but not reversible. |
-| No crypto on SECRET tier | Applying any transformation to a secret value (even hashing) is a risk vector. Replacement with `[REDACTED]` is the only safe operation. |
-| Deny-by-default | A newly added field that is not in the registry falls back to PRIVATE, not PUBLIC. |
-| `res.json` is the sole capture point | Only structured JSON responses are inspected. Binary streams and redirects are not captured. |
+| Assumption                           | Rationale                                                                                                                                |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Log sinks are **untrusted** surfaces | Logs may be forwarded to third-party aggregators. No SECRET value must ever reach them.                                                  |
+| Hash prefix only (8 hex chars)       | Full SHA-256 of short values like wallet addresses is brute-forceable. An 8-char prefix is correlation-safe but not reversible.          |
+| No crypto on SECRET tier             | Applying any transformation to a secret value (even hashing) is a risk vector. Replacement with `[REDACTED]` is the only safe operation. |
+| Deny-by-default                      | A newly added field that is not in the registry falls back to PRIVATE, not PUBLIC.                                                       |
+| `res.json` is the sole capture point | Only structured JSON responses are inspected. Binary streams and redirects are not captured.                                             |
 
 ---
 
@@ -368,9 +501,9 @@ Each request produces one JSON line on `stdout`:
 // Example: adding a new private field
 const FIELD_POLICY: Record<string, FieldTier> = {
   // ...
-  ledger_index: FieldTier.PUBLIC,   // safe to log verbatim
-  fee_amount:   FieldTier.PRIVATE,  // hash before logging
-  seed_phrase:  FieldTier.SECRET,   // already exists — never log
+  ledger_index: FieldTier.PUBLIC, // safe to log verbatim
+  fee_amount: FieldTier.PRIVATE, // hash before logging
+  seed_phrase: FieldTier.SECRET, // already exists — never log
 };
 ```
 
@@ -388,10 +521,10 @@ npm test
 
 ### Test coverage (our files)
 
-| File | Stmts | Branch | Funcs | Lines |
-|------|-------|--------|-------|-------|
-| `lib/logging/policy.ts` | 98.5% | 98.3% | 100% | 98.3% |
-| `middleware/request-logger.ts` | 100% | 100% | 100% | 100% |
+| File                           | Stmts | Branch | Funcs | Lines |
+| ------------------------------ | ----- | ------ | ----- | ----- |
+| `lib/logging/policy.ts`        | 98.5% | 98.3%  | 100%  | 98.3% |
+| `middleware/request-logger.ts` | 100%  | 100%   | 100%  | 100%  |
 
 ### Key test categories
 

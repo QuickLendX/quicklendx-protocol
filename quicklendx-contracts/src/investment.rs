@@ -1,5 +1,5 @@
 use crate::errors::QuickLendXError;
-use crate::storage::bump_persistent;
+use crate::storage::extend_persistent_ttl;
 // Re-export from crate::types so other modules can continue to import from crate::investment.
 pub use crate::types::{InsuranceCoverage, Investment, InvestmentStatus};
 use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec};
@@ -39,19 +39,30 @@ impl InvestmentStatus {
     /// Terminal states are immutable. Once an investment reaches Completed,
     /// Defaulted, Refunded, or Withdrawn, no further transition is permitted.
     ///
+    /// Detailed state machine design and couplings are documented in
+    /// [investment-lifecycle.md](file:///Users/backenddevopsdeveloper/Downloads/DRIPS/vida-quicklendx-protocol/quicklendx-contracts/docs/investment-lifecycle.md).
+    ///
     /// ### Allowed transitions
-    /// | From      | To                              |
-    /// |-----------|----------------------------------|
-    /// | Active    | Completed, Defaulted, Refunded, Withdrawn |
-    /// | Withdrawn | (terminal - no further moves)   |
-    /// | Completed | (terminal)                      |
-    /// | Defaulted | (terminal)                      |
-    /// | Refunded  | (terminal)                      |
+    /// | From      | To                              | Driving Entrypoint |
+    /// |-----------|----------------------------------|--------------------|
+    /// | Active    | Completed, Defaulted, Refunded, Withdrawn | accept_bid_and_fund -> Active;<br>settlement -> Completed;<br>refund_escrow_funds -> Refunded;<br>default handling -> Defaulted;<br>withdrawal -> Withdrawn |
+    /// | Withdrawn | (terminal - no further moves)   | - |
+    /// | Completed | (terminal)                      | - |
+    /// | Defaulted | (terminal)                      | - |
+    /// | Refunded  | (terminal)                      | - |
     ///
     /// ### Security
     /// Calling code **must** invoke this before persisting a status change so
     /// that no path (settlement, default, refund, or future code) can produce
     /// an orphan `Active` investment or an impossible backward transition.
+    ///
+    /// # Arguments
+    /// * `from` - The current status of the investment.
+    /// * `to` - The target status for the transition.
+    ///
+    /// # Returns
+    /// * `Ok(())` if the transition is legal.
+    /// * `Err(QuickLendXError::InvalidStatus)` if the transition is invalid.
     pub fn validate_transition(
         from: &InvestmentStatus,
         to: &InvestmentStatus,
@@ -108,8 +119,7 @@ impl Investment {
     pub fn calculate_premium(amount: i128, coverage_percentage: u32) -> i128 {
         // Reject invalid inputs before any arithmetic.
         if amount <= 0
-            || coverage_percentage < MIN_COVERAGE_PERCENTAGE
-            || coverage_percentage > MAX_COVERAGE_PERCENTAGE
+            || !(MIN_COVERAGE_PERCENTAGE..=MAX_COVERAGE_PERCENTAGE).contains(&coverage_percentage)
         {
             return 0;
         }
@@ -175,8 +185,7 @@ impl Investment {
         premium: i128,
     ) -> Result<i128, QuickLendXError> {
         // Validate coverage percentage bounds.
-        if coverage_percentage < MIN_COVERAGE_PERCENTAGE
-            || coverage_percentage > MAX_COVERAGE_PERCENTAGE
+        if !(MIN_COVERAGE_PERCENTAGE..=MAX_COVERAGE_PERCENTAGE).contains(&coverage_percentage)
         {
             return Err(QuickLendXError::InvalidCoveragePercentage);
         }
@@ -351,11 +360,11 @@ impl InvestmentStorage {
         env.storage()
             .persistent()
             .set(&investment.investment_id, investment);
-        bump_persistent(env, &investment.investment_id);
+        extend_persistent_ttl(env, &investment.investment_id);
 
         let invoice_index_key = Self::invoice_index_key(&investment.invoice_id);
         env.storage().persistent().set(&invoice_index_key, &investment.investment_id);
-        bump_persistent(env, &invoice_index_key);
+        extend_persistent_ttl(env, &invoice_index_key);
 
         // Add to investor index
         Self::add_to_investor_index(env, &investment.investor, &investment.investment_id);
@@ -369,7 +378,7 @@ impl InvestmentStorage {
     pub fn get_investment(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
         let result = env.storage().persistent().get(investment_id);
         if result.is_some() {
-            bump_persistent(env, &investment_id);
+            extend_persistent_ttl(env, &investment_id);
         }
         result
     }
@@ -378,7 +387,7 @@ impl InvestmentStorage {
         let index_key = Self::invoice_index_key(invoice_id);
         let investment_id: Option<BytesN<32>> = env.storage().persistent().get(&index_key);
         if investment_id.is_some() {
-            bump_persistent(env, &index_key);
+            extend_persistent_ttl(env, &index_key);
         }
         investment_id
             .and_then(|id| Self::get_investment(env, &id))
@@ -418,11 +427,11 @@ impl InvestmentStorage {
         env.storage()
             .persistent()
             .set(&investment.investment_id, investment);
-        bump_persistent(env, &investment.investment_id);
+        extend_persistent_ttl(env, &investment.investment_id);
 
         let invoice_index_key = Self::invoice_index_key(&investment.invoice_id);
         env.storage().persistent().set(&invoice_index_key, &investment.investment_id);
-        bump_persistent(env, &invoice_index_key);
+        extend_persistent_ttl(env, &invoice_index_key);
     }
 
     // -- Active-investment index -----------------------------------------------
@@ -441,7 +450,7 @@ impl InvestmentStorage {
         }
         ids.push_back(investment_id.clone());
         env.storage().persistent().set(&ACTIVE_INDEX_KEY, &ids);
-        bump_persistent(env, &ACTIVE_INDEX_KEY);
+        extend_persistent_ttl(env, &ACTIVE_INDEX_KEY);
     }
 
     fn remove_from_active_index(env: &Env, investment_id: &BytesN<32>) {
@@ -457,7 +466,7 @@ impl InvestmentStorage {
             }
         }
         env.storage().persistent().set(&ACTIVE_INDEX_KEY, &updated);
-        bump_persistent(env, &ACTIVE_INDEX_KEY);
+        extend_persistent_ttl(env, &ACTIVE_INDEX_KEY);
     }
 
     /// Return all investment IDs currently in `Active` status.
@@ -470,7 +479,7 @@ impl InvestmentStorage {
             .get(&ACTIVE_INDEX_KEY)
             .unwrap_or_else(|| Vec::new(env));
         if !result.is_empty() {
-            bump_persistent(env, &ACTIVE_INDEX_KEY);
+            extend_persistent_ttl(env, &ACTIVE_INDEX_KEY);
         }
         result
     }
@@ -511,7 +520,7 @@ impl InvestmentStorage {
             .get(&key)
             .unwrap_or_else(|| Vec::new(env));
         if !result.is_empty() {
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
         result
     }
@@ -531,7 +540,7 @@ impl InvestmentStorage {
         if !exists {
             investments.push_back(investment_id.clone());
             env.storage().persistent().set(&key, &investments);
-            bump_persistent(env, &key);
+            extend_persistent_ttl(env, &key);
         }
     }
 
