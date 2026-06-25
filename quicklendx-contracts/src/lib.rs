@@ -86,7 +86,7 @@ pub mod invoice_search;
 pub mod maintenance;
 pub mod monitor;
 pub mod notifications;
-pub mod pagination;
+mod pagination;
 pub mod pause;
 pub mod payments;
 pub mod profits;

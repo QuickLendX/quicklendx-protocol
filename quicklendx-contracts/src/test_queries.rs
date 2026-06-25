@@ -22,8 +22,8 @@ use alloc::vec::Vec;
 
 use crate::pagination::{
     calculate_safe_bounds, cap_query_limit, paginate_slice, validate_pagination_params,
-    MAX_QUERY_LIMIT,
 };
+use crate::MAX_QUERY_LIMIT;
 #[cfg(feature = "fuzz-tests")]
 use proptest::prelude::*;
 
