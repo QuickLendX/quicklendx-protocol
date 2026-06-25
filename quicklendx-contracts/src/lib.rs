@@ -232,6 +232,8 @@ mod test_category_breakdown;
 mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_insurance_premium_props;
 #[cfg(test)]
 mod test_notifications;
 pub mod types;
