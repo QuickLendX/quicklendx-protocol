@@ -7,6 +7,7 @@ project's key-management or governance procedures.
 
 Use this playbook when the contract accepts, rejects, emits, or settles
 something in a way that does not match the documented protocol intent.
+For information on which automated alerts to set up before an incident occurs, see the [Monitoring Guide](MONITORING.md).
 
 ## Decision Summary
 
