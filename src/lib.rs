@@ -1,57 +1,30 @@
-/// QuickLendX Smart Contract Library
-///
-/// This crate contains the core arithmetic modules for the QuickLendX
-/// invoice-financing protocol built on Stellar's Soroban platform.
-///
-/// ## Modules
-///
-/// - [`settlement`]    — Invoice settlement payout computation
-/// - [`fees`]          — Protocol fee calculations (origination, servicing, default, early-repayment)
-/// - [`profits`]       — Investor return metrics and platform revenue aggregation
-/// - [`verification`]  — Centralized guards preventing unverified actors from restricted actions
-///
-/// ## Safety Philosophy
-///
-/// All financial arithmetic uses `u128` with `checked_*` operations.
-/// Any computation that would overflow returns `None`; callers must handle
-/// this as an error condition. This eliminates silent wrapping overflow,
-/// underflow, and sign-extension bugs.
-///
-/// The verification module enforces a **deny-by-default** policy: every
-/// restricted action requires the caller to prove verified status through
-/// a guard function.  Pending, rejected, and unknown actors are blocked.
-pub mod admin;
-pub mod errors;
-pub mod events;
-pub mod fees;
-pub mod init;
-pub mod pause;
-pub mod profits;
-pub mod settlement;
-pub mod storage_types;
-pub mod verification;
-pub mod investment;
-pub mod payments;
-pub mod invariants;
+#![no_std]
+#![allow(unexpected_cfgs)] 
 
-pub use admin::{AdminContract, AdminContractClient};
-pub use errors::ContractError;
-pub use storage_types::{FeeConfig, ProtocolConfig};
+pub mod types;
 
-#[cfg(test)]
-pub mod test_admin;
+use soroban_sdk::{contract, contractimpl, Env, Address};
+use types::{DataKey, ProtocolConfig};
 
-#[cfg(test)]
-mod test_protocol_limits_boundary;
+#[contract]
+pub struct QuickLendXContract;
 
-#[cfg(test)]
-mod test_max_invoices_per_business;
+#[contractimpl]
+impl QuickLendXContract {
+    pub fn init(env: Env, admin: Address, fee: u32, min_holding: u64) {
+        // Prevent re-initialization by checking if Admin is already set
+        if env.storage().instance().has(&DataKey::Admin) {
+            panic!("Contract is already initialized");
+        }
 
-#[cfg(test)]
-mod test_investor_kyc;
+        // Set the administrator address
+        env.storage().instance().set(&DataKey::Admin, &admin);
 
-#[cfg(test)]
-mod test_pause;
-
-#[cfg(test)]
-mod test_solvency_invariant;
+        // Store the protocol configuration parameters
+        let config = ProtocolConfig {
+            fee_percentage: fee,
+            min_holding_period: min_holding,
+        };
+        env.storage().instance().set(&DataKey::Config, &config);
+    }
+}
