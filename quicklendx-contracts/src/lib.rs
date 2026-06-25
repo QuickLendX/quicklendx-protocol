@@ -208,6 +208,8 @@ mod test_volume_tier_props;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_treasury_split_overflow_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_default_boundaries;
+#[cfg(all(test, feature = "fuzz-tests"))]
 mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_seed;
